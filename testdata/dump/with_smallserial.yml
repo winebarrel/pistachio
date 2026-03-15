@@ -1,0 +1,12 @@
+init: |
+  CREATE TABLE public.users (
+      id smallserial PRIMARY KEY,
+      name text NOT NULL
+  );
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id smallserial NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

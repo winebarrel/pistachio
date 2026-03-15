@@ -1,0 +1,22 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, name FROM public.users;
+  COMMENT ON VIEW public.active_users IS 'Active users only';
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_users
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT users.id,
+      users.name
+     FROM users;
+  COMMENT ON VIEW public.active_users IS 'Active users only';

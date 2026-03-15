@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      bio text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      bio text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

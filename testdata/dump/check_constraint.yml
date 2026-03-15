@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      price numeric(10,2) NOT NULL,
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_price_check CHECK (price > 0),
+      CONSTRAINT products_quantity_check CHECK (quantity >= 0)
+  );
+dump: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      price numeric(10,2) NOT NULL,
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_price_check CHECK (price > 0::numeric),
+      CONSTRAINT products_quantity_check CHECK (quantity >= 0)
+  );

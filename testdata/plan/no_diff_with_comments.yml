@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON TABLE public.users IS 'User accounts';
+  COMMENT ON COLUMN public.users.name IS 'Full name';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON TABLE public.users IS 'User accounts';
+  COMMENT ON COLUMN public.users.name IS 'Full name';
+plan: ""

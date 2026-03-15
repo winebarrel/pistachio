@@ -1,0 +1,15 @@
+version: "2"
+linters:
+  enable:
+    - errorlint
+    - misspell
+    - unconvert
+  exclusions:
+    rules:
+      - linters:
+          - errcheck
+        path: _test\.go
+formatters:
+  enable:
+    - gofumpt
+    - goimports

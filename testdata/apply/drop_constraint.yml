@@ -1,0 +1,20 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public."MyTable" (
+      "Id" integer NOT NULL,
+      "Full Name" text NOT NULL,
+      "order" integer,
+      CONSTRAINT "MyTable_pkey" PRIMARY KEY ("Id")
+  );
+dump: |
+  -- public."MyTable"
+  CREATE TABLE public."MyTable" (
+      "Id" integer NOT NULL,
+      "Full Name" text NOT NULL,
+      "order" integer,
+      CONSTRAINT "MyTable_pkey" PRIMARY KEY ("Id")
+  );

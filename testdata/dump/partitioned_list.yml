@@ -1,0 +1,24 @@
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      level text NOT NULL,
+      message text,
+      CONSTRAINT logs_pkey PRIMARY KEY (level, id)
+  ) PARTITION BY LIST (level);
+  CREATE TABLE public.logs_info PARTITION OF public.logs FOR VALUES IN ('info', 'debug');
+  CREATE TABLE public.logs_error PARTITION OF public.logs FOR VALUES IN ('error', 'warning');
+dump: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      level text NOT NULL,
+      message text,
+      CONSTRAINT logs_pkey PRIMARY KEY (level, id)
+  )
+  PARTITION BY LIST (level);
+
+  -- public.logs_error
+  CREATE TABLE public.logs_error PARTITION OF logs FOR VALUES IN ('error', 'warning');
+
+  -- public.logs_info
+  CREATE TABLE public.logs_info PARTITION OF logs FOR VALUES IN ('info', 'debug');

@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email, name)
+  );
+plan: |
+  ALTER TABLE public.users ADD COLUMN name text;
+  ALTER TABLE public.users DROP CONSTRAINT users_email_key;
+  ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE (email, name);
