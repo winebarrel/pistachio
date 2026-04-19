@@ -42,7 +42,8 @@ func TestApply(t *testing.T) {
 				ConnString: conn.Config().ConnString(),
 				Schemas:    []string{"public"},
 			})
-			require.NoError(t, client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard))
+			_, err = client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+			require.NoError(t, err)
 
 			// Verify
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{})
@@ -77,10 +78,11 @@ func TestApply_WithPreSQLFile(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	require.NoError(t, client.Apply(ctx, &pistachio.ApplyOptions{
+	_, applyErr := client.Apply(ctx, &pistachio.ApplyOptions{
 		File:       desiredFile,
 		PreSQLFile: preSQLFile,
-	}, io.Discard))
+	}, io.Discard)
+	require.NoError(t, applyErr)
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
@@ -113,7 +115,7 @@ SELECT * FROM public.missing_table;`), 0o644))
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		File:       desiredFile,
 		PreSQLFile: preSQLFile,
 		WithTx:     true,
@@ -148,7 +150,7 @@ func TestApply_WithTx_Success(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		File:       desiredFile,
 		PreSQLFile: preSQLFile,
 		WithTx:     true,
@@ -179,7 +181,7 @@ func TestApply_NoDiff(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
 	require.NoError(t, err)
 }
 
@@ -206,7 +208,7 @@ func TestApply_ExecError(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -223,7 +225,7 @@ func TestApply_EmptySchemas(t *testing.T) {
 		Schemas:    []string{},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -237,7 +239,7 @@ func TestApply_InvalidConnString(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -253,7 +255,7 @@ func TestApply_InvalidDesiredFile(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{File: "/nonexistent/file.sql"}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{File: "/nonexistent/file.sql"}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -275,7 +277,7 @@ func TestApply_InvalidPreSQLFile(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		File:       desiredFile,
 		PreSQLFile: "/nonexistent/pre.sql",
 	}, io.Discard)
