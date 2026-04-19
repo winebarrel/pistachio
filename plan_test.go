@@ -33,6 +33,30 @@ func TestPlan_InvalidConnString(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestPlan_WithPassword(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Password:   "dummy",
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{File: desiredFile})
+	require.NoError(t, err)
+	assert.Contains(t, got, "CREATE TABLE public.users")
+}
+
 func TestPlan_InvalidDesiredFile(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -44,6 +68,23 @@ func TestPlan_InvalidDesiredFile(t *testing.T) {
 	})
 
 	_, err := client.Plan(ctx, &pistachio.PlanOptions{File: "/nonexistent/file.sql"})
+	require.Error(t, err)
+}
+
+func TestPlan_EmptySchemas(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{},
+	})
+
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{File: desiredFile})
 	require.Error(t, err)
 }
 

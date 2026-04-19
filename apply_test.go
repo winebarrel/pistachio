@@ -183,6 +183,50 @@ func TestApply_NoDiff(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestApply_ExecError(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	// Desired has a column with a type that references a nonexistent type → exec error on ALTER TABLE
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    data nonexistent_type,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+	require.Error(t, err)
+}
+
+func TestApply_EmptySchemas(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{},
+	})
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+	require.Error(t, err)
+}
+
 func TestApply_InvalidConnString(t *testing.T) {
 	ctx := context.Background()
 	client := pistachio.NewClient(&pistachio.Options{
