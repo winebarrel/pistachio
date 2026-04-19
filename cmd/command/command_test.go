@@ -142,6 +142,22 @@ func TestApply_Run_NoChanges(t *testing.T) {
 	assert.Equal(t, "No changes\n", buf.String())
 }
 
+func TestApply_Run_Error(t *testing.T) {
+	ctx := context.Background()
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: "invalid://connection",
+		Schemas:    []string{"public"},
+	})
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{File: desiredFile}}
+	err := cmd.Run(ctx, client, &buf)
+	require.Error(t, err)
+}
+
 func TestApply_Run(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

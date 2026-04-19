@@ -17,31 +17,31 @@ type ApplyOptions struct {
 	WithTx     bool   `help:"Execute the pre-SQL and schema changes in a transaction."`
 }
 
-func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (bool, error) {
+func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) error {
 	conn, err := client.connect()
 	if err != nil {
-		return false, err
+		return err
 	}
 	defer conn.Close(ctx) //nolint:errcheck
 
 	cat, err := catalog.NewCatalog(conn, client.Schemas)
 	if err != nil {
-		return false, fmt.Errorf("failed to create catalog: %w", err)
+		return fmt.Errorf("failed to create catalog: %w", err)
 	}
 
 	currentTables, err := cat.Tables(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to fetch tables: %w", err)
+		return fmt.Errorf("failed to fetch tables: %w", err)
 	}
 
 	currentViews, err := cat.Views(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to fetch views: %w", err)
+		return fmt.Errorf("failed to fetch views: %w", err)
 	}
 
 	desired, err := parser.ParseSQLFile(options.File)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse SQL file: %w", err)
+		return fmt.Errorf("failed to parse SQL file: %w", err)
 	}
 
 	stmts := diff.DiffTables(currentTables, desired.Tables)
@@ -51,13 +51,13 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if options.PreSQLFile != "" {
 		rawPreSQL, err := os.ReadFile(options.PreSQLFile)
 		if err != nil {
-			return false, fmt.Errorf("failed to read pre-SQL file: %s: %w", options.PreSQLFile, err)
+			return fmt.Errorf("failed to read pre-SQL file: %s: %w", options.PreSQLFile, err)
 		}
 		preSQL = string(rawPreSQL)
 	}
 
 	if len(stmts) == 0 {
-		return false, nil
+		return nil
 	}
 
 	exec := conn.Exec
@@ -66,7 +66,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if options.WithTx {
 		tx, err := conn.Begin(ctx)
 		if err != nil {
-			return false, fmt.Errorf("failed to begin transaction: %w", err)
+			return fmt.Errorf("failed to begin transaction: %w", err)
 		}
 		defer tx.Rollback(ctx) //nolint:errcheck
 		exec = tx.Exec
@@ -75,20 +75,20 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 	if preSQL != "" {
 		if _, err := exec(ctx, preSQL); err != nil {
-			return false, fmt.Errorf("failed to execute pre-SQL: %w", err)
+			return fmt.Errorf("failed to execute pre-SQL: %w", err)
 		}
 	}
 
 	for _, stmt := range stmts {
 		fmt.Fprintln(w, stmt) //nolint:errcheck
 		if _, err := exec(ctx, stmt); err != nil {
-			return false, fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
+			return fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
 		}
 	}
 
 	if err := commit(ctx); err != nil {
-		return false, fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return true, nil
+	return nil
 }
