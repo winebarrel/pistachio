@@ -294,10 +294,11 @@ CREATE VIEW public.v2 AS SELECT name FROM users;`
 }
 
 func TestParseSQL_UnnamedConstraintSkipped(t *testing.T) {
-	// Unnamed inline NOT NULL constraints are skipped by parseTableConstraint
+	// An unnamed table constraint (no CONSTRAINT name) is skipped by parseTableConstraint
 	sql := `CREATE TABLE public.items (
     id integer NOT NULL,
-    name text
+    name text,
+    PRIMARY KEY (id)
 );`
 	result, err := parser.ParseSQL(sql)
 	require.NoError(t, err)
