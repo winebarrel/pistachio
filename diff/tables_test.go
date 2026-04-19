@@ -417,6 +417,12 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 	assert.Contains(t, stmts[1], "ADD CONSTRAINT fk_user")
 }
 
+func TestEqualFKDef_implicitPublicSchema(t *testing.T) {
+	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
+	b := "FOREIGN KEY (user_id) REFERENCES public.users(id)"
+	assert.True(t, equalFKDef(a, b))
+}
+
 func TestEqualFKDef_parseError(t *testing.T) {
 	// When both fail to parse, falls back to string comparison
 	assert.True(t, equalFKDef("not sql", "not sql"))
