@@ -125,3 +125,115 @@ SELECT * FROM public.missing_table;`), 0o644))
 	assert.NotContains(t, got, "CREATE TABLE public.pre_hook")
 	assert.NotContains(t, got, "CREATE TABLE public.users")
 }
+
+func TestApply_WithTx_Success(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	tmpDir := t.TempDir()
+	desiredFile := filepath.Join(tmpDir, "desired.sql")
+	preSQLFile := filepath.Join(tmpDir, "pre.sql")
+
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SELECT 1;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{
+		File:       desiredFile,
+		PreSQLFile: preSQLFile,
+		WithTx:     true,
+	}, io.Discard)
+	require.NoError(t, err)
+
+	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, dumpErr)
+	assert.Contains(t, got, "CREATE TABLE public.users")
+}
+
+func TestApply_NoDiff(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+	require.NoError(t, err)
+}
+
+func TestApply_InvalidConnString(t *testing.T) {
+	ctx := context.Background()
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: "invalid://connection",
+		Schemas:    []string{"public"},
+	})
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+	require.Error(t, err)
+}
+
+func TestApply_InvalidDesiredFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{File: "/nonexistent/file.sql"}, io.Discard)
+	require.Error(t, err)
+}
+
+func TestApply_InvalidPreSQLFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{
+		File:       desiredFile,
+		PreSQLFile: "/nonexistent/pre.sql",
+	}, io.Discard)
+	require.Error(t, err)
+}

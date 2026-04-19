@@ -19,6 +19,34 @@ type planTestCase struct {
 	Plan    string `yaml:"plan"`
 }
 
+func TestPlan_InvalidConnString(t *testing.T) {
+	ctx := context.Background()
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: "invalid://connection",
+		Schemas:    []string{"public"},
+	})
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
+
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{File: desiredFile})
+	require.Error(t, err)
+}
+
+func TestPlan_InvalidDesiredFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{File: "/nonexistent/file.sql"})
+	require.Error(t, err)
+}
+
 func TestPlan(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
