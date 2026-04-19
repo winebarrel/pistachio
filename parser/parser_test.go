@@ -76,3 +76,67 @@ func TestParseSQL_InvalidSQL(t *testing.T) {
 	_, err := parser.ParseSQL("NOT VALID SQL AT ALL ;;; {{{}}")
 	require.Error(t, err)
 }
+
+func TestParseSQL_View(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.active_users AS SELECT id, name FROM users WHERE (name IS NOT NULL);
+COMMENT ON VIEW public.active_users IS 'Active users';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Tables.Len())
+	assert.Equal(t, 1, result.Views.Len())
+
+	v, ok := result.Views.GetOk("public.active_users")
+	require.True(t, ok)
+	assert.Equal(t, "active_users", v.Name)
+	assert.Equal(t, "public", v.Schema)
+	assert.NotNil(t, v.Comment)
+	assert.Equal(t, "Active users", *v.Comment)
+
+	expected := "-- public.active_users\n" +
+		"CREATE OR REPLACE VIEW public.active_users AS\n" +
+		"SELECT id, name FROM users WHERE name IS NOT NULL;\n" +
+		"COMMENT ON VIEW public.active_users IS 'Active users';"
+	got := model.ViewsToSQL(result.Views)
+	assert.Equal(t, expected, got)
+}
+
+func TestParseSQL_ViewCommentOnColumn(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+COMMENT ON COLUMN public.users.name IS 'User name';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	col, ok := tbl.Columns.GetOk("name")
+	require.True(t, ok)
+	require.NotNil(t, col.Comment)
+	assert.Equal(t, "User name", *col.Comment)
+}
+
+func TestParseSQL_AlterTableNonFK(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    code text NOT NULL
+);
+ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.items")
+	require.NotNil(t, tbl)
+	_, ok := tbl.Constraints.GetOk("items_code_unique")
+	assert.True(t, ok)
+}

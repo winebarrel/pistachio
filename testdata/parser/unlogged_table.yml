@@ -1,0 +1,11 @@
+input: |
+  CREATE UNLOGGED TABLE public.temp_data (
+      id integer NOT NULL,
+      CONSTRAINT temp_data_pkey PRIMARY KEY (id)
+  );
+expected: |
+  -- public.temp_data
+  CREATE UNLOGGED TABLE public.temp_data (
+      id integer NOT NULL,
+      CONSTRAINT temp_data_pkey PRIMARY KEY (id)
+  );
