@@ -28,6 +28,32 @@ func TestDump_InvalidConnString(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestDump_UnreachableHost(t *testing.T) {
+	ctx := context.Background()
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: "postgres://postgres@192.0.2.1:5432/postgres?connect_timeout=1",
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to connect")
+}
+
+func TestDump_EmptySchemas(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{},
+	})
+
+	_, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.Error(t, err)
+}
+
 func TestDump(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

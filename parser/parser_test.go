@@ -293,6 +293,81 @@ CREATE VIEW public.v2 AS SELECT name FROM users;`
 	assert.Equal(t, 2, result.Views.Len())
 }
 
+func TestParseSQL_UnnamedConstraintSkipped(t *testing.T) {
+	// Unnamed inline NOT NULL constraints are skipped by parseTableConstraint
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    name text
+);`
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.items")
+	require.NotNil(t, tbl)
+	assert.Equal(t, 0, tbl.Constraints.Len())
+}
+
+func TestParseSQL_CommentRemove(t *testing.T) {
+	// When COMMENT ON ... IS '' (empty string), the comment is set to nil
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+COMMENT ON TABLE public.users IS 'Users';
+COMMENT ON TABLE public.users IS '';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.users")
+	require.NotNil(t, tbl)
+	assert.Nil(t, tbl.Comment)
+}
+
+func TestParseSQL_ViewCommentRemove(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.v1 AS SELECT id FROM users;
+COMMENT ON VIEW public.v1 IS 'my view';
+COMMENT ON VIEW public.v1 IS '';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	v := result.Views.Get("public.v1")
+	require.NotNil(t, v)
+	assert.Nil(t, v.Comment)
+}
+
+func TestParseSQL_ColumnCommentRemove(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+COMMENT ON COLUMN public.users.name IS 'Name';
+COMMENT ON COLUMN public.users.name IS '';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.users")
+	require.NotNil(t, tbl)
+	col, ok := tbl.Columns.GetOk("name")
+	require.True(t, ok)
+	assert.Nil(t, col.Comment)
+}
+
+func TestParseSQL_IndexOnUnknownTableSkipped(t *testing.T) {
+	sql := `CREATE INDEX idx_name ON public.nonexistent USING btree (name);`
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Tables.Len())
+}
+
 func TestParseSQL_ForeignKeyWithSchema(t *testing.T) {
 	sql := `CREATE TABLE myschema.users (
     id integer NOT NULL,
