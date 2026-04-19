@@ -1,2 +1,12 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 88%
+    patch:
+      default:
+        target: 80%
+
 ignore:
   - "internal/testutil"
+  - "cmd/pist"
