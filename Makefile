@@ -42,3 +42,6 @@ sample-db:
 clean-schema:
 	psql -c 'DROP SCHEMA public CASCADE ; CREATE SCHEMA public'
 
+.PHONY: demo
+demo: clean-schema
+	vhs demo.tape
