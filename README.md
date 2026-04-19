@@ -1,5 +1,7 @@
 # pistachio
 
+[![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
+
 `pistachio` is a declarative schema management tool for PostgreSQL.
 
 You describe the desired state of your database schema in SQL, and `pistachio` compares that declaration with the current database schema, then either:
