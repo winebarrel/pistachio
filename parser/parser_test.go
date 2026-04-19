@@ -117,8 +117,10 @@ COMMENT ON COLUMN public.users.name IS 'User name';`
 	result, err := parser.ParseSQL(sql)
 	require.NoError(t, err)
 
-	tbl := result.Tables.Get("public.users")
-	col := tbl.Columns.Get("name")
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	col, ok := tbl.Columns.GetOk("name")
+	require.True(t, ok)
 	require.NotNil(t, col.Comment)
 	assert.Equal(t, "User name", *col.Comment)
 }
