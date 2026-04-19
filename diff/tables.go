@@ -149,7 +149,9 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	}
 
 	// NOT NULL change
-	if current.NotNull != desired.NotNull {
+	// Identity columns are implicitly NOT NULL in PostgreSQL; skip NOT NULL diff
+	// when either side is an identity column to avoid spurious SET/DROP NOT NULL.
+	if current.NotNull != desired.NotNull && !current.Identity.IsIdentityColumn() && !desired.Identity.IsIdentityColumn() {
 		if desired.NotNull {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
 		} else {
