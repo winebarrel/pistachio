@@ -1,0 +1,17 @@
+input: |
+  CREATE TABLE myschema.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON TABLE myschema.users IS 'Users in myschema';
+  COMMENT ON COLUMN myschema.users.name IS 'User name';
+expected: |
+  -- myschema.users
+  CREATE TABLE myschema.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON TABLE myschema.users IS 'Users in myschema';
+  COMMENT ON COLUMN myschema.users.name IS 'User name';

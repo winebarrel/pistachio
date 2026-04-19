@@ -34,6 +34,16 @@ func TestIdent_withDoubleQuote(t *testing.T) {
 	assert.Equal(t, `"my""table"`, Ident(`my"table`))
 }
 
+func TestIdent_unreservedKeyword(t *testing.T) {
+	// "name" is unreserved in PostgreSQL, should not be quoted
+	assert.Equal(t, "name", Ident("name"))
+}
+
+func TestIdent_multipleTokens(t *testing.T) {
+	// A string that scans to multiple tokens should be quoted
+	assert.Equal(t, `"a b"`, Ident("a b"))
+}
+
 func TestQuoteLiteral(t *testing.T) {
 	assert.Equal(t, "'hello'", QuoteLiteral("hello"))
 }

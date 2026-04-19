@@ -200,3 +200,39 @@ func TestTablesToSQL(t *testing.T) {
 	assert.Contains(t, got, "-- public.users")
 	assert.Contains(t, got, "CREATE TABLE public.users")
 }
+
+func TestTablesToSQL_withIndexAndFK(t *testing.T) {
+	tables := orderedmap.New[string, *Table]()
+	tbl := newTable("public", "orders")
+	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true})
+	tbl.Indexes.Set("idx_user", &Index{Definition: "CREATE INDEX idx_user ON public.orders USING btree (user_id)"})
+	tbl.ForeignKeys.Set("fk_user", &ForeignKey{
+		Constraint: Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	comment := "Orders table"
+	tbl.Comment = &comment
+	tables.Set("public.orders", tbl)
+
+	got := TablesToSQL(tables)
+	assert.Contains(t, got, "-- public.orders")
+	assert.Contains(t, got, "CREATE TABLE public.orders")
+	assert.Contains(t, got, "CREATE INDEX idx_user")
+	assert.Contains(t, got, "ADD CONSTRAINT fk_user")
+	assert.Contains(t, got, "COMMENT ON TABLE public.orders")
+}
+
+func TestTablesToSQL_multipleTables(t *testing.T) {
+	tables := orderedmap.New[string, *Table]()
+	t1 := newTable("public", "a")
+	t1.Columns.Set("id", &Column{Name: "id", TypeName: "integer"})
+	tables.Set("public.a", t1)
+	t2 := newTable("public", "b")
+	t2.Columns.Set("id", &Column{Name: "id", TypeName: "integer"})
+	tables.Set("public.b", t2)
+
+	got := TablesToSQL(tables)
+	assert.Contains(t, got, "-- public.a")
+	assert.Contains(t, got, "-- public.b")
+}
