@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
@@ -44,6 +45,9 @@ func newTableExtras(t *model.Table) []string {
 	}
 	for _, fk := range t.ForeignKeys.CollectValues() {
 		stmts = append(stmts, fk.SQL())
+	}
+	if commentSQL := t.CommentSQL(); commentSQL != "" {
+		stmts = append(stmts, strings.Split(commentSQL, "\n")...)
 	}
 	return stmts
 }
