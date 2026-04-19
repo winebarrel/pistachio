@@ -13,7 +13,7 @@ You describe the desired state of your database schema in SQL, and `pistachio` c
 
 The CLI is intended for a schema-as-code workflow where the desired state is kept in a SQL file and the database is reconciled to match it.
 
-<img width="800" height="600" alt="demo" src="https://github.com/user-attachments/assets/0e8b93ea-6b52-468b-9d63-6d39ed8ca041" />
+<img width="800" alt="demo" src="https://github.com/user-attachments/assets/0e8b93ea-6b52-468b-9d63-6d39ed8ca041" />
 
 ## Install
 
