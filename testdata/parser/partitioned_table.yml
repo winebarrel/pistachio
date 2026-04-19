@@ -1,0 +1,15 @@
+input: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at date NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id, created_at)
+  )
+  PARTITION BY RANGE (created_at);
+expected: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at date NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id, created_at)
+  )
+  PARTITION BY RANGE (created_at);

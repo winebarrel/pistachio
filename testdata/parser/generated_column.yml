@@ -1,0 +1,15 @@
+input: |
+  CREATE TABLE public.people (
+      first_name text NOT NULL,
+      last_name text NOT NULL,
+      full_name text GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED,
+      CONSTRAINT people_pkey PRIMARY KEY (first_name, last_name)
+  );
+expected: |
+  -- public.people
+  CREATE TABLE public.people (
+      first_name text NOT NULL,
+      last_name text NOT NULL,
+      full_name text DEFAULT (first_name || ' ') || last_name,
+      CONSTRAINT people_pkey PRIMARY KEY (first_name, last_name)
+  );
