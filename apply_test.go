@@ -42,7 +42,8 @@ func TestApply(t *testing.T) {
 				ConnString: conn.Config().ConnString(),
 				Schemas:    []string{"public"},
 			})
-			require.NoError(t, client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard))
+			err = client.Apply(ctx, &pistachio.ApplyOptions{File: desiredFile}, io.Discard)
+			require.NoError(t, err)
 
 			// Verify
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{})
@@ -77,10 +78,11 @@ func TestApply_WithPreSQLFile(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	require.NoError(t, client.Apply(ctx, &pistachio.ApplyOptions{
+	applyErr := client.Apply(ctx, &pistachio.ApplyOptions{
 		File:       desiredFile,
 		PreSQLFile: preSQLFile,
-	}, io.Discard))
+	}, io.Discard)
+	require.NoError(t, applyErr)
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
