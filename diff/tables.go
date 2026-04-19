@@ -293,6 +293,15 @@ func parseFKDef(def string) (*pg_query.Constraint, error) {
 	return con, nil
 }
 
+// normalizeFKSchema normalizes the referenced table's schema name in a FK
+// constraint node so that an empty schema (implicit public) is treated
+// the same as an explicit "public" schema.
+func normalizeFKSchema(con *pg_query.Constraint) {
+	if con.Pktable != nil && con.Pktable.Schemaname == "" {
+		con.Pktable.Schemaname = "public"
+	}
+}
+
 // equalFKDef compares two FK constraint definitions by their parse trees,
 // so that formatting differences do not cause false diffs.
 func equalFKDef(a, b string) bool {
@@ -301,6 +310,8 @@ func equalFKDef(a, b string) bool {
 	if errA != nil || errB != nil {
 		return a == b
 	}
+	normalizeFKSchema(nodeA)
+	normalizeFKSchema(nodeB)
 	return proto.Equal(nodeA, nodeB)
 }
 
