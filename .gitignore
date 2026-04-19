@@ -33,3 +33,5 @@ go.work.sum
 
 /pist
 *.sql
+*.bak
+demo.gif
