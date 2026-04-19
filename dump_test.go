@@ -17,6 +17,17 @@ type dumpTestCase struct {
 	Dump string `yaml:"dump"`
 }
 
+func TestDump_InvalidConnString(t *testing.T) {
+	ctx := context.Background()
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: "invalid://connection",
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.Error(t, err)
+}
+
 func TestDump(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
