@@ -1,0 +1,15 @@
+input: |
+  CREATE TABLE myschema.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_name ON myschema.users USING btree (name);
+expected: |
+  -- myschema.users
+  CREATE TABLE myschema.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_name ON myschema.users USING btree (name);

@@ -398,6 +398,63 @@ func TestEqualFKDef_different(t *testing.T) {
 	assert.False(t, equalFKDef(a, b))
 }
 
+func TestDiffTables_newTable_withForeignKey(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	tbl := newTable("public", "orders")
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	tbl.ForeignKeys.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired.Set("public.orders", tbl)
+
+	stmts := DiffTables(current, desired)
+	assert.Len(t, stmts, 2)
+	assert.Contains(t, stmts[0], "CREATE TABLE")
+	assert.Contains(t, stmts[1], "ADD CONSTRAINT fk_user")
+}
+
+func TestEqualFKDef_parseError(t *testing.T) {
+	// When both fail to parse, falls back to string comparison
+	assert.True(t, equalFKDef("not sql", "not sql"))
+	assert.False(t, equalFKDef("not sql", "other"))
+}
+
+func TestEqualDefault_parseError(t *testing.T) {
+	// When both fail to parse, falls back to string comparison
+	assert.True(t, equalDefault(ptr(")))invalid"), ptr(")))invalid")))
+	assert.False(t, equalDefault(ptr(")))invalid"), ptr(")))other")))
+}
+
+func TestEqualViewDef_parseError(t *testing.T) {
+	// When normalization fails, falls back to string comparison
+	assert.True(t, equalViewDef(")))invalid", ")))invalid"))
+	assert.False(t, equalViewDef(")))invalid", ")))other"))
+}
+
+func TestDiffForeignKeys_change(t *testing.T) {
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired := orderedmap.New[string, *model.ForeignKey]()
+	desired.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	stmts := diffForeignKeys("public.orders", current, desired)
+	assert.Len(t, stmts, 2)
+	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", stmts[0])
+	assert.Contains(t, stmts[1], "ADD CONSTRAINT fk_user")
+}
+
 func TestDiffTable_partitionChild(t *testing.T) {
 	parent := "public.events"
 	bound := "FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')"

@@ -1,0 +1,14 @@
+input: |
+  CREATE TABLE myschema.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW myschema.active_users AS SELECT id, name FROM myschema.users;
+expected: |
+  -- myschema.users
+  CREATE TABLE myschema.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

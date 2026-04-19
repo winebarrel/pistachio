@@ -1,0 +1,13 @@
+input: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text COLLATE "en_US" NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+expected: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text COLLATE "en_US" NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

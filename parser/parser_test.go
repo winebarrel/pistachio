@@ -125,6 +125,80 @@ COMMENT ON COLUMN public.users.name IS 'User name';`
 	assert.Equal(t, "User name", *col.Comment)
 }
 
+func TestParseSQL_SchemaQualifiedView(t *testing.T) {
+	sql := `CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW myschema.active_users AS SELECT id, name FROM myschema.users;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Views.Len())
+
+	v, ok := result.Views.GetOk("myschema.active_users")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", v.Schema)
+	assert.Equal(t, "active_users", v.Name)
+}
+
+func TestParseSQL_CommentOnTable(t *testing.T) {
+	sql := `CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+COMMENT ON TABLE myschema.users IS 'Users table';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("myschema.users")
+	require.True(t, ok)
+	require.NotNil(t, tbl.Comment)
+	assert.Equal(t, "Users table", *tbl.Comment)
+}
+
+func TestParseSQL_ForeignKeyNotValid(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.orders (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) NOT VALID;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.orders")
+	require.True(t, ok)
+	fk, ok := tbl.ForeignKeys.GetOk("fk_user")
+	require.True(t, ok)
+	assert.False(t, fk.Validated)
+	assert.Equal(t, "public", *fk.RefSchema)
+	assert.Equal(t, "users", *fk.RefTable)
+	assert.Equal(t, []string{"user_id"}, fk.Columns)
+}
+
+func TestParseSQL_TablespaceOnCreate(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+) TABLESPACE my_ts;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	require.NotNil(t, tbl.TableSpace)
+	assert.Equal(t, "my_ts", *tbl.TableSpace)
+}
+
 func TestParseSQL_AlterTableNonFK(t *testing.T) {
 	sql := `CREATE TABLE public.items (
     id integer NOT NULL,
@@ -139,4 +213,105 @@ ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);`
 	require.NotNil(t, tbl)
 	_, ok := tbl.Constraints.GetOk("items_code_unique")
 	assert.True(t, ok)
+}
+
+func TestParseSQL_AlterTableUnknownTable(t *testing.T) {
+	// ALTER TABLE referencing a table not in parsed result is silently skipped
+	sql := `ALTER TABLE public.nonexistent ADD CONSTRAINT fk FOREIGN KEY (id) REFERENCES public.other(id);`
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Tables.Len())
+}
+
+func TestParseSQL_CommentOnUnknownTable(t *testing.T) {
+	// COMMENT on unknown table is silently skipped
+	sql := `COMMENT ON TABLE public.nonexistent IS 'test';`
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Tables.Len())
+}
+
+func TestParseSQL_PartitionListType(t *testing.T) {
+	sql := `CREATE TABLE public.sales (
+    id integer NOT NULL,
+    region text NOT NULL,
+    CONSTRAINT sales_pkey PRIMARY KEY (id, region)
+)
+PARTITION BY LIST (region);
+CREATE TABLE public.sales_east PARTITION OF public.sales FOR VALUES IN ('east');`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Tables.Len())
+
+	parent, ok := result.Tables.GetOk("public.sales")
+	require.True(t, ok)
+	assert.True(t, parent.Partitioned)
+	require.NotNil(t, parent.PartitionDef)
+	assert.Contains(t, *parent.PartitionDef, "LIST")
+
+	child, ok := result.Tables.GetOk("public.sales_east")
+	require.True(t, ok)
+	require.NotNil(t, child.PartitionOf)
+	require.NotNil(t, child.PartitionBound)
+}
+
+func TestParseSQL_InlineUniqueConstraint(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    code text NOT NULL,
+    CONSTRAINT items_pkey PRIMARY KEY (id),
+    CONSTRAINT items_code_key UNIQUE (code),
+    CONSTRAINT items_code_check CHECK (code <> '')
+);`
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.items")
+	require.NotNil(t, tbl)
+	assert.Equal(t, 3, tbl.Constraints.Len())
+
+	_, ok := tbl.Constraints.GetOk("items_pkey")
+	assert.True(t, ok)
+	_, ok = tbl.Constraints.GetOk("items_code_key")
+	assert.True(t, ok)
+	_, ok = tbl.Constraints.GetOk("items_code_check")
+	assert.True(t, ok)
+}
+
+func TestParseSQL_MultipleViews(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.v1 AS SELECT id FROM users;
+CREATE VIEW public.v2 AS SELECT name FROM users;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Views.Len())
+}
+
+func TestParseSQL_ForeignKeyWithSchema(t *testing.T) {
+	sql := `CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE myschema.orders (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
+);
+ALTER TABLE myschema.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES myschema.users(id);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("myschema.orders")
+	require.True(t, ok)
+	fk, ok := tbl.ForeignKeys.GetOk("fk_user")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", fk.Schema)
+	assert.Equal(t, "myschema", *fk.RefSchema)
 }
