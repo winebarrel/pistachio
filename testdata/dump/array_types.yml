@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.configs (
+      id integer NOT NULL,
+      tags text[],
+      scores integer[],
+      CONSTRAINT configs_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.configs
+  CREATE TABLE public.configs (
+      id integer NOT NULL,
+      tags text[],
+      scores integer[],
+      CONSTRAINT configs_pkey PRIMARY KEY (id)
+  );

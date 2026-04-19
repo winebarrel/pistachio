@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON COLUMN public.users.name IS 'Full name';
+  COMMENT ON COLUMN public.users.email IS 'Email address';
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON COLUMN public.users.name IS 'Full name';
+  COMMENT ON COLUMN public.users.email IS 'Email address';

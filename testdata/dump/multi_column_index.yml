@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_events_user_created ON public.events USING btree (user_id, created_at DESC);
+dump: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_events_user_created ON public.events USING btree (user_id, created_at DESC);

@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY,
+      name text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY,
+      name text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );

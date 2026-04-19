@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text DEFAULT 'unknown' NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text DEFAULT 'unknown'::text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

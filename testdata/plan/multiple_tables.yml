@@ -1,0 +1,25 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+plan: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.users ADD COLUMN email text;

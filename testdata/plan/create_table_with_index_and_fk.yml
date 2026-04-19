@@ -1,0 +1,27 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      title text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_posts_user_id ON public.posts USING btree (user_id);
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+plan: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      title text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_posts_user_id ON public.posts USING btree (user_id);
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id);

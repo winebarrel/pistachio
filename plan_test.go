@@ -1,0 +1,50 @@
+package pistachio_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
+	"github.com/winebarrel/pistachio/internal/testutil"
+)
+
+type planTestCase struct {
+	Init    string `yaml:"init"`
+	Desired string `yaml:"desired"`
+	Plan    string `yaml:"plan"`
+}
+
+func TestPlan(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	files, err := filepath.Glob("testdata/plan/*.yml")
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+
+	for _, file := range files {
+		name := strings.TrimSuffix(filepath.Base(file), ".yml")
+
+		t.Run(name, func(t *testing.T) {
+			tc := loadYAML[planTestCase](t, file)
+			testutil.SetupDB(t, ctx, conn, tc.Init)
+
+			desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+			require.NoError(t, os.WriteFile(desiredFile, []byte(tc.Desired), 0o644))
+			client := pistachio.NewClient(&pistachio.Options{
+				ConnString: conn.Config().ConnString(),
+				Schemas:    []string{"public"},
+			})
+
+			got, err := client.Plan(ctx, &pistachio.PlanOptions{File: desiredFile})
+			require.NoError(t, err)
+			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got))
+		})
+	}
+}

@@ -1,0 +1,21 @@
+input: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+expected: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );

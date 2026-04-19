@@ -1,0 +1,14 @@
+init: ""
+desired: |
+  CREATE TABLE public.users (
+      id bigserial NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id bigint NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

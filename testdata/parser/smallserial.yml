@@ -1,0 +1,11 @@
+input: |
+  CREATE TABLE public.users (
+      id smallserial NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+expected: |
+  -- public.users
+  CREATE TABLE public.users (
+      id smallint NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

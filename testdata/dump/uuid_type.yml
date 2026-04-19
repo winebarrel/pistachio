@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.tokens (
+      id uuid NOT NULL,
+      value text NOT NULL,
+      CONSTRAINT tokens_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.tokens
+  CREATE TABLE public.tokens (
+      id uuid NOT NULL,
+      value text NOT NULL,
+      CONSTRAINT tokens_pkey PRIMARY KEY (id)
+  );

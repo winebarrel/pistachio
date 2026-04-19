@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      price numeric(10,2) NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      price numeric(10,2) NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_price_check CHECK (price > 0::numeric)
+  );
+plan: |
+  ALTER TABLE public.products ADD CONSTRAINT products_price_check CHECK (price > 0::numeric);

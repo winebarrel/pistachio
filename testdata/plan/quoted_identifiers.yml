@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public."MyTable" (
+      "Id" integer NOT NULL,
+      CONSTRAINT "MyTable_pkey" PRIMARY KEY ("Id")
+  );
+desired: |
+  CREATE TABLE public."MyTable" (
+      "Id" integer NOT NULL,
+      "Name" text NOT NULL,
+      CONSTRAINT "MyTable_pkey" PRIMARY KEY ("Id")
+  );
+plan: |
+  ALTER TABLE public."MyTable" ADD COLUMN "Name" text NOT NULL;
