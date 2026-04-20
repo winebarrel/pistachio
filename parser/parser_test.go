@@ -318,7 +318,7 @@ CREATE TABLE myapp.items (
 }
 
 func TestParseSQL_InlineForeignKeyUnnamed(t *testing.T) {
-	// Unnamed table-level FK constraints should be skipped
+	// Unnamed table-level FK constraints should return an error
 	sql := `CREATE TABLE public.groups (
     id integer NOT NULL,
     CONSTRAINT groups_pkey PRIMARY KEY (id)
@@ -330,12 +330,9 @@ CREATE TABLE public.members (
     FOREIGN KEY (group_id) REFERENCES public.groups(id)
 );`
 
-	result, err := parser.ParseSQL(sql)
-	require.NoError(t, err)
-
-	tbl, ok := result.Tables.GetOk("public.members")
-	require.True(t, ok)
-	assert.Equal(t, 0, tbl.ForeignKeys.Len())
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unnamed FOREIGN KEY constraints are not supported")
 }
 
 func TestParseSQL_ColumnLevelNamedCheck(t *testing.T) {
@@ -447,26 +444,37 @@ CREATE TABLE public.items (
 	assert.Equal(t, []string{"group_id"}, fk.Columns)
 }
 
-func TestParseSQL_ColumnLevelUnnamedConstraintsSkipped(t *testing.T) {
-	// Unnamed column-level PRIMARY KEY, UNIQUE, CHECK, FK should all be skipped
-	sql := `CREATE TABLE public.groups (
-    id integer NOT NULL,
-    CONSTRAINT groups_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.items (
-    id integer PRIMARY KEY,
-    name text UNIQUE,
-    val integer CHECK (val > 0),
-    group_id integer REFERENCES public.groups(id)
-);`
+func TestParseSQL_ColumnLevelUnnamedConstraintsError(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+	}{
+		{
+			name: "PRIMARY KEY",
+			sql:  `CREATE TABLE public.items (id integer PRIMARY KEY);`,
+		},
+		{
+			name: "UNIQUE",
+			sql:  `CREATE TABLE public.items (id integer NOT NULL, code text UNIQUE);`,
+		},
+		{
+			name: "CHECK",
+			sql:  `CREATE TABLE public.items (id integer NOT NULL, val integer CHECK (val > 0));`,
+		},
+		{
+			name: "FOREIGN KEY",
+			sql: `CREATE TABLE public.groups (id integer NOT NULL, CONSTRAINT groups_pkey PRIMARY KEY (id));
+CREATE TABLE public.items (id integer NOT NULL, group_id integer REFERENCES public.groups(id));`,
+		},
+	}
 
-	result, err := parser.ParseSQL(sql)
-	require.NoError(t, err)
-
-	tbl, ok := result.Tables.GetOk("public.items")
-	require.True(t, ok)
-	assert.Equal(t, 0, tbl.Constraints.Len())
-	assert.Equal(t, 0, tbl.ForeignKeys.Len())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parser.ParseSQL(tt.sql)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unnamed constraint")
+		})
+	}
 }
 
 func TestParseSQL_TablespaceOnCreate(t *testing.T) {
@@ -578,19 +586,16 @@ CREATE VIEW public.v2 AS SELECT name FROM users;`
 	assert.Equal(t, 2, result.Views.Len())
 }
 
-func TestParseSQL_UnnamedConstraintSkipped(t *testing.T) {
-	// An unnamed table constraint (no CONSTRAINT name) is skipped by parseTableConstraint
+func TestParseSQL_UnnamedConstraintError(t *testing.T) {
+	// An unnamed table constraint should return an error
 	sql := `CREATE TABLE public.items (
     id integer NOT NULL,
     name text,
     PRIMARY KEY (id)
 );`
-	result, err := parser.ParseSQL(sql)
-	require.NoError(t, err)
-
-	tbl := result.Tables.Get("public.items")
-	require.NotNil(t, tbl)
-	assert.Equal(t, 0, tbl.Constraints.Len())
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unnamed constraints are not supported")
 }
 
 func TestParseSQL_CommentRemove(t *testing.T) {
