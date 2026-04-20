@@ -289,6 +289,18 @@ COMMENT ON TABLE public.users IS 'User accounts';`)
 	assert.NotContains(t, s, "public.users")
 }
 
+func TestDump_OmitSchema_MultipleSchemas(t *testing.T) {
+	ctx := context.Background()
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: "postgres://postgres@localhost/postgres",
+		Schemas:    []string{"public", "other"},
+	})
+
+	_, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--omit-schema cannot be used with multiple schemas")
+}
+
 func TestDumpResult_OmitSchema_Index(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

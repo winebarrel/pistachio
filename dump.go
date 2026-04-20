@@ -106,6 +106,10 @@ func toFileName(schema, name string) string {
 }
 
 func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResult, error) {
+	if options.OmitSchema && len(client.Schemas) > 1 {
+		return nil, fmt.Errorf("--omit-schema cannot be used with multiple schemas")
+	}
+
 	conn, err := client.connect()
 	if err != nil {
 		return nil, err

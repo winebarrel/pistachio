@@ -284,11 +284,11 @@ func parseIndexDef(def string) (*pg_query.IndexStmt, error) {
 	return is, nil
 }
 
-// normalizeIndexSchema normalizes the table's schema name in an IndexStmt
-// so that an empty schema (implicit public) is treated the same as an explicit "public" schema.
-func normalizeIndexSchema(is *pg_query.IndexStmt) {
-	if is.Relation != nil && is.Relation.Schemaname == "" {
-		is.Relation.Schemaname = "public"
+// clearIndexSchema clears the schema name in an IndexStmt so that
+// index definitions are compared without regard to schema qualification.
+func clearIndexSchema(is *pg_query.IndexStmt) {
+	if is.Relation != nil {
+		is.Relation.Schemaname = ""
 	}
 }
 
@@ -300,8 +300,8 @@ func equalIndexDef(a, b string) bool {
 	if errA != nil || errB != nil {
 		return a == b
 	}
-	normalizeIndexSchema(nodeA)
-	normalizeIndexSchema(nodeB)
+	clearIndexSchema(nodeA)
+	clearIndexSchema(nodeB)
 	return proto.Equal(nodeA, nodeB)
 }
 

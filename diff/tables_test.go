@@ -493,6 +493,21 @@ func TestEqualIndexDef_schemaVsNoSchema(t *testing.T) {
 	))
 }
 
+func TestEqualIndexDef_customSchemaVsNoSchema(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON myschema.users USING btree (id)",
+		"CREATE INDEX idx ON users USING btree (id)",
+	))
+}
+
+func TestEqualIndexDef_differentSchemas(t *testing.T) {
+	// Different schemas should still be equal — schema is ignored in comparison
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON myschema.users USING btree (id)",
+		"CREATE INDEX idx ON public.users USING btree (id)",
+	))
+}
+
 func TestEqualIndexDef_different(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
