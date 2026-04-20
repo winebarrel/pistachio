@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
       - name: Run GoReleaser
         run: |
-          docker run \
+          docker run -q \
             --rm \
             -e CGO_ENABLED=1 \
             -e GITHUB_TOKEN \
