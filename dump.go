@@ -83,13 +83,32 @@ func (r *DumpResult) String() string {
 
 func (r *DumpResult) Files() map[string]string {
 	files := make(map[string]string)
+	seen := make(map[string]bool)
 	for _, t := range r.tables().CollectValues() {
-		files[toFileName(t.Schema, t.Name)] = model.TableToSQL(t) + "\n"
+		name := uniqueFileName(seen, toFileName(t.Schema, t.Name))
+		files[name] = model.TableToSQL(t) + "\n"
+		seen[strings.ToLower(name)] = true
 	}
 	for _, v := range r.views().CollectValues() {
-		files[toFileName(v.Schema, v.Name)] = model.ViewToSQL(v) + "\n"
+		name := uniqueFileName(seen, toFileName(v.Schema, v.Name))
+		files[name] = model.ViewToSQL(v) + "\n"
+		seen[strings.ToLower(name)] = true
 	}
 	return files
+}
+
+func uniqueFileName(seen map[string]bool, name string) string {
+	if !seen[strings.ToLower(name)] {
+		return name
+	}
+	ext := ".sql"
+	base := strings.TrimSuffix(name, ext)
+	for i := 2; ; i++ {
+		candidate := fmt.Sprintf("%s_%d%s", base, i, ext)
+		if !seen[strings.ToLower(candidate)] {
+			return candidate
+		}
+	}
 }
 
 var fileNameReplacer = strings.NewReplacer(

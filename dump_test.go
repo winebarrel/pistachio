@@ -8,8 +8,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
+	"github.com/winebarrel/pistachio/model"
 )
 
 type dumpTestCase struct {
@@ -323,6 +325,67 @@ CREATE INDEX idx_users_id ON public.users (id);`)
 	s := got.String()
 	assert.Contains(t, s, "CREATE INDEX idx_users_id ON users")
 	assert.NotContains(t, s, "ON public.users")
+}
+
+func TestDumpResult_Files_DuplicateFileName(t *testing.T) {
+	// When a table and view produce the same file name, the second should be renamed
+	tables := orderedmap.New[string, *model.Table]()
+	tbl := &model.Table{
+		Schema:      "",
+		Name:        "users",
+		Columns:     orderedmap.New[string, *model.Column](),
+		Constraints: orderedmap.New[string, *model.Constraint](),
+		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
+		Indexes:     orderedmap.New[string, *model.Index](),
+	}
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	tables.Set("users", tbl)
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("users", &model.View{Schema: "", Name: "users", Definition: "SELECT 1"})
+
+	result := &pistachio.DumpResult{
+		Tables: tables,
+		Views:  views,
+	}
+	files := result.Files()
+	assert.Len(t, files, 2)
+	assert.Contains(t, files, "users.sql")
+	assert.Contains(t, files, "users_2.sql")
+}
+
+func TestDumpResult_Files_DuplicateFileNameCaseInsensitive(t *testing.T) {
+	// "Users" and "users" should be treated as duplicate file names
+	tables := orderedmap.New[string, *model.Table]()
+	t1 := &model.Table{
+		Schema:      "",
+		Name:        "users",
+		Columns:     orderedmap.New[string, *model.Column](),
+		Constraints: orderedmap.New[string, *model.Constraint](),
+		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
+		Indexes:     orderedmap.New[string, *model.Index](),
+	}
+	t1.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	t2 := &model.Table{
+		Schema:      "",
+		Name:        "Users",
+		Columns:     orderedmap.New[string, *model.Column](),
+		Constraints: orderedmap.New[string, *model.Constraint](),
+		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
+		Indexes:     orderedmap.New[string, *model.Index](),
+	}
+	t2.Columns.Set("id", &model.Column{Name: "id", TypeName: "bigint", NotNull: true})
+	tables.Set("users", t1)
+	tables.Set("Users", t2)
+
+	result := &pistachio.DumpResult{
+		Tables: tables,
+		Views:  orderedmap.New[string, *model.View](),
+	}
+	files := result.Files()
+	assert.Contains(t, files, "users.sql")
+	assert.Contains(t, files, "Users_2.sql")
+	assert.Len(t, files, 2)
 }
 
 func TestDump(t *testing.T) {
