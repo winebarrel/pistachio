@@ -48,6 +48,7 @@ homebrew_casks:
     homepage: https://github.com/winebarrel/pistachio
     description: pistachio is a declarative schema management tool for PostgreSQL.
     license: MIT
+    binary: pist
     hooks:
       post:
         install: |
