@@ -263,6 +263,81 @@ ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCE
 	assert.Equal(t, []string{"user_id"}, fk.Columns)
 }
 
+func TestParseSQL_InlineForeignKey(t *testing.T) {
+	sql := `CREATE TABLE public.groups (
+    id integer NOT NULL,
+    CONSTRAINT groups_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.members (
+    id integer NOT NULL,
+    group_id integer NOT NULL,
+    CONSTRAINT members_pkey PRIMARY KEY (id),
+    CONSTRAINT members_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.members")
+	require.True(t, ok)
+	fk, ok := tbl.ForeignKeys.GetOk("members_group_id_fkey")
+	require.True(t, ok)
+	assert.True(t, fk.Validated)
+	assert.Equal(t, "public", fk.Schema)
+	assert.Equal(t, "members", fk.Table)
+	assert.Equal(t, "public", *fk.RefSchema)
+	assert.Equal(t, "groups", *fk.RefTable)
+	assert.Equal(t, []string{"group_id"}, fk.Columns)
+	assert.Contains(t, fk.Definition, "FOREIGN KEY (group_id)")
+}
+
+func TestParseSQL_InlineForeignKeyWithSchema(t *testing.T) {
+	sql := `CREATE TABLE myapp.categories (
+    id integer NOT NULL,
+    CONSTRAINT categories_pkey PRIMARY KEY (id)
+);
+CREATE TABLE myapp.items (
+    id integer NOT NULL,
+    category_id integer NOT NULL,
+    CONSTRAINT items_pkey PRIMARY KEY (id),
+    CONSTRAINT items_category_id_fkey FOREIGN KEY (category_id) REFERENCES myapp.categories(id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("myapp.items")
+	require.True(t, ok)
+	fk, ok := tbl.ForeignKeys.GetOk("items_category_id_fkey")
+	require.True(t, ok)
+	assert.Equal(t, "myapp", fk.Schema)
+	assert.Equal(t, "items", fk.Table)
+	assert.Equal(t, "myapp", *fk.RefSchema)
+	assert.Equal(t, "categories", *fk.RefTable)
+	assert.Equal(t, []string{"category_id"}, fk.Columns)
+}
+
+func TestParseSQL_InlineForeignKeyUnnamed(t *testing.T) {
+	// Unnamed table-level FK constraints should be skipped
+	sql := `CREATE TABLE public.groups (
+    id integer NOT NULL,
+    CONSTRAINT groups_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.members (
+    id integer NOT NULL,
+    group_id integer NOT NULL,
+    CONSTRAINT members_pkey PRIMARY KEY (id),
+    FOREIGN KEY (group_id) REFERENCES public.groups(id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.members")
+	require.True(t, ok)
+	assert.Equal(t, 0, tbl.ForeignKeys.Len())
+}
+
 func TestParseSQL_TablespaceOnCreate(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,

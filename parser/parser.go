@@ -187,12 +187,22 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 
 		case elt.GetConstraint() != nil:
 			con := elt.GetConstraint()
-			constraint, err := parseTableConstraint(con)
-			if err != nil {
-				return nil, err
-			}
-			if constraint != nil {
-				table.Constraints.Set(constraint.Name, constraint)
+			if con.Contype == pg_query.ConstrType_CONSTR_FOREIGN {
+				fk, err := parseInlineForeignKey(con, schema, cs.Relation.Relname, defaultSchema)
+				if err != nil {
+					return nil, err
+				}
+				if fk != nil {
+					table.ForeignKeys.Set(fk.Name, fk)
+				}
+			} else {
+				constraint, err := parseTableConstraint(con)
+				if err != nil {
+					return nil, err
+				}
+				if constraint != nil {
+					table.Constraints.Set(constraint.Name, constraint)
+				}
 			}
 		}
 	}
@@ -502,6 +512,53 @@ func parseAlterTableConstraint(as *pg_query.AlterTableStmt, defaultSchema string
 	}
 
 	return nil, nil, nil
+}
+
+// parseInlineForeignKey builds a ForeignKey from an inline FOREIGN KEY
+// constraint inside a CREATE TABLE statement.
+func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchema string) (*model.ForeignKey, error) {
+	if con.Conname == "" {
+		return nil, nil
+	}
+
+	def, err := deparseConstraintDef(con)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deparse constraint %s: %w", con.Conname, err)
+	}
+
+	var refSchema, refTable *string
+	if con.Pktable != nil {
+		rs := con.Pktable.Schemaname
+		if rs == "" {
+			rs = defaultSchema
+		}
+		refSchema = &rs
+		rt := con.Pktable.Relname
+		refTable = &rt
+	}
+
+	var columns []string
+	for _, attr := range con.FkAttrs {
+		if s := attr.GetString_(); s != nil {
+			columns = append(columns, s.Sval)
+		}
+	}
+
+	return &model.ForeignKey{
+		Constraint: model.Constraint{
+			Name:       con.Conname,
+			Type:       model.ConstraintType('f'),
+			Definition: def,
+			Columns:    columns,
+			Deferrable: con.Deferrable,
+			Deferred:   con.Initdeferred,
+			Validated:  !con.SkipValidation,
+		},
+		Schema:    schema,
+		Table:     table,
+		RefSchema: refSchema,
+		RefTable:  refTable,
+	}, nil
 }
 
 // Deparse helpers

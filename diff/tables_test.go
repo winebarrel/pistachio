@@ -290,7 +290,7 @@ func TestDiffForeignKeys_add(t *testing.T) {
 		Table:      "orders",
 	})
 
-	stmts := diffForeignKeys("public.orders", current, desired)
+	stmts := diffForeignKeys("public.orders", "public", current, desired)
 	assert.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "ADD CONSTRAINT fk_user")
 }
@@ -304,7 +304,7 @@ func TestDiffForeignKeys_drop(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
-	stmts := diffForeignKeys("public.orders", current, desired)
+	stmts := diffForeignKeys("public.orders", "public", current, desired)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, stmts)
 }
 
@@ -389,13 +389,13 @@ func TestEqualDefault(t *testing.T) {
 func TestEqualFKDef(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES users (id)"
-	assert.True(t, equalFKDef(a, b))
+	assert.True(t, equalFKDef(a, b, "public"))
 }
 
 func TestEqualFKDef_different(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES orders(id)"
-	assert.False(t, equalFKDef(a, b))
+	assert.False(t, equalFKDef(a, b, "public"))
 }
 
 func TestDiffTables_newTable_withForeignKey(t *testing.T) {
@@ -420,13 +420,25 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 func TestEqualFKDef_implicitPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES public.users(id)"
-	assert.True(t, equalFKDef(a, b))
+	assert.True(t, equalFKDef(a, b, "public"))
+}
+
+func TestEqualFKDef_implicitNonPublicSchema(t *testing.T) {
+	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
+	b := "FOREIGN KEY (item_id) REFERENCES myapp.items(id)"
+	assert.True(t, equalFKDef(a, b, "myapp"))
+}
+
+func TestEqualFKDef_implicitNonPublicSchema_different(t *testing.T) {
+	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
+	b := "FOREIGN KEY (item_id) REFERENCES other.items(id)"
+	assert.False(t, equalFKDef(a, b, "myapp"))
 }
 
 func TestEqualFKDef_parseError(t *testing.T) {
 	// When both fail to parse, falls back to string comparison
-	assert.True(t, equalFKDef("not sql", "not sql"))
-	assert.False(t, equalFKDef("not sql", "other"))
+	assert.True(t, equalFKDef("not sql", "not sql", "public"))
+	assert.False(t, equalFKDef("not sql", "other", "public"))
 }
 
 func TestEqualDefault_parseError(t *testing.T) {
@@ -455,7 +467,7 @@ func TestDiffForeignKeys_change(t *testing.T) {
 		Table:      "orders",
 	})
 
-	stmts := diffForeignKeys("public.orders", current, desired)
+	stmts := diffForeignKeys("public.orders", "public", current, desired)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", stmts[0])
 	assert.Contains(t, stmts[1], "ADD CONSTRAINT fk_user")
@@ -508,9 +520,131 @@ func TestEqualConstraintDef_different(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_nonTextCastPreserved(t *testing.T) {
+	// ::integer cast is semantically meaningful and must not be stripped
+	assert.False(t, equalConstraintDef(
+		"CHECK (val > '0'::integer)",
+		"CHECK (val > '0')",
+	))
+}
+
+func TestEqualConstraintDef_textCastOnRegex(t *testing.T) {
+	// pg_get_constraintdef adds ::text to string literals
+	assert.True(t, equalConstraintDef(
+		"CHECK ((code ~ '^[0-9a-f]{64}$'::text))",
+		"CHECK (code ~ '^[0-9a-f]{64}$')",
+	))
+}
+
+func TestEqualConstraintDef_textCastOnNotEmpty(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((name <> ''::text))",
+		"CHECK (name <> '')",
+	))
+}
+
+func TestEqualConstraintDef_inVsAnyArray(t *testing.T) {
+	// pg_get_constraintdef returns = ANY(ARRAY[...]) for IN (...)
+	assert.True(t, equalConstraintDef(
+		"CHECK ((status = ANY (ARRAY['active'::text, 'pending'::text])))",
+		"CHECK (status IN ('active', 'pending'))",
+	))
+}
+
+func TestEqualConstraintDef_varcharCastInAnyArray(t *testing.T) {
+	// pg_get_constraintdef may use ::character varying and ::text[] casts
+	assert.True(t, equalConstraintDef(
+		"CHECK ((status::text = ANY (ARRAY['active'::character varying, 'pending'::character varying]::text[])))",
+		"CHECK (status IN ('active', 'pending'))",
+	))
+}
+
+func TestEqualConstraintDef_varcharCastWithoutArrayCast(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((status = ANY (ARRAY['active'::character varying, 'pending'::character varying])))",
+		"CHECK (status IN ('active', 'pending'))",
+	))
+}
+
+func TestEqualConstraintDef_inVsAnyArray_different(t *testing.T) {
+	assert.False(t, equalConstraintDef(
+		"CHECK ((status = ANY (ARRAY['active'::text, 'pending'::text])))",
+		"CHECK (status IN ('active', 'closed'))",
+	))
+}
+
+func TestEqualConstraintDef_textCastInBoolExpr(t *testing.T) {
+	// AND/OR combining multiple conditions with ::text casts
+	assert.True(t, equalConstraintDef(
+		"CHECK (((name <> ''::text) AND (code ~ '^[0-9]+$'::text)))",
+		"CHECK (name <> '' AND code ~ '^[0-9]+$')",
+	))
+}
+
+func TestEqualConstraintDef_textCastInFuncCall(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((length((name)::text) > 0))",
+		"CHECK (length(name::text) > 0)",
+	))
+}
+
+func TestEqualConstraintDef_textCastInCoalesce(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((COALESCE(name, ''::text) <> ''::text))",
+		"CHECK (COALESCE(name, '') <> '')",
+	))
+}
+
+func TestEqualConstraintDef_textCastInNullTest(t *testing.T) {
+	// NullTest recurse - ensure it doesn't break
+	assert.True(t, equalConstraintDef(
+		"CHECK ((name IS NOT NULL))",
+		"CHECK (name IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_textCastInCase(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK (((CASE WHEN (kind = 'a'::text) THEN 1 ELSE 0 END) > 0))",
+		"CHECK ((CASE WHEN kind = 'a' THEN 1 ELSE 0 END) > 0)",
+	))
+}
+
 func TestEqualConstraintDef_parseError(t *testing.T) {
 	assert.True(t, equalConstraintDef(")))invalid", ")))invalid"))
 	assert.False(t, equalConstraintDef(")))invalid", ")))other"))
+}
+
+func TestDiffConstraints_noChangeWithTextCast(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_name", &model.Constraint{
+		Name:       "chk_name",
+		Definition: "CHECK ((name <> ''::text))",
+	})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_name", &model.Constraint{
+		Name:       "chk_name",
+		Definition: "CHECK (name <> '')",
+	})
+
+	stmts := diffConstraints("public.items", current, desired)
+	assert.Empty(t, stmts)
+}
+
+func TestDiffConstraints_noChangeWithInVsAny(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_status", &model.Constraint{
+		Name:       "chk_status",
+		Definition: "CHECK ((status = ANY (ARRAY['active'::text, 'pending'::text])))",
+	})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_status", &model.Constraint{
+		Name:       "chk_status",
+		Definition: "CHECK (status IN ('active', 'pending'))",
+	})
+
+	stmts := diffConstraints("public.items", current, desired)
+	assert.Empty(t, stmts)
 }
 
 func TestDiffConstraints_noChangeWithFormattingDiff(t *testing.T) {
@@ -620,6 +754,53 @@ func TestDiffTables_indexWhereClauseSchemaInsensitive(t *testing.T) {
 
 	stmts := DiffTables(current, desired)
 	assert.Empty(t, stmts)
+}
+
+func TestEqualIndexDef_explicitAscVsDefault(t *testing.T) {
+	// ASC is the default sort order; pg_get_indexdef omits it
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1 DESC, col2)",
+		"CREATE INDEX idx ON t USING btree (col1 DESC, col2 ASC)",
+	))
+}
+
+func TestEqualIndexDef_allDefault(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1)",
+		"CREATE INDEX idx ON t USING btree (col1 ASC)",
+	))
+}
+
+func TestEqualIndexDef_descNullsFirst(t *testing.T) {
+	// NULLS FIRST is the default for DESC; pg_get_indexdef omits it
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1 DESC)",
+		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS FIRST)",
+	))
+}
+
+func TestEqualIndexDef_ascNullsLast(t *testing.T) {
+	// NULLS LAST is the default for ASC; pg_get_indexdef omits it
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1)",
+		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS LAST)",
+	))
+}
+
+func TestEqualIndexDef_descNullsLast_notEqual(t *testing.T) {
+	// NULLS LAST for DESC is non-default, must not be treated as equal
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1 DESC)",
+		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS LAST)",
+	))
+}
+
+func TestEqualIndexDef_ascNullsFirst_notEqual(t *testing.T) {
+	// NULLS FIRST for ASC is non-default, must not be treated as equal
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1)",
+		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS FIRST)",
+	))
 }
 
 func TestEqualIndexDef_different(t *testing.T) {

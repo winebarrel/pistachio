@@ -141,6 +141,33 @@ func TestListIndexes(t *testing.T) {
 		assert.Contains(t, idx.Definition, "lower")
 	})
 
+	t.Run("unique index referenced by foreign key not excluded", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.groups (
+				id integer NOT NULL,
+				code text NOT NULL,
+				CONSTRAINT groups_pkey PRIMARY KEY (id)
+			);
+			CREATE UNIQUE INDEX idx_groups_code ON public.groups (code);
+			CREATE TABLE public.members (
+				id integer NOT NULL,
+				group_code text NOT NULL,
+				CONSTRAINT members_pkey PRIMARY KEY (id),
+				CONSTRAINT members_group_code_fkey FOREIGN KEY (group_code) REFERENCES public.groups(code)
+			);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		tbl := tables.Get("public.groups")
+		// The unique index should not be excluded just because a FK references it
+		idx, ok := tbl.Indexes.GetOk("idx_groups_code")
+		require.True(t, ok)
+		assert.Contains(t, idx.Definition, "UNIQUE")
+	})
+
 	t.Run("constraint index excluded", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.users (

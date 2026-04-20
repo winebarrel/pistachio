@@ -60,14 +60,14 @@ func diffTable(current, desired *model.Table) []string {
 	// so skip diffing them to avoid false DROP statements.
 	if desired.PartitionOf != nil && desired.PartitionBound != nil {
 		stmts = append(stmts, diffIndexes(current.Indexes, desired.Indexes)...)
-		stmts = append(stmts, diffForeignKeys(fqtn, current.ForeignKeys, desired.ForeignKeys)...)
+		stmts = append(stmts, diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)...)
 		return stmts
 	}
 
 	stmts = append(stmts, diffColumns(fqtn, current.Columns, desired.Columns)...)
 	stmts = append(stmts, diffConstraints(fqtn, current.Constraints, desired.Constraints)...)
 	stmts = append(stmts, diffIndexes(current.Indexes, desired.Indexes)...)
-	stmts = append(stmts, diffForeignKeys(fqtn, current.ForeignKeys, desired.ForeignKeys)...)
+	stmts = append(stmts, diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)...)
 	stmts = append(stmts, diffComments(current, desired)...)
 
 	return stmts
@@ -164,13 +164,108 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 
 // normalizeConstraintDef normalizes a constraint definition by parsing
 // and deparsing it through pg_query to eliminate formatting differences.
+// It also normalizes AST-level differences introduced by pg_get_constraintdef
+// (e.g. explicit ::text casts on string literals, = ANY(ARRAY[...]) vs IN (...)).
 func normalizeConstraintDef(def string) (string, error) {
 	sql := "ALTER TABLE _t ADD CONSTRAINT _c " + def
 	result, err := pg_query.Parse(sql)
 	if err != nil {
 		return "", err
 	}
+	as := result.Stmts[0].Stmt.GetAlterTableStmt()
+	if as != nil {
+		cmd := as.Cmds[0].GetAlterTableCmd()
+		if cmd != nil {
+			con := cmd.Def.GetConstraint()
+			if con != nil {
+				con.RawExpr = normalizeCheckExpr(con.RawExpr)
+			}
+		}
+	}
 	return pg_query.Deparse(result)
+}
+
+// normalizeCheckExpr recursively normalizes a CHECK constraint expression
+// so that semantically equivalent definitions compare as equal:
+//   - Strips casts to text-like types (text, varchar), which pg_get_constraintdef adds.
+//   - Converts = ANY(ARRAY[...]) to IN (...) (PostgreSQL internal representation).
+func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
+	if node == nil {
+		return nil
+	}
+	switch n := node.Node.(type) {
+	case *pg_query.Node_TypeCast:
+		tc := n.TypeCast
+		tc.Arg = normalizeCheckExpr(tc.Arg)
+		if isTextLikeTypeName(tc.TypeName) {
+			return tc.Arg
+		}
+	case *pg_query.Node_AExpr:
+		ae := n.AExpr
+		ae.Lexpr = normalizeCheckExpr(ae.Lexpr)
+		ae.Rexpr = normalizeCheckExpr(ae.Rexpr)
+		if ae.Kind == pg_query.A_Expr_Kind_AEXPR_OP_ANY {
+			if arr := ae.Rexpr.GetAArrayExpr(); arr != nil {
+				ae.Kind = pg_query.A_Expr_Kind_AEXPR_IN
+				ae.Rexpr = &pg_query.Node{
+					Node: &pg_query.Node_List{
+						List: &pg_query.List{Items: arr.Elements},
+					},
+				}
+			}
+		}
+	case *pg_query.Node_BoolExpr:
+		for i, arg := range n.BoolExpr.Args {
+			n.BoolExpr.Args[i] = normalizeCheckExpr(arg)
+		}
+	case *pg_query.Node_AArrayExpr:
+		for i, elem := range n.AArrayExpr.Elements {
+			n.AArrayExpr.Elements[i] = normalizeCheckExpr(elem)
+		}
+	case *pg_query.Node_List:
+		for i, item := range n.List.Items {
+			n.List.Items[i] = normalizeCheckExpr(item)
+		}
+	case *pg_query.Node_FuncCall:
+		for i, arg := range n.FuncCall.Args {
+			n.FuncCall.Args[i] = normalizeCheckExpr(arg)
+		}
+	case *pg_query.Node_NullTest:
+		n.NullTest.Arg = normalizeCheckExpr(n.NullTest.Arg)
+	case *pg_query.Node_CoalesceExpr:
+		for i, arg := range n.CoalesceExpr.Args {
+			n.CoalesceExpr.Args[i] = normalizeCheckExpr(arg)
+		}
+	case *pg_query.Node_CaseExpr:
+		n.CaseExpr.Arg = normalizeCheckExpr(n.CaseExpr.Arg)
+		n.CaseExpr.Defresult = normalizeCheckExpr(n.CaseExpr.Defresult)
+		for _, when := range n.CaseExpr.Args {
+			if w := when.GetCaseWhen(); w != nil {
+				w.Expr = normalizeCheckExpr(w.Expr)
+				w.Result = normalizeCheckExpr(w.Result)
+			}
+		}
+	}
+	return node
+}
+
+// isTextLikeTypeName returns true if the TypeName refers to a text-like type
+// (text, text[], varchar, character varying, or their array forms).
+// pg_get_constraintdef adds these casts on expressions that are already
+// text-typed, so stripping them avoids false diffs.
+func isTextLikeTypeName(tn *pg_query.TypeName) bool {
+	if tn == nil {
+		return false
+	}
+	for _, n := range tn.Names {
+		if s := n.GetString_(); s != nil {
+			switch s.Sval {
+			case "text", "varchar":
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // equalConstraintDef compares two constraint definitions by normalizing
@@ -232,14 +327,14 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) []strin
 	return stmts
 }
 
-func diffForeignKeys(fqtn string, current, desired *orderedmap.Map[string, *model.ForeignKey]) []string {
+func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey]) []string {
 	var stmts []string
 
 	// Drop removed or changed FKs
 	for name := range current.All() {
 		desiredFk, ok := desired.GetOk(name)
 		currentFk := current.Get(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition) {
+		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
 		}
 	}
@@ -247,7 +342,7 @@ func diffForeignKeys(fqtn string, current, desired *orderedmap.Map[string, *mode
 	// Add new or changed FKs
 	for name, desiredFk := range desired.All() {
 		currentFk, ok := current.GetOk(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition) {
+		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
 			stmts = append(stmts, desiredFk.SQL())
 		}
 	}
@@ -299,8 +394,9 @@ func equalPtr[T comparable](a, b *T) bool {
 
 // normalizeIndexDef normalizes an index definition by parsing it,
 // clearing the schema, and deparsing it back to a canonical string.
-// This avoids false diffs caused by formatting differences or
-// protobuf location metadata.
+// It also canonicalises the default sort order so that explicit ASC
+// (the default) matches an omitted order, and explicit NULLS LAST
+// for ASC / NULLS FIRST for DESC matches an omitted nulls clause.
 func normalizeIndexDef(def string) (string, error) {
 	result, err := pg_query.Parse(def)
 	if err != nil {
@@ -312,6 +408,28 @@ func normalizeIndexDef(def string) (string, error) {
 	}
 	if is.Relation != nil {
 		is.Relation.Schemaname = ""
+	}
+	for _, p := range is.IndexParams {
+		ie := p.GetIndexElem()
+		if ie == nil {
+			continue
+		}
+		// Canonicalise sort order: SORTBY_ASC and SORTBY_DEFAULT are equivalent.
+		if ie.Ordering == pg_query.SortByDir_SORTBY_ASC {
+			ie.Ordering = pg_query.SortByDir_SORTBY_DEFAULT
+		}
+		// Canonicalise nulls order: NULLS LAST is the default for ASC/DEFAULT,
+		// NULLS FIRST is the default for DESC.
+		switch ie.Ordering {
+		case pg_query.SortByDir_SORTBY_DEFAULT:
+			if ie.NullsOrdering == pg_query.SortByNulls_SORTBY_NULLS_LAST {
+				ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
+			}
+		case pg_query.SortByDir_SORTBY_DESC:
+			if ie.NullsOrdering == pg_query.SortByNulls_SORTBY_NULLS_FIRST {
+				ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
+			}
+		}
 	}
 	return pg_query.Deparse(result)
 }
@@ -351,24 +469,26 @@ func parseFKDef(def string) (*pg_query.Constraint, error) {
 }
 
 // normalizeFKSchema normalizes the referenced table's schema name in a FK
-// constraint node so that an empty schema (implicit public) is treated
-// the same as an explicit "public" schema.
-func normalizeFKSchema(con *pg_query.Constraint) {
+// constraint node so that an empty schema (implicit via search_path) is
+// treated the same as the explicit schema of the owning table.
+func normalizeFKSchema(con *pg_query.Constraint, schema string) {
 	if con.Pktable != nil && con.Pktable.Schemaname == "" {
-		con.Pktable.Schemaname = "public"
+		con.Pktable.Schemaname = schema
 	}
 }
 
 // equalFKDef compares two FK constraint definitions by their parse trees,
 // so that formatting differences do not cause false diffs.
-func equalFKDef(a, b string) bool {
+// schema is the schema of the table that owns the FK constraint and is used
+// to fill in an implicit (empty) schema on the referenced table.
+func equalFKDef(a, b, schema string) bool {
 	nodeA, errA := parseFKDef(a)
 	nodeB, errB := parseFKDef(b)
 	if errA != nil || errB != nil {
 		return a == b
 	}
-	normalizeFKSchema(nodeA)
-	normalizeFKSchema(nodeB)
+	normalizeFKSchema(nodeA, schema)
+	normalizeFKSchema(nodeB, schema)
 	return proto.Equal(nodeA, nodeB)
 }
 

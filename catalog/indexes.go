@@ -17,6 +17,8 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 					con.conindid
 				FROM
 					pg_catalog.pg_constraint con
+				WHERE
+					con.contype IN ('p', 'u', 'x')
 			),
 			-- https://www.postgresql.org/docs/current/catalog-pg-depend.html
 			dependency_extension AS (
