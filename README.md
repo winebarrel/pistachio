@@ -90,6 +90,16 @@ pist dump --split ./schema/
 # => ./schema/public.users.sql, ./schema/public.orders.sql, ...
 ```
 
+Use `--omit-schema` to omit schema names from the dump output.
+
+```bash
+pist dump --omit-schema
+# => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
+
+pist dump --omit-schema --split ./schema/
+# => ./schema/users.sql, ./schema/orders.sql, ...
+```
+
 ## Example
 
 Create a schema file:

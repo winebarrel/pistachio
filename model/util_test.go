@@ -23,7 +23,7 @@ func TestIdent_uppercase(t *testing.T) {
 }
 
 func TestIdent_empty(t *testing.T) {
-	assert.Equal(t, `""`, Ident(""))
+	assert.Equal(t, "", Ident(""))
 }
 
 func TestIdent_withSpecialChars(t *testing.T) {
