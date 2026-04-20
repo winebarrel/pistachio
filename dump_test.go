@@ -289,6 +289,30 @@ COMMENT ON TABLE public.users IS 'User accounts';`)
 	assert.NotContains(t, s, "public.users")
 }
 
+func TestDumpResult_OmitSchema_Index(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_id ON public.users (id);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+	s := got.String()
+	assert.Contains(t, s, "CREATE INDEX idx_users_id ON users")
+	assert.NotContains(t, s, "ON public.users")
+}
+
 func TestDump(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

@@ -28,6 +28,8 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 	tables := orderedmap.New[string, *model.Table]()
 	for _, t := range r.Tables.CollectValues() {
 		copied := *t
+		fqtn := t.FQTN()
+		tableName := model.Ident(t.Name)
 		copied.Schema = ""
 		if copied.ForeignKeys.Len() > 0 {
 			fks := orderedmap.New[string, *model.ForeignKey]()
@@ -38,7 +40,17 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			}
 			copied.ForeignKeys = fks
 		}
-		tables.Set(t.FQTN(), &copied)
+		if copied.Indexes.Len() > 0 {
+			idxs := orderedmap.New[string, *model.Index]()
+			for _, idx := range copied.Indexes.CollectValues() {
+				idxCopied := *idx
+				idxCopied.Schema = ""
+				idxCopied.Definition = strings.ReplaceAll(idx.Definition, " ON "+fqtn+" ", " ON "+tableName+" ")
+				idxs.Set(idx.Name, &idxCopied)
+			}
+			copied.Indexes = idxs
+		}
+		tables.Set(fqtn, &copied)
 	}
 	return tables
 }
