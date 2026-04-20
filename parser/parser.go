@@ -25,15 +25,23 @@ func ReadSQLFile(path string) (string, error) {
 }
 
 func ParseSQLFile(path string) (*ParseResult, error) {
+	return ParseSQLFileWithSchema(path, "public")
+}
+
+func ParseSQLFileWithSchema(path string, defaultSchema string) (*ParseResult, error) {
 	sql, err := ReadSQLFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return ParseSQL(sql)
+	return ParseSQLWithSchema(sql, defaultSchema)
 }
 
 func ParseSQLFiles(paths []string) (*ParseResult, error) {
+	return ParseSQLFilesWithSchema(paths, "public")
+}
+
+func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult, error) {
 	var sqls []string
 	for _, path := range paths {
 		sql, err := ReadSQLFile(path)
@@ -43,10 +51,14 @@ func ParseSQLFiles(paths []string) (*ParseResult, error) {
 		sqls = append(sqls, sql)
 	}
 
-	return ParseSQL(strings.Join(sqls, "\n"))
+	return ParseSQLWithSchema(strings.Join(sqls, "\n"), defaultSchema)
 }
 
 func ParseSQL(sql string) (*ParseResult, error) {
+	return ParseSQLWithSchema(sql, "public")
+}
+
+func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {
 	result, err := pg_query.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL: %w", err)
@@ -60,21 +72,21 @@ func ParseSQL(sql string) (*ParseResult, error) {
 
 		switch {
 		case node.GetCreateStmt() != nil:
-			table, err := parseCreateStmt(node.GetCreateStmt())
+			table, err := parseCreateStmt(node.GetCreateStmt(), defaultSchema)
 			if err != nil {
 				return nil, err
 			}
 			tables.Set(table.FQTN(), table)
 
 		case node.GetViewStmt() != nil:
-			view, err := parseViewStmt(node.GetViewStmt())
+			view, err := parseViewStmt(node.GetViewStmt(), defaultSchema)
 			if err != nil {
 				return nil, err
 			}
 			views.Set(view.FQVN(), view)
 
 		case node.GetIndexStmt() != nil:
-			idx, err := parseIndexStmt(node.GetIndexStmt(), rawStmt)
+			idx, err := parseIndexStmt(node.GetIndexStmt(), rawStmt, defaultSchema)
 			if err != nil {
 				return nil, err
 			}
@@ -87,7 +99,7 @@ func ParseSQL(sql string) (*ParseResult, error) {
 			as := node.GetAlterTableStmt()
 			schema := as.Relation.Schemaname
 			if schema == "" {
-				schema = "public"
+				schema = defaultSchema
 			}
 			fqtn := model.Ident(schema, as.Relation.Relname)
 			t, ok := tables.GetOk(fqtn)
@@ -95,7 +107,7 @@ func ParseSQL(sql string) (*ParseResult, error) {
 				continue
 			}
 
-			con, fk, err := parseAlterTableConstraint(as)
+			con, fk, err := parseAlterTableConstraint(as, defaultSchema)
 			if err != nil {
 				return nil, err
 			}
@@ -107,17 +119,17 @@ func ParseSQL(sql string) (*ParseResult, error) {
 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
-			parseCommentStmt(cs, tables, views)
+			parseCommentStmt(cs, defaultSchema, tables, views)
 		}
 	}
 
 	return &ParseResult{Tables: tables, Views: views}, nil
 }
 
-func parseCreateStmt(cs *pg_query.CreateStmt) (*model.Table, error) {
+func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Table, error) {
 	schema := cs.Relation.Schemaname
 	if schema == "" {
-		schema = "public"
+		schema = defaultSchema
 	}
 
 	table := &model.Table{
@@ -149,7 +161,7 @@ func parseCreateStmt(cs *pg_query.CreateStmt) (*model.Table, error) {
 		if rv != nil {
 			parentSchema := rv.Schemaname
 			if parentSchema == "" {
-				parentSchema = "public"
+				parentSchema = defaultSchema
 			}
 			parent := model.Ident(parentSchema, rv.Relname)
 			table.PartitionOf = &parent
@@ -296,7 +308,7 @@ func parseTableConstraint(con *pg_query.Constraint) (*model.Constraint, error) {
 	}, nil
 }
 
-func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt) (*model.Index, error) {
+func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt, defaultSchema string) (*model.Index, error) {
 	result := &pg_query.ParseResult{
 		Stmts: []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},
 	}
@@ -307,7 +319,7 @@ func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt) (*model.I
 
 	schema := is.Relation.Schemaname
 	if schema == "" {
-		schema = "public"
+		schema = defaultSchema
 	}
 
 	var tablespace *string
@@ -325,10 +337,10 @@ func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt) (*model.I
 	}, nil
 }
 
-func parseViewStmt(vs *pg_query.ViewStmt) (*model.View, error) {
+func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, error) {
 	schema := vs.View.Schemaname
 	if schema == "" {
-		schema = "public"
+		schema = defaultSchema
 	}
 
 	// Deparse the SELECT query
@@ -349,9 +361,9 @@ func parseViewStmt(vs *pg_query.ViewStmt) (*model.View, error) {
 	}, nil
 }
 
-func parseCommentStmt(cs *pg_query.CommentStmt, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View]) {
+func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View]) {
 	items := cs.Object.GetList().GetItems()
-	if len(items) < 2 {
+	if len(items) == 0 {
 		return
 	}
 
@@ -364,7 +376,7 @@ func parseCommentStmt(cs *pg_query.CommentStmt, tables *orderedmap.Map[string, *
 
 	switch cs.Objtype {
 	case pg_query.ObjectType_OBJECT_TABLE:
-		schema := "public"
+		schema := defaultSchema
 		tableName := names[0]
 		if len(names) >= 2 {
 			schema = names[0]
@@ -380,7 +392,7 @@ func parseCommentStmt(cs *pg_query.CommentStmt, tables *orderedmap.Map[string, *
 			}
 		}
 	case pg_query.ObjectType_OBJECT_VIEW:
-		schema := "public"
+		schema := defaultSchema
 		viewName := names[0]
 		if len(names) >= 2 {
 			schema = names[0]
@@ -396,7 +408,10 @@ func parseCommentStmt(cs *pg_query.CommentStmt, tables *orderedmap.Map[string, *
 			}
 		}
 	case pg_query.ObjectType_OBJECT_COLUMN:
-		schema := "public"
+		if len(names) < 2 {
+			return
+		}
+		schema := defaultSchema
 		tableName := names[0]
 		colName := names[1]
 		if len(names) >= 3 {
@@ -418,7 +433,7 @@ func parseCommentStmt(cs *pg_query.CommentStmt, tables *orderedmap.Map[string, *
 	}
 }
 
-func parseAlterTableConstraint(as *pg_query.AlterTableStmt) (*model.Constraint, *model.ForeignKey, error) {
+func parseAlterTableConstraint(as *pg_query.AlterTableStmt, defaultSchema string) (*model.Constraint, *model.ForeignKey, error) {
 	for _, cmdNode := range as.Cmds {
 		cmd := cmdNode.GetAlterTableCmd()
 		if cmd == nil || cmd.Subtype != pg_query.AlterTableType_AT_AddConstraint {
@@ -431,7 +446,7 @@ func parseAlterTableConstraint(as *pg_query.AlterTableStmt) (*model.Constraint, 
 
 		schema := as.Relation.Schemaname
 		if schema == "" {
-			schema = "public"
+			schema = defaultSchema
 		}
 
 		def, err := deparseConstraintDef(con)
@@ -444,7 +459,7 @@ func parseAlterTableConstraint(as *pg_query.AlterTableStmt) (*model.Constraint, 
 			if con.Pktable != nil {
 				rs := con.Pktable.Schemaname
 				if rs == "" {
-					rs = "public"
+					rs = defaultSchema
 				}
 				refSchema = &rs
 				rt := con.Pktable.Relname

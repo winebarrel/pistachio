@@ -103,6 +103,25 @@ pist -n staging -m staging=public plan schema.sql
 pist -n staging -m staging=public apply schema.sql
 ```
 
+### Omit schema
+
+Use `--omit-schema` to omit schema names from the dump output.
+
+```bash
+pist dump --omit-schema
+# => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
+
+pist dump --omit-schema --split ./schema/
+# => ./schema/users.sql, ./schema/orders.sql, ...
+```
+
+When schema is omitted in SQL files, `plan` and `apply` use the schema specified by `-n`:
+
+```bash
+pist -n staging plan schema.sql   # schema-less SQL is treated as "staging"
+pist -n staging apply schema.sql
+```
+
 ### Split dump
 
 Use `--split` to output each table/view as a separate file in the specified directory.

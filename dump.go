@@ -11,43 +11,105 @@ import (
 )
 
 type DumpOptions struct {
-	Split string `help:"Output each table/view as a separate file in the specified directory."`
+	Split      string `help:"Output each table/view as a separate file in the specified directory."`
+	OmitSchema bool   `help:"Omit schema name from the dump output."`
 }
 
 type DumpResult struct {
-	Tables *orderedmap.Map[string, *model.Table]
-	Views  *orderedmap.Map[string, *model.View]
+	Tables     *orderedmap.Map[string, *model.Table]
+	Views      *orderedmap.Map[string, *model.View]
+	OmitSchema bool
+}
+
+func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
+	if !r.OmitSchema {
+		return r.Tables
+	}
+	tables := orderedmap.New[string, *model.Table]()
+	for _, t := range r.Tables.CollectValues() {
+		copied := *t
+		fqtn := t.FQTN()
+		tableName := model.Ident(t.Name)
+		copied.Schema = ""
+		if copied.ForeignKeys.Len() > 0 {
+			fks := orderedmap.New[string, *model.ForeignKey]()
+			for _, fk := range copied.ForeignKeys.CollectValues() {
+				fkCopied := *fk
+				fkCopied.Schema = ""
+				fks.Set(fk.Name, &fkCopied)
+			}
+			copied.ForeignKeys = fks
+		}
+		if copied.Indexes.Len() > 0 {
+			idxs := orderedmap.New[string, *model.Index]()
+			for _, idx := range copied.Indexes.CollectValues() {
+				idxCopied := *idx
+				idxCopied.Schema = ""
+				idxCopied.Definition = strings.ReplaceAll(idx.Definition, " ON "+fqtn+" ", " ON "+tableName+" ")
+				idxs.Set(idx.Name, &idxCopied)
+			}
+			copied.Indexes = idxs
+		}
+		tables.Set(fqtn, &copied)
+	}
+	return tables
+}
+
+func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
+	if !r.OmitSchema {
+		return r.Views
+	}
+	views := orderedmap.New[string, *model.View]()
+	for _, v := range r.Views.CollectValues() {
+		copied := *v
+		copied.Schema = ""
+		views.Set(v.FQVN(), &copied)
+	}
+	return views
 }
 
 func (r *DumpResult) String() string {
 	var parts []string
-	if r.Tables.Len() > 0 {
-		parts = append(parts, model.TablesToSQL(r.Tables))
+	tables := r.tables()
+	views := r.views()
+	if tables.Len() > 0 {
+		parts = append(parts, model.TablesToSQL(tables))
 	}
-	if r.Views.Len() > 0 {
-		parts = append(parts, model.ViewsToSQL(r.Views))
+	if views.Len() > 0 {
+		parts = append(parts, model.ViewsToSQL(views))
 	}
 	return strings.Join(parts, "\n\n")
 }
 
 func (r *DumpResult) Files() map[string]string {
 	files := make(map[string]string)
-	for _, t := range r.Tables.CollectValues() {
+	for _, t := range r.tables().CollectValues() {
 		files[toFileName(t.Schema, t.Name)] = model.TableToSQL(t) + "\n"
 	}
-	for _, v := range r.Views.CollectValues() {
+	for _, v := range r.views().CollectValues() {
 		files[toFileName(v.Schema, v.Name)] = model.ViewToSQL(v) + "\n"
 	}
 	return files
 }
 
-var fileNameReplacer = strings.NewReplacer(`"`, "", " ", "_")
+var fileNameReplacer = strings.NewReplacer(
+	`"`, "",
+	" ", "_",
+)
 
 func toFileName(schema, name string) string {
-	return fileNameReplacer.Replace(schema+"."+name) + ".sql"
+	base := name
+	if schema != "" {
+		base = schema + "." + name
+	}
+	return fileNameReplacer.Replace(base) + ".sql"
 }
 
 func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResult, error) {
+	if options.OmitSchema && len(client.Schemas) > 1 {
+		return nil, fmt.Errorf("--omit-schema cannot be used with multiple schemas")
+	}
+
 	conn, err := client.connect()
 	if err != nil {
 		return nil, err
@@ -70,7 +132,8 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	}
 
 	return &DumpResult{
-		Tables: client.remapTableSchemas(tables),
-		Views:  client.remapViewSchemas(views),
+		Tables:     client.remapTableSchemas(tables),
+		Views:      client.remapViewSchemas(views),
+		OmitSchema: options.OmitSchema,
 	}, nil
 }

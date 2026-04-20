@@ -561,3 +561,89 @@ CREATE TABLE myschema.users (
 	t.Log(output)
 	assert.Contains(t, output, "name text")
 }
+
+func TestPlan_SchemalessDesired_CustomSchema(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+`)
+
+	// Desired SQL without schema - should use -n schema ("myschema")
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	t.Log(got)
+
+	assert.Contains(t, got, "ALTER TABLE myschema.users ADD COLUMN name text;")
+}
+
+func TestPlan_SchemalessDesired_CustomSchema_NoDiff(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestApply_SchemalessDesired_CustomSchema(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	require.NoError(t, err)
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, got.String(), "name text")
+}
