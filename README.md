@@ -35,10 +35,10 @@ Flags:
       --version
 
 Commands:
-  apply <file> [flags]
+  apply <files> ... [flags]
     Apply schema changes to the database.
 
-  plan <file> [flags]
+  plan <files> ... [flags]
     Print the schema diff SQL without applying it.
 
   dump [flags]
@@ -49,10 +49,13 @@ Run "pist <command> --help" for more information on a command.
 
 ### plan
 
-Compare a schema file against the current database and print the SQL needed to reconcile them.
+Compare schema file(s) against the current database and print the SQL needed to reconcile them.
 
 ```bash
 pist plan schema.sql
+
+# Multiple files
+pist plan tables.sql views.sql
 ```
 
 ### apply
@@ -61,6 +64,9 @@ Apply the diff to the database.
 
 ```bash
 pist apply schema.sql
+
+# Multiple files
+pist apply tables.sql views.sql
 ```
 
 Use `--pre-sql-file` to run SQL before applying changes. Use `--with-tx` to wrap everything in a transaction.
@@ -75,6 +81,13 @@ Dump the current database schema as SQL. Output can be used directly as a schema
 
 ```bash
 pist dump
+```
+
+Use `--split` to output each table/view as a separate file in the specified directory.
+
+```bash
+pist dump --split ./schema/
+# => ./schema/public.users.sql, ./schema/public.orders.sql, ...
 ```
 
 ## Example
@@ -107,6 +120,14 @@ Preview and apply:
 ```bash
 pist plan schema.sql   # review the diff
 pist apply schema.sql  # apply it
+```
+
+Or split schema into multiple files and use them together:
+
+```bash
+pist dump --split ./schema/       # dump per table/view
+pist plan ./schema/*.sql          # review the diff
+pist apply ./schema/*.sql         # apply it
 ```
 
 ## Supported Objects
