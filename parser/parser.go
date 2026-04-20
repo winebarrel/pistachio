@@ -363,7 +363,7 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 
 func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View]) {
 	items := cs.Object.GetList().GetItems()
-	if len(items) < 2 {
+	if len(items) == 0 {
 		return
 	}
 
@@ -408,6 +408,9 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 			}
 		}
 	case pg_query.ObjectType_OBJECT_COLUMN:
+		if len(names) < 2 {
+			return
+		}
 		schema := defaultSchema
 		tableName := names[0]
 		colName := names[1]
