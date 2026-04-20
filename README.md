@@ -3,39 +3,83 @@
 [![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
 
-`pistachio` is a declarative schema management tool for PostgreSQL.
-
-You describe the desired state of your database schema in SQL, and `pistachio` compares that declaration with the current database schema, then either:
-
-- prints the SQL diff with `plan`
-- applies the diff with `apply`
-- dumps the current schema with `dump`
-
-The CLI is intended for a schema-as-code workflow where the desired state is kept in a SQL file and the database is reconciled to match it.
+Declarative schema management tool for PostgreSQL. Define your desired schema in SQL and let `pistachio` figure out the diff.
 
 <img width="800" alt="demo" src="https://github.com/user-attachments/assets/0e8b93ea-6b52-468b-9d63-6d39ed8ca041" />
 
-## Install
+## Installation
+
+### Homebrew
 
 ```bash
-go install github.com/winebarrel/pistachio/cmd/pist@latest
+brew install winebarrel/pistachio/pist
 ```
 
-Or build from this repository:
+### Download binary
+
+Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
+
+## Usage
+
+```
+Usage: pist <command> [flags]
+
+Flags:
+  -h, --help                  Show context-sensitive help.
+  -c, --conn-string="postgres://postgres@localhost/postgres"
+                              PostgreSQL connection string. See
+                              https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+                              ($DATABASE_URL)
+      --password=STRING       PostgreSQL password ($PGPASSWORD).
+  -n, --schemas=public,...    Schemas to inspect and modify ($PGSCHEMAS).
+      --version
+
+Commands:
+  apply <file> [flags]
+    Apply schema changes to the database.
+
+  plan <file> [flags]
+    Print the schema diff SQL without applying it.
+
+  dump [flags]
+    Dump the current database schema as SQL.
+
+Run "pist <command> --help" for more information on a command.
+```
+
+### plan
+
+Compare a schema file against the current database and print the SQL needed to reconcile them.
 
 ```bash
-go build -o pist ./cmd/pist
+pist plan schema.sql
 ```
 
-## Quick Start
+### apply
 
-Start PostgreSQL for local testing:
+Apply the diff to the database.
 
 ```bash
-docker compose up -d
+pist apply schema.sql
 ```
 
-Create a desired schema file:
+Use `--pre-sql-file` to run SQL before applying changes. Use `--with-tx` to wrap everything in a transaction.
+
+```bash
+pist apply schema.sql --pre-sql-file pre.sql --with-tx
+```
+
+### dump
+
+Dump the current database schema as SQL. Output can be used directly as a schema file.
+
+```bash
+pist dump
+```
+
+## Example
+
+Create a schema file:
 
 ```sql
 CREATE TABLE public.users (
@@ -58,153 +102,27 @@ ALTER TABLE ONLY public.posts
     FOREIGN KEY (user_id) REFERENCES users(id);
 ```
 
-Preview the changes:
+Preview and apply:
 
 ```bash
-pist plan schema.sql
-```
-
-Apply them:
-
-```bash
-pist apply schema.sql
-```
-
-Dump the current schema:
-
-```bash
-pist dump
-```
-
-## Commands
-
-### `plan`
-
-Prints the SQL needed to reconcile the current database schema with the declared desired schema.
-
-```bash
-pist plan schema.sql
-```
-
-Example output:
-
-```sql
-CREATE TABLE public.posts (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    title text NOT NULL,
-    CONSTRAINT posts_pkey PRIMARY KEY (id)
-);
-CREATE INDEX idx_posts_user_id ON public.posts USING btree (user_id);
-ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id);
-```
-
-### `apply`
-
-Executes the diff SQL against the target database and prints each executed statement.
-
-```bash
-pist apply schema.sql
-```
-
-You can run SQL before the generated diff:
-
-```bash
-pist apply schema.sql --pre-sql-file pre.sql
-```
-
-You can also wrap the pre-SQL and generated statements in a transaction:
-
-```bash
-pist apply schema.sql --with-tx
-```
-
-### `dump`
-
-Dumps the current schema as SQL.
-
-```bash
-pist dump
-```
-
-The output is suitable as a starting point for a declarative schema file.
-
-## Options
-
-Common options:
-
-```text
--c, --conn-string    PostgreSQL connection string
-    --password       PostgreSQL password
--n, --schemas        Schemas to inspect and modify
-```
-
-Environment variables:
-
-- `DATABASE_URL`
-- `PGPASSWORD`
-- `PGSCHEMAS`
-
-Defaults:
-
-- connection string: `postgres://postgres@localhost/postgres`
-- schemas: `public`
-
-Examples:
-
-```bash
-DATABASE_URL=postgres://postgres:postgres@localhost/app pist plan schema.sql
-PGSCHEMAS=public,tenant_a pist dump
+pist plan schema.sql   # review the diff
+pist apply schema.sql  # apply it
 ```
 
 ## Supported Objects
 
-Based on the current implementation and tests, `pistachio` supports diffing and dumping these PostgreSQL objects and features:
+- Tables (including unlogged and partitioned tables)
+- Views
+- Columns (serial/bigserial/smallserial, identity, generated)
+- Constraints (primary key, unique, check, exclusion, foreign key)
+- Indexes (unique, partial, expression, hash, multi-column)
+- Comments (on tables, columns, views)
+- Array, JSON, UUID, and other built-in types
+- Quoted identifiers
 
-- tables
-- views
-- columns
-- primary key, unique, check, and exclusion constraints
-- foreign keys, including foreign key actions
-- indexes, including unique, partial, expression, hash, and multi-column indexes
-- comments on tables, columns, and views
-- serial, smallserial, and bigserial-style schemas
-- identity columns
-- generated columns
-- array, JSON, UUID, and various built-in types
-- quoted identifiers
-- unlogged tables
-- partitioned tables
-
-## How It Works
-
-`pistachio` follows a declarative workflow:
-
-- you define the desired schema in SQL
-- `pistachio` reads and parses that declaration
-- `pistachio` inspects the current PostgreSQL catalog
-- it generates the SQL required to reconcile the current state with the declared state
-
-In other words, you manage the target schema definition, and `pistachio` computes the migration steps needed to reach it.
-
-The desired schema file is expected to contain declarative SQL such as:
-
-- `CREATE TABLE`
-- `CREATE VIEW`
-- `CREATE INDEX`
-- `ALTER TABLE ... ADD CONSTRAINT`
-- `COMMENT ON ...`
-
-## Testing
-
-Start PostgreSQL first:
+## Development
 
 ```bash
 docker compose up -d
-```
-
-Then run:
-
-```bash
 make test
 ```
