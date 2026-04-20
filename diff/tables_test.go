@@ -520,6 +520,14 @@ func TestEqualConstraintDef_different(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_nonTextCastPreserved(t *testing.T) {
+	// ::integer cast is semantically meaningful and must not be stripped
+	assert.False(t, equalConstraintDef(
+		"CHECK (val > '0'::integer)",
+		"CHECK (val > '0')",
+	))
+}
+
 func TestEqualConstraintDef_textCastOnRegex(t *testing.T) {
 	// pg_get_constraintdef adds ::text to string literals
 	assert.True(t, equalConstraintDef(
