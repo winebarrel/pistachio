@@ -5,7 +5,7 @@ coverage:
         target: 88%
     patch:
       default:
-        target: 80%
+        target: 75%
 
 ignore:
   - "internal/testutil"

@@ -338,6 +338,137 @@ CREATE TABLE public.members (
 	assert.Equal(t, 0, tbl.ForeignKeys.Len())
 }
 
+func TestParseSQL_ColumnLevelNamedCheck(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    status integer NOT NULL CONSTRAINT items_status_check CHECK (status = 0 OR status = 1),
+    CONSTRAINT items_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.items")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("items_status_check")
+	require.True(t, ok)
+	assert.Contains(t, con.Definition, "CHECK")
+}
+
+func TestParseSQL_ColumnLevelNamedFK(t *testing.T) {
+	sql := `CREATE TABLE public.groups (
+    id integer NOT NULL,
+    CONSTRAINT groups_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.members (
+    id integer NOT NULL,
+    group_id integer NOT NULL CONSTRAINT members_group_fkey REFERENCES public.groups(id),
+    CONSTRAINT members_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.members")
+	require.True(t, ok)
+	fk, ok := tbl.ForeignKeys.GetOk("members_group_fkey")
+	require.True(t, ok)
+	assert.Equal(t, "public", fk.Schema)
+	assert.Equal(t, "members", fk.Table)
+	assert.Equal(t, "public", *fk.RefSchema)
+	assert.Equal(t, "groups", *fk.RefTable)
+	assert.Equal(t, []string{"group_id"}, fk.Columns)
+	assert.Contains(t, fk.Definition, "FOREIGN KEY (group_id)")
+}
+
+func TestParseSQL_ColumnLevelNamedUnique(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    code text NOT NULL CONSTRAINT items_code_key UNIQUE,
+    CONSTRAINT items_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.items")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("items_code_key")
+	require.True(t, ok)
+	assert.Contains(t, con.Definition, "UNIQUE")
+}
+
+func TestParseSQL_ColumnLevelNamedPrimaryKey(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL CONSTRAINT items_pkey PRIMARY KEY,
+    name text NOT NULL
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.items")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("items_pkey")
+	require.True(t, ok)
+	assert.Contains(t, con.Definition, "PRIMARY KEY")
+}
+
+func TestParseSQL_ColumnLevelMixedConstraints(t *testing.T) {
+	// Multiple named column-level constraints on different columns
+	sql := `CREATE TABLE public.groups (
+    id integer NOT NULL,
+    CONSTRAINT groups_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.items (
+    id integer NOT NULL CONSTRAINT items_pkey PRIMARY KEY,
+    code text NOT NULL CONSTRAINT items_code_key UNIQUE,
+    group_id integer NOT NULL CONSTRAINT items_group_fkey REFERENCES public.groups(id),
+    val integer NOT NULL CONSTRAINT items_val_check CHECK (val > 0)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.items")
+	require.True(t, ok)
+
+	// PK and UNIQUE
+	_, ok = tbl.Constraints.GetOk("items_pkey")
+	assert.True(t, ok)
+	_, ok = tbl.Constraints.GetOk("items_code_key")
+	assert.True(t, ok)
+	_, ok = tbl.Constraints.GetOk("items_val_check")
+	assert.True(t, ok)
+
+	// FK
+	fk, ok := tbl.ForeignKeys.GetOk("items_group_fkey")
+	require.True(t, ok)
+	assert.Equal(t, []string{"group_id"}, fk.Columns)
+}
+
+func TestParseSQL_ColumnLevelUnnamedConstraintsSkipped(t *testing.T) {
+	// Unnamed column-level PRIMARY KEY, UNIQUE, CHECK, FK should all be skipped
+	sql := `CREATE TABLE public.groups (
+    id integer NOT NULL,
+    CONSTRAINT groups_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.items (
+    id integer PRIMARY KEY,
+    name text UNIQUE,
+    val integer CHECK (val > 0),
+    group_id integer REFERENCES public.groups(id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.items")
+	require.True(t, ok)
+	assert.Equal(t, 0, tbl.Constraints.Len())
+	assert.Equal(t, 0, tbl.ForeignKeys.Len())
+}
+
 func TestParseSQL_TablespaceOnCreate(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,
