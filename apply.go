@@ -12,9 +12,9 @@ import (
 )
 
 type ApplyOptions struct {
-	File       string `arg:"" help:"Path to the desired schema SQL file."`
-	PreSQLFile string `type:"path" help:"Path to a SQL file to execute before applying changes."`
-	WithTx     bool   `help:"Execute the pre-SQL and schema changes in a transaction."`
+	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
+	PreSQLFile string   `type:"path" help:"Path to a SQL file to execute before applying changes."`
+	WithTx     bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
 }
 
 func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) error {
@@ -39,7 +39,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return fmt.Errorf("failed to fetch views: %w", err)
 	}
 
-	desired, err := parser.ParseSQLFile(options.File)
+	desired, err := parser.ParseSQLFiles(options.Files)
 	if err != nil {
 		return fmt.Errorf("failed to parse SQL file: %w", err)
 	}
