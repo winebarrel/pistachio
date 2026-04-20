@@ -377,6 +377,25 @@ CREATE TABLE public.members (
 	assert.Equal(t, "members", fk.Table)
 	assert.Equal(t, "public", *fk.RefSchema)
 	assert.Equal(t, "groups", *fk.RefTable)
+	assert.Equal(t, []string{"group_id"}, fk.Columns)
+	assert.Contains(t, fk.Definition, "FOREIGN KEY (group_id)")
+}
+
+func TestParseSQL_ColumnLevelNamedUnique(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    code text NOT NULL CONSTRAINT items_code_key UNIQUE,
+    CONSTRAINT items_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.items")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("items_code_key")
+	require.True(t, ok)
+	assert.Contains(t, con.Definition, "UNIQUE")
 }
 
 func TestParseSQL_ColumnLevelUnnamedConstraintsSkipped(t *testing.T) {

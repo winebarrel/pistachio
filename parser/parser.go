@@ -294,6 +294,10 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 		}
 		switch con.Contype {
 		case pg_query.ConstrType_CONSTR_FOREIGN:
+			// Column-level FK has no FkAttrs; fill in the owning column name.
+			if len(con.FkAttrs) == 0 {
+				con.FkAttrs = []*pg_query.Node{pg_query.MakeStrNode(cd.Colname)}
+			}
 			fk, err := parseInlineForeignKey(con, schema, table.Name, defaultSchema)
 			if err != nil {
 				return err
