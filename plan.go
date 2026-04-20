@@ -41,8 +41,8 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, e
 		return "", fmt.Errorf("failed to parse SQL file: %w", err)
 	}
 
-	stmts := diff.DiffTables(currentTables, client.reverseRemapTableSchemas(desired.Tables))
-	stmts = append(stmts, diff.DiffViews(currentViews, client.reverseRemapViewSchemas(desired.Views))...)
+	stmts := diff.DiffTables(client.filterTables(currentTables), client.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
+	stmts = append(stmts, diff.DiffViews(client.filterViews(currentViews), client.filterViews(client.reverseRemapViewSchemas(desired.Views)))...)
 
 	return strings.Join(stmts, "\n"), nil
 }

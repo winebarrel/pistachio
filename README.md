@@ -34,6 +34,10 @@ Flags:
   -n, --schemas=public,...    Schemas to inspect and modify ($PGSCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
+  -I, --include=INCLUDE,...   Include only tables/views matching the pattern
+                              (wildcard: *, ?).
+  -E, --exclude=EXCLUDE,...   Exclude tables/views matching the pattern
+                              (wildcard: *, ?).
       --version
 
 Commands:
@@ -101,6 +105,21 @@ You can also use it with `plan` and `apply`. The desired SQL files use the mappe
 # schema.sql uses "public" as the schema name
 pist -n staging -m staging=public plan schema.sql
 pist -n staging -m staging=public apply schema.sql
+```
+
+### Filtering tables/views
+
+Use `-I` / `--include` to include only matching tables/views, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against table/view names only (not schema-qualified names).
+
+```bash
+# Dump only tables/views matching "user*"
+pist -I 'user*' dump
+
+# Plan changes excluding temporary tables
+pist -E 'tmp_*' plan schema.sql
+
+# Combine include and exclude
+pist -I 'user*' -E 'user_tmp' apply schema.sql
 ```
 
 ### Omit schema

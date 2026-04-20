@@ -132,8 +132,8 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	}
 
 	return &DumpResult{
-		Tables:     client.remapTableSchemas(tables),
-		Views:      client.remapViewSchemas(views),
+		Tables:     client.filterTables(client.remapTableSchemas(tables)),
+		Views:      client.filterViews(client.remapViewSchemas(views)),
 		OmitSchema: options.OmitSchema,
 	}, nil
 }
