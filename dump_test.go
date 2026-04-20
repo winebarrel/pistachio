@@ -328,9 +328,9 @@ CREATE INDEX idx_users_id ON public.users (id);`)
 }
 
 func TestDumpResult_Files_DuplicateFileName(t *testing.T) {
-	// When two tables produce the same file name, the second should be renamed
+	// When a table and view produce the same file name, the second should be renamed
 	tables := orderedmap.New[string, *model.Table]()
-	t1 := &model.Table{
+	tbl := &model.Table{
 		Schema:      "",
 		Name:        "users",
 		Columns:     orderedmap.New[string, *model.Column](),
@@ -338,40 +338,20 @@ func TestDumpResult_Files_DuplicateFileName(t *testing.T) {
 		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
 		Indexes:     orderedmap.New[string, *model.Index](),
 	}
-	t1.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
-	t2 := &model.Table{
-		Schema:      "",
-		Name:        "users",
-		Columns:     orderedmap.New[string, *model.Column](),
-		Constraints: orderedmap.New[string, *model.Constraint](),
-		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
-		Indexes:     orderedmap.New[string, *model.Index](),
-	}
-	t2.Columns.Set("id", &model.Column{Name: "id", TypeName: "bigint", NotNull: true})
-	tables.Set("users", t1)
-	tables.Set("users_2", t2) // different key to avoid orderedmap dedup
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	tables.Set("users", tbl)
 
-	// Manually set up two entries that generate the same toFileName
+	views := orderedmap.New[string, *model.View]()
+	views.Set("users", &model.View{Schema: "", Name: "users", Definition: "SELECT 1"})
+
 	result := &pistachio.DumpResult{
 		Tables: tables,
-		Views:  orderedmap.New[string, *model.View](),
-	}
-	files := result.Files()
-	assert.Contains(t, files, "users.sql")
-	// Only one table since orderedmap keys are different but names are same
-	// Let's verify uniqueFileName via a view with same name
-	tables2 := orderedmap.New[string, *model.Table]()
-	tables2.Set("users", t1)
-	views := orderedmap.New[string, *model.View]()
-	v := &model.View{Schema: "", Name: "users", Definition: "SELECT 1"}
-	views.Set("users", v)
-	result2 := &pistachio.DumpResult{
-		Tables: tables2,
 		Views:  views,
 	}
-	files2 := result2.Files()
-	assert.Contains(t, files2, "users.sql")
-	assert.Contains(t, files2, "users_2.sql")
+	files := result.Files()
+	assert.Len(t, files, 2)
+	assert.Contains(t, files, "users.sql")
+	assert.Contains(t, files, "users_2.sql")
 }
 
 func TestDumpResult_Files_DuplicateFileNameCaseInsensitive(t *testing.T) {
