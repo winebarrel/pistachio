@@ -31,14 +31,18 @@ func (v View) CommentSQL() string {
 	return ""
 }
 
+func ViewToSQL(v *View) string {
+	parts := []string{"-- " + v.FQVN(), v.SQL()}
+	if s := v.CommentSQL(); s != "" {
+		parts = append(parts, s)
+	}
+	return strings.Join(parts, "\n")
+}
+
 func ViewsToSQL(views *orderedmap.Map[string, *View]) string {
 	return strings.Join(
 		orderedmap.TransformSlice(views, func(_ string, v *View) string {
-			parts := []string{"-- " + v.FQVN(), v.SQL()}
-			if s := v.CommentSQL(); s != "" {
-				parts = append(parts, s)
-			}
-			return strings.Join(parts, "\n")
+			return ViewToSQL(v)
 		}),
 		"\n\n",
 	)

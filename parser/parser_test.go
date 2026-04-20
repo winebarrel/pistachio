@@ -57,6 +57,38 @@ func TestParseSQLFile(t *testing.T) {
 	assert.Equal(t, "public", tbl.Schema)
 }
 
+func TestParseSQLFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	file1 := filepath.Join(tmpDir, "tables.sql")
+	file2 := filepath.Join(tmpDir, "views.sql")
+
+	require.NoError(t, os.WriteFile(file1, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+	require.NoError(t, os.WriteFile(file2, []byte(`CREATE TABLE public.posts (
+    id integer NOT NULL,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	result, err := parser.ParseSQLFiles([]string{file1, file2})
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Tables.Len())
+
+	_, ok := result.Tables.GetOk("public.users")
+	assert.True(t, ok)
+	_, ok = result.Tables.GetOk("public.posts")
+	assert.True(t, ok)
+}
+
+func TestParseSQLFiles_FileNotFound(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "exists.sql")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("CREATE TABLE t (id int);"), 0o644))
+
+	_, err := parser.ParseSQLFiles([]string{tmpFile, "/nonexistent/file.sql"})
+	require.Error(t, err)
+}
+
 func TestReadSQLFile(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "test.sql")
 	sql := "SELECT 1;"

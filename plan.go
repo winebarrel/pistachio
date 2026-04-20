@@ -11,7 +11,7 @@ import (
 )
 
 type PlanOptions struct {
-	File string `arg:"" help:"Path to the desired schema SQL file."`
+	Files []string `arg:"" help:"Path to the desired schema SQL file(s)."`
 }
 
 func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, error) {
@@ -36,7 +36,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, e
 		return "", fmt.Errorf("failed to fetch views: %w", err)
 	}
 
-	desired, err := parser.ParseSQLFile(options.File)
+	desired, err := parser.ParseSQLFiles(options.Files)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse SQL file: %w", err)
 	}
