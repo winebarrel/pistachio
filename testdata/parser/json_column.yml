@@ -1,0 +1,15 @@
+input: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      payload json NOT NULL,
+      metadata jsonb,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+expected: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      payload json NOT NULL,
+      metadata jsonb,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );

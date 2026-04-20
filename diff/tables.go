@@ -162,13 +162,39 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	return stmts
 }
 
+// normalizeConstraintDef normalizes a constraint definition by parsing
+// and deparsing it through pg_query to eliminate formatting differences.
+func normalizeConstraintDef(def string) (string, error) {
+	sql := "ALTER TABLE _t ADD CONSTRAINT _c " + def
+	result, err := pg_query.Parse(sql)
+	if err != nil {
+		return "", err
+	}
+	return pg_query.Deparse(result)
+}
+
+// equalConstraintDef compares two constraint definitions by normalizing
+// them through pg_query parse/deparse, so that formatting differences
+// (e.g. extra parentheses, spacing) do not cause false diffs.
+func equalConstraintDef(a, b string) bool {
+	if a == b {
+		return true
+	}
+	normA, errA := normalizeConstraintDef(a)
+	normB, errB := normalizeConstraintDef(b)
+	if errA != nil || errB != nil {
+		return a == b
+	}
+	return normA == normB
+}
+
 func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint]) []string {
 	var stmts []string
 
 	// Drop removed or changed constraints
 	for name, currentCon := range current.All() {
 		desiredCon, ok := desired.GetOk(name)
-		if !ok || currentCon.Definition != desiredCon.Definition {
+		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
 		}
 	}
@@ -176,7 +202,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	// Add new or changed constraints
 	for name, desiredCon := range desired.All() {
 		currentCon, ok := current.GetOk(name)
-		if !ok || currentCon.Definition != desiredCon.Definition {
+		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" ADD CONSTRAINT "+model.Ident(name)+" "+desiredCon.Definition+";")
 		}
 	}
@@ -271,38 +297,35 @@ func equalPtr[T comparable](a, b *T) bool {
 	return *a == *b
 }
 
-// parseIndexDef parses an index definition string into a pg_query IndexStmt node.
-func parseIndexDef(def string) (*pg_query.IndexStmt, error) {
+// normalizeIndexDef normalizes an index definition by parsing it,
+// clearing the schema, and deparsing it back to a canonical string.
+// This avoids false diffs caused by formatting differences or
+// protobuf location metadata.
+func normalizeIndexDef(def string) (string, error) {
 	result, err := pg_query.Parse(def)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	is := result.Stmts[0].Stmt.GetIndexStmt()
 	if is == nil {
-		return nil, fmt.Errorf("unexpected parse result for index definition: %s", def)
+		return "", fmt.Errorf("unexpected parse result for index definition: %s", def)
 	}
-	return is, nil
-}
-
-// clearIndexSchema clears the schema name in an IndexStmt so that
-// index definitions are compared without regard to schema qualification.
-func clearIndexSchema(is *pg_query.IndexStmt) {
 	if is.Relation != nil {
 		is.Relation.Schemaname = ""
 	}
+	return pg_query.Deparse(result)
 }
 
-// equalIndexDef compares two index definitions by their parse trees,
-// so that schema qualification differences do not cause false diffs.
+// equalIndexDef compares two index definitions by normalizing them
+// through pg_query parse/deparse, so that schema qualification and
+// formatting differences do not cause false diffs.
 func equalIndexDef(a, b string) bool {
-	nodeA, errA := parseIndexDef(a)
-	nodeB, errB := parseIndexDef(b)
+	normA, errA := normalizeIndexDef(a)
+	normB, errB := normalizeIndexDef(b)
 	if errA != nil || errB != nil {
 		return a == b
 	}
-	clearIndexSchema(nodeA)
-	clearIndexSchema(nodeB)
-	return proto.Equal(nodeA, nodeB)
+	return normA == normB
 }
 
 // parseFKDef parses a FK constraint definition string into a pg_query Constraint node.

@@ -536,7 +536,11 @@ func deparseTypeName(tn *pg_query.TypeName) (string, error) {
 	if lastParen < 0 {
 		return "", fmt.Errorf("unexpected deparse output for type: %s", sql)
 	}
-	return normalizeTypeName(strings.TrimSpace(rest[:lastParen])), nil
+	typeName := strings.TrimSpace(rest[:lastParen])
+	// pg_query may qualify built-in types with "pg_catalog." (e.g. json → pg_catalog.json).
+	// Strip the prefix so the result matches format_type() output.
+	typeName = strings.TrimPrefix(typeName, "pg_catalog.")
+	return normalizeTypeName(typeName), nil
 }
 
 var typeAliases = map[string]string{
@@ -553,6 +557,7 @@ var typeAliases = map[string]string{
 	"timestamptz": "timestamp with time zone",
 	"time":        "time without time zone",
 	"timetz":      "time with time zone",
+	"varbit":      "bit varying",
 	"decimal":     "numeric",
 	"float":       "double precision",
 	"serial":      "integer",
