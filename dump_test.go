@@ -54,6 +54,26 @@ func TestDump_EmptySchemas(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestDump_CanceledContext(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+
+	_, err := client.Dump(canceledCtx, &pistachio.DumpOptions{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch tables")
+}
+
 func TestDumpResult_String_Empty(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
