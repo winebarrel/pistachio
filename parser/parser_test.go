@@ -318,15 +318,16 @@ CREATE TABLE myapp.items (
 }
 
 func TestParseSQL_InlineForeignKeyUnnamed(t *testing.T) {
-	// Unnamed inline FK constraints should be skipped (same as other unnamed constraints)
+	// Unnamed table-level FK constraints should be skipped
 	sql := `CREATE TABLE public.groups (
     id integer NOT NULL,
     CONSTRAINT groups_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.members (
     id integer NOT NULL,
-    group_id integer NOT NULL REFERENCES public.groups(id),
-    CONSTRAINT members_pkey PRIMARY KEY (id)
+    group_id integer NOT NULL,
+    CONSTRAINT members_pkey PRIMARY KEY (id),
+    FOREIGN KEY (group_id) REFERENCES public.groups(id)
 );`
 
 	result, err := parser.ParseSQL(sql)
