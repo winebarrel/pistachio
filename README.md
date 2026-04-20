@@ -109,7 +109,7 @@ pist -n staging -m staging=public apply schema.sql
 
 ### Filtering tables/views
 
-Use `-I` / `--include` to include only matching tables/views, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards.
+Use `-I` / `--include` to include only matching tables/views, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against table/view names only (not schema-qualified names).
 
 ```bash
 # Dump only tables/views matching "user*"
