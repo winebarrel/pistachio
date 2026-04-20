@@ -2,7 +2,7 @@ package pistachio
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 )
 
 type Options struct {
@@ -18,7 +18,7 @@ func (o *Options) MatchName(name string) bool {
 	if len(o.Include) > 0 {
 		matched := false
 		for _, pattern := range o.Include {
-			if ok, _ := filepath.Match(pattern, name); ok {
+			if ok, _ := path.Match(pattern, name); ok {
 				matched = true
 				break
 			}
@@ -28,7 +28,7 @@ func (o *Options) MatchName(name string) bool {
 		}
 	}
 	for _, pattern := range o.Exclude {
-		if ok, _ := filepath.Match(pattern, name); ok {
+		if ok, _ := path.Match(pattern, name); ok {
 			return false
 		}
 	}
@@ -36,7 +36,24 @@ func (o *Options) MatchName(name string) bool {
 }
 
 func (o *Options) AfterApply() error {
-	return o.ValidateSchemaMap()
+	if err := o.ValidateSchemaMap(); err != nil {
+		return err
+	}
+	return o.ValidatePatterns()
+}
+
+func (o *Options) ValidatePatterns() error {
+	for _, pattern := range o.Include {
+		if _, err := path.Match(pattern, ""); err != nil {
+			return fmt.Errorf("invalid --include pattern %q: %w", pattern, err)
+		}
+	}
+	for _, pattern := range o.Exclude {
+		if _, err := path.Match(pattern, ""); err != nil {
+			return fmt.Errorf("invalid --exclude pattern %q: %w", pattern, err)
+		}
+	}
+	return nil
 }
 
 func (o *Options) ValidateSchemaMap() error {

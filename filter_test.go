@@ -13,6 +13,39 @@ import (
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
+func TestValidatePatterns(t *testing.T) {
+	t.Run("valid patterns", func(t *testing.T) {
+		o := &pistachio.Options{Include: []string{"user*", "post?"}, Exclude: []string{"tmp_*"}}
+		assert.NoError(t, o.ValidatePatterns())
+	})
+
+	t.Run("invalid include pattern", func(t *testing.T) {
+		o := &pistachio.Options{Include: []string{"[invalid"}}
+		err := o.ValidatePatterns()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--include")
+	})
+
+	t.Run("invalid exclude pattern", func(t *testing.T) {
+		o := &pistachio.Options{Exclude: []string{"[invalid"}}
+		err := o.ValidatePatterns()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--exclude")
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		o := &pistachio.Options{}
+		assert.NoError(t, o.ValidatePatterns())
+	})
+}
+
+func TestAfterApply_InvalidPattern(t *testing.T) {
+	o := &pistachio.Options{Include: []string{"[bad"}}
+	err := o.AfterApply()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--include")
+}
+
 func TestMatchName(t *testing.T) {
 	t.Run("no filters", func(t *testing.T) {
 		o := &pistachio.Options{}
