@@ -36,7 +36,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, e
 		return "", fmt.Errorf("failed to fetch views: %w", err)
 	}
 
-	desired, err := parser.ParseSQLFiles(options.Files)
+	desired, err := parser.ParseSQLFilesWithSchema(options.Files, client.Schemas[0])
 	if err != nil {
 		return "", fmt.Errorf("failed to parse SQL file: %w", err)
 	}

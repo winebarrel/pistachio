@@ -190,7 +190,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) []strin
 	// Drop removed or changed indexes
 	for name, currentIdx := range current.All() {
 		desiredIdx, ok := desired.GetOk(name)
-		if !ok || currentIdx.Definition != desiredIdx.Definition {
+		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
 			stmts = append(stmts, "DROP INDEX "+model.Ident(currentIdx.Schema, name)+";")
 		}
 	}
@@ -198,7 +198,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) []strin
 	// Add new or changed indexes
 	for name, desiredIdx := range desired.All() {
 		currentIdx, ok := current.GetOk(name)
-		if !ok || currentIdx.Definition != desiredIdx.Definition {
+		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
 			stmts = append(stmts, desiredIdx.Definition+";")
 		}
 	}
@@ -269,6 +269,40 @@ func equalPtr[T comparable](a, b *T) bool {
 		return false
 	}
 	return *a == *b
+}
+
+// parseIndexDef parses an index definition string into a pg_query IndexStmt node.
+func parseIndexDef(def string) (*pg_query.IndexStmt, error) {
+	result, err := pg_query.Parse(def)
+	if err != nil {
+		return nil, err
+	}
+	is := result.Stmts[0].Stmt.GetIndexStmt()
+	if is == nil {
+		return nil, fmt.Errorf("unexpected parse result for index definition: %s", def)
+	}
+	return is, nil
+}
+
+// normalizeIndexSchema normalizes the table's schema name in an IndexStmt
+// so that an empty schema (implicit public) is treated the same as an explicit "public" schema.
+func normalizeIndexSchema(is *pg_query.IndexStmt) {
+	if is.Relation != nil && is.Relation.Schemaname == "" {
+		is.Relation.Schemaname = "public"
+	}
+}
+
+// equalIndexDef compares two index definitions by their parse trees,
+// so that schema qualification differences do not cause false diffs.
+func equalIndexDef(a, b string) bool {
+	nodeA, errA := parseIndexDef(a)
+	nodeB, errB := parseIndexDef(b)
+	if errA != nil || errB != nil {
+		return a == b
+	}
+	normalizeIndexSchema(nodeA)
+	normalizeIndexSchema(nodeB)
+	return proto.Equal(nodeA, nodeB)
 }
 
 // parseFKDef parses a FK constraint definition string into a pg_query Constraint node.

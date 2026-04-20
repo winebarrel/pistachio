@@ -10,10 +10,13 @@ import (
 var safeIdentifierPattern = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
 func Ident(names ...string) string {
-	idents := make([]string, len(names))
+	var idents []string
 
-	for i, n := range names {
-		idents[i] = quoteIdent(n)
+	for _, n := range names {
+		if n == "" {
+			continue
+		}
+		idents = append(idents, quoteIdent(n))
 	}
 
 	return strings.Join(idents, ".")

@@ -478,3 +478,47 @@ func TestDiffTable_partitionChild(t *testing.T) {
 	assert.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "CREATE INDEX idx_new")
 }
+
+func TestEqualIndexDef_sameSchema(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON public.users USING btree (id)",
+		"CREATE INDEX idx ON public.users USING btree (id)",
+	))
+}
+
+func TestEqualIndexDef_schemaVsNoSchema(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON public.users USING btree (id)",
+		"CREATE INDEX idx ON users USING btree (id)",
+	))
+}
+
+func TestEqualIndexDef_different(t *testing.T) {
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON public.users USING btree (id)",
+		"CREATE INDEX idx ON public.users USING btree (name)",
+	))
+}
+
+func TestEqualIndexDef_parseError(t *testing.T) {
+	assert.False(t, equalIndexDef("NOT VALID SQL", "CREATE INDEX idx ON users (id)"))
+	assert.True(t, equalIndexDef("NOT VALID SQL", "NOT VALID SQL"))
+}
+
+func TestDiffTables_indexSchemaInsensitive(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "users")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	ct.Indexes.Set("idx", &model.Index{Schema: "public", Name: "idx", Table: "users", Definition: "CREATE INDEX idx ON public.users USING btree (id)"})
+	current.Set("public.users", ct)
+
+	dt := newTable("public", "users")
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	dt.Indexes.Set("idx", &model.Index{Schema: "", Name: "idx", Table: "users", Definition: "CREATE INDEX idx ON users USING btree (id)"})
+	desired.Set("public.users", dt)
+
+	stmts := DiffTables(current, desired)
+	assert.Empty(t, stmts)
+}
