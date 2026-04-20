@@ -505,6 +505,12 @@ func TestEqualIndexDef_parseError(t *testing.T) {
 	assert.True(t, equalIndexDef("NOT VALID SQL", "NOT VALID SQL"))
 }
 
+func TestEqualIndexDef_notIndexStmt(t *testing.T) {
+	// Valid SQL but not an INDEX statement — falls back to string comparison
+	assert.False(t, equalIndexDef("SELECT 1", "CREATE INDEX idx ON users (id)"))
+	assert.True(t, equalIndexDef("SELECT 1", "SELECT 1"))
+}
+
 func TestDiffTables_indexSchemaInsensitive(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()

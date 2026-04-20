@@ -470,3 +470,97 @@ ALTER TABLE myschema.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFEREN
 	assert.Equal(t, "myschema", fk.Schema)
 	assert.Equal(t, "myschema", *fk.RefSchema)
 }
+
+func TestParseSQLWithSchema_DefaultSchema(t *testing.T) {
+	sql := `CREATE TABLE users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON users (name);
+CREATE VIEW active_users AS SELECT id, name FROM users;
+COMMENT ON TABLE users IS 'User accounts';
+COMMENT ON COLUMN users.name IS 'User name';`
+
+	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	require.NoError(t, err)
+
+	// Table defaults to myschema
+	tbl, ok := result.Tables.GetOk("myschema.users")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", tbl.Schema)
+
+	// Index defaults to myschema
+	idx, ok := tbl.Indexes.GetOk("idx_users_name")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", idx.Schema)
+
+	// View defaults to myschema
+	v, ok := result.Views.GetOk("myschema.active_users")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", v.Schema)
+
+	// Table comment
+	require.NotNil(t, tbl.Comment)
+	assert.Equal(t, "User accounts", *tbl.Comment)
+
+	// Column comment
+	col, ok := tbl.Columns.GetOk("name")
+	require.True(t, ok)
+	require.NotNil(t, col.Comment)
+	assert.Equal(t, "User name", *col.Comment)
+}
+
+func TestParseSQLWithSchema_AlterTable(t *testing.T) {
+	sql := `CREATE TABLE users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE orders (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
+);
+ALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);`
+
+	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("myschema.orders")
+	require.True(t, ok)
+	fk, ok := tbl.ForeignKeys.GetOk("fk_user")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", fk.Schema)
+	assert.Equal(t, "myschema", *fk.RefSchema)
+}
+
+func TestParseSQLWithSchema_InheritedTable(t *testing.T) {
+	sql := `CREATE TABLE events (
+    id integer NOT NULL,
+    created_at date NOT NULL
+) PARTITION BY RANGE (created_at);
+CREATE TABLE events_2024 PARTITION OF events
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');`
+
+	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("myschema.events_2024")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", tbl.Schema)
+	require.NotNil(t, tbl.PartitionOf)
+	assert.Contains(t, *tbl.PartitionOf, "myschema")
+}
+
+func TestParseSQLWithSchema_ViewComment(t *testing.T) {
+	sql := `CREATE VIEW active_users AS SELECT 1;
+COMMENT ON VIEW active_users IS 'Active users';`
+
+	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	require.NoError(t, err)
+
+	v, ok := result.Views.GetOk("myschema.active_users")
+	require.True(t, ok)
+	require.NotNil(t, v.Comment)
+	assert.Equal(t, "Active users", *v.Comment)
+}
