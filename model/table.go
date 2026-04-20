@@ -126,20 +126,24 @@ func (t Table) CommentSQL() string {
 	return strings.Join(stmts, "\n")
 }
 
+func TableToSQL(t *Table) string {
+	parts := []string{"-- " + t.FQTN(), t.SQL()}
+	if s := t.IdxSQL(); s != "" {
+		parts = append(parts, s)
+	}
+	if s := t.FkSQL(); s != "" {
+		parts = append(parts, "\n"+s)
+	}
+	if s := t.CommentSQL(); s != "" {
+		parts = append(parts, s)
+	}
+	return strings.Join(parts, "\n")
+}
+
 func TablesToSQL(tables *orderedmap.Map[string, *Table]) string {
 	return strings.Join(
 		orderedmap.TransformSlice(tables, func(_ string, t *Table) string {
-			parts := []string{"-- " + t.FQTN(), t.SQL()}
-			if s := t.IdxSQL(); s != "" {
-				parts = append(parts, s)
-			}
-			if s := t.FkSQL(); s != "" {
-				parts = append(parts, "\n"+s)
-			}
-			if s := t.CommentSQL(); s != "" {
-				parts = append(parts, s)
-			}
-			return strings.Join(parts, "\n")
+			return TableToSQL(t)
 		}),
 		"\n\n",
 	)

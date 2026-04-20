@@ -48,7 +48,7 @@ func TestApply(t *testing.T) {
 			// Verify
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 			require.NoError(t, err)
-			assert.Equal(t, strings.TrimSpace(tc.Applied), strings.TrimSpace(got))
+			assert.Equal(t, strings.TrimSpace(tc.Applied), strings.TrimSpace(got.String()))
 		})
 	}
 }
@@ -86,8 +86,8 @@ func TestApply_WithPreSQLFile(t *testing.T) {
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
-	assert.Contains(t, got, "CREATE TABLE public.pre_hook")
-	assert.Contains(t, got, "CREATE TABLE public.users")
+	assert.Contains(t, got.String(), "CREATE TABLE public.pre_hook")
+	assert.Contains(t, got.String(), "CREATE TABLE public.users")
 }
 
 func TestApply_WithTx(t *testing.T) {
@@ -124,8 +124,8 @@ SELECT * FROM public.missing_table;`), 0o644))
 
 	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, dumpErr)
-	assert.NotContains(t, got, "CREATE TABLE public.pre_hook")
-	assert.NotContains(t, got, "CREATE TABLE public.users")
+	assert.NotContains(t, got.String(), "CREATE TABLE public.pre_hook")
+	assert.NotContains(t, got.String(), "CREATE TABLE public.users")
 }
 
 func TestApply_WithTx_Success(t *testing.T) {
@@ -159,7 +159,7 @@ func TestApply_WithTx_Success(t *testing.T) {
 
 	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, dumpErr)
-	assert.Contains(t, got, "CREATE TABLE public.users")
+	assert.Contains(t, got.String(), "CREATE TABLE public.users")
 }
 
 func TestApply_NoDiff(t *testing.T) {
