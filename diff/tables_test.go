@@ -520,9 +520,108 @@ func TestEqualConstraintDef_different(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_textCastOnRegex(t *testing.T) {
+	// pg_get_constraintdef adds ::text to string literals
+	assert.True(t, equalConstraintDef(
+		"CHECK ((code ~ '^[0-9a-f]{64}$'::text))",
+		"CHECK (code ~ '^[0-9a-f]{64}$')",
+	))
+}
+
+func TestEqualConstraintDef_textCastOnNotEmpty(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((name <> ''::text))",
+		"CHECK (name <> '')",
+	))
+}
+
+func TestEqualConstraintDef_inVsAnyArray(t *testing.T) {
+	// pg_get_constraintdef returns = ANY(ARRAY[...]) for IN (...)
+	assert.True(t, equalConstraintDef(
+		"CHECK ((status = ANY (ARRAY['active'::text, 'pending'::text])))",
+		"CHECK (status IN ('active', 'pending'))",
+	))
+}
+
+func TestEqualConstraintDef_inVsAnyArray_different(t *testing.T) {
+	assert.False(t, equalConstraintDef(
+		"CHECK ((status = ANY (ARRAY['active'::text, 'pending'::text])))",
+		"CHECK (status IN ('active', 'closed'))",
+	))
+}
+
+func TestEqualConstraintDef_textCastInBoolExpr(t *testing.T) {
+	// AND/OR combining multiple conditions with ::text casts
+	assert.True(t, equalConstraintDef(
+		"CHECK (((name <> ''::text) AND (code ~ '^[0-9]+$'::text)))",
+		"CHECK (name <> '' AND code ~ '^[0-9]+$')",
+	))
+}
+
+func TestEqualConstraintDef_textCastInFuncCall(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((length((name)::text) > 0))",
+		"CHECK (length(name::text) > 0)",
+	))
+}
+
+func TestEqualConstraintDef_textCastInCoalesce(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((COALESCE(name, ''::text) <> ''::text))",
+		"CHECK (COALESCE(name, '') <> '')",
+	))
+}
+
+func TestEqualConstraintDef_textCastInNullTest(t *testing.T) {
+	// NullTest recurse - ensure it doesn't break
+	assert.True(t, equalConstraintDef(
+		"CHECK ((name IS NOT NULL))",
+		"CHECK (name IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_textCastInCase(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK (((CASE WHEN (kind = 'a'::text) THEN 1 ELSE 0 END) > 0))",
+		"CHECK ((CASE WHEN kind = 'a' THEN 1 ELSE 0 END) > 0)",
+	))
+}
+
 func TestEqualConstraintDef_parseError(t *testing.T) {
 	assert.True(t, equalConstraintDef(")))invalid", ")))invalid"))
 	assert.False(t, equalConstraintDef(")))invalid", ")))other"))
+}
+
+func TestDiffConstraints_noChangeWithTextCast(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_name", &model.Constraint{
+		Name:       "chk_name",
+		Definition: "CHECK ((name <> ''::text))",
+	})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_name", &model.Constraint{
+		Name:       "chk_name",
+		Definition: "CHECK (name <> '')",
+	})
+
+	stmts := diffConstraints("public.items", current, desired)
+	assert.Empty(t, stmts)
+}
+
+func TestDiffConstraints_noChangeWithInVsAny(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_status", &model.Constraint{
+		Name:       "chk_status",
+		Definition: "CHECK ((status = ANY (ARRAY['active'::text, 'pending'::text])))",
+	})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_status", &model.Constraint{
+		Name:       "chk_status",
+		Definition: "CHECK (status IN ('active', 'pending'))",
+	})
+
+	stmts := diffConstraints("public.items", current, desired)
+	assert.Empty(t, stmts)
 }
 
 func TestDiffConstraints_noChangeWithFormattingDiff(t *testing.T) {

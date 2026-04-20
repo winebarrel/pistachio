@@ -164,13 +164,102 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 
 // normalizeConstraintDef normalizes a constraint definition by parsing
 // and deparsing it through pg_query to eliminate formatting differences.
+// It also normalizes AST-level differences introduced by pg_get_constraintdef
+// (e.g. explicit ::text casts on string literals, = ANY(ARRAY[...]) vs IN (...)).
 func normalizeConstraintDef(def string) (string, error) {
 	sql := "ALTER TABLE _t ADD CONSTRAINT _c " + def
 	result, err := pg_query.Parse(sql)
 	if err != nil {
 		return "", err
 	}
+	as := result.Stmts[0].Stmt.GetAlterTableStmt()
+	if as != nil {
+		cmd := as.Cmds[0].GetAlterTableCmd()
+		if cmd != nil {
+			con := cmd.Def.GetConstraint()
+			if con != nil {
+				con.RawExpr = normalizeCheckExpr(con.RawExpr)
+			}
+		}
+	}
 	return pg_query.Deparse(result)
+}
+
+// normalizeCheckExpr recursively normalizes a CHECK constraint expression
+// so that semantically equivalent definitions compare as equal:
+//   - Strips redundant ::text casts on string constants (added by pg_get_constraintdef).
+//   - Converts = ANY(ARRAY[...]) to IN (...) (PostgreSQL internal representation).
+func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
+	if node == nil {
+		return nil
+	}
+	switch n := node.Node.(type) {
+	case *pg_query.Node_TypeCast:
+		tc := n.TypeCast
+		tc.Arg = normalizeCheckExpr(tc.Arg)
+		if isTextTypeName(tc.TypeName) && tc.Arg.GetAConst() != nil {
+			return tc.Arg
+		}
+	case *pg_query.Node_AExpr:
+		ae := n.AExpr
+		ae.Lexpr = normalizeCheckExpr(ae.Lexpr)
+		ae.Rexpr = normalizeCheckExpr(ae.Rexpr)
+		if ae.Kind == pg_query.A_Expr_Kind_AEXPR_OP_ANY {
+			if arr := ae.Rexpr.GetAArrayExpr(); arr != nil {
+				ae.Kind = pg_query.A_Expr_Kind_AEXPR_IN
+				ae.Rexpr = &pg_query.Node{
+					Node: &pg_query.Node_List{
+						List: &pg_query.List{Items: arr.Elements},
+					},
+				}
+			}
+		}
+	case *pg_query.Node_BoolExpr:
+		for i, arg := range n.BoolExpr.Args {
+			n.BoolExpr.Args[i] = normalizeCheckExpr(arg)
+		}
+	case *pg_query.Node_AArrayExpr:
+		for i, elem := range n.AArrayExpr.Elements {
+			n.AArrayExpr.Elements[i] = normalizeCheckExpr(elem)
+		}
+	case *pg_query.Node_List:
+		for i, item := range n.List.Items {
+			n.List.Items[i] = normalizeCheckExpr(item)
+		}
+	case *pg_query.Node_FuncCall:
+		for i, arg := range n.FuncCall.Args {
+			n.FuncCall.Args[i] = normalizeCheckExpr(arg)
+		}
+	case *pg_query.Node_NullTest:
+		n.NullTest.Arg = normalizeCheckExpr(n.NullTest.Arg)
+	case *pg_query.Node_CoalesceExpr:
+		for i, arg := range n.CoalesceExpr.Args {
+			n.CoalesceExpr.Args[i] = normalizeCheckExpr(arg)
+		}
+	case *pg_query.Node_CaseExpr:
+		n.CaseExpr.Arg = normalizeCheckExpr(n.CaseExpr.Arg)
+		n.CaseExpr.Defresult = normalizeCheckExpr(n.CaseExpr.Defresult)
+		for _, when := range n.CaseExpr.Args {
+			if w := when.GetCaseWhen(); w != nil {
+				w.Expr = normalizeCheckExpr(w.Expr)
+				w.Result = normalizeCheckExpr(w.Result)
+			}
+		}
+	}
+	return node
+}
+
+// isTextTypeName returns true if the TypeName refers to the built-in text type.
+func isTextTypeName(tn *pg_query.TypeName) bool {
+	if tn == nil {
+		return false
+	}
+	for _, n := range tn.Names {
+		if s := n.GetString_(); s != nil && s.Sval == "text" {
+			return true
+		}
+	}
+	return false
 }
 
 // equalConstraintDef compares two constraint definitions by normalizing
