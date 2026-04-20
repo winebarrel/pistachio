@@ -29,7 +29,7 @@ func TestPlan_InvalidConnString(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{File: desiredFile})
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.Error(t, err)
 }
 
@@ -52,7 +52,7 @@ func TestPlan_WithPassword(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{File: desiredFile})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Contains(t, got, "CREATE TABLE public.users")
 }
@@ -67,7 +67,7 @@ func TestPlan_InvalidDesiredFile(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{File: "/nonexistent/file.sql"})
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{"/nonexistent/file.sql"}})
 	require.Error(t, err)
 }
 
@@ -84,7 +84,7 @@ func TestPlan_EmptySchemas(t *testing.T) {
 		Schemas:    []string{},
 	})
 
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{File: desiredFile})
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.Error(t, err)
 }
 
@@ -111,7 +111,7 @@ func TestPlan(t *testing.T) {
 				Schemas:    []string{"public"},
 			})
 
-			got, err := client.Plan(ctx, &pistachio.PlanOptions{File: desiredFile})
+			got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got))
 		})

@@ -33,6 +33,19 @@ func ParseSQLFile(path string) (*ParseResult, error) {
 	return ParseSQL(sql)
 }
 
+func ParseSQLFiles(paths []string) (*ParseResult, error) {
+	var sqls []string
+	for _, path := range paths {
+		sql, err := ReadSQLFile(path)
+		if err != nil {
+			return nil, err
+		}
+		sqls = append(sqls, sql)
+	}
+
+	return ParseSQL(strings.Join(sqls, "\n"))
+}
+
 func ParseSQL(sql string) (*ParseResult, error) {
 	result, err := pg_query.Parse(sql)
 	if err != nil {

@@ -33,7 +33,7 @@ func TestPlan_Run(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{File: desiredFile}}
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
@@ -181,6 +181,55 @@ CREATE TABLE public."My Table" (
 	assert.Contains(t, string(data), `CREATE TABLE public."My Table"`)
 }
 
+func TestDump_Run_Split_MkdirError(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: "/dev/null/invalid"}}
+	err := cmd.Run(ctx, client, &buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create directory")
+}
+
+func TestDump_Run_Split_WriteError(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	splitDir := filepath.Join(t.TempDir(), "split_output")
+	require.NoError(t, os.MkdirAll(splitDir, 0o555))
+
+	var buf bytes.Buffer
+	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: splitDir}}
+	err := cmd.Run(ctx, client, &buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to write")
+}
+
 func TestPlan_Run_Error(t *testing.T) {
 	ctx := context.Background()
 	client := pistachio.NewClient(&pistachio.Options{
@@ -192,7 +241,7 @@ func TestPlan_Run_Error(t *testing.T) {
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{File: desiredFile}}
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 }
@@ -230,7 +279,7 @@ func TestPlan_Run_NoChanges(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{File: desiredFile}}
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Equal(t, "No changes\n", buf.String())
@@ -256,7 +305,7 @@ func TestApply_Run_NoChanges(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{File: desiredFile}}
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Equal(t, "No changes\n", buf.String())
@@ -273,7 +322,7 @@ func TestApply_Run_Error(t *testing.T) {
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{File: desiredFile}}
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 }
@@ -297,7 +346,7 @@ func TestApply_Run(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{File: desiredFile}}
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
