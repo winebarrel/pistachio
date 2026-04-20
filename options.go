@@ -1,12 +1,38 @@
 package pistachio
 
-import "fmt"
+import (
+	"fmt"
+	"path/filepath"
+)
 
 type Options struct {
 	ConnString string            `short:"c" env:"DATABASE_URL" default:"postgres://postgres@localhost/postgres" help:"PostgreSQL connection string. See https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING"`
 	Password   string            `env:"PGPASSWORD" help:"PostgreSQL password."`
 	Schemas    []string          `short:"n" env:"PGSCHEMAS" default:"public" help:"Schemas to inspect and modify."`
 	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
+	Include    []string          `short:"I" help:"Include only tables/views matching the pattern (wildcard: *, ?)."`
+	Exclude    []string          `short:"E" help:"Exclude tables/views matching the pattern (wildcard: *, ?)."`
+}
+
+func (o *Options) MatchName(name string) bool {
+	if len(o.Include) > 0 {
+		matched := false
+		for _, pattern := range o.Include {
+			if ok, _ := filepath.Match(pattern, name); ok {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	for _, pattern := range o.Exclude {
+		if ok, _ := filepath.Match(pattern, name); ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (o *Options) AfterApply() error {

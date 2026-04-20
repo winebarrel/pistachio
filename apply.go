@@ -44,8 +44,8 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return fmt.Errorf("failed to parse SQL file: %w", err)
 	}
 
-	stmts := diff.DiffTables(currentTables, client.reverseRemapTableSchemas(desired.Tables))
-	stmts = append(stmts, diff.DiffViews(currentViews, client.reverseRemapViewSchemas(desired.Views))...)
+	stmts := diff.DiffTables(client.filterTables(currentTables), client.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
+	stmts = append(stmts, diff.DiffViews(client.filterViews(currentViews), client.filterViews(client.reverseRemapViewSchemas(desired.Views)))...)
 
 	var preSQL string
 	if options.PreSQLFile != "" {
