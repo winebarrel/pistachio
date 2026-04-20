@@ -552,7 +552,7 @@ func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchem
 			Columns:    columns,
 			Deferrable: con.Deferrable,
 			Deferred:   con.Initdeferred,
-			Validated:  true,
+			Validated:  !con.SkipValidation,
 		},
 		Schema:    schema,
 		Table:     table,

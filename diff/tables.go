@@ -187,7 +187,7 @@ func normalizeConstraintDef(def string) (string, error) {
 
 // normalizeCheckExpr recursively normalizes a CHECK constraint expression
 // so that semantically equivalent definitions compare as equal:
-//   - Strips redundant ::text casts on string constants (added by pg_get_constraintdef).
+//   - Strips casts to text-like types (text, varchar), which pg_get_constraintdef adds.
 //   - Converts = ANY(ARRAY[...]) to IN (...) (PostgreSQL internal representation).
 func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 	if node == nil {
