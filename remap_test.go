@@ -52,6 +52,30 @@ func TestRemapSchema(t *testing.T) {
 	})
 }
 
+func TestValidateSchemaMap(t *testing.T) {
+	t.Run("nil map", func(t *testing.T) {
+		o := &pistachio.Options{}
+		assert.NoError(t, o.ValidateSchemaMap())
+	})
+
+	t.Run("single entry", func(t *testing.T) {
+		o := &pistachio.Options{SchemaMap: map[string]string{"staging": "public"}}
+		assert.NoError(t, o.ValidateSchemaMap())
+	})
+
+	t.Run("distinct destinations", func(t *testing.T) {
+		o := &pistachio.Options{SchemaMap: map[string]string{"a": "x", "b": "y"}}
+		assert.NoError(t, o.ValidateSchemaMap())
+	})
+
+	t.Run("duplicate destinations", func(t *testing.T) {
+		o := &pistachio.Options{SchemaMap: map[string]string{"a": "public", "b": "public"}}
+		err := o.ValidateSchemaMap()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate schema-map destination")
+	})
+}
+
 func TestReverseRemapSchema(t *testing.T) {
 	t.Run("nil map", func(t *testing.T) {
 		o := &pistachio.Options{}
@@ -121,10 +145,10 @@ CREATE VIEW myschema.active_users AS SELECT id, name FROM myschema.users;
 	output := got.String()
 	t.Log(output)
 
-	// Schema should be remapped to "public" in CREATE statements
+	// Schema references should be remapped to "public", including inside view definitions
 	assert.Contains(t, output, "CREATE TABLE public.users")
 	assert.Contains(t, output, "CREATE OR REPLACE VIEW public.active_users")
-	// Note: view definitions returned by PostgreSQL keep original schema names internally
+	assert.Contains(t, output, "FROM public.users")
 }
 
 func TestDump_WithSchemaMap_Files(t *testing.T) {
