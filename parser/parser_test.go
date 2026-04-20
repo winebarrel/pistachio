@@ -936,6 +936,64 @@ func TestParseSQL_DuplicateColumn(t *testing.T) {
 	assert.Contains(t, err.Error(), "duplicate column")
 }
 
+func TestParseSQL_DuplicateForeignKeyAlterTable(t *testing.T) {
+	sql := `CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+CREATE TABLE public.orders (id integer NOT NULL, user_id integer NOT NULL, CONSTRAINT orders_pkey PRIMARY KEY (id));
+ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);
+ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate foreign key")
+}
+
+func TestParseSQL_DuplicateConstraintAlterTable(t *testing.T) {
+	sql := `CREATE TABLE public.items (id integer NOT NULL, code text NOT NULL);
+ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);
+ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate constraint")
+}
+
+func TestParseSQL_DuplicateInlineForeignKey(t *testing.T) {
+	sql := `CREATE TABLE public.groups (id integer NOT NULL, CONSTRAINT groups_pkey PRIMARY KEY (id));
+CREATE TABLE public.items (
+    id integer NOT NULL,
+    CONSTRAINT items_pkey PRIMARY KEY (id),
+    CONSTRAINT items_fk FOREIGN KEY (id) REFERENCES public.groups(id),
+    CONSTRAINT items_fk FOREIGN KEY (id) REFERENCES public.groups(id)
+);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate foreign key")
+}
+
+func TestParseSQL_DuplicateColumnLevelConstraint(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL CONSTRAINT items_pkey PRIMARY KEY,
+    code text NOT NULL CONSTRAINT items_pkey UNIQUE
+);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate constraint")
+}
+
+func TestParseSQL_DuplicateColumnLevelForeignKey(t *testing.T) {
+	sql := `CREATE TABLE public.groups (id integer NOT NULL, CONSTRAINT groups_pkey PRIMARY KEY (id));
+CREATE TABLE public.items (
+    id integer NOT NULL CONSTRAINT items_fk REFERENCES public.groups(id),
+    code integer NOT NULL CONSTRAINT items_fk REFERENCES public.groups(id)
+);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate foreign key")
+}
+
 func TestParseSQLWithSchema_ViewComment(t *testing.T) {
 	sql := `CREATE VIEW active_users AS SELECT 1;
 COMMENT ON VIEW active_users IS 'Active users';`
