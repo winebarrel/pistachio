@@ -48,6 +48,11 @@ func TestIdent_multipleTokens(t *testing.T) {
 	assert.Equal(t, `"a b"`, Ident("a b"))
 }
 
+func TestQuoteIdent_empty(t *testing.T) {
+	// quoteIdent with empty string returns quoted empty
+	assert.Equal(t, `""`, quoteIdent(""))
+}
+
 func TestQuoteLiteral(t *testing.T) {
 	assert.Equal(t, "'hello'", QuoteLiteral("hello"))
 }
