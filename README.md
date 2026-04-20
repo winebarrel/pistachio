@@ -12,7 +12,7 @@ Declarative schema management tool for PostgreSQL. Define your desired schema in
 ### Homebrew
 
 ```bash
-brew install winebarrel/pistachio/pist
+brew install winebarrel/pistachio/pistachio
 ```
 
 ### Download binary
