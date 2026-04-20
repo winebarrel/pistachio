@@ -60,14 +60,14 @@ func diffTable(current, desired *model.Table) []string {
 	// so skip diffing them to avoid false DROP statements.
 	if desired.PartitionOf != nil && desired.PartitionBound != nil {
 		stmts = append(stmts, diffIndexes(current.Indexes, desired.Indexes)...)
-		stmts = append(stmts, diffForeignKeys(fqtn, current.ForeignKeys, desired.ForeignKeys)...)
+		stmts = append(stmts, diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)...)
 		return stmts
 	}
 
 	stmts = append(stmts, diffColumns(fqtn, current.Columns, desired.Columns)...)
 	stmts = append(stmts, diffConstraints(fqtn, current.Constraints, desired.Constraints)...)
 	stmts = append(stmts, diffIndexes(current.Indexes, desired.Indexes)...)
-	stmts = append(stmts, diffForeignKeys(fqtn, current.ForeignKeys, desired.ForeignKeys)...)
+	stmts = append(stmts, diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)...)
 	stmts = append(stmts, diffComments(current, desired)...)
 
 	return stmts
@@ -232,14 +232,14 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) []strin
 	return stmts
 }
 
-func diffForeignKeys(fqtn string, current, desired *orderedmap.Map[string, *model.ForeignKey]) []string {
+func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey]) []string {
 	var stmts []string
 
 	// Drop removed or changed FKs
 	for name := range current.All() {
 		desiredFk, ok := desired.GetOk(name)
 		currentFk := current.Get(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition) {
+		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
 		}
 	}
@@ -247,7 +247,7 @@ func diffForeignKeys(fqtn string, current, desired *orderedmap.Map[string, *mode
 	// Add new or changed FKs
 	for name, desiredFk := range desired.All() {
 		currentFk, ok := current.GetOk(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition) {
+		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
 			stmts = append(stmts, desiredFk.SQL())
 		}
 	}
@@ -351,24 +351,26 @@ func parseFKDef(def string) (*pg_query.Constraint, error) {
 }
 
 // normalizeFKSchema normalizes the referenced table's schema name in a FK
-// constraint node so that an empty schema (implicit public) is treated
-// the same as an explicit "public" schema.
-func normalizeFKSchema(con *pg_query.Constraint) {
+// constraint node so that an empty schema (implicit via search_path) is
+// treated the same as the explicit schema of the owning table.
+func normalizeFKSchema(con *pg_query.Constraint, schema string) {
 	if con.Pktable != nil && con.Pktable.Schemaname == "" {
-		con.Pktable.Schemaname = "public"
+		con.Pktable.Schemaname = schema
 	}
 }
 
 // equalFKDef compares two FK constraint definitions by their parse trees,
 // so that formatting differences do not cause false diffs.
-func equalFKDef(a, b string) bool {
+// schema is the schema of the table that owns the FK constraint and is used
+// to fill in an implicit (empty) schema on the referenced table.
+func equalFKDef(a, b, schema string) bool {
 	nodeA, errA := parseFKDef(a)
 	nodeB, errB := parseFKDef(b)
 	if errA != nil || errB != nil {
 		return a == b
 	}
-	normalizeFKSchema(nodeA)
-	normalizeFKSchema(nodeB)
+	normalizeFKSchema(nodeA, schema)
+	normalizeFKSchema(nodeB, schema)
 	return proto.Equal(nodeA, nodeB)
 }
 

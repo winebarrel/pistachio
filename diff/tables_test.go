@@ -290,7 +290,7 @@ func TestDiffForeignKeys_add(t *testing.T) {
 		Table:      "orders",
 	})
 
-	stmts := diffForeignKeys("public.orders", current, desired)
+	stmts := diffForeignKeys("public.orders", "public", current, desired)
 	assert.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "ADD CONSTRAINT fk_user")
 }
@@ -304,7 +304,7 @@ func TestDiffForeignKeys_drop(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
-	stmts := diffForeignKeys("public.orders", current, desired)
+	stmts := diffForeignKeys("public.orders", "public", current, desired)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, stmts)
 }
 
@@ -389,13 +389,13 @@ func TestEqualDefault(t *testing.T) {
 func TestEqualFKDef(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES users (id)"
-	assert.True(t, equalFKDef(a, b))
+	assert.True(t, equalFKDef(a, b, "public"))
 }
 
 func TestEqualFKDef_different(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES orders(id)"
-	assert.False(t, equalFKDef(a, b))
+	assert.False(t, equalFKDef(a, b, "public"))
 }
 
 func TestDiffTables_newTable_withForeignKey(t *testing.T) {
@@ -420,13 +420,25 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 func TestEqualFKDef_implicitPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES public.users(id)"
-	assert.True(t, equalFKDef(a, b))
+	assert.True(t, equalFKDef(a, b, "public"))
+}
+
+func TestEqualFKDef_implicitNonPublicSchema(t *testing.T) {
+	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
+	b := "FOREIGN KEY (item_id) REFERENCES myapp.items(id)"
+	assert.True(t, equalFKDef(a, b, "myapp"))
+}
+
+func TestEqualFKDef_implicitNonPublicSchema_different(t *testing.T) {
+	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
+	b := "FOREIGN KEY (item_id) REFERENCES other.items(id)"
+	assert.False(t, equalFKDef(a, b, "myapp"))
 }
 
 func TestEqualFKDef_parseError(t *testing.T) {
 	// When both fail to parse, falls back to string comparison
-	assert.True(t, equalFKDef("not sql", "not sql"))
-	assert.False(t, equalFKDef("not sql", "other"))
+	assert.True(t, equalFKDef("not sql", "not sql", "public"))
+	assert.False(t, equalFKDef("not sql", "other", "public"))
 }
 
 func TestEqualDefault_parseError(t *testing.T) {
@@ -455,7 +467,7 @@ func TestDiffForeignKeys_change(t *testing.T) {
 		Table:      "orders",
 	})
 
-	stmts := diffForeignKeys("public.orders", current, desired)
+	stmts := diffForeignKeys("public.orders", "public", current, desired)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", stmts[0])
 	assert.Contains(t, stmts[1], "ADD CONSTRAINT fk_user")
