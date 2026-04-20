@@ -1,0 +1,65 @@
+version: 2
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - &build
+    id: darwin-amd64
+    main: ./cmd/pistachio
+    env:
+      - CGO_ENABLED=1
+      - CC=o64-clang
+      - CXX=o64-clang++
+    ldflags:
+      - -X main.version={{.Version}}
+    goos: [darwin]
+    goarch: [amd64]
+  - <<: *build
+    id: darwin-arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    goos: [darwin]
+    goarch: [arm64]
+  - <<: *build
+    id: linux-amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=x86_64-linux-gnu-gcc
+      - CXX=x86_64-linux-gnu-g++
+    goos: [linux]
+    goarch: [amd64]
+  - <<: *build
+    id: linux-arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    goos: [linux]
+    goarch: [arm64]
+checksum:
+  name_template: "checksums.txt"
+homebrew_casks:
+  - repository:
+      owner: winebarrel
+      name: homebrew-pistachio
+    homepage: https://github.com/winebarrel/pistachio
+    description: pistachio is a SQL execution history management tool.
+    license: MIT
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/pistachio"]
+          end
+nfpms:
+  - file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
+    homepage: https://github.com/winebarrel/pistachio
+    description: pistachio is a declarative schema management tool for PostgreSQL.
+    license: MIT
+    maintainer: "Genki Sugawara <sugawara@winebarrel.jp>"
+    formats:
+      - apk
+      - deb
+      - rpm
