@@ -191,6 +191,53 @@ COMMENT ON TABLE myschema.users IS 'Users table';`
 	assert.Equal(t, "Users table", *tbl.Comment)
 }
 
+func TestParseSQL_CommentOnTable_Schemaless(t *testing.T) {
+	sql := `CREATE TABLE users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+COMMENT ON TABLE users IS 'Users table';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	require.NotNil(t, tbl.Comment)
+	assert.Equal(t, "Users table", *tbl.Comment)
+}
+
+func TestParseSQL_CommentOnColumn_Schemaless(t *testing.T) {
+	sql := `CREATE TABLE users (
+    id integer NOT NULL,
+    name text
+);
+COMMENT ON COLUMN users.name IS 'User name';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	col, ok := tbl.Columns.GetOk("name")
+	require.True(t, ok)
+	require.NotNil(t, col.Comment)
+	assert.Equal(t, "User name", *col.Comment)
+}
+
+func TestParseSQL_CommentOnView_Schemaless(t *testing.T) {
+	sql := `CREATE VIEW active_users AS SELECT 1;
+COMMENT ON VIEW active_users IS 'Active users';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	v, ok := result.Views.GetOk("public.active_users")
+	require.True(t, ok)
+	require.NotNil(t, v.Comment)
+	assert.Equal(t, "Active users", *v.Comment)
+}
+
 func TestParseSQL_ForeignKeyNotValid(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,
