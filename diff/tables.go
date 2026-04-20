@@ -197,7 +197,7 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 	case *pg_query.Node_TypeCast:
 		tc := n.TypeCast
 		tc.Arg = normalizeCheckExpr(tc.Arg)
-		if isTextTypeName(tc.TypeName) && tc.Arg.GetAConst() != nil {
+		if isTextLikeTypeName(tc.TypeName) {
 			return tc.Arg
 		}
 	case *pg_query.Node_AExpr:
@@ -249,14 +249,20 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 	return node
 }
 
-// isTextTypeName returns true if the TypeName refers to the built-in text type.
-func isTextTypeName(tn *pg_query.TypeName) bool {
+// isTextLikeTypeName returns true if the TypeName refers to a text-like type
+// (text, text[], varchar, character varying, or their array forms).
+// pg_get_constraintdef adds these casts on expressions that are already
+// text-typed, so stripping them avoids false diffs.
+func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 	if tn == nil {
 		return false
 	}
 	for _, n := range tn.Names {
-		if s := n.GetString_(); s != nil && s.Sval == "text" {
-			return true
+		if s := n.GetString_(); s != nil {
+			switch s.Sval {
+			case "text", "varchar":
+				return true
+			}
 		}
 	}
 	return false

@@ -543,6 +543,21 @@ func TestEqualConstraintDef_inVsAnyArray(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_varcharCastInAnyArray(t *testing.T) {
+	// pg_get_constraintdef may use ::character varying and ::text[] casts
+	assert.True(t, equalConstraintDef(
+		"CHECK ((status::text = ANY (ARRAY['active'::character varying, 'pending'::character varying]::text[])))",
+		"CHECK (status IN ('active', 'pending'))",
+	))
+}
+
+func TestEqualConstraintDef_varcharCastWithoutArrayCast(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((status = ANY (ARRAY['active'::character varying, 'pending'::character varying])))",
+		"CHECK (status IN ('active', 'pending'))",
+	))
+}
+
 func TestEqualConstraintDef_inVsAnyArray_different(t *testing.T) {
 	assert.False(t, equalConstraintDef(
 		"CHECK ((status = ANY (ARRAY['active'::text, 'pending'::text])))",
