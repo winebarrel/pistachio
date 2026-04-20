@@ -35,6 +35,20 @@ func setupSchemaDB(t *testing.T, ctx context.Context, schema string, initSQL str
 	return conn.Config().ConnString()
 }
 
+func TestAfterApply(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		o := &pistachio.Options{SchemaMap: map[string]string{"staging": "public"}}
+		assert.NoError(t, o.AfterApply())
+	})
+
+	t.Run("duplicate destinations", func(t *testing.T) {
+		o := &pistachio.Options{SchemaMap: map[string]string{"a": "public", "b": "public"}}
+		err := o.AfterApply()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate schema-map destination")
+	})
+}
+
 func TestRemapSchema(t *testing.T) {
 	t.Run("nil map", func(t *testing.T) {
 		o := &pistachio.Options{}
