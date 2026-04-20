@@ -32,6 +32,8 @@ Flags:
                               ($DATABASE_URL)
       --password=STRING       PostgreSQL password ($PGPASSWORD).
   -n, --schemas=public,...    Schemas to inspect and modify ($PGSCHEMAS).
+  -m, --schema-map=KEY=VALUE;...
+                              Schema name mapping (e.g. -m old=new).
       --version
 
 Commands:
@@ -82,6 +84,26 @@ Dump the current database schema as SQL. Output can be used directly as a schema
 ```bash
 pist dump
 ```
+
+### Schema name mapping
+
+Use `-m` / `--schema-map` to remap schema names. This is useful when you want to manage a database whose schema name differs from the one used in your SQL files.
+
+For example, to dump a `staging` schema as if it were `public`:
+
+```bash
+pist -n staging -m staging=public dump
+```
+
+You can also use it with `plan` and `apply`. The desired SQL files use the mapped name (`public`), while the generated SQL targets the real database schema (`staging`):
+
+```bash
+# schema.sql uses "public" as the schema name
+pist -n staging -m staging=public plan schema.sql
+pist -n staging -m staging=public apply schema.sql
+```
+
+### Split dump
 
 Use `--split` to output each table/view as a separate file in the specified directory.
 

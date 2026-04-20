@@ -70,7 +70,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	}
 
 	return &DumpResult{
-		Tables: tables,
-		Views:  views,
+		Tables: client.remapTableSchemas(tables),
+		Views:  client.remapViewSchemas(views),
 	}, nil
 }
