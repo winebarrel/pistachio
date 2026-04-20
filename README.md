@@ -190,6 +190,9 @@ pist plan ./schema/*.sql          # review the diff
 pist apply ./schema/*.sql         # apply it
 ```
 
+> [!NOTE]
+> Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are not tracked by pistachio because PostgreSQL auto-generates their names at creation time, making them unpredictable from the SQL file alone. Use explicit `CONSTRAINT <name>` clauses to ensure constraints are managed correctly.
+
 ## Supported Objects
 
 - Tables (including unlogged and partitioned tables)
