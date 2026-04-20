@@ -283,9 +283,10 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 }
 
 // extractColumnConstraints extracts named constraints from a column definition
-// (e.g. PRIMARY KEY, UNIQUE, CHECK, FOREIGN KEY) and adds them to the table.
-// Column-level constraints that have no explicit name are skipped because
-// PostgreSQL auto-generates names that cannot be predicted from the SQL file.
+// (e.g. PRIMARY KEY, UNIQUE, CHECK, EXCLUSION, FOREIGN KEY) and adds them to
+// the table. Column-attribute constraints (NOT NULL, DEFAULT, IDENTITY,
+// GENERATED) are skipped as they are handled by parseColumnDef.
+// Unnamed non-attribute constraints return an error.
 func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema, defaultSchema string) error {
 	for _, conNode := range cd.Constraints {
 		con := conNode.GetConstraint()

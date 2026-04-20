@@ -445,15 +445,36 @@ CREATE TABLE public.items (
 }
 
 func TestParseSQL_ColumnLevelUnnamedConstraintsError(t *testing.T) {
-	// Unnamed column-level PRIMARY KEY should return an error
-	sql := `CREATE TABLE public.items (
-    id integer PRIMARY KEY,
-    name text NOT NULL
-);`
+	tests := []struct {
+		name string
+		sql  string
+	}{
+		{
+			name: "PRIMARY KEY",
+			sql:  `CREATE TABLE public.items (id integer PRIMARY KEY);`,
+		},
+		{
+			name: "UNIQUE",
+			sql:  `CREATE TABLE public.items (id integer NOT NULL, code text UNIQUE);`,
+		},
+		{
+			name: "CHECK",
+			sql:  `CREATE TABLE public.items (id integer NOT NULL, val integer CHECK (val > 0));`,
+		},
+		{
+			name: "FOREIGN KEY",
+			sql: `CREATE TABLE public.groups (id integer NOT NULL, CONSTRAINT groups_pkey PRIMARY KEY (id));
+CREATE TABLE public.items (id integer NOT NULL, group_id integer REFERENCES public.groups(id));`,
+		},
+	}
 
-	_, err := parser.ParseSQL(sql)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unnamed constraint")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parser.ParseSQL(tt.sql)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unnamed constraint")
+		})
+	}
 }
 
 func TestParseSQL_TablespaceOnCreate(t *testing.T) {
