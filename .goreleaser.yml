@@ -5,7 +5,7 @@ before:
 builds:
   - &build
     id: darwin-amd64
-    main: ./cmd/pistachio
+    main: ./cmd/pist
     env:
       - CGO_ENABLED=1
       - CC=o64-clang
