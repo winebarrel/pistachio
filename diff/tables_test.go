@@ -479,6 +479,56 @@ func TestDiffTable_partitionChild(t *testing.T) {
 	assert.Contains(t, stmts[0], "CREATE INDEX idx_new")
 }
 
+func TestEqualConstraintDef_same(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"PRIMARY KEY (id)",
+		"PRIMARY KEY (id)",
+	))
+}
+
+func TestEqualConstraintDef_formattingDiff(t *testing.T) {
+	// pg_get_constraintdef may return extra parentheses compared to pg_query deparse
+	assert.True(t, equalConstraintDef(
+		"CHECK ((kind = ANY (ARRAY['a'::text, 'b'::text])))",
+		"CHECK (kind = ANY(ARRAY['a'::text, 'b'::text]))",
+	))
+}
+
+func TestEqualConstraintDef_castFormattingDiff(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK (((color)::text = ANY ((ARRAY['red'::character varying, 'blue'::character varying])::text[])))",
+		"CHECK (color::text = ANY(ARRAY['red'::varchar, 'blue'::varchar]::text[]))",
+	))
+}
+
+func TestEqualConstraintDef_different(t *testing.T) {
+	assert.False(t, equalConstraintDef(
+		"CHECK (age > 0)",
+		"CHECK (age >= 18)",
+	))
+}
+
+func TestEqualConstraintDef_parseError(t *testing.T) {
+	assert.True(t, equalConstraintDef(")))invalid", ")))invalid"))
+	assert.False(t, equalConstraintDef(")))invalid", ")))other"))
+}
+
+func TestDiffConstraints_noChangeWithFormattingDiff(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_kind", &model.Constraint{
+		Name:       "chk_kind",
+		Definition: "CHECK ((kind = ANY (ARRAY['x'::text, 'y'::text])))",
+	})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_kind", &model.Constraint{
+		Name:       "chk_kind",
+		Definition: "CHECK (kind = ANY(ARRAY['x'::text, 'y'::text]))",
+	})
+
+	stmts := diffConstraints("public.items", current, desired)
+	assert.Empty(t, stmts)
+}
+
 func TestEqualIndexDef_sameSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
@@ -506,6 +556,70 @@ func TestEqualIndexDef_differentSchemas(t *testing.T) {
 		"CREATE INDEX idx ON myschema.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id)",
 	))
+}
+
+func TestEqualIndexDef_whereClauseSchemaVsNoSchema(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE UNIQUE INDEX idx ON myschema.products USING btree (sku) WHERE removed_at IS NULL AND sku IS NOT NULL",
+		"CREATE UNIQUE INDEX idx ON products USING btree (sku) WHERE removed_at IS NULL AND sku IS NOT NULL",
+	))
+}
+
+func TestEqualIndexDef_whereClauseFormattingDiff(t *testing.T) {
+	// pg_get_indexdef may return extra parentheses in WHERE clause
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON myschema.products USING btree (group_id) WHERE ((group_id IS NOT NULL))",
+		"CREATE INDEX idx ON products USING btree (group_id) WHERE group_id IS NOT NULL",
+	))
+}
+
+func TestEqualIndexDef_whereClauseWithCast(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON myschema.events USING btree (created_at) WHERE ((kind)::text = 'done'::text)",
+		"CREATE INDEX idx ON events USING btree (created_at) WHERE kind::text = 'done'::text",
+	))
+}
+
+func TestEqualIndexDef_whereClauseBooleanCondition(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON myschema.tasks USING btree (priority) WHERE ((visible = true))",
+		"CREATE INDEX idx ON tasks USING btree (priority) WHERE visible = true",
+	))
+}
+
+func TestEqualIndexDef_whereClauseMultipleConditions(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE UNIQUE INDEX idx ON myschema.tasks USING btree (kind, seq) WHERE ((visible = true) AND (seq > 0))",
+		"CREATE UNIQUE INDEX idx ON tasks USING btree (kind, seq) WHERE visible = true AND seq > 0",
+	))
+}
+
+func TestDiffTables_indexWhereClauseSchemaInsensitive(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "products")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	ct.Indexes.Set("idx", &model.Index{
+		Schema:     "public",
+		Name:       "idx",
+		Table:      "products",
+		Definition: "CREATE UNIQUE INDEX idx ON public.products USING btree (sku) WHERE ((removed_at IS NULL) AND (sku IS NOT NULL))",
+	})
+	current.Set("public.products", ct)
+
+	dt := newTable("public", "products")
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	dt.Indexes.Set("idx", &model.Index{
+		Schema:     "",
+		Name:       "idx",
+		Table:      "products",
+		Definition: "CREATE UNIQUE INDEX idx ON products USING btree (sku) WHERE removed_at IS NULL AND sku IS NOT NULL",
+	})
+	desired.Set("public.products", dt)
+
+	stmts := DiffTables(current, desired)
+	assert.Empty(t, stmts)
 }
 
 func TestEqualIndexDef_different(t *testing.T) {
