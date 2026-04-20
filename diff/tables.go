@@ -394,8 +394,9 @@ func equalPtr[T comparable](a, b *T) bool {
 
 // normalizeIndexDef normalizes an index definition by parsing it,
 // clearing the schema, and deparsing it back to a canonical string.
-// This avoids false diffs caused by formatting differences or
-// protobuf location metadata.
+// It also canonicalises the default sort order so that explicit ASC
+// (the default) matches an omitted order, and explicit NULLS LAST
+// for ASC / NULLS FIRST for DESC matches an omitted nulls clause.
 func normalizeIndexDef(def string) (string, error) {
 	result, err := pg_query.Parse(def)
 	if err != nil {
@@ -407,6 +408,28 @@ func normalizeIndexDef(def string) (string, error) {
 	}
 	if is.Relation != nil {
 		is.Relation.Schemaname = ""
+	}
+	for _, p := range is.IndexParams {
+		ie := p.GetIndexElem()
+		if ie == nil {
+			continue
+		}
+		// Canonicalise sort order: SORTBY_ASC and SORTBY_DEFAULT are equivalent.
+		if ie.Ordering == pg_query.SortByDir_SORTBY_ASC {
+			ie.Ordering = pg_query.SortByDir_SORTBY_DEFAULT
+		}
+		// Canonicalise nulls order: NULLS LAST is the default for ASC/DEFAULT,
+		// NULLS FIRST is the default for DESC.
+		switch ie.Ordering {
+		case pg_query.SortByDir_SORTBY_DEFAULT:
+			if ie.NullsOrdering == pg_query.SortByNulls_SORTBY_NULLS_LAST {
+				ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
+			}
+		case pg_query.SortByDir_SORTBY_DESC:
+			if ie.NullsOrdering == pg_query.SortByNulls_SORTBY_NULLS_FIRST {
+				ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
+			}
+		}
 	}
 	return pg_query.Deparse(result)
 }

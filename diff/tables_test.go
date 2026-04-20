@@ -748,6 +748,53 @@ func TestDiffTables_indexWhereClauseSchemaInsensitive(t *testing.T) {
 	assert.Empty(t, stmts)
 }
 
+func TestEqualIndexDef_explicitAscVsDefault(t *testing.T) {
+	// ASC is the default sort order; pg_get_indexdef omits it
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1 DESC, col2)",
+		"CREATE INDEX idx ON t USING btree (col1 DESC, col2 ASC)",
+	))
+}
+
+func TestEqualIndexDef_allDefault(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1)",
+		"CREATE INDEX idx ON t USING btree (col1 ASC)",
+	))
+}
+
+func TestEqualIndexDef_descNullsFirst(t *testing.T) {
+	// NULLS FIRST is the default for DESC; pg_get_indexdef omits it
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1 DESC)",
+		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS FIRST)",
+	))
+}
+
+func TestEqualIndexDef_ascNullsLast(t *testing.T) {
+	// NULLS LAST is the default for ASC; pg_get_indexdef omits it
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1)",
+		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS LAST)",
+	))
+}
+
+func TestEqualIndexDef_descNullsLast_notEqual(t *testing.T) {
+	// NULLS LAST for DESC is non-default, must not be treated as equal
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1 DESC)",
+		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS LAST)",
+	))
+}
+
+func TestEqualIndexDef_ascNullsFirst_notEqual(t *testing.T) {
+	// NULLS FIRST for ASC is non-default, must not be treated as equal
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1)",
+		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS FIRST)",
+	))
+}
+
 func TestEqualIndexDef_different(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
