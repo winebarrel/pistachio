@@ -398,6 +398,55 @@ func TestParseSQL_ColumnLevelNamedUnique(t *testing.T) {
 	assert.Contains(t, con.Definition, "UNIQUE")
 }
 
+func TestParseSQL_ColumnLevelNamedPrimaryKey(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL CONSTRAINT items_pkey PRIMARY KEY,
+    name text NOT NULL
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.items")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("items_pkey")
+	require.True(t, ok)
+	assert.Contains(t, con.Definition, "PRIMARY KEY")
+}
+
+func TestParseSQL_ColumnLevelMixedConstraints(t *testing.T) {
+	// Multiple named column-level constraints on different columns
+	sql := `CREATE TABLE public.groups (
+    id integer NOT NULL,
+    CONSTRAINT groups_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.items (
+    id integer NOT NULL CONSTRAINT items_pkey PRIMARY KEY,
+    code text NOT NULL CONSTRAINT items_code_key UNIQUE,
+    group_id integer NOT NULL CONSTRAINT items_group_fkey REFERENCES public.groups(id),
+    val integer NOT NULL CONSTRAINT items_val_check CHECK (val > 0)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.items")
+	require.True(t, ok)
+
+	// PK and UNIQUE
+	_, ok = tbl.Constraints.GetOk("items_pkey")
+	assert.True(t, ok)
+	_, ok = tbl.Constraints.GetOk("items_code_key")
+	assert.True(t, ok)
+	_, ok = tbl.Constraints.GetOk("items_val_check")
+	assert.True(t, ok)
+
+	// FK
+	fk, ok := tbl.ForeignKeys.GetOk("items_group_fkey")
+	require.True(t, ok)
+	assert.Equal(t, []string{"group_id"}, fk.Columns)
+}
+
 func TestParseSQL_ColumnLevelUnnamedConstraintsSkipped(t *testing.T) {
 	// Unnamed column-level PRIMARY KEY, UNIQUE, CHECK, FK should all be skipped
 	sql := `CREATE TABLE public.groups (
