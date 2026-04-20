@@ -15,6 +15,14 @@ type ParseResult struct {
 	Views  *orderedmap.Map[string, *model.View]
 }
 
+func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
+	if _, ok := m.GetOk(key); ok {
+		return fmt.Errorf("duplicate %s: %s", kind, key)
+	}
+	m.Set(key, v)
+	return nil
+}
+
 func ReadSQLFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -76,14 +84,18 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if err != nil {
 				return nil, err
 			}
-			tables.Set(table.FQTN(), table)
+			if err := setUnique(tables, table.FQTN(), "table", table); err != nil {
+				return nil, err
+			}
 
 		case node.GetViewStmt() != nil:
 			view, err := parseViewStmt(node.GetViewStmt(), defaultSchema)
 			if err != nil {
 				return nil, err
 			}
-			views.Set(view.FQVN(), view)
+			if err := setUnique(views, view.FQVN(), "view", view); err != nil {
+				return nil, err
+			}
 
 		case node.GetIndexStmt() != nil:
 			idx, err := parseIndexStmt(node.GetIndexStmt(), rawStmt, defaultSchema)
@@ -92,7 +104,9 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			}
 			fqtn := model.Ident(idx.Schema, idx.Table)
 			if t, ok := tables.GetOk(fqtn); ok {
-				t.Indexes.Set(idx.Name, idx)
+				if err := setUnique(t.Indexes, idx.Name, "index", idx); err != nil {
+					return nil, err
+				}
 			}
 
 		case node.GetAlterTableStmt() != nil:
@@ -112,9 +126,13 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if fk != nil {
-				t.ForeignKeys.Set(fk.Name, fk)
+				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
+					return nil, err
+				}
 			} else if con != nil {
-				t.Constraints.Set(con.Name, con)
+				if err := setUnique(t.Constraints, con.Name, "constraint", con); err != nil {
+					return nil, err
+				}
 			}
 
 		case node.GetCommentStmt() != nil:
@@ -184,7 +202,9 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 			if err != nil {
 				return nil, err
 			}
-			table.Columns.Set(col.Name, col)
+			if err := setUnique(table.Columns, col.Name, "column", col); err != nil {
+				return nil, err
+			}
 
 			// Extract column-level constraints (PRIMARY KEY, UNIQUE, CHECK, FK).
 			if err := extractColumnConstraints(cd, table, schema, defaultSchema); err != nil {
@@ -199,7 +219,9 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 					return nil, err
 				}
 				if fk != nil {
-					table.ForeignKeys.Set(fk.Name, fk)
+					if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
+						return nil, err
+					}
 				}
 			} else {
 				constraint, err := parseTableConstraint(con)
@@ -207,7 +229,9 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 					return nil, err
 				}
 				if constraint != nil {
-					table.Constraints.Set(constraint.Name, constraint)
+					if err := setUnique(table.Constraints, constraint.Name, "constraint", constraint); err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -313,7 +337,9 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 				return err
 			}
 			if fk != nil {
-				table.ForeignKeys.Set(fk.Name, fk)
+				if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
+					return err
+				}
 			}
 		case pg_query.ConstrType_CONSTR_PRIMARY, pg_query.ConstrType_CONSTR_UNIQUE,
 			pg_query.ConstrType_CONSTR_CHECK, pg_query.ConstrType_CONSTR_EXCLUSION:
@@ -322,7 +348,9 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 				return err
 			}
 			if constraint != nil {
-				table.Constraints.Set(constraint.Name, constraint)
+				if err := setUnique(table.Constraints, constraint.Name, "constraint", constraint); err != nil {
+					return err
+				}
 			}
 		}
 	}

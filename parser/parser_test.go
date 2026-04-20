@@ -883,6 +883,59 @@ func TestParseSQL_TableLevelExclusionConstraint(t *testing.T) {
 	assert.Contains(t, con.Definition, "EXCLUDE USING gist")
 }
 
+func TestParseSQL_DuplicateTable(t *testing.T) {
+	sql := `CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate table")
+}
+
+func TestParseSQL_DuplicateView(t *testing.T) {
+	sql := `CREATE VIEW public.v1 AS SELECT 1;
+CREATE VIEW public.v1 AS SELECT 2;`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate view")
+}
+
+func TestParseSQL_DuplicateIndex(t *testing.T) {
+	sql := `CREATE TABLE public.users (id integer NOT NULL, name text, CONSTRAINT users_pkey PRIMARY KEY (id));
+CREATE INDEX idx_name ON public.users (name);
+CREATE INDEX idx_name ON public.users (name);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate index")
+}
+
+func TestParseSQL_DuplicateConstraint(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    val integer NOT NULL,
+    CONSTRAINT items_pkey PRIMARY KEY (id),
+    CONSTRAINT items_pkey PRIMARY KEY (id)
+);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate constraint")
+}
+
+func TestParseSQL_DuplicateColumn(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate column")
+}
+
 func TestParseSQLWithSchema_ViewComment(t *testing.T) {
 	sql := `CREATE VIEW active_users AS SELECT 1;
 COMMENT ON VIEW active_users IS 'Active users';`
