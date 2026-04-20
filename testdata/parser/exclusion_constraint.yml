@@ -1,0 +1,17 @@
+input: |
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      during tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&)
+  );
+expected: |
+  -- public.reservations
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      during tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&)
+  );
