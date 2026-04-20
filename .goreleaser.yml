@@ -6,6 +6,7 @@ builds:
   - &build
     id: darwin-amd64
     main: ./cmd/pist
+    binary: pist
     env:
       - CGO_ENABLED=1
       - CC=o64-clang
@@ -51,7 +52,7 @@ homebrew_casks:
       post:
         install: |
           if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/pistachio"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/pist"]
           end
 nfpms:
   - file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
