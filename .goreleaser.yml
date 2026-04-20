@@ -45,7 +45,7 @@ homebrew_casks:
       owner: winebarrel
       name: homebrew-pistachio
     homepage: https://github.com/winebarrel/pistachio
-    description: pistachio is a SQL execution history management tool.
+    description: pistachio is a declarative schema management tool for PostgreSQL.
     license: MIT
     hooks:
       post:
