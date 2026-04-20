@@ -179,11 +179,17 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 	for _, elt := range cs.TableElts {
 		switch {
 		case elt.GetColumnDef() != nil:
-			col, err := parseColumnDef(elt.GetColumnDef())
+			cd := elt.GetColumnDef()
+			col, err := parseColumnDef(cd)
 			if err != nil {
 				return nil, err
 			}
 			table.Columns.Set(col.Name, col)
+
+			// Extract column-level constraints (PRIMARY KEY, UNIQUE, CHECK, FK).
+			if err := extractColumnConstraints(cd, table, schema, defaultSchema); err != nil {
+				return nil, err
+			}
 
 		case elt.GetConstraint() != nil:
 			con := elt.GetConstraint()
@@ -274,6 +280,39 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 	}
 
 	return col, nil
+}
+
+// extractColumnConstraints extracts named constraints from a column definition
+// (e.g. PRIMARY KEY, UNIQUE, CHECK, FOREIGN KEY) and adds them to the table.
+// Column-level constraints that have no explicit name are skipped because
+// PostgreSQL auto-generates names that cannot be predicted from the SQL file.
+func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema, defaultSchema string) error {
+	for _, conNode := range cd.Constraints {
+		con := conNode.GetConstraint()
+		if con == nil || con.Conname == "" {
+			continue
+		}
+		switch con.Contype {
+		case pg_query.ConstrType_CONSTR_FOREIGN:
+			fk, err := parseInlineForeignKey(con, schema, table.Name, defaultSchema)
+			if err != nil {
+				return err
+			}
+			if fk != nil {
+				table.ForeignKeys.Set(fk.Name, fk)
+			}
+		case pg_query.ConstrType_CONSTR_PRIMARY, pg_query.ConstrType_CONSTR_UNIQUE,
+			pg_query.ConstrType_CONSTR_CHECK, pg_query.ConstrType_CONSTR_EXCLUSION:
+			constraint, err := parseTableConstraint(con)
+			if err != nil {
+				return err
+			}
+			if constraint != nil {
+				table.Constraints.Set(constraint.Name, constraint)
+			}
+		}
+	}
+	return nil
 }
 
 func parseTableConstraint(con *pg_query.Constraint) (*model.Constraint, error) {
