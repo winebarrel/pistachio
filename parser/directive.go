@@ -79,14 +79,14 @@ func splitQualifiedName(s string) []string {
 				current.WriteByte(ch)
 			}
 		} else if ch == '.' && !inQuote {
-			parts = append(parts, current.String())
+			parts = append(parts, strings.TrimSpace(current.String()))
 			current.Reset()
 		} else {
 			current.WriteByte(ch)
 		}
 	}
 	if current.Len() > 0 {
-		parts = append(parts, current.String())
+		parts = append(parts, strings.TrimSpace(current.String()))
 	}
 	return parts
 }
@@ -116,7 +116,10 @@ func ExtractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]s
 		matches := renameDirectivePattern.FindAllStringSubmatch(leading, -1)
 		if len(matches) > 0 {
 			// Use the last match (closest to the actual SQL statement)
-			directives[loc] = matches[len(matches)-1][1]
+			renameFrom := strings.TrimSpace(matches[len(matches)-1][1])
+			if renameFrom != "" {
+				directives[loc] = renameFrom
+			}
 		}
 	}
 
