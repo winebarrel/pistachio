@@ -516,6 +516,94 @@ func TestDiffTable_partitionChild(t *testing.T) {
 	assert.Contains(t, stmts[0], "CREATE INDEX idx_new")
 }
 
+func TestDiffTable_partitionChild_indexRenameError(t *testing.T) {
+	parent := "public.events"
+	bound := "FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')"
+
+	current := newTable("public", "events_2024")
+	current.PartitionOf = &parent
+	current.PartitionBound = &bound
+
+	desired := newTable("public", "events_2024")
+	desired.PartitionOf = &parent
+	desired.PartitionBound = &bound
+	oldName := "nonexistent"
+	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", RenameFrom: &oldName, Definition: "CREATE INDEX idx_new ON public.events_2024 (id)"})
+
+	_, err := diffTable(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source index")
+}
+
+func TestDiffTable_partitionChild_fkRenameError(t *testing.T) {
+	parent := "public.events"
+	bound := "FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')"
+
+	current := newTable("public", "events_2024")
+	current.PartitionOf = &parent
+	current.PartitionBound = &bound
+
+	desired := newTable("public", "events_2024")
+	desired.PartitionOf = &parent
+	desired.PartitionBound = &bound
+	oldName := "nonexistent"
+	desired.ForeignKeys.Set("fk_new", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_new", RenameFrom: &oldName, Definition: "FOREIGN KEY (id) REFERENCES public.events(id)"},
+		Schema:     "public",
+		Table:      "events_2024",
+	})
+
+	_, err := diffTable(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source foreign key")
+}
+
+func TestDiffTable_constraintRenameError(t *testing.T) {
+	current := newTable("public", "users")
+	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+
+	desired := newTable("public", "users")
+	desired.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	oldName := "nonexistent"
+	desired.Constraints.Set("new_con", &model.Constraint{Name: "new_con", RenameFrom: &oldName, Definition: "UNIQUE (id)"})
+
+	_, err := diffTable(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source constraint")
+}
+
+func TestDiffTable_indexRenameError(t *testing.T) {
+	current := newTable("public", "users")
+	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+
+	desired := newTable("public", "users")
+	desired.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	oldName := "nonexistent"
+	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", RenameFrom: &oldName, Definition: "CREATE INDEX idx_new ON public.users (id)"})
+
+	_, err := diffTable(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source index")
+}
+
+func TestDiffTable_fkRenameError(t *testing.T) {
+	current := newTable("public", "users")
+	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+
+	desired := newTable("public", "users")
+	desired.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	oldName := "nonexistent"
+	desired.ForeignKeys.Set("fk_new", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_new", RenameFrom: &oldName, Definition: "FOREIGN KEY (id) REFERENCES public.other(id)"},
+		Schema:     "public",
+		Table:      "users",
+	})
+
+	_, err := diffTable(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source foreign key")
+}
+
 func TestEqualConstraintDef_same(t *testing.T) {
 	assert.True(t, equalConstraintDef(
 		"PRIMARY KEY (id)",
