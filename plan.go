@@ -56,13 +56,13 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, e
 
 	tableStmts, err := diff.DiffTables(client.filterTables(currentTables), client.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to diff tables: %w", err)
 	}
 	stmts = append(stmts, tableStmts...)
 
 	viewStmts, err := diff.DiffViews(client.filterViews(currentViews), client.filterViews(client.reverseRemapViewSchemas(desired.Views)))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to diff views: %w", err)
 	}
 	stmts = append(stmts, viewStmts...)
 

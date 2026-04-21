@@ -103,7 +103,11 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 			for idxName, idx := range renamed.Indexes.All() {
 				idxCopy := *idx
 				idxCopy.Table = desiredTable.Name
-				idxCopy.Definition = updateIndexTableName(idx.Definition, desiredTable.Name)
+				updatedDef, err := updateIndexTableName(idx.Definition, desiredTable.Name)
+				if err != nil {
+					return nil, nil, err
+				}
+				idxCopy.Definition = updatedDef
 				newIndexes.Set(idxName, &idxCopy)
 			}
 			renamed.Indexes = newIndexes
@@ -128,21 +132,21 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 
 // updateIndexTableName parses an index definition, updates the table name,
 // and deparses it back to canonical SQL.
-func updateIndexTableName(def string, newTableName string) string {
+func updateIndexTableName(def string, newTableName string) (string, error) {
 	result, err := pg_query.Parse(def)
 	if err != nil {
-		return def // fallback to original
+		return "", fmt.Errorf("failed to parse index definition: %w", err)
 	}
 	is := result.Stmts[0].Stmt.GetIndexStmt()
 	if is == nil || is.Relation == nil {
-		return def
+		return "", fmt.Errorf("failed to parse index definition: expected IndexStmt with relation")
 	}
 	is.Relation.Relname = newTableName
 	deparsed, err := pg_query.Deparse(result)
 	if err != nil {
-		return def
+		return "", fmt.Errorf("failed to deparse index definition: %w", err)
 	}
-	return deparsed
+	return deparsed, nil
 }
 
 // detectViewRenames finds desired views with RenameFrom that match a current view.
@@ -310,7 +314,11 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 		renamed := *oldIdx
 		renamed.Name = newName
 		// Update definition to reflect the new index name via pg_query parse/deparse
-		renamed.Definition = updateIndexName(renamed.Definition, newName)
+		updatedDef, err := updateIndexName(renamed.Definition, newName)
+		if err != nil {
+			return nil, nil, err
+		}
+		renamed.Definition = updatedDef
 		adjusted.Set(newName, &renamed)
 	}
 
@@ -318,21 +326,21 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 }
 
 // updateIndexName parses an index definition, updates the index name, and deparses.
-func updateIndexName(def string, newName string) string {
+func updateIndexName(def string, newName string) (string, error) {
 	result, err := pg_query.Parse(def)
 	if err != nil {
-		return def
+		return "", fmt.Errorf("failed to parse index definition: %w", err)
 	}
 	is := result.Stmts[0].Stmt.GetIndexStmt()
 	if is == nil {
-		return def
+		return "", fmt.Errorf("failed to parse index definition: expected IndexStmt")
 	}
 	is.Idxname = newName
 	deparsed, err := pg_query.Deparse(result)
 	if err != nil {
-		return def
+		return "", fmt.Errorf("failed to deparse index definition: %w", err)
 	}
-	return deparsed
+	return deparsed, nil
 }
 
 // detectForeignKeyRenames finds desired foreign keys with RenameFrom that match a current FK.
