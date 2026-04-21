@@ -1243,6 +1243,36 @@ ALTER TABLE public.users ADD CONSTRAINT new_unique UNIQUE (code);`
 	assert.Equal(t, "old_unique", *con.RenameFrom)
 }
 
+func TestParseSQLWithSchema_RenameDirective_Qualifies(t *testing.T) {
+	sql := `-- pist:rename-from old_status
+CREATE TYPE new_status AS ENUM ('active', 'inactive');
+-- pist:rename-from old_users
+CREATE TABLE users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:rename-from old_view
+CREATE VIEW new_view AS SELECT 1;`
+
+	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("myschema.new_status")
+	require.True(t, ok)
+	require.NotNil(t, e.RenameFrom)
+	assert.Equal(t, "myschema.old_status", *e.RenameFrom)
+
+	tbl, ok := result.Tables.GetOk("myschema.users")
+	require.True(t, ok)
+	require.NotNil(t, tbl.RenameFrom)
+	assert.Equal(t, "myschema.old_users", *tbl.RenameFrom)
+
+	v, ok := result.Views.GetOk("myschema.new_view")
+	require.True(t, ok)
+	require.NotNil(t, v.RenameFrom)
+	assert.Equal(t, "myschema.old_view", *v.RenameFrom)
+}
+
 func TestParseSQL_NoRenameDirective(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,

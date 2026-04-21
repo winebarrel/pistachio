@@ -182,6 +182,13 @@ func TestNormalizeDirectiveValue(t *testing.T) {
 	assert.Equal(t, "simple", normalizeDirectiveValue("simple"))
 }
 
+func TestQualifyRenameFrom(t *testing.T) {
+	assert.Equal(t, "public.old_name", QualifyRenameFrom("old_name", "public"))
+	assert.Equal(t, "public.old_name", QualifyRenameFrom("public.old_name", "public"))
+	assert.Equal(t, "myschema.old_name", QualifyRenameFrom("myschema.old_name", "public"))
+	assert.Equal(t, "public.Old Name", QualifyRenameFrom("Old Name", "public"))
+}
+
 func TestExtractStmtDirectives_QuotedName(t *testing.T) {
 	sql := `-- pist:rename-from "My Schema"."Old Name"
 CREATE TABLE public.users (id integer NOT NULL);`
