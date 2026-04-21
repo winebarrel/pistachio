@@ -121,14 +121,53 @@ pist plan schema.sql
 
 After applying, you can leave the directive in place (it will be silently skipped) or remove it.
 
-### Working with multiple schemas
+### Working with specific schemas
 
-Target a specific schema with `-n`:
+By default, pistachio targets the `public` schema. Use `-n` to specify a different schema:
 
 ```bash
+# Dump the "myschema" schema
 pist -n myschema dump
+
+# Plan/apply against "myschema"
 pist -n myschema plan schema.sql
 pist -n myschema apply schema.sql
+```
+
+You can also manage multiple schemas at once:
+
+```bash
+pist -n public,myschema dump
+```
+
+### Schema name mapping
+
+Use `-m` / `--schema-map` when your SQL files use a different schema name than the actual database. This is common when you write SQL against `public` but deploy to a staging-specific schema:
+
+```bash
+# Dump "staging" schema but output as "public"
+pist -n staging -m staging=public dump
+
+# Plan/apply: SQL files use "public", but changes target "staging"
+pist -n staging -m staging=public plan schema.sql
+pist -n staging -m staging=public apply schema.sql
+```
+
+### Schema-less SQL files
+
+If your SQL files omit schema names (e.g. `CREATE TABLE users` instead of `CREATE TABLE public.users`), pistachio uses the first schema from `-n` as the default:
+
+```bash
+# Schema-less SQL is treated as "myschema"
+pist -n myschema plan schema.sql
+pist -n myschema apply schema.sql
+```
+
+Use `--omit-schema` with dump to produce schema-less output:
+
+```bash
+pist dump --omit-schema > schema.sql
+# => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
 ```
 
 ### Filtering objects
@@ -138,6 +177,14 @@ Focus on specific objects with `-I` (include) and `-E` (exclude):
 ```bash
 pist dump -I 'user*'           # dump only user-related objects
 pist plan -E 'tmp_*' schema.sql  # ignore temporary tables
+```
+
+Use `--enable` / `--disable` to filter by object type:
+
+```bash
+pist dump --enable enum            # dump only enums
+pist dump --disable view           # dump everything except views
+pist dump --enable table --enable enum  # dump tables and enums only
 ```
 
 ### Using transactions
