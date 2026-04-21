@@ -69,6 +69,15 @@ CREATE TABLE public.users (id integer NOT NULL);`
 		assert.Equal(t, "old_name", dirs[result.Stmts[0].StmtLocation])
 	})
 
+	t.Run("whitespace-only directive ignored", func(t *testing.T) {
+		sql := `-- pist:rename-from
+CREATE TABLE public.users (id integer NOT NULL);`
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
+		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		assert.Empty(t, dirs)
+	})
+
 	t.Run("regular comment ignored", func(t *testing.T) {
 		sql := `-- this is a regular comment
 CREATE TABLE public.users (id integer NOT NULL);`
@@ -171,6 +180,11 @@ func TestExtractConstraintName(t *testing.T) {
 	assert.Equal(t, "My Con", extractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))
 	assert.Equal(t, "", extractConstraintName("id integer NOT NULL"))
 	assert.Equal(t, "", extractConstraintName(""))
+}
+
+func TestSplitQualifiedName_SpacesAroundDot(t *testing.T) {
+	parts := splitQualifiedName("public . old_table")
+	assert.Equal(t, []string{"public", "old_table"}, parts)
 }
 
 func TestNormalizeDirectiveValue(t *testing.T) {
