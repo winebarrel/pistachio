@@ -5,6 +5,8 @@
 
 Declarative schema management tool for PostgreSQL. Define your desired schema in SQL and let `pistachio` figure out the diff.
 
+See also: [Getting Started Guide](getting-started.md)
+
 <img width="800" alt="demo" src="https://github.com/user-attachments/assets/dad22b07-64d6-4064-a360-4d028944cd58" />
 
 ## Installation
@@ -18,8 +20,6 @@ brew install winebarrel/pistachio/pistachio
 ### Download binary
 
 Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
-
-See also: [Getting Started Guide](getting-started.md)
 
 ## Usage
 
