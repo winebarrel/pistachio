@@ -9,6 +9,64 @@ import (
 
 var renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:rename-from[ \t]+(.+?)[ \t]*$`)
 
+// unquoteIdent strips surrounding double quotes from a SQL identifier and
+// unescapes doubled double-quotes ("" → "). Returns the input unchanged
+// if it is not quoted.
+func unquoteIdent(s string) string {
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		inner := s[1 : len(s)-1]
+		return strings.ReplaceAll(inner, `""`, `"`)
+	}
+	return s
+}
+
+// normalizeDirectiveValue normalizes a rename-from directive value by
+// unquoting each part of a potentially schema-qualified name.
+// e.g. `"My Schema"."Old Name"` → `My Schema.Old Name`
+//
+//	`public.old_name`       → `public.old_name` (unchanged)
+//	`"Old Name"`            → `Old Name`
+func normalizeDirectiveValue(s string) string {
+	// Split on dots, but respect quoted identifiers
+	parts := splitQualifiedName(s)
+	for i, p := range parts {
+		parts[i] = unquoteIdent(p)
+	}
+	return strings.Join(parts, ".")
+}
+
+// splitQualifiedName splits a potentially schema-qualified name into parts,
+// respecting quoted identifiers. e.g. `"My Schema"."Old Name"` → [`"My Schema"`, `"Old Name"`]
+func splitQualifiedName(s string) []string {
+	var parts []string
+	var current strings.Builder
+	inQuote := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == '"' {
+			if inQuote && i+1 < len(s) && s[i+1] == '"' {
+				// Escaped double quote
+				current.WriteByte('"')
+				current.WriteByte('"')
+				i++
+			} else {
+				inQuote = !inQuote
+				current.WriteByte(ch)
+			}
+		} else if ch == '.' && !inQuote {
+			parts = append(parts, current.String())
+			current.Reset()
+		} else {
+			current.WriteByte(ch)
+		}
+	}
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+	return parts
+}
+
 // ExtractStmtDirectives scans raw SQL for `-- pist:rename-from <name>` comments
 // that appear in each statement's raw text region (including leading comments).
 // pg_query includes leading comments in StmtLocation/StmtLen, so we scan the
@@ -34,7 +92,7 @@ func ExtractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]s
 		matches := renameDirectivePattern.FindAllStringSubmatch(leading, -1)
 		if len(matches) > 0 {
 			// Use the last match (closest to the actual SQL statement)
-			directives[loc] = matches[len(matches)-1][1]
+			directives[loc] = normalizeDirectiveValue(matches[len(matches)-1][1])
 		}
 	}
 
@@ -81,7 +139,7 @@ func ExtractInlineDirectives(rawCreateTableSQL string) *InlineDirectives {
 		trimmed := strings.TrimSpace(line)
 
 		if m := renameDirectivePattern.FindStringSubmatch(line); m != nil {
-			pendingRename = m[1]
+			pendingRename = normalizeDirectiveValue(m[1])
 			continue
 		}
 
