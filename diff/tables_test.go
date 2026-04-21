@@ -1082,6 +1082,25 @@ func TestDiffTables_renameTable_sourceNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "rename source")
 }
 
+func TestDiffTables_renameColumn_error_propagates(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "users")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	current.Set("public.users", ct)
+
+	oldName := "nonexistent"
+	dt := newTable("public", "users")
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	dt.Columns.Set("new_col", &model.Column{Name: "new_col", RenameFrom: &oldName, TypeName: "text"})
+	desired.Set("public.users", dt)
+
+	_, err := DiffTables(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source column")
+}
+
 func TestDiffColumns_renameColumn_sourceNotFound(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
 
