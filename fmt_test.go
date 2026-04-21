@@ -52,6 +52,16 @@ func TestFormat_InvalidSQL(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestFormat_EmptySchemas(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "test.sql")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(`CREATE TABLE public.users (id integer NOT NULL);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{}})
+	_, err := client.Format(&pistachio.FmtOptions{Files: []string{tmpFile}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no schemas configured")
+}
+
 func TestFormat_MultipleFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	file1 := filepath.Join(tmpDir, "a.sql")

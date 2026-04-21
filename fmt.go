@@ -17,13 +17,16 @@ type FmtOptions struct {
 // provided, each file is formatted independently and returned as a map from
 // file path to formatted SQL.
 func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
+	if len(client.Schemas) == 0 {
+		return nil, fmt.Errorf("no schemas configured")
+	}
 	defaultSchema := client.Schemas[0]
 	results := make(map[string]string, len(options.Files))
 
 	for _, path := range options.Files {
 		result, err := parser.ParseSQLFileWithSchema(path, defaultSchema)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse SQL file: %w", err)
+			return nil, fmt.Errorf("failed to parse SQL file %q: %w", path, err)
 		}
 		results[path] = formatParseResult(result)
 	}
