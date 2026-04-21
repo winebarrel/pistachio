@@ -618,6 +618,48 @@ CREATE TABLE myschema.users (
 	assert.Empty(t, got)
 }
 
+func TestDump_WithSchemaMap_Domain(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE DOMAIN myschema.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	assert.Contains(t, output, "CREATE DOMAIN public.pos_int")
+	assert.NotContains(t, output, "myschema.pos_int")
+}
+
+func TestPlan_WithSchemaMap_Domain(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE DOMAIN myschema.pos_int AS integer;
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE DOMAIN public.pos_int AS integer NOT NULL;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Contains(t, got, "ALTER DOMAIN myschema.pos_int SET NOT NULL;")
+}
+
 func TestDump_WithSchemaMap_Enum(t *testing.T) {
 	ctx := context.Background()
 

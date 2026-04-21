@@ -1326,6 +1326,57 @@ func TestParseSQLWithSchema_Domain(t *testing.T) {
 	assert.Equal(t, "myschema", d.Schema)
 }
 
+func TestParseSQL_DomainWithCollation(t *testing.T) {
+	sql := `CREATE DOMAIN public.name AS text COLLATE "en_US";`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	d := result.Domains.Get("public.name")
+	require.NotNil(t, d)
+	require.NotNil(t, d.Collation)
+	assert.Equal(t, "en_US", *d.Collation)
+}
+
+func TestParseSQL_DomainCommentRemove(t *testing.T) {
+	sql := `CREATE DOMAIN public.pos_int AS integer;
+COMMENT ON DOMAIN public.pos_int IS 'Positive integer';
+COMMENT ON DOMAIN public.pos_int IS '';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	d := result.Domains.Get("public.pos_int")
+	require.NotNil(t, d)
+	assert.Nil(t, d.Comment)
+}
+
+func TestParseSQL_DomainMultipleConstraints(t *testing.T) {
+	sql := `CREATE DOMAIN public.bounded_int AS integer
+    CONSTRAINT min_check CHECK (VALUE >= 0)
+    CONSTRAINT max_check CHECK (VALUE <= 100);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	d := result.Domains.Get("public.bounded_int")
+	require.NotNil(t, d)
+	assert.Len(t, d.Constraints, 2)
+}
+
+func TestParseSQL_DomainRenameDirective(t *testing.T) {
+	sql := `-- pist:rename-from public.old_domain
+CREATE DOMAIN public.new_domain AS integer;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	d := result.Domains.Get("public.new_domain")
+	require.NotNil(t, d)
+	require.NotNil(t, d.RenameFrom)
+	assert.Equal(t, "public.old_domain", *d.RenameFrom)
+}
+
 func TestParseSQL_DomainUnnamedConstraint_Error(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer CHECK (VALUE > 0);`
 	_, err := parser.ParseSQL(sql)

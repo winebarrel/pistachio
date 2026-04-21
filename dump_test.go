@@ -313,6 +313,26 @@ COMMENT ON TYPE public.status IS 'User status';`)
 	assert.Contains(t, s, "COMMENT ON TYPE status")
 }
 
+func TestDumpResult_OmitSchema_Domain(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+	s := got.String()
+	assert.Contains(t, s, "CREATE DOMAIN pos_int AS integer")
+	assert.NotContains(t, s, "public.pos_int")
+}
+
 func TestDumpResult_OmitSchema_Enum_Files(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
