@@ -180,6 +180,8 @@ func TestExtractConstraintName(t *testing.T) {
 	assert.Equal(t, "My Con", extractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))
 	assert.Equal(t, "", extractConstraintName("id integer NOT NULL"))
 	assert.Equal(t, "", extractConstraintName(""))
+	// Unquoted names are lowercased
+	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT Users_Pkey PRIMARY KEY (id)"))
 }
 
 func TestSplitQualifiedName_SpacesAroundDot(t *testing.T) {
@@ -203,6 +205,8 @@ func TestNormalizeUnqualifiedDirective(t *testing.T) {
 	// Schema-qualified: take last part only
 	assert.Equal(t, "old_idx", normalizeUnqualifiedDirective("public.old_idx"))
 	assert.Equal(t, "Old Name", normalizeUnqualifiedDirective(`public."Old Name"`))
+	// Unquoted names are lowercased
+	assert.Equal(t, "oldcolumn", normalizeUnqualifiedDirective("OldColumn"))
 }
 
 func TestQualifyRenameFrom(t *testing.T) {
@@ -248,4 +252,6 @@ func TestExtractColumnName(t *testing.T) {
 	assert.Equal(t, "My Col", extractColumnName(`"My Col" text NOT NULL,`))
 	assert.Equal(t, "", extractColumnName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
 	assert.Equal(t, "", extractColumnName(""))
+	// Unquoted names are lowercased
+	assert.Equal(t, "displayname", extractColumnName("DisplayName text NOT NULL"))
 }

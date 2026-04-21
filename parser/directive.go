@@ -25,14 +25,14 @@ func QualifyRenameFrom(value, defaultSchema string) string {
 }
 
 // unquoteIdent strips surrounding double quotes from a SQL identifier and
-// unescapes doubled double-quotes ("" → "). Returns the input unchanged
-// if it is not quoted.
+// unescapes doubled double-quotes ("" → "). For unquoted identifiers,
+// folds to lowercase to match PostgreSQL's behavior.
 func unquoteIdent(s string) string {
 	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
 		inner := s[1 : len(s)-1]
 		return strings.ReplaceAll(inner, `""`, `"`)
 	}
-	return s
+	return strings.ToLower(s)
 }
 
 // normalizeDirectiveValue normalizes a rename-from directive value by
@@ -250,7 +250,7 @@ func extractConstraintName(line string) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	return fields[0]
+	return strings.ToLower(fields[0])
 }
 
 // extractColumnName extracts the column name from a column definition line.
@@ -272,7 +272,7 @@ func extractColumnName(line string) string {
 		return ""
 	}
 
-	// Unquoted identifier: first word
+	// Unquoted identifier: first word, folded to lowercase per PostgreSQL behavior
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
 		return ""
@@ -281,5 +281,5 @@ func extractColumnName(line string) string {
 	name := fields[0]
 	// Remove trailing comma if present
 	name = strings.TrimSuffix(name, ",")
-	return name
+	return strings.ToLower(name)
 }
