@@ -332,7 +332,7 @@ CREATE TABLE public.members (
 
 	_, err := parser.ParseSQL(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unnamed FOREIGN KEY constraints are not supported (table: members)")
+	assert.Contains(t, err.Error(), "unnamed FOREIGN KEY constraint on table \"members\" is not supported")
 }
 
 func TestParseSQL_ColumnLevelNamedCheck(t *testing.T) {
