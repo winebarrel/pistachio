@@ -120,7 +120,7 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Include:    []string{"users"}}})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -149,7 +149,7 @@ CREATE TABLE public.posts (
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Exclude:    []string{"posts"}}})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Exclude: []string{"posts"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -181,7 +181,7 @@ CREATE TABLE public.posts (
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Include:    []string{"user*"}}})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"user*"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -238,7 +238,7 @@ CREATE VIEW public.tmp_view AS SELECT 1;`)
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Exclude:    []string{"tmp_*"}}})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Exclude: []string{"tmp_*"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -278,7 +278,7 @@ CREATE TABLE public.posts (
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Include:    []string{"users"}}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
@@ -317,7 +317,7 @@ CREATE TABLE public.posts (
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Exclude:    []string{"posts"}}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Exclude: []string{"posts"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
@@ -338,7 +338,7 @@ CREATE TYPE public.role AS ENUM ('admin', 'user');`)
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Include:    []string{"status"}}})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -360,7 +360,7 @@ CREATE TYPE public.role AS ENUM ('admin', 'user');`)
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Exclude:    []string{"role"}}})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Exclude: []string{"role"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -386,7 +386,7 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Include:    []string{"status"}}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';")
@@ -411,7 +411,7 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{FilterOptions: pistachio.FilterOptions{Include:    []string{"status"}}, Files: []string{desiredFile}}, io.Discard)
+	err := client.Apply(ctx, &pistachio.ApplyOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: only status should have the new value
@@ -460,7 +460,7 @@ CREATE TABLE public.posts (
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{FilterOptions: pistachio.FilterOptions{Include:    []string{"users"}}, Files: []string{desiredFile}}, io.Discard)
+	err := client.Apply(ctx, &pistachio.ApplyOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: only users should have the new column
