@@ -995,6 +995,80 @@ func TestDiffTables_renameTable_alreadyApplied(t *testing.T) {
 	assert.Empty(t, stmts)
 }
 
+func TestDiffTables_renameTable_withIndex(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "users")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	ct.Columns.Set("name", &model.Column{Name: "name", TypeName: "text"})
+	ct.Indexes.Set("idx_users_name", &model.Index{Schema: "public", Name: "idx_users_name", Table: "users", Definition: "CREATE INDEX idx_users_name ON public.users USING btree (name)"})
+	current.Set("public.users", ct)
+
+	oldName := "public.users"
+	dt := newTable("public", "accounts")
+	dt.RenameFrom = &oldName
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	dt.Columns.Set("name", &model.Column{Name: "name", TypeName: "text"})
+	dt.Indexes.Set("idx_users_name", &model.Index{Schema: "public", Name: "idx_users_name", Table: "accounts", Definition: "CREATE INDEX idx_users_name ON public.accounts USING btree (name)"})
+	desired.Set("public.accounts", dt)
+
+	stmts, err := DiffTables(current, desired)
+	require.NoError(t, err)
+	// Should only rename the table, no DROP/CREATE index
+	assert.Equal(t, []string{"ALTER TABLE public.users RENAME TO accounts;"}, stmts)
+}
+
+func TestDiffTables_renameTable_withFK(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "orders")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	ct.Columns.Set("user_id", &model.Column{Name: "user_id", TypeName: "integer"})
+	ct.ForeignKeys.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	current.Set("public.orders", ct)
+
+	oldName := "public.orders"
+	dt := newTable("public", "purchases")
+	dt.RenameFrom = &oldName
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	dt.Columns.Set("user_id", &model.Column{Name: "user_id", TypeName: "integer"})
+	dt.ForeignKeys.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
+		Schema:     "public",
+		Table:      "purchases",
+	})
+	desired.Set("public.purchases", dt)
+
+	stmts, err := DiffTables(current, desired)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME TO purchases;"}, stmts)
+}
+
+func TestDiffTables_renameTable_crossSchema_error(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "users")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	current.Set("public.users", ct)
+
+	oldName := "public.users"
+	dt := newTable("other", "users")
+	dt.RenameFrom = &oldName
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	desired.Set("other.users", dt)
+
+	_, err := DiffTables(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cross-schema rename")
+}
+
 func TestDiffColumns_renameColumn(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
 	current.Set("name", &model.Column{Name: "name", TypeName: "text"})

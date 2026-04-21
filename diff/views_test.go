@@ -114,6 +114,19 @@ func TestDiffViews_rename_alreadyApplied(t *testing.T) {
 	assert.Empty(t, stmts)
 }
 
+func TestDiffViews_rename_crossSchema_error(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+
+	oldName := "public.v1"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("other.v2", &model.View{Schema: "other", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	_, err := DiffViews(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cross-schema rename")
+}
+
 func TestDiffViews_rename_sourceNotFound(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 
