@@ -11,6 +11,7 @@ import (
 )
 
 type DumpOptions struct {
+	FilterOptions
 	Split      string `help:"Output each table/view/enum as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
 }
@@ -169,9 +170,9 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	}
 
 	return &DumpResult{
-		Tables:     client.filterTables(client.remapTableSchemas(tables)),
-		Views:      client.filterViews(client.remapViewSchemas(views)),
-		Enums:      client.filterEnums(client.remapEnumSchemas(enums)),
+		Tables:     options.filterTables(client.remapTableSchemas(tables)),
+		Views:      options.filterViews(client.remapViewSchemas(views)),
+		Enums:      options.filterEnums(client.remapEnumSchemas(enums)),
 		OmitSchema: options.OmitSchema,
 	}, nil
 }

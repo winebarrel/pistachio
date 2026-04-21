@@ -12,6 +12,7 @@ import (
 )
 
 type PlanOptions struct {
+	FilterOptions
 	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
 	PreSQLFile string   `type:"path" help:"Path to a SQL file to execute before applying changes."`
 }
@@ -48,19 +49,19 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, e
 		return "", fmt.Errorf("failed to parse SQL file: %w", err)
 	}
 
-	enumDiff, err := diff.DiffEnums(client.filterEnums(currentEnums), client.filterEnums(client.reverseRemapEnumSchemas(desired.Enums)))
+	enumDiff, err := diff.DiffEnums(options.filterEnums(currentEnums), options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums)))
 	if err != nil {
 		return "", err
 	}
 	stmts := enumDiff.Stmts
 
-	tableStmts, err := diff.DiffTables(client.filterTables(currentTables), client.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
+	tableStmts, err := diff.DiffTables(options.filterTables(currentTables), options.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
 	if err != nil {
 		return "", fmt.Errorf("failed to diff tables: %w", err)
 	}
 	stmts = append(stmts, tableStmts...)
 
-	viewStmts, err := diff.DiffViews(client.filterViews(currentViews), client.filterViews(client.reverseRemapViewSchemas(desired.Views)))
+	viewStmts, err := diff.DiffViews(options.filterViews(currentViews), options.filterViews(client.reverseRemapViewSchemas(desired.Views)))
 	if err != nil {
 		return "", fmt.Errorf("failed to diff views: %w", err)
 	}
