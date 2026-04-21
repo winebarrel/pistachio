@@ -1,6 +1,7 @@
 package pistachio_test
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -88,6 +89,48 @@ func TestApply_WithPreSQLFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "CREATE TABLE public.pre_hook")
 	assert.Contains(t, got.String(), "CREATE TABLE public.users")
+}
+
+func TestApply_WithPreSQLFile_Output(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	tmpDir := t.TempDir()
+	desiredFile := filepath.Join(tmpDir, "desired.sql")
+	preSQLFile := filepath.Join(tmpDir, "pre.sql")
+
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+	require.NoError(t, os.WriteFile(preSQLFile, []byte(`CREATE TABLE public.pre_hook (
+    id integer NOT NULL,
+    CONSTRAINT pre_hook_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:      []string{desiredFile},
+		PreSQLFile: preSQLFile,
+	}, &buf)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "CREATE TABLE public.pre_hook")
+	assert.Contains(t, output, "CREATE TABLE public.users")
+
+	// pre-SQL should appear before diff statements
+	preSQLPos := strings.Index(output, "CREATE TABLE public.pre_hook")
+	diffPos := strings.Index(output, "CREATE TABLE public.users")
+	assert.Less(t, preSQLPos, diffPos)
 }
 
 func TestApply_WithTx(t *testing.T) {
