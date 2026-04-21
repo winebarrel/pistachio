@@ -433,6 +433,84 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 	assert.NotContains(t, output, "'guest'")
 }
 
+func TestIsTypeEnabled(t *testing.T) {
+	t.Run("empty (all enabled)", func(t *testing.T) {
+		f := &pistachio.FilterOptions{}
+		assert.True(t, f.IsTypeEnabled("table"))
+		assert.True(t, f.IsTypeEnabled("view"))
+		assert.True(t, f.IsTypeEnabled("enum"))
+		assert.True(t, f.IsTypeEnabled("domain"))
+	})
+
+	t.Run("only table", func(t *testing.T) {
+		f := &pistachio.FilterOptions{Only: []string{"table"}}
+		assert.True(t, f.IsTypeEnabled("table"))
+		assert.False(t, f.IsTypeEnabled("view"))
+		assert.False(t, f.IsTypeEnabled("enum"))
+		assert.False(t, f.IsTypeEnabled("domain"))
+	})
+
+	t.Run("multiple types", func(t *testing.T) {
+		f := &pistachio.FilterOptions{Only: []string{"table", "enum"}}
+		assert.True(t, f.IsTypeEnabled("table"))
+		assert.False(t, f.IsTypeEnabled("view"))
+		assert.True(t, f.IsTypeEnabled("enum"))
+		assert.False(t, f.IsTypeEnabled("domain"))
+	})
+}
+
+func TestDump_Only_Enum(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{Only: []string{"enum"}},
+	})
+	require.NoError(t, err)
+	output := got.String()
+	assert.Contains(t, output, "CREATE TYPE public.status")
+	assert.NotContains(t, output, "CREATE TABLE")
+}
+
+func TestDump_Only_Table(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{Only: []string{"table"}},
+	})
+	require.NoError(t, err)
+	output := got.String()
+	assert.Contains(t, output, "CREATE TABLE public.users")
+	assert.NotContains(t, output, "CREATE TYPE")
+}
+
 func TestDump_IncludeDomain(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
