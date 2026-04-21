@@ -219,5 +219,4 @@ pist plan schema.sql | grep -q "No changes"
 
 - Always use explicit `CONSTRAINT <name>` clauses. Unnamed constraints are not tracked by pistachio.
 - Run `pist plan` before `pist apply` to review changes.
-- Use `--with-tx` for production applies so failures are rolled back.
 - Keep your schema file(s) in version control alongside your application code.
