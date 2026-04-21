@@ -29,15 +29,15 @@ func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse SQL file %q: %w", path, err)
 		}
-		results[path] = FormatSchemaSQL(result.Enums, result.Tables, result.Views)
+		results[path] = formatSchemaSQL(result.Enums, result.Tables, result.Views)
 	}
 
 	return results, nil
 }
 
-// FormatSchemaSQL formats enums, tables, and views into canonical SQL output.
+// formatSchemaSQL formats enums, tables, and views into canonical SQL output.
 // This is the shared formatting logic used by both dump and fmt.
-func FormatSchemaSQL(
+func formatSchemaSQL(
 	enums *orderedmap.Map[string, *model.Enum],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],

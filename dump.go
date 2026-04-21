@@ -86,7 +86,7 @@ func (r *DumpResult) enums() *orderedmap.Map[string, *model.Enum] {
 }
 
 func (r *DumpResult) String() string {
-	return FormatSchemaSQL(r.enums(), r.tables(), r.views())
+	return formatSchemaSQL(r.enums(), r.tables(), r.views())
 }
 
 func (r *DumpResult) Files() map[string]string {
