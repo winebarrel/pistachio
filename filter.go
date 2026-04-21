@@ -46,3 +46,17 @@ func (f *FilterOptions) filterEnums(enums *orderedmap.Map[string, *model.Enum]) 
 	}
 	return filtered
 }
+
+func (f *FilterOptions) filterDomains(domains *orderedmap.Map[string, *model.Domain]) *orderedmap.Map[string, *model.Domain] {
+	if len(f.Include) == 0 && len(f.Exclude) == 0 {
+		return domains
+	}
+
+	filtered := orderedmap.New[string, *model.Domain]()
+	for k, d := range domains.All() {
+		if f.MatchName(d.Name) {
+			filtered.Set(k, d)
+		}
+	}
+	return filtered
+}

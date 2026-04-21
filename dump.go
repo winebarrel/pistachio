@@ -20,6 +20,7 @@ type DumpResult struct {
 	Tables     *orderedmap.Map[string, *model.Table]
 	Views      *orderedmap.Map[string, *model.View]
 	Enums      *orderedmap.Map[string, *model.Enum]
+	Domains    *orderedmap.Map[string, *model.Domain]
 	OmitSchema bool
 }
 
@@ -86,8 +87,24 @@ func (r *DumpResult) enums() *orderedmap.Map[string, *model.Enum] {
 	return enums
 }
 
+func (r *DumpResult) domains() *orderedmap.Map[string, *model.Domain] {
+	if r.Domains == nil {
+		return orderedmap.New[string, *model.Domain]()
+	}
+	if !r.OmitSchema {
+		return r.Domains
+	}
+	domains := orderedmap.New[string, *model.Domain]()
+	for _, d := range r.Domains.CollectValues() {
+		copied := *d
+		copied.Schema = ""
+		domains.Set(d.FQDN(), &copied)
+	}
+	return domains
+}
+
 func (r *DumpResult) String() string {
-	return formatSchemaSQL(r.enums(), r.tables(), r.views())
+	return formatSchemaSQL(r.domains(), r.enums(), r.tables(), r.views())
 }
 
 func (r *DumpResult) Files() map[string]string {
@@ -96,6 +113,11 @@ func (r *DumpResult) Files() map[string]string {
 	for _, e := range r.enums().CollectValues() {
 		name := uniqueFileName(seen, toFileName(e.Schema, e.Name))
 		files[name] = model.EnumToSQL(e) + "\n"
+		seen[strings.ToLower(name)] = true
+	}
+	for _, d := range r.domains().CollectValues() {
+		name := uniqueFileName(seen, toFileName(d.Schema, d.Name))
+		files[name] = model.DomainToSQL(d) + "\n"
 		seen[strings.ToLower(name)] = true
 	}
 	for _, t := range r.tables().CollectValues() {
@@ -169,10 +191,16 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		return nil, fmt.Errorf("failed to fetch enums: %w", err)
 	}
 
+	domains, err := catalog.Domains(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch domains: %w", err)
+	}
+
 	return &DumpResult{
 		Tables:     options.filterTables(client.remapTableSchemas(tables)),
 		Views:      options.filterViews(client.remapViewSchemas(views)),
 		Enums:      options.filterEnums(client.remapEnumSchemas(enums)),
+		Domains:    options.filterDomains(client.remapDomainSchemas(domains)),
 		OmitSchema: options.OmitSchema,
 	}, nil
 }

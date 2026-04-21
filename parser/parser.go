@@ -11,9 +11,10 @@ import (
 )
 
 type ParseResult struct {
-	Tables *orderedmap.Map[string, *model.Table]
-	Views  *orderedmap.Map[string, *model.View]
-	Enums  *orderedmap.Map[string, *model.Enum]
+	Tables  *orderedmap.Map[string, *model.Table]
+	Views   *orderedmap.Map[string, *model.View]
+	Enums   *orderedmap.Map[string, *model.Enum]
+	Domains *orderedmap.Map[string, *model.Domain]
 }
 
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
@@ -76,6 +77,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	tables := orderedmap.New[string, *model.Table]()
 	views := orderedmap.New[string, *model.View]()
 	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
 
 	stmtDirectives := ExtractStmtDirectives(sql, result.Stmts)
 
@@ -94,6 +96,19 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				enum.RenameFrom = &qualified
 			}
 			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
+				return nil, err
+			}
+
+		case node.GetCreateDomainStmt() != nil:
+			domain, err := parseCreateDomainStmt(node.GetCreateDomainStmt(), rawStmt, defaultSchema)
+			if err != nil {
+				return nil, err
+			}
+			if renameFrom != "" {
+				qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+				domain.RenameFrom = &qualified
+			}
+			if err := setUnique(domains, domain.FQDN(), "domain", domain); err != nil {
 				return nil, err
 			}
 
@@ -199,11 +214,11 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
-			parseCommentStmt(cs, defaultSchema, tables, views, enums)
+			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains)
 		}
 	}
 
-	return &ParseResult{Tables: tables, Views: views, Enums: enums}, nil
+	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains}, nil
 }
 
 func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Table, error) {
@@ -514,6 +529,160 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 	}, nil
 }
 
+func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawStmt, defaultSchema string) (*model.Domain, error) {
+	schema := defaultSchema
+	name := ""
+
+	for i, n := range ds.Domainname {
+		if s := n.GetString_(); s != nil {
+			if i == len(ds.Domainname)-1 {
+				name = s.Sval
+			} else {
+				schema = s.Sval
+			}
+		}
+	}
+
+	// Deparse the full statement and extract the domain definition
+	result := &pg_query.ParseResult{
+		Stmts: []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},
+	}
+	deparsed, err := pg_query.Deparse(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deparse domain %s: %w", name, err)
+	}
+
+	// Parse the base type
+	baseType := ""
+	if ds.TypeName != nil {
+		bt, err := deparseTypeName(ds.TypeName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deparse base type for domain %s: %w", name, err)
+		}
+		baseType = bt
+	}
+
+	domain := &model.Domain{
+		Schema:   schema,
+		Name:     name,
+		BaseType: baseType,
+	}
+
+	// Extract collation
+	if ds.CollClause != nil && len(ds.CollClause.Collname) > 0 {
+		var parts []string
+		for _, n := range ds.CollClause.Collname {
+			if s := n.GetString_(); s != nil {
+				parts = append(parts, s.Sval)
+			}
+		}
+		if len(parts) > 0 {
+			collation := strings.Join(parts, ".")
+			domain.Collation = &collation
+		}
+	}
+
+	// Extract constraints from deparsed SQL
+	// Parse the deparsed statement to get normalized constraints
+	for _, conNode := range ds.Constraints {
+		con := conNode.GetConstraint()
+		if con == nil {
+			continue
+		}
+		switch con.Contype {
+		case pg_query.ConstrType_CONSTR_NOTNULL:
+			domain.NotNull = true
+		case pg_query.ConstrType_CONSTR_DEFAULT:
+			if con.RawExpr != nil {
+				def, err := deparseExpr(con.RawExpr)
+				if err != nil {
+					return nil, fmt.Errorf("failed to deparse default for domain %s: %w", name, err)
+				}
+				domain.Default = &def
+			}
+		case pg_query.ConstrType_CONSTR_CHECK:
+			if con.Conname == "" {
+				return nil, fmt.Errorf("unnamed constraint on domain %q is not supported", name)
+			}
+			// Extract CHECK definition from the deparsed SQL
+			def := extractCheckDefFromDeparsed(deparsed, con.Conname)
+			if def == "" {
+				// Fallback: deparse the raw expression
+				if con.RawExpr != nil {
+					expr, err := deparseExpr(con.RawExpr)
+					if err != nil {
+						return nil, fmt.Errorf("failed to deparse constraint %s for domain %s: %w", con.Conname, name, err)
+					}
+					def = "CHECK (" + expr + ")"
+				}
+			}
+			domain.Constraints = append(domain.Constraints, &model.DomainConstraint{
+				Name:       con.Conname,
+				Definition: def,
+			})
+		}
+	}
+
+	return domain, nil
+}
+
+// extractCheckDefFromDeparsed extracts a CHECK constraint definition from a deparsed
+// CREATE DOMAIN statement by finding the CONSTRAINT name ... portion.
+func extractCheckDefFromDeparsed(deparsed, conName string) string {
+	marker := "CONSTRAINT " + model.Ident(conName) + " "
+	idx := strings.Index(deparsed, marker)
+	if idx == -1 {
+		return ""
+	}
+	rest := deparsed[idx+len(marker):]
+	// The CHECK definition is everything from "CHECK" to the end of the constraint
+	// which ends at the next CONSTRAINT keyword or end of statement
+	checkIdx := strings.Index(rest, "CHECK")
+	if checkIdx == -1 {
+		return ""
+	}
+	def := rest[checkIdx:]
+	// Find the end: next CONSTRAINT or end of statement
+	nextCon := strings.Index(def[1:], " CONSTRAINT ")
+	if nextCon >= 0 {
+		def = strings.TrimSpace(def[:nextCon+1])
+	} else {
+		def = strings.TrimSpace(def)
+	}
+	return def
+}
+
+func parseCommentOnDomain(cs *pg_query.CommentStmt, defaultSchema string, domains *orderedmap.Map[string, *model.Domain]) {
+	tn := cs.Object.GetTypeName()
+	if tn == nil {
+		return
+	}
+	var names []string
+	for _, n := range tn.Names {
+		if s := n.GetString_(); s != nil {
+			names = append(names, s.Sval)
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+	schema := defaultSchema
+	domainName := names[0]
+	if len(names) >= 2 {
+		schema = names[0]
+		domainName = names[1]
+	}
+	fqdn := model.Ident(schema, domainName)
+	if d, ok := domains.GetOk(fqdn); ok {
+		if cs.Comment != "" {
+			c := cs.Comment
+			d.Comment = &c
+		} else {
+			d.Comment = nil
+		}
+	}
+}
+
 func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*model.Enum, error) {
 	schema := defaultSchema
 	name := ""
@@ -542,10 +711,14 @@ func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*mo
 	}, nil
 }
 
-func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum]) {
-	// COMMENT ON TYPE uses TypeName, not a list
+func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum], domains *orderedmap.Map[string, *model.Domain]) {
+	// COMMENT ON TYPE/DOMAIN uses TypeName, not a list
 	if cs.Objtype == pg_query.ObjectType_OBJECT_TYPE {
 		parseCommentOnType(cs, defaultSchema, enums)
+		return
+	}
+	if cs.Objtype == pg_query.ObjectType_OBJECT_DOMAIN {
+		parseCommentOnDomain(cs, defaultSchema, domains)
 		return
 	}
 

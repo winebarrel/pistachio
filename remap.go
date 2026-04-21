@@ -158,3 +158,33 @@ func (client *Client) reverseRemapEnumSchemas(enums *orderedmap.Map[string, *mod
 
 	return remapped
 }
+
+func (client *Client) remapDomainSchemas(domains *orderedmap.Map[string, *model.Domain]) *orderedmap.Map[string, *model.Domain] {
+	if len(client.SchemaMap) == 0 {
+		return domains
+	}
+
+	remapped := orderedmap.New[string, *model.Domain]()
+
+	for _, d := range domains.CollectValues() {
+		d.Schema = client.RemapSchema(d.Schema)
+		remapped.Set(d.FQDN(), d)
+	}
+
+	return remapped
+}
+
+func (client *Client) reverseRemapDomainSchemas(domains *orderedmap.Map[string, *model.Domain]) *orderedmap.Map[string, *model.Domain] {
+	if len(client.SchemaMap) == 0 {
+		return domains
+	}
+
+	remapped := orderedmap.New[string, *model.Domain]()
+
+	for _, d := range domains.CollectValues() {
+		d.Schema = client.ReverseRemapSchema(d.Schema)
+		remapped.Set(d.FQDN(), d)
+	}
+
+	return remapped
+}

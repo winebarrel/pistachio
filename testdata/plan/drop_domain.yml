@@ -1,0 +1,5 @@
+init: |
+  CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+desired: ""
+plan: |
+  DROP DOMAIN public.pos_int;
