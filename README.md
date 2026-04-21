@@ -144,6 +144,48 @@ pist -n staging plan schema.sql   # schema-less SQL is treated as "staging"
 pist -n staging apply schema.sql
 ```
 
+### Renaming objects
+
+Use `-- pist:rename-from <old_name>` directives to rename objects instead of dropping and recreating them.
+
+**Tables, views, enums:**
+
+```sql
+-- pist:rename-from public.old_status
+CREATE TYPE public.new_status AS ENUM ('active', 'inactive');
+
+-- pist:rename-from public.old_users
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+
+-- pist:rename-from public.old_view
+CREATE VIEW public.new_view AS SELECT 1;
+```
+
+**Columns, constraints, indexes** (inside `CREATE TABLE` or before `CREATE INDEX` / `ALTER TABLE ADD CONSTRAINT`):
+
+```sql
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pist:rename-from name
+    display_name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    -- pist:rename-from users_name_key
+    CONSTRAINT users_display_name_key UNIQUE (display_name)
+);
+
+-- pist:rename-from idx_users_name
+CREATE INDEX idx_users_display_name ON public.users (display_name);
+
+-- pist:rename-from fk_old_name
+ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFERENCES public.users(id);
+```
+
+> [!TIP]
+> Rename directives that have already been applied are silently skipped, so you can safely leave them in your schema files until cleanup.
+
 ### Split dump
 
 Use `--split` to output each table/view/enum as a separate file in the specified directory.
@@ -208,6 +250,7 @@ pist apply ./schema/*.sql         # apply it
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types)
+- Renaming (tables, views, enums, columns, constraints, indexes via `-- pist:rename-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 
