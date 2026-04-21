@@ -351,3 +351,42 @@ func TestApply_Run(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
 }
+
+func TestFmt_Run(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "test.sql")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(`CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		Schemas: []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{FmtOptions: pistachio.FmtOptions{Files: []string{tmpFile}}}
+	err := cmd.Run(client, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
+	assert.Contains(t, buf.String(), "    id integer NOT NULL")
+}
+
+func TestFmt_Run_Write(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "test.sql")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(`CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		Schemas: []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{FmtOptions: pistachio.FmtOptions{Files: []string{tmpFile}, Write: true}}
+	err := cmd.Run(client, &buf)
+	require.NoError(t, err)
+
+	// stdout should be empty when writing to file
+	assert.Empty(t, buf.String())
+
+	// File should be formatted
+	content, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "CREATE TABLE public.users")
+	assert.Contains(t, string(content), "    id integer NOT NULL")
+}
