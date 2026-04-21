@@ -224,7 +224,7 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 					}
 				}
 			} else {
-				constraint, err := parseTableConstraint(con)
+				constraint, err := parseTableConstraint(con, table.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -324,7 +324,7 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 			continue
 		}
 		if con.Conname == "" {
-			return fmt.Errorf("unnamed constraint on column %q is not supported (type: %s)", cd.Colname, con.Contype)
+			return fmt.Errorf("unnamed constraint on column %q in table %q is not supported (type: %s)", cd.Colname, table.Name, con.Contype)
 		}
 		switch con.Contype {
 		case pg_query.ConstrType_CONSTR_FOREIGN:
@@ -343,7 +343,7 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 			}
 		case pg_query.ConstrType_CONSTR_PRIMARY, pg_query.ConstrType_CONSTR_UNIQUE,
 			pg_query.ConstrType_CONSTR_CHECK, pg_query.ConstrType_CONSTR_EXCLUSION:
-			constraint, err := parseTableConstraint(con)
+			constraint, err := parseTableConstraint(con, table.Name)
 			if err != nil {
 				return err
 			}
@@ -357,9 +357,9 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 	return nil
 }
 
-func parseTableConstraint(con *pg_query.Constraint) (*model.Constraint, error) {
+func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Constraint, error) {
 	if con.Conname == "" {
-		return nil, fmt.Errorf("unnamed constraints are not supported (type: %s)", con.Contype)
+		return nil, fmt.Errorf("unnamed constraint on table %q is not supported (type: %s)", tableName, con.Contype)
 	}
 
 	var conType model.ConstraintType
@@ -584,7 +584,7 @@ func parseAlterTableConstraint(as *pg_query.AlterTableStmt, defaultSchema string
 		}
 
 		// Non-FK constraint (PRIMARY KEY, UNIQUE, CHECK, etc.)
-		constraint, err := parseTableConstraint(con)
+		constraint, err := parseTableConstraint(con, as.Relation.Relname)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -599,7 +599,7 @@ func parseAlterTableConstraint(as *pg_query.AlterTableStmt, defaultSchema string
 // constraint inside a CREATE TABLE statement.
 func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchema string) (*model.ForeignKey, error) {
 	if con.Conname == "" {
-		return nil, fmt.Errorf("unnamed FOREIGN KEY constraints are not supported")
+		return nil, fmt.Errorf("unnamed FOREIGN KEY constraint on table %q is not supported", table)
 	}
 
 	def, err := deparseConstraintDef(con)
