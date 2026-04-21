@@ -136,7 +136,7 @@ pist -n staging -m staging=public apply schema.sql
 
 Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names).
 
-Use `--only` to restrict operations to specific object types (`table`, `view`, `enum`, `domain`). Can be repeated to include multiple types. Also available as `$PIST_ONLY` environment variable.
+Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`. Can be repeated. Also available as `$PIST_ENABLE` / `$PIST_DISABLE` environment variables.
 
 These flags are available on the `dump`, `plan`, and `apply` subcommands.
 
@@ -151,20 +151,24 @@ pist plan -E 'tmp_*' schema.sql
 pist apply -I 'user*' -E 'user_tmp' schema.sql
 
 # Dump only enums
-pist dump --only enum
+pist dump --enable enum
 
 # Dump only tables and views
-pist dump --only table --only view
+pist dump --enable table --enable view
+
+# Dump everything except views
+pist dump --disable view
 
 # Plan changes for enums only
-pist plan --only enum schema.sql
+pist plan --enable enum schema.sql
 
-# Using environment variable
-PIST_ONLY=enum pist dump
+# Using environment variables
+PIST_ENABLE=enum pist dump
+PIST_DISABLE=view pist dump
 ```
 
 > [!NOTE]
-> `--only` excludes dependent objects. For example, `--only table` omits enums/domains that table columns may reference, so the generated SQL may not apply cleanly on its own. Use `--only` primarily for inspection (`dump`, `plan`) rather than `apply`.
+> `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference), so use them primarily for inspection (`dump`, `plan`) rather than `apply`.
 
 ### Omit schema
 
