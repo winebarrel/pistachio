@@ -7,7 +7,7 @@ Set Height 600
 Set Padding 20
 
 Hide
-Type "alias colorize='bat -l sql -p --paging=never'" Enter
+Type "alias colorize='bat -l sql -p --paging=never' && clear"
 Show
 
 # Create schema file
