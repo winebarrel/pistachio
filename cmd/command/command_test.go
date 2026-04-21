@@ -368,6 +368,44 @@ func TestFmt_Run(t *testing.T) {
 	assert.Contains(t, buf.String(), "    id integer NOT NULL")
 }
 
+func TestFmt_Run_InvalidFile(t *testing.T) {
+	client := pistachio.NewClient(&pistachio.Options{
+		Schemas: []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{FmtOptions: pistachio.FmtOptions{Files: []string{"/nonexistent/file.sql"}}}
+	err := cmd.Run(client, &buf)
+	require.Error(t, err)
+}
+
+func TestFmt_Run_WriteError(t *testing.T) {
+	// Create a read-only directory so WriteFile fails
+	tmpDir := t.TempDir()
+	readonlyDir := filepath.Join(tmpDir, "readonly")
+	require.NoError(t, os.MkdirAll(readonlyDir, 0o555))
+
+	// Input file must be readable but the write target must fail.
+	// Since -w writes back to the same files, put a readable file in a read-only dir.
+	inputFile := filepath.Join(readonlyDir, "test.sql")
+	// Write before making it read-only won't work since dir is already 0o555.
+	// Instead: create file first, then make dir read-only.
+	require.NoError(t, os.Chmod(readonlyDir, 0o755))
+	require.NoError(t, os.WriteFile(inputFile, []byte(`CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`), 0o444))
+	require.NoError(t, os.Chmod(readonlyDir, 0o555))
+	t.Cleanup(func() { os.Chmod(readonlyDir, 0o755) })
+
+	client := pistachio.NewClient(&pistachio.Options{
+		Schemas: []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{FmtOptions: pistachio.FmtOptions{Files: []string{inputFile}, Write: true}}
+	err := cmd.Run(client, &buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to write")
+}
+
 func TestFmt_Run_Write(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "test.sql")
 	require.NoError(t, os.WriteFile(tmpFile, []byte(`CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`), 0o644))
