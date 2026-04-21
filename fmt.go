@@ -29,15 +29,17 @@ func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse SQL file %q: %w", path, err)
 		}
-		results[path] = formatSchemaSQL(result.Enums, result.Tables, result.Views)
+		results[path] = formatSchemaSQL(result.Domains, result.Enums, result.Tables, result.Views)
 	}
 
 	return results, nil
 }
 
-// formatSchemaSQL formats enums, tables, and views into canonical SQL output.
+// formatSchemaSQL formats domains, enums, tables, and views into canonical SQL output.
 // This is the shared formatting logic used by both dump and fmt.
+// Order: enums → domains → tables → views (enums first since domains may depend on them).
 func formatSchemaSQL(
+	domains *orderedmap.Map[string, *model.Domain],
 	enums *orderedmap.Map[string, *model.Enum],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
@@ -45,6 +47,9 @@ func formatSchemaSQL(
 	var parts []string
 	if enums != nil && enums.Len() > 0 {
 		parts = append(parts, model.EnumsToSQL(enums))
+	}
+	if domains != nil && domains.Len() > 0 {
+		parts = append(parts, model.DomainsToSQL(domains))
 	}
 	if tables != nil && tables.Len() > 0 {
 		parts = append(parts, model.TablesToSQL(tables))

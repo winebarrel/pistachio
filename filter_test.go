@@ -433,6 +433,29 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 	assert.NotContains(t, output, "'guest'")
 }
 
+func TestDump_IncludeDomain(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+CREATE DOMAIN public.email AS varchar(255);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{Include: []string{"pos_int"}},
+	})
+	require.NoError(t, err)
+	output := got.String()
+	assert.Contains(t, output, "public.pos_int")
+	assert.NotContains(t, output, "public.email")
+}
+
 func TestApply_Include(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

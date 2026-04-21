@@ -45,6 +45,11 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return fmt.Errorf("failed to fetch enums: %w", err)
 	}
 
+	currentDomains, err := cat.Domains(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch domains: %w", err)
+	}
+
 	desired, err := parser.ParseSQLFilesWithSchema(options.Files, client.Schemas[0])
 	if err != nil {
 		return fmt.Errorf("failed to parse SQL file: %w", err)
@@ -55,6 +60,12 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return err
 	}
 	stmts := enumDiff.Stmts
+
+	domainDiff, err := diff.DiffDomains(options.filterDomains(currentDomains), options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains)))
+	if err != nil {
+		return fmt.Errorf("failed to diff domains: %w", err)
+	}
+	stmts = append(stmts, domainDiff.Stmts...)
 
 	tableStmts, err := diff.DiffTables(options.filterTables(currentTables), options.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
 	if err != nil {
@@ -68,6 +79,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	}
 	stmts = append(stmts, viewStmts...)
 
+	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
 
 	var preSQL string

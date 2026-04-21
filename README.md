@@ -265,14 +265,15 @@ pist apply ./schema/*.sql         # apply it
 
 ## Supported Objects
 
+- Domain types (`CREATE DOMAIN`, `ALTER DOMAIN SET/DROP DEFAULT`, `SET/DROP NOT NULL`, `ADD/DROP CONSTRAINT`)
 - Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
 - Tables (including unlogged and partitioned tables)
 - Views
 - Columns (serial/bigserial/smallserial, identity, generated)
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
-- Comments (on tables, columns, views, types)
-- Renaming (tables, views, enums, columns, constraints, foreign keys, indexes via `-- pist:rename-from` directive)
+- Comments (on tables, columns, views, types, domains)
+- Renaming (tables, views, enums, domains, columns, constraints, foreign keys, indexes via `-- pist:rename-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 

@@ -1,0 +1,11 @@
+init: ""
+desired: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE DOMAIN public.user_status AS status CONSTRAINT status_check CHECK (VALUE <> 'inactive'::status);
+plan: |
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );
+  CREATE DOMAIN public.user_status AS status
+      CONSTRAINT status_check CHECK (value <> 'inactive'::status);

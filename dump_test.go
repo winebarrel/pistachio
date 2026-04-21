@@ -2,6 +2,7 @@ package pistachio_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -311,6 +312,78 @@ COMMENT ON TYPE public.status IS 'User status';`)
 	assert.Contains(t, s, "CREATE TYPE status AS ENUM")
 	assert.NotContains(t, s, "public.status")
 	assert.Contains(t, s, "COMMENT ON TYPE status")
+}
+
+func TestDumpResult_OmitSchema_Domain(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+	s := got.String()
+	assert.Contains(t, s, "CREATE DOMAIN pos_int AS integer")
+	assert.NotContains(t, s, "public.pos_int")
+}
+
+func TestDump_Domain_DefaultCollationExcluded(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE DOMAIN public.email AS varchar(255) NOT NULL DEFAULT ''::varchar;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	s := got.String()
+	assert.Contains(t, s, "CREATE DOMAIN public.email")
+	assert.NotContains(t, s, "COLLATE")
+	assert.NotContains(t, s, "default")
+}
+
+func TestDump_Domain_OmitSchema_PlanNoDiff(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+CREATE DOMAIN public.email AS varchar(255) NOT NULL DEFAULT ''::varchar;
+CREATE TABLE public.users (
+    id pos_int NOT NULL,
+    email email NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	// Dump with omit-schema, then plan should have no diff
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+
+	tmpFile := filepath.Join(t.TempDir(), "schema.sql")
+	require.NoError(t, os.WriteFile(tmpFile, []byte(got.String()), 0o644))
+
+	plan, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{tmpFile}})
+	require.NoError(t, err)
+	assert.Empty(t, plan)
 }
 
 func TestDumpResult_OmitSchema_Enum_Files(t *testing.T) {
