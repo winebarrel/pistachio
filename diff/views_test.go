@@ -88,6 +88,44 @@ func TestDiffViews_commentDrop(t *testing.T) {
 	assert.Equal(t, "COMMENT ON VIEW public.v1 IS NULL;", stmts[0])
 }
 
+func TestDiffViews_rename(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+
+	oldName := "public.v1"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER VIEW public.v1 RENAME TO v2;"}, stmts)
+}
+
+func TestDiffViews_rename_alreadyApplied(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v2", &model.View{Schema: "public", Name: "v2", Definition: "SELECT 1"})
+
+	oldName := "public.v1"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+func TestDiffViews_rename_sourceNotFound(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+
+	oldName := "public.nonexistent"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	_, err := DiffViews(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source")
+}
+
 func TestNormalizeViewDef(t *testing.T) {
 	got, err := normalizeViewDef("SELECT   1")
 	assert.NoError(t, err)

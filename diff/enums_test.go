@@ -233,3 +233,75 @@ func TestDiffEnums_Reorder_Error(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot reorder enum values")
 	assert.Contains(t, err.Error(), "public.status")
 }
+
+func TestDiffEnums_Rename(t *testing.T) {
+	oldName := "public.status"
+	current := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"active", "inactive"},
+	})
+	desired := newEnumMap(&model.Enum{
+		Schema:     "public",
+		Name:       "user_status",
+		RenameFrom: &oldName,
+		Values:     []string{"active", "inactive"},
+	})
+	result, err := diff.DiffEnums(current, desired)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TYPE public.status RENAME TO user_status;"}, result.Stmts)
+	assert.Empty(t, result.DropStmts)
+}
+
+func TestDiffEnums_RenameAndAddValue(t *testing.T) {
+	oldName := "public.status"
+	current := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"active", "inactive"},
+	})
+	desired := newEnumMap(&model.Enum{
+		Schema:     "public",
+		Name:       "user_status",
+		RenameFrom: &oldName,
+		Values:     []string{"active", "inactive", "pending"},
+	})
+	result, err := diff.DiffEnums(current, desired)
+	require.NoError(t, err)
+	assert.Len(t, result.Stmts, 2)
+	assert.Equal(t, "ALTER TYPE public.status RENAME TO user_status;", result.Stmts[0])
+	assert.Contains(t, result.Stmts[1], "ADD VALUE 'pending'")
+}
+
+func TestDiffEnums_RenameAlreadyApplied(t *testing.T) {
+	oldName := "public.old_status"
+	current := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "user_status",
+		Values: []string{"active", "inactive"},
+	})
+	desired := newEnumMap(&model.Enum{
+		Schema:     "public",
+		Name:       "user_status",
+		RenameFrom: &oldName,
+		Values:     []string{"active", "inactive"},
+	})
+	result, err := diff.DiffEnums(current, desired)
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.DropStmts)
+}
+
+func TestDiffEnums_RenameSourceNotFound(t *testing.T) {
+	oldName := "public.nonexistent"
+	current := newEnumMap()
+	desired := newEnumMap(&model.Enum{
+		Schema:     "public",
+		Name:       "user_status",
+		RenameFrom: &oldName,
+		Values:     []string{"active"},
+	})
+	_, err := diff.DiffEnums(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source")
+}
