@@ -1338,6 +1338,17 @@ func TestParseSQL_DomainWithCollation(t *testing.T) {
 	assert.Equal(t, "en_US", *d.Collation)
 }
 
+func TestParseSQL_DomainDefaultCollationExcluded(t *testing.T) {
+	sql := `CREATE DOMAIN public.name AS text COLLATE "default";`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	d := result.Domains.Get("public.name")
+	require.NotNil(t, d)
+	assert.Nil(t, d.Collation)
+}
+
 func TestParseSQL_DomainCommentRemove(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer;
 COMMENT ON DOMAIN public.pos_int IS 'Positive integer';

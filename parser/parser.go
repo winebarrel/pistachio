@@ -577,8 +577,12 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 			}
 		}
 		if len(parts) > 0 {
-			collation := strings.Join(parts, ".")
-			domain.Collation = &collation
+			// Skip "default" collation (implicit for text types, excluded by catalog)
+			lastPart := parts[len(parts)-1]
+			if lastPart != "default" {
+				collation := strings.Join(parts, ".")
+				domain.Collation = &collation
+			}
 		}
 	}
 

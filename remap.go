@@ -164,10 +164,12 @@ func (client *Client) remapDomainSchemas(domains *orderedmap.Map[string, *model.
 		return domains
 	}
 
+	replacer := buildDefReplacer(client.SchemaMap)
 	remapped := orderedmap.New[string, *model.Domain]()
 
 	for _, d := range domains.CollectValues() {
 		d.Schema = client.RemapSchema(d.Schema)
+		d.BaseType = replacer.Replace(d.BaseType)
 		remapped.Set(d.FQDN(), d)
 	}
 
@@ -179,10 +181,12 @@ func (client *Client) reverseRemapDomainSchemas(domains *orderedmap.Map[string, 
 		return domains
 	}
 
+	replacer := buildReverseDefReplacer(client.SchemaMap)
 	remapped := orderedmap.New[string, *model.Domain]()
 
 	for _, d := range domains.CollectValues() {
 		d.Schema = client.ReverseRemapSchema(d.Schema)
+		d.BaseType = replacer.Replace(d.BaseType)
 		remapped.Set(d.FQDN(), d)
 	}
 
