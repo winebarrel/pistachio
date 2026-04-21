@@ -379,6 +379,17 @@ func TestFmt_Run_InvalidFile(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestFmt_Run_Write_InvalidFile(t *testing.T) {
+	client := pistachio.NewClient(&pistachio.Options{
+		Schemas: []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{FmtOptions: pistachio.FmtOptions{Files: []string{"/nonexistent/file.sql"}, Write: true}}
+	err := cmd.Run(client, &buf)
+	require.Error(t, err)
+}
+
 func TestFmt_Run_WriteError(t *testing.T) {
 	// Create a read-only directory so WriteFile fails
 	tmpDir := t.TempDir()

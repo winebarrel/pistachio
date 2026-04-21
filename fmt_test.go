@@ -16,7 +16,7 @@ type fmtTestCase struct {
 	Expected string `yaml:"expected"`
 }
 
-func TestFmtSQL(t *testing.T) {
+func TestFormat(t *testing.T) {
 	files, err := filepath.Glob("testdata/fmt/*.yml")
 	require.NoError(t, err)
 	require.NotEmpty(t, files)
@@ -29,33 +29,42 @@ func TestFmtSQL(t *testing.T) {
 			tmpFile := filepath.Join(t.TempDir(), "input.sql")
 			require.NoError(t, os.WriteFile(tmpFile, []byte(tc.Input), 0o644))
 
-			got, err := pistachio.FmtSQL(&pistachio.FmtOptions{Files: []string{tmpFile}}, "public")
+			client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
+			got, err := client.Format(&pistachio.FmtOptions{Files: []string{tmpFile}})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Expected), strings.TrimSpace(got))
 		})
 	}
 }
 
-func TestFmtSQL_InvalidFile(t *testing.T) {
-	_, err := pistachio.FmtSQL(&pistachio.FmtOptions{Files: []string{"/nonexistent/file.sql"}}, "public")
+func TestFormat_InvalidFile(t *testing.T) {
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
+	_, err := client.Format(&pistachio.FmtOptions{Files: []string{"/nonexistent/file.sql"}})
 	require.Error(t, err)
 }
 
-func TestFmtSQL_InvalidSQL(t *testing.T) {
+func TestFormat_InvalidSQL(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "bad.sql")
 	require.NoError(t, os.WriteFile(tmpFile, []byte("NOT VALID SQL {{{}}}"), 0o644))
 
-	_, err := pistachio.FmtSQL(&pistachio.FmtOptions{Files: []string{tmpFile}}, "public")
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
+	_, err := client.Format(&pistachio.FmtOptions{Files: []string{tmpFile}})
 	require.Error(t, err)
 }
 
-func TestFmtSQL_Write(t *testing.T) {
+func TestFormatFile(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "test.sql")
-	input := `CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`
-	require.NoError(t, os.WriteFile(tmpFile, []byte(input), 0o644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte(`CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`), 0o644))
 
-	got, err := pistachio.FmtSQL(&pistachio.FmtOptions{Files: []string{tmpFile}}, "public")
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
+	got, err := client.FormatFile(tmpFile)
 	require.NoError(t, err)
 	assert.Contains(t, got, "CREATE TABLE public.users")
 	assert.Contains(t, got, "    id integer NOT NULL")
+}
+
+func TestFormatFile_InvalidFile(t *testing.T) {
+	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
+	_, err := client.FormatFile("/nonexistent/file.sql")
+	require.Error(t, err)
 }
