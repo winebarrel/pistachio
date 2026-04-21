@@ -105,6 +105,92 @@ func TestMatchName(t *testing.T) {
 	})
 }
 
+func TestIsTypeEnabled_Disable(t *testing.T) {
+	t.Run("disable table", func(t *testing.T) {
+		f := &pistachio.FilterOptions{Disable: []string{"table"}}
+		assert.False(t, f.IsTypeEnabled("table"))
+		assert.True(t, f.IsTypeEnabled("view"))
+		assert.True(t, f.IsTypeEnabled("enum"))
+		assert.True(t, f.IsTypeEnabled("domain"))
+	})
+
+	t.Run("disable multiple", func(t *testing.T) {
+		f := &pistachio.FilterOptions{Disable: []string{"table", "view"}}
+		assert.False(t, f.IsTypeEnabled("table"))
+		assert.False(t, f.IsTypeEnabled("view"))
+		assert.True(t, f.IsTypeEnabled("enum"))
+		assert.True(t, f.IsTypeEnabled("domain"))
+	})
+
+	t.Run("enable takes precedence over disable", func(t *testing.T) {
+		f := &pistachio.FilterOptions{Enable: []string{"enum"}, Disable: []string{"table"}}
+		assert.True(t, f.IsTypeEnabled("enum"))
+		assert.False(t, f.IsTypeEnabled("table"))
+		assert.False(t, f.IsTypeEnabled("view"))
+	})
+}
+
+func TestDump_Disable_Table(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{Disable: []string{"table"}},
+	})
+	require.NoError(t, err)
+	output := got.String()
+	assert.Contains(t, output, "CREATE TYPE public.status")
+	assert.NotContains(t, output, "CREATE TABLE")
+}
+
+func TestPlan_Disable_Table(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		FilterOptions: pistachio.FilterOptions{Disable: []string{"table"}},
+		Files:         []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got, "ALTER TYPE")
+	assert.NotContains(t, got, "ALTER TABLE")
+}
+
 func TestDump_Include(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -434,7 +520,7 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 	assert.NotContains(t, output, "'guest'")
 }
 
-func TestIsTypeEnabled(t *testing.T) {
+func TestIsTypeEnabled_Enable(t *testing.T) {
 	t.Run("empty (all enabled)", func(t *testing.T) {
 		f := &pistachio.FilterOptions{}
 		assert.True(t, f.IsTypeEnabled("table"))
@@ -444,7 +530,7 @@ func TestIsTypeEnabled(t *testing.T) {
 	})
 
 	t.Run("only table", func(t *testing.T) {
-		f := &pistachio.FilterOptions{Only: []string{"table"}}
+		f := &pistachio.FilterOptions{Enable: []string{"table"}}
 		assert.True(t, f.IsTypeEnabled("table"))
 		assert.False(t, f.IsTypeEnabled("view"))
 		assert.False(t, f.IsTypeEnabled("enum"))
@@ -452,7 +538,7 @@ func TestIsTypeEnabled(t *testing.T) {
 	})
 
 	t.Run("multiple types", func(t *testing.T) {
-		f := &pistachio.FilterOptions{Only: []string{"table", "enum"}}
+		f := &pistachio.FilterOptions{Enable: []string{"table", "enum"}}
 		assert.True(t, f.IsTypeEnabled("table"))
 		assert.False(t, f.IsTypeEnabled("view"))
 		assert.True(t, f.IsTypeEnabled("enum"))
@@ -460,7 +546,7 @@ func TestIsTypeEnabled(t *testing.T) {
 	})
 }
 
-func TestDump_Only_Enum(t *testing.T) {
+func TestDump_Enable_Enum(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -478,7 +564,7 @@ CREATE TABLE public.users (
 	})
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{
-		FilterOptions: pistachio.FilterOptions{Only: []string{"enum"}},
+		FilterOptions: pistachio.FilterOptions{Enable: []string{"enum"}},
 	})
 	require.NoError(t, err)
 	output := got.String()
@@ -486,7 +572,7 @@ CREATE TABLE public.users (
 	assert.NotContains(t, output, "CREATE TABLE")
 }
 
-func TestDump_Only_Table(t *testing.T) {
+func TestDump_Enable_Table(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -504,7 +590,7 @@ CREATE TABLE public.users (
 	})
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{
-		FilterOptions: pistachio.FilterOptions{Only: []string{"table"}},
+		FilterOptions: pistachio.FilterOptions{Enable: []string{"table"}},
 	})
 	require.NoError(t, err)
 	output := got.String()
@@ -512,7 +598,7 @@ CREATE TABLE public.users (
 	assert.NotContains(t, output, "CREATE TYPE")
 }
 
-func TestDump_Only_View(t *testing.T) {
+func TestDump_Enable_View(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -530,7 +616,7 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 	})
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{
-		FilterOptions: pistachio.FilterOptions{Only: []string{"view"}},
+		FilterOptions: pistachio.FilterOptions{Enable: []string{"view"}},
 	})
 	require.NoError(t, err)
 	output := got.String()
@@ -538,7 +624,7 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 	assert.NotContains(t, output, "CREATE TABLE")
 }
 
-func TestDump_Only_Domain(t *testing.T) {
+func TestDump_Enable_Domain(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -556,7 +642,7 @@ CREATE TABLE public.users (
 	})
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{
-		FilterOptions: pistachio.FilterOptions{Only: []string{"domain"}},
+		FilterOptions: pistachio.FilterOptions{Enable: []string{"domain"}},
 	})
 	require.NoError(t, err)
 	output := got.String()
@@ -564,7 +650,7 @@ CREATE TABLE public.users (
 	assert.NotContains(t, output, "CREATE TABLE")
 }
 
-func TestPlan_Only_Enum(t *testing.T) {
+func TestPlan_Enable_Enum(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -591,7 +677,7 @@ CREATE TABLE public.users (
 	})
 
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{
-		FilterOptions: pistachio.FilterOptions{Only: []string{"enum"}},
+		FilterOptions: pistachio.FilterOptions{Enable: []string{"enum"}},
 		Files:         []string{desiredFile},
 	})
 	require.NoError(t, err)
@@ -599,7 +685,7 @@ CREATE TABLE public.users (
 	assert.NotContains(t, got, "ALTER TABLE")
 }
 
-func TestApply_Only_Table(t *testing.T) {
+func TestApply_Enable_Table(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -627,7 +713,7 @@ CREATE TABLE public.users (
 
 	var buf bytes.Buffer
 	err := client.Apply(ctx, &pistachio.ApplyOptions{
-		FilterOptions: pistachio.FilterOptions{Only: []string{"table"}},
+		FilterOptions: pistachio.FilterOptions{Enable: []string{"table"}},
 		Files:         []string{desiredFile},
 	}, &buf)
 	require.NoError(t, err)

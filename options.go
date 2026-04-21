@@ -15,21 +15,29 @@ type Options struct {
 type FilterOptions struct {
 	Include []string `short:"I" help:"Include only tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
 	Exclude []string `short:"E" help:"Exclude tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
-	Only    []string `enum:"table,view,enum,domain" env:"PIST_ONLY" help:"Include only specified object types (can be repeated)."`
+	Enable  []string `enum:"table,view,enum,domain" env:"PIST_ENABLE" help:"Enable only specified object types (can be repeated)."`
+	Disable []string `enum:"table,view,enum,domain" env:"PIST_DISABLE" help:"Disable specified object types (can be repeated)."`
 }
 
 // IsTypeEnabled returns true if the given object type should be included.
-// If Only is empty, all types are enabled.
+// Enable takes precedence: if set, only listed types are enabled.
+// Disable excludes listed types (ignored when Enable is set).
+// If neither is set, all types are enabled.
 func (f *FilterOptions) IsTypeEnabled(typeName string) bool {
-	if len(f.Only) == 0 {
-		return true
+	if len(f.Enable) > 0 {
+		for _, t := range f.Enable {
+			if t == typeName {
+				return true
+			}
+		}
+		return false
 	}
-	for _, t := range f.Only {
+	for _, t := range f.Disable {
 		if t == typeName {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func (f *FilterOptions) MatchName(name string) bool {
