@@ -35,7 +35,8 @@ func (cmd *Fmt) Run(client *pistachio.Client, w io.Writer) error {
 			if err != nil {
 				return fmt.Errorf("failed to read %s: %w", path, err)
 			}
-			if strings.TrimSpace(string(original)) != strings.TrimSpace(results[path]) {
+			expected := results[path] + "\n"
+			if string(original) != expected {
 				unformatted = append(unformatted, path)
 			}
 		}
@@ -49,7 +50,8 @@ func (cmd *Fmt) Run(client *pistachio.Client, w io.Writer) error {
 	}
 
 	if cmd.Write {
-		for path, content := range results {
+		for _, path := range cmd.Files {
+			content := results[path]
 			mode := os.FileMode(0o644)
 			if info, err := os.Stat(path); err == nil {
 				mode = info.Mode()

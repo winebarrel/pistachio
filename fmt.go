@@ -43,13 +43,13 @@ func FormatSchemaSQL(
 	views *orderedmap.Map[string, *model.View],
 ) string {
 	var parts []string
-	if enums.Len() > 0 {
+	if enums != nil && enums.Len() > 0 {
 		parts = append(parts, model.EnumsToSQL(enums))
 	}
-	if tables.Len() > 0 {
+	if tables != nil && tables.Len() > 0 {
 		parts = append(parts, model.TablesToSQL(tables))
 	}
-	if views.Len() > 0 {
+	if views != nil && views.Len() > 0 {
 		parts = append(parts, model.ViewsToSQL(views))
 	}
 	return strings.Join(parts, "\n\n")
