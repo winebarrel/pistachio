@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -13,7 +14,8 @@ func TestDiffViews_newView(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	stmts := DiffViews(current, desired)
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "CREATE OR REPLACE VIEW public.v1")
 }
@@ -23,7 +25,8 @@ func TestDiffViews_dropView(t *testing.T) {
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 	desired := orderedmap.New[string, *model.View]()
 
-	stmts := DiffViews(current, desired)
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP VIEW public.v1;"}, stmts)
 }
 
@@ -33,7 +36,8 @@ func TestDiffViews_modifyView(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 2"})
 
-	stmts := DiffViews(current, desired)
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "CREATE OR REPLACE VIEW public.v1")
 }
@@ -44,7 +48,8 @@ func TestDiffViews_noChange(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	stmts := DiffViews(current, desired)
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
 
@@ -54,7 +59,8 @@ func TestDiffViews_formattingDifferenceIgnored(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	stmts := DiffViews(current, desired)
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
 
@@ -64,7 +70,8 @@ func TestDiffViews_commentAdd(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Comment: ptr("my view")})
 
-	stmts := DiffViews(current, desired)
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "COMMENT ON VIEW public.v1 IS 'my view';", stmts[0])
 }
@@ -75,9 +82,88 @@ func TestDiffViews_commentDrop(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	stmts := DiffViews(current, desired)
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "COMMENT ON VIEW public.v1 IS NULL;", stmts[0])
+}
+
+func TestDiffViews_rename(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+
+	oldName := "public.v1"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER VIEW public.v1 RENAME TO v2;"}, stmts)
+}
+
+func TestDiffViews_rename_selfRename_skipped(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+
+	oldName := "public.v1"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+func TestDiffViews_rename_alreadyApplied(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v2", &model.View{Schema: "public", Name: "v2", Definition: "SELECT 1"})
+
+	oldName := "public.v1"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+func TestDiffViews_rename_destinationExists_error(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+	current.Set("public.v2", &model.View{Schema: "public", Name: "v2", Definition: "SELECT 2"})
+
+	oldName := "public.v1"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	_, err := DiffViews(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "destination already exists")
+}
+
+func TestDiffViews_rename_crossSchema_error(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+
+	oldName := "public.v1"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("other.v2", &model.View{Schema: "other", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	_, err := DiffViews(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cross-schema rename")
+}
+
+func TestDiffViews_rename_sourceNotFound(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+
+	oldName := "public.nonexistent"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	_, err := DiffViews(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source")
 }
 
 func TestNormalizeViewDef(t *testing.T) {

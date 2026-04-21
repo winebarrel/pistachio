@@ -7,11 +7,12 @@ import (
 )
 
 type Enum struct {
-	OID     uint32
-	Schema  string
-	Name    string
-	Values  []string
-	Comment *string
+	OID        uint32
+	Schema     string
+	Name       string
+	RenameFrom *string
+	Values     []string
+	Comment    *string
 }
 
 func (e Enum) FQEN() string {

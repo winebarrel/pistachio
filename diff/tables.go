@@ -10,8 +10,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func DiffTables(current, desired *orderedmap.Map[string, *model.Table]) []string {
+func DiffTables(current, desired *orderedmap.Map[string, *model.Table]) ([]string, error) {
 	var stmts []string
+
+	// Detect renames
+	renameStmts, current, err := detectTableRenames(current, desired)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, renameStmts...)
 
 	// New tables
 	for k, v := range desired.All() {
@@ -24,7 +31,11 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table]) []string
 	// Modified tables
 	for k, desiredTable := range desired.All() {
 		if currentTable, ok := current.GetOk(k); ok {
-			stmts = append(stmts, diffTable(currentTable, desiredTable)...)
+			tableStmts, err := diffTable(currentTable, desiredTable)
+			if err != nil {
+				return nil, err
+			}
+			stmts = append(stmts, tableStmts...)
 		}
 	}
 
@@ -35,7 +46,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table]) []string
 		}
 	}
 
-	return stmts
+	return stmts, nil
 }
 
 func newTableExtras(t *model.Table) []string {
@@ -52,29 +63,64 @@ func newTableExtras(t *model.Table) []string {
 	return stmts
 }
 
-func diffTable(current, desired *model.Table) []string {
+func diffTable(current, desired *model.Table) ([]string, error) {
 	var stmts []string
 	fqtn := desired.FQTN()
 
 	// Partition children inherit columns and constraints from the parent,
 	// so skip diffing them to avoid false DROP statements.
 	if desired.PartitionOf != nil && desired.PartitionBound != nil {
-		stmts = append(stmts, diffIndexes(current.Indexes, desired.Indexes)...)
-		stmts = append(stmts, diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)...)
-		return stmts
+		idxStmts, err := diffIndexes(current.Indexes, desired.Indexes)
+		if err != nil {
+			return nil, err
+		}
+		stmts = append(stmts, idxStmts...)
+		fkStmts, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)
+		if err != nil {
+			return nil, err
+		}
+		stmts = append(stmts, fkStmts...)
+		return stmts, nil
 	}
 
-	stmts = append(stmts, diffColumns(fqtn, current.Columns, desired.Columns)...)
-	stmts = append(stmts, diffConstraints(fqtn, current.Constraints, desired.Constraints)...)
-	stmts = append(stmts, diffIndexes(current.Indexes, desired.Indexes)...)
-	stmts = append(stmts, diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)...)
+	colStmts, err := diffColumns(fqtn, current.Columns, desired.Columns)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, colStmts...)
+
+	conStmts, err := diffConstraints(fqtn, current.Constraints, desired.Constraints)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, conStmts...)
+
+	idxStmts, err := diffIndexes(current.Indexes, desired.Indexes)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, idxStmts...)
+
+	fkStmts, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, fkStmts...)
+
 	stmts = append(stmts, diffComments(current, desired)...)
 
-	return stmts
+	return stmts, nil
 }
 
-func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column]) []string {
+func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column]) ([]string, error) {
 	var stmts []string
+
+	// Detect renames
+	renameStmts, current, err := detectColumnRenames(fqtn, current, desired)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, renameStmts...)
 
 	// Add new columns
 	for name, col := range desired.All() {
@@ -97,7 +143,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 		}
 	}
 
-	return stmts
+	return stmts, nil
 }
 
 func addColumnSQL(fqtn string, col *model.Column) string {
@@ -283,8 +329,15 @@ func equalConstraintDef(a, b string) bool {
 	return normA == normB
 }
 
-func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint]) []string {
+func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint]) ([]string, error) {
 	var stmts []string
+
+	// Detect renames
+	renameStmts, current, err := detectConstraintRenames(fqtn, current, desired)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, renameStmts...)
 
 	// Drop removed or changed constraints
 	for name, currentCon := range current.All() {
@@ -302,11 +355,18 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		}
 	}
 
-	return stmts
+	return stmts, nil
 }
 
-func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) []string {
+func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) ([]string, error) {
 	var stmts []string
+
+	// Detect renames
+	renameStmts, current, err := detectIndexRenames(current, desired)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, renameStmts...)
 
 	// Drop removed or changed indexes
 	for name, currentIdx := range current.All() {
@@ -324,11 +384,18 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) []strin
 		}
 	}
 
-	return stmts
+	return stmts, nil
 }
 
-func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey]) []string {
+func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey]) ([]string, error) {
 	var stmts []string
+
+	// Detect renames
+	renameStmts, current, err := detectForeignKeyRenames(fqtn, current, desired)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, renameStmts...)
 
 	// Drop removed or changed FKs
 	for name := range current.All() {
@@ -347,7 +414,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 		}
 	}
 
-	return stmts
+	return stmts, nil
 }
 
 func diffComments(current, desired *model.Table) []string {

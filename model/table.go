@@ -11,6 +11,7 @@ type Table struct {
 	OID            uint32
 	Schema         string
 	Name           string
+	RenameFrom     *string
 	TableSpace     *string
 	Unlogged       bool
 	Partitioned    bool

@@ -16,6 +16,13 @@ type EnumDiffResult struct {
 func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum]) (*EnumDiffResult, error) {
 	result := &EnumDiffResult{}
 
+	// Detect renames
+	renameStmts, current, err := detectEnumRenames(current, desired)
+	if err != nil {
+		return nil, err
+	}
+	result.Stmts = append(result.Stmts, renameStmts...)
+
 	// New enums
 	for k, desiredEnum := range desired.All() {
 		if _, ok := current.GetOk(k); !ok {

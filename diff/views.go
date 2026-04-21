@@ -33,8 +33,15 @@ func equalViewDef(a, b string) bool {
 	return normA == normB
 }
 
-func DiffViews(current, desired *orderedmap.Map[string, *model.View]) []string {
+func DiffViews(current, desired *orderedmap.Map[string, *model.View]) ([]string, error) {
 	var stmts []string
+
+	// Detect renames
+	renameStmts, current, err := detectViewRenames(current, desired)
+	if err != nil {
+		return nil, err
+	}
+	stmts = append(stmts, renameStmts...)
 
 	// New or modified views (CREATE OR REPLACE)
 	for k, desiredView := range desired.All() {
@@ -67,5 +74,5 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View]) []string {
 		}
 	}
 
-	return stmts
+	return stmts, nil
 }

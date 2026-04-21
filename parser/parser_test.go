@@ -1098,3 +1098,193 @@ func TestParseSQL_CommentOnUnknownEnum(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Enums.Len())
 }
+
+func TestParseSQL_RenameDirective_Enum(t *testing.T) {
+	sql := `-- pist:rename-from public.old_status
+CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.new_status")
+	require.True(t, ok)
+	require.NotNil(t, e.RenameFrom)
+	assert.Equal(t, "public.old_status", *e.RenameFrom)
+}
+
+func TestParseSQL_RenameDirective_Table(t *testing.T) {
+	sql := `-- pist:rename-from public.old_users
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	require.NotNil(t, tbl.RenameFrom)
+	assert.Equal(t, "public.old_users", *tbl.RenameFrom)
+}
+
+func TestParseSQL_RenameDirective_View(t *testing.T) {
+	sql := `-- pist:rename-from public.old_view
+CREATE VIEW public.new_view AS SELECT 1;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	v, ok := result.Views.GetOk("public.new_view")
+	require.True(t, ok)
+	require.NotNil(t, v.RenameFrom)
+	assert.Equal(t, "public.old_view", *v.RenameFrom)
+}
+
+func TestParseSQL_RenameDirective_Column(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pist:rename-from name
+    display_name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	col, ok := tbl.Columns.GetOk("display_name")
+	require.True(t, ok)
+	require.NotNil(t, col.RenameFrom)
+	assert.Equal(t, "name", *col.RenameFrom)
+}
+
+func TestParseSQL_RenameDirective_Index(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:rename-from idx_old
+CREATE INDEX idx_new ON public.users (name);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("idx_new")
+	require.True(t, ok)
+	require.NotNil(t, idx.RenameFrom)
+	assert.Equal(t, "idx_old", *idx.RenameFrom)
+}
+
+func TestParseSQL_RenameDirective_Constraint(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    code text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    -- pist:rename-from old_unique
+    CONSTRAINT new_unique UNIQUE (code)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("new_unique")
+	require.True(t, ok)
+	require.NotNil(t, con.RenameFrom)
+	assert.Equal(t, "old_unique", *con.RenameFrom)
+}
+
+func TestParseSQL_RenameDirective_ForeignKey(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.orders (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
+);
+-- pist:rename-from old_fk
+ALTER TABLE public.orders ADD CONSTRAINT new_fk FOREIGN KEY (user_id) REFERENCES public.users(id);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.orders")
+	require.True(t, ok)
+	fk, ok := tbl.ForeignKeys.GetOk("new_fk")
+	require.True(t, ok)
+	require.NotNil(t, fk.RenameFrom)
+	assert.Equal(t, "old_fk", *fk.RenameFrom)
+}
+
+func TestParseSQL_RenameDirective_AlterTableConstraint(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    code text NOT NULL
+);
+-- pist:rename-from old_unique
+ALTER TABLE public.users ADD CONSTRAINT new_unique UNIQUE (code);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("new_unique")
+	require.True(t, ok)
+	require.NotNil(t, con.RenameFrom)
+	assert.Equal(t, "old_unique", *con.RenameFrom)
+}
+
+func TestParseSQLWithSchema_RenameDirective_Qualifies(t *testing.T) {
+	sql := `-- pist:rename-from old_status
+CREATE TYPE new_status AS ENUM ('active', 'inactive');
+-- pist:rename-from old_users
+CREATE TABLE users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:rename-from old_view
+CREATE VIEW new_view AS SELECT 1;`
+
+	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("myschema.new_status")
+	require.True(t, ok)
+	require.NotNil(t, e.RenameFrom)
+	assert.Equal(t, "myschema.old_status", *e.RenameFrom)
+
+	tbl, ok := result.Tables.GetOk("myschema.users")
+	require.True(t, ok)
+	require.NotNil(t, tbl.RenameFrom)
+	assert.Equal(t, "myschema.old_users", *tbl.RenameFrom)
+
+	v, ok := result.Views.GetOk("myschema.new_view")
+	require.True(t, ok)
+	require.NotNil(t, v.RenameFrom)
+	assert.Equal(t, "myschema.old_view", *v.RenameFrom)
+}
+
+func TestParseSQL_NoRenameDirective(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.users")
+	assert.Nil(t, tbl.RenameFrom)
+	col, _ := tbl.Columns.GetOk("name")
+	assert.Nil(t, col.RenameFrom)
+}

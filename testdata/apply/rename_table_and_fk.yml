@@ -1,0 +1,39 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pist:rename-from public.orders
+  CREATE TABLE public.purchases (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  -- pist:rename-from fk_user
+  ALTER TABLE public.purchases ADD CONSTRAINT fk_buyer FOREIGN KEY (user_id) REFERENCES public.users(id);
+applied: |
+  -- public.purchases
+  CREATE TABLE public.purchases (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.purchases ADD CONSTRAINT fk_buyer FOREIGN KEY (user_id) REFERENCES users(id);
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
