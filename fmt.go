@@ -35,8 +35,9 @@ func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 	return results, nil
 }
 
-// formatSchemaSQL formats enums, tables, and views into canonical SQL output.
+// formatSchemaSQL formats domains, enums, tables, and views into canonical SQL output.
 // This is the shared formatting logic used by both dump and fmt.
+// Order: enums → domains → tables → views (enums first since domains may depend on them).
 func formatSchemaSQL(
 	domains *orderedmap.Map[string, *model.Domain],
 	enums *orderedmap.Map[string, *model.Enum],
@@ -44,11 +45,11 @@ func formatSchemaSQL(
 	views *orderedmap.Map[string, *model.View],
 ) string {
 	var parts []string
-	if domains != nil && domains.Len() > 0 {
-		parts = append(parts, model.DomainsToSQL(domains))
-	}
 	if enums != nil && enums.Len() > 0 {
 		parts = append(parts, model.EnumsToSQL(enums))
+	}
+	if domains != nil && domains.Len() > 0 {
+		parts = append(parts, model.DomainsToSQL(domains))
 	}
 	if tables != nil && tables.Len() > 0 {
 		parts = append(parts, model.TablesToSQL(tables))

@@ -54,17 +54,17 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, e
 		return "", fmt.Errorf("failed to parse SQL file: %w", err)
 	}
 
-	domainDiff, err := diff.DiffDomains(options.filterDomains(currentDomains), options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains)))
-	if err != nil {
-		return "", fmt.Errorf("failed to diff domains: %w", err)
-	}
-	stmts := domainDiff.Stmts
-
 	enumDiff, err := diff.DiffEnums(options.filterEnums(currentEnums), options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums)))
 	if err != nil {
 		return "", err
 	}
-	stmts = append(stmts, enumDiff.Stmts...)
+	stmts := enumDiff.Stmts
+
+	domainDiff, err := diff.DiffDomains(options.filterDomains(currentDomains), options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains)))
+	if err != nil {
+		return "", fmt.Errorf("failed to diff domains: %w", err)
+	}
+	stmts = append(stmts, domainDiff.Stmts...)
 
 	tableStmts, err := diff.DiffTables(options.filterTables(currentTables), options.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
 	if err != nil {
@@ -78,8 +78,8 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, e
 	}
 	stmts = append(stmts, viewStmts...)
 
-	stmts = append(stmts, enumDiff.DropStmts...)
 	stmts = append(stmts, domainDiff.DropStmts...)
+	stmts = append(stmts, enumDiff.DropStmts...)
 
 	if options.PreSQLFile != "" && len(stmts) > 0 {
 		rawPreSQL, err := os.ReadFile(options.PreSQLFile)
