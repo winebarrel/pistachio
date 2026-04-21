@@ -122,6 +122,16 @@ func TestDiffDomains_DropConstraint(t *testing.T) {
 	assert.Contains(t, result.Stmts[0], "DROP CONSTRAINT pos_check")
 }
 
+func TestDiffDomains_CollationChange_Error(t *testing.T) {
+	colA := "pg_catalog.C"
+	colB := "pg_catalog.POSIX"
+	current := newDomainMap(&model.Domain{Schema: "public", Name: "name", BaseType: "text", Collation: &colA})
+	desired := newDomainMap(&model.Domain{Schema: "public", Name: "name", BaseType: "text", Collation: &colB})
+	_, err := diff.DiffDomains(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot change collation")
+}
+
 func TestDiffDomains_BaseTypeChange_Error(t *testing.T) {
 	current := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", BaseType: "integer"})
 	desired := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", BaseType: "bigint"})

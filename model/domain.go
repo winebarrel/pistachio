@@ -32,7 +32,13 @@ func (d Domain) SQL() string {
 	sql := "CREATE DOMAIN " + Ident(d.Schema, d.Name) + " AS " + d.BaseType
 
 	if d.Collation != nil {
-		sql += " COLLATE " + Ident(*d.Collation)
+		// Collation may be schema-qualified (e.g. "pg_catalog.default")
+		parts := strings.Split(*d.Collation, ".")
+		quotedParts := make([]string, len(parts))
+		for i, p := range parts {
+			quotedParts[i] = Ident(p)
+		}
+		sql += " COLLATE " + strings.Join(quotedParts, ".")
 	}
 
 	if d.Default != nil {

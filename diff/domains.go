@@ -65,6 +65,11 @@ func diffDomain(fqdn string, current, desired *model.Domain) ([]string, error) {
 		return nil, fmt.Errorf("cannot change base type of domain %s from %s to %s: PostgreSQL does not support this", fqdn, current.BaseType, desired.BaseType)
 	}
 
+	// Collation change is not supported by PostgreSQL ALTER DOMAIN
+	if !equalPtr(current.Collation, desired.Collation) {
+		return nil, fmt.Errorf("cannot change collation of domain %s: PostgreSQL does not support this", fqdn)
+	}
+
 	// Default change (use AST comparison to handle type alias differences)
 	if !equalDefault(current.Default, desired.Default) {
 		if desired.Default != nil {
@@ -168,7 +173,6 @@ func detectDomainRenames(current, desired *orderedmap.Map[string, *model.Domain]
 		adjusted.Delete(oldKey)
 		renamed := *oldDomain
 		renamed.Name = desiredDomain.Name
-		// Deep copy constraints
 		renamed.Constraints = slices.Clone(oldDomain.Constraints)
 		adjusted.Set(newKey, &renamed)
 	}
