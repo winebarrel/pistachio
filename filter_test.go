@@ -1,6 +1,7 @@
 package pistachio_test
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -509,6 +510,130 @@ CREATE TABLE public.users (
 	output := got.String()
 	assert.Contains(t, output, "CREATE TABLE public.users")
 	assert.NotContains(t, output, "CREATE TYPE")
+}
+
+func TestDump_Only_View(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{Only: []string{"view"}},
+	})
+	require.NoError(t, err)
+	output := got.String()
+	assert.Contains(t, output, "CREATE OR REPLACE VIEW")
+	assert.NotContains(t, output, "CREATE TABLE")
+}
+
+func TestDump_Only_Domain(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{Only: []string{"domain"}},
+	})
+	require.NoError(t, err)
+	output := got.String()
+	assert.Contains(t, output, "CREATE DOMAIN")
+	assert.NotContains(t, output, "CREATE TABLE")
+}
+
+func TestPlan_Only_Enum(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		FilterOptions: pistachio.FilterOptions{Only: []string{"enum"}},
+		Files:         []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got, "ALTER TYPE")
+	assert.NotContains(t, got, "ALTER TABLE")
+}
+
+func TestApply_Only_Table(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	err := client.Apply(ctx, &pistachio.ApplyOptions{
+		FilterOptions: pistachio.FilterOptions{Only: []string{"table"}},
+		Files:         []string{desiredFile},
+	}, &buf)
+	require.NoError(t, err)
+	output := buf.String()
+	assert.Contains(t, output, "ALTER TABLE")
+	assert.NotContains(t, output, "ALTER TYPE")
 }
 
 func TestDump_IncludeDomain(t *testing.T) {
