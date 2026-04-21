@@ -90,7 +90,8 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if renameFrom != "" {
-				enum.RenameFrom = &renameFrom
+				qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+				enum.RenameFrom = &qualified
 			}
 			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
 				return nil, err
@@ -102,7 +103,8 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if renameFrom != "" {
-				table.RenameFrom = &renameFrom
+				qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+				table.RenameFrom = &qualified
 			}
 
 			// Extract column/constraint-level directives from raw SQL
@@ -138,7 +140,8 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if renameFrom != "" {
-				view.RenameFrom = &renameFrom
+				qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+				view.RenameFrom = &qualified
 			}
 			if err := setUnique(views, view.FQVN(), "view", view); err != nil {
 				return nil, err

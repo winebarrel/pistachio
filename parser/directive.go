@@ -9,6 +9,15 @@ import (
 
 var renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:rename-from[ \t]+(.+?)[ \t]*$`)
 
+// QualifyRenameFrom qualifies a rename-from value with the default schema
+// if it does not already contain a schema (dot separator).
+func QualifyRenameFrom(value, defaultSchema string) string {
+	if strings.Contains(value, ".") {
+		return value
+	}
+	return defaultSchema + "." + value
+}
+
 // unquoteIdent strips surrounding double quotes from a SQL identifier and
 // unescapes doubled double-quotes ("" → "). Returns the input unchanged
 // if it is not quoted.
