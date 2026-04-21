@@ -25,19 +25,15 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 Usage: pist <command> [flags]
 
 Flags:
-  -h, --help                   Show context-sensitive help.
+  -h, --help                  Show context-sensitive help.
   -c, --conn-string="postgres://postgres@localhost/postgres"
-                               PostgreSQL connection string. See
-                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-                               ($PIST_CONN_STR)
-      --password=STRING        PostgreSQL password ($PIST_PASSWORD).
-  -n, --schemas=public,...     Schemas to inspect and modify ($PGSCHEMAS).
+                              PostgreSQL connection string. See
+                              https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+                              ($PIST_CONN_STR)
+      --password=STRING       PostgreSQL password ($PIST_PASSWORD).
+  -n, --schemas=public,...    Schemas to inspect and modify ($PGSCHEMAS).
   -m, --schema-map=KEY=VALUE;...
-                               Schema name mapping (e.g. -m old=new).
-  -I, --include=INCLUDE,...    Include only tables/views/enums matching the
-                               pattern (wildcard: *, ?).
-  -E, --exclude=EXCLUDE,...    Exclude tables/views/enums matching the pattern
-                               (wildcard: *, ?).
+                              Schema name mapping (e.g. -m old=new).
       --version
 
 Commands:
@@ -136,17 +132,17 @@ pist -n staging -m staging=public apply schema.sql
 
 ### Filtering tables/views/enums
 
-Use `-I` / `--include` to include only matching tables/views/enums, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names).
+Use `-I` / `--include` to include only matching tables/views/enums, or `-E` / `--exclude` to exclude them. These flags are available on the `dump`, `plan`, and `apply` subcommands. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names).
 
 ```bash
 # Dump only objects matching "user*"
-pist -I 'user*' dump
+pist dump -I 'user*'
 
 # Plan changes excluding temporary tables
-pist -E 'tmp_*' plan schema.sql
+pist plan -E 'tmp_*' schema.sql
 
 # Combine include and exclude
-pist -I 'user*' -E 'user_tmp' apply schema.sql
+pist apply -I 'user*' -E 'user_tmp' schema.sql
 ```
 
 ### Omit schema

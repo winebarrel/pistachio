@@ -10,14 +10,17 @@ type Options struct {
 	Password   string            `env:"PIST_PASSWORD" help:"PostgreSQL password."`
 	Schemas    []string          `short:"n" env:"PGSCHEMAS" default:"public" help:"Schemas to inspect and modify."`
 	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
-	Include    []string          `short:"I" help:"Include only tables/views/enums matching the pattern (wildcard: *, ?)."`
-	Exclude    []string          `short:"E" help:"Exclude tables/views/enums matching the pattern (wildcard: *, ?)."`
 }
 
-func (o *Options) MatchName(name string) bool {
-	if len(o.Include) > 0 {
+type FilterOptions struct {
+	Include []string `short:"I" help:"Include only tables/views/enums matching the pattern (wildcard: *, ?)."`
+	Exclude []string `short:"E" help:"Exclude tables/views/enums matching the pattern (wildcard: *, ?)."`
+}
+
+func (f *FilterOptions) MatchName(name string) bool {
+	if len(f.Include) > 0 {
 		matched := false
-		for _, pattern := range o.Include {
+		for _, pattern := range f.Include {
 			if ok, _ := path.Match(pattern, name); ok {
 				matched = true
 				break
@@ -27,7 +30,7 @@ func (o *Options) MatchName(name string) bool {
 			return false
 		}
 	}
-	for _, pattern := range o.Exclude {
+	for _, pattern := range f.Exclude {
 		if ok, _ := path.Match(pattern, name); ok {
 			return false
 		}
@@ -35,25 +38,26 @@ func (o *Options) MatchName(name string) bool {
 	return true
 }
 
-func (o *Options) AfterApply() error {
-	if err := o.ValidateSchemaMap(); err != nil {
-		return err
-	}
-	return o.ValidatePatterns()
+func (f *FilterOptions) AfterApply() error {
+	return f.ValidatePatterns()
 }
 
-func (o *Options) ValidatePatterns() error {
-	for _, pattern := range o.Include {
+func (f *FilterOptions) ValidatePatterns() error {
+	for _, pattern := range f.Include {
 		if _, err := path.Match(pattern, ""); err != nil {
 			return fmt.Errorf("invalid --include pattern %q: %w", pattern, err)
 		}
 	}
-	for _, pattern := range o.Exclude {
+	for _, pattern := range f.Exclude {
 		if _, err := path.Match(pattern, ""); err != nil {
 			return fmt.Errorf("invalid --exclude pattern %q: %w", pattern, err)
 		}
 	}
 	return nil
+}
+
+func (o *Options) AfterApply() error {
+	return o.ValidateSchemaMap()
 }
 
 func (o *Options) ValidateSchemaMap() error {

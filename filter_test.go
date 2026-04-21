@@ -15,32 +15,37 @@ import (
 
 func TestValidatePatterns(t *testing.T) {
 	t.Run("valid patterns", func(t *testing.T) {
-		o := &pistachio.Options{Include: []string{"user*", "post?"}, Exclude: []string{"tmp_*"}}
+		o := &pistachio.FilterOptions{Include: []string{"user*", "post?"}, Exclude: []string{"tmp_*"}}
 		assert.NoError(t, o.ValidatePatterns())
 	})
 
 	t.Run("invalid include pattern", func(t *testing.T) {
-		o := &pistachio.Options{Include: []string{"[invalid"}}
+		o := &pistachio.FilterOptions{Include: []string{"[invalid"}}
 		err := o.ValidatePatterns()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "--include")
 	})
 
 	t.Run("invalid exclude pattern", func(t *testing.T) {
-		o := &pistachio.Options{Exclude: []string{"[invalid"}}
+		o := &pistachio.FilterOptions{Exclude: []string{"[invalid"}}
 		err := o.ValidatePatterns()
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "--exclude")
 	})
 
 	t.Run("empty", func(t *testing.T) {
-		o := &pistachio.Options{}
+		o := &pistachio.FilterOptions{}
 		assert.NoError(t, o.ValidatePatterns())
 	})
 }
 
-func TestAfterApply_InvalidPattern(t *testing.T) {
-	o := &pistachio.Options{Include: []string{"[bad"}}
+func TestFilterOptions_AfterApply_Valid(t *testing.T) {
+	o := &pistachio.FilterOptions{Include: []string{"user*"}}
+	assert.NoError(t, o.AfterApply())
+}
+
+func TestFilterOptions_AfterApply_Invalid(t *testing.T) {
+	o := &pistachio.FilterOptions{Include: []string{"[bad"}}
 	err := o.AfterApply()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--include")
@@ -48,37 +53,37 @@ func TestAfterApply_InvalidPattern(t *testing.T) {
 
 func TestMatchName(t *testing.T) {
 	t.Run("no filters", func(t *testing.T) {
-		o := &pistachio.Options{}
+		o := &pistachio.FilterOptions{}
 		assert.True(t, o.MatchName("users"))
 	})
 
 	t.Run("include match", func(t *testing.T) {
-		o := &pistachio.Options{Include: []string{"users"}}
+		o := &pistachio.FilterOptions{Include: []string{"users"}}
 		assert.True(t, o.MatchName("users"))
 		assert.False(t, o.MatchName("posts"))
 	})
 
 	t.Run("include wildcard", func(t *testing.T) {
-		o := &pistachio.Options{Include: []string{"user*"}}
+		o := &pistachio.FilterOptions{Include: []string{"user*"}}
 		assert.True(t, o.MatchName("users"))
 		assert.True(t, o.MatchName("user_roles"))
 		assert.False(t, o.MatchName("posts"))
 	})
 
 	t.Run("exclude match", func(t *testing.T) {
-		o := &pistachio.Options{Exclude: []string{"posts"}}
+		o := &pistachio.FilterOptions{Exclude: []string{"posts"}}
 		assert.True(t, o.MatchName("users"))
 		assert.False(t, o.MatchName("posts"))
 	})
 
 	t.Run("exclude wildcard", func(t *testing.T) {
-		o := &pistachio.Options{Exclude: []string{"tmp_*"}}
+		o := &pistachio.FilterOptions{Exclude: []string{"tmp_*"}}
 		assert.True(t, o.MatchName("users"))
 		assert.False(t, o.MatchName("tmp_backup"))
 	})
 
 	t.Run("include and exclude", func(t *testing.T) {
-		o := &pistachio.Options{Include: []string{"user*"}, Exclude: []string{"user_tmp"}}
+		o := &pistachio.FilterOptions{Include: []string{"user*"}, Exclude: []string{"user_tmp"}}
 		assert.True(t, o.MatchName("users"))
 		assert.True(t, o.MatchName("user_roles"))
 		assert.False(t, o.MatchName("user_tmp"))
@@ -86,14 +91,14 @@ func TestMatchName(t *testing.T) {
 	})
 
 	t.Run("multiple include patterns", func(t *testing.T) {
-		o := &pistachio.Options{Include: []string{"users", "posts"}}
+		o := &pistachio.FilterOptions{Include: []string{"users", "posts"}}
 		assert.True(t, o.MatchName("users"))
 		assert.True(t, o.MatchName("posts"))
 		assert.False(t, o.MatchName("orders"))
 	})
 
 	t.Run("question mark wildcard", func(t *testing.T) {
-		o := &pistachio.Options{Include: []string{"user?"}}
+		o := &pistachio.FilterOptions{Include: []string{"user?"}}
 		assert.True(t, o.MatchName("users"))
 		assert.False(t, o.MatchName("user_roles"))
 	})
@@ -118,10 +123,9 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Include:    []string{"users"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -148,10 +152,9 @@ CREATE TABLE public.posts (
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Exclude:    []string{"posts"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Exclude: []string{"posts"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -181,10 +184,9 @@ CREATE TABLE public.posts (
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Include:    []string{"user*"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"user*"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -239,10 +241,9 @@ CREATE VIEW public.tmp_view AS SELECT 1;`)
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Exclude:    []string{"tmp_*"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Exclude: []string{"tmp_*"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -280,10 +281,9 @@ CREATE TABLE public.posts (
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Include:    []string{"users"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
@@ -320,10 +320,9 @@ CREATE TABLE public.posts (
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Exclude:    []string{"posts"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Exclude: []string{"posts"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
@@ -342,10 +341,9 @@ CREATE TYPE public.role AS ENUM ('admin', 'user');`)
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Include:    []string{"status"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -365,10 +363,9 @@ CREATE TYPE public.role AS ENUM ('admin', 'user');`)
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Exclude:    []string{"role"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{FilterOptions: pistachio.FilterOptions{Exclude: []string{"role"}}})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -392,10 +389,9 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Include:    []string{"status"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';")
@@ -418,10 +414,9 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Include:    []string{"status"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	err := client.Apply(ctx, &pistachio.ApplyOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: only status should have the new value
@@ -468,10 +463,9 @@ CREATE TABLE public.posts (
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-		Include:    []string{"users"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	err := client.Apply(ctx, &pistachio.ApplyOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: only users should have the new column
