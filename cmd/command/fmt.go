@@ -21,7 +21,12 @@ func (cmd *Fmt) Run(client *pistachio.Client, w io.Writer) error {
 
 	if cmd.Write {
 		for path, content := range results {
-			if err := os.WriteFile(path, []byte(content+"\n"), 0o644); err != nil {
+			// Preserve original file permissions
+			mode := os.FileMode(0o644)
+			if info, err := os.Stat(path); err == nil {
+				mode = info.Mode()
+			}
+			if err := os.WriteFile(path, []byte(content+"\n"), mode); err != nil {
 				return fmt.Errorf("failed to write %s: %w", path, err)
 			}
 		}

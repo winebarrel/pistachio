@@ -86,20 +86,7 @@ func (r *DumpResult) enums() *orderedmap.Map[string, *model.Enum] {
 }
 
 func (r *DumpResult) String() string {
-	var parts []string
-	enums := r.enums()
-	tables := r.tables()
-	views := r.views()
-	if enums.Len() > 0 {
-		parts = append(parts, model.EnumsToSQL(enums))
-	}
-	if tables.Len() > 0 {
-		parts = append(parts, model.TablesToSQL(tables))
-	}
-	if views.Len() > 0 {
-		parts = append(parts, model.ViewsToSQL(views))
-	}
-	return strings.Join(parts, "\n\n")
+	return FormatSchemaSQL(r.enums(), r.tables(), r.views())
 }
 
 func (r *DumpResult) Files() map[string]string {

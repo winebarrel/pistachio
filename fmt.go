@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
 )
@@ -13,9 +14,8 @@ type FmtOptions struct {
 	Write bool     `short:"w" help:"Write result to source file(s) instead of stdout."`
 }
 
-// Format formats SQL files and returns the results. When multiple files are
-// provided, each file is formatted independently and returned as a map from
-// file path to formatted SQL.
+// Format formats SQL files and returns the results. Each file is formatted
+// independently and returned as a map from file path to formatted SQL.
 func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 	if len(client.Schemas) == 0 {
 		return nil, fmt.Errorf("no schemas configured")
@@ -28,23 +28,28 @@ func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse SQL file %q: %w", path, err)
 		}
-		results[path] = formatParseResult(result)
+		results[path] = FormatSchemaSQL(result.Enums, result.Tables, result.Views)
 	}
 
 	return results, nil
 }
 
-func formatParseResult(result *parser.ParseResult) string {
+// FormatSchemaSQL formats enums, tables, and views into canonical SQL output.
+// This is the shared formatting logic used by both dump and fmt.
+func FormatSchemaSQL(
+	enums *orderedmap.Map[string, *model.Enum],
+	tables *orderedmap.Map[string, *model.Table],
+	views *orderedmap.Map[string, *model.View],
+) string {
 	var parts []string
-	if result.Enums.Len() > 0 {
-		parts = append(parts, model.EnumsToSQL(result.Enums))
+	if enums.Len() > 0 {
+		parts = append(parts, model.EnumsToSQL(enums))
 	}
-	if result.Tables.Len() > 0 {
-		parts = append(parts, model.TablesToSQL(result.Tables))
+	if tables.Len() > 0 {
+		parts = append(parts, model.TablesToSQL(tables))
 	}
-	if result.Views.Len() > 0 {
-		parts = append(parts, model.ViewsToSQL(result.Views))
+	if views.Len() > 0 {
+		parts = append(parts, model.ViewsToSQL(views))
 	}
-
 	return strings.Join(parts, "\n\n")
 }
