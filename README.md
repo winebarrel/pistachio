@@ -250,7 +250,7 @@ pist apply ./schema/*.sql         # apply it
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types)
-- Renaming (tables, views, enums, columns, constraints, indexes via `-- pist:rename-from` directive)
+- Renaming (tables, views, enums, columns, constraints, foreign keys, indexes via `-- pist:rename-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 

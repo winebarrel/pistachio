@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
+	"github.com/winebarrel/pistachio/model"
 )
 
 var renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:rename-from[ \t]+(.+?)[ \t]*$`)
@@ -30,18 +31,18 @@ func unquoteIdent(s string) string {
 }
 
 // normalizeDirectiveValue normalizes a rename-from directive value by
-// unquoting each part of a potentially schema-qualified name.
-// e.g. `"My Schema"."Old Name"` → `My Schema.Old Name`
+// unquoting each part and re-quoting via model.Ident to match the
+// canonical identifier format used by the parser and diff layer.
+// e.g. `"My Schema"."Old Name"` → `"My Schema"."Old Name"` (canonical)
 //
 //	`public.old_name`       → `public.old_name` (unchanged)
-//	`"Old Name"`            → `Old Name`
+//	`"Old Name"`            → `"Old Name"` (canonical)
 func normalizeDirectiveValue(s string) string {
-	// Split on dots, but respect quoted identifiers
 	parts := splitQualifiedName(s)
 	for i, p := range parts {
 		parts[i] = unquoteIdent(p)
 	}
-	return strings.Join(parts, ".")
+	return model.Ident(parts...)
 }
 
 // splitQualifiedName splits a potentially schema-qualified name into parts,
@@ -141,7 +142,14 @@ func ExtractInlineDirectives(rawCreateTableSQL string) *InlineDirectives {
 		Columns:     make(map[string]string),
 		Constraints: make(map[string]string),
 	}
-	lines := strings.Split(rawCreateTableSQL, "\n")
+
+	// Only scan lines inside the column/constraint list (after the opening parenthesis)
+	parenIdx := strings.Index(rawCreateTableSQL, "(")
+	if parenIdx < 0 {
+		return result
+	}
+	body := rawCreateTableSQL[parenIdx:]
+	lines := strings.Split(body, "\n")
 
 	var pendingRename string
 	for _, line := range lines {
@@ -181,6 +189,30 @@ func ExtractColumnDirectives(rawCreateTableSQL string) map[string]string {
 	return ExtractInlineDirectives(rawCreateTableSQL).Columns
 }
 
+// scanQuotedIdent scans a quoted identifier from the start of s, handling ""
+// escape sequences. Returns the unquoted name and true if successful.
+func scanQuotedIdent(s string) (string, bool) {
+	if len(s) == 0 || s[0] != '"' {
+		return "", false
+	}
+	var name strings.Builder
+	for i := 1; i < len(s); i++ {
+		if s[i] == '"' {
+			if i+1 < len(s) && s[i+1] == '"' {
+				// Escaped double quote
+				name.WriteByte('"')
+				i++
+			} else {
+				// End of quoted identifier
+				return name.String(), true
+			}
+		} else {
+			name.WriteByte(s[i])
+		}
+	}
+	return "", false
+}
+
 // extractConstraintName extracts the constraint name from a CONSTRAINT line.
 // e.g. "CONSTRAINT users_pkey PRIMARY KEY (id)" → "users_pkey"
 func extractConstraintName(line string) string {
@@ -191,9 +223,9 @@ func extractConstraintName(line string) string {
 	}
 	rest := strings.TrimSpace(line[len("CONSTRAINT "):])
 	if strings.HasPrefix(rest, `"`) {
-		end := strings.Index(rest[1:], `"`)
-		if end >= 0 {
-			return rest[1 : end+1]
+		name, ok := scanQuotedIdent(rest)
+		if ok {
+			return name
 		}
 		return ""
 	}
@@ -216,10 +248,9 @@ func extractColumnName(line string) string {
 	}
 
 	if strings.HasPrefix(line, `"`) {
-		// Quoted identifier
-		end := strings.Index(line[1:], `"`)
-		if end >= 0 {
-			return line[1 : end+1]
+		name, ok := scanQuotedIdent(line)
+		if ok {
+			return name
 		}
 		return ""
 	}

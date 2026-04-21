@@ -120,7 +120,7 @@ func TestExtractColumnDirectives(t *testing.T) {
     "New Name" text NOT NULL
 );`
 		dirs := ExtractColumnDirectives(sql)
-		assert.Equal(t, "Old Name", dirs["New Name"])
+		assert.Equal(t, `"Old Name"`, dirs["New Name"])
 	})
 
 	t.Run("constraint line skipped", func(t *testing.T) {
@@ -175,10 +175,10 @@ func TestExtractConstraintName(t *testing.T) {
 
 func TestNormalizeDirectiveValue(t *testing.T) {
 	assert.Equal(t, "public.old_name", normalizeDirectiveValue("public.old_name"))
-	assert.Equal(t, "Old Name", normalizeDirectiveValue(`"Old Name"`))
-	assert.Equal(t, "My Schema.Old Name", normalizeDirectiveValue(`"My Schema"."Old Name"`))
-	assert.Equal(t, "public.Old Name", normalizeDirectiveValue(`public."Old Name"`))
-	assert.Equal(t, `has"quote`, normalizeDirectiveValue(`"has""quote"`))
+	assert.Equal(t, `"Old Name"`, normalizeDirectiveValue(`"Old Name"`))
+	assert.Equal(t, `"My Schema"."Old Name"`, normalizeDirectiveValue(`"My Schema"."Old Name"`))
+	assert.Equal(t, `public."Old Name"`, normalizeDirectiveValue(`public."Old Name"`))
+	assert.Equal(t, `"has""quote"`, normalizeDirectiveValue(`"has""quote"`))
 	assert.Equal(t, "simple", normalizeDirectiveValue("simple"))
 }
 
@@ -195,7 +195,26 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 	dirs := ExtractStmtDirectives(sql, result.Stmts)
-	assert.Equal(t, "My Schema.Old Name", dirs[result.Stmts[0].StmtLocation])
+	assert.Equal(t, `"My Schema"."Old Name"`, dirs[result.Stmts[0].StmtLocation])
+}
+
+func TestScanQuotedIdent(t *testing.T) {
+	name, ok := scanQuotedIdent(`"My Name" text NOT NULL`)
+	assert.True(t, ok)
+	assert.Equal(t, "My Name", name)
+
+	name, ok = scanQuotedIdent(`"has""quote" text`)
+	assert.True(t, ok)
+	assert.Equal(t, `has"quote`, name)
+
+	_, ok = scanQuotedIdent(`not_quoted`)
+	assert.False(t, ok)
+
+	_, ok = scanQuotedIdent(`"unterminated`)
+	assert.False(t, ok)
+
+	_, ok = scanQuotedIdent(``)
+	assert.False(t, ok)
 }
 
 func TestExtractColumnName(t *testing.T) {
