@@ -1273,6 +1273,74 @@ CREATE VIEW new_view AS SELECT 1;`
 	assert.Equal(t, "myschema.old_view", *v.RenameFrom)
 }
 
+func TestParseSQL_Domain(t *testing.T) {
+	sql := `CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Domains.Len())
+
+	d, ok := result.Domains.GetOk("public.pos_int")
+	require.True(t, ok)
+	assert.Equal(t, "pos_int", d.Name)
+	assert.Equal(t, "public", d.Schema)
+	assert.Equal(t, "integer", d.BaseType)
+	assert.Len(t, d.Constraints, 1)
+	assert.Equal(t, "pos_check", d.Constraints[0].Name)
+}
+
+func TestParseSQL_DomainWithDefault(t *testing.T) {
+	sql := `CREATE DOMAIN public.pos_int AS integer NOT NULL DEFAULT 1;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	d := result.Domains.Get("public.pos_int")
+	require.NotNil(t, d)
+	assert.True(t, d.NotNull)
+	require.NotNil(t, d.Default)
+	assert.Equal(t, "1", *d.Default)
+}
+
+func TestParseSQL_DomainWithComment(t *testing.T) {
+	sql := `CREATE DOMAIN public.pos_int AS integer;
+COMMENT ON DOMAIN public.pos_int IS 'Positive integer';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	d := result.Domains.Get("public.pos_int")
+	require.NotNil(t, d)
+	require.NotNil(t, d.Comment)
+	assert.Equal(t, "Positive integer", *d.Comment)
+}
+
+func TestParseSQLWithSchema_Domain(t *testing.T) {
+	sql := `CREATE DOMAIN pos_int AS integer;`
+
+	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	require.NoError(t, err)
+
+	d, ok := result.Domains.GetOk("myschema.pos_int")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", d.Schema)
+}
+
+func TestParseSQL_DomainUnnamedConstraint_Error(t *testing.T) {
+	sql := `CREATE DOMAIN public.pos_int AS integer CHECK (VALUE > 0);`
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unnamed constraint")
+}
+
+func TestParseSQL_DuplicateDomain(t *testing.T) {
+	sql := `CREATE DOMAIN public.pos_int AS integer;
+CREATE DOMAIN public.pos_int AS bigint;`
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate domain")
+}
+
 func TestParseSQL_NoRenameDirective(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,
