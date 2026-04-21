@@ -2,7 +2,6 @@ package diff
 
 import (
 	"fmt"
-	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
@@ -227,6 +226,12 @@ func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[strin
 			return nil, nil, fmt.Errorf("rename source constraint %s not found in %s", model.Ident(oldName), fqtn)
 		}
 
+		if oldName != newName {
+			if _, exists := adjusted.GetOk(newName); exists {
+				return nil, nil, fmt.Errorf("cannot rename constraint %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
+			}
+		}
+
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME CONSTRAINT "+model.Ident(oldName)+" TO "+model.Ident(newName)+";")
 
 		adjusted.Delete(oldName)
@@ -257,6 +262,12 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 			return nil, nil, fmt.Errorf("rename source index %s not found", model.Ident(oldName))
 		}
 
+		if oldName != newName {
+			if _, exists := adjusted.GetOk(newName); exists {
+				return nil, nil, fmt.Errorf("cannot rename index %s to %s: destination already exists", model.Ident(oldName), model.Ident(newName))
+			}
+		}
+
 		stmts = append(stmts, "ALTER INDEX "+model.Ident(oldIdx.Schema, oldName)+" RENAME TO "+model.Ident(newName)+";")
 
 		adjusted.Delete(oldName)
@@ -274,7 +285,7 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 func updateIndexName(def string, newName string) string {
 	result, err := pg_query.Parse(def)
 	if err != nil {
-		return strings.Replace(def, model.Ident(newName), model.Ident(newName), 1) // fallback
+		return def
 	}
 	is := result.Stmts[0].Stmt.GetIndexStmt()
 	if is == nil {
@@ -305,6 +316,12 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source foreign key %s not found in %s", model.Ident(oldName), fqtn)
+		}
+
+		if oldName != newName {
+			if _, exists := adjusted.GetOk(newName); exists {
+				return nil, nil, fmt.Errorf("cannot rename foreign key %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
+			}
 		}
 
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME CONSTRAINT "+model.Ident(oldName)+" TO "+model.Ident(newName)+";")

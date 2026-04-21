@@ -1266,6 +1266,60 @@ func TestDiffForeignKeys_rename_sourceNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
 
+func TestDiffConstraints_rename_destinationExists_error(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("old_con", &model.Constraint{Name: "old_con", Definition: "UNIQUE (code)"})
+	current.Set("new_con", &model.Constraint{Name: "new_con", Definition: "UNIQUE (name)"})
+
+	oldName := "old_con"
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("new_con", &model.Constraint{Name: "new_con", RenameFrom: &oldName, Definition: "UNIQUE (code)"})
+
+	_, err := diffConstraints("public.users", current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "destination already exists")
+}
+
+func TestDiffIndexes_rename_destinationExists_error(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	current.Set("old_idx", &model.Index{Schema: "public", Name: "old_idx", Table: "users", Definition: "CREATE INDEX old_idx ON public.users USING btree (name)"})
+	current.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (id)"})
+
+	oldName := "old_idx"
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
+
+	_, err := diffIndexes(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "destination already exists")
+}
+
+func TestDiffForeignKeys_rename_destinationExists_error(t *testing.T) {
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("old_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "old_fk", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	current.Set("new_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "new_fk", Definition: "FOREIGN KEY (item_id) REFERENCES public.items(id)"},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	oldName := "old_fk"
+	desired := orderedmap.New[string, *model.ForeignKey]()
+	desired.Set("new_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "new_fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	_, err := diffForeignKeys("public.orders", "public", current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "destination already exists")
+}
+
 func TestDiffTables_renameTable_sourceNotFound(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()

@@ -49,10 +49,14 @@ func normalizeDirectiveValue(s string) string {
 
 // normalizeUnqualifiedDirective normalizes a rename-from directive value
 // for unqualified names (columns, constraints, indexes, foreign keys)
-// by unquoting the identifier. The result matches the unquoted name
-// used as orderedmap keys by the parser.
+// by unquoting the identifier. If a schema-qualified name is provided
+// (e.g. "public.old_idx"), only the last part is used.
+// The result matches the unquoted name used as orderedmap keys by the parser.
 func normalizeUnqualifiedDirective(s string) string {
-	return unquoteIdent(s)
+	parts := splitQualifiedName(s)
+	// Use the last part (the actual name, ignoring any schema prefix)
+	last := parts[len(parts)-1]
+	return unquoteIdent(last)
 }
 
 // splitQualifiedName splits a potentially schema-qualified name into parts,

@@ -186,6 +186,9 @@ func TestNormalizeUnqualifiedDirective(t *testing.T) {
 	assert.Equal(t, "old_name", normalizeUnqualifiedDirective("old_name"))
 	assert.Equal(t, "Old Name", normalizeUnqualifiedDirective(`"Old Name"`))
 	assert.Equal(t, `has"quote`, normalizeUnqualifiedDirective(`"has""quote"`))
+	// Schema-qualified: take last part only
+	assert.Equal(t, "old_idx", normalizeUnqualifiedDirective("public.old_idx"))
+	assert.Equal(t, "Old Name", normalizeUnqualifiedDirective(`public."Old Name"`))
 }
 
 func TestQualifyRenameFrom(t *testing.T) {
