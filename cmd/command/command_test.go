@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -381,9 +380,6 @@ func TestFmt_Run_InvalidFile(t *testing.T) {
 }
 
 func TestFmt_Run_WriteError(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("chmod-based write error test not supported on Windows")
-	}
 	tmpDir := t.TempDir()
 	readonlyDir := filepath.Join(tmpDir, "readonly")
 	require.NoError(t, os.MkdirAll(readonlyDir, 0o755))
