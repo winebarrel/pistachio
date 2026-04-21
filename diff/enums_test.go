@@ -24,9 +24,10 @@ func TestDiffEnums_CreateNew(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active", "inactive"},
 	})
-	stmts := diff.DiffEnums(current, desired)
-	assert.Len(t, stmts, 1)
-	assert.Contains(t, stmts[0], "CREATE TYPE public.status AS ENUM")
+	result := diff.DiffEnums(current, desired)
+	assert.Len(t, result.Stmts, 1)
+	assert.Contains(t, result.Stmts[0], "CREATE TYPE public.status AS ENUM")
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffEnums_DropExisting(t *testing.T) {
@@ -36,8 +37,9 @@ func TestDiffEnums_DropExisting(t *testing.T) {
 		Values: []string{"active", "inactive"},
 	})
 	desired := newEnumMap()
-	stmts := diff.DiffEnums(current, desired)
-	assert.Equal(t, []string{"DROP TYPE public.status;"}, stmts)
+	result := diff.DiffEnums(current, desired)
+	assert.Empty(t, result.Stmts)
+	assert.Equal(t, []string{"DROP TYPE public.status;"}, result.DropStmts)
 }
 
 func TestDiffEnums_AddValue(t *testing.T) {
@@ -51,8 +53,38 @@ func TestDiffEnums_AddValue(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active", "inactive", "pending"},
 	})
-	stmts := diff.DiffEnums(current, desired)
-	assert.Equal(t, []string{"ALTER TYPE public.status ADD VALUE 'pending';"}, stmts)
+	result := diff.DiffEnums(current, desired)
+	assert.Equal(t, []string{"ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';"}, result.Stmts)
+}
+
+func TestDiffEnums_AddValueMiddle(t *testing.T) {
+	current := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"active", "closed"},
+	})
+	desired := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"active", "pending", "closed"},
+	})
+	result := diff.DiffEnums(current, desired)
+	assert.Equal(t, []string{"ALTER TYPE public.status ADD VALUE 'pending' AFTER 'active';"}, result.Stmts)
+}
+
+func TestDiffEnums_AddValueBeginning(t *testing.T) {
+	current := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"active", "inactive"},
+	})
+	desired := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"new", "active", "inactive"},
+	})
+	result := diff.DiffEnums(current, desired)
+	assert.Equal(t, []string{"ALTER TYPE public.status ADD VALUE 'new' BEFORE 'active';"}, result.Stmts)
 }
 
 func TestDiffEnums_NoDiff(t *testing.T) {
@@ -66,8 +98,9 @@ func TestDiffEnums_NoDiff(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active", "inactive"},
 	})
-	stmts := diff.DiffEnums(current, desired)
-	assert.Empty(t, stmts)
+	result := diff.DiffEnums(current, desired)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffEnums_AddComment(t *testing.T) {
@@ -83,8 +116,8 @@ func TestDiffEnums_AddComment(t *testing.T) {
 		Values:  []string{"active"},
 		Comment: &comment,
 	})
-	stmts := diff.DiffEnums(current, desired)
-	assert.Equal(t, []string{"COMMENT ON TYPE public.status IS 'User status';"}, stmts)
+	result := diff.DiffEnums(current, desired)
+	assert.Equal(t, []string{"COMMENT ON TYPE public.status IS 'User status';"}, result.Stmts)
 }
 
 func TestDiffEnums_DropComment(t *testing.T) {
@@ -100,8 +133,8 @@ func TestDiffEnums_DropComment(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active"},
 	})
-	stmts := diff.DiffEnums(current, desired)
-	assert.Equal(t, []string{"COMMENT ON TYPE public.status IS NULL;"}, stmts)
+	result := diff.DiffEnums(current, desired)
+	assert.Equal(t, []string{"COMMENT ON TYPE public.status IS NULL;"}, result.Stmts)
 }
 
 func TestDiffEnums_CreateWithComment(t *testing.T) {
@@ -113,8 +146,8 @@ func TestDiffEnums_CreateWithComment(t *testing.T) {
 		Values:  []string{"active"},
 		Comment: &comment,
 	})
-	stmts := diff.DiffEnums(current, desired)
-	assert.Len(t, stmts, 2)
-	assert.Contains(t, stmts[0], "CREATE TYPE public.status AS ENUM")
-	assert.Equal(t, "COMMENT ON TYPE public.status IS 'User status';", stmts[1])
+	result := diff.DiffEnums(current, desired)
+	assert.Len(t, result.Stmts, 2)
+	assert.Contains(t, result.Stmts[0], "CREATE TYPE public.status AS ENUM")
+	assert.Equal(t, "COMMENT ON TYPE public.status IS 'User status';", result.Stmts[1])
 }

@@ -46,6 +46,7 @@ func (c *Catalog) ListEnums(ctx context.Context) ([]*model.Enum, error) {
 			JOIN pg_catalog.pg_enum e ON e.enumtypid = t.oid
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = t.oid
 			AND d.classoid = 'pg_type'::regclass
+			AND d.objsubid = 0
 			LEFT JOIN dependency_extension de ON de.objid = t.oid
 		WHERE
 			t.typtype = 'e'

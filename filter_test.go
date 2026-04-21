@@ -398,7 +398,7 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 
-	assert.Contains(t, got, "ALTER TYPE public.status ADD VALUE 'pending';")
+	assert.Contains(t, got, "ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';")
 	assert.NotContains(t, got, "role")
 }
 

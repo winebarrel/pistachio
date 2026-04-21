@@ -658,7 +658,7 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 
-	assert.Contains(t, got, "ALTER TYPE myschema.status ADD VALUE 'pending';")
+	assert.Contains(t, got, "ALTER TYPE myschema.status ADD VALUE 'pending' AFTER 'inactive';")
 }
 
 func TestPlan_WithSchemaMap_Enum_NoDiff(t *testing.T) {
