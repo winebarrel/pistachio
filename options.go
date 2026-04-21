@@ -38,6 +38,10 @@ func (f *FilterOptions) MatchName(name string) bool {
 	return true
 }
 
+func (f *FilterOptions) AfterApply() error {
+	return f.ValidatePatterns()
+}
+
 func (f *FilterOptions) ValidatePatterns() error {
 	for _, pattern := range f.Include {
 		if _, err := path.Match(pattern, ""); err != nil {
