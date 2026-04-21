@@ -455,4 +455,3 @@ func TestFmt_Run_Check_NotFormatted(t *testing.T) {
 	assert.Contains(t, notFormatted.Error(), tmpFile)
 	assert.Contains(t, buf.String(), tmpFile)
 }
-
