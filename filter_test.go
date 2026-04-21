@@ -39,9 +39,14 @@ func TestValidatePatterns(t *testing.T) {
 	})
 }
 
-func TestAfterApply_InvalidPattern(t *testing.T) {
+func TestFilterOptions_AfterApply_Valid(t *testing.T) {
+	o := &pistachio.FilterOptions{Include: []string{"user*"}}
+	assert.NoError(t, o.AfterApply())
+}
+
+func TestFilterOptions_AfterApply_Invalid(t *testing.T) {
 	o := &pistachio.FilterOptions{Include: []string{"[bad"}}
-	err := o.ValidatePatterns()
+	err := o.AfterApply()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--include")
 }
