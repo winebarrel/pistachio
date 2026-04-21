@@ -10,6 +10,7 @@ type View struct {
 	OID        uint32
 	Schema     string
 	Name       string
+	RenameFrom *string
 	Definition string
 	Comment    *string
 }

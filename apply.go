@@ -54,8 +54,19 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return err
 	}
 	stmts := enumDiff.Stmts
-	stmts = append(stmts, diff.DiffTables(client.filterTables(currentTables), client.filterTables(client.reverseRemapTableSchemas(desired.Tables)))...)
-	stmts = append(stmts, diff.DiffViews(client.filterViews(currentViews), client.filterViews(client.reverseRemapViewSchemas(desired.Views)))...)
+
+	tableStmts, err := diff.DiffTables(client.filterTables(currentTables), client.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
+	if err != nil {
+		return err
+	}
+	stmts = append(stmts, tableStmts...)
+
+	viewStmts, err := diff.DiffViews(client.filterViews(currentViews), client.filterViews(client.reverseRemapViewSchemas(desired.Views)))
+	if err != nil {
+		return err
+	}
+	stmts = append(stmts, viewStmts...)
+
 	stmts = append(stmts, enumDiff.DropStmts...)
 
 	var preSQL string

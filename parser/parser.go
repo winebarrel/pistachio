@@ -77,14 +77,20 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	views := orderedmap.New[string, *model.View]()
 	enums := orderedmap.New[string, *model.Enum]()
 
+	stmtDirectives := ExtractStmtDirectives(sql, result.Stmts)
+
 	for _, rawStmt := range result.Stmts {
 		node := rawStmt.Stmt
+		renameFrom := stmtDirectives[rawStmt.StmtLocation]
 
 		switch {
 		case node.GetCreateEnumStmt() != nil:
 			enum, err := parseCreateEnumStmt(node.GetCreateEnumStmt(), defaultSchema)
 			if err != nil {
 				return nil, err
+			}
+			if renameFrom != "" {
+				enum.RenameFrom = &renameFrom
 			}
 			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
 				return nil, err
@@ -95,6 +101,33 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if err != nil {
 				return nil, err
 			}
+			if renameFrom != "" {
+				table.RenameFrom = &renameFrom
+			}
+
+			// Extract column/constraint-level directives from raw SQL
+			stmtEnd := rawStmt.StmtLocation + rawStmt.StmtLen
+			if stmtEnd > int32(len(sql)) {
+				stmtEnd = int32(len(sql))
+			}
+			rawStmtSQL := sql[rawStmt.StmtLocation:stmtEnd]
+			inlineDirectives := ExtractInlineDirectives(rawStmtSQL)
+			for colName, oldName := range inlineDirectives.Columns {
+				if col, ok := table.Columns.GetOk(colName); ok {
+					old := oldName
+					col.RenameFrom = &old
+				}
+			}
+			for conName, oldName := range inlineDirectives.Constraints {
+				if con, ok := table.Constraints.GetOk(conName); ok {
+					old := oldName
+					con.RenameFrom = &old
+				} else if fk, ok := table.ForeignKeys.GetOk(conName); ok {
+					old := oldName
+					fk.RenameFrom = &old
+				}
+			}
+
 			if err := setUnique(tables, table.FQTN(), "table", table); err != nil {
 				return nil, err
 			}
@@ -104,6 +137,9 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if err != nil {
 				return nil, err
 			}
+			if renameFrom != "" {
+				view.RenameFrom = &renameFrom
+			}
 			if err := setUnique(views, view.FQVN(), "view", view); err != nil {
 				return nil, err
 			}
@@ -112,6 +148,9 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			idx, err := parseIndexStmt(node.GetIndexStmt(), rawStmt, defaultSchema)
 			if err != nil {
 				return nil, err
+			}
+			if renameFrom != "" {
+				idx.RenameFrom = &renameFrom
 			}
 			fqtn := model.Ident(idx.Schema, idx.Table)
 			if t, ok := tables.GetOk(fqtn); ok {
@@ -137,10 +176,16 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if fk != nil {
+				if renameFrom != "" {
+					fk.RenameFrom = &renameFrom
+				}
 				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
 					return nil, err
 				}
 			} else if con != nil {
+				if renameFrom != "" {
+					con.RenameFrom = &renameFrom
+				}
 				if err := setUnique(t.Constraints, con.Name, "constraint", con); err != nil {
 					return nil, err
 				}

@@ -1,0 +1,182 @@
+package parser
+
+import (
+	"testing"
+
+	pg_query "github.com/pganalyze/pg_query_go/v6"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestExtractStmtDirectives(t *testing.T) {
+	t.Run("single directive", func(t *testing.T) {
+		sql := `-- pist:rename-from public.old_status
+CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
+		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		assert.Len(t, dirs, 1)
+		assert.Equal(t, "public.old_status", dirs[result.Stmts[0].StmtLocation])
+	})
+
+	t.Run("multiple directives", func(t *testing.T) {
+		sql := `-- pist:rename-from public.old_status
+CREATE TYPE public.new_status AS ENUM ('active');
+-- pist:rename-from public.old_users
+CREATE TABLE public.users (id integer NOT NULL);`
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
+		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		assert.Len(t, dirs, 2)
+		assert.Equal(t, "public.old_status", dirs[result.Stmts[0].StmtLocation])
+		assert.Equal(t, "public.old_users", dirs[result.Stmts[1].StmtLocation])
+	})
+
+	t.Run("no directives", func(t *testing.T) {
+		sql := `CREATE TABLE public.users (id integer NOT NULL);`
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
+		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		assert.Empty(t, dirs)
+	})
+
+	t.Run("directive only on second statement", func(t *testing.T) {
+		sql := `CREATE TABLE public.users (id integer NOT NULL);
+-- pist:rename-from public.old_posts
+CREATE TABLE public.posts (id integer NOT NULL);`
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
+		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		assert.Len(t, dirs, 1)
+		assert.Equal(t, "public.old_posts", dirs[result.Stmts[1].StmtLocation])
+	})
+
+	t.Run("directive with extra whitespace", func(t *testing.T) {
+		sql := `  -- pist:rename-from  public.old_name
+CREATE TABLE public.users (id integer NOT NULL);`
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
+		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		assert.Equal(t, "public.old_name", dirs[result.Stmts[0].StmtLocation])
+	})
+
+	t.Run("unqualified name", func(t *testing.T) {
+		sql := `-- pist:rename-from old_name
+CREATE TABLE public.users (id integer NOT NULL);`
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
+		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		assert.Equal(t, "old_name", dirs[result.Stmts[0].StmtLocation])
+	})
+
+	t.Run("regular comment ignored", func(t *testing.T) {
+		sql := `-- this is a regular comment
+CREATE TABLE public.users (id integer NOT NULL);`
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
+		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		assert.Empty(t, dirs)
+	})
+}
+
+func TestExtractColumnDirectives(t *testing.T) {
+	t.Run("single column directive", func(t *testing.T) {
+		sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pist:rename-from name
+    display_name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+		dirs := ExtractColumnDirectives(sql)
+		assert.Len(t, dirs, 1)
+		assert.Equal(t, "name", dirs["display_name"])
+	})
+
+	t.Run("multiple column directives", func(t *testing.T) {
+		sql := `CREATE TABLE public.users (
+    -- pist:rename-from uid
+    id integer NOT NULL,
+    -- pist:rename-from name
+    display_name text NOT NULL
+);`
+		dirs := ExtractColumnDirectives(sql)
+		assert.Len(t, dirs, 2)
+		assert.Equal(t, "uid", dirs["id"])
+		assert.Equal(t, "name", dirs["display_name"])
+	})
+
+	t.Run("no directives", func(t *testing.T) {
+		sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL
+);`
+		dirs := ExtractColumnDirectives(sql)
+		assert.Empty(t, dirs)
+	})
+
+	t.Run("quoted column name", func(t *testing.T) {
+		sql := `CREATE TABLE public.users (
+    -- pist:rename-from "Old Name"
+    "New Name" text NOT NULL
+);`
+		dirs := ExtractColumnDirectives(sql)
+		assert.Equal(t, `"Old Name"`, dirs[`New Name`])
+	})
+
+	t.Run("constraint line skipped", func(t *testing.T) {
+		sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pist:rename-from old_col
+    new_col text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+		dirs := ExtractColumnDirectives(sql)
+		assert.Len(t, dirs, 1)
+		assert.Equal(t, "old_col", dirs["new_col"])
+	})
+}
+
+func TestExtractInlineDirectives_Constraint(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    code text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    -- pist:rename-from users_code_key
+    CONSTRAINT users_code_unique UNIQUE (code)
+);`
+	dirs := ExtractInlineDirectives(sql)
+	assert.Empty(t, dirs.Columns)
+	assert.Len(t, dirs.Constraints, 1)
+	assert.Equal(t, "users_code_key", dirs.Constraints["users_code_unique"])
+}
+
+func TestExtractInlineDirectives_Mixed(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pist:rename-from name
+    display_name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    -- pist:rename-from old_unique
+    CONSTRAINT new_unique UNIQUE (display_name)
+);`
+	dirs := ExtractInlineDirectives(sql)
+	assert.Len(t, dirs.Columns, 1)
+	assert.Equal(t, "name", dirs.Columns["display_name"])
+	assert.Len(t, dirs.Constraints, 1)
+	assert.Equal(t, "old_unique", dirs.Constraints["new_unique"])
+}
+
+func TestExtractConstraintName(t *testing.T) {
+	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
+	assert.Equal(t, "My Con", extractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))
+	assert.Equal(t, "", extractConstraintName("id integer NOT NULL"))
+	assert.Equal(t, "", extractConstraintName(""))
+}
+
+func TestExtractColumnName(t *testing.T) {
+	assert.Equal(t, "id", extractColumnName("id integer NOT NULL,"))
+	assert.Equal(t, "name", extractColumnName("name text NOT NULL"))
+	assert.Equal(t, "My Col", extractColumnName(`"My Col" text NOT NULL,`))
+	assert.Equal(t, "", extractColumnName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
+	assert.Equal(t, "", extractColumnName(""))
+}

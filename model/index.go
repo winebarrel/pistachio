@@ -4,6 +4,7 @@ type Index struct {
 	OID        uint32
 	Schema     string
 	Name       string
+	RenameFrom *string
 	Table      string
 	Definition string
 	TableSpace *string

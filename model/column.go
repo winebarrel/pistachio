@@ -34,6 +34,7 @@ func (b ColumnGenerated) IsVirtualGeneratedColumn() bool {
 
 type Column struct {
 	Name        string
+	RenameFrom  *string
 	TypeName    string
 	NotNull     bool
 	Default     *string

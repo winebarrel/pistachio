@@ -1,0 +1,11 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+desired: |
+  -- pist:rename-from public.status
+  CREATE TYPE public.user_status AS ENUM ('active', 'inactive');
+applied: |
+  -- public.user_status
+  CREATE TYPE public.user_status AS ENUM (
+      'active',
+      'inactive'
+  );

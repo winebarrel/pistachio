@@ -37,6 +37,7 @@ func (b ConstraintType) IsExclusionConstraint() bool {
 type Constraint struct {
 	OID        uint32
 	Name       string
+	RenameFrom *string
 	Type       ConstraintType
 	Definition string
 	Columns    []string
