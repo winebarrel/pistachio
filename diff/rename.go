@@ -49,6 +49,12 @@ func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([
 }
 
 // detectTableRenames finds desired tables with RenameFrom that match a current table.
+//
+// NOTE: After a table rename, other objects that reference the old table name
+// (e.g. foreign keys in other tables, view definitions) are not updated in the
+// adjusted current state. PostgreSQL automatically updates these on RENAME, so
+// running plan/apply a second time after a rename will produce a clean diff.
+// A single plan may emit redundant DROP/CREATE for dependent objects.
 func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) ([]string, *orderedmap.Map[string, *model.Table], error) {
 	var stmts []string
 	adjusted := cloneMap(current)
@@ -172,6 +178,12 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 }
 
 // detectColumnRenames finds desired columns with RenameFrom that match a current column.
+//
+// NOTE: After a column rename, constraint/index/FK definitions that reference the
+// old column name are not updated in the adjusted current state. PostgreSQL
+// automatically updates these on RENAME COLUMN, so running plan/apply a second
+// time will produce a clean diff. A single plan may emit redundant DROP/ADD for
+// dependent constraints or indexes.
 func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Column]) ([]string, *orderedmap.Map[string, *model.Column], error) {
 	var stmts []string
 	adjusted := cloneMap(current)
