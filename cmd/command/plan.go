@@ -19,7 +19,7 @@ func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 	}
 
 	if plan == "" {
-		fmt.Fprintln(w, "No changes") //nolint:errcheck
+		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
 	} else {
 		fmt.Fprintln(w, plan) //nolint:errcheck
 	}

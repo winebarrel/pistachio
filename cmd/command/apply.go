@@ -21,7 +21,7 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 	}
 
 	if buf.Len() == 0 {
-		fmt.Fprintln(w, "No changes") //nolint:errcheck
+		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
 	} else {
 		w.Write(buf.Bytes()) //nolint:errcheck
 	}
