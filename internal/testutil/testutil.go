@@ -11,7 +11,7 @@ import (
 
 func ConnectDB(t *testing.T) *pgx.Conn {
 	t.Helper()
-	connString := os.Getenv("DATABASE_URL")
+	connString := os.Getenv("PIST_CONN_STR")
 	if connString == "" {
 		connString = "postgres://postgres@localhost/postgres"
 	}

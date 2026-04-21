@@ -29,8 +29,8 @@ Flags:
   -c, --conn-string="postgres://postgres@localhost/postgres"
                               PostgreSQL connection string. See
                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-                              ($DATABASE_URL)
-      --password=STRING       PostgreSQL password ($PGPASSWORD).
+                              ($PIST_CONN_STR)
+      --password=STRING       PostgreSQL password ($PIST_PASSWORD).
   -n, --schemas=public,...    Schemas to inspect and modify ($PGSCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).

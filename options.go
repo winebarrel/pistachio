@@ -6,8 +6,8 @@ import (
 )
 
 type Options struct {
-	ConnString string            `short:"c" env:"DATABASE_URL" default:"postgres://postgres@localhost/postgres" help:"PostgreSQL connection string. See https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING"`
-	Password   string            `env:"PGPASSWORD" help:"PostgreSQL password."`
+	ConnString string            `short:"c" env:"PIST_CONN_STR" default:"postgres://postgres@localhost/postgres" help:"PostgreSQL connection string. See https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING"`
+	Password   string            `env:"PIST_PASSWORD" help:"PostgreSQL password."`
 	Schemas    []string          `short:"n" env:"PGSCHEMAS" default:"public" help:"Schemas to inspect and modify."`
 	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
 	Include    []string          `short:"I" help:"Include only tables/views matching the pattern (wildcard: *, ?)."`
