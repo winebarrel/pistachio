@@ -19,6 +19,7 @@ var cli struct {
 	Apply command.Apply `cmd:"" help:"Apply schema changes to the database."`
 	Plan  command.Plan  `cmd:"" help:"Print the schema diff SQL without applying it."`
 	Dump  command.Dump  `cmd:"" help:"Dump the current database schema as SQL."`
+	Fmt   command.Fmt   `cmd:"" help:"Format SQL file(s) into canonical form."`
 }
 
 func main() {
