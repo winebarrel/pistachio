@@ -1006,3 +1006,95 @@ COMMENT ON VIEW active_users IS 'Active users';`
 	require.NotNil(t, v.Comment)
 	assert.Equal(t, "Active users", *v.Comment)
 }
+
+func TestParseSQL_Enum(t *testing.T) {
+	sql := `CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Enums.Len())
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Equal(t, "status", e.Name)
+	assert.Equal(t, "public", e.Schema)
+	assert.Equal(t, []string{"active", "inactive", "pending"}, e.Values)
+
+	expected := "-- public.status\n" +
+		"CREATE TYPE public.status AS ENUM (\n" +
+		"    'active',\n" +
+		"    'inactive',\n" +
+		"    'pending'\n" +
+		");"
+	got := model.EnumsToSQL(result.Enums)
+	assert.Equal(t, expected, got)
+}
+
+func TestParseSQL_EnumWithComment(t *testing.T) {
+	sql := `CREATE TYPE public.status AS ENUM ('active', 'inactive');
+COMMENT ON TYPE public.status IS 'User status';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	require.NotNil(t, e.Comment)
+	assert.Equal(t, "User status", *e.Comment)
+}
+
+func TestParseSQL_EnumCommentRemove(t *testing.T) {
+	sql := `CREATE TYPE public.status AS ENUM ('active', 'inactive');
+COMMENT ON TYPE public.status IS 'User status';
+COMMENT ON TYPE public.status IS '';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Nil(t, e.Comment)
+}
+
+func TestParseSQLWithSchema_Enum(t *testing.T) {
+	sql := `CREATE TYPE status AS ENUM ('active', 'inactive');
+COMMENT ON TYPE status IS 'User status';`
+
+	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("myschema.status")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", e.Schema)
+	assert.Equal(t, "status", e.Name)
+	require.NotNil(t, e.Comment)
+	assert.Equal(t, "User status", *e.Comment)
+}
+
+func TestParseSQL_EnumSchemaQualified(t *testing.T) {
+	sql := `CREATE TYPE myschema.status AS ENUM ('active', 'inactive');`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("myschema.status")
+	require.True(t, ok)
+	assert.Equal(t, "myschema", e.Schema)
+	assert.Equal(t, "status", e.Name)
+}
+
+func TestParseSQL_DuplicateEnum(t *testing.T) {
+	sql := `CREATE TYPE public.status AS ENUM ('active');
+CREATE TYPE public.status AS ENUM ('inactive');`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate enum")
+}
+
+func TestParseSQL_CommentOnUnknownEnum(t *testing.T) {
+	sql := `COMMENT ON TYPE public.nonexistent IS 'test';`
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Enums.Len())
+}

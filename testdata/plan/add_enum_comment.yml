@@ -1,0 +1,7 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+desired: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  COMMENT ON TYPE public.status IS 'User status';
+plan: |
+  COMMENT ON TYPE public.status IS 'User status';
