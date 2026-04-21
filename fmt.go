@@ -13,34 +13,22 @@ type FmtOptions struct {
 	Write bool     `short:"w" help:"Write result to source file(s) instead of stdout."`
 }
 
-// Format formats the combined SQL from the provided files and returns the result as a string.
-func (client *Client) Format(options *FmtOptions) (string, error) {
-	return FmtSQL(options.Files, client.Schemas[0])
-}
+// Format formats SQL files and returns the results. When multiple files are
+// provided, each file is formatted independently and returned as a map from
+// file path to formatted SQL.
+func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
+	defaultSchema := client.Schemas[0]
+	results := make(map[string]string, len(options.Files))
 
-// FormatFile formats a single SQL file and returns the result as a string.
-func (client *Client) FormatFile(path string) (string, error) {
-	return FmtSQLFile(path, client.Schemas[0])
-}
-
-// FmtSQL formats the combined SQL from the provided files and returns the result as a string.
-func FmtSQL(files []string, defaultSchema string) (string, error) {
-	result, err := parser.ParseSQLFilesWithSchema(files, defaultSchema)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse SQL file: %w", err)
+	for _, path := range options.Files {
+		result, err := parser.ParseSQLFileWithSchema(path, defaultSchema)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse SQL file: %w", err)
+		}
+		results[path] = formatParseResult(result)
 	}
 
-	return formatParseResult(result), nil
-}
-
-// FmtSQLFile formats a single SQL file and returns the result as a string.
-func FmtSQLFile(path string, defaultSchema string) (string, error) {
-	result, err := parser.ParseSQLFileWithSchema(path, defaultSchema)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse SQL file: %w", err)
-	}
-
-	return formatParseResult(result), nil
+	return results, nil
 }
 
 func formatParseResult(result *parser.ParseResult) string {

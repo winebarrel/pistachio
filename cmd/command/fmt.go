@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/winebarrel/pistachio"
 )
@@ -13,25 +14,25 @@ type Fmt struct {
 }
 
 func (cmd *Fmt) Run(client *pistachio.Client, w io.Writer) error {
+	results, err := client.Format(&cmd.FmtOptions)
+	if err != nil {
+		return err
+	}
+
 	if cmd.Write {
-		// Format each file individually and write back
-		for _, path := range cmd.Files {
-			result, err := client.FormatFile(path)
-			if err != nil {
-				return err
-			}
-			if err := os.WriteFile(path, []byte(result+"\n"), 0o644); err != nil {
+		for path, content := range results {
+			if err := os.WriteFile(path, []byte(content+"\n"), 0o644); err != nil {
 				return fmt.Errorf("failed to write %s: %w", path, err)
 			}
 		}
 		return nil
 	}
 
-	result, err := client.Format(&cmd.FmtOptions)
-	if err != nil {
-		return err
+	// Print all results to stdout
+	var parts []string
+	for _, path := range cmd.Files {
+		parts = append(parts, results[path])
 	}
-
-	fmt.Fprintln(w, result) //nolint:errcheck
+	fmt.Fprintln(w, strings.Join(parts, "\n\n")) //nolint:errcheck
 	return nil
 }

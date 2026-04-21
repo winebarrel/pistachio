@@ -30,9 +30,9 @@ func TestFormat(t *testing.T) {
 			require.NoError(t, os.WriteFile(tmpFile, []byte(tc.Input), 0o644))
 
 			client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
-			got, err := client.Format(&pistachio.FmtOptions{Files: []string{tmpFile}})
+			results, err := client.Format(&pistachio.FmtOptions{Files: []string{tmpFile}})
 			require.NoError(t, err)
-			assert.Equal(t, strings.TrimSpace(tc.Expected), strings.TrimSpace(got))
+			assert.Equal(t, strings.TrimSpace(tc.Expected), strings.TrimSpace(results[tmpFile]))
 		})
 	}
 }
@@ -52,19 +52,17 @@ func TestFormat_InvalidSQL(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestFormatFile(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "test.sql")
-	require.NoError(t, os.WriteFile(tmpFile, []byte(`CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`), 0o644))
+func TestFormat_MultipleFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	file1 := filepath.Join(tmpDir, "a.sql")
+	file2 := filepath.Join(tmpDir, "b.sql")
+	require.NoError(t, os.WriteFile(file1, []byte(`CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`), 0o644))
+	require.NoError(t, os.WriteFile(file2, []byte(`CREATE TABLE public.posts (id integer NOT NULL, CONSTRAINT posts_pkey PRIMARY KEY (id));`), 0o644))
 
 	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
-	got, err := client.FormatFile(tmpFile)
+	results, err := client.Format(&pistachio.FmtOptions{Files: []string{file1, file2}})
 	require.NoError(t, err)
-	assert.Contains(t, got, "CREATE TABLE public.users")
-	assert.Contains(t, got, "    id integer NOT NULL")
-}
-
-func TestFormatFile_InvalidFile(t *testing.T) {
-	client := pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
-	_, err := client.FormatFile("/nonexistent/file.sql")
-	require.Error(t, err)
+	assert.Len(t, results, 2)
+	assert.Contains(t, results[file1], "CREATE TABLE public.users")
+	assert.Contains(t, results[file2], "CREATE TABLE public.posts")
 }
