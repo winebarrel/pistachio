@@ -1050,6 +1050,43 @@ func TestDiffTables_renameTable_withFK(t *testing.T) {
 	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME TO purchases;"}, stmts)
 }
 
+func TestDiffTables_renameTable_destinationExists_error(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct1 := newTable("public", "users")
+	ct1.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	current.Set("public.users", ct1)
+
+	ct2 := newTable("public", "accounts")
+	ct2.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	current.Set("public.accounts", ct2)
+
+	oldName := "public.users"
+	dt := newTable("public", "accounts")
+	dt.RenameFrom = &oldName
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	desired.Set("public.accounts", dt)
+
+	_, err := DiffTables(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "destination already exists")
+}
+
+func TestDiffColumns_renameColumn_destinationExists_error(t *testing.T) {
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text"})
+	current.Set("display_name", &model.Column{Name: "display_name", TypeName: "text"})
+
+	oldName := "name"
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("display_name", &model.Column{Name: "display_name", RenameFrom: &oldName, TypeName: "text"})
+
+	_, err := diffColumns("public.users", current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "destination already exists")
+}
+
 func TestDiffTables_renameTable_crossSchema_error(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()
