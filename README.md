@@ -5,7 +5,7 @@
 
 Declarative schema management tool for PostgreSQL. Define your desired schema in SQL and let `pistachio` figure out the diff.
 
-<img width="800" alt="demo" src="https://github.com/user-attachments/assets/0e8b93ea-6b52-468b-9d63-6d39ed8ca041" />
+<img width="800" alt="demo" src="https://github.com/user-attachments/assets/dad22b07-64d6-4064-a360-4d028944cd58" />
 
 ## Installation
 
