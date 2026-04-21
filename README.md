@@ -19,6 +19,8 @@ brew install winebarrel/pistachio/pistachio
 
 Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
 
+See also: [Getting Started Guide](getting-started.md)
+
 ## Usage
 
 ```
