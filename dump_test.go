@@ -291,6 +291,49 @@ COMMENT ON TABLE public.users IS 'User accounts';`)
 	assert.NotContains(t, s, "public.users")
 }
 
+func TestDumpResult_OmitSchema_Enum(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+COMMENT ON TYPE public.status IS 'User status';`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+	s := got.String()
+	assert.Contains(t, s, "CREATE TYPE status AS ENUM")
+	assert.NotContains(t, s, "public.status")
+	assert.Contains(t, s, "COMMENT ON TYPE status")
+}
+
+func TestDumpResult_OmitSchema_Enum_Files(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+	files := got.Files()
+	assert.Contains(t, files, "status.sql")
+	assert.NotContains(t, files, "public.status.sql")
+	assert.Contains(t, files["status.sql"], "CREATE TYPE status AS ENUM")
+}
+
 func TestDump_OmitSchema_MultipleSchemas(t *testing.T) {
 	ctx := context.Background()
 	client := pistachio.NewClient(&pistachio.Options{

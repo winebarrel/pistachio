@@ -11,13 +11,14 @@ import (
 )
 
 type DumpOptions struct {
-	Split      string `help:"Output each table/view as a separate file in the specified directory."`
+	Split      string `help:"Output each table/view/enum as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
 }
 
 type DumpResult struct {
 	Tables     *orderedmap.Map[string, *model.Table]
 	Views      *orderedmap.Map[string, *model.View]
+	Enums      *orderedmap.Map[string, *model.Enum]
 	OmitSchema bool
 }
 
@@ -68,10 +69,30 @@ func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
 	return views
 }
 
+func (r *DumpResult) enums() *orderedmap.Map[string, *model.Enum] {
+	if r.Enums == nil {
+		return orderedmap.New[string, *model.Enum]()
+	}
+	if !r.OmitSchema {
+		return r.Enums
+	}
+	enums := orderedmap.New[string, *model.Enum]()
+	for _, e := range r.Enums.CollectValues() {
+		copied := *e
+		copied.Schema = ""
+		enums.Set(e.FQEN(), &copied)
+	}
+	return enums
+}
+
 func (r *DumpResult) String() string {
 	var parts []string
+	enums := r.enums()
 	tables := r.tables()
 	views := r.views()
+	if enums.Len() > 0 {
+		parts = append(parts, model.EnumsToSQL(enums))
+	}
 	if tables.Len() > 0 {
 		parts = append(parts, model.TablesToSQL(tables))
 	}
@@ -84,6 +105,11 @@ func (r *DumpResult) String() string {
 func (r *DumpResult) Files() map[string]string {
 	files := make(map[string]string)
 	seen := make(map[string]bool)
+	for _, e := range r.enums().CollectValues() {
+		name := uniqueFileName(seen, toFileName(e.Schema, e.Name))
+		files[name] = model.EnumToSQL(e) + "\n"
+		seen[strings.ToLower(name)] = true
+	}
 	for _, t := range r.tables().CollectValues() {
 		name := uniqueFileName(seen, toFileName(t.Schema, t.Name))
 		files[name] = model.TableToSQL(t) + "\n"
@@ -150,9 +176,15 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		return nil, fmt.Errorf("failed to fetch views: %w", err)
 	}
 
+	enums, err := catalog.Enums(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch enums: %w", err)
+	}
+
 	return &DumpResult{
 		Tables:     client.filterTables(client.remapTableSchemas(tables)),
 		Views:      client.filterViews(client.remapViewSchemas(views)),
+		Enums:      client.filterEnums(client.remapEnumSchemas(enums)),
 		OmitSchema: options.OmitSchema,
 	}, nil
 }

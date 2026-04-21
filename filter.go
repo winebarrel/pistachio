@@ -32,3 +32,17 @@ func (client *Client) filterViews(views *orderedmap.Map[string, *model.View]) *o
 	}
 	return filtered
 }
+
+func (client *Client) filterEnums(enums *orderedmap.Map[string, *model.Enum]) *orderedmap.Map[string, *model.Enum] {
+	if len(client.Include) == 0 && len(client.Exclude) == 0 {
+		return enums
+	}
+
+	filtered := orderedmap.New[string, *model.Enum]()
+	for k, e := range enums.All() {
+		if client.MatchName(e.Name) {
+			filtered.Set(k, e)
+		}
+	}
+	return filtered
+}

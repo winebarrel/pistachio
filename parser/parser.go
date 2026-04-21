@@ -13,6 +13,7 @@ import (
 type ParseResult struct {
 	Tables *orderedmap.Map[string, *model.Table]
 	Views  *orderedmap.Map[string, *model.View]
+	Enums  *orderedmap.Map[string, *model.Enum]
 }
 
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
@@ -74,11 +75,21 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 
 	tables := orderedmap.New[string, *model.Table]()
 	views := orderedmap.New[string, *model.View]()
+	enums := orderedmap.New[string, *model.Enum]()
 
 	for _, rawStmt := range result.Stmts {
 		node := rawStmt.Stmt
 
 		switch {
+		case node.GetCreateEnumStmt() != nil:
+			enum, err := parseCreateEnumStmt(node.GetCreateEnumStmt(), defaultSchema)
+			if err != nil {
+				return nil, err
+			}
+			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
+				return nil, err
+			}
+
 		case node.GetCreateStmt() != nil:
 			table, err := parseCreateStmt(node.GetCreateStmt(), defaultSchema)
 			if err != nil {
@@ -137,11 +148,11 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
-			parseCommentStmt(cs, defaultSchema, tables, views)
+			parseCommentStmt(cs, defaultSchema, tables, views, enums)
 		}
 	}
 
-	return &ParseResult{Tables: tables, Views: views}, nil
+	return &ParseResult{Tables: tables, Views: views, Enums: enums}, nil
 }
 
 func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Table, error) {
@@ -452,7 +463,41 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 	}, nil
 }
 
-func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View]) {
+func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*model.Enum, error) {
+	schema := defaultSchema
+	name := ""
+
+	for i, n := range es.TypeName {
+		if s := n.GetString_(); s != nil {
+			if i == len(es.TypeName)-1 {
+				name = s.Sval
+			} else {
+				schema = s.Sval
+			}
+		}
+	}
+
+	var values []string
+	for _, v := range es.Vals {
+		if s := v.GetString_(); s != nil {
+			values = append(values, s.Sval)
+		}
+	}
+
+	return &model.Enum{
+		Schema: schema,
+		Name:   name,
+		Values: values,
+	}, nil
+}
+
+func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum]) {
+	// COMMENT ON TYPE uses TypeName, not a list
+	if cs.Objtype == pg_query.ObjectType_OBJECT_TYPE {
+		parseCommentOnType(cs, defaultSchema, enums)
+		return
+	}
+
 	items := cs.Object.GetList().GetItems()
 	if len(items) == 0 {
 		return
@@ -520,6 +565,37 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 					col.Comment = nil
 				}
 			}
+		}
+	}
+}
+
+func parseCommentOnType(cs *pg_query.CommentStmt, defaultSchema string, enums *orderedmap.Map[string, *model.Enum]) {
+	tn := cs.Object.GetTypeName()
+	if tn == nil {
+		return
+	}
+	var names []string
+	for _, n := range tn.Names {
+		if s := n.GetString_(); s != nil {
+			names = append(names, s.Sval)
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+	schema := defaultSchema
+	typeName := names[0]
+	if len(names) >= 2 {
+		schema = names[0]
+		typeName = names[1]
+	}
+	fqen := model.Ident(schema, typeName)
+	if e, ok := enums.GetOk(fqen); ok {
+		if cs.Comment != "" {
+			c := cs.Comment
+			e.Comment = &c
+		} else {
+			e.Comment = nil
 		}
 	}
 }

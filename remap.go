@@ -128,3 +128,33 @@ func (client *Client) reverseRemapViewSchemas(views *orderedmap.Map[string, *mod
 
 	return remapped
 }
+
+func (client *Client) remapEnumSchemas(enums *orderedmap.Map[string, *model.Enum]) *orderedmap.Map[string, *model.Enum] {
+	if len(client.SchemaMap) == 0 {
+		return enums
+	}
+
+	remapped := orderedmap.New[string, *model.Enum]()
+
+	for _, e := range enums.CollectValues() {
+		e.Schema = client.RemapSchema(e.Schema)
+		remapped.Set(e.FQEN(), e)
+	}
+
+	return remapped
+}
+
+func (client *Client) reverseRemapEnumSchemas(enums *orderedmap.Map[string, *model.Enum]) *orderedmap.Map[string, *model.Enum] {
+	if len(client.SchemaMap) == 0 {
+		return enums
+	}
+
+	remapped := orderedmap.New[string, *model.Enum]()
+
+	for _, e := range enums.CollectValues() {
+		e.Schema = client.ReverseRemapSchema(e.Schema)
+		remapped.Set(e.FQEN(), e)
+	}
+
+	return remapped
+}

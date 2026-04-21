@@ -330,6 +330,114 @@ CREATE TABLE public.posts (
 	assert.NotContains(t, got, "posts")
 }
 
+func TestDump_IncludeEnum(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TYPE public.role AS ENUM ('admin', 'user');`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+		Include:    []string{"status"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	assert.Contains(t, output, "CREATE TYPE public.status AS ENUM")
+	assert.NotContains(t, output, "public.role")
+}
+
+func TestDump_ExcludeEnum(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TYPE public.role AS ENUM ('admin', 'user');`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+		Exclude:    []string{"role"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	assert.Contains(t, output, "CREATE TYPE public.status AS ENUM")
+	assert.NotContains(t, output, "public.role")
+}
+
+func TestPlan_IncludeEnum(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TYPE public.role AS ENUM ('admin', 'user');`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');
+CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+		Include:    []string{"status"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Contains(t, got, "ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';")
+	assert.NotContains(t, got, "role")
+}
+
+func TestApply_IncludeEnum(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TYPE public.role AS ENUM ('admin', 'user');`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');
+CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+		Include:    []string{"status"},
+	})
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	require.NoError(t, err)
+
+	// Verify: only status should have the new value
+	verifyClient := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := verifyClient.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	assert.Contains(t, output, "'pending'")
+	assert.NotContains(t, output, "'guest'")
+}
+
 func TestApply_Include(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

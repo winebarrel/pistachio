@@ -618,6 +618,99 @@ CREATE TABLE myschema.users (
 	assert.Empty(t, got)
 }
 
+func TestDump_WithSchemaMap_Enum(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
+`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	assert.Contains(t, output, "CREATE TYPE public.status AS ENUM")
+	assert.NotContains(t, output, "myschema.status")
+}
+
+func TestPlan_WithSchemaMap_Enum(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Contains(t, got, "ALTER TYPE myschema.status ADD VALUE 'pending' AFTER 'inactive';")
+}
+
+func TestPlan_WithSchemaMap_Enum_NoDiff(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TYPE public.status AS ENUM ('active', 'inactive');`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestApply_WithSchemaMap_Enum(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	require.NoError(t, err)
+
+	verifyClient := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	got, err := verifyClient.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, got.String(), "'pending'")
+}
+
 func TestApply_SchemalessDesired_CustomSchema(t *testing.T) {
 	ctx := context.Background()
 

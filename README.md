@@ -25,19 +25,19 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 Usage: pist <command> [flags]
 
 Flags:
-  -h, --help                  Show context-sensitive help.
+  -h, --help                   Show context-sensitive help.
   -c, --conn-string="postgres://postgres@localhost/postgres"
-                              PostgreSQL connection string. See
-                              https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-                              ($PIST_CONN_STR)
-      --password=STRING       PostgreSQL password ($PIST_PASSWORD).
-  -n, --schemas=public,...    Schemas to inspect and modify ($PGSCHEMAS).
+                               PostgreSQL connection string. See
+                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+                               ($PIST_CONN_STR)
+      --password=STRING        PostgreSQL password ($PIST_PASSWORD).
+  -n, --schemas=public,...     Schemas to inspect and modify ($PGSCHEMAS).
   -m, --schema-map=KEY=VALUE;...
-                              Schema name mapping (e.g. -m old=new).
-  -I, --include=INCLUDE,...   Include only tables/views matching the pattern
-                              (wildcard: *, ?).
-  -E, --exclude=EXCLUDE,...   Exclude tables/views matching the pattern
-                              (wildcard: *, ?).
+                               Schema name mapping (e.g. -m old=new).
+  -I, --include=INCLUDE,...    Include only tables/views/enums matching the
+                               pattern (wildcard: *, ?).
+  -E, --exclude=EXCLUDE,...    Exclude tables/views/enums matching the pattern
+                               (wildcard: *, ?).
       --version
 
 Commands:
@@ -110,12 +110,12 @@ pist -n staging -m staging=public plan schema.sql
 pist -n staging -m staging=public apply schema.sql
 ```
 
-### Filtering tables/views
+### Filtering tables/views/enums
 
-Use `-I` / `--include` to include only matching tables/views, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against table/view names only (not schema-qualified names).
+Use `-I` / `--include` to include only matching tables/views/enums, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names).
 
 ```bash
-# Dump only tables/views matching "user*"
+# Dump only objects matching "user*"
 pist -I 'user*' dump
 
 # Plan changes excluding temporary tables
@@ -146,11 +146,11 @@ pist -n staging apply schema.sql
 
 ### Split dump
 
-Use `--split` to output each table/view as a separate file in the specified directory.
+Use `--split` to output each table/view/enum as a separate file in the specified directory.
 
 ```bash
 pist dump --split ./schema/
-# => ./schema/public.users.sql, ./schema/public.orders.sql, ...
+# => ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...
 ```
 
 ## Example
@@ -158,9 +158,12 @@ pist dump --split ./schema/
 Create a schema file:
 
 ```sql
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+
 CREATE TABLE public.users (
     id integer NOT NULL,
     name text NOT NULL,
+    status status NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 
@@ -188,7 +191,7 @@ pist apply schema.sql  # apply it
 Or split schema into multiple files and use them together:
 
 ```bash
-pist dump --split ./schema/       # dump per table/view
+pist dump --split ./schema/       # dump per table/view/enum
 pist plan ./schema/*.sql          # review the diff
 pist apply ./schema/*.sql         # apply it
 ```
@@ -198,12 +201,13 @@ pist apply ./schema/*.sql         # apply it
 
 ## Supported Objects
 
+- Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
 - Tables (including unlogged and partitioned tables)
 - Views
 - Columns (serial/bigserial/smallserial, identity, generated)
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
-- Comments (on tables, columns, views)
+- Comments (on tables, columns, views, types)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 

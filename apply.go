@@ -39,13 +39,24 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return fmt.Errorf("failed to fetch views: %w", err)
 	}
 
+	currentEnums, err := cat.Enums(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch enums: %w", err)
+	}
+
 	desired, err := parser.ParseSQLFilesWithSchema(options.Files, client.Schemas[0])
 	if err != nil {
 		return fmt.Errorf("failed to parse SQL file: %w", err)
 	}
 
-	stmts := diff.DiffTables(client.filterTables(currentTables), client.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
+	enumDiff, err := diff.DiffEnums(client.filterEnums(currentEnums), client.filterEnums(client.reverseRemapEnumSchemas(desired.Enums)))
+	if err != nil {
+		return err
+	}
+	stmts := enumDiff.Stmts
+	stmts = append(stmts, diff.DiffTables(client.filterTables(currentTables), client.filterTables(client.reverseRemapTableSchemas(desired.Tables)))...)
 	stmts = append(stmts, diff.DiffViews(client.filterViews(currentViews), client.filterViews(client.reverseRemapViewSchemas(desired.Views)))...)
+	stmts = append(stmts, enumDiff.DropStmts...)
 
 	var preSQL string
 	if options.PreSQLFile != "" {

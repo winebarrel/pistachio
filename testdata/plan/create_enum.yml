@@ -1,0 +1,9 @@
+init: ""
+desired: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');
+plan: |
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive',
+      'pending'
+  );

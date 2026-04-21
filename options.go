@@ -10,8 +10,8 @@ type Options struct {
 	Password   string            `env:"PIST_PASSWORD" help:"PostgreSQL password."`
 	Schemas    []string          `short:"n" env:"PGSCHEMAS" default:"public" help:"Schemas to inspect and modify."`
 	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
-	Include    []string          `short:"I" help:"Include only tables/views matching the pattern (wildcard: *, ?)."`
-	Exclude    []string          `short:"E" help:"Exclude tables/views matching the pattern (wildcard: *, ?)."`
+	Include    []string          `short:"I" help:"Include only tables/views/enums matching the pattern (wildcard: *, ?)."`
+	Exclude    []string          `short:"E" help:"Exclude tables/views/enums matching the pattern (wildcard: *, ?)."`
 }
 
 func (o *Options) MatchName(name string) bool {
