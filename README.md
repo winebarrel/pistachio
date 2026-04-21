@@ -50,6 +50,9 @@ Commands:
   dump [flags]
     Dump the current database schema as SQL.
 
+  fmt <files> ... [flags]
+    Format SQL file(s) into canonical form.
+
 Run "pist <command> --help" for more information on a command.
 ```
 
@@ -90,6 +93,21 @@ Dump the current database schema as SQL. Output can be used directly as a schema
 
 ```bash
 pist dump
+```
+
+### fmt
+
+Format SQL file(s) into the canonical form used by `dump`. Useful for normalizing hand-written schema files.
+
+```bash
+# Print formatted SQL to stdout
+pist fmt schema.sql
+
+# Format multiple files to stdout (combined)
+pist fmt tables.sql views.sql
+
+# Overwrite file(s) in place
+pist fmt -w schema.sql
 ```
 
 ### Schema name mapping
