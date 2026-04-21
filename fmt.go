@@ -11,8 +11,8 @@ import (
 
 type FmtOptions struct {
 	Files []string `arg:"" help:"Path to the SQL file(s) to format."`
-	Write bool     `short:"w" help:"Write result to source file(s) instead of stdout."`
-	Check bool     `help:"Check if files are formatted. Exit with non-zero status if any file needs formatting."`
+	Write bool     `short:"w" xor:"mode" help:"Write result to source file(s) instead of stdout."`
+	Check bool     `xor:"mode" help:"Check if files are formatted. Exit with non-zero status if any file needs formatting."`
 }
 
 // Format formats SQL files and returns the results. Each file is formatted
