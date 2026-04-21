@@ -163,6 +163,9 @@ pist plan --only enum schema.sql
 PIST_ONLY=enum pist dump
 ```
 
+> [!NOTE]
+> `--only` excludes dependent objects. For example, `--only table` omits enums/domains that table columns may reference, so the generated SQL may not apply cleanly on its own. Use `--only` primarily for inspection (`dump`, `plan`) rather than `apply`.
+
 ### Omit schema
 
 Use `--omit-schema` to omit schema names from the dump output.
