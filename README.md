@@ -108,6 +108,9 @@ pist fmt tables.sql views.sql
 
 # Overwrite file(s) in place
 pist fmt -w schema.sql
+
+# Check if files are formatted (exit 1 if not, useful for CI)
+pist fmt --check schema.sql
 ```
 
 ### Schema name mapping

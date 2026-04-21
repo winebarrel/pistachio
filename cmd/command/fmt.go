@@ -13,15 +13,43 @@ type Fmt struct {
 	pistachio.FmtOptions
 }
 
+// ErrNotFormatted is returned when --check finds unformatted files.
+type ErrNotFormatted struct {
+	Files []string
+}
+
+func (e *ErrNotFormatted) Error() string {
+	return fmt.Sprintf("files not formatted: %s", strings.Join(e.Files, ", "))
+}
+
 func (cmd *Fmt) Run(client *pistachio.Client, w io.Writer) error {
 	results, err := client.Format(&cmd.FmtOptions)
 	if err != nil {
 		return err
 	}
 
+	if cmd.Check {
+		var unformatted []string
+		for _, path := range cmd.Files {
+			original, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("failed to read %s: %w", path, err)
+			}
+			if strings.TrimSpace(string(original)) != strings.TrimSpace(results[path]) {
+				unformatted = append(unformatted, path)
+			}
+		}
+		if len(unformatted) > 0 {
+			for _, path := range unformatted {
+				fmt.Fprintln(w, path) //nolint:errcheck
+			}
+			return &ErrNotFormatted{Files: unformatted}
+		}
+		return nil
+	}
+
 	if cmd.Write {
 		for path, content := range results {
-			// Preserve original file permissions
 			mode := os.FileMode(0o644)
 			if info, err := os.Stat(path); err == nil {
 				mode = info.Mode()
