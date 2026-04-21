@@ -136,7 +136,7 @@ pist -n staging -m staging=public apply schema.sql
 
 Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names).
 
-Use `--only` to restrict operations to specific object types (`table`, `view`, `enum`, `domain`). Can be repeated to include multiple types.
+Use `--only` to restrict operations to specific object types (`table`, `view`, `enum`, `domain`). Can be repeated to include multiple types. Also available as `$PIST_ONLY` environment variable.
 
 These flags are available on the `dump`, `plan`, and `apply` subcommands.
 
@@ -158,6 +158,9 @@ pist dump --only table --only view
 
 # Plan changes for enums only
 pist plan --only enum schema.sql
+
+# Using environment variable
+PIST_ONLY=enum pist dump
 ```
 
 ### Omit schema
