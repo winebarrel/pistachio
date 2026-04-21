@@ -74,6 +74,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	}
 
 	if preSQL != "" {
+		fmt.Fprintln(w, preSQL) //nolint:errcheck
 		if _, err := exec(ctx, preSQL); err != nil {
 			return fmt.Errorf("failed to execute pre-SQL: %w", err)
 		}
