@@ -25,19 +25,19 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 Usage: pist <command> [flags]
 
 Flags:
-  -h, --help                  Show context-sensitive help.
+  -h, --help                   Show context-sensitive help.
   -c, --conn-string="postgres://postgres@localhost/postgres"
-                              PostgreSQL connection string. See
-                              https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-                              ($PIST_CONN_STR)
-      --password=STRING       PostgreSQL password ($PIST_PASSWORD).
-  -n, --schemas=public,...    Schemas to inspect and modify ($PGSCHEMAS).
+                               PostgreSQL connection string. See
+                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+                               ($PIST_CONN_STR)
+      --password=STRING        PostgreSQL password ($PIST_PASSWORD).
+  -n, --schemas=public,...     Schemas to inspect and modify ($PGSCHEMAS).
   -m, --schema-map=KEY=VALUE;...
-                              Schema name mapping (e.g. -m old=new).
-  -I, --include=INCLUDE,...   Include only tables/views/enums matching the
-                              pattern (wildcard: *, ?).
-  -E, --exclude=EXCLUDE,...   Exclude tables/views/enums matching the pattern
-                              (wildcard: *, ?).
+                               Schema name mapping (e.g. -m old=new).
+  -I, --include=INCLUDE,...    Include only tables/views/enums matching the
+                               pattern (wildcard: *, ?).
+  -E, --exclude=EXCLUDE,...    Exclude tables/views/enums matching the pattern
+                               (wildcard: *, ?).
       --version
 
 Commands:
