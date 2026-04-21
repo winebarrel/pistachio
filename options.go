@@ -13,8 +13,23 @@ type Options struct {
 }
 
 type FilterOptions struct {
-	Include []string `short:"I" help:"Include only tables/views/enums matching the pattern (wildcard: *, ?)."`
-	Exclude []string `short:"E" help:"Exclude tables/views/enums matching the pattern (wildcard: *, ?)."`
+	Include []string `short:"I" help:"Include only tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
+	Exclude []string `short:"E" help:"Exclude tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
+	Only    []string `enum:"table,view,enum,domain" env:"PIST_ONLY" help:"Include only specified object types (can be repeated)."`
+}
+
+// IsTypeEnabled returns true if the given object type should be included.
+// If Only is empty, all types are enabled.
+func (f *FilterOptions) IsTypeEnabled(typeName string) bool {
+	if len(f.Only) == 0 {
+		return true
+	}
+	for _, t := range f.Only {
+		if t == typeName {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *FilterOptions) MatchName(name string) bool {

@@ -6,6 +6,9 @@ import (
 )
 
 func (f *FilterOptions) filterTables(tables *orderedmap.Map[string, *model.Table]) *orderedmap.Map[string, *model.Table] {
+	if !f.IsTypeEnabled("table") {
+		return orderedmap.New[string, *model.Table]()
+	}
 	if len(f.Include) == 0 && len(f.Exclude) == 0 {
 		return tables
 	}
@@ -20,6 +23,9 @@ func (f *FilterOptions) filterTables(tables *orderedmap.Map[string, *model.Table
 }
 
 func (f *FilterOptions) filterViews(views *orderedmap.Map[string, *model.View]) *orderedmap.Map[string, *model.View] {
+	if !f.IsTypeEnabled("view") {
+		return orderedmap.New[string, *model.View]()
+	}
 	if len(f.Include) == 0 && len(f.Exclude) == 0 {
 		return views
 	}
@@ -34,6 +40,9 @@ func (f *FilterOptions) filterViews(views *orderedmap.Map[string, *model.View]) 
 }
 
 func (f *FilterOptions) filterEnums(enums *orderedmap.Map[string, *model.Enum]) *orderedmap.Map[string, *model.Enum] {
+	if !f.IsTypeEnabled("enum") {
+		return orderedmap.New[string, *model.Enum]()
+	}
 	if len(f.Include) == 0 && len(f.Exclude) == 0 {
 		return enums
 	}
@@ -48,6 +57,9 @@ func (f *FilterOptions) filterEnums(enums *orderedmap.Map[string, *model.Enum]) 
 }
 
 func (f *FilterOptions) filterDomains(domains *orderedmap.Map[string, *model.Domain]) *orderedmap.Map[string, *model.Domain] {
+	if !f.IsTypeEnabled("domain") {
+		return orderedmap.New[string, *model.Domain]()
+	}
 	if len(f.Include) == 0 && len(f.Exclude) == 0 {
 		return domains
 	}
