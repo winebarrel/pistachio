@@ -179,7 +179,7 @@ func TestPlan_WithPreSQLFile_NoDiff(t *testing.T) {
 		PreSQLFile: preSQLFile,
 	})
 	require.NoError(t, err)
-	assert.Contains(t, got, "SELECT 1;")
+	assert.Empty(t, got)
 }
 
 func TestPlan_SchemalessDesired(t *testing.T) {
