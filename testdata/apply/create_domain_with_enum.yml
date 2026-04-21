@@ -1,0 +1,13 @@
+init: ""
+desired: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE DOMAIN public.user_status AS status;
+applied: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.user_status
+  CREATE DOMAIN public.user_status AS status;
