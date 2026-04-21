@@ -88,6 +88,100 @@ func TestPlan_EmptySchemas(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestPlan_WithPreSQLFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	tmpDir := t.TempDir()
+	desiredFile := filepath.Join(tmpDir, "desired.sql")
+	preSQLFile := filepath.Join(tmpDir, "pre.sql")
+
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SELECT 1;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:      []string{desiredFile},
+		PreSQLFile: preSQLFile,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got, "SELECT 1;")
+	assert.Contains(t, got, "CREATE TABLE public.users")
+
+	// pre-SQL should appear before diff statements
+	preSQLPos := strings.Index(got, "SELECT 1;")
+	diffPos := strings.Index(got, "CREATE TABLE public.users")
+	assert.Less(t, preSQLPos, diffPos)
+}
+
+func TestPlan_WithPreSQLFile_InvalidFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:      []string{desiredFile},
+		PreSQLFile: "/nonexistent/pre.sql",
+	})
+	require.Error(t, err)
+}
+
+func TestPlan_WithPreSQLFile_NoDiff(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	tmpDir := t.TempDir()
+	desiredFile := filepath.Join(tmpDir, "desired.sql")
+	preSQLFile := filepath.Join(tmpDir, "pre.sql")
+
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SELECT 1;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:      []string{desiredFile},
+		PreSQLFile: preSQLFile,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
 func TestPlan_SchemalessDesired(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

@@ -3,6 +3,7 @@ package pistachio
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/winebarrel/pistachio/catalog"
@@ -11,7 +12,8 @@ import (
 )
 
 type PlanOptions struct {
-	Files []string `arg:"" help:"Path to the desired schema SQL file(s)."`
+	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
+	PreSQLFile string   `type:"path" help:"Path to a SQL file to execute before applying changes."`
 }
 
 func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, error) {
@@ -43,6 +45,14 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (string, e
 
 	stmts := diff.DiffTables(client.filterTables(currentTables), client.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
 	stmts = append(stmts, diff.DiffViews(client.filterViews(currentViews), client.filterViews(client.reverseRemapViewSchemas(desired.Views)))...)
+
+	if options.PreSQLFile != "" && len(stmts) > 0 {
+		rawPreSQL, err := os.ReadFile(options.PreSQLFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to read pre-SQL file: %s: %w", options.PreSQLFile, err)
+		}
+		stmts = append([]string{string(rawPreSQL)}, stmts...)
+	}
 
 	return strings.Join(stmts, "\n"), nil
 }

@@ -62,6 +62,9 @@ pist plan schema.sql
 
 # Multiple files
 pist plan tables.sql views.sql
+
+# Include pre-SQL in the output
+pist plan schema.sql --pre-sql-file pre.sql
 ```
 
 ### apply
