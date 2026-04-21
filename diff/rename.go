@@ -19,6 +19,10 @@ func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([
 		}
 		oldKey := *desiredEnum.RenameFrom
 
+		if oldKey == newKey {
+			continue
+		}
+
 		oldEnum, ok := adjusted.GetOk(oldKey)
 		if !ok {
 			if _, exists := adjusted.GetOk(newKey); exists {
@@ -64,6 +68,10 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 			continue
 		}
 		oldKey := *desiredTable.RenameFrom
+
+		if oldKey == newKey {
+			continue
+		}
 
 		oldTable, ok := adjusted.GetOk(oldKey)
 		if !ok {
@@ -148,6 +156,10 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 		}
 		oldKey := *desiredView.RenameFrom
 
+		if oldKey == newKey {
+			continue
+		}
+
 		oldView, ok := adjusted.GetOk(oldKey)
 		if !ok {
 			if _, exists := adjusted.GetOk(newKey); exists {
@@ -194,6 +206,10 @@ func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *
 		}
 		oldName := *desiredCol.RenameFrom
 
+		if oldName == newName {
+			continue
+		}
+
 		oldCol, ok := adjusted.GetOk(oldName)
 		if !ok {
 			if _, exists := adjusted.GetOk(newName); exists {
@@ -230,6 +246,10 @@ func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[strin
 		}
 		oldName := *desiredCon.RenameFrom
 
+		if oldName == newName {
+			continue
+		}
+
 		oldCon, ok := adjusted.GetOk(oldName)
 		if !ok {
 			if _, exists := adjusted.GetOk(newName); exists {
@@ -265,6 +285,10 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 			continue
 		}
 		oldName := *desiredIdx.RenameFrom
+
+		if oldName == newName {
+			continue
+		}
 
 		oldIdx, ok := adjusted.GetOk(oldName)
 		if !ok {
@@ -321,6 +345,10 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 			continue
 		}
 		oldName := *desiredFK.RenameFrom
+
+		if oldName == newName {
+			continue
+		}
 
 		oldFK, ok := adjusted.GetOk(oldName)
 		if !ok {

@@ -101,6 +101,19 @@ func TestDiffViews_rename(t *testing.T) {
 	assert.Equal(t, []string{"ALTER VIEW public.v1 RENAME TO v2;"}, stmts)
 }
 
+func TestDiffViews_rename_selfRename_skipped(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+
+	oldName := "public.v1"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", RenameFrom: &oldName, Definition: "SELECT 1"})
+
+	stmts, err := DiffViews(current, desired)
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
 func TestDiffViews_rename_alreadyApplied(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.v2", &model.View{Schema: "public", Name: "v2", Definition: "SELECT 1"})

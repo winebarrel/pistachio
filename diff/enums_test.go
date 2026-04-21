@@ -273,6 +273,24 @@ func TestDiffEnums_RenameAndAddValue(t *testing.T) {
 	assert.Contains(t, result.Stmts[1], "ADD VALUE 'pending'")
 }
 
+func TestDiffEnums_RenameSelfRename_Skipped(t *testing.T) {
+	oldName := "public.status"
+	current := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"active"},
+	})
+	desired := newEnumMap(&model.Enum{
+		Schema:     "public",
+		Name:       "status",
+		RenameFrom: &oldName,
+		Values:     []string{"active"},
+	})
+	result, err := diff.DiffEnums(current, desired)
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+}
+
 func TestDiffEnums_RenameAlreadyApplied(t *testing.T) {
 	oldName := "public.old_status"
 	current := newEnumMap(&model.Enum{
