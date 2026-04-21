@@ -153,7 +153,8 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if renameFrom != "" {
-				idx.RenameFrom = &renameFrom
+				unquoted := normalizeUnqualifiedDirective(renameFrom)
+				idx.RenameFrom = &unquoted
 			}
 			fqtn := model.Ident(idx.Schema, idx.Table)
 			if t, ok := tables.GetOk(fqtn); ok {
@@ -180,14 +181,16 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			}
 			if fk != nil {
 				if renameFrom != "" {
-					fk.RenameFrom = &renameFrom
+					unquoted := normalizeUnqualifiedDirective(renameFrom)
+					fk.RenameFrom = &unquoted
 				}
 				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
 					return nil, err
 				}
 			} else if con != nil {
 				if renameFrom != "" {
-					con.RenameFrom = &renameFrom
+					unquoted := normalizeUnqualifiedDirective(renameFrom)
+					con.RenameFrom = &unquoted
 				}
 				if err := setUnique(t.Constraints, con.Name, "constraint", con); err != nil {
 					return nil, err

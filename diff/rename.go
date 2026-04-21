@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 )
 
 // detectEnumRenames finds desired enums with RenameFrom that match a current enum.
-// Returns RENAME statements and a new "current" map where the renamed entry's key
-// has been updated to the new FQEN.
 func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([]string, *orderedmap.Map[string, *model.Enum], error) {
 	var stmts []string
 	adjusted := cloneMap(current)
@@ -27,6 +26,12 @@ func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
+		}
+
+		if oldKey != newKey {
+			if _, exists := adjusted.GetOk(newKey); exists {
+				return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
+			}
 		}
 
 		if oldEnum.Schema != desiredEnum.Schema {
@@ -63,12 +68,15 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
+		if oldKey != newKey {
+			if _, exists := adjusted.GetOk(newKey); exists {
+				return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
+			}
+		}
+
 		if oldTable.Schema != desiredTable.Schema {
 			return nil, nil, fmt.Errorf("cannot rename %s to %s: cross-schema rename is not supported", oldKey, newKey)
 		}
-
-		oldFQTN := oldTable.FQTN()
-		newFQTN := model.Ident(oldTable.Schema, desiredTable.Name)
 
 		stmts = append(stmts, "ALTER TABLE "+oldKey+" RENAME TO "+model.Ident(desiredTable.Name)+";")
 
@@ -76,19 +84,19 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 		renamed := *oldTable
 		renamed.Name = desiredTable.Name
 
-		// Update index definitions to reflect the new table name
+		// Update index definitions to reflect the new table name via pg_query parse/deparse
 		if renamed.Indexes.Len() > 0 {
 			newIndexes := orderedmap.New[string, *model.Index]()
 			for idxName, idx := range renamed.Indexes.All() {
 				idxCopy := *idx
 				idxCopy.Table = desiredTable.Name
-				idxCopy.Definition = strings.ReplaceAll(idx.Definition, " ON "+oldFQTN+" ", " ON "+newFQTN+" ")
+				idxCopy.Definition = updateIndexTableName(idx.Definition, desiredTable.Name)
 				newIndexes.Set(idxName, &idxCopy)
 			}
 			renamed.Indexes = newIndexes
 		}
 
-		// Update FK definitions to reflect the new table name
+		// Update FK table name
 		if renamed.ForeignKeys.Len() > 0 {
 			newFKs := orderedmap.New[string, *model.ForeignKey]()
 			for fkName, fk := range renamed.ForeignKeys.All() {
@@ -103,6 +111,25 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 	}
 
 	return stmts, adjusted, nil
+}
+
+// updateIndexTableName parses an index definition, updates the table name,
+// and deparses it back to canonical SQL.
+func updateIndexTableName(def string, newTableName string) string {
+	result, err := pg_query.Parse(def)
+	if err != nil {
+		return def // fallback to original
+	}
+	is := result.Stmts[0].Stmt.GetIndexStmt()
+	if is == nil || is.Relation == nil {
+		return def
+	}
+	is.Relation.Relname = newTableName
+	deparsed, err := pg_query.Deparse(result)
+	if err != nil {
+		return def
+	}
+	return deparsed
 }
 
 // detectViewRenames finds desired views with RenameFrom that match a current view.
@@ -122,6 +149,12 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
+		}
+
+		if oldKey != newKey {
+			if _, exists := adjusted.GetOk(newKey); exists {
+				return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
+			}
 		}
 
 		if oldView.Schema != desiredView.Schema {
@@ -156,6 +189,12 @@ func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *
 				continue
 			}
 			return nil, nil, fmt.Errorf("rename source column %s not found in %s", model.Ident(oldName), fqtn)
+		}
+
+		if oldName != newName {
+			if _, exists := adjusted.GetOk(newName); exists {
+				return nil, nil, fmt.Errorf("cannot rename column %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
+			}
 		}
 
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME COLUMN "+model.Ident(oldName)+" TO "+model.Ident(newName)+";")
@@ -223,12 +262,30 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 		adjusted.Delete(oldName)
 		renamed := *oldIdx
 		renamed.Name = newName
-		// Update definition to reflect the new index name
-		renamed.Definition = strings.Replace(renamed.Definition, model.Ident(oldName), model.Ident(newName), 1)
+		// Update definition to reflect the new index name via pg_query parse/deparse
+		renamed.Definition = updateIndexName(renamed.Definition, newName)
 		adjusted.Set(newName, &renamed)
 	}
 
 	return stmts, adjusted, nil
+}
+
+// updateIndexName parses an index definition, updates the index name, and deparses.
+func updateIndexName(def string, newName string) string {
+	result, err := pg_query.Parse(def)
+	if err != nil {
+		return strings.Replace(def, model.Ident(newName), model.Ident(newName), 1) // fallback
+	}
+	is := result.Stmts[0].Stmt.GetIndexStmt()
+	if is == nil {
+		return def
+	}
+	is.Idxname = newName
+	deparsed, err := pg_query.Deparse(result)
+	if err != nil {
+		return def
+	}
+	return deparsed
 }
 
 // detectForeignKeyRenames finds desired foreign keys with RenameFrom that match a current FK.

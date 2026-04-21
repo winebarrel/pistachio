@@ -310,6 +310,23 @@ func TestDiffEnums_RenameCrossSchema_Error(t *testing.T) {
 	assert.Contains(t, err.Error(), "cross-schema rename")
 }
 
+func TestDiffEnums_RenameDestinationExists_Error(t *testing.T) {
+	oldName := "public.status"
+	current := newEnumMap(
+		&model.Enum{Schema: "public", Name: "status", Values: []string{"active"}},
+		&model.Enum{Schema: "public", Name: "user_status", Values: []string{"a"}},
+	)
+	desired := newEnumMap(&model.Enum{
+		Schema:     "public",
+		Name:       "user_status",
+		RenameFrom: &oldName,
+		Values:     []string{"active"},
+	})
+	_, err := diff.DiffEnums(current, desired)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "destination already exists")
+}
+
 func TestDiffEnums_RenameSourceNotFound(t *testing.T) {
 	oldName := "public.nonexistent"
 	current := newEnumMap()

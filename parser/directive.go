@@ -11,12 +11,17 @@ import (
 var renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:rename-from[ \t]+(.+?)[ \t]*$`)
 
 // QualifyRenameFrom qualifies a rename-from value with the default schema
-// if it does not already contain a schema (dot separator).
+// if it does not already contain a schema. Quoted identifiers containing
+// dots (e.g. `"a.b"`) are treated as a single identifier.
 func QualifyRenameFrom(value, defaultSchema string) string {
-	if strings.Contains(value, ".") {
-		return value
+	parts := splitQualifiedName(value)
+	for i, p := range parts {
+		parts[i] = unquoteIdent(p)
 	}
-	return defaultSchema + "." + value
+	if len(parts) >= 2 {
+		return model.Ident(parts...)
+	}
+	return model.Ident(defaultSchema, parts[0])
 }
 
 // unquoteIdent strips surrounding double quotes from a SQL identifier and
@@ -33,16 +38,21 @@ func unquoteIdent(s string) string {
 // normalizeDirectiveValue normalizes a rename-from directive value by
 // unquoting each part and re-quoting via model.Ident to match the
 // canonical identifier format used by the parser and diff layer.
-// e.g. `"My Schema"."Old Name"` → `"My Schema"."Old Name"` (canonical)
-//
-//	`public.old_name`       → `public.old_name` (unchanged)
-//	`"Old Name"`            → `"Old Name"` (canonical)
+// Used for schema-qualified names (tables, views, enums).
 func normalizeDirectiveValue(s string) string {
 	parts := splitQualifiedName(s)
 	for i, p := range parts {
 		parts[i] = unquoteIdent(p)
 	}
 	return model.Ident(parts...)
+}
+
+// normalizeUnqualifiedDirective normalizes a rename-from directive value
+// for unqualified names (columns, constraints, indexes, foreign keys)
+// by unquoting the identifier. The result matches the unquoted name
+// used as orderedmap keys by the parser.
+func normalizeUnqualifiedDirective(s string) string {
+	return unquoteIdent(s)
 }
 
 // splitQualifiedName splits a potentially schema-qualified name into parts,
@@ -102,7 +112,7 @@ func ExtractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]s
 		matches := renameDirectivePattern.FindAllStringSubmatch(leading, -1)
 		if len(matches) > 0 {
 			// Use the last match (closest to the actual SQL statement)
-			directives[loc] = normalizeDirectiveValue(matches[len(matches)-1][1])
+			directives[loc] = matches[len(matches)-1][1]
 		}
 	}
 
@@ -156,7 +166,7 @@ func ExtractInlineDirectives(rawCreateTableSQL string) *InlineDirectives {
 		trimmed := strings.TrimSpace(line)
 
 		if m := renameDirectivePattern.FindStringSubmatch(line); m != nil {
-			pendingRename = normalizeDirectiveValue(m[1])
+			pendingRename = normalizeUnqualifiedDirective(m[1])
 			continue
 		}
 

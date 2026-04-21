@@ -120,7 +120,7 @@ func TestExtractColumnDirectives(t *testing.T) {
     "New Name" text NOT NULL
 );`
 		dirs := ExtractColumnDirectives(sql)
-		assert.Equal(t, `"Old Name"`, dirs["New Name"])
+		assert.Equal(t, "Old Name", dirs["New Name"])
 	})
 
 	t.Run("constraint line skipped", func(t *testing.T) {
@@ -182,11 +182,19 @@ func TestNormalizeDirectiveValue(t *testing.T) {
 	assert.Equal(t, "simple", normalizeDirectiveValue("simple"))
 }
 
+func TestNormalizeUnqualifiedDirective(t *testing.T) {
+	assert.Equal(t, "old_name", normalizeUnqualifiedDirective("old_name"))
+	assert.Equal(t, "Old Name", normalizeUnqualifiedDirective(`"Old Name"`))
+	assert.Equal(t, `has"quote`, normalizeUnqualifiedDirective(`"has""quote"`))
+}
+
 func TestQualifyRenameFrom(t *testing.T) {
 	assert.Equal(t, "public.old_name", QualifyRenameFrom("old_name", "public"))
 	assert.Equal(t, "public.old_name", QualifyRenameFrom("public.old_name", "public"))
 	assert.Equal(t, "myschema.old_name", QualifyRenameFrom("myschema.old_name", "public"))
-	assert.Equal(t, "public.Old Name", QualifyRenameFrom("Old Name", "public"))
+	assert.Equal(t, `public."Old Name"`, QualifyRenameFrom(`"Old Name"`, "public"))
+	// Quoted identifier containing a dot should be treated as single name
+	assert.Equal(t, `public."a.b"`, QualifyRenameFrom(`"a.b"`, "public"))
 }
 
 func TestExtractStmtDirectives_QuotedName(t *testing.T) {
