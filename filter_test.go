@@ -187,8 +187,8 @@ CREATE TABLE public.users (
 		Files:         []string{desiredFile},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, got, "ALTER TYPE")
-	assert.NotContains(t, got, "ALTER TABLE")
+	assert.Contains(t, got.SQL, "ALTER TYPE")
+	assert.NotContains(t, got.SQL, "ALTER TABLE")
 }
 
 func TestPlan_AllowDrop_None(t *testing.T) {
@@ -214,7 +214,7 @@ CREATE TABLE public.users (
 	// No --allow-drop: DROP TABLE should be suppressed
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Empty(t, got)
+	assert.Empty(t, got.SQL)
 }
 
 func TestPlan_AllowDrop_Column(t *testing.T) {
@@ -248,7 +248,7 @@ CREATE TABLE public.users (
 		Files:      []string{desiredFile},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, got, "DROP COLUMN email")
+	assert.Contains(t, got.SQL, "DROP COLUMN email")
 }
 
 func TestApply_DefaultNoDrops(t *testing.T) {
@@ -273,7 +273,7 @@ CREATE TABLE public.users (
 	})
 
 	var buf bytes.Buffer
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 	assert.Empty(t, buf.String())
 
@@ -465,8 +465,8 @@ CREATE TABLE public.posts (
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
-	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
-	assert.NotContains(t, got, "posts")
+	assert.Contains(t, got.SQL, "ALTER TABLE public.users ADD COLUMN name text;")
+	assert.NotContains(t, got.SQL, "posts")
 }
 
 func TestPlan_Exclude(t *testing.T) {
@@ -504,8 +504,8 @@ CREATE TABLE public.posts (
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Exclude: []string{"posts"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
-	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
-	assert.NotContains(t, got, "posts")
+	assert.Contains(t, got.SQL, "ALTER TABLE public.users ADD COLUMN name text;")
+	assert.NotContains(t, got.SQL, "posts")
 }
 
 func TestDump_IncludeEnum(t *testing.T) {
@@ -573,8 +573,8 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
-	assert.Contains(t, got, "ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';")
-	assert.NotContains(t, got, "role")
+	assert.Contains(t, got.SQL, "ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';")
+	assert.NotContains(t, got.SQL, "role")
 }
 
 func TestApply_IncludeEnum(t *testing.T) {
@@ -595,7 +595,7 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: only status should have the new value
@@ -773,8 +773,8 @@ CREATE TABLE public.users (
 		Files:         []string{desiredFile},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, got, "ALTER TYPE")
-	assert.NotContains(t, got, "ALTER TABLE")
+	assert.Contains(t, got.SQL, "ALTER TYPE")
+	assert.NotContains(t, got.SQL, "ALTER TABLE")
 }
 
 func TestApply_Enable_Table(t *testing.T) {
@@ -804,7 +804,7 @@ CREATE TABLE public.users (
 	})
 
 	var buf bytes.Buffer
-	err := client.Apply(ctx, &pistachio.ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		FilterOptions: pistachio.FilterOptions{Enable: []string{"table"}},
 		Files:         []string{desiredFile},
 	}, &buf)
@@ -869,7 +869,7 @@ CREATE TABLE public.posts (
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: only users should have the new column

@@ -19,64 +19,79 @@ type ApplyOptions struct {
 	WithTx     bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
 }
 
-func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) error {
+func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ObjectCount, error) {
 	conn, err := client.connect()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer conn.Close(ctx) //nolint:errcheck
 
 	cat, err := catalog.NewCatalog(conn, client.Schemas)
 	if err != nil {
-		return fmt.Errorf("failed to create catalog: %w", err)
+		return nil, fmt.Errorf("failed to create catalog: %w", err)
 	}
 
 	currentTables, err := cat.Tables(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch tables: %w", err)
+		return nil, fmt.Errorf("failed to fetch tables: %w", err)
 	}
 
 	currentViews, err := cat.Views(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch views: %w", err)
+		return nil, fmt.Errorf("failed to fetch views: %w", err)
 	}
 
 	currentEnums, err := cat.Enums(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch enums: %w", err)
+		return nil, fmt.Errorf("failed to fetch enums: %w", err)
 	}
 
 	currentDomains, err := cat.Domains(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch domains: %w", err)
+		return nil, fmt.Errorf("failed to fetch domains: %w", err)
 	}
 
 	desired, err := parser.ParseSQLFilesWithSchema(options.Files, client.Schemas[0])
 	if err != nil {
-		return fmt.Errorf("failed to parse SQL file: %w", err)
+		return nil, fmt.Errorf("failed to parse SQL file: %w", err)
 	}
 
-	enumDiff, err := diff.DiffEnums(options.filterEnums(currentEnums), options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums)), &options.DropPolicy)
+	filterDesiredBySchemas(desired, client.Schemas, client.SchemaMap)
+
+	filteredTables := options.filterTables(currentTables)
+	filteredViews := options.filterViews(currentViews)
+	filteredEnums := options.filterEnums(currentEnums)
+	filteredDomains := options.filterDomains(currentDomains)
+
+	count := &ObjectCount{
+		Schemas: client.Schemas,
+		Tables:  filteredTables.Len(),
+		Views:   filteredViews.Len(),
+		Enums:   filteredEnums.Len(),
+		Domains: filteredDomains.Len(),
+	}
+
+	enumDiff, err := diff.DiffEnums(filteredEnums, options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums)), &options.DropPolicy)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	stmts := enumDiff.Stmts
 
-	domainDiff, err := diff.DiffDomains(options.filterDomains(currentDomains), options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains)), &options.DropPolicy)
+	domainDiff, err := diff.DiffDomains(filteredDomains, options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains)), &options.DropPolicy)
 	if err != nil {
-		return fmt.Errorf("failed to diff domains: %w", err)
+		return nil, fmt.Errorf("failed to diff domains: %w", err)
 	}
 	stmts = append(stmts, domainDiff.Stmts...)
 
-	tableStmts, err := diff.DiffTables(options.filterTables(currentTables), options.filterTables(client.reverseRemapTableSchemas(desired.Tables)), &options.DropPolicy)
+	tableStmts, err := diff.DiffTables(filteredTables, options.filterTables(client.reverseRemapTableSchemas(desired.Tables)), &options.DropPolicy)
 	if err != nil {
-		return fmt.Errorf("failed to diff tables: %w", err)
+		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
 	stmts = append(stmts, tableStmts...)
 
-	viewStmts, err := diff.DiffViews(options.filterViews(currentViews), options.filterViews(client.reverseRemapViewSchemas(desired.Views)), &options.DropPolicy)
+	viewStmts, err := diff.DiffViews(filteredViews, options.filterViews(client.reverseRemapViewSchemas(desired.Views)), &options.DropPolicy)
 	if err != nil {
-		return fmt.Errorf("failed to diff views: %w", err)
+		return nil, fmt.Errorf("failed to diff views: %w", err)
 	}
 	stmts = append(stmts, viewStmts...)
 
@@ -87,13 +102,13 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if options.PreSQLFile != "" {
 		rawPreSQL, err := os.ReadFile(options.PreSQLFile)
 		if err != nil {
-			return fmt.Errorf("failed to read pre-SQL file: %s: %w", options.PreSQLFile, err)
+			return nil, fmt.Errorf("failed to read pre-SQL file: %s: %w", options.PreSQLFile, err)
 		}
 		preSQL = string(rawPreSQL)
 	}
 
 	if len(stmts) == 0 {
-		return nil
+		return count, nil
 	}
 
 	exec := conn.Exec
@@ -102,7 +117,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if options.WithTx {
 		tx, err := conn.Begin(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to begin transaction: %w", err)
+			return nil, fmt.Errorf("failed to begin transaction: %w", err)
 		}
 		defer tx.Rollback(ctx) //nolint:errcheck
 		exec = tx.Exec
@@ -112,20 +127,20 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if preSQL != "" {
 		fmt.Fprintln(w, preSQL) //nolint:errcheck
 		if _, err := exec(ctx, preSQL); err != nil {
-			return fmt.Errorf("failed to execute pre-SQL: %w", err)
+			return nil, fmt.Errorf("failed to execute pre-SQL: %w", err)
 		}
 	}
 
 	for _, stmt := range stmts {
 		fmt.Fprintln(w, stmt) //nolint:errcheck
 		if _, err := exec(ctx, stmt); err != nil {
-			return fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
+			return nil, fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
 		}
 	}
 
 	if err := commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return nil
+	return count, nil
 }

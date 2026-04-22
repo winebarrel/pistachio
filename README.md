@@ -284,8 +284,9 @@ ALTER TABLE ONLY public.posts
 Preview and apply:
 
 ```bash
-pist plan schema.sql   # review the diff
-pist apply schema.sql  # apply it
+pist plan schema.sql                  # review the diff (drops suppressed by default)
+pist plan --allow-drop all schema.sql # review the diff (with drops)
+pist apply schema.sql                 # apply it
 ```
 
 Or split schema into multiple files and use them together:

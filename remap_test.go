@@ -218,7 +218,7 @@ CREATE TABLE myschema.users (
 	t.Log(got)
 
 	// Should detect the diff and produce ALTER TABLE with the real DB schema
-	assert.Contains(t, got, "ALTER TABLE myschema.users ADD COLUMN name text;")
+	assert.Contains(t, got.SQL, "ALTER TABLE myschema.users ADD COLUMN name text;")
 }
 
 func TestPlan_WithSchemaMap_NoDiff(t *testing.T) {
@@ -247,7 +247,7 @@ CREATE TABLE myschema.users (
 	require.NoError(t, err)
 
 	// No diff expected since schemas are remapped
-	assert.Empty(t, got)
+	assert.Empty(t, got.SQL)
 }
 
 func TestDump_WithoutSchemaMap(t *testing.T) {
@@ -295,7 +295,7 @@ CREATE TABLE myschema.users (
 
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Empty(t, got)
+	assert.Empty(t, got.SQL)
 }
 
 func TestDump_WithSchemaMap_ForeignKey(t *testing.T) {
@@ -411,7 +411,7 @@ CREATE TABLE myschema.users (
 
 	// "other" schema is not reverse-mapped, so it won't match myschema
 	// This results in creating the "other" table and dropping "myschema" table
-	assert.Contains(t, got, "DROP TABLE myschema.users;")
+	assert.Contains(t, got.SQL, "DROP TABLE myschema.users;")
 }
 
 func TestPlan_WithSchemaMap_ForeignKey(t *testing.T) {
@@ -454,7 +454,7 @@ ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (use
 	require.NoError(t, err)
 	t.Log(got)
 
-	assert.Contains(t, got, "ALTER TABLE myschema.posts ADD COLUMN title text;")
+	assert.Contains(t, got.SQL, "ALTER TABLE myschema.posts ADD COLUMN title text;")
 }
 
 func TestPlan_WithSchemaMap_Index(t *testing.T) {
@@ -487,7 +487,7 @@ CREATE INDEX users_name_idx ON public.users (name);
 	require.NoError(t, err)
 	t.Log(got)
 
-	assert.Contains(t, got, "users_name_idx")
+	assert.Contains(t, got.SQL, "users_name_idx")
 }
 
 func TestPlan_WithSchemaMap_View(t *testing.T) {
@@ -518,7 +518,7 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;
 	require.NoError(t, err)
 	t.Log(got)
 
-	assert.Contains(t, got, "CREATE OR REPLACE VIEW myschema.active_users")
+	assert.Contains(t, got.SQL, "CREATE OR REPLACE VIEW myschema.active_users")
 }
 
 func TestApply_WithSchemaMap(t *testing.T) {
@@ -545,7 +545,7 @@ CREATE TABLE myschema.users (
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: dump without schema map should show myschema with new column
@@ -589,7 +589,7 @@ CREATE TABLE myschema.users (
 	require.NoError(t, err)
 	t.Log(got)
 
-	assert.Contains(t, got, "ALTER TABLE myschema.users ADD COLUMN name text;")
+	assert.Contains(t, got.SQL, "ALTER TABLE myschema.users ADD COLUMN name text;")
 }
 
 func TestPlan_SchemalessDesired_CustomSchema_NoDiff(t *testing.T) {
@@ -615,7 +615,7 @@ CREATE TABLE myschema.users (
 
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Empty(t, got)
+	assert.Empty(t, got.SQL)
 }
 
 func TestDump_WithSchemaMap_Domain(t *testing.T) {
@@ -657,7 +657,7 @@ CREATE DOMAIN myschema.pos_int AS integer;
 
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Contains(t, got, "ALTER DOMAIN myschema.pos_int SET NOT NULL;")
+	assert.Contains(t, got.SQL, "ALTER DOMAIN myschema.pos_int SET NOT NULL;")
 }
 
 func TestDump_WithSchemaMap_Enum(t *testing.T) {
@@ -700,7 +700,7 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
-	assert.Contains(t, got, "ALTER TYPE myschema.status ADD VALUE 'pending' AFTER 'inactive';")
+	assert.Contains(t, got.SQL, "ALTER TYPE myschema.status ADD VALUE 'pending' AFTER 'inactive';")
 }
 
 func TestPlan_WithSchemaMap_Enum_NoDiff(t *testing.T) {
@@ -721,7 +721,7 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Empty(t, got)
+	assert.Empty(t, got.SQL)
 }
 
 func TestApply_WithSchemaMap_Enum(t *testing.T) {
@@ -740,7 +740,7 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	verifyClient := pistachio.NewClient(&pistachio.Options{
@@ -775,7 +775,7 @@ CREATE TABLE myschema.users (
 		Schemas:    []string{"myschema"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{})

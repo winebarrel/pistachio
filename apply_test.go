@@ -43,7 +43,7 @@ func TestApply(t *testing.T) {
 				ConnString: conn.Config().ConnString(),
 				Schemas:    []string{"public"},
 			})
-			err = client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
+			_, err = client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
 			require.NoError(t, err)
 
 			// Verify
@@ -79,7 +79,7 @@ func TestApply_WithPreSQLFile(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	applyErr := client.Apply(ctx, &pistachio.ApplyOptions{
+	_, applyErr := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 	}, io.Discard)
@@ -117,7 +117,7 @@ func TestApply_WithPreSQLFile_Output(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	err := client.Apply(ctx, &pistachio.ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 	}, &buf)
@@ -158,7 +158,7 @@ SELECT * FROM public.missing_table;`), 0o644))
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 		WithTx:     true,
@@ -193,7 +193,7 @@ func TestApply_WithTx_Success(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 		WithTx:     true,
@@ -224,7 +224,7 @@ func TestApply_NoDiff(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 }
 
@@ -251,7 +251,7 @@ CREATE TABLE public.users (
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
@@ -282,7 +282,7 @@ func TestApply_ExecError(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -299,7 +299,7 @@ func TestApply_EmptySchemas(t *testing.T) {
 		Schemas:    []string{},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -313,7 +313,7 @@ func TestApply_InvalidConnString(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -329,7 +329,7 @@ func TestApply_InvalidDesiredFile(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{"/nonexistent/file.sql"}}, io.Discard)
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{"/nonexistent/file.sql"}}, io.Discard)
 	require.Error(t, err)
 }
 
@@ -351,7 +351,7 @@ func TestApply_InvalidPreSQLFile(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: "/nonexistent/pre.sql",
 	}, io.Discard)
