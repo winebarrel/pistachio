@@ -10,33 +10,46 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker) ([]string, error) {
+// TableDiffResult separates FK operations from other statements to allow
+// correct ordering: FK drops first, then schema changes, then FK adds last.
+type TableDiffResult struct {
+	FKDropStmts  []string // FK drops (should run first)
+	Stmts        []string // CREATE/ALTER/DROP TABLE, columns, constraints, indexes, comments
+	FKAddStmts   []string // FK adds (should run last)
+	DropStmts    []string // DROP TABLE (should run after FK drops)
+}
+
+func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker) (*TableDiffResult, error) {
 	dc = NormalizeDropChecker(dc)
-	var stmts []string
+	result := &TableDiffResult{}
 
 	// Detect renames
 	renameStmts, current, err := detectTableRenames(current, desired)
 	if err != nil {
 		return nil, err
 	}
-	stmts = append(stmts, renameStmts...)
+	result.Stmts = append(result.Stmts, renameStmts...)
 
 	// New tables
 	for k, v := range desired.All() {
 		if _, ok := current.GetOk(k); !ok {
-			stmts = append(stmts, v.SQL())
-			stmts = append(stmts, newTableExtras(v)...)
+			result.Stmts = append(result.Stmts, v.SQL())
+			stmts, fkStmts := newTableExtras(v)
+			result.Stmts = append(result.Stmts, stmts...)
+			result.FKAddStmts = append(result.FKAddStmts, fkStmts...)
 		}
 	}
 
 	// Modified tables
 	for k, desiredTable := range desired.All() {
 		if currentTable, ok := current.GetOk(k); ok {
-			tableStmts, err := diffTable(currentTable, desiredTable, dc)
+			tableResult, err := diffTable(currentTable, desiredTable, dc)
 			if err != nil {
 				return nil, err
 			}
-			stmts = append(stmts, tableStmts...)
+			result.FKDropStmts = append(result.FKDropStmts, tableResult.FKDropStmts...)
+			result.Stmts = append(result.Stmts, tableResult.Stmts...)
+			result.FKAddStmts = append(result.FKAddStmts, tableResult.FKAddStmts...)
 		}
 	}
 
@@ -44,31 +57,37 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	if dc.IsDropAllowed("table") {
 		for k := range current.Keys() {
 			if _, ok := desired.GetOk(k); !ok {
-				stmts = append(stmts, "DROP TABLE "+k+";")
+				result.DropStmts = append(result.DropStmts, "DROP TABLE "+k+";")
 			}
 		}
 	}
 
-	return stmts, nil
+	return result, nil
 }
 
-func newTableExtras(t *model.Table) []string {
-	var stmts []string
+// newTableExtras returns non-FK extras and FK statements separately.
+func newTableExtras(t *model.Table) (stmts []string, fkStmts []string) {
 	for _, idx := range t.Indexes.CollectValues() {
 		stmts = append(stmts, idx.SQL())
 	}
 	for _, fk := range t.ForeignKeys.CollectValues() {
-		stmts = append(stmts, fk.SQL())
+		fkStmts = append(fkStmts, fk.SQL())
 	}
 	if commentSQL := t.CommentSQL(); commentSQL != "" {
 		stmts = append(stmts, strings.Split(commentSQL, "\n")...)
 	}
-	return stmts
+	return
 }
 
-func diffTable(current, desired *model.Table, dc DropChecker) ([]string, error) {
+type tableDiffResult struct {
+	FKDropStmts []string
+	Stmts       []string
+	FKAddStmts  []string
+}
+
+func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult, error) {
 	dc = NormalizeDropChecker(dc)
-	var stmts []string
+	result := &tableDiffResult{}
 	fqtn := desired.FQTN()
 
 	// Partition children inherit columns and constraints from the parent,
@@ -78,42 +97,44 @@ func diffTable(current, desired *model.Table, dc DropChecker) ([]string, error) 
 		if err != nil {
 			return nil, err
 		}
-		stmts = append(stmts, idxStmts...)
-		fkStmts, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)
+		result.Stmts = append(result.Stmts, idxStmts...)
+		fkDrops, fkAdds, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)
 		if err != nil {
 			return nil, err
 		}
-		stmts = append(stmts, fkStmts...)
-		return stmts, nil
+		result.FKDropStmts = append(result.FKDropStmts, fkDrops...)
+		result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
+		return result, nil
 	}
 
 	colStmts, err := diffColumns(fqtn, current.Columns, desired.Columns, dc)
 	if err != nil {
 		return nil, err
 	}
-	stmts = append(stmts, colStmts...)
+	result.Stmts = append(result.Stmts, colStmts...)
 
 	conStmts, err := diffConstraints(fqtn, current.Constraints, desired.Constraints)
 	if err != nil {
 		return nil, err
 	}
-	stmts = append(stmts, conStmts...)
+	result.Stmts = append(result.Stmts, conStmts...)
 
 	idxStmts, err := diffIndexes(current.Indexes, desired.Indexes)
 	if err != nil {
 		return nil, err
 	}
-	stmts = append(stmts, idxStmts...)
+	result.Stmts = append(result.Stmts, idxStmts...)
 
-	fkStmts, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)
+	fkDrops, fkAdds, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)
 	if err != nil {
 		return nil, err
 	}
-	stmts = append(stmts, fkStmts...)
+	result.FKDropStmts = append(result.FKDropStmts, fkDrops...)
+	result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 
-	stmts = append(stmts, diffComments(current, desired)...)
+	result.Stmts = append(result.Stmts, diffComments(current, desired)...)
 
-	return stmts, nil
+	return result, nil
 }
 
 func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) ([]string, error) {
@@ -394,22 +415,24 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) ([]stri
 	return stmts, nil
 }
 
-func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey]) ([]string, error) {
-	var stmts []string
+// diffForeignKeys returns (dropStmts, addStmts, error).
+// Rename statements are included in addStmts (they depend on table renames being done first).
+func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey]) ([]string, []string, error) {
+	var dropStmts, addStmts []string
 
-	// Detect renames
+	// Detect renames (renames go into addStmts since they may depend on table renames)
 	renameStmts, current, err := detectForeignKeyRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	stmts = append(stmts, renameStmts...)
+	addStmts = append(addStmts, renameStmts...)
 
 	// Drop removed or changed FKs
 	for name := range current.All() {
 		desiredFk, ok := desired.GetOk(name)
 		currentFk := current.Get(name)
 		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
+			dropStmts = append(dropStmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
 		}
 	}
 
@@ -417,11 +440,11 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	for name, desiredFk := range desired.All() {
 		currentFk, ok := current.GetOk(name)
 		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
-			stmts = append(stmts, desiredFk.SQL())
+			addStmts = append(addStmts, desiredFk.SQL())
 		}
 	}
 
-	return stmts, nil
+	return dropStmts, addStmts, nil
 }
 
 func diffComments(current, desired *model.Table) []string {

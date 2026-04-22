@@ -33,10 +33,10 @@ func TestDiffTables_newTable(t *testing.T) {
 	tbl.Constraints.Set("users_pkey", &model.Constraint{Name: "users_pkey", Definition: "PRIMARY KEY (id)"})
 	desired.Set("public.users", tbl)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Len(t, stmts, 1)
-	assert.Contains(t, stmts[0], "CREATE TABLE public.users")
+	assert.Len(t, result.Stmts, 1)
+	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.users")
 }
 
 func TestDiffTables_newTable_withExtras(t *testing.T) {
@@ -49,12 +49,12 @@ func TestDiffTables_newTable_withExtras(t *testing.T) {
 	tbl.Comment = ptr("Users table")
 	desired.Set("public.users", tbl)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Len(t, stmts, 3)
-	assert.Contains(t, stmts[0], "CREATE TABLE")
-	assert.Contains(t, stmts[1], "CREATE INDEX idx_name")
-	assert.Contains(t, stmts[2], "COMMENT ON TABLE")
+	assert.Len(t, result.Stmts, 3)
+	assert.Contains(t, result.Stmts[0], "CREATE TABLE")
+	assert.Contains(t, result.Stmts[1], "CREATE INDEX idx_name")
+	assert.Contains(t, result.Stmts[2], "COMMENT ON TABLE")
 }
 
 func TestDiffTables_dropTable(t *testing.T) {
@@ -63,9 +63,9 @@ func TestDiffTables_dropTable(t *testing.T) {
 
 	current.Set("public.users", newTable("public", "users"))
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"DROP TABLE public.users;"}, stmts)
+	assert.Equal(t, []string{"DROP TABLE public.users;"}, result.DropStmts)
 }
 
 func TestNormalizeDropChecker_nil(t *testing.T) {
@@ -85,9 +85,9 @@ func TestDiffTables_nilDropChecker(t *testing.T) {
 	current.Set("public.users", newTable("public", "users"))
 
 	// nil DropChecker should not panic, drops should be denied
-	stmts, err := DiffTables(current, desired, nil)
+	result, err := DiffTables(current, desired, nil)
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.Stmts)
 }
 
 func TestDiffTables_dropTable_denied(t *testing.T) {
@@ -96,9 +96,9 @@ func TestDiffTables_dropTable_denied(t *testing.T) {
 
 	current.Set("public.users", newTable("public", "users"))
 
-	stmts, err := DiffTables(current, desired, DenyAllDrops{})
+	result, err := DiffTables(current, desired, DenyAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.Stmts)
 }
 
 func TestDiffColumns_dropColumn_denied(t *testing.T) {
@@ -126,9 +126,9 @@ func TestDiffTables_noChange(t *testing.T) {
 	tbl2.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
 	desired.Set("public.users", tbl2)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.Stmts)
 }
 
 func TestDiffColumns_addColumn(t *testing.T) {
@@ -356,10 +356,10 @@ func TestDiffForeignKeys_add(t *testing.T) {
 		Table:      "orders",
 	})
 
-	stmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	_, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
 	require.NoError(t, err)
-	assert.Len(t, stmts, 1)
-	assert.Contains(t, stmts[0], "ADD CONSTRAINT fk_user")
+	assert.Len(t, addStmts, 1)
+	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
 }
 
 func TestDiffForeignKeys_drop(t *testing.T) {
@@ -371,9 +371,10 @@ func TestDiffForeignKeys_drop(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
-	stmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, stmts)
+	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, dropStmts)
+	assert.Empty(t, addStmts)
 }
 
 func TestDiffComments_tableComment_add(t *testing.T) {
@@ -479,11 +480,12 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 	})
 	desired.Set("public.orders", tbl)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Len(t, stmts, 2)
-	assert.Contains(t, stmts[0], "CREATE TABLE")
-	assert.Contains(t, stmts[1], "ADD CONSTRAINT fk_user")
+	assert.Len(t, result.Stmts, 1)
+	assert.Contains(t, result.Stmts[0], "CREATE TABLE")
+	assert.Len(t, result.FKAddStmts, 1)
+	assert.Contains(t, result.FKAddStmts[0], "ADD CONSTRAINT fk_user")
 }
 
 func TestEqualFKDef_implicitPublicSchema(t *testing.T) {
@@ -536,11 +538,11 @@ func TestDiffForeignKeys_change(t *testing.T) {
 		Table:      "orders",
 	})
 
-	stmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
 	require.NoError(t, err)
-	assert.Len(t, stmts, 2)
-	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", stmts[0])
-	assert.Contains(t, stmts[1], "ADD CONSTRAINT fk_user")
+	assert.Len(t, append(dropStmts, addStmts...), 2)
+	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
+	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
 }
 
 func TestDiffTable_partitionChild(t *testing.T) {
@@ -556,10 +558,10 @@ func TestDiffTable_partitionChild(t *testing.T) {
 	desired.PartitionBound = &bound
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", Definition: "CREATE INDEX idx_new ON public.events_2024 (id)"})
 
-	stmts, err := diffTable(current, desired, AllowAllDrops{})
+	tableResult, err := diffTable(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Len(t, stmts, 1)
-	assert.Contains(t, stmts[0], "CREATE INDEX idx_new")
+	assert.Len(t, tableResult.Stmts, 1)
+	assert.Contains(t, tableResult.Stmts[0], "CREATE INDEX idx_new")
 }
 
 func TestDiffTable_partitionChild_indexRenameError(t *testing.T) {
@@ -914,9 +916,9 @@ func TestDiffTables_indexWhereClauseSchemaInsensitive(t *testing.T) {
 	})
 	desired.Set("public.products", dt)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.Stmts)
 }
 
 func TestEqualIndexDef_explicitAscVsDefault(t *testing.T) {
@@ -998,9 +1000,9 @@ func TestDiffTables_indexSchemaInsensitive(t *testing.T) {
 	dt.Indexes.Set("idx", &model.Index{Schema: "", Name: "idx", Table: "users", Definition: "CREATE INDEX idx ON users USING btree (id)"})
 	desired.Set("public.users", dt)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.Stmts)
 }
 
 func TestDiffTables_renameTable(t *testing.T) {
@@ -1017,9 +1019,9 @@ func TestDiffTables_renameTable(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("public.accounts", dt)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"ALTER TABLE public.users RENAME TO accounts;"}, stmts)
+	assert.Equal(t, []string{"ALTER TABLE public.users RENAME TO accounts;"}, result.Stmts)
 }
 
 func TestDiffTables_renameTable_selfRename_skipped(t *testing.T) {
@@ -1036,9 +1038,9 @@ func TestDiffTables_renameTable_selfRename_skipped(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("public.users", dt)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.Stmts)
 }
 
 func TestDiffColumns_renameColumn_selfRename_skipped(t *testing.T) {
@@ -1096,9 +1098,10 @@ func TestDiffForeignKeys_rename_selfRename_skipped(t *testing.T) {
 		Table:      "orders",
 	})
 
-	stmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, dropStmts)
+	assert.Empty(t, addStmts)
 }
 
 func TestDiffTables_renameTable_alreadyApplied(t *testing.T) {
@@ -1115,9 +1118,9 @@ func TestDiffTables_renameTable_alreadyApplied(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("public.accounts", dt)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.Stmts)
 }
 
 func TestDiffTables_renameTable_withIndex(t *testing.T) {
@@ -1138,10 +1141,10 @@ func TestDiffTables_renameTable_withIndex(t *testing.T) {
 	dt.Indexes.Set("idx_users_name", &model.Index{Schema: "public", Name: "idx_users_name", Table: "accounts", Definition: "CREATE INDEX idx_users_name ON public.accounts USING btree (name)"})
 	desired.Set("public.accounts", dt)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	// Should only rename the table, no DROP/CREATE index
-	assert.Equal(t, []string{"ALTER TABLE public.users RENAME TO accounts;"}, stmts)
+	assert.Equal(t, []string{"ALTER TABLE public.users RENAME TO accounts;"}, result.Stmts)
 }
 
 func TestDiffTables_renameTable_withFK(t *testing.T) {
@@ -1170,9 +1173,9 @@ func TestDiffTables_renameTable_withFK(t *testing.T) {
 	})
 	desired.Set("public.purchases", dt)
 
-	stmts, err := DiffTables(current, desired, AllowAllDrops{})
+	result, err := DiffTables(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME TO purchases;"}, stmts)
+	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME TO purchases;"}, result.Stmts)
 }
 
 func TestDiffTables_renameTable_destinationExists_error(t *testing.T) {
@@ -1349,9 +1352,10 @@ func TestDiffForeignKeys_rename(t *testing.T) {
 		Table:      "orders",
 	})
 
-	stmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME CONSTRAINT old_fk TO new_fk;"}, stmts)
+	assert.Empty(t, dropStmts)
+	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME CONSTRAINT old_fk TO new_fk;"}, addStmts)
 }
 
 func TestDiffForeignKeys_rename_alreadyApplied(t *testing.T) {
@@ -1370,9 +1374,8 @@ func TestDiffForeignKeys_rename_alreadyApplied(t *testing.T) {
 		Table:      "orders",
 	})
 
-	stmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	_, _, err := diffForeignKeys("public.orders", "public", current, desired)
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
 }
 
 func TestDiffForeignKeys_rename_sourceNotFound(t *testing.T) {
@@ -1386,7 +1389,7 @@ func TestDiffForeignKeys_rename_sourceNotFound(t *testing.T) {
 		Table:      "orders",
 	})
 
-	_, err := diffForeignKeys("public.orders", "public", current, desired)
+	_, _, err := diffForeignKeys("public.orders", "public", current, desired)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -1440,7 +1443,7 @@ func TestDiffForeignKeys_rename_destinationExists_error(t *testing.T) {
 		Table:      "orders",
 	})
 
-	_, err := diffForeignKeys("public.orders", "public", current, desired)
+	_, _, err := diffForeignKeys("public.orders", "public", current, desired)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }

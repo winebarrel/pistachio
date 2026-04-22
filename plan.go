@@ -114,11 +114,13 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	}
 	stmts = append(stmts, domainDiff.Stmts...)
 
-	tableStmts, err := diff.DiffTables(filteredTables, options.filterTables(client.reverseRemapTableSchemas(desired.Tables)), &options.DropPolicy)
+	tableDiff, err := diff.DiffTables(filteredTables, options.filterTables(client.reverseRemapTableSchemas(desired.Tables)), &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
-	stmts = append(stmts, tableStmts...)
+	// FK drops first (before any table/column changes)
+	stmts = append(stmts, tableDiff.FKDropStmts...)
+	stmts = append(stmts, tableDiff.Stmts...)
 
 	viewStmts, err := diff.DiffViews(filteredViews, options.filterViews(client.reverseRemapViewSchemas(desired.Views)), &options.DropPolicy)
 	if err != nil {
@@ -126,8 +128,13 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	}
 	stmts = append(stmts, viewStmts...)
 
+	// Drops: tables before domains/enums (dependency order)
+	stmts = append(stmts, tableDiff.DropStmts...)
 	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
+
+	// FK adds last (after all tables exist)
+	stmts = append(stmts, tableDiff.FKAddStmts...)
 
 	if options.PreSQLFile != "" && len(stmts) > 0 {
 		rawPreSQL, err := os.ReadFile(options.PreSQLFile)
