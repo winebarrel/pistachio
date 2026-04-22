@@ -3,7 +3,6 @@ package pistachio
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/winebarrel/pistachio/catalog"
@@ -15,6 +14,7 @@ type PlanOptions struct {
 	FilterOptions
 	DropPolicy
 	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
+	PreSQL     string   `help:"SQL to execute before applying changes."`
 	PreSQLFile string   `type:"path" help:"Path to a SQL file to execute before applying changes."`
 }
 
@@ -136,12 +136,12 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	// FK adds last (after all tables exist)
 	stmts = append(stmts, tableDiff.FKAddStmts...)
 
-	if options.PreSQLFile != "" && len(stmts) > 0 {
-		rawPreSQL, err := os.ReadFile(options.PreSQLFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read pre-SQL file: %s: %w", options.PreSQLFile, err)
-		}
-		stmts = append([]string{string(rawPreSQL)}, stmts...)
+	preSQL, err := resolvePreSQL(options.PreSQL, options.PreSQLFile)
+	if err != nil {
+		return nil, err
+	}
+	if preSQL != "" && len(stmts) > 0 {
+		stmts = append([]string{preSQL}, stmts...)
 	}
 
 	return &PlanResult{

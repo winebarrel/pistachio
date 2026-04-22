@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/diff"
@@ -15,6 +14,7 @@ type ApplyOptions struct {
 	FilterOptions
 	DropPolicy
 	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
+	PreSQL     string   `help:"SQL to execute before applying changes."`
 	PreSQLFile string   `type:"path" help:"Path to a SQL file to execute before applying changes."`
 	WithTx     bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
 }
@@ -102,13 +102,9 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 	stmts = append(stmts, tableDiff.FKAddStmts...)
 
-	var preSQL string
-	if options.PreSQLFile != "" {
-		rawPreSQL, err := os.ReadFile(options.PreSQLFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read pre-SQL file: %s: %w", options.PreSQLFile, err)
-		}
-		preSQL = string(rawPreSQL)
+	preSQL, err := resolvePreSQL(options.PreSQL, options.PreSQLFile)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(stmts) == 0 {
