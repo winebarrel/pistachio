@@ -123,11 +123,15 @@ After applying, you can leave the directive in place (it will be silently skippe
 
 ### Working with specific schemas
 
-By default, pistachio targets the `public` schema. Use `-n` to specify a different schema:
+By default, pistachio targets the `public` schema. Use `-n` or `$PIST_SCHEMAS` to specify a different schema:
 
 ```bash
 # Dump the "myschema" schema
 pist -n myschema dump
+
+# Or use environment variable
+export PIST_SCHEMAS=myschema
+pist dump
 
 # Plan/apply against "myschema"
 pist -n myschema plan schema.sql
