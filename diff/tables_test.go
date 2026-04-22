@@ -68,6 +68,48 @@ func TestDiffTables_dropTable(t *testing.T) {
 	assert.Equal(t, []string{"DROP TABLE public.users;"}, result.DropStmts)
 }
 
+func TestDiffTables_dropTable_withFK(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	users := newTable("public", "users")
+	current.Set("public.users", users)
+
+	posts := newTable("public", "posts")
+	posts.ForeignKeys.Set("posts_user_id_fkey", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "posts_user_id_fkey", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)"},
+		Schema:     "public",
+		Table:      "posts",
+	})
+	current.Set("public.posts", posts)
+
+	result, err := DiffTables(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.posts DROP CONSTRAINT posts_user_id_fkey;"}, result.FKDropStmts)
+	assert.Equal(t, []string{"DROP TABLE public.users;", "DROP TABLE public.posts;"}, result.DropStmts)
+}
+
+func TestDiffTables_dropTable_withFK_denied(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	users := newTable("public", "users")
+	current.Set("public.users", users)
+
+	posts := newTable("public", "posts")
+	posts.ForeignKeys.Set("posts_user_id_fkey", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "posts_user_id_fkey", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)"},
+		Schema:     "public",
+		Table:      "posts",
+	})
+	current.Set("public.posts", posts)
+
+	result, err := DiffTables(current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.FKDropStmts)
+	assert.Empty(t, result.DropStmts)
+}
+
 func TestNormalizeDropChecker_nil(t *testing.T) {
 	dc := NormalizeDropChecker(nil)
 	assert.False(t, dc.IsDropAllowed("table"))
