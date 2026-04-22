@@ -124,6 +124,37 @@ func TestPlan_WithPreSQLFile(t *testing.T) {
 	assert.Less(t, preSQLPos, diffPos)
 }
 
+func TestPlan_WithPreSQL(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:  []string{desiredFile},
+		PreSQL: "SET search_path TO public;",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "SET search_path TO public;")
+	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
+
+	preSQLPos := strings.Index(got.SQL, "SET search_path")
+	diffPos := strings.Index(got.SQL, "CREATE TABLE")
+	assert.Less(t, preSQLPos, diffPos)
+}
+
 func TestPlan_WithPreSQLFile_InvalidFile(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
