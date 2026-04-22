@@ -83,11 +83,12 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	}
 	stmts = append(stmts, domainDiff.Stmts...)
 
-	tableStmts, err := diff.DiffTables(filteredTables, options.filterTables(client.reverseRemapTableSchemas(desired.Tables)), &options.DropPolicy)
+	tableDiff, err := diff.DiffTables(filteredTables, options.filterTables(client.reverseRemapTableSchemas(desired.Tables)), &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
-	stmts = append(stmts, tableStmts...)
+	stmts = append(stmts, tableDiff.FKDropStmts...)
+	stmts = append(stmts, tableDiff.Stmts...)
 
 	viewStmts, err := diff.DiffViews(filteredViews, options.filterViews(client.reverseRemapViewSchemas(desired.Views)), &options.DropPolicy)
 	if err != nil {
@@ -95,8 +96,11 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	}
 	stmts = append(stmts, viewStmts...)
 
+	stmts = append(stmts, tableDiff.DropStmts...)
 	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
+
+	stmts = append(stmts, tableDiff.FKAddStmts...)
 
 	var preSQL string
 	if options.PreSQLFile != "" {
