@@ -383,7 +383,7 @@ CREATE TABLE public.users (
 
 	plan, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{tmpFile}})
 	require.NoError(t, err)
-	assert.Empty(t, plan)
+	assert.Empty(t, plan.SQL)
 }
 
 func TestDumpResult_OmitSchema_Enum_Files(t *testing.T) {

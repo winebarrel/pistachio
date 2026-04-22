@@ -13,15 +13,15 @@ type Plan struct {
 }
 
 func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {
-	plan, err := client.Plan(ctx, &cmd.PlanOptions)
+	result, err := client.Plan(ctx, &cmd.PlanOptions)
 	if err != nil {
 		return err
 	}
 
-	if plan == "" {
-		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
+	if result.SQL == "" {
+		fmt.Fprintf(w, "-- No changes (%s)\n", result.Count) //nolint:errcheck
 	} else {
-		fmt.Fprintln(w, plan) //nolint:errcheck
+		fmt.Fprintln(w, result.SQL) //nolint:errcheck
 	}
 
 	return nil

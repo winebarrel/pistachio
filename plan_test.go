@@ -54,7 +54,7 @@ func TestPlan_WithPassword(t *testing.T) {
 
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Contains(t, got, "CREATE TABLE public.users")
+	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
 }
 
 func TestPlan_InvalidDesiredFile(t *testing.T) {
@@ -115,12 +115,12 @@ func TestPlan_WithPreSQLFile(t *testing.T) {
 		PreSQLFile: preSQLFile,
 	})
 	require.NoError(t, err)
-	assert.Contains(t, got, "SELECT 1;")
-	assert.Contains(t, got, "CREATE TABLE public.users")
+	assert.Contains(t, got.SQL, "SELECT 1;")
+	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
 
 	// pre-SQL should appear before diff statements
-	preSQLPos := strings.Index(got, "SELECT 1;")
-	diffPos := strings.Index(got, "CREATE TABLE public.users")
+	preSQLPos := strings.Index(got.SQL, "SELECT 1;")
+	diffPos := strings.Index(got.SQL, "CREATE TABLE public.users")
 	assert.Less(t, preSQLPos, diffPos)
 }
 
@@ -179,7 +179,7 @@ func TestPlan_WithPreSQLFile_NoDiff(t *testing.T) {
 		PreSQLFile: preSQLFile,
 	})
 	require.NoError(t, err)
-	assert.Empty(t, got)
+	assert.Empty(t, got.SQL)
 }
 
 func TestPlan_SchemalessDesired(t *testing.T) {
@@ -208,7 +208,7 @@ CREATE TABLE public.users (
 
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
+	assert.Contains(t, got.SQL, "ALTER TABLE public.users ADD COLUMN name text;")
 }
 
 func TestPlan_SchemalessDesired_NoDiff(t *testing.T) {
@@ -235,7 +235,7 @@ CREATE TABLE public.users (
 
 	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Empty(t, got)
+	assert.Empty(t, got.SQL)
 }
 
 func TestPlan(t *testing.T) {
@@ -263,7 +263,7 @@ func TestPlan(t *testing.T) {
 
 			got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 			require.NoError(t, err)
-			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got))
+			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got.SQL))
 		})
 	}
 }
