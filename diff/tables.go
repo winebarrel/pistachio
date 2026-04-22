@@ -10,7 +10,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func DiffTables(current, desired *orderedmap.Map[string, *model.Table]) ([]string, error) {
+func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker) ([]string, error) {
+	dc = NormalizeDropChecker(dc)
 	var stmts []string
 
 	// Detect renames
@@ -31,7 +32,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table]) ([]strin
 	// Modified tables
 	for k, desiredTable := range desired.All() {
 		if currentTable, ok := current.GetOk(k); ok {
-			tableStmts, err := diffTable(currentTable, desiredTable)
+			tableStmts, err := diffTable(currentTable, desiredTable, dc)
 			if err != nil {
 				return nil, err
 			}
@@ -40,9 +41,11 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table]) ([]strin
 	}
 
 	// Dropped tables
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			stmts = append(stmts, "DROP TABLE "+k+";")
+	if dc.IsDropAllowed("table") {
+		for k := range current.Keys() {
+			if _, ok := desired.GetOk(k); !ok {
+				stmts = append(stmts, "DROP TABLE "+k+";")
+			}
 		}
 	}
 
@@ -63,7 +66,8 @@ func newTableExtras(t *model.Table) []string {
 	return stmts
 }
 
-func diffTable(current, desired *model.Table) ([]string, error) {
+func diffTable(current, desired *model.Table, dc DropChecker) ([]string, error) {
+	dc = NormalizeDropChecker(dc)
 	var stmts []string
 	fqtn := desired.FQTN()
 
@@ -83,7 +87,7 @@ func diffTable(current, desired *model.Table) ([]string, error) {
 		return stmts, nil
 	}
 
-	colStmts, err := diffColumns(fqtn, current.Columns, desired.Columns)
+	colStmts, err := diffColumns(fqtn, current.Columns, desired.Columns, dc)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +116,8 @@ func diffTable(current, desired *model.Table) ([]string, error) {
 	return stmts, nil
 }
 
-func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column]) ([]string, error) {
+func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) ([]string, error) {
+	dc = NormalizeDropChecker(dc)
 	var stmts []string
 
 	// Detect renames
@@ -137,9 +142,11 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 	}
 
 	// Drop removed columns
-	for name := range current.Keys() {
-		if _, ok := desired.GetOk(name); !ok {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
+	if dc.IsDropAllowed("column") {
+		for name := range current.Keys() {
+			if _, ok := desired.GetOk(name); !ok {
+				stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
+			}
 		}
 	}
 

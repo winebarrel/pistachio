@@ -186,10 +186,31 @@ pist plan -E 'tmp_*' schema.sql  # ignore temporary tables
 Use `--enable` / `--disable` to filter by object type:
 
 ```bash
-pist dump --enable enum            # dump only enums
-pist dump --disable view           # dump everything except views
-pist dump --enable table --enable enum  # dump tables and enums only
+pist dump --enable enum              # dump only enums
+pist dump --disable view             # dump everything except views
+pist dump --enable table,enum        # dump tables and enums only
 ```
+
+### Controlling drops
+
+By default, `plan` and `apply` do **not** drop tables, views, enums, domains, or columns. Use `--allow-drop` to opt in:
+
+```bash
+# Allow all drops
+pist plan --allow-drop all schema.sql
+pist apply --allow-drop all schema.sql
+
+# Allow only specific drop types (comma-separated or repeated)
+pist apply --allow-drop column,table schema.sql
+
+# Using environment variable
+PIST_ALLOW_DROP=all pist plan schema.sql
+```
+
+Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`.
+
+> [!NOTE]
+> Constraints and indexes are dropped when their definitions change or they are removed from the desired schema, regardless of `--allow-drop`. PostgreSQL does not support altering their definitions in place — the only way to update them is DROP + ADD.
 
 ### Using transactions
 

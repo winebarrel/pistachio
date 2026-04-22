@@ -85,6 +85,19 @@ Use `--pre-sql-file` to run SQL before applying changes. Use `--with-tx` to wrap
 pist apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 
+By default, `plan` and `apply` do not drop tables, views, enums, domains, or columns. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`). Also available as `$PIST_ALLOW_DROP`.
+
+```bash
+# Allow all drops
+pist plan --allow-drop all schema.sql
+
+# Allow only column and table drops
+pist apply --allow-drop column,table schema.sql
+```
+
+> [!NOTE]
+> Constraints and indexes are always dropped when their definitions change or they are removed from the desired schema, regardless of `--allow-drop`. This is because PostgreSQL does not support `ALTER CONSTRAINT` or `ALTER INDEX` for definition changes — the only way to update them is DROP + ADD.
+
 ### dump
 
 Dump the current database schema as SQL. Output can be used directly as a schema file.
@@ -154,7 +167,7 @@ pist apply -I 'user*' -E 'user_tmp' schema.sql
 pist dump --enable enum
 
 # Dump only tables and views
-pist dump --enable table --enable view
+pist dump --enable table,view
 
 # Dump everything except views
 pist dump --disable view

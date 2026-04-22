@@ -191,6 +191,98 @@ CREATE TABLE public.users (
 	assert.NotContains(t, got, "ALTER TABLE")
 }
 
+func TestPlan_AllowDrop_None(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(``), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	// No --allow-drop: DROP TABLE should be suppressed
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestPlan_AllowDrop_Column(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    email text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	// --allow-drop column: DROP COLUMN allowed but DROP TABLE not
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"column"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got, "DROP COLUMN email")
+}
+
+func TestApply_DefaultNoDrops(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	// Desired is empty — without --allow-drop, table should NOT be dropped
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(``), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+
+	// Verify table still exists
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, got.String(), "CREATE TABLE public.users")
+}
+
 func TestDump_Include(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -370,7 +462,7 @@ CREATE TABLE public.posts (
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
@@ -409,7 +501,7 @@ CREATE TABLE public.posts (
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Exclude: []string{"posts"}}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Exclude: []string{"posts"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
@@ -478,7 +570,7 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';")
@@ -503,7 +595,7 @@ CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');`), 0o644))
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}}, io.Discard)
+	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"status"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: only status should have the new value
@@ -777,7 +869,7 @@ CREATE TABLE public.posts (
 		Schemas:    []string{"public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}}, io.Discard)
+	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, FilterOptions: pistachio.FilterOptions{Include: []string{"users"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: only users should have the new column

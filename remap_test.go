@@ -213,7 +213,7 @@ CREATE TABLE myschema.users (
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -243,7 +243,7 @@ CREATE TABLE myschema.users (
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	// No diff expected since schemas are remapped
@@ -293,7 +293,7 @@ CREATE TABLE myschema.users (
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
@@ -406,7 +406,7 @@ CREATE TABLE myschema.users (
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	// "other" schema is not reverse-mapped, so it won't match myschema
@@ -450,7 +450,7 @@ ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (use
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -483,7 +483,7 @@ CREATE INDEX users_name_idx ON public.users (name);
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -514,7 +514,7 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -545,7 +545,7 @@ CREATE TABLE myschema.users (
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	// Verify: dump without schema map should show myschema with new column
@@ -585,7 +585,7 @@ CREATE TABLE myschema.users (
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	t.Log(got)
 
@@ -613,7 +613,7 @@ CREATE TABLE myschema.users (
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
@@ -655,7 +655,7 @@ CREATE DOMAIN myschema.pos_int AS integer;
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Contains(t, got, "ALTER DOMAIN myschema.pos_int SET NOT NULL;")
 }
@@ -697,7 +697,7 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "ALTER TYPE myschema.status ADD VALUE 'pending' AFTER 'inactive';")
@@ -719,7 +719,7 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
@@ -740,7 +740,7 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 		SchemaMap:  map[string]string{"myschema": "public"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	verifyClient := pistachio.NewClient(&pistachio.Options{
@@ -775,7 +775,7 @@ CREATE TABLE myschema.users (
 		Schemas:    []string{"myschema"},
 	})
 
-	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	err := client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
 	require.NoError(t, err)
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{})

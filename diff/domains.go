@@ -13,7 +13,8 @@ type DomainDiffResult struct {
 	DropStmts []string
 }
 
-func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain]) (*DomainDiffResult, error) {
+func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc DropChecker) (*DomainDiffResult, error) {
+	dc = NormalizeDropChecker(dc)
 	result := &DomainDiffResult{}
 
 	// Detect renames
@@ -48,9 +49,11 @@ func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain]) (*Doma
 	}
 
 	// Dropped domains
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			result.DropStmts = append(result.DropStmts, "DROP DOMAIN "+k+";")
+	if dc.IsDropAllowed("domain") {
+		for k := range current.Keys() {
+			if _, ok := desired.GetOk(k); !ok {
+				result.DropStmts = append(result.DropStmts, "DROP DOMAIN "+k+";")
+			}
 		}
 	}
 

@@ -13,6 +13,7 @@ import (
 
 type ApplyOptions struct {
 	FilterOptions
+	DropPolicy
 	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
 	PreSQLFile string   `type:"path" help:"Path to a SQL file to execute before applying changes."`
 	WithTx     bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
@@ -55,25 +56,25 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return fmt.Errorf("failed to parse SQL file: %w", err)
 	}
 
-	enumDiff, err := diff.DiffEnums(options.filterEnums(currentEnums), options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums)))
+	enumDiff, err := diff.DiffEnums(options.filterEnums(currentEnums), options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums)), &options.DropPolicy)
 	if err != nil {
 		return err
 	}
 	stmts := enumDiff.Stmts
 
-	domainDiff, err := diff.DiffDomains(options.filterDomains(currentDomains), options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains)))
+	domainDiff, err := diff.DiffDomains(options.filterDomains(currentDomains), options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains)), &options.DropPolicy)
 	if err != nil {
 		return fmt.Errorf("failed to diff domains: %w", err)
 	}
 	stmts = append(stmts, domainDiff.Stmts...)
 
-	tableStmts, err := diff.DiffTables(options.filterTables(currentTables), options.filterTables(client.reverseRemapTableSchemas(desired.Tables)))
+	tableStmts, err := diff.DiffTables(options.filterTables(currentTables), options.filterTables(client.reverseRemapTableSchemas(desired.Tables)), &options.DropPolicy)
 	if err != nil {
 		return fmt.Errorf("failed to diff tables: %w", err)
 	}
 	stmts = append(stmts, tableStmts...)
 
-	viewStmts, err := diff.DiffViews(options.filterViews(currentViews), options.filterViews(client.reverseRemapViewSchemas(desired.Views)))
+	viewStmts, err := diff.DiffViews(options.filterViews(currentViews), options.filterViews(client.reverseRemapViewSchemas(desired.Views)), &options.DropPolicy)
 	if err != nil {
 		return fmt.Errorf("failed to diff views: %w", err)
 	}
