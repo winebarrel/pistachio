@@ -54,6 +54,34 @@ func TestApply(t *testing.T) {
 	}
 }
 
+func TestApply_WithPreSQL(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:  []string{desiredFile},
+		PreSQL: "SELECT 1;",
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "SELECT 1;")
+	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
+}
+
 func TestApply_WithPreSQLFile(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

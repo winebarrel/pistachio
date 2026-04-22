@@ -65,6 +65,7 @@ pist plan schema.sql
 pist plan tables.sql views.sql
 
 # Include pre-SQL in the output
+pist plan schema.sql --pre-sql "SET search_path TO myschema;"
 pist plan schema.sql --pre-sql-file pre.sql
 ```
 
@@ -79,9 +80,13 @@ pist apply schema.sql
 pist apply tables.sql views.sql
 ```
 
-Use `--pre-sql-file` to run SQL before applying changes. Use `--with-tx` to wrap everything in a transaction.
+Use `--pre-sql` or `--pre-sql-file` to run SQL before applying changes (mutually exclusive). Use `--with-tx` to wrap everything in a transaction.
 
 ```bash
+# Inline SQL
+pist apply schema.sql --pre-sql "SET search_path TO myschema;" --with-tx
+
+# From file
 pist apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 

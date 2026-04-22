@@ -224,9 +224,10 @@ pist apply schema.sql --with-tx
 
 ### Running pre-migration SQL
 
-Execute SQL before applying schema changes (e.g. installing extensions):
+Execute SQL before applying schema changes (e.g. installing extensions). Use `--pre-sql` for inline SQL or `--pre-sql-file` for a file (mutually exclusive):
 
 ```bash
+pist apply schema.sql --pre-sql "CREATE EXTENSION IF NOT EXISTS pgcrypto;" --with-tx
 pist apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 
