@@ -521,6 +521,39 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;
 	assert.Contains(t, got.SQL, "CREATE OR REPLACE VIEW myschema.active_users")
 }
 
+func TestPlan_WithSchemaMap_View_NoDiff(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    label text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW myschema.active_users AS SELECT id, label FROM myschema.users WHERE label = 'active';
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    label text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.active_users AS SELECT id, label FROM public.users WHERE label = 'active';
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Empty(t, got.SQL)
+}
+
 func TestApply_WithSchemaMap(t *testing.T) {
 	ctx := context.Background()
 

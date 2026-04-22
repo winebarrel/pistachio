@@ -87,7 +87,9 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
-	viewDiff, err := diff.DiffViews(filteredViews, options.filterViews(client.reverseRemapViewSchemas(desired.Views)), &options.DropPolicy)
+	desiredViews := options.filterViews(client.reverseRemapViewSchemas(desired.Views))
+	normalizeDesiredViewDefs(ctx, conn, filteredViews, desiredViews)
+	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff views: %w", err)
 	}

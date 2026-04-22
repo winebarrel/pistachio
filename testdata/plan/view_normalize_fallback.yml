@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      label text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS
+  SELECT id, label FROM items WHERE label = 'active';
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS
+  SELECT id FROM items;
+plan: |
+  ALTER TABLE public.items DROP COLUMN label;
+  CREATE OR REPLACE VIEW public.active_items AS
+  SELECT id FROM items;
