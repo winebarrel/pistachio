@@ -68,6 +68,28 @@ func TestDiffTables_dropTable(t *testing.T) {
 	assert.Equal(t, []string{"DROP TABLE public.users;"}, stmts)
 }
 
+func TestNormalizeDropChecker_nil(t *testing.T) {
+	dc := NormalizeDropChecker(nil)
+	assert.False(t, dc.IsDropAllowed("table"))
+}
+
+func TestNormalizeDropChecker_nonNil(t *testing.T) {
+	dc := NormalizeDropChecker(AllowAllDrops{})
+	assert.True(t, dc.IsDropAllowed("table"))
+}
+
+func TestDiffTables_nilDropChecker(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	current.Set("public.users", newTable("public", "users"))
+
+	// nil DropChecker should not panic, drops should be denied
+	stmts, err := DiffTables(current, desired, nil)
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
 func TestDiffTables_dropTable_denied(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()
