@@ -53,6 +53,39 @@ CREATE VIEW public.active_items AS SELECT id FROM items;
 	assert.Equal(t, "SELECT id FROM items", v.Definition)
 }
 
+func TestNormalizeDesiredViewDefs_SavepointIsolation(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.items (
+    id integer NOT NULL,
+    label text NOT NULL,
+    CONSTRAINT items_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.good_view AS SELECT id, label FROM items WHERE label = 'active';
+`)
+
+	current := orderedmap.New[string, *model.View]()
+	// First view: will fail (references nonexistent column)
+	current.Set("public.bad_view", &model.View{Schema: "public", Name: "bad_view", Definition: "SELECT missing_col FROM items"})
+	// Second view: should still succeed despite first failure
+	current.Set("public.good_view", &model.View{Schema: "public", Name: "good_view", Definition: "SELECT id, label FROM items WHERE label = 'active'"})
+
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.bad_view", &model.View{Schema: "public", Name: "bad_view", Definition: "SELECT missing_col FROM items"})
+	desired.Set("public.good_view", &model.View{Schema: "public", Name: "good_view", Definition: "SELECT id, label FROM items WHERE label = 'active'"})
+
+	pistachio.NormalizeDesiredViewDefs(ctx, conn, current, desired)
+
+	// bad_view: definition unchanged (CREATE VIEW failed)
+	bad, _ := desired.GetOk("public.bad_view")
+	assert.Equal(t, "SELECT missing_col FROM items", bad.Definition)
+
+	// good_view: definition normalized despite bad_view failing first
+	good, _ := desired.GetOk("public.good_view")
+	assert.Contains(t, good.Definition, "'active'::text")
+}
+
 func TestNormalizeDesiredViewDefs_SkipsNewViews(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

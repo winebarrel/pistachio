@@ -30,16 +30,34 @@ func normalizeDesiredViewDefs(ctx context.Context, conn *pgx.Conn, current, desi
 			continue
 		}
 
-		sql := "CREATE OR REPLACE VIEW " + v.FQVN() + " AS " + v.Definition
-		if _, err := tx.Exec(ctx, sql); err != nil {
-			continue
+		if def, err := normalizeOneViewDef(ctx, tx, v); err == nil {
+			v.Definition = def
 		}
-
-		var def string
-		if err := tx.QueryRow(ctx, "SELECT pg_catalog.pg_get_viewdef($1::regclass, true)", v.FQVN()).Scan(&def); err != nil {
-			continue
-		}
-
-		v.Definition = def
 	}
+}
+
+// normalizeOneViewDef normalizes a single view definition using a savepoint
+// so that a failure does not abort the outer transaction and block subsequent views.
+func normalizeOneViewDef(ctx context.Context, tx pgx.Tx, v *model.View) (string, error) {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer sp.Rollback(ctx) //nolint:errcheck
+
+	sql := "CREATE OR REPLACE VIEW " + v.FQVN() + " AS " + v.Definition
+	if _, err := sp.Exec(ctx, sql); err != nil {
+		return "", err
+	}
+
+	var def string
+	if err := sp.QueryRow(ctx, "SELECT pg_catalog.pg_get_viewdef($1::regclass, true)", v.FQVN()).Scan(&def); err != nil {
+		return "", err
+	}
+
+	if err := sp.Commit(ctx); err != nil {
+		return "", err
+	}
+
+	return def, nil
 }
