@@ -251,6 +251,38 @@ CREATE TABLE public.users (
 	assert.Contains(t, got, "DROP COLUMN email")
 }
 
+func TestApply_DefaultNoDrops(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	// Desired is empty — without --allow-drop, table should NOT be dropped
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(``), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+
+	// Verify table still exists
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, got.String(), "CREATE TABLE public.users")
+}
+
 func TestDump_Include(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

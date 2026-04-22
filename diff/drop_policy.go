@@ -9,3 +9,16 @@ type DropChecker interface {
 type AllowAllDrops struct{}
 
 func (AllowAllDrops) IsDropAllowed(string) bool { return true }
+
+// DenyAllDrops is a DropChecker that denies all drops.
+type DenyAllDrops struct{}
+
+func (DenyAllDrops) IsDropAllowed(string) bool { return false }
+
+// NormalizeDropChecker returns dc if non-nil, otherwise returns DenyAllDrops.
+func NormalizeDropChecker(dc DropChecker) DropChecker {
+	if dc == nil {
+		return DenyAllDrops{}
+	}
+	return dc
+}

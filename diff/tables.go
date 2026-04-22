@@ -11,6 +11,7 @@ import (
 )
 
 func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker) ([]string, error) {
+	dc = NormalizeDropChecker(dc)
 	var stmts []string
 
 	// Detect renames
@@ -66,6 +67,7 @@ func newTableExtras(t *model.Table) []string {
 }
 
 func diffTable(current, desired *model.Table, dc DropChecker) ([]string, error) {
+	dc = NormalizeDropChecker(dc)
 	var stmts []string
 	fqtn := desired.FQTN()
 
@@ -115,6 +117,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) ([]string, error) 
 }
 
 func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) ([]string, error) {
+	dc = NormalizeDropChecker(dc)
 	var stmts []string
 
 	// Detect renames

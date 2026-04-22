@@ -34,6 +34,7 @@ func equalViewDef(a, b string) bool {
 }
 
 func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker) ([]string, error) {
+	dc = NormalizeDropChecker(dc)
 	var stmts []string
 
 	// Detect renames

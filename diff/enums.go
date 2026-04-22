@@ -14,6 +14,7 @@ type EnumDiffResult struct {
 }
 
 func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChecker) (*EnumDiffResult, error) {
+	dc = NormalizeDropChecker(dc)
 	result := &EnumDiffResult{}
 
 	// Detect renames

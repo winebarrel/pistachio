@@ -193,7 +193,7 @@ pist dump --enable table,enum        # dump tables and enums only
 
 ### Controlling drops
 
-By default, `plan` and `apply` do **not** generate DROP statements to prevent accidental data loss. Use `--allow-drop` to opt in:
+By default, `plan` and `apply` do **not** drop tables, views, enums, domains, or columns. Use `--allow-drop` to opt in:
 
 ```bash
 # Allow all drops
