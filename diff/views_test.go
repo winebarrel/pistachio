@@ -38,6 +38,7 @@ func TestDiffViews_dropView_denied(t *testing.T) {
 	result, err := DiffViews(current, desired, DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_modifyView(t *testing.T) {
@@ -61,6 +62,7 @@ func TestDiffViews_noChange(t *testing.T) {
 	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_formattingDifferenceIgnored(t *testing.T) {
@@ -72,6 +74,7 @@ func TestDiffViews_formattingDifferenceIgnored(t *testing.T) {
 	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_commentAdd(t *testing.T) {
@@ -122,6 +125,7 @@ func TestDiffViews_rename_selfRename_skipped(t *testing.T) {
 	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_rename_alreadyApplied(t *testing.T) {
@@ -135,6 +139,7 @@ func TestDiffViews_rename_alreadyApplied(t *testing.T) {
 	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_rename_destinationExists_error(t *testing.T) {
