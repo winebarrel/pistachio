@@ -207,7 +207,7 @@ pist apply --allow-drop column,table schema.sql
 PIST_ALLOW_DROP=all pist plan schema.sql
 ```
 
-Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `index`.
+Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`.
 
 ### Using transactions
 

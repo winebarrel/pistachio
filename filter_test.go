@@ -217,7 +217,7 @@ CREATE TABLE public.users (
 	assert.Empty(t, got)
 }
 
-func TestPlan_AllowDrop_Table(t *testing.T) {
+func TestPlan_AllowDrop_Column(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
