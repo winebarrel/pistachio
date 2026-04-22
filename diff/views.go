@@ -33,7 +33,7 @@ func equalViewDef(a, b string) bool {
 	return normA == normB
 }
 
-func DiffViews(current, desired *orderedmap.Map[string, *model.View]) ([]string, error) {
+func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker) ([]string, error) {
 	var stmts []string
 
 	// Detect renames
@@ -52,9 +52,11 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View]) ([]string,
 	}
 
 	// Dropped views
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			stmts = append(stmts, "DROP VIEW "+k+";")
+	if dc.IsDropAllowed("view") {
+		for k := range current.Keys() {
+			if _, ok := desired.GetOk(k); !ok {
+				stmts = append(stmts, "DROP VIEW "+k+";")
+			}
 		}
 	}
 

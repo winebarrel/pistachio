@@ -13,7 +13,7 @@ type EnumDiffResult struct {
 	DropStmts []string
 }
 
-func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum]) (*EnumDiffResult, error) {
+func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChecker) (*EnumDiffResult, error) {
 	result := &EnumDiffResult{}
 
 	// Detect renames
@@ -57,9 +57,11 @@ func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum]) (*EnumDiff
 	}
 
 	// Dropped enums
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			result.DropStmts = append(result.DropStmts, "DROP TYPE "+k+";")
+	if dc.IsDropAllowed("enum") {
+		for k := range current.Keys() {
+			if _, ok := desired.GetOk(k); !ok {
+				result.DropStmts = append(result.DropStmts, "DROP TYPE "+k+";")
+			}
 		}
 	}
 

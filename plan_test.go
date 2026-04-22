@@ -52,7 +52,7 @@ func TestPlan_WithPassword(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Contains(t, got, "CREATE TABLE public.users")
 }
@@ -206,7 +206,7 @@ CREATE TABLE public.users (
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Contains(t, got, "ALTER TABLE public.users ADD COLUMN name text;")
 }
@@ -233,7 +233,7 @@ CREATE TABLE public.users (
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
@@ -261,7 +261,7 @@ func TestPlan(t *testing.T) {
 				Schemas:    []string{"public"},
 			})
 
-			got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+			got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got))
 		})

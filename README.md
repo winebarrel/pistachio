@@ -85,6 +85,16 @@ Use `--pre-sql-file` to run SQL before applying changes. Use `--with-tx` to wrap
 pist apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 
+By default, `plan` and `apply` do not generate DROP statements. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `index`). Also available as `$PIST_ALLOW_DROP`.
+
+```bash
+# Allow all drops
+pist plan --allow-drop all schema.sql
+
+# Allow only column and table drops
+pist apply --allow-drop column --allow-drop table schema.sql
+```
+
 ### dump
 
 Dump the current database schema as SQL. Output can be used directly as a schema file.

@@ -33,7 +33,7 @@ func TestPlan_Run(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
@@ -241,7 +241,7 @@ func TestPlan_Run_Error(t *testing.T) {
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 }
@@ -279,7 +279,7 @@ func TestPlan_Run_NoChanges(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Equal(t, "-- No changes\n", buf.String())
@@ -305,7 +305,7 @@ func TestApply_Run_NoChanges(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Equal(t, "-- No changes\n", buf.String())
@@ -322,7 +322,7 @@ func TestApply_Run_Error(t *testing.T) {
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 }
@@ -346,7 +346,7 @@ func TestApply_Run(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")

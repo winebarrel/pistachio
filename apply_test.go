@@ -43,7 +43,7 @@ func TestApply(t *testing.T) {
 				ConnString: conn.Config().ConnString(),
 				Schemas:    []string{"public"},
 			})
-			err = client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+			err = client.Apply(ctx, &pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}, io.Discard)
 			require.NoError(t, err)
 
 			// Verify
