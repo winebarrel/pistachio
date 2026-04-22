@@ -30,6 +30,16 @@ func TestDiffViews_dropView(t *testing.T) {
 	assert.Equal(t, []string{"DROP VIEW public.v1;"}, stmts)
 }
 
+func TestDiffViews_dropView_denied(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+	desired := orderedmap.New[string, *model.View]()
+
+	stmts, err := DiffViews(current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
 func TestDiffViews_modifyView(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})

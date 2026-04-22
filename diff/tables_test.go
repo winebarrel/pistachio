@@ -68,6 +68,30 @@ func TestDiffTables_dropTable(t *testing.T) {
 	assert.Equal(t, []string{"DROP TABLE public.users;"}, stmts)
 }
 
+func TestDiffTables_dropTable_denied(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	current.Set("public.users", newTable("public", "users"))
+
+	stmts, err := DiffTables(current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+func TestDiffColumns_dropColumn_denied(t *testing.T) {
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	current.Set("name", &model.Column{Name: "name", TypeName: "text"})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+
+	stmts, err := diffColumns("public.users", current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
 func TestDiffTables_noChange(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()

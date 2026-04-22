@@ -45,6 +45,19 @@ func TestDiffEnums_DropExisting(t *testing.T) {
 	assert.Equal(t, []string{"DROP TYPE public.status;"}, result.DropStmts)
 }
 
+func TestDiffEnums_DropExisting_Denied(t *testing.T) {
+	current := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"active", "inactive"},
+	})
+	desired := newEnumMap()
+	result, err := diff.DiffEnums(current, desired, diff.DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.DropStmts)
+}
+
 func TestDiffEnums_AddValue(t *testing.T) {
 	current := newEnumMap(&model.Enum{
 		Schema: "public",
