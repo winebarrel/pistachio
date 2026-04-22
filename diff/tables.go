@@ -53,10 +53,13 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 		}
 	}
 
-	// Dropped tables
+	// Dropped tables: drop FKs on dropped tables first to avoid dependency errors
 	if dc.IsDropAllowed("table") {
-		for k := range current.Keys() {
+		for k, tbl := range current.All() {
 			if _, ok := desired.GetOk(k); !ok {
+				for name := range tbl.ForeignKeys.Keys() {
+					result.FKDropStmts = append(result.FKDropStmts, "ALTER TABLE "+k+" DROP CONSTRAINT "+model.Ident(name)+";")
+				}
 				result.DropStmts = append(result.DropStmts, "DROP TABLE "+k+";")
 			}
 		}
