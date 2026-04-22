@@ -14,10 +14,10 @@ func TestDiffViews_newView(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Len(t, stmts, 1)
-	assert.Contains(t, stmts[0], "CREATE OR REPLACE VIEW public.v1")
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW public.v1")
 }
 
 func TestDiffViews_dropView(t *testing.T) {
@@ -25,9 +25,9 @@ func TestDiffViews_dropView(t *testing.T) {
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 	desired := orderedmap.New[string, *model.View]()
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"DROP VIEW public.v1;"}, stmts)
+	assert.Equal(t, []string{"DROP VIEW public.v1;"}, result.DropStmts)
 }
 
 func TestDiffViews_dropView_denied(t *testing.T) {
@@ -35,9 +35,10 @@ func TestDiffViews_dropView_denied(t *testing.T) {
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 	desired := orderedmap.New[string, *model.View]()
 
-	stmts, err := DiffViews(current, desired, DenyAllDrops{})
+	result, err := DiffViews(current, desired, DenyAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_modifyView(t *testing.T) {
@@ -46,10 +47,10 @@ func TestDiffViews_modifyView(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 2"})
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Len(t, stmts, 1)
-	assert.Contains(t, stmts[0], "CREATE OR REPLACE VIEW public.v1")
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW public.v1")
 }
 
 func TestDiffViews_noChange(t *testing.T) {
@@ -58,9 +59,10 @@ func TestDiffViews_noChange(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_formattingDifferenceIgnored(t *testing.T) {
@@ -69,9 +71,10 @@ func TestDiffViews_formattingDifferenceIgnored(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_commentAdd(t *testing.T) {
@@ -80,10 +83,10 @@ func TestDiffViews_commentAdd(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Comment: ptr("my view")})
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Len(t, stmts, 1)
-	assert.Equal(t, "COMMENT ON VIEW public.v1 IS 'my view';", stmts[0])
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Equal(t, "COMMENT ON VIEW public.v1 IS 'my view';", result.CreateStmts[0])
 }
 
 func TestDiffViews_commentDrop(t *testing.T) {
@@ -92,10 +95,10 @@ func TestDiffViews_commentDrop(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Len(t, stmts, 1)
-	assert.Equal(t, "COMMENT ON VIEW public.v1 IS NULL;", stmts[0])
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Equal(t, "COMMENT ON VIEW public.v1 IS NULL;", result.CreateStmts[0])
 }
 
 func TestDiffViews_rename(t *testing.T) {
@@ -106,9 +109,9 @@ func TestDiffViews_rename(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"ALTER VIEW public.v1 RENAME TO v2;"}, stmts)
+	assert.Equal(t, []string{"ALTER VIEW public.v1 RENAME TO v2;"}, result.CreateStmts)
 }
 
 func TestDiffViews_rename_selfRename_skipped(t *testing.T) {
@@ -119,9 +122,10 @@ func TestDiffViews_rename_selfRename_skipped(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", RenameFrom: &oldName, Definition: "SELECT 1"})
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_rename_alreadyApplied(t *testing.T) {
@@ -132,9 +136,10 @@ func TestDiffViews_rename_alreadyApplied(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: &oldName, Definition: "SELECT 1"})
 
-	stmts, err := DiffViews(current, desired, AllowAllDrops{})
+	result, err := DiffViews(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
 }
 
 func TestDiffViews_rename_destinationExists_error(t *testing.T) {

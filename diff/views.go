@@ -33,22 +33,29 @@ func equalViewDef(a, b string) bool {
 	return normA == normB
 }
 
-func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker) ([]string, error) {
+// ViewDiffResult separates view DROP and CREATE/MODIFY statements.
+// Drops should run before table changes, creates after.
+type ViewDiffResult struct {
+	DropStmts   []string // DROP VIEW (should run before table changes)
+	CreateStmts []string // ALTER VIEW RENAME, CREATE OR REPLACE VIEW, comments (should run after table changes)
+}
+
+func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker) (*ViewDiffResult, error) {
 	dc = NormalizeDropChecker(dc)
-	var stmts []string
+	result := &ViewDiffResult{}
 
 	// Detect renames
 	renameStmts, current, err := detectViewRenames(current, desired)
 	if err != nil {
 		return nil, err
 	}
-	stmts = append(stmts, renameStmts...)
+	result.CreateStmts = append(result.CreateStmts, renameStmts...)
 
 	// New or modified views (CREATE OR REPLACE)
 	for k, desiredView := range desired.All() {
 		currentView, ok := current.GetOk(k)
 		if !ok || !equalViewDef(currentView.Definition, desiredView.Definition) {
-			stmts = append(stmts, desiredView.SQL())
+			result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 		}
 	}
 
@@ -56,7 +63,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	if dc.IsDropAllowed("view") {
 		for k := range current.Keys() {
 			if _, ok := desired.GetOk(k); !ok {
-				stmts = append(stmts, "DROP VIEW "+k+";")
+				result.DropStmts = append(result.DropStmts, "DROP VIEW "+k+";")
 			}
 		}
 	}
@@ -70,12 +77,12 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		}
 		if !equalPtr(currentComment, desiredView.Comment) {
 			if desiredView.Comment != nil {
-				stmts = append(stmts, "COMMENT ON VIEW "+k+" IS "+model.QuoteLiteral(*desiredView.Comment)+";")
+				result.CreateStmts = append(result.CreateStmts, "COMMENT ON VIEW "+k+" IS "+model.QuoteLiteral(*desiredView.Comment)+";")
 			} else {
-				stmts = append(stmts, "COMMENT ON VIEW "+k+" IS NULL;")
+				result.CreateStmts = append(result.CreateStmts, "COMMENT ON VIEW "+k+" IS NULL;")
 			}
 		}
 	}
 
-	return stmts, nil
+	return result, nil
 }

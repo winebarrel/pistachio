@@ -87,20 +87,27 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
-	stmts = append(stmts, tableDiff.FKDropStmts...)
-	stmts = append(stmts, tableDiff.Stmts...)
-
-	viewStmts, err := diff.DiffViews(filteredViews, options.filterViews(client.reverseRemapViewSchemas(desired.Views)), &options.DropPolicy)
+	viewDiff, err := diff.DiffViews(filteredViews, options.filterViews(client.reverseRemapViewSchemas(desired.Views)), &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff views: %w", err)
 	}
-	stmts = append(stmts, viewStmts...)
 
+	// Drop views before table/column changes (views may depend on columns being dropped)
+	stmts = append(stmts, viewDiff.DropStmts...)
+
+	// FK drops before table/column changes
+	stmts = append(stmts, tableDiff.FKDropStmts...)
+	stmts = append(stmts, tableDiff.Stmts...)
+
+	// Table drops
 	stmts = append(stmts, tableDiff.DropStmts...)
 	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
 
 	stmts = append(stmts, tableDiff.FKAddStmts...)
+
+	// View creates last (views may depend on tables/columns created above)
+	stmts = append(stmts, viewDiff.CreateStmts...)
 
 	preSQL, err := resolvePreSQL(options.PreSQL, options.PreSQLFile)
 	if err != nil {
