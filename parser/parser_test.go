@@ -122,6 +122,24 @@ func TestReadSQLFile_Stdin(t *testing.T) {
 	assert.Equal(t, sql, got)
 }
 
+func TestReadSQLFile_Stdin_ReadAll(t *testing.T) {
+	// Verify that stdin reads empty content from a closed pipe without error
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	w.Close()
+
+	origStdin := os.Stdin
+	os.Stdin = r
+	defer func() {
+		os.Stdin = origStdin
+		r.Close()
+	}()
+
+	got, err := parser.ReadSQLFile("-")
+	require.NoError(t, err)
+	assert.Equal(t, "", got)
+}
+
 func TestParseSQLFile_NotFound(t *testing.T) {
 	_, err := parser.ParseSQLFile("/nonexistent/file.sql")
 	require.Error(t, err)
