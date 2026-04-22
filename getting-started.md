@@ -210,7 +210,7 @@ PIST_ALLOW_DROP=all pist plan schema.sql
 Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`.
 
 > [!NOTE]
-> Constraints and indexes are always dropped regardless of `--allow-drop` (PostgreSQL requires DROP + ADD to change their definitions).
+> Constraints and indexes are dropped when their definitions change or they are removed from the desired schema, regardless of `--allow-drop`. PostgreSQL does not support altering their definitions in place — the only way to update them is DROP + ADD.
 
 ### Using transactions
 
