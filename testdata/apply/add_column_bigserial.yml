@@ -1,14 +1,17 @@
-init: ""
+init: |
+  CREATE TABLE public.users (
+      name text NOT NULL
+  );
 desired: |
   CREATE TABLE public.users (
-      id serial NOT NULL,
+      id bigserial NOT NULL,
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 applied: |
   -- public.users
   CREATE TABLE public.users (
-      id serial NOT NULL,
       name text NOT NULL,
+      id bigserial NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );

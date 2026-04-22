@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.users (
+      name text NOT NULL
+  );
+desired: |
+  CREATE TABLE public.users (
+      id bigserial NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users ADD COLUMN id bigserial NOT NULL;
+  ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
