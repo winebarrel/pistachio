@@ -14,9 +14,9 @@ import (
 // correct ordering: FK drops first, then schema changes, then FK adds last.
 type TableDiffResult struct {
 	FKDropStmts []string // FK drops (should run first)
-	Stmts       []string // CREATE/ALTER/DROP TABLE, columns, constraints, indexes, comments
-	FKAddStmts  []string // FK adds (should run last)
-	DropStmts   []string // DROP TABLE (should run after FK drops)
+	Stmts       []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
+	FKAddStmts  []string // FK adds and renames (should run last)
+	DropStmts   []string // DROP TABLE (separate from Stmts for ordering)
 }
 
 func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker) (*TableDiffResult, error) {
