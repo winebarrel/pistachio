@@ -1,4 +1,6 @@
 package pistachio
 
-var ResolvePreSQL = resolvePreSQL
-var NormalizeDesiredViewDefs = normalizeDesiredViewDefs
+var (
+	ResolvePreSQL            = resolvePreSQL
+	NormalizeDesiredViewDefs = normalizeDesiredViewDefs
+)
