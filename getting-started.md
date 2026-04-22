@@ -77,6 +77,7 @@ pist plan schema.sql
 Output:
 
 ```sql
+-- Target: schema: public, 1 table, 0 views, 0 enums, 0 domains
 ALTER TABLE public.users ADD COLUMN email text;
 ```
 
@@ -92,6 +93,7 @@ Verify by running plan again:
 
 ```bash
 pist plan schema.sql
+# => -- Target: schema: public, 1 table, 0 views, 0 enums, 0 domains
 # => -- No changes
 ```
 
