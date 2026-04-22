@@ -209,6 +209,9 @@ PIST_ALLOW_DROP=all pist plan schema.sql
 
 Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`.
 
+> [!NOTE]
+> Constraints and indexes are always dropped regardless of `--allow-drop` (PostgreSQL requires DROP + ADD to change their definitions).
+
 ### Using transactions
 
 Wrap apply in a transaction so all changes succeed or fail together:

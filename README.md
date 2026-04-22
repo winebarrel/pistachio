@@ -95,6 +95,9 @@ pist plan --allow-drop all schema.sql
 pist apply --allow-drop column,table schema.sql
 ```
 
+> [!NOTE]
+> Constraints and indexes are always dropped when their definitions change or they are removed from the desired schema, regardless of `--allow-drop`. This is because PostgreSQL does not support `ALTER CONSTRAINT` or `ALTER INDEX` for definition changes — the only way to update them is DROP + ADD.
+
 ### dump
 
 Dump the current database schema as SQL. Output can be used directly as a schema file.
