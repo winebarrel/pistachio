@@ -37,7 +37,7 @@ func equalViewDef(a, b string) bool {
 // Drops should run before table changes, creates after.
 type ViewDiffResult struct {
 	DropStmts   []string // DROP VIEW (should run before table changes)
-	CreateStmts []string // CREATE OR REPLACE VIEW, comments (should run after table changes)
+	CreateStmts []string // ALTER VIEW RENAME, CREATE OR REPLACE VIEW, comments (should run after table changes)
 }
 
 func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker) (*ViewDiffResult, error) {

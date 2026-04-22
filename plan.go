@@ -129,7 +129,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		return nil, fmt.Errorf("failed to diff views: %w", err)
 	}
 
-	// View drops first (views may depend on columns being dropped)
+	// Drop views before table/column changes (views may depend on columns being dropped)
 	stmts = append(stmts, viewDiff.DropStmts...)
 
 	// FK drops before table/column changes
