@@ -27,9 +27,12 @@ type ObjectCount struct {
 	Domains int
 }
 
-func (c ObjectCount) String() string {
-	return fmt.Sprintf("schema: %s, %s, %s, %s, %s",
-		strings.Join(c.Schemas, ", "),
+func (c ObjectCount) SchemaNames() string {
+	return strings.Join(c.Schemas, ", ")
+}
+
+func (c ObjectCount) Summary() string {
+	return fmt.Sprintf("%s, %s, %s, %s",
 		pluralize(c.Tables, "table"),
 		pluralize(c.Views, "view"),
 		pluralize(c.Enums, "enum"),

@@ -282,7 +282,7 @@ func TestPlan_Run_NoChanges(t *testing.T) {
 	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "-- Plan: schema: public, 1 table,")
+	assert.Contains(t, buf.String(), "-- Plan for schema public (")
 	assert.Contains(t, buf.String(), "-- No changes")
 }
 
@@ -309,7 +309,7 @@ func TestApply_Run_NoChanges(t *testing.T) {
 	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "-- Apply: schema: public, 1 table,")
+	assert.Contains(t, buf.String(), "-- Apply to schema public (")
 	assert.Contains(t, buf.String(), "-- No changes")
 }
 
