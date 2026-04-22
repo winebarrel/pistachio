@@ -106,7 +106,10 @@ func TestReadSQLFile_Stdin(t *testing.T) {
 
 	origStdin := os.Stdin
 	os.Stdin = r
-	defer func() { os.Stdin = origStdin }()
+	defer func() {
+		os.Stdin = origStdin
+		r.Close()
+	}()
 
 	sql := "SELECT 1;"
 	go func() {

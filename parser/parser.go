@@ -37,6 +37,9 @@ func ReadSQLFile(path string) (string, error) {
 	}
 
 	if err != nil {
+		if path == "-" {
+			return "", fmt.Errorf("failed to read SQL from stdin: %w", err)
+		}
 		return "", fmt.Errorf("failed to read SQL file: %w", err)
 	}
 
