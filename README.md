@@ -33,7 +33,7 @@ Flags:
                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
                               ($PIST_CONN_STR)
       --password=STRING       PostgreSQL password ($PIST_PASSWORD).
-  -n, --schemas=public,...    Schemas to inspect and modify ($PGSCHEMAS).
+  -n, --schemas=public,...    Schemas to inspect and modify ($PIST_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
       --version
