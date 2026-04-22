@@ -200,8 +200,8 @@ By default, `plan` and `apply` do **not** generate DROP statements to prevent ac
 pist plan --allow-drop all schema.sql
 pist apply --allow-drop all schema.sql
 
-# Allow only specific drop types
-pist apply --allow-drop column --allow-drop table schema.sql
+# Allow only specific drop types (comma-separated or repeated)
+pist apply --allow-drop column,table schema.sql
 
 # Using environment variable
 PIST_ALLOW_DROP=all pist plan schema.sql

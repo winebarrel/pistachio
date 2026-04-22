@@ -92,7 +92,7 @@ By default, `plan` and `apply` do not generate DROP statements. Use `--allow-dro
 pist plan --allow-drop all schema.sql
 
 # Allow only column and table drops
-pist apply --allow-drop column --allow-drop table schema.sql
+pist apply --allow-drop column,table schema.sql
 ```
 
 ### dump
