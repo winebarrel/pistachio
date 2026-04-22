@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -26,7 +27,15 @@ func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error
 }
 
 func ReadSQLFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	var data []byte
+	var err error
+
+	if path == "-" {
+		data, err = io.ReadAll(os.Stdin)
+	} else {
+		data, err = os.ReadFile(path)
+	}
+
 	if err != nil {
 		return "", fmt.Errorf("failed to read SQL file: %w", err)
 	}
