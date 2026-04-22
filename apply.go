@@ -14,8 +14,8 @@ type ApplyOptions struct {
 	FilterOptions
 	DropPolicy
 	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
-	PreSQL     string   `help:"SQL to execute before applying changes."`
-	PreSQLFile string   `type:"path" help:"Path to a SQL file to execute before applying changes."`
+	PreSQL     string   `xor:"pre-sql" help:"SQL to execute before applying changes."`
+	PreSQLFile string   `type:"path" xor:"pre-sql" help:"Path to a SQL file to execute before applying changes."`
 	WithTx     bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
 }
 
