@@ -8,7 +8,7 @@ desired: |
 applied: |
   -- public.users
   CREATE TABLE public.users (
-      id smallint NOT NULL,
+      id smallserial NOT NULL,
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );

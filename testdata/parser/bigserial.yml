@@ -6,6 +6,6 @@ input: |
 expected: |
   -- public.users
   CREATE TABLE public.users (
-      id bigint NOT NULL,
+      id bigserial NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );

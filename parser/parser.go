@@ -1014,9 +1014,6 @@ var typeAliases = map[string]string{
 	"varbit":      "bit varying",
 	"decimal":     "numeric",
 	"float":       "double precision",
-	"serial":      "integer",
-	"bigserial":   "bigint",
-	"smallserial": "smallint",
 }
 
 func normalizeTypeName(name string) string {
