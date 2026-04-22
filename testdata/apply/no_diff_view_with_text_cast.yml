@@ -1,0 +1,30 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      label text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS
+  SELECT id, label FROM items WHERE label = 'active';
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      label text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS
+  SELECT items.id, items.label FROM items WHERE items.label = 'active';
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      label text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_items
+  CREATE OR REPLACE VIEW public.active_items AS
+  SELECT items.id,
+      items.label
+     FROM items
+    WHERE items.label = 'active'::text;

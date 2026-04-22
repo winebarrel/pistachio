@@ -4,17 +4,82 @@ import (
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // normalizeViewDef normalizes a view definition by parsing and deparsing it
 // through pg_query, so that formatting differences are eliminated.
+// It also strips implicit ::text casts on string literals that pg_get_viewdef adds.
 func normalizeViewDef(def string) (string, error) {
 	sql := "CREATE VIEW _v AS " + def
 	result, err := pg_query.Parse(sql)
 	if err != nil {
 		return "", err
 	}
+	for _, stmt := range result.Stmts {
+		stripImplicitTextCastsFromNode(stmt.Stmt)
+	}
 	return pg_query.Deparse(result)
+}
+
+// isImplicitTextCast returns true if the TypeCast is a ::text cast on a string literal.
+// pg_get_viewdef adds these casts implicitly; they are semantically redundant.
+func isImplicitTextCast(tc *pg_query.TypeCast) bool {
+	if tc == nil || tc.Arg == nil || tc.TypeName == nil {
+		return false
+	}
+	if c := tc.Arg.GetAConst(); c == nil || c.GetSval() == nil {
+		return false
+	}
+	for _, n := range tc.TypeName.Names {
+		if s := n.GetString_(); s != nil && s.Sval == "text" {
+			return true
+		}
+	}
+	return false
+}
+
+var nodeFullName = (&pg_query.Node{}).ProtoReflect().Descriptor().FullName()
+
+// stripImplicitTextCastsFromNode unwraps ::text casts on string literals in the given node.
+func stripImplicitTextCastsFromNode(node *pg_query.Node) {
+	if node == nil {
+		return
+	}
+	if tc := node.GetTypeCast(); isImplicitTextCast(tc) {
+		node.Node = tc.Arg.Node
+		stripImplicitTextCastsFromNode(node)
+		return
+	}
+	walkNodeChildren(node.ProtoReflect())
+}
+
+// walkNodeChildren recursively visits all child Node fields via protobuf reflection.
+func walkNodeChildren(msg protoreflect.Message) {
+	msg.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		if fd.Kind() != protoreflect.MessageKind {
+			return true
+		}
+		if fd.IsList() {
+			list := v.List()
+			for i := 0; i < list.Len(); i++ {
+				m := list.Get(i).Message()
+				if m.Descriptor().FullName() == nodeFullName {
+					stripImplicitTextCastsFromNode(m.Interface().(*pg_query.Node))
+				} else {
+					walkNodeChildren(m)
+				}
+			}
+		} else {
+			m := v.Message()
+			if m.Descriptor().FullName() == nodeFullName {
+				stripImplicitTextCastsFromNode(m.Interface().(*pg_query.Node))
+			} else {
+				walkNodeChildren(m)
+			}
+		}
+		return true
+	})
 }
 
 // equalViewDef compares two view definitions by normalizing them through

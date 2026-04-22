@@ -198,3 +198,48 @@ func TestEqualViewDef_formattingDifference(t *testing.T) {
 func TestEqualViewDef_different(t *testing.T) {
 	assert.False(t, equalViewDef("SELECT 1", "SELECT 2"))
 }
+
+func TestEqualViewDef_implicitTextCast(t *testing.T) {
+	// pg_get_viewdef adds ::text to string literals; this should be ignored
+	assert.True(t, equalViewDef(
+		"SELECT id FROM items WHERE label = 'active'::text",
+		"SELECT id FROM items WHERE label = 'active'",
+	))
+}
+
+func TestEqualViewDef_implicitTextCastMultiple(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT id FROM items WHERE label = 'active'::text AND status = 'enabled'::text",
+		"SELECT id FROM items WHERE label = 'active' AND status = 'enabled'",
+	))
+}
+
+func TestEqualViewDef_nonTextCastPreserved(t *testing.T) {
+	// ::integer cast is meaningful and should NOT be stripped
+	assert.False(t, equalViewDef(
+		"SELECT id FROM items WHERE id = '123'::integer",
+		"SELECT id FROM items WHERE id = '123'",
+	))
+}
+
+func TestEqualViewDef_textCastOnNonStringPreserved(t *testing.T) {
+	// ::text on a non-string-literal (column ref) is meaningful
+	assert.False(t, equalViewDef(
+		"SELECT id::text FROM items",
+		"SELECT id FROM items",
+	))
+}
+
+func TestEqualViewDef_implicitTextCastInSubquery(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT id FROM items WHERE label IN (SELECT name FROM categories WHERE name = 'food'::text)",
+		"SELECT id FROM items WHERE label IN (SELECT name FROM categories WHERE name = 'food')",
+	))
+}
+
+func TestEqualViewDef_implicitTextCastInCaseExpr(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT CASE WHEN label = 'active'::text THEN 'yes'::text ELSE 'no'::text END FROM items",
+		"SELECT CASE WHEN label = 'active' THEN 'yes' ELSE 'no' END FROM items",
+	))
+}
