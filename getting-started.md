@@ -191,6 +191,24 @@ pist dump --disable view           # dump everything except views
 pist dump --enable table --enable enum  # dump tables and enums only
 ```
 
+### Controlling drops
+
+By default, `plan` and `apply` do **not** generate DROP statements to prevent accidental data loss. Use `--allow-drop` to opt in:
+
+```bash
+# Allow all drops
+pist plan --allow-drop all schema.sql
+pist apply --allow-drop all schema.sql
+
+# Allow only specific drop types
+pist apply --allow-drop column --allow-drop table schema.sql
+
+# Using environment variable
+PIST_ALLOW_DROP=all pist plan schema.sql
+```
+
+Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `index`.
+
 ### Using transactions
 
 Wrap apply in a transaction so all changes succeed or fail together:
