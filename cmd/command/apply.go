@@ -20,7 +20,7 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 		return err
 	}
 
-	fmt.Fprintf(w, "-- Target: %s\n", count) //nolint:errcheck
+	fmt.Fprintf(w, "-- Apply: %s\n", count) //nolint:errcheck
 
 	if buf.Len() == 0 {
 		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
