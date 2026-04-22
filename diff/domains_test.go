@@ -47,6 +47,15 @@ func TestDiffDomains_Drop(t *testing.T) {
 	assert.Equal(t, []string{"DROP DOMAIN public.pos_int;"}, result.DropStmts)
 }
 
+func TestDiffDomains_Drop_Denied(t *testing.T) {
+	current := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", BaseType: "integer"})
+	desired := newDomainMap()
+	result, err := diff.DiffDomains(current, desired, diff.DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.DropStmts)
+}
+
 func TestDiffDomains_NoDiff(t *testing.T) {
 	current := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", BaseType: "integer"})
 	desired := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", BaseType: "integer"})
