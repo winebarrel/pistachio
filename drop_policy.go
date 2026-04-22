@@ -11,7 +11,7 @@ type DropPolicy struct {
 }
 
 func (p *DropPolicy) IsDropAllowed(objectType string) bool {
-	if len(p.AllowDrop) == 0 {
+	if p == nil || len(p.AllowDrop) == 0 {
 		return false
 	}
 	return slices.Contains(p.AllowDrop, "all") || slices.Contains(p.AllowDrop, objectType)
