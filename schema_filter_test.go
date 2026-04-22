@@ -86,12 +86,12 @@ CREATE TABLE other.stuff (
 	assert.Equal(t, 1, count.Tables)
 }
 
-func TestObjectCount_SchemaNames(t *testing.T) {
+func TestObjectCount_SchemaLabel(t *testing.T) {
 	c := pistachio.ObjectCount{Schemas: []string{"public"}}
-	assert.Equal(t, "public", c.SchemaNames())
+	assert.Equal(t, "schema public", c.SchemaLabel())
 
 	c2 := pistachio.ObjectCount{Schemas: []string{"public", "myschema"}}
-	assert.Equal(t, "public, myschema", c2.SchemaNames())
+	assert.Equal(t, "schemas public, myschema", c2.SchemaLabel())
 }
 
 func TestObjectCount_Summary(t *testing.T) {

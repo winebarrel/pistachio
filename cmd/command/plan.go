@@ -18,7 +18,7 @@ func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 		return err
 	}
 
-	fmt.Fprintf(w, "-- Plan for schema %s (%s)\n", result.Count.SchemaNames(), result.Count.Summary()) //nolint:errcheck
+	fmt.Fprintf(w, "-- Plan for %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
 
 	if result.SQL == "" {
 		fmt.Fprintln(w, "-- No changes") //nolint:errcheck

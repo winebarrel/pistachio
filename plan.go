@@ -27,8 +27,11 @@ type ObjectCount struct {
 	Domains int
 }
 
-func (c ObjectCount) SchemaNames() string {
-	return strings.Join(c.Schemas, ", ")
+func (c ObjectCount) SchemaLabel() string {
+	if len(c.Schemas) == 1 {
+		return "schema " + c.Schemas[0]
+	}
+	return "schemas " + strings.Join(c.Schemas, ", ")
 }
 
 func (c ObjectCount) Summary() string {

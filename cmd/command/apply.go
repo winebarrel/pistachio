@@ -20,7 +20,7 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 		return err
 	}
 
-	fmt.Fprintf(w, "-- Apply to schema %s (%s)\n", count.SchemaNames(), count.Summary()) //nolint:errcheck
+	fmt.Fprintf(w, "-- Apply to %s (%s)\n", count.SchemaLabel(), count.Summary()) //nolint:errcheck
 
 	if buf.Len() == 0 {
 		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
