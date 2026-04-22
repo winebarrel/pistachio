@@ -10,7 +10,7 @@ desired: |
       id integer NOT NULL,
       code text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id),
-      -- pist:rename-from users_code_key
+      -- pist:renamed-from users_code_key
       CONSTRAINT users_code_unique UNIQUE (code)
   );
 plan: |

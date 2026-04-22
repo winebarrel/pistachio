@@ -191,21 +191,21 @@ pist -n staging apply schema.sql
 
 ### Renaming objects
 
-Use `-- pist:rename-from <old_name>` directives to rename objects instead of dropping and recreating them.
+Use `-- pist:renamed-from <old_name>` directives to rename objects instead of dropping and recreating them.
 
 **Tables, views, enums:**
 
 ```sql
--- pist:rename-from public.old_status
+-- pist:renamed-from public.old_status
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');
 
--- pist:rename-from public.old_users
+-- pist:renamed-from public.old_users
 CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 
--- pist:rename-from public.old_view
+-- pist:renamed-from public.old_view
 CREATE VIEW public.new_view AS SELECT 1;
 ```
 
@@ -214,17 +214,17 @@ CREATE VIEW public.new_view AS SELECT 1;
 ```sql
 CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:rename-from name
+    -- pist:renamed-from name
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id),
-    -- pist:rename-from users_name_key
+    -- pist:renamed-from users_name_key
     CONSTRAINT users_display_name_key UNIQUE (display_name)
 );
 
--- pist:rename-from idx_users_name
+-- pist:renamed-from idx_users_name
 CREATE INDEX idx_users_display_name ON public.users (display_name);
 
--- pist:rename-from fk_old_name
+-- pist:renamed-from fk_old_name
 ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFERENCES public.users(id);
 ```
 
@@ -296,7 +296,7 @@ pist apply ./schema/*.sql         # apply it
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types, domains)
-- Renaming (tables, views, enums, domains, columns, constraints, foreign keys, indexes via `-- pist:rename-from` directive)
+- Renaming (tables, views, enums, domains, columns, constraints, foreign keys, indexes via `-- pist:renamed-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 

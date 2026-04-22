@@ -103,12 +103,12 @@ Repeat steps 4-6 as your schema evolves. Your schema file is always the source o
 
 ### Renaming objects
 
-Use the `-- pist:rename-from` directive to rename objects without dropping and recreating them:
+Use the `-- pist:renamed-from` directive to rename objects without dropping and recreating them:
 
 ```sql
 CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:rename-from name
+    -- pist:renamed-from name
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );

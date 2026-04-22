@@ -8,9 +8,9 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-var renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:rename-from[ \t]+(.+?)[ \t]*$`)
+var renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:renamed-from[ \t]+(.+?)[ \t]*$`)
 
-// QualifyRenameFrom qualifies a rename-from value with the default schema
+// QualifyRenameFrom qualifies a renamed-from value with the default schema
 // if it does not already contain a schema. Quoted identifiers containing
 // dots (e.g. `"a.b"`) are treated as a single identifier.
 func QualifyRenameFrom(value, defaultSchema string) string {
@@ -35,7 +35,7 @@ func unquoteIdent(s string) string {
 	return strings.ToLower(s)
 }
 
-// normalizeDirectiveValue normalizes a rename-from directive value by
+// normalizeDirectiveValue normalizes a renamed-from directive value by
 // unquoting each part and re-quoting via model.Ident to match the
 // canonical identifier format used by the parser and diff layer.
 // Used for schema-qualified names (tables, views, enums).
@@ -47,7 +47,7 @@ func normalizeDirectiveValue(s string) string {
 	return model.Ident(parts...)
 }
 
-// normalizeUnqualifiedDirective normalizes a rename-from directive value
+// normalizeUnqualifiedDirective normalizes a renamed-from directive value
 // for unqualified names (columns, constraints, indexes, foreign keys)
 // by unquoting the identifier. If a schema-qualified name is provided
 // (e.g. "public.old_idx"), only the last part is used.
@@ -91,7 +91,7 @@ func splitQualifiedName(s string) []string {
 	return parts
 }
 
-// ExtractStmtDirectives scans raw SQL for `-- pist:rename-from <name>` comments
+// ExtractStmtDirectives scans raw SQL for `-- pist:renamed-from <name>` comments
 // that appear in each statement's raw text region (including leading comments).
 // pg_query includes leading comments in StmtLocation/StmtLen, so we scan the
 // raw text of each statement for the directive.
@@ -152,7 +152,7 @@ type InlineDirectives struct {
 }
 
 // ExtractInlineDirectives scans the raw text of a CREATE TABLE statement for
-// `-- pist:rename-from <old_name>` directives that appear on lines immediately
+// `-- pist:renamed-from <old_name>` directives that appear on lines immediately
 // before column or constraint definitions.
 func ExtractInlineDirectives(rawCreateTableSQL string) *InlineDirectives {
 	result := &InlineDirectives{

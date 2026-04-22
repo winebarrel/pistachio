@@ -10,7 +10,7 @@ import (
 
 func TestExtractStmtDirectives(t *testing.T) {
 	t.Run("single directive", func(t *testing.T) {
-		sql := `-- pist:rename-from public.old_status
+		sql := `-- pist:renamed-from public.old_status
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
@@ -20,9 +20,9 @@ CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 	})
 
 	t.Run("multiple directives", func(t *testing.T) {
-		sql := `-- pist:rename-from public.old_status
+		sql := `-- pist:renamed-from public.old_status
 CREATE TYPE public.new_status AS ENUM ('active');
--- pist:rename-from public.old_users
+-- pist:renamed-from public.old_users
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
@@ -42,7 +42,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 
 	t.Run("directive only on second statement", func(t *testing.T) {
 		sql := `CREATE TABLE public.users (id integer NOT NULL);
--- pist:rename-from public.old_posts
+-- pist:renamed-from public.old_posts
 CREATE TABLE public.posts (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
@@ -52,7 +52,7 @@ CREATE TABLE public.posts (id integer NOT NULL);`
 	})
 
 	t.Run("directive with extra whitespace", func(t *testing.T) {
-		sql := `  -- pist:rename-from  public.old_name
+		sql := `  -- pist:renamed-from  public.old_name
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
@@ -61,7 +61,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	})
 
 	t.Run("unqualified name", func(t *testing.T) {
-		sql := `-- pist:rename-from old_name
+		sql := `-- pist:renamed-from old_name
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
@@ -70,7 +70,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	})
 
 	t.Run("whitespace-only directive ignored", func(t *testing.T) {
-		sql := `-- pist:rename-from
+		sql := `-- pist:renamed-from
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestExtractColumnDirectives(t *testing.T) {
 	t.Run("single column directive", func(t *testing.T) {
 		sql := `CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:rename-from name
+    -- pist:renamed-from name
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
@@ -103,9 +103,9 @@ func TestExtractColumnDirectives(t *testing.T) {
 
 	t.Run("multiple column directives", func(t *testing.T) {
 		sql := `CREATE TABLE public.users (
-    -- pist:rename-from uid
+    -- pist:renamed-from uid
     id integer NOT NULL,
-    -- pist:rename-from name
+    -- pist:renamed-from name
     display_name text NOT NULL
 );`
 		dirs := ExtractColumnDirectives(sql)
@@ -125,7 +125,7 @@ func TestExtractColumnDirectives(t *testing.T) {
 
 	t.Run("quoted column name", func(t *testing.T) {
 		sql := `CREATE TABLE public.users (
-    -- pist:rename-from "Old Name"
+    -- pist:renamed-from "Old Name"
     "New Name" text NOT NULL
 );`
 		dirs := ExtractColumnDirectives(sql)
@@ -135,7 +135,7 @@ func TestExtractColumnDirectives(t *testing.T) {
 	t.Run("constraint line skipped", func(t *testing.T) {
 		sql := `CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:rename-from old_col
+    -- pist:renamed-from old_col
     new_col text,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
@@ -150,7 +150,7 @@ func TestExtractInlineDirectives_Constraint(t *testing.T) {
     id integer NOT NULL,
     code text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id),
-    -- pist:rename-from users_code_key
+    -- pist:renamed-from users_code_key
     CONSTRAINT users_code_unique UNIQUE (code)
 );`
 	dirs := ExtractInlineDirectives(sql)
@@ -162,10 +162,10 @@ func TestExtractInlineDirectives_Constraint(t *testing.T) {
 func TestExtractInlineDirectives_Mixed(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:rename-from name
+    -- pist:renamed-from name
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id),
-    -- pist:rename-from old_unique
+    -- pist:renamed-from old_unique
     CONSTRAINT new_unique UNIQUE (display_name)
 );`
 	dirs := ExtractInlineDirectives(sql)
@@ -219,7 +219,7 @@ func TestQualifyRenameFrom(t *testing.T) {
 }
 
 func TestExtractStmtDirectives_QuotedName(t *testing.T) {
-	sql := `-- pist:rename-from "My Schema"."Old Name"
+	sql := `-- pist:renamed-from "My Schema"."Old Name"
 CREATE TABLE public.users (id integer NOT NULL);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)

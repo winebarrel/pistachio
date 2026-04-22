@@ -1100,7 +1100,7 @@ func TestParseSQL_CommentOnUnknownEnum(t *testing.T) {
 }
 
 func TestParseSQL_RenameDirective_Enum(t *testing.T) {
-	sql := `-- pist:rename-from public.old_status
+	sql := `-- pist:renamed-from public.old_status
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 
 	result, err := parser.ParseSQL(sql)
@@ -1113,7 +1113,7 @@ CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 }
 
 func TestParseSQL_RenameDirective_Table(t *testing.T) {
-	sql := `-- pist:rename-from public.old_users
+	sql := `-- pist:renamed-from public.old_users
 CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
@@ -1129,7 +1129,7 @@ CREATE TABLE public.users (
 }
 
 func TestParseSQL_RenameDirective_View(t *testing.T) {
-	sql := `-- pist:rename-from public.old_view
+	sql := `-- pist:renamed-from public.old_view
 CREATE VIEW public.new_view AS SELECT 1;`
 
 	result, err := parser.ParseSQL(sql)
@@ -1144,7 +1144,7 @@ CREATE VIEW public.new_view AS SELECT 1;`
 func TestParseSQL_RenameDirective_Column(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:rename-from name
+    -- pist:renamed-from name
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
@@ -1166,7 +1166,7 @@ func TestParseSQL_RenameDirective_Index(t *testing.T) {
     name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:rename-from idx_old
+-- pist:renamed-from idx_old
 CREATE INDEX idx_new ON public.users (name);`
 
 	result, err := parser.ParseSQL(sql)
@@ -1185,7 +1185,7 @@ func TestParseSQL_RenameDirective_Constraint(t *testing.T) {
     id integer NOT NULL,
     code text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id),
-    -- pist:rename-from old_unique
+    -- pist:renamed-from old_unique
     CONSTRAINT new_unique UNIQUE (code)
 );`
 
@@ -1210,7 +1210,7 @@ CREATE TABLE public.orders (
     user_id integer NOT NULL,
     CONSTRAINT orders_pkey PRIMARY KEY (id)
 );
--- pist:rename-from old_fk
+-- pist:renamed-from old_fk
 ALTER TABLE public.orders ADD CONSTRAINT new_fk FOREIGN KEY (user_id) REFERENCES public.users(id);`
 
 	result, err := parser.ParseSQL(sql)
@@ -1229,7 +1229,7 @@ func TestParseSQL_RenameDirective_AlterTableConstraint(t *testing.T) {
     id integer NOT NULL,
     code text NOT NULL
 );
--- pist:rename-from old_unique
+-- pist:renamed-from old_unique
 ALTER TABLE public.users ADD CONSTRAINT new_unique UNIQUE (code);`
 
 	result, err := parser.ParseSQL(sql)
@@ -1244,14 +1244,14 @@ ALTER TABLE public.users ADD CONSTRAINT new_unique UNIQUE (code);`
 }
 
 func TestParseSQLWithSchema_RenameDirective_Qualifies(t *testing.T) {
-	sql := `-- pist:rename-from old_status
+	sql := `-- pist:renamed-from old_status
 CREATE TYPE new_status AS ENUM ('active', 'inactive');
--- pist:rename-from old_users
+-- pist:renamed-from old_users
 CREATE TABLE users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:rename-from old_view
+-- pist:renamed-from old_view
 CREATE VIEW new_view AS SELECT 1;`
 
 	result, err := parser.ParseSQLWithSchema(sql, "myschema")
@@ -1376,7 +1376,7 @@ func TestParseSQL_DomainMultipleConstraints(t *testing.T) {
 }
 
 func TestParseSQL_DomainRenameDirective(t *testing.T) {
-	sql := `-- pist:rename-from public.old_domain
+	sql := `-- pist:renamed-from public.old_domain
 CREATE DOMAIN public.new_domain AS integer;`
 
 	result, err := parser.ParseSQL(sql)
