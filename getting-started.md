@@ -186,9 +186,9 @@ pist plan -E 'tmp_*' schema.sql  # ignore temporary tables
 Use `--enable` / `--disable` to filter by object type:
 
 ```bash
-pist dump --enable enum            # dump only enums
-pist dump --disable view           # dump everything except views
-pist dump --enable table --enable enum  # dump tables and enums only
+pist dump --enable enum              # dump only enums
+pist dump --disable view             # dump everything except views
+pist dump --enable table,enum        # dump tables and enums only
 ```
 
 ### Controlling drops

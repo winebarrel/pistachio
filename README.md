@@ -164,7 +164,7 @@ pist apply -I 'user*' -E 'user_tmp' schema.sql
 pist dump --enable enum
 
 # Dump only tables and views
-pist dump --enable table --enable view
+pist dump --enable table,view
 
 # Dump everything except views
 pist dump --disable view
