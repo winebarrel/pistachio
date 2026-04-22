@@ -136,16 +136,16 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	stmts = append(stmts, tableDiff.FKDropStmts...)
 	stmts = append(stmts, tableDiff.Stmts...)
 
-	// View creates after table changes (views may reference new tables/columns)
-	stmts = append(stmts, viewDiff.CreateStmts...)
-
-	// Table drops
+	// Drops: tables before domains/enums (dependency order)
 	stmts = append(stmts, tableDiff.DropStmts...)
 	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
 
-	// FK adds last (after all tables exist)
+	// FK adds after all tables exist
 	stmts = append(stmts, tableDiff.FKAddStmts...)
+
+	// View creates last (views may reference new tables/columns/FKs)
+	stmts = append(stmts, viewDiff.CreateStmts...)
 
 	preSQL, err := resolvePreSQL(options.PreSQL, options.PreSQLFile)
 	if err != nil {

@@ -99,15 +99,15 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	stmts = append(stmts, tableDiff.FKDropStmts...)
 	stmts = append(stmts, tableDiff.Stmts...)
 
-	// View creates after table changes
-	stmts = append(stmts, viewDiff.CreateStmts...)
-
 	// Table drops
 	stmts = append(stmts, tableDiff.DropStmts...)
 	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
 
 	stmts = append(stmts, tableDiff.FKAddStmts...)
+
+	// View creates last (views may depend on tables/columns created above)
+	stmts = append(stmts, viewDiff.CreateStmts...)
 
 	preSQL, err := resolvePreSQL(options.PreSQL, options.PreSQLFile)
 	if err != nil {
