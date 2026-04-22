@@ -88,5 +88,15 @@ CREATE TABLE other.stuff (
 
 func TestObjectCount_String(t *testing.T) {
 	c := pistachio.ObjectCount{Tables: 3, Views: 1, Enums: 2, Domains: 0}
-	assert.Equal(t, "3 tables, 1 views, 2 enums, 0 domains", c.String())
+	assert.Equal(t, "3 tables, 1 view, 2 enums, 0 domains", c.String())
+}
+
+func TestObjectCount_String_Singular(t *testing.T) {
+	c := pistachio.ObjectCount{Tables: 1, Views: 1, Enums: 1, Domains: 1}
+	assert.Equal(t, "1 table, 1 view, 1 enum, 1 domain", c.String())
+}
+
+func TestObjectCount_String_Zero(t *testing.T) {
+	c := pistachio.ObjectCount{}
+	assert.Equal(t, "0 tables, 0 views, 0 enums, 0 domains", c.String())
 }

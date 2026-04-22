@@ -282,7 +282,7 @@ func TestPlan_Run_NoChanges(t *testing.T) {
 	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "-- No changes", buf.String())
+	assert.Equal(t, "-- No changes (1 table, 0 views, 0 enums, 0 domains)\n", buf.String())
 }
 
 func TestApply_Run_NoChanges(t *testing.T) {
@@ -308,7 +308,7 @@ func TestApply_Run_NoChanges(t *testing.T) {
 	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "-- No changes", buf.String())
+	assert.Equal(t, "-- No changes (1 table, 0 views, 0 enums, 0 domains)\n", buf.String())
 }
 
 func TestApply_Run_Error(t *testing.T) {

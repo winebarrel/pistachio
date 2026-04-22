@@ -27,7 +27,19 @@ type ObjectCount struct {
 }
 
 func (c ObjectCount) String() string {
-	return fmt.Sprintf("%d tables, %d views, %d enums, %d domains", c.Tables, c.Views, c.Enums, c.Domains)
+	return fmt.Sprintf("%s, %s, %s, %s",
+		pluralize(c.Tables, "table"),
+		pluralize(c.Views, "view"),
+		pluralize(c.Enums, "enum"),
+		pluralize(c.Domains, "domain"),
+	)
+}
+
+func pluralize(n int, singular string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, singular)
+	}
+	return fmt.Sprintf("%d %ss", n, singular)
 }
 
 // PlanResult holds the result of a Plan operation.
