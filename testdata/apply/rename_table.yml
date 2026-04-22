@@ -4,7 +4,7 @@ init: |
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 desired: |
-  -- pist:rename-from public.users
+  -- pist:renamed-from public.users
   CREATE TABLE public.accounts (
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)

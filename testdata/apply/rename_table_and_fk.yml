@@ -14,13 +14,13 @@ desired: |
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-  -- pist:rename-from public.orders
+  -- pist:renamed-from public.orders
   CREATE TABLE public.purchases (
       id integer NOT NULL,
       user_id integer NOT NULL,
       CONSTRAINT orders_pkey PRIMARY KEY (id)
   );
-  -- pist:rename-from fk_user
+  -- pist:renamed-from fk_user
   ALTER TABLE public.purchases ADD CONSTRAINT fk_buyer FOREIGN KEY (user_id) REFERENCES public.users(id);
 applied: |
   -- public.purchases
