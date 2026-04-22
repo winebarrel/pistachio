@@ -20,6 +20,7 @@ type PlanOptions struct {
 
 // ObjectCount holds the number of objects inspected by type.
 type ObjectCount struct {
+	Schemas []string
 	Tables  int
 	Views   int
 	Enums   int
@@ -27,7 +28,8 @@ type ObjectCount struct {
 }
 
 func (c ObjectCount) String() string {
-	return fmt.Sprintf("%s, %s, %s, %s",
+	return fmt.Sprintf("schema: %s, %s, %s, %s, %s",
+		strings.Join(c.Schemas, ", "),
 		pluralize(c.Tables, "table"),
 		pluralize(c.Views, "view"),
 		pluralize(c.Enums, "enum"),
@@ -93,6 +95,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	filteredDomains := options.filterDomains(currentDomains)
 
 	count := ObjectCount{
+		Schemas: client.Schemas,
 		Tables:  filteredTables.Len(),
 		Views:   filteredViews.Len(),
 		Enums:   filteredEnums.Len(),

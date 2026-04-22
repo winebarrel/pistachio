@@ -87,16 +87,16 @@ CREATE TABLE other.stuff (
 }
 
 func TestObjectCount_String(t *testing.T) {
-	c := pistachio.ObjectCount{Tables: 3, Views: 1, Enums: 2, Domains: 0}
-	assert.Equal(t, "3 tables, 1 view, 2 enums, 0 domains", c.String())
+	c := pistachio.ObjectCount{Schemas: []string{"public"}, Tables: 3, Views: 1, Enums: 2, Domains: 0}
+	assert.Equal(t, "schema: public, 3 tables, 1 view, 2 enums, 0 domains", c.String())
 }
 
 func TestObjectCount_String_Singular(t *testing.T) {
-	c := pistachio.ObjectCount{Tables: 1, Views: 1, Enums: 1, Domains: 1}
-	assert.Equal(t, "1 table, 1 view, 1 enum, 1 domain", c.String())
+	c := pistachio.ObjectCount{Schemas: []string{"myschema"}, Tables: 1, Views: 1, Enums: 1, Domains: 1}
+	assert.Equal(t, "schema: myschema, 1 table, 1 view, 1 enum, 1 domain", c.String())
 }
 
-func TestObjectCount_String_Zero(t *testing.T) {
-	c := pistachio.ObjectCount{}
-	assert.Equal(t, "0 tables, 0 views, 0 enums, 0 domains", c.String())
+func TestObjectCount_String_MultipleSchemas(t *testing.T) {
+	c := pistachio.ObjectCount{Schemas: []string{"public", "myschema"}, Tables: 5, Views: 2, Enums: 1, Domains: 0}
+	assert.Equal(t, "schema: public, myschema, 5 tables, 2 views, 1 enum, 0 domains", c.String())
 }

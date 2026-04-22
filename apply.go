@@ -64,6 +64,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	filteredDomains := options.filterDomains(currentDomains)
 
 	count := &ObjectCount{
+		Schemas: client.Schemas,
 		Tables:  filteredTables.Len(),
 		Views:   filteredViews.Len(),
 		Enums:   filteredEnums.Len(),

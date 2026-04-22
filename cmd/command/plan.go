@@ -18,8 +18,10 @@ func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 		return err
 	}
 
+	fmt.Fprintf(w, "-- Target: %s\n", result.Count) //nolint:errcheck
+
 	if result.SQL == "" {
-		fmt.Fprintf(w, "-- No changes (%s)\n", result.Count) //nolint:errcheck
+		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
 	} else {
 		fmt.Fprintln(w, result.SQL) //nolint:errcheck
 	}
