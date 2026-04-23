@@ -245,6 +245,6 @@ pist plan schema.sql | grep -q "No changes"
 
 ## Tips
 
-- Unnamed constraints are auto-named following PostgreSQL's convention, but duplicate names and 63-byte identifier truncation cannot be predicted. **Use explicit `CONSTRAINT <name>` clauses** to avoid ambiguity.
+- Unnamed constraints are auto-named following PostgreSQL's convention, but pistachio does not currently emulate PostgreSQL's identifier truncation (63 bytes) or collision suffixing, so generated names may differ. **Use explicit `CONSTRAINT <name>` clauses** to avoid ambiguity.
 - Run `pist plan` before `pist apply` to review changes.
 - Keep your schema file(s) in version control alongside your application code.

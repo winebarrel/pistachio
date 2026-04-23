@@ -458,7 +458,8 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 		if con.Conname == "" {
 			con.Conname = autoNameConstraint(table.Name, cd.Colname, con.Contype)
 		}
-		// Column-level PK/UNIQUE/CHECK/EXCLUSION have no Keys; fill in the column name.
+		// Column-level PK/UNIQUE/EXCLUSION have no Keys; fill in the column name.
+		// CHECK constraints do not use Keys (they reference columns via the expression).
 		switch con.Contype {
 		case pg_query.ConstrType_CONSTR_PRIMARY:
 			if len(con.Keys) == 0 {
