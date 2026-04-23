@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pgquery "github.com/wasilibs/go-pgquery"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 	"google.golang.org/protobuf/proto"
@@ -245,7 +246,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 // (e.g. explicit ::text casts on string literals, = ANY(ARRAY[...]) vs IN (...)).
 func normalizeConstraintDef(def string) (string, error) {
 	sql := "ALTER TABLE _t ADD CONSTRAINT _c " + def
-	result, err := pg_query.Parse(sql)
+	result, err := pgquery.Parse(sql)
 	if err != nil {
 		return "", err
 	}
@@ -259,7 +260,7 @@ func normalizeConstraintDef(def string) (string, error) {
 			}
 		}
 	}
-	return pg_query.Deparse(result)
+	return pgquery.Deparse(result)
 }
 
 // normalizeCheckExpr recursively normalizes a CHECK constraint expression
@@ -498,7 +499,7 @@ func equalPtr[T comparable](a, b *T) bool {
 // (the default) matches an omitted order, and explicit NULLS LAST
 // for ASC / NULLS FIRST for DESC matches an omitted nulls clause.
 func normalizeIndexDef(def string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pgquery.Parse(def)
 	if err != nil {
 		return "", err
 	}
@@ -531,7 +532,7 @@ func normalizeIndexDef(def string) (string, error) {
 			}
 		}
 	}
-	return pg_query.Deparse(result)
+	return pgquery.Deparse(result)
 }
 
 // equalIndexDef compares two index definitions by normalizing them
@@ -549,7 +550,7 @@ func equalIndexDef(a, b string) bool {
 // parseFKDef parses a FK constraint definition string into a pg_query Constraint node.
 func parseFKDef(def string) (*pg_query.Constraint, error) {
 	sql := "ALTER TABLE _t ADD CONSTRAINT _c " + def
-	result, err := pg_query.Parse(sql)
+	result, err := pgquery.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -595,7 +596,7 @@ func equalFKDef(a, b, schema string) bool {
 // parseDefault parses a default expression string into a pg_query Node,
 // stripping a top-level type cast added by pg_get_expr (e.g. 'hello'::text → 'hello').
 func parseDefault(expr string) (*pg_query.Node, error) {
-	result, err := pg_query.Parse("SELECT " + expr)
+	result, err := pgquery.Parse("SELECT " + expr)
 	if err != nil {
 		return nil, err
 	}

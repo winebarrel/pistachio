@@ -3,7 +3,7 @@ package parser
 import (
 	"testing"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pgquery "github.com/wasilibs/go-pgquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,7 +12,7 @@ func TestExtractStmtDirectives(t *testing.T) {
 	t.Run("single directive", func(t *testing.T) {
 		sql := `-- pist:renamed-from public.old_status
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
-		result, err := pg_query.Parse(sql)
+		result, err := pgquery.Parse(sql)
 		require.NoError(t, err)
 		dirs := ExtractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 1)
@@ -24,7 +24,7 @@ CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 CREATE TYPE public.new_status AS ENUM ('active');
 -- pist:renamed-from public.old_users
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgquery.Parse(sql)
 		require.NoError(t, err)
 		dirs := ExtractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 2)
@@ -34,7 +34,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 
 	t.Run("no directives", func(t *testing.T) {
 		sql := `CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgquery.Parse(sql)
 		require.NoError(t, err)
 		dirs := ExtractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
@@ -44,7 +44,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 		sql := `CREATE TABLE public.users (id integer NOT NULL);
 -- pist:renamed-from public.old_posts
 CREATE TABLE public.posts (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgquery.Parse(sql)
 		require.NoError(t, err)
 		dirs := ExtractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 1)
@@ -54,7 +54,7 @@ CREATE TABLE public.posts (id integer NOT NULL);`
 	t.Run("directive with extra whitespace", func(t *testing.T) {
 		sql := `  -- pist:renamed-from  public.old_name
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgquery.Parse(sql)
 		require.NoError(t, err)
 		dirs := ExtractStmtDirectives(sql, result.Stmts)
 		assert.Equal(t, "public.old_name", dirs[result.Stmts[0].StmtLocation])
@@ -63,7 +63,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	t.Run("unqualified name", func(t *testing.T) {
 		sql := `-- pist:renamed-from old_name
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgquery.Parse(sql)
 		require.NoError(t, err)
 		dirs := ExtractStmtDirectives(sql, result.Stmts)
 		assert.Equal(t, "old_name", dirs[result.Stmts[0].StmtLocation])
@@ -72,7 +72,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	t.Run("whitespace-only directive ignored", func(t *testing.T) {
 		sql := `-- pist:renamed-from
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgquery.Parse(sql)
 		require.NoError(t, err)
 		dirs := ExtractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
@@ -81,7 +81,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	t.Run("regular comment ignored", func(t *testing.T) {
 		sql := `-- this is a regular comment
 CREATE TABLE public.users (id integer NOT NULL);`
-		result, err := pg_query.Parse(sql)
+		result, err := pgquery.Parse(sql)
 		require.NoError(t, err)
 		dirs := ExtractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
@@ -221,7 +221,7 @@ func TestQualifyRenameFrom(t *testing.T) {
 func TestExtractStmtDirectives_QuotedName(t *testing.T) {
 	sql := `-- pist:renamed-from "My Schema"."Old Name"
 CREATE TABLE public.users (id integer NOT NULL);`
-	result, err := pg_query.Parse(sql)
+	result, err := pgquery.Parse(sql)
 	require.NoError(t, err)
 	dirs := ExtractStmtDirectives(sql, result.Stmts)
 	assert.Equal(t, `"My Schema"."Old Name"`, dirs[result.Stmts[0].StmtLocation])

@@ -1,7 +1,7 @@
 package diff
 
 import (
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pgquery "github.com/wasilibs/go-pgquery"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -10,11 +10,11 @@ import (
 // through pg_query, so that formatting differences are eliminated.
 func normalizeViewDef(def string) (string, error) {
 	sql := "CREATE VIEW _v AS " + def
-	result, err := pg_query.Parse(sql)
+	result, err := pgquery.Parse(sql)
 	if err != nil {
 		return "", err
 	}
-	return pg_query.Deparse(result)
+	return pgquery.Deparse(result)
 }
 
 // equalViewDef compares two view definitions by normalizing them through

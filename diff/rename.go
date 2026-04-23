@@ -3,7 +3,7 @@ package diff
 import (
 	"fmt"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pgquery "github.com/wasilibs/go-pgquery"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -133,7 +133,7 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 // updateIndexTableName parses an index definition, updates the table name,
 // and deparses it back to canonical SQL.
 func updateIndexTableName(def string, newTableName string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pgquery.Parse(def)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse index definition: %w", err)
 	}
@@ -142,7 +142,7 @@ func updateIndexTableName(def string, newTableName string) (string, error) {
 		return "", fmt.Errorf("failed to parse index definition: expected IndexStmt with relation")
 	}
 	is.Relation.Relname = newTableName
-	deparsed, err := pg_query.Deparse(result)
+	deparsed, err := pgquery.Deparse(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to deparse index definition: %w", err)
 	}
@@ -327,7 +327,7 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 
 // updateIndexName parses an index definition, updates the index name, and deparses.
 func updateIndexName(def string, newName string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, err := pgquery.Parse(def)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse index definition: %w", err)
 	}
@@ -336,7 +336,7 @@ func updateIndexName(def string, newName string) (string, error) {
 		return "", fmt.Errorf("failed to parse index definition: expected IndexStmt")
 	}
 	is.Idxname = newName
-	deparsed, err := pg_query.Deparse(result)
+	deparsed, err := pgquery.Deparse(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to deparse index definition: %w", err)
 	}

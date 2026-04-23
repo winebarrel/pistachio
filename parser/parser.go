@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pgquery "github.com/wasilibs/go-pgquery"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -81,7 +82,7 @@ func ParseSQL(sql string) (*ParseResult, error) {
 }
 
 func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {
-	result, err := pg_query.Parse(sql)
+	result, err := pgquery.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL: %w", err)
 	}
@@ -564,7 +565,7 @@ func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt, defaultSc
 	result := &pg_query.ParseResult{
 		Stmts: []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},
 	}
-	def, err := pg_query.Deparse(result)
+	def, err := pgquery.Deparse(result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deparse index: %w", err)
 	}
@@ -601,7 +602,7 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 			Stmt: vs.Query,
 		}},
 	}
-	def, err := pg_query.Deparse(selectResult)
+	def, err := pgquery.Deparse(selectResult)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deparse view query: %w", err)
 	}
@@ -631,7 +632,7 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 	result := &pg_query.ParseResult{
 		Stmts: []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},
 	}
-	deparsed, err := pg_query.Deparse(result)
+	deparsed, err := pgquery.Deparse(result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deparse domain %s: %w", name, err)
 	}
@@ -1053,7 +1054,7 @@ func deparseTypeName(tn *pg_query.TypeName) (string, error) {
 			},
 		}},
 	}
-	sql, err := pg_query.Deparse(result)
+	sql, err := pgquery.Deparse(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to deparse type name: %w", err)
 	}
@@ -1129,7 +1130,7 @@ func deparseExpr(node *pg_query.Node) (string, error) {
 			},
 		}},
 	}
-	sql, err := pg_query.Deparse(result)
+	sql, err := pgquery.Deparse(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to deparse expression: %w", err)
 	}
@@ -1160,7 +1161,7 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 			},
 		}},
 	}
-	sql, err := pg_query.Deparse(result)
+	sql, err := pgquery.Deparse(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to deparse constraint: %w", err)
 	}
@@ -1197,7 +1198,7 @@ func deparsePartitionSpec(cs *pg_query.CreateStmt) (string, error) {
 			Stmt: &pg_query.Node{Node: &pg_query.Node_CreateStmt{CreateStmt: minCS}},
 		}},
 	}
-	sql, err := pg_query.Deparse(result)
+	sql, err := pgquery.Deparse(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to deparse partition spec: %w", err)
 	}
@@ -1222,7 +1223,7 @@ func deparsePartitionBound(cs *pg_query.CreateStmt) (string, error) {
 			Stmt: &pg_query.Node{Node: &pg_query.Node_CreateStmt{CreateStmt: minCS}},
 		}},
 	}
-	sql, err := pg_query.Deparse(result)
+	sql, err := pgquery.Deparse(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to deparse partition bound: %w", err)
 	}

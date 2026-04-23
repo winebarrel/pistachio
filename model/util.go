@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
+	pgquery "github.com/wasilibs/go-pgquery"
 )
 
 var safeIdentifierPattern = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
@@ -31,7 +32,7 @@ func quoteIdent(name string) string {
 		return quote(name)
 	}
 
-	result, err := pg_query.Scan(name)
+	result, err := pgquery.Scan(name)
 	if err != nil || len(result.Tokens) != 1 {
 		return quote(name)
 	}
