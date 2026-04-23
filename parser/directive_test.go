@@ -3,9 +3,9 @@ package parser
 import (
 	"testing"
 
-	pgquery "github.com/wasilibs/go-pgquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	pgquery "github.com/wasilibs/go-pgquery"
 )
 
 func TestExtractStmtDirectives(t *testing.T) {
