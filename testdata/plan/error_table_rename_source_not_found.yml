@@ -1,0 +1,12 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pist:renamed-from public.nonexistent
+  CREATE TABLE public.accounts (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+error: "rename source"

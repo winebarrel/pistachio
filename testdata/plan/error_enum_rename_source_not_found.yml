@@ -1,0 +1,6 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+desired: |
+  -- pist:renamed-from public.nonexistent
+  CREATE TYPE public.new_status AS ENUM ('active', 'inactive');
+error: "rename source"

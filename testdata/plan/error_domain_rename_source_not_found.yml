@@ -1,0 +1,6 @@
+init: |
+  CREATE DOMAIN public.positive_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+desired: |
+  -- pist:renamed-from public.nonexistent
+  CREATE DOMAIN public.new_positive_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+error: "rename source"
