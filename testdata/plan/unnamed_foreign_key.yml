@@ -1,0 +1,22 @@
+init: |
+  CREATE TABLE public.groups (
+      id integer NOT NULL,
+      CONSTRAINT groups_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.groups (
+      id integer NOT NULL,
+      CONSTRAINT groups_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.members (
+      id integer NOT NULL,
+      group_id integer REFERENCES public.groups(id),
+      CONSTRAINT members_pkey PRIMARY KEY (id)
+  );
+plan: |
+  CREATE TABLE public.members (
+      id integer NOT NULL,
+      group_id integer,
+      CONSTRAINT members_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.members ADD CONSTRAINT members_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups (id);

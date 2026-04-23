@@ -1,0 +1,14 @@
+init: ""
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      age integer CHECK (age > 0),
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      age integer,
+      CONSTRAINT users_age_check CHECK (age > 0),
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

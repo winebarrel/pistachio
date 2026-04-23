@@ -245,6 +245,6 @@ pist plan schema.sql | grep -q "No changes"
 
 ## Tips
 
-- Always use explicit `CONSTRAINT <name>` clauses. Unnamed constraints are not tracked by pistachio.
+- Unnamed constraints are auto-named following PostgreSQL's convention, but duplicate names cannot be predicted. **Use explicit `CONSTRAINT <name>` clauses** to avoid ambiguity.
 - Run `pist plan` before `pist apply` to review changes.
 - Keep your schema file(s) in version control alongside your application code.

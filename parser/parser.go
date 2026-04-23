@@ -395,11 +395,41 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 	return col, nil
 }
 
+// autoNameConstraint generates a PostgreSQL-style constraint name for unnamed
+// constraints, following the naming convention from PostgreSQL's
+// ChooseConstraintName (src/backend/catalog/pg_constraint.c):
+//
+//	PRIMARY KEY → {table}_pkey
+//	UNIQUE      → {table}_{col}_key
+//	CHECK       → {table}_{col}_check
+//	EXCLUSION   → {table}_{col}_excl
+//	FOREIGN KEY → {table}_{col}_fkey
+//
+// colName is the first column involved; it is empty for table-level PRIMARY KEY.
+// Duplicate name resolution is NOT handled; users should use explicit CONSTRAINT
+// names to avoid ambiguity.
+func autoNameConstraint(tableName, colName string, contype pg_query.ConstrType) string {
+	switch contype {
+	case pg_query.ConstrType_CONSTR_PRIMARY:
+		return tableName + "_pkey"
+	case pg_query.ConstrType_CONSTR_UNIQUE:
+		return tableName + "_" + colName + "_key"
+	case pg_query.ConstrType_CONSTR_CHECK:
+		return tableName + "_" + colName + "_check"
+	case pg_query.ConstrType_CONSTR_EXCLUSION:
+		return tableName + "_" + colName + "_excl"
+	case pg_query.ConstrType_CONSTR_FOREIGN:
+		return tableName + "_" + colName + "_fkey"
+	default:
+		return ""
+	}
+}
+
 // extractColumnConstraints extracts named constraints from a column definition
 // (e.g. PRIMARY KEY, UNIQUE, CHECK, EXCLUSION, FOREIGN KEY) and adds them to
 // the table. Column-attribute constraints (NOT NULL, DEFAULT, IDENTITY,
 // GENERATED) are skipped as they are handled by parseColumnDef.
-// Unnamed non-attribute constraints return an error.
+// Unnamed constraints are auto-named following PostgreSQL's naming convention.
 func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema, defaultSchema string) error {
 	for _, conNode := range cd.Constraints {
 		con := conNode.GetConstraint()
@@ -413,7 +443,22 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 			continue
 		}
 		if con.Conname == "" {
-			return fmt.Errorf("unnamed constraint on column %q in table %q is not supported (type: %s)", cd.Colname, table.Name, con.Contype)
+			con.Conname = autoNameConstraint(table.Name, cd.Colname, con.Contype)
+		}
+		// Column-level PK/UNIQUE/CHECK/EXCLUSION have no Keys; fill in the column name.
+		switch con.Contype {
+		case pg_query.ConstrType_CONSTR_PRIMARY:
+			if len(con.Keys) == 0 {
+				con.Keys = []*pg_query.Node{pg_query.MakeStrNode(cd.Colname)}
+			}
+			// PK implies NOT NULL
+			if col, ok := table.Columns.GetOk(cd.Colname); ok {
+				col.NotNull = true
+			}
+		case pg_query.ConstrType_CONSTR_UNIQUE, pg_query.ConstrType_CONSTR_EXCLUSION:
+			if len(con.Keys) == 0 {
+				con.Keys = []*pg_query.Node{pg_query.MakeStrNode(cd.Colname)}
+			}
 		}
 		switch con.Contype {
 		case pg_query.ConstrType_CONSTR_FOREIGN:
@@ -448,7 +493,13 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 
 func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Constraint, error) {
 	if con.Conname == "" {
-		return nil, fmt.Errorf("unnamed constraint on table %q is not supported (type: %s)", tableName, con.Contype)
+		var firstCol string
+		if len(con.Keys) > 0 {
+			if s := con.Keys[0].GetString_(); s != nil {
+				firstCol = s.Sval
+			}
+		}
+		con.Conname = autoNameConstraint(tableName, firstCol, con.Contype)
 	}
 
 	var conType model.ConstraintType
@@ -618,7 +669,7 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 			}
 		case pg_query.ConstrType_CONSTR_CHECK:
 			if con.Conname == "" {
-				return nil, fmt.Errorf("unnamed constraint on domain %q is not supported", name)
+				con.Conname = name + "_check"
 			}
 			// Extract CHECK definition from the deparsed SQL
 			def := extractCheckDefFromDeparsed(deparsed, con.Conname)
@@ -915,7 +966,13 @@ func parseAlterTableConstraint(as *pg_query.AlterTableStmt, defaultSchema string
 // constraint inside a CREATE TABLE statement.
 func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchema string) (*model.ForeignKey, error) {
 	if con.Conname == "" {
-		return nil, fmt.Errorf("unnamed FOREIGN KEY constraint on table %q is not supported", table)
+		var firstCol string
+		if len(con.FkAttrs) > 0 {
+			if s := con.FkAttrs[0].GetString_(); s != nil {
+				firstCol = s.Sval
+			}
+		}
+		con.Conname = autoNameConstraint(table, firstCol, con.Contype)
 	}
 
 	def, err := deparseConstraintDef(con)

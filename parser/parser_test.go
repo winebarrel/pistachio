@@ -359,7 +359,7 @@ CREATE TABLE myapp.items (
 }
 
 func TestParseSQL_InlineForeignKeyUnnamed(t *testing.T) {
-	// Unnamed table-level FK constraints should return an error
+	// Unnamed table-level FK constraints should be auto-named
 	sql := `CREATE TABLE public.groups (
     id integer NOT NULL,
     CONSTRAINT groups_pkey PRIMARY KEY (id)
@@ -371,9 +371,11 @@ CREATE TABLE public.members (
     FOREIGN KEY (group_id) REFERENCES public.groups(id)
 );`
 
-	_, err := parser.ParseSQL(sql)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unnamed FOREIGN KEY constraint on table \"members\" is not supported")
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	tbl := result.Tables.Get("public.members")
+	_, ok := tbl.ForeignKeys.GetOk("members_group_id_fkey")
+	assert.True(t, ok)
 }
 
 func TestParseSQL_ColumnLevelNamedCheck(t *testing.T) {
@@ -485,35 +487,54 @@ CREATE TABLE public.items (
 	assert.Equal(t, []string{"group_id"}, fk.Columns)
 }
 
-func TestParseSQL_ColumnLevelUnnamedConstraintsError(t *testing.T) {
+func TestParseSQL_ColumnLevelUnnamedConstraintsAutoNamed(t *testing.T) {
 	tests := []struct {
-		name string
-		sql  string
+		name         string
+		sql          string
+		table        string
+		conName      string
+		isForeignKey bool
 	}{
 		{
-			name: "PRIMARY KEY",
-			sql:  `CREATE TABLE public.items (id integer PRIMARY KEY);`,
+			name:    "PRIMARY KEY",
+			sql:     `CREATE TABLE public.items (id integer PRIMARY KEY);`,
+			table:   "public.items",
+			conName: "items_pkey",
 		},
 		{
-			name: "UNIQUE",
-			sql:  `CREATE TABLE public.items (id integer NOT NULL, code text UNIQUE);`,
+			name:    "UNIQUE",
+			sql:     `CREATE TABLE public.items (id integer NOT NULL, code text UNIQUE, CONSTRAINT items_pkey PRIMARY KEY (id));`,
+			table:   "public.items",
+			conName: "items_code_key",
 		},
 		{
-			name: "CHECK",
-			sql:  `CREATE TABLE public.items (id integer NOT NULL, val integer CHECK (val > 0));`,
+			name:    "CHECK",
+			sql:     `CREATE TABLE public.items (id integer NOT NULL, val integer CHECK (val > 0), CONSTRAINT items_pkey PRIMARY KEY (id));`,
+			table:   "public.items",
+			conName: "items_val_check",
 		},
 		{
-			name: "FOREIGN KEY",
-			sql: `CREATE TABLE public.groups (id integer NOT NULL, CONSTRAINT groups_pkey PRIMARY KEY (id));
-CREATE TABLE public.items (id integer NOT NULL, group_id integer REFERENCES public.groups(id));`,
+			name:         "FOREIGN KEY",
+			sql:          "CREATE TABLE public.groups (id integer NOT NULL, CONSTRAINT groups_pkey PRIMARY KEY (id));\nCREATE TABLE public.items (id integer NOT NULL, group_id integer REFERENCES public.groups(id), CONSTRAINT items_pkey PRIMARY KEY (id));",
+			table:        "public.items",
+			conName:      "items_group_id_fkey",
+			isForeignKey: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parser.ParseSQL(tt.sql)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "unnamed constraint")
+			result, err := parser.ParseSQL(tt.sql)
+			require.NoError(t, err)
+			tbl := result.Tables.Get(tt.table)
+			require.NotNil(t, tbl)
+			if tt.isForeignKey {
+				_, ok := tbl.ForeignKeys.GetOk(tt.conName)
+				assert.True(t, ok, "expected FK %s", tt.conName)
+			} else {
+				_, ok := tbl.Constraints.GetOk(tt.conName)
+				assert.True(t, ok, "expected constraint %s", tt.conName)
+			}
 		})
 	}
 }
@@ -627,16 +648,18 @@ CREATE VIEW public.v2 AS SELECT name FROM users;`
 	assert.Equal(t, 2, result.Views.Len())
 }
 
-func TestParseSQL_UnnamedConstraintError(t *testing.T) {
-	// An unnamed table constraint should return an error
+func TestParseSQL_UnnamedTableConstraintAutoNamed(t *testing.T) {
+	// An unnamed table constraint should be auto-named
 	sql := `CREATE TABLE public.items (
     id integer NOT NULL,
     name text,
     PRIMARY KEY (id)
 );`
-	_, err := parser.ParseSQL(sql)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unnamed constraint on table \"items\" is not supported")
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	tbl := result.Tables.Get("public.items")
+	_, ok := tbl.Constraints.GetOk("items_pkey")
+	assert.True(t, ok)
 }
 
 func TestParseSQL_CommentRemove(t *testing.T) {
@@ -1429,11 +1452,14 @@ CREATE DOMAIN public.new_domain AS integer;`
 	assert.Equal(t, "public.old_domain", *d.RenameFrom)
 }
 
-func TestParseSQL_DomainUnnamedConstraint_Error(t *testing.T) {
+func TestParseSQL_DomainUnnamedConstraintAutoNamed(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer CHECK (VALUE > 0);`
-	_, err := parser.ParseSQL(sql)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unnamed constraint")
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	d := result.Domains.Get("public.pos_int")
+	require.NotNil(t, d)
+	require.Len(t, d.Constraints, 1)
+	assert.Equal(t, "pos_int_check", d.Constraints[0].Name)
 }
 
 func TestParseSQL_DuplicateDomain(t *testing.T) {
