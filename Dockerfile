@@ -4,7 +4,13 @@ WORKDIR /src
 COPY go.* /src/
 RUN go mod download
 
-COPY . /src/
+COPY *.go /src/
+COPY catalog/ /src/catalog/
+COPY cmd/ /src/cmd/
+COPY diff/ /src/diff/
+COPY internal/ /src/internal/
+COPY model/ /src/model/
+COPY parser/ /src/parser/
 ARG PIST_VERSION
 RUN CGO_ENABLED=1 go build -o pist -ldflags "-X main.version=${PIST_VERSION#v}" ./cmd/pist
 
