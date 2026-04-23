@@ -539,6 +539,22 @@ func TestParseSQL_ColumnLevelUnnamedConstraintsAutoNamed(t *testing.T) {
 	}
 }
 
+func TestParseSQL_TableLevelUnnamedExclusionAutoNamed(t *testing.T) {
+	sql := `CREATE TABLE public.reservations (
+    id integer NOT NULL,
+    room integer NOT NULL,
+    during tsrange NOT NULL,
+    CONSTRAINT reservations_pkey PRIMARY KEY (id),
+    EXCLUDE USING gist (room WITH =, during WITH &&)
+);`
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	tbl := result.Tables.Get("public.reservations")
+	require.NotNil(t, tbl)
+	_, ok := tbl.Constraints.GetOk("reservations_room_excl")
+	assert.True(t, ok)
+}
+
 func TestParseSQL_TablespaceOnCreate(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,

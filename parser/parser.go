@@ -498,6 +498,13 @@ func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Co
 			if s := con.Keys[0].GetString_(); s != nil {
 				firstCol = s.Sval
 			}
+		} else if len(con.Exclusions) > 0 {
+			// EXCLUSION constraints store columns in Exclusions, not Keys
+			if elem := con.Exclusions[0].GetList(); elem != nil && len(elem.Items) > 0 {
+				if ie := elem.Items[0].GetIndexElem(); ie != nil {
+					firstCol = ie.Name
+				}
+			}
 		}
 		con.Conname = autoNameConstraint(tableName, firstCol, con.Contype)
 	}
