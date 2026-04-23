@@ -1,4 +1,6 @@
-FROM golang:1.26 AS build
+FROM golang:1.26-alpine AS build
+
+RUN apk add --no-cache gcc musl-dev
 
 WORKDIR /src
 COPY go.* /src/
@@ -8,9 +10,9 @@ COPY . /src/
 ARG PIST_VERSION
 RUN CGO_ENABLED=1 go build -o pist -ldflags "-X main.version=${PIST_VERSION#v}" ./cmd/pist
 
-FROM debian:bookworm-slim
+FROM alpine:3
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates
 
 COPY --from=build /src/pist /usr/local/bin/
 
