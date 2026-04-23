@@ -321,6 +321,14 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 					if err := setUnique(table.Constraints, constraint.Name, "constraint", constraint); err != nil {
 						return nil, err
 					}
+					// PK implies NOT NULL on all key columns
+					if constraint.Type.IsPrimaryKeyConstraint() {
+						for _, colName := range constraint.Columns {
+							if col, ok := table.Columns.GetOk(colName); ok {
+								col.NotNull = true
+							}
+						}
+					}
 				}
 			}
 		}
@@ -400,12 +408,13 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 // ChooseConstraintName (src/backend/catalog/pg_constraint.c):
 //
 //	PRIMARY KEY → {table}_pkey
-//	UNIQUE      → {table}_{col}_key
-//	CHECK       → {table}_{col}_check
-//	EXCLUSION   → {table}_{col}_excl
-//	FOREIGN KEY → {table}_{col}_fkey
+//	UNIQUE      → {table}_{col}_key  (or {table}_key if colName is empty)
+//	CHECK       → {table}_{col}_check (or {table}_check if colName is empty)
+//	EXCLUSION   → {table}_{col}_excl  (or {table}_excl if colName is empty)
+//	FOREIGN KEY → {table}_{col}_fkey  (or {table}_fkey if colName is empty)
 //
-// colName is the first column involved; it is empty for table-level PRIMARY KEY.
+// colName is the first column involved when one is derivable; it may be empty
+// for table-level constraints where no single column name is available.
 // Duplicate name resolution is NOT handled; users should use explicit CONSTRAINT
 // names to avoid ambiguity.
 func autoNameConstraint(tableName, colName string, contype pg_query.ConstrType) string {
