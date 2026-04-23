@@ -76,7 +76,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 
 	enumDiff, err := diff.DiffEnums(filteredEnums, options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums)), &options.DropPolicy)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to diff enums: %w", err)
 	}
 	stmts := enumDiff.Stmts
 
