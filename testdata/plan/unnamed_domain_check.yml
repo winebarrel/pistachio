@@ -1,0 +1,6 @@
+init: ""
+desired: |
+  CREATE DOMAIN public.positive_int AS integer CHECK (VALUE > 0);
+plan: |
+  CREATE DOMAIN public.positive_int AS integer
+      CONSTRAINT positive_int_check CHECK (value > 0);
