@@ -409,17 +409,21 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 // Duplicate name resolution is NOT handled; users should use explicit CONSTRAINT
 // names to avoid ambiguity.
 func autoNameConstraint(tableName, colName string, contype pg_query.ConstrType) string {
+	base := tableName
+	if colName != "" {
+		base += "_" + colName
+	}
 	switch contype {
 	case pg_query.ConstrType_CONSTR_PRIMARY:
 		return tableName + "_pkey"
 	case pg_query.ConstrType_CONSTR_UNIQUE:
-		return tableName + "_" + colName + "_key"
+		return base + "_key"
 	case pg_query.ConstrType_CONSTR_CHECK:
-		return tableName + "_" + colName + "_check"
+		return base + "_check"
 	case pg_query.ConstrType_CONSTR_EXCLUSION:
-		return tableName + "_" + colName + "_excl"
+		return base + "_excl"
 	case pg_query.ConstrType_CONSTR_FOREIGN:
-		return tableName + "_" + colName + "_fkey"
+		return base + "_fkey"
 	default:
 		return ""
 	}

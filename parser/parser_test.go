@@ -374,6 +374,7 @@ CREATE TABLE public.members (
 	result, err := parser.ParseSQL(sql)
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public.members")
+	require.NotNil(t, tbl)
 	_, ok := tbl.ForeignKeys.GetOk("members_group_id_fkey")
 	assert.True(t, ok)
 }
@@ -674,6 +675,7 @@ func TestParseSQL_UnnamedTableConstraintAutoNamed(t *testing.T) {
 	result, err := parser.ParseSQL(sql)
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public.items")
+	require.NotNil(t, tbl)
 	_, ok := tbl.Constraints.GetOk("items_pkey")
 	assert.True(t, ok)
 }

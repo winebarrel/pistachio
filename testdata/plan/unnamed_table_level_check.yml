@@ -1,0 +1,17 @@
+init: ""
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      start_date date,
+      end_date date,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CHECK (start_date < end_date)
+  );
+plan: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      start_date date,
+      end_date date,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_check CHECK (start_date < end_date)
+  );
