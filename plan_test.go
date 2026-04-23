@@ -17,6 +17,7 @@ type planTestCase struct {
 	Init    string `yaml:"init"`
 	Desired string `yaml:"desired"`
 	Plan    string `yaml:"plan"`
+	Error   string `yaml:"error"`
 }
 
 func TestPlan_InvalidConnString(t *testing.T) {
@@ -293,6 +294,11 @@ func TestPlan(t *testing.T) {
 			})
 
 			got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+			if tc.Error != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.Error)
+				return
+			}
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got.SQL))
 		})
