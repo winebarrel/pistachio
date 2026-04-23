@@ -1,0 +1,17 @@
+init: ""
+desired: |
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      during tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      EXCLUDE USING gist (room WITH =, during WITH &&)
+  );
+plan: |
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      during tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      CONSTRAINT reservations_room_excl EXCLUDE USING gist (room WITH =, during WITH &&)
+  );

@@ -303,7 +303,11 @@ pist apply ./schema/*.sql         # apply it
 ```
 
 > [!NOTE]
-> Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are not tracked by pistachio because PostgreSQL auto-generates their names at creation time, making them unpredictable from the SQL file alone. Use explicit `CONSTRAINT <name>` clauses to ensure constraints are managed correctly.
+> Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are auto-named by pistachio following PostgreSQL's naming convention (`{table}_pkey`, `{table}_{col}_key`, `{table}_{col}_check`, `{table}_{col}_fkey`, `{table}_{col}_excl`). However, pistachio's auto-naming has the following limitations:
+> - When multiple constraints would generate the same name, PostgreSQL appends a numeric suffix (e.g. `_1`) that pistachio cannot predict.
+> - PostgreSQL truncates identifier names to 63 bytes (NAMEDATALEN - 1). pistachio does not apply this truncation, so very long table/column names may produce mismatched constraint names.
+>
+> **It is strongly recommended to use explicit `CONSTRAINT <name>` clauses** to avoid these issues.
 
 ## Supported Objects
 
