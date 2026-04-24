@@ -355,6 +355,25 @@ func TestDiffViews_modifyMatview(t *testing.T) {
 	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
 }
 
+func TestDiffViews_modifyMatview_dropDenied(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 2 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	// Drop denied: no DROP or CREATE should be generated
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.CreateStmts)
+}
+
 func TestDiffViews_matviewIndexAdd(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.mv", &model.View{

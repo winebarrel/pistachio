@@ -210,13 +210,15 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		} else if !equalViewDef(currentView.Definition, desiredView.Definition) {
 			if desiredView.Materialized {
 				// Materialized views cannot use CREATE OR REPLACE.
-				// Must DROP and recreate.
-				dropStmt := "DROP MATERIALIZED VIEW " + k + ";"
-				result.DropStmts = append(result.DropStmts, dropStmt)
-				result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
-				if desiredView.Indexes != nil {
-					for _, idx := range desiredView.Indexes.CollectValues() {
-						result.CreateStmts = append(result.CreateStmts, idx.SQL())
+				// Must DROP and recreate, but only if drops are allowed.
+				if dc.IsDropAllowed("view") {
+					dropStmt := "DROP MATERIALIZED VIEW " + k + ";"
+					result.DropStmts = append(result.DropStmts, dropStmt)
+					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
+					if desiredView.Indexes != nil {
+						for _, idx := range desiredView.Indexes.CollectValues() {
+							result.CreateStmts = append(result.CreateStmts, idx.SQL())
+						}
 					}
 				}
 			} else {
