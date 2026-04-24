@@ -483,6 +483,32 @@ CREATE INDEX idx_users_id ON public.users (id);`)
 	assert.NotContains(t, s, "ON public.users")
 }
 
+func TestDumpResult_OmitSchema_MaterializedView(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+	s := got.String()
+	assert.Contains(t, s, "CREATE MATERIALIZED VIEW user_stats")
+	assert.Contains(t, s, "CREATE INDEX idx_user_stats_cnt ON user_stats")
+	assert.NotContains(t, s, "ON public.user_stats")
+}
+
 func TestDumpResult_Files_DuplicateFileName(t *testing.T) {
 	// When a table and view produce the same file name, the second should be renamed
 	tables := orderedmap.New[string, *model.Table]()

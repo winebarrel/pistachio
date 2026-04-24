@@ -433,3 +433,25 @@ func TestDiffViews_matviewNoChange(t *testing.T) {
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts)
 }
+
+func TestDiffViews_renameMatview(t *testing.T) {
+	old := "public.old_mv"
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.old_mv", &model.View{
+		Schema: "public", Name: "old_mv", Materialized: true,
+		Definition: "SELECT 1", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.new_mv", &model.View{
+		Schema: "public", Name: "new_mv", Materialized: true,
+		Definition: "SELECT 1", RenameFrom: &old,
+		Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	require.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "ALTER MATERIALIZED VIEW")
+	assert.Contains(t, result.CreateStmts[0], "RENAME TO new_mv")
+}
