@@ -291,8 +291,6 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 }
 
 // extractViewDepsFallback uses substring matching as a fallback when
-// pg_query parsing fails.
-// extractViewDepsFallback uses substring matching as a fallback when
 // pg_query parsing fails. It checks both fully-qualified names and
 // unqualified names (with defaultSchema prefix) to handle schemaless refs.
 func extractViewDepsFallback(definition, defaultSchema string, defined map[string]bool) []string {
