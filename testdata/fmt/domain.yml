@@ -1,0 +1,6 @@
+input: |
+  CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+expected: |
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK (value > 0);
