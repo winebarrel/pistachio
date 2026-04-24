@@ -43,6 +43,7 @@ func TestExtractObjectName(t *testing.T) {
 		{`COMMENT ON COLUMN "S"."T".col IS 'x';`, `"S"."T"`},
 		{`CREATE TABLE public."escaped""quote" (id integer);`, `public."escaped""quote"`},
 		{`CREATE TABLE public.$foo (id integer);`, "public.$foo"},
+		{`COMMENT ON COLUMN "S""x"."T".col IS 'x';`, `"S""x"."T"`},
 	}
 
 	for _, tt := range tests {
