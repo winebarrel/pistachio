@@ -165,3 +165,55 @@ func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
 	assert.Contains(t, result[0], "view_b", "dependent view dropped first")
 	assert.Contains(t, result[1], "view_a", "dependency dropped second")
 }
+
+func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
+	// Current schema has cyclic FK → drop ordering should fall back
+	refA := "a"
+	refB := "b"
+	schemaPublic := "public"
+
+	currentEnums := orderedmap.New[string, *model.Enum]()
+	currentDomains := orderedmap.New[string, *model.Domain]()
+	currentViews := orderedmap.New[string, *model.View]()
+	currentTables := orderedmap.New[string, *model.Table]()
+	for _, cfg := range []struct{ name, ref string }{{"a", refB}, {"b", refA}} {
+		tbl := &model.Table{Schema: "public", Name: cfg.name}
+		tbl.Columns = orderedmap.New[string, *model.Column]()
+		tbl.Indexes = orderedmap.New[string, *model.Index]()
+		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+		tbl.ForeignKeys.Set(cfg.name+"_fk", &model.ForeignKey{
+			Constraint: model.Constraint{Name: cfg.name + "_fk"},
+			RefSchema:  &schemaPublic,
+			RefTable:   &cfg.ref,
+		})
+		currentTables.Set("public."+cfg.name, tbl)
+	}
+
+	desiredEnums := orderedmap.New[string, *model.Enum]()
+	desiredDomains := orderedmap.New[string, *model.Domain]()
+	desiredTables := orderedmap.New[string, *model.Table]()
+	desiredViews := orderedmap.New[string, *model.View]()
+
+	enumDiff := &diff.EnumDiffResult{}
+	domainDiff := &diff.DomainDiffResult{}
+	tableDiff := &diff.TableDiffResult{
+		DropStmts: []string{"DROP TABLE public.a;", "DROP TABLE public.b;"},
+	}
+	viewDiff := &diff.ViewDiffResult{}
+
+	result := pistachio.OrderStatements(
+		currentEnums, currentDomains, currentTables, currentViews,
+		desiredEnums, desiredDomains, desiredTables, desiredViews,
+		enumDiff, domainDiff, tableDiff, viewDiff,
+	)
+
+	// Should still produce output via fallback (not panic or error)
+	require.Len(t, result, 2)
+}
+
+func TestExtractObjectName_QuotedWithEscapedQuote(t *testing.T) {
+	// COMMENT ON COLUMN with escaped quotes in identifier
+	got := pistachio.ExtractObjectName(`COMMENT ON COLUMN "My""Schema"."My""Table".col IS 'x';`)
+	assert.Equal(t, `"My""Schema"."My""Table"`, got)
+}

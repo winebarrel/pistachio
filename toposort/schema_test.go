@@ -465,3 +465,135 @@ func TestOrderFromSchema_ViewWithScalarSubquery(t *testing.T) {
 	assert.Less(t, idx["public.users"], idx["public.user_with_setting"], "users before view")
 	assert.Less(t, idx["public.settings"], idx["public.user_with_setting"], "settings before view (scalar subquery)")
 }
+
+func TestOrderFromSchema_ViewWithExistsSubquery(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	for _, name := range []string{"users", "orders"} {
+		tbl := &model.Table{Schema: "public", Name: name}
+		tbl.Columns = orderedmap.New[string, *model.Column]()
+		tbl.Indexes = orderedmap.New[string, *model.Index]()
+		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+		tables.Set("public."+name, tbl)
+	}
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.users_with_orders", &model.View{
+		Schema:     "public",
+		Name:       "users_with_orders",
+		Definition: "SELECT id FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.users"], idx["public.users_with_orders"])
+	assert.Less(t, idx["public.orders"], idx["public.users_with_orders"])
+}
+
+func TestOrderFromSchema_ViewWithCoalesce(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	for _, name := range []string{"users", "defaults"} {
+		tbl := &model.Table{Schema: "public", Name: name}
+		tbl.Columns = orderedmap.New[string, *model.Column]()
+		tbl.Indexes = orderedmap.New[string, *model.Index]()
+		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+		tables.Set("public."+name, tbl)
+	}
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.v", &model.View{
+		Schema:     "public",
+		Name:       "v",
+		Definition: "SELECT id, COALESCE(name, (SELECT val FROM defaults LIMIT 1)) FROM users",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.users"], idx["public.v"])
+	assert.Less(t, idx["public.defaults"], idx["public.v"])
+}
+
+func TestOrderFromSchema_ViewWithCaseSubquery(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	for _, name := range []string{"users", "config"} {
+		tbl := &model.Table{Schema: "public", Name: name}
+		tbl.Columns = orderedmap.New[string, *model.Column]()
+		tbl.Indexes = orderedmap.New[string, *model.Index]()
+		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+		tables.Set("public."+name, tbl)
+	}
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.v", &model.View{
+		Schema:     "public",
+		Name:       "v",
+		Definition: "SELECT id, CASE WHEN active THEN (SELECT val FROM config LIMIT 1) ELSE 'none' END FROM users",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.users"], idx["public.v"])
+	assert.Less(t, idx["public.config"], idx["public.v"])
+}
+
+func TestOrderFromSchema_ViewWithUnparseableDefinition(t *testing.T) {
+	// View definition that pg_query can't parse triggers fallback
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	users := &model.Table{Schema: "public", Name: "users"}
+	users.Columns = orderedmap.New[string, *model.Column]()
+	users.Indexes = orderedmap.New[string, *model.Index]()
+	users.Constraints = orderedmap.New[string, *model.Constraint]()
+	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.users", users)
+
+	views := orderedmap.New[string, *model.View]()
+	// Invalid SQL that can't be parsed but contains "public.users"
+	views.Set("public.bad_view", &model.View{
+		Schema:     "public",
+		Name:       "bad_view",
+		Definition: "NOT VALID SQL BUT MENTIONS public.users",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	// Fallback substring matching should still detect the dependency
+	assert.Less(t, idx["public.users"], idx["public.bad_view"])
+}
