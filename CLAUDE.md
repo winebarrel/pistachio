@@ -42,7 +42,7 @@ make lint     # golangci-lint run
 
 ## Code conventions
 
-- Package-level tests use the same package name (e.g., `package diff` not `package diff_test`) for access to unexported functions.
+- Package-level tests generally use external test packages (e.g., `package catalog_test`, `package model_test`). Use same-package tests only when access to unexported identifiers is required (e.g., `package diff`).
 - Root-level integration tests use `package pistachio_test`.
-- Test fixtures are YAML files in `testdata/` with `init`, `desired`, and `applied` fields.
+- Test fixtures are YAML files in `testdata/`, but fields vary by test suite (e.g., `apply` uses `init`/`desired`/`applied`, `plan` uses `init`/`desired`/`plan`/`error`, `dump` uses `init`/`dump`, `parser`/`fmt` use `input`/`expected`).
 - `orderedmap.Map` is used throughout for deterministic iteration order of schema objects.
