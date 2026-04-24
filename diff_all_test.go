@@ -213,6 +213,57 @@ func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
 	require.Len(t, result, 2)
 }
 
+func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {
+	// Statements with unknown position (e.g., RENAME, INDEX ops) should
+	// be placed before topo-ordered statements, not after.
+	currentEnums := orderedmap.New[string, *model.Enum]()
+	currentDomains := orderedmap.New[string, *model.Domain]()
+	currentViews := orderedmap.New[string, *model.View]()
+
+	currentTables := orderedmap.New[string, *model.Table]()
+	tbl := &model.Table{Schema: "public", Name: "users"}
+	tbl.Columns = orderedmap.New[string, *model.Column]()
+	tbl.Indexes = orderedmap.New[string, *model.Index]()
+	tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+	tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	currentTables.Set("public.users", tbl)
+
+	desiredEnums := orderedmap.New[string, *model.Enum]()
+	desiredDomains := orderedmap.New[string, *model.Domain]()
+	desiredViews := orderedmap.New[string, *model.View]()
+
+	desiredTables := orderedmap.New[string, *model.Table]()
+	tbl2 := &model.Table{Schema: "public", Name: "accounts"}
+	tbl2.Columns = orderedmap.New[string, *model.Column]()
+	tbl2.Indexes = orderedmap.New[string, *model.Index]()
+	tbl2.Constraints = orderedmap.New[string, *model.Constraint]()
+	tbl2.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	desiredTables.Set("public.accounts", tbl2)
+
+	enumDiff := &diff.EnumDiffResult{}
+	domainDiff := &diff.DomainDiffResult{}
+	tableDiff := &diff.TableDiffResult{
+		Stmts: []string{
+			// RENAME uses old name → not in desired posMap → pos=-1
+			"ALTER TABLE public.users RENAME TO accounts;",
+			// Column change uses new name → in desired posMap
+			"ALTER TABLE public.accounts ADD COLUMN name text;",
+		},
+	}
+	viewDiff := &diff.ViewDiffResult{}
+
+	result := pistachio.OrderStatements(
+		currentEnums, currentDomains, currentTables, currentViews,
+		desiredEnums, desiredDomains, desiredTables, desiredViews,
+		enumDiff, domainDiff, tableDiff, viewDiff,
+	)
+
+	require.Len(t, result, 2)
+	// RENAME (unknown pos) must come before ADD COLUMN (known pos)
+	assert.Contains(t, result[0], "RENAME TO accounts")
+	assert.Contains(t, result[1], "ADD COLUMN name")
+}
+
 func TestExtractObjectName_QuotedWithEscapedQuote(t *testing.T) {
 	// COMMENT ON COLUMN with escaped quotes in identifier
 	got := pistachio.ExtractObjectName(`COMMENT ON COLUMN "My""Schema"."My""Table".col IS 'x';`)

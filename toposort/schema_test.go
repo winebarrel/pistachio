@@ -499,6 +499,40 @@ func TestOrderFromSchema_ViewWithExistsSubquery(t *testing.T) {
 	assert.Less(t, idx["public.orders"], idx["public.users_with_orders"])
 }
 
+func TestOrderFromSchema_ViewWithJoinOnSubquery(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	for _, name := range []string{"users", "posts", "config"} {
+		tbl := &model.Table{Schema: "public", Name: name}
+		tbl.Columns = orderedmap.New[string, *model.Column]()
+		tbl.Indexes = orderedmap.New[string, *model.Index]()
+		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+		tables.Set("public."+name, tbl)
+	}
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.v", &model.View{
+		Schema:     "public",
+		Name:       "v",
+		Definition: "SELECT u.id FROM users u JOIN posts p ON u.id = p.user_id AND p.id > (SELECT val FROM config LIMIT 1)",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.users"], idx["public.v"])
+	assert.Less(t, idx["public.posts"], idx["public.v"])
+	assert.Less(t, idx["public.config"], idx["public.v"], "config referenced in JOIN ON subquery")
+}
+
 func TestOrderFromSchema_ViewWithCoalesce(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()

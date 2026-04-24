@@ -465,6 +465,57 @@ func TestSortSQL_NonPublicSchema(t *testing.T) {
 	assert.Contains(t, sorted[1], "myapp.posts")
 }
 
+func TestExtractDeps_ViewWithWhereSubquery(t *testing.T) {
+	sql := `
+		CREATE TABLE public.users (id integer NOT NULL, active boolean);
+		CREATE TABLE public.config (key text, val integer);
+		CREATE VIEW public.v AS SELECT id FROM public.users WHERE id > (SELECT val FROM public.config WHERE key = 'min_id');
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 3)
+
+	assert.Equal(t, "public.v", stmts[2].Name)
+	assert.Contains(t, stmts[2].Deps, "public.users")
+	assert.Contains(t, stmts[2].Deps, "public.config")
+}
+
+func TestExtractDeps_ViewWithCTE(t *testing.T) {
+	sql := `
+		CREATE TABLE public.users (id integer NOT NULL);
+		CREATE VIEW public.v AS WITH active AS (SELECT id FROM public.users) SELECT id FROM active;
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+
+	assert.Equal(t, "public.v", stmts[1].Name)
+	assert.Contains(t, stmts[1].Deps, "public.users")
+}
+
+func TestExtractDeps_JoinWithSubqueryInQuals(t *testing.T) {
+	sql := `
+		CREATE TABLE public.users (id integer NOT NULL);
+		CREATE TABLE public.config (key text, val integer);
+		CREATE TABLE public.posts (id integer NOT NULL, user_id integer);
+		CREATE VIEW public.v AS
+			SELECT u.id FROM public.users u
+			JOIN public.posts p ON u.id = p.user_id
+				AND p.id > (SELECT val FROM public.config WHERE key = 'min_post');
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 4)
+
+	assert.Equal(t, "public.v", stmts[3].Name)
+	assert.Contains(t, stmts[3].Deps, "public.users")
+	assert.Contains(t, stmts[3].Deps, "public.posts")
+	assert.Contains(t, stmts[3].Deps, "public.config")
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchString(s, substr)
 }
