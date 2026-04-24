@@ -36,9 +36,9 @@ summary() {
 
 # Reset the database and optionally run init SQL from a file.
 setup_db() {
-  psql "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 -c 'SET client_min_messages TO warning; DROP SCHEMA public CASCADE; CREATE SCHEMA public'
+  psql -X "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 -c 'SET client_min_messages TO warning; DROP SCHEMA public CASCADE; CREATE SCHEMA public'
   if [ $# -gt 0 ] && [ -n "$1" ]; then
-    psql "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 -f "$1"
+    psql -X "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 -f "$1"
   fi
 }
 
