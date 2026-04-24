@@ -7,10 +7,11 @@ Pistachio is a declarative schema management tool for PostgreSQL, written in Go.
 ## Build & test
 
 ```sh
-make build    # go build ./cmd/pist
-make vet      # go vet ./...
-make test     # go test -p 1 -v ./... $(TEST_OPTS)
-make lint     # golangci-lint run
+make build          # go build ./cmd/pist
+make vet            # go vet ./...
+make test           # go test -p 1 -v ./... $(TEST_OPTS)
+make test-scenario  # CLI scenario tests (bash, requires PostgreSQL)
+make lint           # golangci-lint run
 ```
 
 - Tests require a running PostgreSQL instance (default: `postgres://postgres@localhost/postgres`, override with `TEST_PIST_CONN_STR`).
@@ -26,6 +27,7 @@ make lint     # golangci-lint run
 - `diff/` - Generates DDL diff between current and desired schemas
 - `internal/testutil/` - Test helpers (DB connection, setup)
 - `testdata/` - YAML-based test fixtures for multiple test suites, including integration and unit tests
+- `test/scenario/` - CLI-level scenario tests (shell scripts that run `pist` CLI against sample schemas)
 
 ## Development workflow
 
@@ -46,3 +48,4 @@ make lint     # golangci-lint run
 - Root-level integration tests use `package pistachio_test`.
 - Test fixtures are YAML files in `testdata/`, but fields vary by test suite (e.g., `apply` uses `init`/`desired`/`applied`, `plan` uses `init`/`desired`/`plan`/`error`, `dump` uses `init`/`dump`, `parser`/`fmt` use `input`/`expected`).
 - `orderedmap.Map` is used throughout for deterministic iteration order of schema objects.
+- CLI scenario tests live in `test/scenario/`. Each `*.test.sh` script loads an initial schema, then applies incremental changes step by step, verifying plan output and drift-free state at each step. Shared helpers are in `helper.sh`; test SQL data is in `test/scenario/testdata/<schema>/`.

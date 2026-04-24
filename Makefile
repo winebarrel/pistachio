@@ -44,6 +44,10 @@ sample-db:
 sample-db-tar:
 	curl -sSfL $(TAR_URL) | tar xzO $(TAR_SQL_PATH) | psql
 
+.PHONY: test-scenario
+test-scenario:
+	bash test/scenario/run.sh
+
 .PHONY: clean-schema
 clean-schema:
 	psql -c 'DROP SCHEMA public CASCADE ; CREATE SCHEMA public'
