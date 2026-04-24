@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text COLLATE "C" NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text COLLATE "C" NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

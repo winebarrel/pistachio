@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_code_key UNIQUE (code) DEFERRABLE INITIALLY DEFERRED
+  );
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_code_key UNIQUE (code) DEFERRABLE INITIALLY DEFERRED
+  );

@@ -1,0 +1,16 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      age integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.users ADD CONSTRAINT chk_age CHECK (age > 0) NOT VALID;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      age integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT chk_age CHECK (age > 0)
+  );
+plan: |
+  ALTER TABLE public.users VALIDATE CONSTRAINT chk_age;
