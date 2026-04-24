@@ -1,0 +1,15 @@
+input: |
+  CREATE TABLE public.documents (
+      id integer NOT NULL,
+      tags jsonb NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX documents_tags_idx ON public.documents USING gin (tags);
+expected: |
+  -- public.documents
+  CREATE TABLE public.documents (
+      id integer NOT NULL,
+      tags jsonb NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX documents_tags_idx ON public.documents USING gin (tags);

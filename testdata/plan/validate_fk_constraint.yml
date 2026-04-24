@@ -1,0 +1,24 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) NOT VALID;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);
+plan: |
+  ALTER TABLE public.orders VALIDATE CONSTRAINT fk_user;

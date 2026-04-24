@@ -1,0 +1,9 @@
+init: |
+  CREATE DOMAIN public.bounded_int AS integer
+      CONSTRAINT min_check CHECK (VALUE > 0)
+      CONSTRAINT max_check CHECK (VALUE < 1000);
+dump: |
+  -- public.bounded_int
+  CREATE DOMAIN public.bounded_int AS integer
+      CONSTRAINT max_check CHECK ((VALUE < 1000))
+      CONSTRAINT min_check CHECK ((VALUE > 0));

@@ -1,0 +1,15 @@
+input: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp without time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX events_created_at_idx ON public.events USING brin (created_at);
+expected: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp without time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX events_created_at_idx ON public.events USING brin (created_at);

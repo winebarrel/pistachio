@@ -1,0 +1,15 @@
+input: |
+  CREATE TABLE public.lookups (
+      id integer NOT NULL,
+      key text NOT NULL,
+      CONSTRAINT lookups_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX lookups_key_idx ON public.lookups USING hash (key);
+expected: |
+  -- public.lookups
+  CREATE TABLE public.lookups (
+      id integer NOT NULL,
+      key text NOT NULL,
+      CONSTRAINT lookups_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX lookups_key_idx ON public.lookups USING hash (key);

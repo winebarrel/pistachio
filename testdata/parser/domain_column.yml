@@ -1,0 +1,14 @@
+input: |
+  CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      quantity public.pos_int NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+expected: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      quantity public.pos_int NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
