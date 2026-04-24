@@ -223,10 +223,13 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 		return
 	}
 
-	// Walk JoinExpr
+	// Walk JoinExpr (including join qualifiers that may contain subqueries)
 	if join := node.GetJoinExpr(); join != nil {
 		collectRangeVars(join.Larg, defaultSchema, defined, seen)
 		collectRangeVars(join.Rarg, defaultSchema, defined, seen)
+		if join.Quals != nil {
+			collectRangeVars(join.Quals, defaultSchema, defined, seen)
+		}
 		return
 	}
 

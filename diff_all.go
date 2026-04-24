@@ -167,30 +167,33 @@ func orderStatements(
 		dropPosMap[name] = i
 	}
 
-	// Phase 1: Creates/modifications in topological order
+	// Phase 1: Creates/modifications in topological order.
+	// Statements whose owning object cannot be identified (pos < 0) are placed
+	// after all topo-ordered statements, preserving their original relative order.
 	var createStmts []taggedStmt
 	createStmts = append(createStmts, tagStatements(enumDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(domainDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(tableDiff.Stmts, createPosMap)...)
 	sort.SliceStable(createStmts, func(i, j int) bool {
-		return createStmts[i].pos < createStmts[j].pos
+		return compareTaggedPos(createStmts[i].pos, createStmts[j].pos, false)
 	})
 
-	// Phase 2: Drops in reverse topological order (dependents dropped first)
+	// Phase 2: Drops in reverse topological order (dependents dropped first).
+	// Unknown statements (pos < 0) are placed first (before known drops).
 	var dropStmts []taggedStmt
 	dropStmts = append(dropStmts, tagStatements(viewDiff.DropStmts, dropPosMap)...)
 	dropStmts = append(dropStmts, tagStatements(tableDiff.DropStmts, dropPosMap)...)
 	dropStmts = append(dropStmts, tagStatements(domainDiff.DropStmts, dropPosMap)...)
 	dropStmts = append(dropStmts, tagStatements(enumDiff.DropStmts, dropPosMap)...)
 	sort.SliceStable(dropStmts, func(i, j int) bool {
-		return dropStmts[i].pos > dropStmts[j].pos // reverse order
+		return compareTaggedPos(dropStmts[i].pos, dropStmts[j].pos, true)
 	})
 
 	// Phase 3: View creates in topological order
 	var viewCreateStmts []taggedStmt
 	viewCreateStmts = append(viewCreateStmts, tagStatements(viewDiff.CreateStmts, createPosMap)...)
 	sort.SliceStable(viewCreateStmts, func(i, j int) bool {
-		return viewCreateStmts[i].pos < viewCreateStmts[j].pos
+		return compareTaggedPos(viewCreateStmts[i].pos, viewCreateStmts[j].pos, false)
 	})
 
 	// Assemble: FK drops → drops → creates → FK adds → view creates
@@ -242,9 +245,33 @@ type taggedStmt struct {
 	pos int
 }
 
+// compareTaggedPos compares two tagged statement positions for sorting.
+// Unknown positions (pos < 0) are placed before all known positions,
+// preserving their original relative order via the stable sort.
+// This ensures RENAME and INDEX statements (which can't be mapped to a
+// posMap entry) execute before dependent creates/modifications.
+func compareTaggedPos(posI, posJ int, reverse bool) bool {
+	iUnknown := posI < 0
+	jUnknown := posJ < 0
+
+	switch {
+	case iUnknown && jUnknown:
+		return false // preserve original order
+	case iUnknown:
+		return true // unknown before known
+	case jUnknown:
+		return false
+	default:
+		if reverse {
+			return posI > posJ
+		}
+		return posI < posJ
+	}
+}
+
 // tagStatements extracts object names from SQL statements and assigns
 // topological positions. Statements whose object can't be identified
-// get position -1 (sorted first) to preserve safety.
+// get position -1.
 func tagStatements(stmts []string, posMap map[string]int) []taggedStmt {
 	tagged := make([]taggedStmt, len(stmts))
 	for i, sql := range stmts {

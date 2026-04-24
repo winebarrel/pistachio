@@ -157,9 +157,35 @@ func extractSelectDeps(node *pg_query.Node, defaultSchema string, seen map[strin
 		return
 	}
 
+	// CTEs (WITH clause)
+	if ss.WithClause != nil {
+		for _, cte := range ss.WithClause.Ctes {
+			if c := cte.GetCommonTableExpr(); c != nil {
+				extractSelectDeps(c.Ctequery, defaultSchema, seen)
+			}
+		}
+	}
+
 	// FROM clause
 	for _, from := range ss.FromClause {
 		extractFromDeps(from, defaultSchema, seen)
+	}
+
+	// Target list (scalar subqueries in SELECT)
+	for _, target := range ss.TargetList {
+		if rt := target.GetResTarget(); rt != nil && rt.Val != nil {
+			extractExprDeps(rt.Val, defaultSchema, seen)
+		}
+	}
+
+	// WHERE clause
+	if ss.WhereClause != nil {
+		extractExprDeps(ss.WhereClause, defaultSchema, seen)
+	}
+
+	// HAVING clause
+	if ss.HavingClause != nil {
+		extractExprDeps(ss.HavingClause, defaultSchema, seen)
 	}
 
 	// Set operations (UNION, INTERSECT, EXCEPT)
@@ -168,6 +194,31 @@ func extractSelectDeps(node *pg_query.Node, defaultSchema string, seen map[strin
 	}
 	if ss.Rarg != nil {
 		extractSelectDeps(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}}, defaultSchema, seen)
+	}
+}
+
+// extractExprDeps walks expression nodes to find SubLink (subquery) references.
+func extractExprDeps(node *pg_query.Node, defaultSchema string, seen map[string]bool) {
+	if node == nil {
+		return
+	}
+
+	if sl := node.GetSubLink(); sl != nil {
+		extractSelectDeps(sl.Subselect, defaultSchema, seen)
+		return
+	}
+
+	if expr := node.GetAExpr(); expr != nil {
+		extractExprDeps(expr.Lexpr, defaultSchema, seen)
+		extractExprDeps(expr.Rexpr, defaultSchema, seen)
+		return
+	}
+
+	if boolExpr := node.GetBoolExpr(); boolExpr != nil {
+		for _, arg := range boolExpr.Args {
+			extractExprDeps(arg, defaultSchema, seen)
+		}
+		return
 	}
 }
 
@@ -185,6 +236,9 @@ func extractFromDeps(node *pg_query.Node, defaultSchema string, seen map[string]
 	if join := node.GetJoinExpr(); join != nil {
 		extractFromDeps(join.Larg, defaultSchema, seen)
 		extractFromDeps(join.Rarg, defaultSchema, seen)
+		if join.Quals != nil {
+			extractExprDeps(join.Quals, defaultSchema, seen)
+		}
 		return
 	}
 
