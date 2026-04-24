@@ -9,7 +9,7 @@ Pistachio is a declarative schema management tool for PostgreSQL, written in Go.
 ```sh
 make build    # go build ./cmd/pist
 make vet      # go vet ./...
-make test     # go test -p 1 -v ./...
+make test     # go test -p 1 -v ./... $(TEST_OPTS)
 make lint     # golangci-lint run
 ```
 
@@ -37,7 +37,7 @@ make lint     # golangci-lint run
    - Verify coverage has not decreased and cover any reachable paths that can be tested naturally (do not write unnatural tests for unreachable defensive code).
    - Consider whether similar issues exist elsewhere in the codebase.
    - Run `make lint` to check for lint errors.
-   - Run `make schema` to create sample schemas, then verify behavior with `pist plan` / `pist dump` against them.
+   - Run `make schema` to load sample schema SQL files into the local database (requires `psql`, `curl`, and network access), then verify behavior with `pist plan` / `pist dump` against them.
 5. Do not run tests in parallel (`make test` uses `-p 1`).
 
 ## Code conventions
