@@ -171,7 +171,7 @@ run_step() {
   fi
 
   local apply_output
-  apply_output=$(pist_apply "${files[@]}" 2>&1) || { fail "apply failed: $apply_output"; return 1; }
+  apply_output=$(pist_apply "${files[@]}") || { fail "apply failed: $apply_output"; return 1; }
 
   local drift
   drift=$(pist_plan "${files[@]}") || { fail "post-apply plan failed: $drift"; return 1; }

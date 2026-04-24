@@ -108,8 +108,7 @@ assert_no_drop_type "allow-drop domain: no enum drop" "enum" "domain" "$DATA/des
 setup_db "$DATA/init.sql"
 
 step "allow-drop all: drops present"
-plan_output=$(pist_plan "$DATA/desired_drop_all.sql")
-if [ $? -ne 0 ]; then
+if ! plan_output=$(pist_plan "$DATA/desired_drop_all.sql"); then
   fail "plan failed: $plan_output"
 else
   has_all=true
