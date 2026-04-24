@@ -441,7 +441,48 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	if err != nil {
 		return nil, nil, err
 	}
-	addStmts = append(addStmts, renameStmts...)
+
+	// Build a map of new name → old name for renamed FKs
+	renamedFrom := map[string]string{}
+	for name, desiredFk := range desired.All() {
+		if desiredFk.RenameFrom != nil && *desiredFk.RenameFrom != name {
+			renamedFrom[name] = *desiredFk.RenameFrom
+		}
+	}
+
+	// Determine which renamed FKs need recreation (drop+add) instead of just rename
+	needsRecreation := map[string]bool{}
+	for name := range current.All() {
+		desiredFk, ok := desired.GetOk(name)
+		if !ok {
+			continue
+		}
+		currentFk := current.Get(name)
+		if !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
+			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT (no recreation needed)
+			if equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
+				continue
+			}
+			if _, renamed := renamedFrom[name]; renamed {
+				needsRecreation[name] = true
+			}
+		}
+	}
+
+	// Only emit rename statements for FKs that don't need recreation
+	for _, stmt := range renameStmts {
+		skip := false
+		for name := range needsRecreation {
+			oldName := renamedFrom[name]
+			if strings.Contains(stmt, model.Ident(oldName)+" TO "+model.Ident(name)) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			addStmts = append(addStmts, stmt)
+		}
+	}
 
 	// Drop removed or changed FKs
 	for name := range current.All() {
@@ -452,7 +493,11 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 			if ok && equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
 				continue
 			}
-			dropStmts = append(dropStmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
+			dropName := name
+			if oldName, renamed := renamedFrom[name]; renamed {
+				dropName = oldName
+			}
+			dropStmts = append(dropStmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(dropName)+";")
 		}
 	}
 
