@@ -431,6 +431,33 @@ func TestExtractDeps_ViewWithSchemalessTable(t *testing.T) {
 	assert.Contains(t, stmts[1].Deps, "public.users")
 }
 
+func TestExtractDeps_MaterializedView(t *testing.T) {
+	sql := `
+		CREATE TABLE public.users (id integer NOT NULL);
+		CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+
+	assert.Equal(t, "public.user_stats", stmts[1].Name)
+	assert.Contains(t, stmts[1].Deps, "public.users")
+}
+
+func TestSortSQL_MaterializedViewOrder(t *testing.T) {
+	sql := `
+		CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+		CREATE TABLE public.users (id integer NOT NULL);
+	`
+
+	sorted, err := toposort.SortSQL(sql)
+	require.NoError(t, err)
+	require.Len(t, sorted, 2)
+	assert.Contains(t, sorted[0], "CREATE TABLE")
+	assert.Contains(t, sorted[1], "CREATE MATERIALIZED VIEW")
+}
+
 func TestExtractDeps_NonPublicSchema(t *testing.T) {
 	sql := `
 		CREATE TYPE myapp.status AS ENUM ('a', 'b');

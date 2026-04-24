@@ -755,6 +755,47 @@ COMMENT ON COLUMN public.users.name IS '';`
 	assert.Nil(t, col.Comment)
 }
 
+func TestParseSQL_MaterializedView(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Tables.Len())
+	assert.Equal(t, 1, result.Views.Len())
+
+	v, ok := result.Views.GetOk("public.user_stats")
+	require.True(t, ok)
+	assert.Equal(t, "user_stats", v.Name)
+	assert.Equal(t, "public", v.Schema)
+	assert.True(t, v.Materialized)
+	assert.Contains(t, v.Definition, "SELECT count(") // deparsed
+}
+
+func TestParseSQL_MaterializedViewWithIndex(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	v, ok := result.Views.GetOk("public.user_stats")
+	require.True(t, ok)
+	assert.True(t, v.Materialized)
+	assert.Equal(t, 1, v.Indexes.Len())
+
+	idx, ok := v.Indexes.GetOk("idx_user_stats_cnt")
+	require.True(t, ok)
+	assert.Equal(t, "user_stats", idx.Table)
+}
+
 func TestParseSQL_IndexOnUnknownTableSkipped(t *testing.T) {
 	sql := `CREATE INDEX idx_name ON public.nonexistent USING btree (name);`
 	result, err := parser.ParseSQL(sql)

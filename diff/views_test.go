@@ -365,3 +365,71 @@ func TestDiffViews_matviewCommentAdd(t *testing.T) {
 	assert.Len(t, result.CreateStmts, 1)
 	assert.Contains(t, result.CreateStmts[0], "COMMENT ON MATERIALIZED VIEW")
 }
+
+func TestDiffViews_matviewCommentDrop(t *testing.T) {
+	comment := "stats"
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1", Comment: &comment, Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1", Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "COMMENT ON MATERIALIZED VIEW public.mv IS NULL")
+}
+
+func TestDiffViews_matviewIndexChange(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	mvCurrent := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mvCurrent.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	current.Set("public.mv", mvCurrent)
+
+	desired := orderedmap.New[string, *model.View]()
+	mvDesired := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mvDesired.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE UNIQUE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	desired.Set("public.mv", mvDesired)
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	require.Len(t, result.CreateStmts, 2)
+	assert.Contains(t, result.CreateStmts[0], "DROP INDEX")
+	assert.Contains(t, result.CreateStmts[1], "CREATE UNIQUE INDEX")
+}
+
+func TestDiffViews_matviewNoChange(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.CreateStmts)
+}

@@ -891,7 +891,7 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 				t.Comment = nil
 			}
 		}
-	case pg_query.ObjectType_OBJECT_VIEW:
+	case pg_query.ObjectType_OBJECT_VIEW, pg_query.ObjectType_OBJECT_MATVIEW:
 		schema := defaultSchema
 		viewName := names[0]
 		if len(names) >= 2 {

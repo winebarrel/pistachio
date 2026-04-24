@@ -51,3 +51,27 @@ CREATE OR REPLACE VIEW public.v2 AS
 SELECT 2;`
 	assert.Equal(t, expected, got)
 }
+
+func TestView_SQL_materialized(t *testing.T) {
+	v := View{Schema: "public", Name: "mv", Materialized: true, Definition: "SELECT count(*) AS cnt FROM users"}
+	expected := "CREATE MATERIALIZED VIEW public.mv AS\nSELECT count(*) AS cnt FROM users;"
+	assert.Equal(t, expected, v.SQL())
+}
+
+func TestView_CommentSQL_materialized(t *testing.T) {
+	comment := "stats"
+	v := View{Schema: "public", Name: "mv", Materialized: true, Comment: &comment}
+	assert.Equal(t, "COMMENT ON MATERIALIZED VIEW public.mv IS 'stats';", v.CommentSQL())
+}
+
+func TestViewToSQL_materializedWithIndex(t *testing.T) {
+	indexes := orderedmap.New[string, *Index]()
+	indexes.Set("idx_mv_n", &Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	v := &View{Schema: "public", Name: "mv", Materialized: true, Definition: "SELECT 1 AS n", Indexes: indexes}
+	got := ViewToSQL(v)
+	assert.Contains(t, got, "CREATE MATERIALIZED VIEW")
+	assert.Contains(t, got, "CREATE INDEX idx_mv_n")
+}
