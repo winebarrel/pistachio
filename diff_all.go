@@ -243,6 +243,7 @@ func tagStatements(stmts []string, posMap map[string]int) []taggedStmt {
 }
 
 // extractObjectName extracts the primary schema-qualified object name from a DDL statement.
+// The returned name preserves quoting to match the canonical format used by model.Ident.
 func extractObjectName(sql string) string {
 	sql = strings.TrimSpace(sql)
 
@@ -256,7 +257,9 @@ func extractObjectName(sql string) string {
 		{"CREATE DOMAIN "},
 		{"CREATE OR REPLACE VIEW "},
 		{"CREATE VIEW "},
-		{"CREATE INDEX "}, // special: name is after ON
+		{"CREATE INDEX "},
+		{"ALTER INDEX "},
+		{"DROP INDEX "},
 		{"ALTER TABLE ONLY "},
 		{"ALTER TABLE "},
 		{"ALTER TYPE "},
@@ -279,9 +282,17 @@ func extractObjectName(sql string) string {
 			continue
 		}
 
-		if strings.HasPrefix(upper, "CREATE INDEX ") {
-			// CREATE INDEX name ON [ONLY] schema.table ...
+		if strings.HasPrefix(upper, "CREATE INDEX ") ||
+			strings.HasPrefix(upper, "DROP INDEX ") {
+			// CREATE/DROP INDEX name ON [ONLY] schema.table ...
 			return extractIndexTable(sql)
+		}
+
+		if strings.HasPrefix(upper, "ALTER INDEX ") {
+			// ALTER INDEX schema.idx RENAME TO ... → extract table from idx name context
+			// Index statements belong to the table they're on, but ALTER INDEX
+			// doesn't contain the table name directly. Return "" to use pos=-1.
+			return ""
 		}
 
 		rest := sql[len(p.prefix):]
@@ -289,9 +300,9 @@ func extractObjectName(sql string) string {
 
 		if strings.HasPrefix(upper, "COMMENT ON COLUMN ") {
 			// schema.table.column → schema.table
-			parts := strings.SplitN(name, ".", 3)
+			parts := splitIdentifier(name, 3)
 			if len(parts) >= 2 {
-				return parts[0] + "." + parts[1]
+				return joinIdentifierParts(parts[:2])
 			}
 		}
 
@@ -302,36 +313,81 @@ func extractObjectName(sql string) string {
 }
 
 // extractFirstIdentifier extracts a possibly schema-qualified identifier
-// from the beginning of a string.
+// from the beginning of a string, preserving quoting to match the canonical
+// format used by model.Ident.
 func extractFirstIdentifier(s string) string {
 	s = strings.TrimSpace(s)
 	var result strings.Builder
 	inQuote := false
 
-	for _, ch := range s {
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
 		if ch == '"' {
+			result.WriteByte(ch)
+			if inQuote && i+1 < len(s) && s[i+1] == '"' {
+				// Escaped quote inside a quoted identifier
+				result.WriteByte(s[i+1])
+				i++
+				continue
+			}
 			inQuote = !inQuote
-			result.WriteRune(ch)
 			continue
 		}
 		if inQuote {
-			result.WriteRune(ch)
+			result.WriteByte(ch)
 			continue
 		}
 		if ch == '.' || ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
-			result.WriteRune(ch)
+			result.WriteByte(ch)
 			continue
 		}
 		break
 	}
 
-	name := result.String()
-	// Remove quotes for matching
-	name = strings.ReplaceAll(name, "\"", "")
-	return name
+	return result.String()
 }
 
-// extractIndexTable extracts the table name from a CREATE INDEX statement.
+// splitIdentifier splits a possibly-quoted schema-qualified identifier into parts.
+// e.g., `"MySchema"."MyTable".col` → ["\"MySchema\"", "\"MyTable\"", "col"]
+func splitIdentifier(ident string, maxParts int) []string {
+	var parts []string
+	var part strings.Builder
+	inQuote := false
+
+	for i := 0; i < len(ident); i++ {
+		ch := ident[i]
+		if ch == '"' {
+			part.WriteByte(ch)
+			if inQuote && i+1 < len(ident) && ident[i+1] == '"' {
+				part.WriteByte(ident[i+1])
+				i++
+				continue
+			}
+			inQuote = !inQuote
+			continue
+		}
+		if ch == '.' && !inQuote {
+			parts = append(parts, part.String())
+			part.Reset()
+			if len(parts) >= maxParts-1 {
+				// Put the rest into the last part
+				parts = append(parts, ident[i+1:])
+				return parts
+			}
+			continue
+		}
+		part.WriteByte(ch)
+	}
+	parts = append(parts, part.String())
+	return parts
+}
+
+// joinIdentifierParts joins identifier parts back with dots.
+func joinIdentifierParts(parts []string) string {
+	return strings.Join(parts, ".")
+}
+
+// extractIndexTable extracts the table name from a CREATE/DROP INDEX statement.
 func extractIndexTable(sql string) string {
 	upper := strings.ToUpper(sql)
 	idx := strings.Index(upper, " ON ")

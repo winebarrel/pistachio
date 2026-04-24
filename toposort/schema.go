@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -28,7 +29,7 @@ func OrderFromSchema(
 	// Domains: may depend on enums or other domains via base type
 	for k, d := range domains.All() {
 		g.AddNode(k)
-		if dep := resolveBaseTypeDep(d.BaseType, defined); dep != "" {
+		if dep := resolveTypeDep(d.BaseType, d.Schema, defined); dep != "" {
 			g.AddEdge(k, dep)
 		}
 	}
@@ -40,7 +41,7 @@ func OrderFromSchema(
 		// Column type dependencies
 		if t.Columns != nil {
 			for _, col := range t.Columns.CollectValues() {
-				if dep := resolveBaseTypeDep(col.TypeName, defined); dep != "" {
+				if dep := resolveTypeDep(col.TypeName, t.Schema, defined); dep != "" {
 					g.AddEdge(k, dep)
 				}
 			}
@@ -49,7 +50,7 @@ func OrderFromSchema(
 		// FK dependencies
 		if t.ForeignKeys != nil {
 			for _, fk := range t.ForeignKeys.CollectValues() {
-				refSchema := "public"
+				refSchema := t.Schema
 				if fk.RefSchema != nil {
 					refSchema = *fk.RefSchema
 				}
@@ -73,7 +74,7 @@ func OrderFromSchema(
 	// Views: depend on tables/views referenced in their definition
 	for k, v := range views.All() {
 		g.AddNode(k)
-		deps := extractViewDeps(v.Definition, defined)
+		deps := extractViewDeps(v.Definition, v.Schema, defined)
 		for _, dep := range deps {
 			if dep != k {
 				g.AddEdge(k, dep)
@@ -112,9 +113,10 @@ func collectDefined(
 	return defined
 }
 
-// resolveBaseTypeDep checks if a type name refers to a defined object.
-// Handles both schema-qualified ("public.status") and unqualified ("status") names.
-func resolveBaseTypeDep(typeName string, defined map[string]bool) string {
+// resolveTypeDep checks if a type name refers to a defined object.
+// Handles schema-qualified ("public.status"), unqualified ("status"),
+// and array types ("status[]"). Uses defaultSchema to qualify unqualified names.
+func resolveTypeDep(typeName, defaultSchema string, defined map[string]bool) string {
 	if typeName == "" {
 		return ""
 	}
@@ -124,9 +126,9 @@ func resolveBaseTypeDep(typeName string, defined map[string]bool) string {
 		return typeName
 	}
 
-	// Try with public schema prefix
+	// Try with default schema prefix for unqualified names
 	if !strings.Contains(typeName, ".") {
-		qualified := "public." + typeName
+		qualified := defaultSchema + "." + typeName
 		if defined[qualified] {
 			return qualified
 		}
@@ -135,22 +137,28 @@ func resolveBaseTypeDep(typeName string, defined map[string]bool) string {
 	// Array types: strip trailing []
 	base := strings.TrimSuffix(typeName, "[]")
 	if base != typeName {
-		return resolveBaseTypeDep(base, defined)
+		return resolveTypeDep(base, defaultSchema, defined)
 	}
 
 	return ""
 }
 
 // extractViewDeps parses a view definition SQL to find referenced tables/views.
-// Uses simple identifier extraction since view definitions are already deparsed SQL.
-func extractViewDeps(definition string, defined map[string]bool) []string {
+// Uses pg_query to parse the SELECT statement and extract RangeVar references.
+func extractViewDeps(definition, defaultSchema string, defined map[string]bool) []string {
 	seen := make(map[string]bool)
 
-	// Check each defined object name to see if it appears in the view definition
-	for name := range defined {
-		if containsIdentifier(definition, name) {
-			seen[name] = true
-		}
+	// Parse the view definition as a SELECT statement
+	sql := "SELECT * FROM (" + definition + ") _sub"
+	result, err := pg_query.Parse(sql)
+	if err != nil {
+		// Fallback: try substring matching if parsing fails
+		return extractViewDepsFallback(definition, defined)
+	}
+
+	// Walk the AST to find RangeVar nodes
+	for _, stmt := range result.Stmts {
+		collectRangeVars(stmt.Stmt, defaultSchema, defined, seen)
 	}
 
 	deps := make([]string, 0, len(seen))
@@ -161,7 +169,84 @@ func extractViewDeps(definition string, defined map[string]bool) []string {
 	return deps
 }
 
-// containsIdentifier checks if a SQL string references a schema-qualified identifier.
-func containsIdentifier(sql, ident string) bool {
-	return strings.Contains(sql, ident)
+// collectRangeVars recursively walks a pg_query Node tree to find all
+// RangeVar references (table/view names in FROM clauses, JOINs, subqueries).
+func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[string]bool, seen map[string]bool) {
+	if node == nil {
+		return
+	}
+
+	// Check if this node is a RangeVar
+	if rv := node.GetRangeVar(); rv != nil {
+		name := qualifyRangeVar(rv, defaultSchema)
+		if name != "" && defined[name] {
+			seen[name] = true
+		}
+		return
+	}
+
+	// Check if this is a SelectStmt and walk its parts
+	if ss := node.GetSelectStmt(); ss != nil {
+		for _, from := range ss.FromClause {
+			collectRangeVars(from, defaultSchema, defined, seen)
+		}
+		if ss.WhereClause != nil {
+			collectRangeVars(ss.WhereClause, defaultSchema, defined, seen)
+		}
+		if ss.Larg != nil {
+			collectRangeVars(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}}, defaultSchema, defined, seen)
+		}
+		if ss.Rarg != nil {
+			collectRangeVars(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}}, defaultSchema, defined, seen)
+		}
+		return
+	}
+
+	// Walk JoinExpr
+	if join := node.GetJoinExpr(); join != nil {
+		collectRangeVars(join.Larg, defaultSchema, defined, seen)
+		collectRangeVars(join.Rarg, defaultSchema, defined, seen)
+		return
+	}
+
+	// Walk subselect
+	if sub := node.GetRangeSubselect(); sub != nil {
+		collectRangeVars(sub.Subquery, defaultSchema, defined, seen)
+		return
+	}
+
+	// Walk sublink (subquery in WHERE clause, e.g., EXISTS, IN)
+	if sl := node.GetSubLink(); sl != nil {
+		collectRangeVars(sl.Subselect, defaultSchema, defined, seen)
+		return
+	}
+}
+
+// qualifyRangeVar returns the schema-qualified name from a RangeVar.
+func qualifyRangeVar(rv *pg_query.RangeVar, defaultSchema string) string {
+	if rv == nil || rv.Relname == "" {
+		return ""
+	}
+	schema := rv.Schemaname
+	if schema == "" {
+		schema = defaultSchema
+	}
+	return schema + "." + rv.Relname
+}
+
+// extractViewDepsFallback uses substring matching as a fallback when
+// pg_query parsing fails.
+func extractViewDepsFallback(definition string, defined map[string]bool) []string {
+	seen := make(map[string]bool)
+	for name := range defined {
+		if strings.Contains(definition, name) {
+			seen[name] = true
+		}
+	}
+	deps := make([]string, 0, len(seen))
+	for dep := range seen {
+		deps = append(deps, dep)
+	}
+	sort.Strings(deps)
+	return deps
 }

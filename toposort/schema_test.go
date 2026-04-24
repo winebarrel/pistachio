@@ -316,3 +316,56 @@ func TestOrderFromSchema_FKWithDefaultSchema(t *testing.T) {
 
 	assert.Less(t, idx["public.users"], idx["public.posts"], "FK target before source with nil schema")
 }
+
+func TestOrderFromSchema_NonPublicSchema(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	enums.Set("myapp.status", &model.Enum{Schema: "myapp", Name: "status", Values: []string{"a", "b"}})
+
+	domains := orderedmap.New[string, *model.Domain]()
+	// Unqualified base type "status" should resolve using domain's schema "myapp"
+	domains.Set("myapp.user_status", &model.Domain{Schema: "myapp", Name: "user_status", BaseType: "status"})
+
+	tables := orderedmap.New[string, *model.Table]()
+	views := orderedmap.New[string, *model.View]()
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["myapp.status"], idx["myapp.user_status"], "enum before domain in non-public schema")
+}
+
+func TestOrderFromSchema_ViewWithSchemalessTableRef(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	users := &model.Table{Schema: "public", Name: "users"}
+	users.Columns = orderedmap.New[string, *model.Column]()
+	users.Indexes = orderedmap.New[string, *model.Index]()
+	users.Constraints = orderedmap.New[string, *model.Constraint]()
+	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.users", users)
+
+	views := orderedmap.New[string, *model.View]()
+	// View definition without schema prefix (as PostgreSQL catalog returns)
+	views.Set("public.v", &model.View{
+		Schema:     "public",
+		Name:       "v",
+		Definition: "SELECT users.id FROM users",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.users"], idx["public.v"], "table before view with schemaless ref")
+}

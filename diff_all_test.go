@@ -32,11 +32,16 @@ func TestExtractObjectName(t *testing.T) {
 		{"CREATE INDEX idx_users_name ON public.users USING btree (name);", "public.users"},
 		{"COMMENT ON TABLE public.users IS 'Users table';", "public.users"},
 		{"COMMENT ON COLUMN public.users.name IS 'Name';", "public.users"},
-		{`CREATE TABLE "MySchema"."MyTable" (id integer);`, "MySchema.MyTable"},
+		{`CREATE TABLE "MySchema"."MyTable" (id integer);`, `"MySchema"."MyTable"`},
 		// Edge cases
 		{"SELECT 1;", ""},
 		{"CREATE INDEX idx ON ONLY public.t (x);", "public.t"},
 		{"CREATE INDEX bad_no_on;", ""},
+		// DROP INDEX / ALTER INDEX
+		{`DROP INDEX public.idx_users_name;`, ""},
+		{`ALTER INDEX public.idx_old RENAME TO idx_new;`, ""},
+		{`COMMENT ON COLUMN "S"."T".col IS 'x';`, `"S"."T"`},
+		{`CREATE TABLE public."escaped""quote" (id integer);`, `public."escaped""quote"`},
 	}
 
 	for _, tt := range tests {
