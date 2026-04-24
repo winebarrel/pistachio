@@ -251,6 +251,13 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	// Comment changes
 	for k, desiredView := range desired.All() {
 		currentView, ok := current.GetOk(k)
+
+		// If the type changed (VIEW ↔ MATERIALIZED VIEW) but drop was denied,
+		// the object type hasn't changed yet — skip comment diff.
+		if ok && currentView.Materialized != desiredView.Materialized && !dc.IsDropAllowed("view") {
+			continue
+		}
+
 		var currentComment *string
 		if ok {
 			currentComment = currentView.Comment

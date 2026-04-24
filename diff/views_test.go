@@ -572,6 +572,7 @@ func TestDiffViews_matviewToView(t *testing.T) {
 }
 
 func TestDiffViews_viewToMatview_dropDenied(t *testing.T) {
+	comment := "my view"
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.v", &model.View{
 		Schema: "public", Name: "v", Materialized: false,
@@ -580,11 +581,32 @@ func TestDiffViews_viewToMatview_dropDenied(t *testing.T) {
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v", &model.View{
 		Schema: "public", Name: "v", Materialized: true,
-		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+		Definition: "SELECT 1 AS n", Comment: &comment,
+		Indexes: orderedmap.New[string, *model.Index](),
 	})
 
 	result, err := DiffViews(current, desired, DenyAllDrops{})
 	require.NoError(t, err)
+	// Type change denied: no DROP, no CREATE, no comment change
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts)
+}
+
+func TestDiffViews_renameTypeMismatch(t *testing.T) {
+	old := "public.old_v"
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.old_v", &model.View{
+		Schema: "public", Name: "old_v", Materialized: false,
+		Definition: "SELECT 1", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.new_v", &model.View{
+		Schema: "public", Name: "new_v", Materialized: true,
+		Definition: "SELECT 1", RenameFrom: &old,
+		Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	_, err := DiffViews(current, desired, AllowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "view type mismatch")
 }
