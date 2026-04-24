@@ -364,25 +364,73 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	var stmts []string
 
 	// Detect renames
-	renameStmts, current, err := detectConstraintRenames(fqtn, current, desired)
+	renameStmts, current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
 	if err != nil {
 		return nil, err
 	}
-	stmts = append(stmts, renameStmts...)
+
+	// Determine which renamed constraints need recreation instead of just rename
+	needsRecreation := map[string]bool{}
+	for name, currentCon := range current.All() {
+		desiredCon, ok := desired.GetOk(name)
+		if !ok {
+			continue
+		}
+		if !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
+			if equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
+				continue
+			}
+			if _, renamed := renamedFrom[name]; renamed {
+				needsRecreation[name] = true
+			}
+		}
+	}
+
+	// Only emit rename statements for constraints that don't need recreation
+	for _, stmt := range renameStmts {
+		skip := false
+		for name := range needsRecreation {
+			oldName := renamedFrom[name]
+			if strings.Contains(stmt, model.Ident(oldName)+" TO "+model.Ident(name)) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			stmts = append(stmts, stmt)
+		}
+	}
 
 	// Drop removed or changed constraints
 	for name, currentCon := range current.All() {
 		desiredCon, ok := desired.GetOk(name)
-		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
+		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
+			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			if ok && equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
+				continue
+			}
+			dropName := name
+			if oldName, renamed := renamedFrom[name]; renamed {
+				dropName = oldName
+			}
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(dropName)+";")
 		}
 	}
 
 	// Add new or changed constraints
 	for name, desiredCon := range desired.All() {
 		currentCon, ok := current.GetOk(name)
-		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" ADD CONSTRAINT "+model.Ident(name)+" "+desiredCon.Definition+";")
+		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
+			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			if ok && equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
+				stmts = append(stmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
+				continue
+			}
+			sql := "ALTER TABLE " + fqtn + " ADD CONSTRAINT " + model.Ident(name) + " " + desiredCon.Definition
+			if !desiredCon.Validated {
+				sql += " NOT VALID"
+			}
+			stmts = append(stmts, sql+";")
 		}
 	}
 
@@ -424,25 +472,71 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	var dropStmts, addStmts []string
 
 	// Detect renames (renames go into addStmts since they may depend on table renames)
-	renameStmts, current, err := detectForeignKeyRenames(fqtn, current, desired)
+	renameStmts, current, renamedFrom, err := detectForeignKeyRenames(fqtn, current, desired)
 	if err != nil {
 		return nil, nil, err
 	}
-	addStmts = append(addStmts, renameStmts...)
+
+	// Determine which renamed FKs need recreation (drop+add) instead of just rename
+	needsRecreation := map[string]bool{}
+	for name := range current.All() {
+		desiredFk, ok := desired.GetOk(name)
+		if !ok {
+			continue
+		}
+		currentFk := current.Get(name)
+		if !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
+			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT (no recreation needed)
+			if equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
+				continue
+			}
+			if _, renamed := renamedFrom[name]; renamed {
+				needsRecreation[name] = true
+			}
+		}
+	}
+
+	// Only emit rename statements for FKs that don't need recreation
+	for _, stmt := range renameStmts {
+		skip := false
+		for name := range needsRecreation {
+			oldName := renamedFrom[name]
+			if strings.Contains(stmt, model.Ident(oldName)+" TO "+model.Ident(name)) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			addStmts = append(addStmts, stmt)
+		}
+	}
 
 	// Drop removed or changed FKs
 	for name := range current.All() {
 		desiredFk, ok := desired.GetOk(name)
 		currentFk := current.Get(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
-			dropStmts = append(dropStmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
+		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
+			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			if ok && equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
+				continue
+			}
+			dropName := name
+			if oldName, renamed := renamedFrom[name]; renamed {
+				dropName = oldName
+			}
+			dropStmts = append(dropStmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(dropName)+";")
 		}
 	}
 
 	// Add new or changed FKs
 	for name, desiredFk := range desired.All() {
 		currentFk, ok := current.GetOk(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
+		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
+			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			if ok && equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
+				addStmts = append(addStmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
+				continue
+			}
 			addStmts = append(addStmts, desiredFk.SQL())
 		}
 	}

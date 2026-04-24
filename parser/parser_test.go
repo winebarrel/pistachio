@@ -394,6 +394,25 @@ func TestParseSQL_ColumnLevelNamedCheck(t *testing.T) {
 	con, ok := tbl.Constraints.GetOk("items_status_check")
 	require.True(t, ok)
 	assert.Contains(t, con.Definition, "CHECK")
+	assert.True(t, con.Validated)
+}
+
+func TestParseSQL_CheckConstraintNotValid(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    CONSTRAINT items_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.items ADD CONSTRAINT items_id_check CHECK (id > 0) NOT VALID;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.items")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("items_id_check")
+	require.True(t, ok)
+	assert.Contains(t, con.Definition, "CHECK")
+	assert.False(t, con.Validated)
 }
 
 func TestParseSQL_ColumnLevelNamedFK(t *testing.T) {
