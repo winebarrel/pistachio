@@ -105,6 +105,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 
 	stmts := orderStatements(
+		filteredEnums, filteredDomains, filteredTables, filteredViews,
 		desiredEnums, desiredDomains, desiredTables, desiredViews,
 		enumDiff, domainDiff, tableDiff, viewDiff,
 	)
@@ -125,6 +126,10 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 // order for diff statements based on object dependencies.
 // Falls back to the default category-based ordering if topological sort fails.
 func orderStatements(
+	currentEnums *orderedmap.Map[string, *model.Enum],
+	currentDomains *orderedmap.Map[string, *model.Domain],
+	currentTables *orderedmap.Map[string, *model.Table],
+	currentViews *orderedmap.Map[string, *model.View],
 	desiredEnums *orderedmap.Map[string, *model.Enum],
 	desiredDomains *orderedmap.Map[string, *model.Domain],
 	desiredTables *orderedmap.Map[string, *model.Table],
@@ -134,52 +139,63 @@ func orderStatements(
 	tableDiff *diff.TableDiffResult,
 	viewDiff *diff.ViewDiffResult,
 ) []string {
-	// Build topological order from desired schema
-	order, err := toposort.OrderFromSchema(
-		desiredEnums,
-		desiredDomains,
-		desiredTables,
-		desiredViews,
+	// Build topological order from desired schema for creates
+	createOrder, err := toposort.OrderFromSchema(
+		desiredEnums, desiredDomains, desiredTables, desiredViews,
 	)
 	if err != nil {
-		// Fallback to hardcoded order (e.g., cyclic FK dependencies)
 		return fallbackOrder(enumDiff, domainDiff, tableDiff, viewDiff)
 	}
 
-	posMap := make(map[string]int, len(order))
-	for i, name := range order {
-		posMap[name] = i
+	createPosMap := make(map[string]int, len(createOrder))
+	for i, name := range createOrder {
+		createPosMap[name] = i
+	}
+
+	// Build topological order from current schema for drops.
+	// Dropped objects are not in the desired schema, so we need the current
+	// schema's dependency graph to determine correct drop order.
+	dropOrder, err := toposort.OrderFromSchema(
+		currentEnums, currentDomains, currentTables, currentViews,
+	)
+	if err != nil {
+		return fallbackOrder(enumDiff, domainDiff, tableDiff, viewDiff)
+	}
+
+	dropPosMap := make(map[string]int, len(dropOrder))
+	for i, name := range dropOrder {
+		dropPosMap[name] = i
 	}
 
 	// Phase 1: Creates/modifications in topological order
 	var createStmts []taggedStmt
-	createStmts = append(createStmts, tagStatements(enumDiff.Stmts, posMap)...)
-	createStmts = append(createStmts, tagStatements(domainDiff.Stmts, posMap)...)
-	createStmts = append(createStmts, tagStatements(tableDiff.Stmts, posMap)...)
+	createStmts = append(createStmts, tagStatements(enumDiff.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(domainDiff.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(tableDiff.Stmts, createPosMap)...)
 	sort.SliceStable(createStmts, func(i, j int) bool {
 		return createStmts[i].pos < createStmts[j].pos
 	})
 
 	// Phase 2: Drops in reverse topological order (dependents dropped first)
 	var dropStmts []taggedStmt
-	dropStmts = append(dropStmts, tagStatements(viewDiff.DropStmts, posMap)...)
-	dropStmts = append(dropStmts, tagStatements(tableDiff.DropStmts, posMap)...)
-	dropStmts = append(dropStmts, tagStatements(domainDiff.DropStmts, posMap)...)
-	dropStmts = append(dropStmts, tagStatements(enumDiff.DropStmts, posMap)...)
+	dropStmts = append(dropStmts, tagStatements(viewDiff.DropStmts, dropPosMap)...)
+	dropStmts = append(dropStmts, tagStatements(tableDiff.DropStmts, dropPosMap)...)
+	dropStmts = append(dropStmts, tagStatements(domainDiff.DropStmts, dropPosMap)...)
+	dropStmts = append(dropStmts, tagStatements(enumDiff.DropStmts, dropPosMap)...)
 	sort.SliceStable(dropStmts, func(i, j int) bool {
 		return dropStmts[i].pos > dropStmts[j].pos // reverse order
 	})
 
 	// Phase 3: View creates in topological order
 	var viewCreateStmts []taggedStmt
-	viewCreateStmts = append(viewCreateStmts, tagStatements(viewDiff.CreateStmts, posMap)...)
+	viewCreateStmts = append(viewCreateStmts, tagStatements(viewDiff.CreateStmts, createPosMap)...)
 	sort.SliceStable(viewCreateStmts, func(i, j int) bool {
 		return viewCreateStmts[i].pos < viewCreateStmts[j].pos
 	})
 
 	// Assemble: FK drops → drops → creates → FK adds → view creates
 	var stmts []string
-	for _, ts := range tagStatements(tableDiff.FKDropStmts, posMap) {
+	for _, ts := range tagStatements(tableDiff.FKDropStmts, dropPosMap) {
 		stmts = append(stmts, ts.sql)
 	}
 	for _, ts := range dropStmts {
@@ -188,7 +204,7 @@ func orderStatements(
 	for _, ts := range createStmts {
 		stmts = append(stmts, ts.sql)
 	}
-	for _, ts := range tagStatements(tableDiff.FKAddStmts, posMap) {
+	for _, ts := range tagStatements(tableDiff.FKAddStmts, createPosMap) {
 		stmts = append(stmts, ts.sql)
 	}
 	for _, ts := range viewCreateStmts {
@@ -337,7 +353,7 @@ func extractFirstIdentifier(s string) string {
 			result.WriteByte(ch)
 			continue
 		}
-		if ch == '.' || ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
+		if ch == '.' || ch == '_' || ch == '$' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
 			result.WriteByte(ch)
 			continue
 		}

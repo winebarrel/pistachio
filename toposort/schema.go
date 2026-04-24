@@ -187,12 +187,31 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 
 	// Check if this is a SelectStmt and walk its parts
 	if ss := node.GetSelectStmt(); ss != nil {
+		// CTEs (WITH clause)
+		if ss.WithClause != nil {
+			for _, cte := range ss.WithClause.Ctes {
+				if c := cte.GetCommonTableExpr(); c != nil {
+					collectRangeVars(c.Ctequery, defaultSchema, defined, seen)
+				}
+			}
+		}
+		// FROM clause
 		for _, from := range ss.FromClause {
 			collectRangeVars(from, defaultSchema, defined, seen)
+		}
+		// Target list (scalar subqueries in SELECT)
+		for _, target := range ss.TargetList {
+			if rt := target.GetResTarget(); rt != nil && rt.Val != nil {
+				collectRangeVars(rt.Val, defaultSchema, defined, seen)
+			}
 		}
 		if ss.WhereClause != nil {
 			collectRangeVars(ss.WhereClause, defaultSchema, defined, seen)
 		}
+		if ss.HavingClause != nil {
+			collectRangeVars(ss.HavingClause, defaultSchema, defined, seen)
+		}
+		// Set operations (UNION, INTERSECT, EXCEPT)
 		if ss.Larg != nil {
 			collectRangeVars(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}}, defaultSchema, defined, seen)
 		}
@@ -220,18 +239,6 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 		collectRangeVars(sl.Subselect, defaultSchema, defined, seen)
 		return
 	}
-}
-
-// qualifyRangeVar returns the schema-qualified name from a RangeVar.
-func qualifyRangeVar(rv *pg_query.RangeVar, defaultSchema string) string {
-	if rv == nil || rv.Relname == "" {
-		return ""
-	}
-	schema := rv.Schemaname
-	if schema == "" {
-		schema = defaultSchema
-	}
-	return schema + "." + rv.Relname
 }
 
 // extractViewDepsFallback uses substring matching as a fallback when

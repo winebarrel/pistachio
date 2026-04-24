@@ -96,7 +96,13 @@ func TestOrderStatements_Fallback(t *testing.T) {
 	tableDiff := &diff.TableDiffResult{Stmts: []string{"CREATE TABLE public.a (id integer);"}}
 	viewDiff := &diff.ViewDiffResult{}
 
+	currentEnums := orderedmap.New[string, *model.Enum]()
+	currentDomains := orderedmap.New[string, *model.Domain]()
+	currentTables := orderedmap.New[string, *model.Table]()
+	currentViews := orderedmap.New[string, *model.View]()
+
 	result := pistachio.OrderStatements(
+		currentEnums, currentDomains, currentTables, currentViews,
 		desiredEnums, desiredDomains, desiredTables, desiredViews,
 		enumDiff, domainDiff, tableDiff, viewDiff,
 	)

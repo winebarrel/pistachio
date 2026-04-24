@@ -15,8 +15,14 @@ type StmtInfo struct {
 }
 
 // ExtractDeps parses SQL containing multiple CREATE statements and returns
-// dependency information for each object.
-func ExtractDeps(sql string) ([]*StmtInfo, error) {
+// dependency information for each object. It uses defaultSchema to qualify
+// unqualified identifiers.
+func ExtractDeps(sql string, defaultSchema ...string) ([]*StmtInfo, error) {
+	schema := "public"
+	if len(defaultSchema) > 0 && defaultSchema[0] != "" {
+		schema = defaultSchema[0]
+	}
+
 	result, err := pg_query.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL: %w", err)
@@ -25,14 +31,14 @@ func ExtractDeps(sql string) ([]*StmtInfo, error) {
 	// First pass: collect all defined object names so we only track internal deps
 	defined := make(map[string]bool)
 	for _, rawStmt := range result.Stmts {
-		if name := objectName(rawStmt); name != "" {
+		if name := objectName(rawStmt, schema); name != "" {
 			defined[name] = true
 		}
 	}
 
 	var stmts []*StmtInfo
 	for _, rawStmt := range result.Stmts {
-		name := objectName(rawStmt)
+		name := objectName(rawStmt, schema)
 		if name == "" {
 			continue
 		}
@@ -44,7 +50,7 @@ func ExtractDeps(sql string) ([]*StmtInfo, error) {
 			return nil, fmt.Errorf("failed to deparse statement for %s: %w", name, err)
 		}
 
-		deps := extractStmtDeps(rawStmt, defined)
+		deps := extractStmtDeps(rawStmt, schema, defined)
 
 		stmts = append(stmts, &StmtInfo{
 			Name: name,
@@ -57,7 +63,7 @@ func ExtractDeps(sql string) ([]*StmtInfo, error) {
 }
 
 // objectName extracts the fully qualified name from a CREATE statement.
-func objectName(rawStmt *pg_query.RawStmt) string {
+func objectName(rawStmt *pg_query.RawStmt, defaultSchema string) string {
 	node := rawStmt.Stmt
 	if node == nil {
 		return ""
@@ -65,13 +71,13 @@ func objectName(rawStmt *pg_query.RawStmt) string {
 
 	switch n := node.Node.(type) {
 	case *pg_query.Node_CreateStmt:
-		return rangeVarName(n.CreateStmt.Relation)
+		return qualifyRangeVar(n.CreateStmt.Relation, defaultSchema)
 	case *pg_query.Node_ViewStmt:
-		return rangeVarName(n.ViewStmt.View)
+		return qualifyRangeVar(n.ViewStmt.View, defaultSchema)
 	case *pg_query.Node_CreateEnumStmt:
-		return typeNameFromNames(n.CreateEnumStmt.TypeName)
+		return typeNameFromNames(n.CreateEnumStmt.TypeName, defaultSchema)
 	case *pg_query.Node_CreateDomainStmt:
-		return typeNameFromNames(n.CreateDomainStmt.Domainname)
+		return typeNameFromNames(n.CreateDomainStmt.Domainname, defaultSchema)
 	}
 
 	return ""
@@ -79,22 +85,22 @@ func objectName(rawStmt *pg_query.RawStmt) string {
 
 // extractStmtDeps extracts dependency names from a statement, filtered to only
 // include names that are defined in the same SQL input.
-func extractStmtDeps(rawStmt *pg_query.RawStmt, defined map[string]bool) []string {
+func extractStmtDeps(rawStmt *pg_query.RawStmt, defaultSchema string, defined map[string]bool) []string {
 	node := rawStmt.Stmt
 	if node == nil {
 		return nil
 	}
 
 	seen := make(map[string]bool)
-	selfName := objectName(rawStmt)
+	selfName := objectName(rawStmt, defaultSchema)
 
 	switch n := node.Node.(type) {
 	case *pg_query.Node_CreateStmt:
-		extractCreateStmtDeps(n.CreateStmt, seen)
+		extractCreateStmtDeps(n.CreateStmt, defaultSchema, seen)
 	case *pg_query.Node_ViewStmt:
-		extractSelectDeps(n.ViewStmt.Query, seen)
+		extractSelectDeps(n.ViewStmt.Query, defaultSchema, seen)
 	case *pg_query.Node_CreateDomainStmt:
-		extractDomainDeps(n.CreateDomainStmt, seen)
+		extractDomainDeps(n.CreateDomainStmt, defaultSchema, seen)
 	}
 
 	var deps []string
@@ -108,18 +114,18 @@ func extractStmtDeps(rawStmt *pg_query.RawStmt, defined map[string]bool) []strin
 }
 
 // extractCreateStmtDeps extracts dependencies from a CREATE TABLE statement.
-func extractCreateStmtDeps(cs *pg_query.CreateStmt, seen map[string]bool) {
+func extractCreateStmtDeps(cs *pg_query.CreateStmt, defaultSchema string, seen map[string]bool) {
 	// Column type references
 	for _, elt := range cs.TableElts {
 		if cd := elt.GetColumnDef(); cd != nil {
-			if typeName := resolveTypeName(cd.TypeName); typeName != "" {
+			if typeName := resolveTypeName(cd.TypeName, defaultSchema); typeName != "" {
 				seen[typeName] = true
 			}
 			// Column-level constraints (inline FK)
 			for _, con := range cd.Constraints {
 				if c := con.GetConstraint(); c != nil {
 					if c.Contype == pg_query.ConstrType_CONSTR_FOREIGN && c.Pktable != nil {
-						seen[rangeVarName(c.Pktable)] = true
+						seen[qualifyRangeVar(c.Pktable, defaultSchema)] = true
 					}
 				}
 			}
@@ -127,7 +133,7 @@ func extractCreateStmtDeps(cs *pg_query.CreateStmt, seen map[string]bool) {
 		// Table-level constraints
 		if con := elt.GetConstraint(); con != nil {
 			if con.Contype == pg_query.ConstrType_CONSTR_FOREIGN && con.Pktable != nil {
-				seen[rangeVarName(con.Pktable)] = true
+				seen[qualifyRangeVar(con.Pktable, defaultSchema)] = true
 			}
 		}
 	}
@@ -135,13 +141,13 @@ func extractCreateStmtDeps(cs *pg_query.CreateStmt, seen map[string]bool) {
 	// Partition parent
 	for _, inh := range cs.InhRelations {
 		if rv := inh.GetRangeVar(); rv != nil {
-			seen[rangeVarName(rv)] = true
+			seen[qualifyRangeVar(rv, defaultSchema)] = true
 		}
 	}
 }
 
 // extractSelectDeps recursively extracts table references from a SELECT statement.
-func extractSelectDeps(node *pg_query.Node, seen map[string]bool) {
+func extractSelectDeps(node *pg_query.Node, defaultSchema string, seen map[string]bool) {
 	if node == nil {
 		return
 	}
@@ -153,62 +159,63 @@ func extractSelectDeps(node *pg_query.Node, seen map[string]bool) {
 
 	// FROM clause
 	for _, from := range ss.FromClause {
-		extractFromDeps(from, seen)
+		extractFromDeps(from, defaultSchema, seen)
 	}
 
 	// Set operations (UNION, INTERSECT, EXCEPT)
 	if ss.Larg != nil {
-		extractSelectDeps(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}}, seen)
+		extractSelectDeps(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}}, defaultSchema, seen)
 	}
 	if ss.Rarg != nil {
-		extractSelectDeps(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}}, seen)
+		extractSelectDeps(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}}, defaultSchema, seen)
 	}
 }
 
 // extractFromDeps extracts table references from FROM clause items.
-func extractFromDeps(node *pg_query.Node, seen map[string]bool) {
+func extractFromDeps(node *pg_query.Node, defaultSchema string, seen map[string]bool) {
 	if node == nil {
 		return
 	}
 
 	if rv := node.GetRangeVar(); rv != nil {
-		seen[rangeVarName(rv)] = true
+		seen[qualifyRangeVar(rv, defaultSchema)] = true
 		return
 	}
 
 	if join := node.GetJoinExpr(); join != nil {
-		extractFromDeps(join.Larg, seen)
-		extractFromDeps(join.Rarg, seen)
+		extractFromDeps(join.Larg, defaultSchema, seen)
+		extractFromDeps(join.Rarg, defaultSchema, seen)
 		return
 	}
 
 	if sub := node.GetRangeSubselect(); sub != nil {
-		extractSelectDeps(sub.Subquery, seen)
+		extractSelectDeps(sub.Subquery, defaultSchema, seen)
 		return
 	}
 }
 
 // extractDomainDeps extracts dependencies from a CREATE DOMAIN statement.
-func extractDomainDeps(ds *pg_query.CreateDomainStmt, seen map[string]bool) {
-	if typeName := resolveTypeName(ds.TypeName); typeName != "" {
+func extractDomainDeps(ds *pg_query.CreateDomainStmt, defaultSchema string, seen map[string]bool) {
+	if typeName := resolveTypeName(ds.TypeName, defaultSchema); typeName != "" {
 		seen[typeName] = true
 	}
 }
 
-// rangeVarName returns "schema.name" from a RangeVar, defaulting schema to "public".
-func rangeVarName(rv *pg_query.RangeVar) string {
-	if rv == nil {
+// qualifyRangeVar returns "schema.name" from a RangeVar, using defaultSchema
+// when the RangeVar has no schema.
+func qualifyRangeVar(rv *pg_query.RangeVar, defaultSchema string) string {
+	if rv == nil || rv.Relname == "" {
 		return ""
 	}
 	schema := rv.Schemaname
 	if schema == "" {
-		schema = "public"
+		schema = defaultSchema
 	}
 	return schema + "." + rv.Relname
 }
 
 // typeNameFromNames builds "schema.name" from a list of name nodes.
-func typeNameFromNames(names []*pg_query.Node) string {
+func typeNameFromNames(names []*pg_query.Node, defaultSchema string) string {
 	var parts []string
 	for _, n := range names {
 		if s := n.GetString_(); s != nil {
@@ -219,14 +226,14 @@ func typeNameFromNames(names []*pg_query.Node) string {
 		return ""
 	}
 	if len(parts) == 1 {
-		return "public." + parts[0]
+		return defaultSchema + "." + parts[0]
 	}
 	return strings.Join(parts, ".")
 }
 
 // resolveTypeName extracts a user-defined type name from a TypeName node.
 // Returns "" for built-in types (pg_catalog.*).
-func resolveTypeName(tn *pg_query.TypeName) string {
+func resolveTypeName(tn *pg_query.TypeName, defaultSchema string) string {
 	if tn == nil {
 		return ""
 	}
@@ -244,7 +251,7 @@ func resolveTypeName(tn *pg_query.TypeName) string {
 		return ""
 	}
 	if len(parts) == 1 {
-		return "public." + parts[0]
+		return defaultSchema + "." + parts[0]
 	}
 	return strings.Join(parts, ".")
 }

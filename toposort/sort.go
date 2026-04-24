@@ -4,8 +4,10 @@ import "fmt"
 
 // SortSQL parses SQL containing multiple CREATE statements and returns
 // the individual statements sorted in dependency order (dependencies first).
-func SortSQL(sql string) ([]string, error) {
-	stmts, err := ExtractDeps(sql)
+// An optional defaultSchema can be provided to qualify unqualified identifiers
+// (defaults to "public").
+func SortSQL(sql string, defaultSchema ...string) ([]string, error) {
+	stmts, err := ExtractDeps(sql, defaultSchema...)
 	if err != nil {
 		return nil, err
 	}
