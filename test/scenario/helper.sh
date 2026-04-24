@@ -75,7 +75,7 @@ assert_no_drop() {
   local plan_output
   plan_output=$(pist_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
-  if echo "$plan_output" | grep -qiE '^[[:space:]]*(DROP |ALTER TABLE .* DROP COLUMN)'; then
+  if echo "$plan_output" | grep -qiE '^[[:space:]]*(DROP TABLE |DROP VIEW |DROP TYPE |DROP DOMAIN |ALTER TABLE .* DROP COLUMN)'; then
     fail "unexpected DROP in plan without --allow-drop"
     echo "    $plan_output" >&2
     return 1
