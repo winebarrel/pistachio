@@ -44,6 +44,8 @@ assert_no_drop "no-drop: domain removed" "$DATA/desired_drop_domain.sql" || true
 
 # --allow-drop table: table dropped, but not view/column/enum/domain
 setup_db "$DATA/init.sql"
+assert_drop_type_present "allow-drop table: table drop present" "table" "table" "$DATA/desired_drop_table.sql" || true
+setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop table: no view drop" "view" "table" "$DATA/desired_drop_all.sql" || true
 setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop table: no column drop" "column" "table" "$DATA/desired_drop_all.sql" || true
@@ -53,6 +55,8 @@ setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop table: no domain drop" "domain" "table" "$DATA/desired_drop_all.sql" || true
 
 # --allow-drop view: view dropped, but not table/column/enum/domain
+setup_db "$DATA/init.sql"
+assert_drop_type_present "allow-drop view: view drop present" "view" "view" "$DATA/desired_drop_view.sql" || true
 setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop view: no table drop" "table" "view" "$DATA/desired_drop_all.sql" || true
 setup_db "$DATA/init.sql"
@@ -64,6 +68,8 @@ assert_no_drop_type "allow-drop view: no domain drop" "domain" "view" "$DATA/des
 
 # --allow-drop column: column dropped, but not table/view/enum/domain
 setup_db "$DATA/init.sql"
+assert_drop_type_present "allow-drop column: column drop present" "column" "column" "$DATA/desired_drop_column.sql" || true
+setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop column: no table drop" "table" "column" "$DATA/desired_drop_all.sql" || true
 setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop column: no view drop" "view" "column" "$DATA/desired_drop_all.sql" || true
@@ -74,6 +80,8 @@ assert_no_drop_type "allow-drop column: no domain drop" "domain" "column" "$DATA
 
 # --allow-drop enum: enum dropped, but not table/view/column/domain
 setup_db "$DATA/init.sql"
+assert_drop_type_present "allow-drop enum: enum drop present" "enum" "enum" "$DATA/desired_drop_enum.sql" || true
+setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop enum: no table drop" "table" "enum" "$DATA/desired_drop_all.sql" || true
 setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop enum: no view drop" "view" "enum" "$DATA/desired_drop_all.sql" || true
@@ -83,6 +91,8 @@ setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop enum: no domain drop" "domain" "enum" "$DATA/desired_drop_all.sql" || true
 
 # --allow-drop domain: domain dropped, but not table/view/column/enum
+setup_db "$DATA/init.sql"
+assert_drop_type_present "allow-drop domain: domain drop present" "domain" "domain" "$DATA/desired_drop_domain.sql" || true
 setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop domain: no table drop" "table" "domain" "$DATA/desired_drop_all.sql" || true
 setup_db "$DATA/init.sql"

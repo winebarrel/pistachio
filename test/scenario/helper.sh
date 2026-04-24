@@ -36,7 +36,7 @@ summary() {
 
 # Reset the database and optionally run init SQL from a file.
 setup_db() {
-  psql "$PIST_CONN_STR" -q -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public' 2>/dev/null
+  psql "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 -c 'SET client_min_messages TO warning; DROP SCHEMA public CASCADE; CREATE SCHEMA public'
   if [ $# -gt 0 ] && [ -n "$1" ]; then
     psql "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 -f "$1"
   fi
@@ -106,6 +106,7 @@ assert_no_drop_type() {
     column) drop_pattern='DROP COLUMN' ;;
     enum)   drop_pattern='DROP TYPE' ;;
     domain) drop_pattern='DROP DOMAIN' ;;
+    *) fail "unknown protected_type: $protected_type"; return 1 ;;
   esac
 
   if echo "$plan_output" | grep -qi "$drop_pattern"; then
@@ -115,6 +116,39 @@ assert_no_drop_type() {
   fi
 
   pass
+}
+
+# Assert that plan output DOES contain DROP for a specific type.
+# Usage: assert_drop_type_present "step name" "expected_type" "allowed_types" files...
+assert_drop_type_present() {
+  local step_name="$1"
+  local expected_type="$2"
+  local allowed_types="$3"
+  shift 3
+  local files=("$@")
+
+  step "$step_name"
+
+  local plan_output
+  plan_output=$(pist_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+
+  local drop_pattern
+  case "$expected_type" in
+    table)  drop_pattern='DROP TABLE' ;;
+    view)   drop_pattern='DROP VIEW' ;;
+    column) drop_pattern='DROP COLUMN' ;;
+    enum)   drop_pattern='DROP TYPE' ;;
+    domain) drop_pattern='DROP DOMAIN' ;;
+    *) fail "unknown expected_type: $expected_type"; return 1 ;;
+  esac
+
+  if echo "$plan_output" | grep -qi "$drop_pattern"; then
+    pass
+  else
+    fail "expected $expected_type drop in plan with --allow-drop $allowed_types"
+    echo "    $plan_output" >&2
+    return 1
+  fi
 }
 
 # Run a step: plan, check expected output, apply, verify no drift.
