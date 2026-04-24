@@ -1141,6 +1141,12 @@ func deparseExpr(node *pg_query.Node) (string, error) {
 }
 
 func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
+	// Temporarily clear SkipValidation so "NOT VALID" is not included in the
+	// definition string (it is tracked separately via the Validated field).
+	origSkipValidation := con.SkipValidation
+	con.SkipValidation = false
+	defer func() { con.SkipValidation = origSkipValidation }()
+
 	alterCmd := &pg_query.AlterTableCmd{
 		Subtype: pg_query.AlterTableType_AT_AddConstraint,
 		Def:     &pg_query.Node{Node: &pg_query.Node_Constraint{Constraint: con}},
