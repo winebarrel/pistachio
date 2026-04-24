@@ -65,8 +65,20 @@ func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
 	views := orderedmap.New[string, *model.View]()
 	for _, v := range r.Views.CollectValues() {
 		copied := *v
+		fqvn := v.FQVN()
+		viewName := model.Ident(v.Name)
 		copied.Schema = ""
-		views.Set(v.FQVN(), &copied)
+		if copied.Indexes != nil && copied.Indexes.Len() > 0 {
+			idxs := orderedmap.New[string, *model.Index]()
+			for _, idx := range copied.Indexes.CollectValues() {
+				idxCopied := *idx
+				idxCopied.Schema = ""
+				idxCopied.Definition = strings.ReplaceAll(idx.Definition, " ON "+fqvn+" ", " ON "+viewName+" ")
+				idxs.Set(idx.Name, &idxCopied)
+			}
+			copied.Indexes = idxs
+		}
+		views.Set(fqvn, &copied)
 	}
 	return views
 }

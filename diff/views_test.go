@@ -198,3 +198,170 @@ func TestEqualViewDef_formattingDifference(t *testing.T) {
 func TestEqualViewDef_different(t *testing.T) {
 	assert.False(t, equalViewDef("SELECT 1", "SELECT 2"))
 }
+
+func TestEqualViewDef_schemaQualificationDifference(t *testing.T) {
+	// pg_get_viewdef omits schema, parser preserves it
+	assert.True(t, equalViewDef(
+		"SELECT id FROM users",
+		"SELECT id FROM public.users",
+	))
+}
+
+func TestEqualViewDef_columnQualificationDifference(t *testing.T) {
+	// pg_get_viewdef adds table.column, parser doesn't
+	assert.True(t, equalViewDef(
+		"SELECT users.id, users.name FROM users",
+		"SELECT id, name FROM public.users",
+	))
+}
+
+func TestDiffViews_newMatview(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n",
+		Indexes:    orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW public.mv")
+}
+
+func TestDiffViews_newMatviewWithIndex(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	desired := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n",
+		Indexes:    orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	desired.Set("public.mv", mv)
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.CreateStmts, 2)
+	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
+	assert.Contains(t, result.CreateStmts[1], "CREATE INDEX idx_mv_n")
+}
+
+func TestDiffViews_dropMatview(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Len(t, result.DropStmts, 1)
+	assert.Contains(t, result.DropStmts[0], "DROP MATERIALIZED VIEW public.mv")
+}
+
+func TestDiffViews_dropMatview_denied(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+
+	result, err := DiffViews(current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+}
+
+func TestDiffViews_modifyMatview(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 2 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	// Materialized views must be dropped and recreated
+	assert.Len(t, result.DropStmts, 1)
+	assert.Contains(t, result.DropStmts[0], "DROP MATERIALIZED VIEW")
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
+}
+
+func TestDiffViews_matviewIndexAdd(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	desired.Set("public.mv", mv)
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "CREATE INDEX idx_mv_n")
+}
+
+func TestDiffViews_matviewIndexDrop(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	current.Set("public.mv", mv)
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "DROP INDEX")
+}
+
+func TestDiffViews_matviewCommentAdd(t *testing.T) {
+	comment := "stats"
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1", Comment: &comment, Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "COMMENT ON MATERIALIZED VIEW")
+}

@@ -4,14 +4,13 @@ init: |
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-  CREATE VIEW public.active_users AS SELECT id, name FROM public.users;
 desired: |
   CREATE TABLE public.users (
       id integer NOT NULL,
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-  -- pist:renamed-from public.active_users
-  CREATE VIEW public.user_list AS SELECT id, name FROM public.users;
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
 plan: |
-  ALTER VIEW public.active_users RENAME TO user_list;
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt FROM public.users;
