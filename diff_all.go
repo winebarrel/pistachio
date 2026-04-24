@@ -178,33 +178,47 @@ func orderStatements(
 		return compareTaggedPos(createStmts[i].pos, createStmts[j].pos, false)
 	})
 
-	// Phase 2: Drops in reverse topological order (dependents dropped first).
-	// Unknown statements (pos < 0) are placed first (before known drops).
-	var dropStmts []taggedStmt
-	dropStmts = append(dropStmts, tagStatements(viewDiff.DropStmts, dropPosMap)...)
-	dropStmts = append(dropStmts, tagStatements(tableDiff.DropStmts, dropPosMap)...)
-	dropStmts = append(dropStmts, tagStatements(domainDiff.DropStmts, dropPosMap)...)
-	dropStmts = append(dropStmts, tagStatements(enumDiff.DropStmts, dropPosMap)...)
-	sort.SliceStable(dropStmts, func(i, j int) bool {
-		return compareTaggedPos(dropStmts[i].pos, dropStmts[j].pos, true)
+	// Phase 2: Pre-create drops in reverse topological order.
+	// View drops must happen before table/column changes (views may depend on
+	// columns being dropped).
+	var preDropStmts []taggedStmt
+	preDropStmts = append(preDropStmts, tagStatements(viewDiff.DropStmts, dropPosMap)...)
+	sort.SliceStable(preDropStmts, func(i, j int) bool {
+		return compareTaggedPos(preDropStmts[i].pos, preDropStmts[j].pos, true)
 	})
 
-	// Phase 3: View creates in topological order
+	// Phase 3: Post-create drops in reverse dependency order.
+	// Table drops must come after table creates/alters (column type changes may
+	// remove references to domains/enums). Domain/enum drops come after table
+	// drops (tables must stop referencing them first).
+	var postDropStmts []taggedStmt
+	postDropStmts = append(postDropStmts, tagStatements(tableDiff.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(domainDiff.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(enumDiff.DropStmts, dropPosMap)...)
+	sort.SliceStable(postDropStmts, func(i, j int) bool {
+		return compareTaggedPos(postDropStmts[i].pos, postDropStmts[j].pos, true)
+	})
+
+	// Phase 4: View creates in topological order
 	var viewCreateStmts []taggedStmt
 	viewCreateStmts = append(viewCreateStmts, tagStatements(viewDiff.CreateStmts, createPosMap)...)
 	sort.SliceStable(viewCreateStmts, func(i, j int) bool {
 		return compareTaggedPos(viewCreateStmts[i].pos, viewCreateStmts[j].pos, false)
 	})
 
-	// Assemble: FK drops → drops → creates → FK adds → view creates
+	// Assemble:
+	// FK drops → view drops → creates/alters → table/domain/enum drops → FK adds → view creates
 	var stmts []string
 	for _, ts := range tagStatements(tableDiff.FKDropStmts, dropPosMap) {
 		stmts = append(stmts, ts.sql)
 	}
-	for _, ts := range dropStmts {
+	for _, ts := range preDropStmts {
 		stmts = append(stmts, ts.sql)
 	}
 	for _, ts := range createStmts {
+		stmts = append(stmts, ts.sql)
+	}
+	for _, ts := range postDropStmts {
 		stmts = append(stmts, ts.sql)
 	}
 	for _, ts := range tagStatements(tableDiff.FKAddStmts, createPosMap) {

@@ -2,6 +2,7 @@ package toposort
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -109,6 +110,7 @@ func extractStmtDeps(rawStmt *pg_query.RawStmt, defaultSchema string, defined ma
 			deps = append(deps, dep)
 		}
 	}
+	sort.Strings(deps)
 
 	return deps
 }

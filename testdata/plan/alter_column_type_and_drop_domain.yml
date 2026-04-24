@@ -1,0 +1,17 @@
+init: |
+  CREATE DOMAIN public.user_name AS text;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name public.user_name,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text;
+  ALTER TABLE public.users ALTER COLUMN name SET NOT NULL;
+  DROP DOMAIN public.user_name;
