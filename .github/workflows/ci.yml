@@ -27,6 +27,7 @@ jobs:
           for i in {1..60}; do docker compose up -d --quiet-pull && break; sleep 1; done
           for i in {1..60}; do pg_isready -U postgres -h 127.0.0.1 -p 5432 && break; sleep 1; done
       - run: make TEST_OPTS='-coverprofile=coverage.txt'
+      - run: make test-scenario
       - uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
