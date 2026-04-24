@@ -33,10 +33,16 @@ schema: clean-schema
 	$(MAKE) sample-db SQL_FILE=pagila.sql
 	$(MAKE) sample-db SQL_FILE=periodic_table.sql
 	$(MAKE) sample-db SQL_FILE=titanic.sql
+	$(MAKE) sample-db-tar TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/world/world-1.0/world-1.0.tar.gz TAR_SQL_PATH=dbsamples-0.1/world/world.sql
+	$(MAKE) sample-db-tar TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/usda/usda-r18-1.0/usda-r18-1.0.tar.gz TAR_SQL_PATH=usda-r18-1.0/usda.sql
 
 .PHONY: sample-db
 sample-db:
 	curl -sSf https://raw.githubusercontent.com/neondatabase/postgres-sample-dbs/refs/heads/main/$(SQL_FILE) | psql
+
+.PHONY: sample-db-tar
+sample-db-tar:
+	curl -sSfL $(TAR_URL) | tar xzO $(TAR_SQL_PATH) | psql
 
 .PHONY: clean-schema
 clean-schema:
