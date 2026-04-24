@@ -775,6 +775,41 @@ CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public
 	assert.Contains(t, v.Definition, "SELECT count(") // deparsed
 }
 
+func TestParseSQL_MaterializedView_Schemaless(t *testing.T) {
+	sql := `CREATE TABLE users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW user_stats AS SELECT count(*) AS cnt FROM users;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Views.Len())
+
+	v, ok := result.Views.GetOk("public.user_stats")
+	require.True(t, ok)
+	assert.Equal(t, "public", v.Schema) // defaults to public
+	assert.True(t, v.Materialized)
+}
+
+func TestParseSQL_MaterializedView_Comment(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+COMMENT ON MATERIALIZED VIEW public.user_stats IS 'User statistics';`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	v, ok := result.Views.GetOk("public.user_stats")
+	require.True(t, ok)
+	assert.True(t, v.Materialized)
+	require.NotNil(t, v.Comment)
+	assert.Equal(t, "User statistics", *v.Comment)
+}
+
 func TestParseSQL_MaterializedViewWithIndex(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,
