@@ -38,7 +38,7 @@ summary() {
 setup_db() {
   psql "$PIST_CONN_STR" -q -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public' 2>/dev/null
   if [ $# -gt 0 ] && [ -n "$1" ]; then
-    psql "$PIST_CONN_STR" -q -f "$1" 2>/dev/null
+    psql "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 -f "$1"
   fi
 }
 
@@ -75,7 +75,7 @@ assert_no_drop() {
   local plan_output
   plan_output=$(pist_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
-  if echo "$plan_output" | grep -qiE '^\s*(DROP |ALTER TABLE .* DROP COLUMN)'; then
+  if echo "$plan_output" | grep -qiE '^[[:space:]]*(DROP |ALTER TABLE .* DROP COLUMN)'; then
     fail "unexpected DROP in plan without --allow-drop"
     echo "    $plan_output" >&2
     return 1
@@ -102,7 +102,7 @@ assert_no_drop_type() {
   local drop_pattern
   case "$protected_type" in
     table)  drop_pattern='DROP TABLE' ;;
-    view)   drop_pattern='DROP VIEW\|CREATE OR REPLACE VIEW' ;;
+    view)   drop_pattern='DROP VIEW' ;;
     column) drop_pattern='DROP COLUMN' ;;
     enum)   drop_pattern='DROP TYPE' ;;
     domain) drop_pattern='DROP DOMAIN' ;;

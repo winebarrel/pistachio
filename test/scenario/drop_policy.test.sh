@@ -101,10 +101,10 @@ step "allow-drop all: drops present"
 plan_output=$(pist_plan "$DATA/desired_drop_all.sql") || { fail "plan failed: $plan_output"; }
 has_all=true
 echo "$plan_output" | grep -q 'DROP TABLE' || has_all=false
+echo "$plan_output" | grep -q 'DROP VIEW' || has_all=false
 echo "$plan_output" | grep -q 'DROP COLUMN' || has_all=false
 echo "$plan_output" | grep -q 'DROP TYPE' || has_all=false
 echo "$plan_output" | grep -q 'DROP DOMAIN' || has_all=false
-# View drop manifests as the view being absent from CREATE OR REPLACE output
 if $has_all; then
   pass
 else
