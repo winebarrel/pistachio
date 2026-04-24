@@ -1,0 +1,33 @@
+-- public.periodic_table
+CREATE TABLE public.periodic_table (
+    "AtomicNumber" integer NOT NULL,
+    "Element" text,
+    "Symbol" text,
+    "AtomicMass" numeric,
+    "NumberOfNeutrons" integer,
+    "NumberOfProtons" integer,
+    "NumberOfElectrons" integer,
+    "Period" integer,
+    "Group" integer,
+    "Phase" text,
+    "Radioactive" boolean,
+    "Natural" boolean,
+    "Metal" boolean,
+    "Nonmetal" boolean,
+    "Metalloid" boolean,
+    "Type" text,
+    "AtomicRadius" numeric,
+    "Electronegativity" numeric,
+    "FirstIonization" numeric,
+    "Density" numeric,
+    "MeltingPoint" numeric,
+    "BoilingPoint" numeric,
+    "NumberOfIsotopes" integer,
+    "Discoverer" text,
+    "Year" integer,
+    "SpecificHeat" numeric,
+    "NumberOfShells" integer,
+    "NumberOfValence" integer,
+    CONSTRAINT periodic_table_pkey PRIMARY KEY ("AtomicNumber")
+);
+CREATE INDEX idx_periodic_table_symbol ON public.periodic_table ("Symbol");
