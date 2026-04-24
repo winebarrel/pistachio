@@ -364,13 +364,10 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	var stmts []string
 
 	// Detect renames
-	renameStmts, current, err := detectConstraintRenames(fqtn, current, desired)
+	renameStmts, current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
 	if err != nil {
 		return nil, err
 	}
-
-	// Build a map of new name → old name only for renames that were actually emitted
-	renamedFrom := extractRenames(renameStmts)
 
 	// Determine which renamed constraints need recreation instead of just rename
 	needsRecreation := map[string]bool{}
@@ -475,13 +472,10 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	var dropStmts, addStmts []string
 
 	// Detect renames (renames go into addStmts since they may depend on table renames)
-	renameStmts, current, err := detectForeignKeyRenames(fqtn, current, desired)
+	renameStmts, current, renamedFrom, err := detectForeignKeyRenames(fqtn, current, desired)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// Build a map of new name → old name only for renames that were actually emitted
-	renamedFrom := extractRenames(renameStmts)
 
 	// Determine which renamed FKs need recreation (drop+add) instead of just rename
 	needsRecreation := map[string]bool{}
@@ -548,24 +542,6 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	}
 
 	return dropStmts, addStmts, nil
-}
-
-// extractRenames parses rename statements of the form
-// "ALTER TABLE ... RENAME CONSTRAINT old TO new;" and returns a map of new name → old name.
-func extractRenames(renameStmts []string) map[string]string {
-	renamedFrom := map[string]string{}
-	for _, stmt := range renameStmts {
-		parts := strings.SplitN(stmt, " RENAME CONSTRAINT ", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		names := strings.SplitN(strings.TrimSuffix(parts[1], ";"), " TO ", 2)
-		if len(names) != 2 {
-			continue
-		}
-		renamedFrom[names[1]] = names[0]
-	}
-	return renamedFrom
 }
 
 func diffComments(current, desired *model.Table) []string {
