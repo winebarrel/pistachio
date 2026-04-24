@@ -169,7 +169,7 @@ func orderStatements(
 
 	// Phase 1: Creates/modifications in topological order.
 	// Statements whose owning object cannot be identified (pos < 0) are placed
-	// after all topo-ordered statements, preserving their original relative order.
+	// before all topo-ordered statements, preserving their original relative order.
 	var createStmts []taggedStmt
 	createStmts = append(createStmts, tagStatements(enumDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(domainDiff.Stmts, createPosMap)...)

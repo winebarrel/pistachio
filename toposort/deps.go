@@ -220,6 +220,36 @@ func extractExprDeps(node *pg_query.Node, defaultSchema string, seen map[string]
 		}
 		return
 	}
+
+	if fc := node.GetFuncCall(); fc != nil {
+		for _, arg := range fc.Args {
+			extractExprDeps(arg, defaultSchema, seen)
+		}
+		return
+	}
+
+	if ce := node.GetCoalesceExpr(); ce != nil {
+		for _, arg := range ce.Args {
+			extractExprDeps(arg, defaultSchema, seen)
+		}
+		return
+	}
+
+	if cs := node.GetCaseExpr(); cs != nil {
+		if cs.Arg != nil {
+			extractExprDeps(cs.Arg, defaultSchema, seen)
+		}
+		for _, when := range cs.Args {
+			if w := when.GetCaseWhen(); w != nil {
+				extractExprDeps(w.Expr, defaultSchema, seen)
+				extractExprDeps(w.Result, defaultSchema, seen)
+			}
+		}
+		if cs.Defresult != nil {
+			extractExprDeps(cs.Defresult, defaultSchema, seen)
+		}
+		return
+	}
 }
 
 // extractFromDeps extracts table references from FROM clause items.

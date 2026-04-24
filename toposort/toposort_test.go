@@ -516,6 +516,38 @@ func TestExtractDeps_JoinWithSubqueryInQuals(t *testing.T) {
 	assert.Contains(t, stmts[3].Deps, "public.config")
 }
 
+func TestExtractDeps_ViewWithCoalesceSubquery(t *testing.T) {
+	sql := `
+		CREATE TABLE public.users (id integer NOT NULL, name text);
+		CREATE TABLE public.defaults (val text);
+		CREATE VIEW public.v AS SELECT id, COALESCE(name, (SELECT val FROM public.defaults LIMIT 1)) FROM public.users;
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 3)
+
+	assert.Equal(t, "public.v", stmts[2].Name)
+	assert.Contains(t, stmts[2].Deps, "public.users")
+	assert.Contains(t, stmts[2].Deps, "public.defaults")
+}
+
+func TestExtractDeps_ViewWithCaseSubquery(t *testing.T) {
+	sql := `
+		CREATE TABLE public.users (id integer NOT NULL, active boolean);
+		CREATE TABLE public.config (val text);
+		CREATE VIEW public.v AS SELECT id, CASE WHEN active THEN (SELECT val FROM public.config LIMIT 1) ELSE 'none' END FROM public.users;
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 3)
+
+	assert.Equal(t, "public.v", stmts[2].Name)
+	assert.Contains(t, stmts[2].Deps, "public.users")
+	assert.Contains(t, stmts[2].Deps, "public.config")
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchString(s, substr)
 }
