@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/pistachio/model"
@@ -80,6 +81,11 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 		if err != nil {
 			return nil, nil, fmt.Errorf("catalog: failed to scan constraint info: %w", err)
 		}
+
+		// pg_get_constraintdef includes "NOT VALID" in the definition string
+		// for unvalidated constraints. Strip it so Definition only contains
+		// the constraint body; validation state is tracked via Validated.
+		con.Definition = strings.TrimSuffix(con.Definition, " NOT VALID")
 
 		if con.Type.IsForeignKeyConstraint() {
 			fk := model.ForeignKey{
