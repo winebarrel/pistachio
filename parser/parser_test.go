@@ -299,6 +299,7 @@ ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCE
 	fk, ok := tbl.ForeignKeys.GetOk("fk_user")
 	require.True(t, ok)
 	assert.False(t, fk.Validated)
+	assert.NotContains(t, fk.Definition, "NOT VALID")
 	assert.Equal(t, "public", *fk.RefSchema)
 	assert.Equal(t, "users", *fk.RefTable)
 	assert.Equal(t, []string{"user_id"}, fk.Columns)
@@ -412,6 +413,7 @@ ALTER TABLE public.items ADD CONSTRAINT items_id_check CHECK (id > 0) NOT VALID;
 	con, ok := tbl.Constraints.GetOk("items_id_check")
 	require.True(t, ok)
 	assert.Contains(t, con.Definition, "CHECK")
+	assert.NotContains(t, con.Definition, "NOT VALID")
 	assert.False(t, con.Validated)
 }
 
