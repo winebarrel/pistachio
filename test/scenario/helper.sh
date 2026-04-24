@@ -4,7 +4,7 @@
 set -euo pipefail
 
 : "${PIST:=./pist}"
-export PIST_CONN_STR="${PIST_CONN_STR:-postgres://postgres@localhost/postgres}"
+export PIST_CONN_STR="${PIST_CONN_STR:-${TEST_PIST_CONN_STR:-postgres://postgres@localhost/postgres}}"
 
 _pass=0
 _fail=0
