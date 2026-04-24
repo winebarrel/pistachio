@@ -1,0 +1,33 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_user_count AS SELECT count(*) AS cnt FROM public.active_users;
+  CREATE VIEW public.active_users AS SELECT id, name FROM public.users WHERE name IS NOT NULL;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_user_count
+  CREATE OR REPLACE VIEW public.active_user_count AS
+  SELECT count(*) AS cnt
+     FROM active_users;
+
+  -- public.active_users
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT users.id,
+      users.name
+     FROM users
+    WHERE users.name IS NOT NULL;
