@@ -215,6 +215,62 @@ func TestEqualViewDef_columnQualificationDifference(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_joinQualification(t *testing.T) {
+	// Covers JoinExpr + A_Expr paths in stripQualifications
+	assert.True(t, equalViewDef(
+		"SELECT u.id FROM users u JOIN orders o ON u.id = o.user_id",
+		"SELECT u.id FROM public.users u JOIN public.orders o ON u.id = o.user_id",
+	))
+}
+
+func TestEqualViewDef_whereSubquery(t *testing.T) {
+	// Covers SubLink + BoolExpr paths in stripQualifications
+	assert.True(t, equalViewDef(
+		"SELECT users.id FROM users WHERE users.id > 0 AND EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)",
+		"SELECT id FROM public.users WHERE id > 0 AND EXISTS (SELECT 1 FROM public.orders WHERE user_id = id)",
+	))
+}
+
+func TestEqualViewDef_groupByOrderByLimit(t *testing.T) {
+	// Covers GroupClause, SortClause, LimitCount paths
+	assert.True(t, equalViewDef(
+		"SELECT users.id, count(*) AS cnt FROM users GROUP BY users.id ORDER BY users.id LIMIT 10",
+		"SELECT id, count(*) AS cnt FROM public.users GROUP BY id ORDER BY id LIMIT 10",
+	))
+}
+
+func TestEqualViewDef_unionDifference(t *testing.T) {
+	// Covers Larg/Rarg paths
+	assert.True(t, equalViewDef(
+		"SELECT users.id FROM users UNION SELECT admins.id FROM admins",
+		"SELECT id FROM public.users UNION SELECT id FROM public.admins",
+	))
+}
+
+func TestEqualViewDef_subselect(t *testing.T) {
+	// Covers RangeSubselect path
+	assert.True(t, equalViewDef(
+		"SELECT sub.id FROM (SELECT users.id FROM users) sub",
+		"SELECT sub.id FROM (SELECT id FROM public.users) sub",
+	))
+}
+
+func TestEqualViewDef_funcCallArgs(t *testing.T) {
+	// Covers FuncCall path
+	assert.True(t, equalViewDef(
+		"SELECT upper(users.name) FROM users",
+		"SELECT upper(name) FROM public.users",
+	))
+}
+
+func TestEqualViewDef_cte(t *testing.T) {
+	// Covers WithClause/CTE path
+	assert.True(t, equalViewDef(
+		"WITH active AS (SELECT users.id FROM users) SELECT active.id FROM active",
+		"WITH active AS (SELECT id FROM public.users) SELECT active.id FROM active",
+	))
+}
+
 func TestDiffViews_newMatview(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	desired := orderedmap.New[string, *model.View]()
