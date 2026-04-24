@@ -587,6 +587,70 @@ func TestDiffForeignKeys_change(t *testing.T) {
 	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
 }
 
+func TestDiffForeignKeys_validatedToNotValid(t *testing.T) {
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired := orderedmap.New[string, *model.ForeignKey]()
+	desired.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, dropStmts, 1)
+	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
+	assert.Len(t, addStmts, 1)
+	assert.Contains(t, addStmts[0], "NOT VALID")
+}
+
+func TestDiffForeignKeys_notValidToValidated(t *testing.T) {
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired := orderedmap.New[string, *model.ForeignKey]()
+	desired.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, dropStmts, 1)
+	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
+	assert.Len(t, addStmts, 1)
+	assert.NotContains(t, addStmts[0], "NOT VALID")
+}
+
+func TestDiffForeignKeys_bothNotValid_noChange(t *testing.T) {
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired := orderedmap.New[string, *model.ForeignKey]()
+	desired.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	require.NoError(t, err)
+	assert.Empty(t, dropStmts)
+	assert.Empty(t, addStmts)
+}
+
 func TestDiffTable_partitionChild(t *testing.T) {
 	parent := "public.events"
 	bound := "FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')"

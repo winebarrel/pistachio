@@ -434,7 +434,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	for name := range current.All() {
 		desiredFk, ok := desired.GetOk(name)
 		currentFk := current.Get(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
+		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
 			dropStmts = append(dropStmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
 		}
 	}
@@ -442,7 +442,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	// Add new or changed FKs
 	for name, desiredFk := range desired.All() {
 		currentFk, ok := current.GetOk(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) {
+		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
 			addStmts = append(addStmts, desiredFk.SQL())
 		}
 	}
