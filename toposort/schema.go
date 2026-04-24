@@ -148,9 +148,11 @@ func resolveTypeDep(typeName, defaultSchema string, defined map[string]bool) str
 func extractViewDeps(definition, defaultSchema string, defined map[string]bool) []string {
 	seen := make(map[string]bool)
 
-	// Parse the view definition as a SELECT statement
-	sql := "SELECT * FROM (" + definition + ") _sub"
-	result, err := pg_query.Parse(sql)
+	// Parse the view definition directly as a SELECT statement.
+	// pg_get_viewdef returns a standalone SELECT, so it can be parsed as-is.
+	def := strings.TrimSpace(definition)
+	def = strings.TrimSuffix(def, ";")
+	result, err := pg_query.Parse(def)
 	if err != nil {
 		// Fallback: try substring matching if parsing fails
 		return extractViewDepsFallback(definition, defined)
@@ -234,9 +236,53 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 		return
 	}
 
-	// Walk sublink (subquery in WHERE clause, e.g., EXISTS, IN)
+	// Walk sublink (subquery in WHERE/HAVING clause, e.g., EXISTS, IN)
 	if sl := node.GetSubLink(); sl != nil {
 		collectRangeVars(sl.Subselect, defaultSchema, defined, seen)
+		return
+	}
+
+	// Walk expression nodes that may contain subqueries
+	if expr := node.GetAExpr(); expr != nil {
+		collectRangeVars(expr.Lexpr, defaultSchema, defined, seen)
+		collectRangeVars(expr.Rexpr, defaultSchema, defined, seen)
+		return
+	}
+
+	if boolExpr := node.GetBoolExpr(); boolExpr != nil {
+		for _, arg := range boolExpr.Args {
+			collectRangeVars(arg, defaultSchema, defined, seen)
+		}
+		return
+	}
+
+	if fc := node.GetFuncCall(); fc != nil {
+		for _, arg := range fc.Args {
+			collectRangeVars(arg, defaultSchema, defined, seen)
+		}
+		return
+	}
+
+	if ce := node.GetCoalesceExpr(); ce != nil {
+		for _, arg := range ce.Args {
+			collectRangeVars(arg, defaultSchema, defined, seen)
+		}
+		return
+	}
+
+	if cs := node.GetCaseExpr(); cs != nil {
+		if cs.Arg != nil {
+			collectRangeVars(cs.Arg, defaultSchema, defined, seen)
+		}
+		for _, when := range cs.Args {
+			if w := when.GetCaseWhen(); w != nil {
+				collectRangeVars(w.Expr, defaultSchema, defined, seen)
+				collectRangeVars(w.Result, defaultSchema, defined, seen)
+			}
+		}
+		if cs.Defresult != nil {
+			collectRangeVars(cs.Defresult, defaultSchema, defined, seen)
+		}
 		return
 	}
 }

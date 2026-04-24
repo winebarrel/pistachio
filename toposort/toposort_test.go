@@ -430,6 +430,41 @@ func TestExtractDeps_ViewWithSchemalessTable(t *testing.T) {
 	assert.Contains(t, stmts[1].Deps, "public.users")
 }
 
+func TestExtractDeps_NonPublicSchema(t *testing.T) {
+	sql := `
+		CREATE TYPE myapp.status AS ENUM ('a', 'b');
+		CREATE TABLE myapp.users (
+			id integer NOT NULL,
+			status status
+		);
+	`
+
+	stmts, err := toposort.ExtractDeps(sql, "myapp")
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+
+	assert.Equal(t, "myapp.status", stmts[0].Name)
+	assert.Equal(t, "myapp.users", stmts[1].Name)
+	assert.Contains(t, stmts[1].Deps, "myapp.status")
+}
+
+func TestSortSQL_NonPublicSchema(t *testing.T) {
+	sql := `
+		CREATE TABLE myapp.posts (
+			id integer NOT NULL,
+			user_id integer NOT NULL,
+			CONSTRAINT posts_user_fk FOREIGN KEY (user_id) REFERENCES myapp.users(id)
+		);
+		CREATE TABLE myapp.users (id integer NOT NULL);
+	`
+
+	sorted, err := toposort.SortSQL(sql, "myapp")
+	require.NoError(t, err)
+	require.Len(t, sorted, 2)
+	assert.Contains(t, sorted[0], "myapp.users")
+	assert.Contains(t, sorted[1], "myapp.posts")
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchString(s, substr)
 }

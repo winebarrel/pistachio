@@ -369,3 +369,99 @@ func TestOrderFromSchema_ViewWithSchemalessTableRef(t *testing.T) {
 
 	assert.Less(t, idx["public.users"], idx["public.v"], "table before view with schemaless ref")
 }
+
+func TestOrderFromSchema_ViewWithCTE(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	users := &model.Table{Schema: "public", Name: "users"}
+	users.Columns = orderedmap.New[string, *model.Column]()
+	users.Indexes = orderedmap.New[string, *model.Index]()
+	users.Constraints = orderedmap.New[string, *model.Constraint]()
+	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.users", users)
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.cte_view", &model.View{
+		Schema:     "public",
+		Name:       "cte_view",
+		Definition: "WITH active AS (SELECT id FROM users WHERE id > 0) SELECT id FROM active",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.users"], idx["public.cte_view"], "table before view with CTE")
+}
+
+func TestOrderFromSchema_ViewWithHavingSubquery(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	for _, name := range []string{"orders", "thresholds"} {
+		tbl := &model.Table{Schema: "public", Name: name}
+		tbl.Columns = orderedmap.New[string, *model.Column]()
+		tbl.Indexes = orderedmap.New[string, *model.Index]()
+		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+		tables.Set("public."+name, tbl)
+	}
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.big_orders", &model.View{
+		Schema:     "public",
+		Name:       "big_orders",
+		Definition: "SELECT user_id, count(*) FROM orders GROUP BY user_id HAVING count(*) > (SELECT min(val) FROM thresholds)",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.orders"], idx["public.big_orders"], "orders before view")
+	assert.Less(t, idx["public.thresholds"], idx["public.big_orders"], "thresholds before view (HAVING subquery)")
+}
+
+func TestOrderFromSchema_ViewWithScalarSubquery(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	for _, name := range []string{"users", "settings"} {
+		tbl := &model.Table{Schema: "public", Name: name}
+		tbl.Columns = orderedmap.New[string, *model.Column]()
+		tbl.Indexes = orderedmap.New[string, *model.Index]()
+		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+		tables.Set("public."+name, tbl)
+	}
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.user_with_setting", &model.View{
+		Schema:     "public",
+		Name:       "user_with_setting",
+		Definition: "SELECT id, (SELECT val FROM settings LIMIT 1) AS setting FROM users",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.users"], idx["public.user_with_setting"], "users before view")
+	assert.Less(t, idx["public.settings"], idx["public.user_with_setting"], "settings before view (scalar subquery)")
+}

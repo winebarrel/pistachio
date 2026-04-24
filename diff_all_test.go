@@ -42,6 +42,7 @@ func TestExtractObjectName(t *testing.T) {
 		{`ALTER INDEX public.idx_old RENAME TO idx_new;`, ""},
 		{`COMMENT ON COLUMN "S"."T".col IS 'x';`, `"S"."T"`},
 		{`CREATE TABLE public."escaped""quote" (id integer);`, `public."escaped""quote"`},
+		{`CREATE TABLE public.$foo (id integer);`, "public.$foo"},
 	}
 
 	for _, tt := range tests {
@@ -111,4 +112,56 @@ func TestOrderStatements_Fallback(t *testing.T) {
 	require.NotEmpty(t, result)
 	assert.Contains(t, result[0], "CREATE TYPE")
 	assert.Contains(t, result[1], "CREATE TABLE")
+}
+
+func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
+	// View B depends on View A in the current schema.
+	// When both are dropped, B must be dropped before A.
+	currentEnums := orderedmap.New[string, *model.Enum]()
+	currentDomains := orderedmap.New[string, *model.Domain]()
+	currentTables := orderedmap.New[string, *model.Table]()
+	tbl := &model.Table{Schema: "public", Name: "users"}
+	tbl.Columns = orderedmap.New[string, *model.Column]()
+	tbl.Indexes = orderedmap.New[string, *model.Index]()
+	tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+	tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	currentTables.Set("public.users", tbl)
+
+	currentViews := orderedmap.New[string, *model.View]()
+	currentViews.Set("public.view_a", &model.View{
+		Schema: "public", Name: "view_a",
+		Definition: "SELECT id FROM public.users",
+	})
+	currentViews.Set("public.view_b", &model.View{
+		Schema: "public", Name: "view_b",
+		Definition: "SELECT id FROM public.view_a",
+	})
+
+	// Desired: only table, both views dropped
+	desiredEnums := orderedmap.New[string, *model.Enum]()
+	desiredDomains := orderedmap.New[string, *model.Domain]()
+	desiredTables := orderedmap.New[string, *model.Table]()
+	desiredTables.Set("public.users", tbl)
+	desiredViews := orderedmap.New[string, *model.View]()
+
+	enumDiff := &diff.EnumDiffResult{}
+	domainDiff := &diff.DomainDiffResult{}
+	tableDiff := &diff.TableDiffResult{}
+	viewDiff := &diff.ViewDiffResult{
+		DropStmts: []string{
+			"DROP VIEW public.view_a;",
+			"DROP VIEW public.view_b;",
+		},
+	}
+
+	result := pistachio.OrderStatements(
+		currentEnums, currentDomains, currentTables, currentViews,
+		desiredEnums, desiredDomains, desiredTables, desiredViews,
+		enumDiff, domainDiff, tableDiff, viewDiff,
+	)
+
+	require.Len(t, result, 2)
+	// view_b depends on view_a → view_b must be dropped first (reverse topo order)
+	assert.Contains(t, result[0], "view_b", "dependent view dropped first")
+	assert.Contains(t, result[1], "view_a", "dependency dropped second")
 }
