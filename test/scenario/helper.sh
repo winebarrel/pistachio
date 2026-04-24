@@ -52,6 +52,71 @@ pist_apply() {
   "$PIST" apply --allow-drop all "$@" 2>&1
 }
 
+# Run pist plan without --allow-drop (default: no drops allowed).
+pist_plan_no_drop() {
+  "$PIST" plan "$@" 2>&1
+}
+
+# Run pist plan with specific --allow-drop types.
+pist_plan_allow_drop() {
+  local drop_types="$1"
+  shift
+  "$PIST" plan --allow-drop "$drop_types" "$@" 2>&1
+}
+
+# Assert that plan output does NOT contain any DROP/drop statements.
+assert_no_drop() {
+  local step_name="$1"
+  shift
+  local files=("$@")
+
+  step "$step_name"
+
+  local plan_output
+  plan_output=$(pist_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+
+  if echo "$plan_output" | grep -qiE '^\s*(DROP |ALTER TABLE .* DROP COLUMN)'; then
+    fail "unexpected DROP in plan without --allow-drop"
+    echo "    $plan_output" >&2
+    return 1
+  fi
+
+  pass
+}
+
+# Assert that plan output does NOT contain DROP for a specific type,
+# even when other drop types are allowed.
+# Usage: assert_no_drop_type "step name" "protected_type" "allowed_types" files...
+assert_no_drop_type() {
+  local step_name="$1"
+  local protected_type="$2"
+  local allowed_types="$3"
+  shift 3
+  local files=("$@")
+
+  step "$step_name"
+
+  local plan_output
+  plan_output=$(pist_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+
+  local drop_pattern
+  case "$protected_type" in
+    table)  drop_pattern='DROP TABLE' ;;
+    view)   drop_pattern='DROP VIEW\|CREATE OR REPLACE VIEW' ;;
+    column) drop_pattern='DROP COLUMN' ;;
+    enum)   drop_pattern='DROP TYPE' ;;
+    domain) drop_pattern='DROP DOMAIN' ;;
+  esac
+
+  if echo "$plan_output" | grep -qi "$drop_pattern"; then
+    fail "unexpected $protected_type drop in plan with --allow-drop $allowed_types"
+    echo "    $plan_output" >&2
+    return 1
+  fi
+
+  pass
+}
+
 # Run a step: plan, check expected output, apply, verify no drift.
 run_step() {
   local step_name="$1"
