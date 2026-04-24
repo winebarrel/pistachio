@@ -1,0 +1,25 @@
+init: ""
+desired: |
+  CREATE VIEW public.user_list AS SELECT id, name FROM public.users;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name public.user_name,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE DOMAIN public.user_name AS text;
+applied: |
+  -- public.user_name
+  CREATE DOMAIN public.user_name AS text;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name user_name,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_list
+  CREATE OR REPLACE VIEW public.user_list AS
+  SELECT users.id,
+      users.name
+     FROM users;
