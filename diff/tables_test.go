@@ -416,6 +416,57 @@ func TestDiffConstraints_changeDefinitionAndValidated(t *testing.T) {
 	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_age CHECK (age >= 18) NOT VALID;", stmts[1])
 }
 
+func TestDiffConstraints_renameAndNotValid(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: true})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: false, RenameFrom: ptr("chk_old")})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 2)
+	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_old;", stmts[0])
+	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_new CHECK (age > 0) NOT VALID;", stmts[1])
+}
+
+func TestDiffConstraints_renameAndChangeDefinition(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: true})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age >= 18)", Validated: true, RenameFrom: ptr("chk_old")})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 2)
+	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_old;", stmts[0])
+	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_new CHECK (age >= 18);", stmts[1])
+}
+
+func TestDiffConstraints_renameAndValidate(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: false})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true, RenameFrom: ptr("chk_old")})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 2)
+	assert.Equal(t, "ALTER TABLE public.users RENAME CONSTRAINT chk_old TO chk_new;", stmts[0])
+	assert.Equal(t, "ALTER TABLE public.users VALIDATE CONSTRAINT chk_new;", stmts[1])
+}
+
+func TestDiffConstraints_renameOnly(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: true})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true, RenameFrom: ptr("chk_old")})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 1)
+	assert.Equal(t, "ALTER TABLE public.users RENAME CONSTRAINT chk_old TO chk_new;", stmts[0])
+}
+
 func TestDiffIndexes_add(t *testing.T) {
 	current := orderedmap.New[string, *model.Index]()
 	desired := orderedmap.New[string, *model.Index]()

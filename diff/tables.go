@@ -368,7 +368,46 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	if err != nil {
 		return nil, err
 	}
-	stmts = append(stmts, renameStmts...)
+
+	// Build a map of new name → old name for renamed constraints
+	renamedFrom := map[string]string{}
+	for name, desiredCon := range desired.All() {
+		if desiredCon.RenameFrom != nil && *desiredCon.RenameFrom != name {
+			renamedFrom[name] = *desiredCon.RenameFrom
+		}
+	}
+
+	// Determine which renamed constraints need recreation instead of just rename
+	needsRecreation := map[string]bool{}
+	for name, currentCon := range current.All() {
+		desiredCon, ok := desired.GetOk(name)
+		if !ok {
+			continue
+		}
+		if !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
+			if equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
+				continue
+			}
+			if _, renamed := renamedFrom[name]; renamed {
+				needsRecreation[name] = true
+			}
+		}
+	}
+
+	// Only emit rename statements for constraints that don't need recreation
+	for _, stmt := range renameStmts {
+		skip := false
+		for name := range needsRecreation {
+			oldName := renamedFrom[name]
+			if strings.Contains(stmt, model.Ident(oldName)+" TO "+model.Ident(name)) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			stmts = append(stmts, stmt)
+		}
+	}
 
 	// Drop removed or changed constraints
 	for name, currentCon := range current.All() {
@@ -378,7 +417,11 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 			if ok && equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
 				continue
 			}
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
+			dropName := name
+			if oldName, renamed := renamedFrom[name]; renamed {
+				dropName = oldName
+			}
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(dropName)+";")
 		}
 	}
 
