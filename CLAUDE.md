@@ -25,7 +25,7 @@ make lint     # golangci-lint run
 - `model/` - Data model structs (Table, Column, Constraint, ForeignKey, Index, View, Enum, Domain)
 - `diff/` - Generates DDL diff between current and desired schemas
 - `internal/testutil/` - Test helpers (DB connection, setup)
-- `testdata/` - YAML-based test fixtures for integration tests
+- `testdata/` - YAML-based test fixtures for multiple test suites, including integration and unit tests
 
 ## Development workflow
 
