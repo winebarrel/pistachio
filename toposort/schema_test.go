@@ -221,3 +221,98 @@ func TestOrderFromSchema_CyclicFK(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cycle detected")
 }
+
+func TestOrderFromSchema_UnqualifiedDomainBaseType(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	enums.Set("public.status", &model.Enum{Schema: "public", Name: "status", Values: []string{"a", "b"}})
+
+	domains := orderedmap.New[string, *model.Domain]()
+	// Domain with unqualified base type "status" (not "public.status")
+	domains.Set("public.user_status", &model.Domain{Schema: "public", Name: "user_status", BaseType: "status"})
+
+	tables := orderedmap.New[string, *model.Table]()
+	views := orderedmap.New[string, *model.View]()
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.status"], idx["public.user_status"], "enum before domain with unqualified base type")
+}
+
+func TestOrderFromSchema_PartitionChild(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	parentFQTN := "public.events"
+
+	tables := orderedmap.New[string, *model.Table]()
+
+	parent := &model.Table{Schema: "public", Name: "events", Partitioned: true}
+	parent.Columns = orderedmap.New[string, *model.Column]()
+	parent.Indexes = orderedmap.New[string, *model.Index]()
+	parent.Constraints = orderedmap.New[string, *model.Constraint]()
+	parent.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.events", parent)
+
+	child := &model.Table{Schema: "public", Name: "events_2024", PartitionOf: &parentFQTN}
+	child.Columns = orderedmap.New[string, *model.Column]()
+	child.Indexes = orderedmap.New[string, *model.Index]()
+	child.Constraints = orderedmap.New[string, *model.Constraint]()
+	child.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.events_2024", child)
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.events"], idx["public.events_2024"], "partition parent before child")
+}
+
+func TestOrderFromSchema_FKWithDefaultSchema(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	// FK with nil RefSchema (should default to "public")
+	refTable := "users"
+
+	tables := orderedmap.New[string, *model.Table]()
+	users := &model.Table{Schema: "public", Name: "users"}
+	users.Columns = orderedmap.New[string, *model.Column]()
+	users.Indexes = orderedmap.New[string, *model.Index]()
+	users.Constraints = orderedmap.New[string, *model.Constraint]()
+	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.users", users)
+
+	posts := &model.Table{Schema: "public", Name: "posts"}
+	posts.Columns = orderedmap.New[string, *model.Column]()
+	posts.Indexes = orderedmap.New[string, *model.Index]()
+	posts.Constraints = orderedmap.New[string, *model.Constraint]()
+	posts.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	posts.ForeignKeys.Set("posts_user_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "posts_user_fk"},
+		RefSchema:  nil, // nil schema → defaults to "public"
+		RefTable:   &refTable,
+	})
+	tables.Set("public.posts", posts)
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.users"], idx["public.posts"], "FK target before source with nil schema")
+}

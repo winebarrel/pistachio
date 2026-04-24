@@ -351,6 +351,85 @@ func TestExtractDeps_PartitionParent(t *testing.T) {
 	assert.Contains(t, stmts[1].Deps, "public.events")
 }
 
+func TestExtractDeps_SkipsNonCreateStatements(t *testing.T) {
+	// ALTER TABLE and other non-CREATE statements should be ignored
+	sql := `
+		CREATE TABLE public.users (id integer NOT NULL);
+		ALTER TABLE public.users ADD COLUMN name text;
+		CREATE TABLE public.posts (id integer NOT NULL);
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	// Only CREATE statements are extracted
+	require.Len(t, stmts, 2)
+	assert.Equal(t, "public.users", stmts[0].Name)
+	assert.Equal(t, "public.posts", stmts[1].Name)
+}
+
+func TestExtractDeps_UnqualifiedEnumType(t *testing.T) {
+	// Enum type referenced without schema prefix in column type
+	sql := `
+		CREATE TYPE public.status AS ENUM ('a', 'b');
+		CREATE TABLE public.users (
+			id integer NOT NULL,
+			status status
+		);
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+
+	assert.Equal(t, "public.users", stmts[1].Name)
+	assert.Contains(t, stmts[1].Deps, "public.status")
+}
+
+func TestExtractDeps_UnqualifiedDomainBaseType(t *testing.T) {
+	// Domain with unqualified base type
+	sql := `
+		CREATE TYPE public.status AS ENUM ('a', 'b');
+		CREATE DOMAIN public.user_status AS status;
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+
+	assert.Equal(t, "public.user_status", stmts[1].Name)
+	assert.Contains(t, stmts[1].Deps, "public.status")
+}
+
+func TestExtractDeps_TableWithNoColumns(t *testing.T) {
+	// Edge case: partition child with no explicit columns
+	sql := `
+		CREATE TABLE public.parent (id integer) PARTITION BY RANGE (id);
+		CREATE TABLE public.child PARTITION OF public.parent FOR VALUES FROM (1) TO (100);
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+
+	assert.Equal(t, "public.child", stmts[1].Name)
+	assert.Contains(t, stmts[1].Deps, "public.parent")
+}
+
+func TestExtractDeps_ViewWithSchemalessTable(t *testing.T) {
+	// View referencing a table without schema prefix
+	sql := `
+		CREATE TABLE public.users (id integer NOT NULL);
+		CREATE VIEW public.v AS SELECT id FROM users;
+	`
+
+	stmts, err := toposort.ExtractDeps(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+
+	assert.Equal(t, "public.v", stmts[1].Name)
+	assert.Contains(t, stmts[1].Deps, "public.users")
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchString(s, substr)
 }
