@@ -1,0 +1,13 @@
+input: |
+  CREATE DOMAIN public.user_status AS public.status CONSTRAINT status_check CHECK (VALUE <> 'inactive'::status);
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+expected: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.user_status
+  CREATE DOMAIN public.user_status AS public.status
+      CONSTRAINT status_check CHECK (value <> 'inactive'::status);

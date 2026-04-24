@@ -1,0 +1,16 @@
+input: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');
+expected: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.role
+  CREATE TYPE public.role AS ENUM (
+      'admin',
+      'user',
+      'guest'
+  );

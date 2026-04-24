@@ -1,0 +1,12 @@
+input: |
+  CREATE TABLE public.products (id integer NOT NULL, name text NOT NULL DEFAULT 'unnamed', price integer NOT NULL, CONSTRAINT products_pkey PRIMARY KEY (id), CONSTRAINT products_name_key UNIQUE (name), CONSTRAINT products_price_check CHECK (price > 0));
+expected: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      name text DEFAULT 'unnamed' NOT NULL,
+      price integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_name_key UNIQUE (name),
+      CONSTRAINT products_price_check CHECK (price > 0)
+  );
