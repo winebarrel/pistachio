@@ -556,7 +556,7 @@ func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Co
 		Columns:    columns,
 		Deferrable: con.Deferrable,
 		Deferred:   con.Initdeferred,
-		Validated:  true,
+		Validated:  !con.SkipValidation,
 	}, nil
 }
 

@@ -326,7 +326,7 @@ func TestAddColumnSQL_generatedStored(t *testing.T) {
 func TestDiffConstraints_add(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
 	desired := orderedmap.New[string, *model.Constraint]()
-	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)"})
+	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
 
 	stmts, err := diffConstraints("public.users", current, desired)
 	require.NoError(t, err)
@@ -335,7 +335,7 @@ func TestDiffConstraints_add(t *testing.T) {
 
 func TestDiffConstraints_drop(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
-	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)"})
+	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
 	desired := orderedmap.New[string, *model.Constraint]()
 
 	stmts, err := diffConstraints("public.users", current, desired)
@@ -345,15 +345,62 @@ func TestDiffConstraints_drop(t *testing.T) {
 
 func TestDiffConstraints_change(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
-	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)"})
+	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
 	desired := orderedmap.New[string, *model.Constraint]()
-	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age >= 18)"})
+	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age >= 18)", Validated: true})
 
 	stmts, err := diffConstraints("public.users", current, desired)
 	require.NoError(t, err)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_age;", stmts[0])
 	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_age CHECK (age >= 18);", stmts[1])
+}
+
+func TestDiffConstraints_addNotValid(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: false})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 1)
+	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_age CHECK (age > 0) NOT VALID;", stmts[0])
+}
+
+func TestDiffConstraints_validatedToNotValid(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: false})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 2)
+	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_age;", stmts[0])
+	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_age CHECK (age > 0) NOT VALID;", stmts[1])
+}
+
+func TestDiffConstraints_notValidToValidated(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: false})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 1)
+	assert.Equal(t, "ALTER TABLE public.users VALIDATE CONSTRAINT chk_age;", stmts[0])
+}
+
+func TestDiffConstraints_bothNotValid_noChange(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: false})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: false})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
 }
 
 func TestDiffIndexes_add(t *testing.T) {

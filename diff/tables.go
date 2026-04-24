@@ -373,7 +373,11 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	// Drop removed or changed constraints
 	for name, currentCon := range current.All() {
 		desiredCon, ok := desired.GetOk(name)
-		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) {
+		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
+			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			if ok && equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
+				continue
+			}
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(name)+";")
 		}
 	}
@@ -381,8 +385,17 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	// Add new or changed constraints
 	for name, desiredCon := range desired.All() {
 		currentCon, ok := current.GetOk(name)
-		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" ADD CONSTRAINT "+model.Ident(name)+" "+desiredCon.Definition+";")
+		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
+			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			if ok && equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
+				stmts = append(stmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
+				continue
+			}
+			sql := "ALTER TABLE " + fqtn + " ADD CONSTRAINT " + model.Ident(name) + " " + desiredCon.Definition
+			if !desiredCon.Validated {
+				sql += " NOT VALID"
+			}
+			stmts = append(stmts, sql+";")
 		}
 	}
 
