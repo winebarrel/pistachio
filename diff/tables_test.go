@@ -1876,3 +1876,86 @@ func TestDiffColumns_renameColumn_sourceNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source column")
 }
+
+func TestUpdateIndexName_parseError(t *testing.T) {
+	_, err := updateIndexName("NOT VALID SQL", "new_idx")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse index definition")
+}
+
+func TestUpdateIndexName_notIndexStmt(t *testing.T) {
+	_, err := updateIndexName("SELECT 1", "new_idx")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected IndexStmt")
+}
+
+func TestUpdateIndexName_success(t *testing.T) {
+	got, err := updateIndexName("CREATE INDEX old_idx ON t (id)", "new_idx")
+	require.NoError(t, err)
+	assert.Contains(t, got, "new_idx")
+	assert.NotContains(t, got, "old_idx")
+}
+
+func TestUpdateIndexTableName_parseError(t *testing.T) {
+	_, err := updateIndexTableName("NOT VALID SQL", "new_table")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse index definition")
+}
+
+func TestUpdateIndexTableName_notIndexStmt(t *testing.T) {
+	_, err := updateIndexTableName("SELECT 1", "new_table")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected IndexStmt with relation")
+}
+
+func TestUpdateIndexTableName_success(t *testing.T) {
+	got, err := updateIndexTableName("CREATE INDEX idx ON old_table (id)", "new_table")
+	require.NoError(t, err)
+	assert.Contains(t, got, "new_table")
+	assert.NotContains(t, got, "old_table")
+}
+
+func TestParseFKDef_parseError(t *testing.T) {
+	_, err := parseFKDef("NOT VALID SQL")
+	require.Error(t, err)
+}
+
+func TestParseFKDef_success(t *testing.T) {
+	con, err := parseFKDef("FOREIGN KEY (user_id) REFERENCES users(id)")
+	require.NoError(t, err)
+	require.NotNil(t, con)
+}
+
+func TestParseDefault_parseError(t *testing.T) {
+	_, err := parseDefault(")))INVALID(((")
+	require.Error(t, err)
+}
+
+func TestParseDefault_success(t *testing.T) {
+	node, err := parseDefault("42")
+	require.NoError(t, err)
+	require.NotNil(t, node)
+}
+
+func TestParseDefault_stripTypeCast(t *testing.T) {
+	node, err := parseDefault("'hello'::text")
+	require.NoError(t, err)
+	require.NotNil(t, node)
+	// The type cast should be stripped, leaving just the string constant
+	assert.Nil(t, node.GetTypeCast())
+}
+
+func TestIsTextLikeTypeName_nil(t *testing.T) {
+	assert.False(t, isTextLikeTypeName(nil))
+}
+
+func TestNormalizeIndexDef_parseError(t *testing.T) {
+	_, err := normalizeIndexDef("NOT VALID SQL")
+	require.Error(t, err)
+}
+
+func TestNormalizeIndexDef_notIndexStmt(t *testing.T) {
+	_, err := normalizeIndexDef("SELECT 1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected parse result")
+}

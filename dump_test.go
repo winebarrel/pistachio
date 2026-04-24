@@ -168,6 +168,46 @@ func TestDumpResult_Files_Empty(t *testing.T) {
 	assert.Empty(t, files)
 }
 
+func TestDumpResult_Files_Enums(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	files := got.Files()
+	assert.Contains(t, files, "public.status.sql")
+	assert.Contains(t, files["public.status.sql"], "CREATE TYPE public.status AS ENUM")
+}
+
+func TestDumpResult_Files_Domains(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	files := got.Files()
+	assert.Contains(t, files, "public.pos_int.sql")
+	assert.Contains(t, files["public.pos_int.sql"], "CREATE DOMAIN public.pos_int")
+}
+
 func TestDumpResult_Files_SpecialCharacters(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
