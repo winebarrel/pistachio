@@ -733,6 +733,30 @@ func TestDiffForeignKeys_renameOnly(t *testing.T) {
 	assert.Equal(t, "ALTER TABLE public.orders RENAME CONSTRAINT fk_old TO fk_new;", addStmts[0])
 }
 
+func TestDiffForeignKeys_renameAndNotValid(t *testing.T) {
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("fk_old", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired := orderedmap.New[string, *model.ForeignKey]()
+	desired.Set("fk_new", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: ptr("fk_old")},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, dropStmts, 1)
+	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_new;", dropStmts[0])
+	assert.Len(t, addStmts, 2)
+	assert.Equal(t, "ALTER TABLE public.orders RENAME CONSTRAINT fk_old TO fk_new;", addStmts[0])
+	assert.Contains(t, addStmts[1], "ADD CONSTRAINT fk_new")
+	assert.Contains(t, addStmts[1], "NOT VALID")
+}
+
 func TestDiffTable_partitionChild(t *testing.T) {
 	parent := "public.events"
 	bound := "FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')"
