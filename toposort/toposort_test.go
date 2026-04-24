@@ -1,6 +1,7 @@
 package toposort_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -214,15 +215,15 @@ func TestSortSQL_ComplexDeps(t *testing.T) {
 	idx := make(map[string]int)
 	for i, s := range sorted {
 		switch {
-		case contains(s, "CREATE TYPE"):
+		case strings.Contains(s, "CREATE TYPE"):
 			idx["enum"] = i
-		case contains(s, "CREATE DOMAIN"):
+		case strings.Contains(s, "CREATE DOMAIN"):
 			idx["domain"] = i
-		case contains(s, "CREATE TABLE") && contains(s, "public.posts"):
+		case strings.Contains(s, "CREATE TABLE") && strings.Contains(s, "public.posts"):
 			idx["posts"] = i
-		case contains(s, "CREATE TABLE") && contains(s, "public.users"):
+		case strings.Contains(s, "CREATE TABLE") && strings.Contains(s, "public.users"):
 			idx["users"] = i
-		case contains(s, "SELECT"):
+		case strings.Contains(s, "SELECT"):
 			idx["view"] = i
 		}
 	}
@@ -546,17 +547,4 @@ func TestExtractDeps_ViewWithCaseSubquery(t *testing.T) {
 	assert.Equal(t, "public.v", stmts[2].Name)
 	assert.Contains(t, stmts[2].Deps, "public.users")
 	assert.Contains(t, stmts[2].Deps, "public.config")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchString(s, substr)
-}
-
-func searchString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

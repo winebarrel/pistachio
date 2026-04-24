@@ -155,7 +155,7 @@ func extractViewDeps(definition, defaultSchema string, defined map[string]bool) 
 	result, err := pg_query.Parse(def)
 	if err != nil {
 		// Fallback: try substring matching if parsing fails
-		return extractViewDepsFallback(definition, defined)
+		return extractViewDepsFallback(definition, defaultSchema, defined)
 	}
 
 	// Walk the AST to find RangeVar nodes
@@ -292,11 +292,22 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 
 // extractViewDepsFallback uses substring matching as a fallback when
 // pg_query parsing fails.
-func extractViewDepsFallback(definition string, defined map[string]bool) []string {
+// extractViewDepsFallback uses substring matching as a fallback when
+// pg_query parsing fails. It checks both fully-qualified names and
+// unqualified names (with defaultSchema prefix) to handle schemaless refs.
+func extractViewDepsFallback(definition, defaultSchema string, defined map[string]bool) []string {
 	seen := make(map[string]bool)
 	for name := range defined {
 		if strings.Contains(definition, name) {
 			seen[name] = true
+			continue
+		}
+		// Try matching the unqualified part (e.g., "users" for "public.users")
+		parts := strings.SplitN(name, ".", 2)
+		if len(parts) == 2 && parts[0] == defaultSchema {
+			if strings.Contains(definition, parts[1]) {
+				seen[name] = true
+			}
 		}
 	}
 	deps := make([]string, 0, len(seen))

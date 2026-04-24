@@ -664,3 +664,35 @@ func TestOrderFromSchema_ViewWithUnparseableDefinition(t *testing.T) {
 	// Fallback substring matching should still detect the dependency
 	assert.Less(t, idx["public.users"], idx["public.bad_view"])
 }
+
+func TestOrderFromSchema_ViewWithUnparseableDefinition_SchemalessRef(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	users := &model.Table{Schema: "public", Name: "users"}
+	users.Columns = orderedmap.New[string, *model.Column]()
+	users.Indexes = orderedmap.New[string, *model.Index]()
+	users.Constraints = orderedmap.New[string, *model.Constraint]()
+	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.users", users)
+
+	views := orderedmap.New[string, *model.View]()
+	// Invalid SQL with schemaless reference "users" (not "public.users")
+	views.Set("public.bad_view", &model.View{
+		Schema:     "public",
+		Name:       "bad_view",
+		Definition: "NOT VALID SQL BUT MENTIONS users TABLE",
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	// Fallback should match "users" part of "public.users" using defaultSchema
+	assert.Less(t, idx["public.users"], idx["public.bad_view"])
+}
