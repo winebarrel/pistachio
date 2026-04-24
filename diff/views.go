@@ -207,21 +207,26 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					result.CreateStmts = append(result.CreateStmts, idx.SQL())
 				}
 			}
-		} else if !equalViewDef(currentView.Definition, desiredView.Definition) {
-			if desiredView.Materialized {
-				// Materialized views cannot use CREATE OR REPLACE.
-				// Must DROP and recreate, but only if drops are allowed.
+		} else if !equalViewDef(currentView.Definition, desiredView.Definition) || currentView.Materialized != desiredView.Materialized {
+			needsDropCreate := desiredView.Materialized || currentView.Materialized != desiredView.Materialized
+			if needsDropCreate {
+				// Materialized views or type changes (VIEW ↔ MATERIALIZED VIEW)
+				// require DROP and recreate. Only proceed if drops are allowed.
 				if dc.IsDropAllowed("view") {
-					dropStmt := "DROP MATERIALIZED VIEW " + k + ";"
-					result.DropStmts = append(result.DropStmts, dropStmt)
+					if currentView.Materialized {
+						result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+k+";")
+					} else {
+						result.DropStmts = append(result.DropStmts, "DROP VIEW "+k+";")
+					}
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
-					if desiredView.Indexes != nil {
+					if desiredView.Materialized && desiredView.Indexes != nil {
 						for _, idx := range desiredView.Indexes.CollectValues() {
 							result.CreateStmts = append(result.CreateStmts, idx.SQL())
 						}
 					}
 				}
 			} else {
+				// Regular view: CREATE OR REPLACE
 				result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 			}
 		} else if desiredView.Materialized {

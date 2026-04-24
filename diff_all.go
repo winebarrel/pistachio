@@ -322,6 +322,7 @@ func extractObjectName(sql string) string {
 		{"ALTER TABLE "},
 		{"ALTER TYPE "},
 		{"ALTER DOMAIN "},
+		{"ALTER MATERIALIZED VIEW "},
 		{"ALTER VIEW "},
 		{"DROP TABLE "},
 		{"DROP MATERIALIZED VIEW "},

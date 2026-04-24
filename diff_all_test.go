@@ -44,6 +44,7 @@ func TestExtractObjectName(t *testing.T) {
 		{`CREATE TABLE public."escaped""quote" (id integer);`, `public."escaped""quote"`},
 		{`CREATE TABLE public.$foo (id integer);`, "public.$foo"},
 		{`COMMENT ON COLUMN "S""x"."T".col IS 'x';`, `"S""x"."T"`},
+		{`ALTER MATERIALIZED VIEW public.mv RENAME TO mv2;`, "public.mv"},
 	}
 
 	for _, tt := range tests {
