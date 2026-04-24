@@ -369,13 +369,8 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		return nil, err
 	}
 
-	// Build a map of new name → old name for renamed constraints
-	renamedFrom := map[string]string{}
-	for name, desiredCon := range desired.All() {
-		if desiredCon.RenameFrom != nil && *desiredCon.RenameFrom != name {
-			renamedFrom[name] = *desiredCon.RenameFrom
-		}
-	}
+	// Build a map of new name → old name only for renames that were actually emitted
+	renamedFrom := extractRenames(renameStmts)
 
 	// Determine which renamed constraints need recreation instead of just rename
 	needsRecreation := map[string]bool{}
@@ -485,13 +480,8 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 		return nil, nil, err
 	}
 
-	// Build a map of new name → old name for renamed FKs
-	renamedFrom := map[string]string{}
-	for name, desiredFk := range desired.All() {
-		if desiredFk.RenameFrom != nil && *desiredFk.RenameFrom != name {
-			renamedFrom[name] = *desiredFk.RenameFrom
-		}
-	}
+	// Build a map of new name → old name only for renames that were actually emitted
+	renamedFrom := extractRenames(renameStmts)
 
 	// Determine which renamed FKs need recreation (drop+add) instead of just rename
 	needsRecreation := map[string]bool{}
@@ -558,6 +548,24 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	}
 
 	return dropStmts, addStmts, nil
+}
+
+// extractRenames parses rename statements of the form
+// "ALTER TABLE ... RENAME CONSTRAINT old TO new;" and returns a map of new name → old name.
+func extractRenames(renameStmts []string) map[string]string {
+	renamedFrom := map[string]string{}
+	for _, stmt := range renameStmts {
+		parts := strings.SplitN(stmt, " RENAME CONSTRAINT ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		names := strings.SplitN(strings.TrimSuffix(parts[1], ";"), " TO ", 2)
+		if len(names) != 2 {
+			continue
+		}
+		renamedFrom[names[1]] = names[0]
+	}
+	return renamedFrom
 }
 
 func diffComments(current, desired *model.Table) []string {

@@ -467,6 +467,19 @@ func TestDiffConstraints_renameOnly(t *testing.T) {
 	assert.Equal(t, "ALTER TABLE public.users RENAME CONSTRAINT chk_old TO chk_new;", stmts[0])
 }
 
+func TestDiffConstraints_renameAlreadyAppliedAndNotValid(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: false, RenameFrom: ptr("chk_old")})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 2)
+	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_new;", stmts[0])
+	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_new CHECK (age > 0) NOT VALID;", stmts[1])
+}
+
 func TestDiffIndexes_add(t *testing.T) {
 	current := orderedmap.New[string, *model.Index]()
 	desired := orderedmap.New[string, *model.Index]()
@@ -862,6 +875,31 @@ func TestDiffForeignKeys_renameAndNotValid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_old;", dropStmts[0])
+	assert.Len(t, addStmts, 1)
+	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_new")
+	assert.Contains(t, addStmts[0], "NOT VALID")
+}
+
+func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
+	// Rename fk_old→fk_new was already applied in DB (current has fk_new).
+	// Desired still has RenameFrom but also changes Validated.
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("fk_new", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired := orderedmap.New[string, *model.ForeignKey]()
+	desired.Set("fk_new", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: ptr("fk_old")},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, dropStmts, 1)
+	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_new;", dropStmts[0])
 	assert.Len(t, addStmts, 1)
 	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_new")
 	assert.Contains(t, addStmts[0], "NOT VALID")
