@@ -108,18 +108,22 @@ assert_no_drop_type "allow-drop domain: no enum drop" "enum" "domain" "$DATA/des
 setup_db "$DATA/init.sql"
 
 step "allow-drop all: drops present"
-plan_output=$(pist_plan "$DATA/desired_drop_all.sql") || { fail "plan failed: $plan_output"; }
-has_all=true
-echo "$plan_output" | grep -qi 'DROP TABLE' || has_all=false
-echo "$plan_output" | grep -qi 'DROP VIEW' || has_all=false
-echo "$plan_output" | grep -qi 'DROP COLUMN' || has_all=false
-echo "$plan_output" | grep -qi 'DROP TYPE' || has_all=false
-echo "$plan_output" | grep -qi 'DROP DOMAIN' || has_all=false
-if $has_all; then
-  pass
+plan_output=$(pist_plan "$DATA/desired_drop_all.sql")
+if [ $? -ne 0 ]; then
+  fail "plan failed: $plan_output"
 else
-  fail "expected all drop types in plan with --allow-drop all"
-  echo "    $plan_output" >&2
+  has_all=true
+  echo "$plan_output" | grep -qi 'DROP TABLE' || has_all=false
+  echo "$plan_output" | grep -qi 'DROP VIEW' || has_all=false
+  echo "$plan_output" | grep -qi 'DROP COLUMN' || has_all=false
+  echo "$plan_output" | grep -qi 'DROP TYPE' || has_all=false
+  echo "$plan_output" | grep -qi 'DROP DOMAIN' || has_all=false
+  if $has_all; then
+    pass
+  else
+    fail "expected all drop types in plan with --allow-drop all"
+    echo "    $plan_output" >&2
+  fi
 fi
 
 summary
