@@ -403,6 +403,19 @@ func TestDiffConstraints_bothNotValid_noChange(t *testing.T) {
 	assert.Empty(t, stmts)
 }
 
+func TestDiffConstraints_changeDefinitionAndValidated(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age >= 18)", Validated: false})
+
+	stmts, err := diffConstraints("public.users", current, desired)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 2)
+	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_age;", stmts[0])
+	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_age CHECK (age >= 18) NOT VALID;", stmts[1])
+}
+
 func TestDiffIndexes_add(t *testing.T) {
 	current := orderedmap.New[string, *model.Index]()
 	desired := orderedmap.New[string, *model.Index]()
