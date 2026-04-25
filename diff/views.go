@@ -265,8 +265,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 
 		var currentComment *string
 		if ok && !recreated[k] {
-			// If the view was recreated (DROP+CREATE), the comment was lost,
-			// so treat it as nil to re-apply the desired comment.
+			// Preserve current comment for diffing only if the view was not
+			// recreated. Recreated views lose their comment in PostgreSQL,
+			// so currentComment stays nil to ensure re-application.
 			currentComment = currentView.Comment
 		}
 		if !equalPtr(currentComment, desiredView.Comment) {
