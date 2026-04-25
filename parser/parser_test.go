@@ -1776,3 +1776,25 @@ CREATE INDEX idx_name ON public.users (name);`
 	require.NotNil(t, idx.RenameFrom)
 	assert.Equal(t, "idx_old", *idx.RenameFrom)
 }
+
+func TestParseSQL_ConcurrentlyDirective_IgnoredOnNonIndex(t *testing.T) {
+	// -- pist:concurrently before a CREATE TABLE should be silently ignored
+	// and should NOT leak to the following CREATE INDEX
+	sql := `-- pist:concurrently
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_id ON public.users (id);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	assert.NotNil(t, tbl)
+
+	idx, ok := tbl.Indexes.GetOk("idx_users_id")
+	require.True(t, ok)
+	assert.False(t, idx.Concurrently)
+}
