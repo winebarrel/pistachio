@@ -467,7 +467,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], concurr
 			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
 			}
 			stmts = append(stmts, stmt)
 		}
@@ -479,7 +479,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], concurr
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
 			stmt, err := createIndexSQL(desiredIdx.Definition, concurrently || desiredIdx.Concurrently)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
 			}
 			stmts = append(stmts, stmt)
 		}

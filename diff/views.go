@@ -1,6 +1,8 @@
 package diff
 
 import (
+	"fmt"
+
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
@@ -210,7 +212,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				for _, idx := range desiredView.Indexes.CollectValues() {
 					stmt, err := createIndexSQL(idx.Definition, indexConcurrently || idx.Concurrently)
 					if err != nil {
-						return nil, err
+						return nil, fmt.Errorf("create index %s on %s: %w", model.Ident(idx.Schema, idx.Name), k, err)
 					}
 					result.CreateStmts = append(result.CreateStmts, stmt)
 				}
@@ -231,7 +233,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 						for _, idx := range desiredView.Indexes.CollectValues() {
 							stmt, err := createIndexSQL(idx.Definition, indexConcurrently || idx.Concurrently)
 							if err != nil {
-								return nil, err
+								return nil, fmt.Errorf("create index %s on %s: %w", model.Ident(idx.Schema, idx.Name), k, err)
 							}
 							result.CreateStmts = append(result.CreateStmts, stmt)
 						}
@@ -321,7 +323,7 @@ func diffViewIndexes(current, desired *model.View, concurrently bool) ([]string,
 			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
 			}
 			stmts = append(stmts, stmt)
 		}
@@ -333,7 +335,7 @@ func diffViewIndexes(current, desired *model.View, concurrently bool) ([]string,
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
 			stmt, err := createIndexSQL(desiredIdx.Definition, concurrently || desiredIdx.Concurrently)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
 			}
 			stmts = append(stmts, stmt)
 		}
