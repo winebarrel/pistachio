@@ -634,3 +634,176 @@ func TestDiffViews_renameTypeMismatch(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "view type mismatch")
 }
+
+func TestDiffViews_newMatviewWithIndex_concurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	desired := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n",
+		Indexes:    orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	desired.Set("public.mv", mv)
+
+	result, err := DiffViews(current, desired, AllowAllDrops{}, true)
+	require.NoError(t, err)
+	require.Len(t, result.CreateStmts, 2)
+	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_mv_n ON public.mv USING btree (n);", result.CreateStmts[1])
+}
+
+func TestDiffViews_newMatviewWithIndex_perIndexDirective(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	desired := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n",
+		Indexes:    orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition:   "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+		Concurrently: true,
+	})
+	desired.Set("public.mv", mv)
+
+	result, err := DiffViews(current, desired, AllowAllDrops{}, false)
+	require.NoError(t, err)
+	require.Len(t, result.CreateStmts, 2)
+	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_mv_n ON public.mv USING btree (n);", result.CreateStmts[1])
+}
+
+func TestDiffViews_matviewIndexAdd_concurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	desired.Set("public.mv", mv)
+
+	result, err := DiffViews(current, desired, AllowAllDrops{}, true)
+	require.NoError(t, err)
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_mv_n ON public.mv USING btree (n);", result.CreateStmts[0])
+}
+
+func TestDiffViews_matviewIndexDrop_concurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	current.Set("public.mv", mv)
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, AllowAllDrops{}, true)
+	require.NoError(t, err)
+	assert.Len(t, result.CreateStmts, 1)
+	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_mv_n;", result.CreateStmts[0])
+}
+
+func TestDiffViews_matviewIndexChange_concurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	mvCurrent := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mvCurrent.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	current.Set("public.mv", mvCurrent)
+
+	desired := orderedmap.New[string, *model.View]()
+	mvDesired := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mvDesired.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE UNIQUE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	desired.Set("public.mv", mvDesired)
+
+	result, err := DiffViews(current, desired, AllowAllDrops{}, true)
+	require.NoError(t, err)
+	require.Len(t, result.CreateStmts, 2)
+	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_mv_n;", result.CreateStmts[0])
+	assert.Equal(t, "CREATE UNIQUE INDEX CONCURRENTLY idx_mv_n ON public.mv USING btree (n);", result.CreateStmts[1])
+}
+
+func TestDiffViews_matviewIndexAdd_perIndexDirective(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition:   "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+		Concurrently: true,
+	})
+	mv.Indexes.Set("idx_mv_n2", &model.Index{
+		Schema: "public", Name: "idx_mv_n2", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n2 ON public.mv USING btree (n)",
+	})
+	desired.Set("public.mv", mv)
+
+	result, err := DiffViews(current, desired, AllowAllDrops{}, false)
+	require.NoError(t, err)
+	assert.Len(t, result.CreateStmts, 2)
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_mv_n ON public.mv USING btree (n);", result.CreateStmts[0])
+	assert.Equal(t, "CREATE INDEX idx_mv_n2 ON public.mv USING btree (n);", result.CreateStmts[1])
+}
+
+func TestDiffViews_modifyMatviewWithIndex_concurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 2 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	desired.Set("public.mv", mv)
+
+	result, err := DiffViews(current, desired, AllowAllDrops{}, true)
+	require.NoError(t, err)
+	assert.Len(t, result.DropStmts, 1)
+	require.Len(t, result.CreateStmts, 2)
+	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_mv_n ON public.mv USING btree (n);", result.CreateStmts[1])
+}
