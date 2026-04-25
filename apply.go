@@ -42,7 +42,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	}
 
 	exec := conn.Exec
-	query := conn.Query
+	queryRow := conn.QueryRow
 	commit := func(context.Context) error { return nil }
 
 	if options.WithTx {
@@ -52,7 +52,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		}
 		defer tx.Rollback(ctx) //nolint:errcheck
 		exec = tx.Exec
-		query = tx.Query
+		queryRow = tx.QueryRow
 		commit = tx.Commit
 	}
 
@@ -75,17 +75,9 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		shouldExecute := true
 
 		if es.CheckSQL != "" {
-			rows, err := query(ctx, es.CheckSQL)
-			if err != nil {
-				return nil, fmt.Errorf("failed to execute check SQL: %s: %w", es.CheckSQL, err)
+			if err := queryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
+				return nil, fmt.Errorf("failed to evaluate check SQL: %s: %w", es.CheckSQL, err)
 			}
-			if rows.Next() {
-				if err := rows.Scan(&shouldExecute); err != nil {
-					rows.Close()
-					return nil, fmt.Errorf("failed to scan check SQL result: %s: %w", es.CheckSQL, err)
-				}
-			}
-			rows.Close()
 		}
 
 		if shouldExecute {

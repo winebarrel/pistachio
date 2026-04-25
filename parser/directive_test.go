@@ -263,7 +263,8 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
 	assert.Equal(t, "SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')", stmts[0].CheckSQL)
@@ -277,7 +278,8 @@ GRANT SELECT ON public.users TO readonly_role;`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "GRANT select")
 	assert.Equal(t, "", stmts[0].CheckSQL)
@@ -292,7 +294,8 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
 	assert.Len(t, skip, 1)
@@ -309,7 +312,8 @@ CREATE OR REPLACE FUNCTION public.func2() RETURNS void AS $$ BEGIN END; $$ LANGU
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
 	require.Len(t, stmts, 2)
 	assert.Equal(t, "", stmts[0].CheckSQL)
 	assert.Equal(t, "SELECT true", stmts[1].CheckSQL)
@@ -322,7 +326,8 @@ func TestExtractExecuteDirectives_None(t *testing.T) {
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Empty(t, skip)
 }

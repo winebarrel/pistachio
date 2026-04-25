@@ -24,7 +24,7 @@ type ExecuteStmt struct {
 // comments and pairs them with the following SQL statement.
 // Returns the execute statements and a set of statement locations to skip
 // during normal parsing.
-func ExtractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*ExecuteStmt, map[int32]bool) {
+func ExtractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*ExecuteStmt, map[int32]bool, error) {
 	var executeStmts []*ExecuteStmt
 	skipLocations := make(map[int32]bool)
 
@@ -49,7 +49,7 @@ func ExtractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 			Stmts: []*pg_query.RawStmt{stmt},
 		})
 		if err != nil {
-			continue
+			return nil, nil, fmt.Errorf("failed to deparse execute statement: %w", err)
 		}
 
 		// Use the last match (closest to the actual SQL statement)
@@ -66,7 +66,7 @@ func ExtractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 		skipLocations[loc] = true
 	}
 
-	return executeStmts, skipLocations
+	return executeStmts, skipLocations, nil
 }
 
 // FormatExecuteStmt formats an ExecuteStmt as SQL with the directive comment.

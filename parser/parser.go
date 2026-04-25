@@ -93,7 +93,10 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	domains := orderedmap.New[string, *model.Domain]()
 
 	stmtDirectives := ExtractStmtDirectives(sql, result.Stmts)
-	executeStmts, executeSkipLocations := ExtractExecuteDirectives(sql, result.Stmts)
+	executeStmts, executeSkipLocations, err := ExtractExecuteDirectives(sql, result.Stmts)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, rawStmt := range result.Stmts {
 		// Skip statements marked with -- pist:execute

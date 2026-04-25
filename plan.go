@@ -73,13 +73,14 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	}
 
 	stmts := result.Stmts
-	if result.PreSQL != "" && len(stmts) > 0 {
-		stmts = append([]string{result.PreSQL}, stmts...)
-	}
 
 	// Append execute statements after schema changes
 	for _, es := range result.ExecuteStmts {
 		stmts = append(stmts, parser.FormatExecuteStmt(es))
+	}
+
+	if result.PreSQL != "" && len(stmts) > 0 {
+		stmts = append([]string{result.PreSQL}, stmts...)
 	}
 
 	return &PlanResult{
