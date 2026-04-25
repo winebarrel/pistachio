@@ -74,7 +74,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// Execute -- pist:execute statements after schema changes.
 	// Set search_path so unqualified names resolve to the configured schemas.
 	if len(result.ExecuteStmts) > 0 && len(client.Schemas) > 0 {
-		searchPath := "SET LOCAL search_path TO " + strings.Join(client.Schemas, ", ")
+		searchPath := "SET search_path TO " + strings.Join(client.Schemas, ", ")
 		if _, err := exec(ctx, searchPath); err != nil {
 			return nil, fmt.Errorf("failed to set search_path: %w", err)
 		}
