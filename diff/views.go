@@ -183,8 +183,9 @@ func stripQualifications(node *pg_query.Node) {
 // ViewDiffResult separates view DROP and CREATE/MODIFY statements.
 // Drops should run before table changes, creates after.
 type ViewDiffResult struct {
-	DropStmts   []string // DROP VIEW / DROP MATERIALIZED VIEW (should run before table changes)
-	CreateStmts []string // ALTER VIEW RENAME, CREATE OR REPLACE VIEW, CREATE MATERIALIZED VIEW, indexes, comments (should run after table changes)
+	DropStmts       []string // DROP VIEW / DROP MATERIALIZED VIEW (should run before table changes)
+	CreateStmts     []string // ALTER VIEW RENAME, CREATE OR REPLACE VIEW, CREATE MATERIALIZED VIEW, indexes, comments (should run after table changes)
+	HasConcurrently bool     // true if any index operation uses CONCURRENTLY
 }
 
 func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker, indexConcurrently bool) (*ViewDiffResult, error) {
@@ -210,11 +211,15 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			// Add indexes for new materialized views
 			if desiredView.Materialized && desiredView.Indexes != nil {
 				for _, idx := range desiredView.Indexes.CollectValues() {
-					stmt, err := createIndexSQL(idx.Definition, indexConcurrently || idx.Concurrently)
+					useConcurrently := indexConcurrently || idx.Concurrently
+					stmt, err := createIndexSQL(idx.Definition, useConcurrently)
 					if err != nil {
 						return nil, fmt.Errorf("create index %s on %s: %w", model.Ident(idx.Schema, idx.Name), k, err)
 					}
 					result.CreateStmts = append(result.CreateStmts, stmt)
+					if useConcurrently {
+						result.HasConcurrently = true
+					}
 				}
 			}
 		} else if !equalViewDef(currentView.Definition, desiredView.Definition) || currentView.Materialized != desiredView.Materialized {
@@ -231,11 +236,15 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 					if desiredView.Materialized && desiredView.Indexes != nil {
 						for _, idx := range desiredView.Indexes.CollectValues() {
-							stmt, err := createIndexSQL(idx.Definition, indexConcurrently || idx.Concurrently)
+							useConcurrently := indexConcurrently || idx.Concurrently
+							stmt, err := createIndexSQL(idx.Definition, useConcurrently)
 							if err != nil {
 								return nil, fmt.Errorf("create index %s on %s: %w", model.Ident(idx.Schema, idx.Name), k, err)
 							}
 							result.CreateStmts = append(result.CreateStmts, stmt)
+							if useConcurrently {
+								result.HasConcurrently = true
+							}
 						}
 					}
 					recreated[k] = true
@@ -246,11 +255,14 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			}
 		} else if desiredView.Materialized {
 			// Definition unchanged, diff indexes
-			viewIdxStmts, err := diffViewIndexes(currentView, desiredView, indexConcurrently)
+			viewIdxStmts, viewIdxHasConcurrently, err := diffViewIndexes(currentView, desiredView, indexConcurrently)
 			if err != nil {
 				return nil, err
 			}
 			result.CreateStmts = append(result.CreateStmts, viewIdxStmts...)
+			if viewIdxHasConcurrently {
+				result.HasConcurrently = true
+			}
 		}
 	}
 
@@ -301,9 +313,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 }
 
 // diffViewIndexes generates DDL for index changes on materialized views.
-func diffViewIndexes(current, desired *model.View, concurrently bool) ([]string, error) {
-	var stmts []string
-
+func diffViewIndexes(current, desired *model.View, concurrently bool) (stmts []string, hasConcurrently bool, err error) {
 	currentIndexes := orderedmap.New[string, *model.Index]()
 	if current.Indexes != nil {
 		currentIndexes = current.Indexes
@@ -323,9 +333,12 @@ func diffViewIndexes(current, desired *model.View, concurrently bool) ([]string,
 			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
-				return nil, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
+				return nil, false, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
 			}
 			stmts = append(stmts, stmt)
+			if useConcurrently {
+				hasConcurrently = true
+			}
 		}
 	}
 
@@ -333,13 +346,17 @@ func diffViewIndexes(current, desired *model.View, concurrently bool) ([]string,
 	for name, desiredIdx := range desiredIndexes.All() {
 		currentIdx, ok := currentIndexes.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmt, err := createIndexSQL(desiredIdx.Definition, concurrently || desiredIdx.Concurrently)
+			useConcurrently := concurrently || desiredIdx.Concurrently
+			stmt, err := createIndexSQL(desiredIdx.Definition, useConcurrently)
 			if err != nil {
-				return nil, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
+				return nil, false, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
 			}
 			stmts = append(stmts, stmt)
+			if useConcurrently {
+				hasConcurrently = true
+			}
 		}
 	}
 
-	return stmts, nil
+	return stmts, hasConcurrently, nil
 }

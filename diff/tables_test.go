@@ -501,9 +501,9 @@ func TestDiffIndexes_add(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"CREATE INDEX idx_name ON public.users USING btree (name);"}, stmts)
+	assert.Equal(t, []string{"CREATE INDEX idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
 
 func TestDiffIndexes_drop(t *testing.T) {
@@ -511,9 +511,9 @@ func TestDiffIndexes_drop(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, stmts)
+	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
 }
 
 func TestDiffIndexes_change(t *testing.T) {
@@ -522,11 +522,11 @@ func TestDiffIndexes_change(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)"})
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Len(t, stmts, 2)
-	assert.Equal(t, "DROP INDEX public.idx_name;", stmts[0])
-	assert.Equal(t, "CREATE INDEX idx_name ON public.users USING hash (name);", stmts[1])
+	assert.Len(t, idxResult.Stmts, 2)
+	assert.Equal(t, "DROP INDEX public.idx_name;", idxResult.Stmts[0])
+	assert.Equal(t, "CREATE INDEX idx_name ON public.users USING hash (name);", idxResult.Stmts[1])
 }
 
 func TestDiffIndexes_add_concurrently(t *testing.T) {
@@ -534,9 +534,9 @@ func TestDiffIndexes_add_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 
-	stmts, err := diffIndexes(current, desired, true)
+	idxResult, err := diffIndexes(current, desired, true)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, stmts)
+	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
 
 func TestDiffIndexes_drop_concurrently(t *testing.T) {
@@ -544,9 +544,9 @@ func TestDiffIndexes_drop_concurrently(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	stmts, err := diffIndexes(current, desired, true)
+	idxResult, err := diffIndexes(current, desired, true)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"DROP INDEX CONCURRENTLY public.idx_name;"}, stmts)
+	assert.Equal(t, []string{"DROP INDEX CONCURRENTLY public.idx_name;"}, idxResult.Stmts)
 }
 
 func TestDiffIndexes_change_concurrently(t *testing.T) {
@@ -555,11 +555,11 @@ func TestDiffIndexes_change_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)"})
 
-	stmts, err := diffIndexes(current, desired, true)
+	idxResult, err := diffIndexes(current, desired, true)
 	require.NoError(t, err)
-	assert.Len(t, stmts, 2)
-	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", stmts[0])
-	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING hash (name);", stmts[1])
+	assert.Len(t, idxResult.Stmts, 2)
+	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", idxResult.Stmts[0])
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING hash (name);", idxResult.Stmts[1])
 }
 
 func TestDiffIndexes_add_unique_concurrently(t *testing.T) {
@@ -567,9 +567,9 @@ func TestDiffIndexes_add_unique_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE UNIQUE INDEX idx_name ON public.users USING btree (name)"})
 
-	stmts, err := diffIndexes(current, desired, true)
+	idxResult, err := diffIndexes(current, desired, true)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"CREATE UNIQUE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, stmts)
+	assert.Equal(t, []string{"CREATE UNIQUE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
 
 func TestDiffIndexes_rename_concurrently(t *testing.T) {
@@ -580,10 +580,10 @@ func TestDiffIndexes_rename_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	stmts, err := diffIndexes(current, desired, true)
+	idxResult, err := diffIndexes(current, desired, true)
 	require.NoError(t, err)
 	// Rename should NOT use CONCURRENTLY
-	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, stmts)
+	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, idxResult.Stmts)
 }
 
 func TestDiffIndexes_noChange_concurrently(t *testing.T) {
@@ -592,9 +592,9 @@ func TestDiffIndexes_noChange_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 
-	stmts, err := diffIndexes(current, desired, true)
+	idxResult, err := diffIndexes(current, desired, true)
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, idxResult.Stmts)
 }
 
 func TestDiffIndexes_add_perIndexConcurrently(t *testing.T) {
@@ -602,9 +602,9 @@ func TestDiffIndexes_add_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, stmts)
+	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
 
 func TestDiffIndexes_drop_perIndexConcurrently_pureDropUsesGlobalFlag(t *testing.T) {
@@ -614,13 +614,13 @@ func TestDiffIndexes_drop_perIndexConcurrently_pureDropUsesGlobalFlag(t *testing
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, stmts)
+	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
 
-	stmts, err = diffIndexes(current, desired, true)
+	idxResult, err = diffIndexes(current, desired, true)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"DROP INDEX CONCURRENTLY public.idx_name;"}, stmts)
+	assert.Equal(t, []string{"DROP INDEX CONCURRENTLY public.idx_name;"}, idxResult.Stmts)
 }
 
 func TestDiffIndexes_change_perIndexConcurrently(t *testing.T) {
@@ -629,11 +629,11 @@ func TestDiffIndexes_change_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)", Concurrently: true})
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Len(t, stmts, 2)
-	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", stmts[0])
-	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING hash (name);", stmts[1])
+	assert.Len(t, idxResult.Stmts, 2)
+	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", idxResult.Stmts[0])
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING hash (name);", idxResult.Stmts[1])
 }
 
 func TestDiffIndexes_mixedConcurrently(t *testing.T) {
@@ -642,11 +642,11 @@ func TestDiffIndexes_mixedConcurrently(t *testing.T) {
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 	desired.Set("idx_email", &model.Index{Schema: "public", Name: "idx_email", Definition: "CREATE INDEX idx_email ON public.users USING btree (email)"})
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Len(t, stmts, 2)
-	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);", stmts[0])
-	assert.Equal(t, "CREATE INDEX idx_email ON public.users USING btree (email);", stmts[1])
+	assert.Len(t, idxResult.Stmts, 2)
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);", idxResult.Stmts[0])
+	assert.Equal(t, "CREATE INDEX idx_email ON public.users USING btree (email);", idxResult.Stmts[1])
 }
 
 func TestCreateIndexSQL_parseError(t *testing.T) {
@@ -1620,9 +1620,9 @@ func TestDiffIndexes_rename_selfRename_skipped(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx", &model.Index{Schema: "public", Name: "idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX idx ON public.users USING btree (name)"})
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, idxResult.Stmts)
 }
 
 func TestDiffForeignKeys_rename_selfRename_skipped(t *testing.T) {
@@ -1824,9 +1824,9 @@ func TestDiffIndexes_rename(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, stmts)
+	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, idxResult.Stmts)
 }
 
 func TestDiffConstraints_rename_alreadyApplied(t *testing.T) {
@@ -1862,9 +1862,9 @@ func TestDiffIndexes_rename_alreadyApplied(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	stmts, err := diffIndexes(current, desired, false)
+	idxResult, err := diffIndexes(current, desired, false)
 	require.NoError(t, err)
-	assert.Empty(t, stmts)
+	assert.Empty(t, idxResult.Stmts)
 }
 
 func TestDiffIndexes_rename_sourceNotFound(t *testing.T) {

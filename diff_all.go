@@ -123,20 +123,8 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		PreSQL:               preSQL,
 		Count:                count,
 		ExecuteStmts:         desired.ExecuteStmts,
-		HasConcurrentlyIndex: hasConcurrentlyStmt(stmts),
+		HasConcurrentlyIndex: tableDiff.HasConcurrently || viewDiff.HasConcurrently,
 	}, nil
-}
-
-// hasConcurrentlyStmt returns true if any generated statement uses
-// CREATE/DROP INDEX CONCURRENTLY.
-func hasConcurrentlyStmt(stmts []string) bool {
-	for _, stmt := range stmts {
-		upper := strings.ToUpper(stmt)
-		if strings.Contains(upper, "INDEX CONCURRENTLY") {
-			return true
-		}
-	}
-	return false
 }
 
 // orderStatements uses topological sort to determine the correct execution
