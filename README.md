@@ -326,6 +326,7 @@ pist apply ./schema/*.sql         # apply it
 - Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
 - Tables (including unlogged and partitioned tables)
 - Views
+- Materialized views
 - Columns (serial/bigserial/smallserial, identity, generated)
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
