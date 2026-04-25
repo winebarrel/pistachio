@@ -108,7 +108,7 @@ CREATE INDEX idx_users_email ON public.users USING btree (email);
 ```
 
 > [!NOTE]
-> Both `--index-concurrently` and `-- pist:concurrently` cannot be used with `--with-tx` because `CONCURRENTLY` operations cannot run inside a transaction.
+> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY` (via `--index-concurrently` or `-- pist:concurrently`), `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when the flag or directive is present.
 
 By default, `plan` and `apply` do not drop tables, views, enums, domains, or columns. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`). Also available as `$PIST_ALLOW_DROP`.
 
