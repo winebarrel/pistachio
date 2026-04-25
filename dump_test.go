@@ -509,7 +509,7 @@ CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);`)
 	assert.NotContains(t, s, "ON public.user_stats")
 }
 
-func TestDumpResult_OmitSchema_View(t *testing.T) {
+func TestDumpResult_OmitSchema_ViewDefinition(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -530,8 +530,12 @@ CREATE VIEW public.active_users AS SELECT id, name FROM public.users WHERE name 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.NoError(t, err)
 	s := got.String()
+	// View name should not have schema prefix
 	assert.Contains(t, s, "CREATE OR REPLACE VIEW active_users")
 	assert.NotContains(t, s, "public.active_users")
+	// View definition (FROM clause) should also not have schema prefix
+	assert.Contains(t, s, "FROM users")
+	assert.NotContains(t, s, "FROM public.users")
 }
 
 func TestDumpResult_Files_DuplicateFileName(t *testing.T) {
