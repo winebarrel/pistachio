@@ -649,6 +649,71 @@ func TestDiffIndexes_mixedConcurrently(t *testing.T) {
 	assert.Equal(t, "CREATE INDEX idx_email ON public.users USING btree (email);", idxResult.Stmts[1])
 }
 
+func TestDiffIndexes_rename_perIndexConcurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	current.Set("old_idx", &model.Index{Schema: "public", Name: "old_idx", Table: "users", Definition: "CREATE INDEX old_idx ON public.users USING btree (name)"})
+
+	oldName := "old_idx"
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)", Concurrently: true})
+
+	idxResult, err := diffIndexes(current, desired, false)
+	require.NoError(t, err)
+	// Rename should NOT use CONCURRENTLY even with per-index directive
+	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, idxResult.Stmts)
+	assert.False(t, idxResult.HasConcurrently)
+}
+
+func TestDiffIndexes_partialIndex_concurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("idx_active", &model.Index{Schema: "public", Name: "idx_active", Definition: "CREATE INDEX idx_active ON public.users USING btree (name) WHERE (active = true)", Concurrently: true})
+
+	idxResult, err := diffIndexes(current, desired, false)
+	require.NoError(t, err)
+	assert.Len(t, idxResult.Stmts, 1)
+	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
+	assert.Contains(t, idxResult.Stmts[0], "WHERE")
+}
+
+func TestDiffIndexes_expressionIndex_concurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("idx_lower", &model.Index{Schema: "public", Name: "idx_lower", Definition: "CREATE INDEX idx_lower ON public.users USING btree (lower(name))"})
+
+	idxResult, err := diffIndexes(current, desired, true)
+	require.NoError(t, err)
+	assert.Len(t, idxResult.Stmts, 1)
+	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
+	assert.Contains(t, idxResult.Stmts[0], "lower")
+}
+
+func TestDiffIndexes_hasConcurrently_flag(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
+
+	// Global flag: HasConcurrently should be true
+	idxResult, err := diffIndexes(current, desired, true)
+	require.NoError(t, err)
+	assert.True(t, idxResult.HasConcurrently)
+
+	// No concurrently: HasConcurrently should be false
+	idxResult, err = diffIndexes(current, desired, false)
+	require.NoError(t, err)
+	assert.False(t, idxResult.HasConcurrently)
+}
+
+func TestDiffIndexes_hasConcurrently_directive(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
+
+	idxResult, err := diffIndexes(current, desired, false)
+	require.NoError(t, err)
+	assert.True(t, idxResult.HasConcurrently)
+}
+
 func TestCreateIndexSQL_parseError(t *testing.T) {
 	_, err := createIndexSQL("NOT VALID SQL {{{{", true)
 	require.Error(t, err)
