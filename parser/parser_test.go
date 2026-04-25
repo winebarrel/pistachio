@@ -831,6 +831,44 @@ CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);`
 	assert.Equal(t, "user_stats", idx.Table)
 }
 
+func TestParseSQL_MaterializedView_RenameDirective(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:renamed-from public.old_stats
+CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	v, ok := result.Views.GetOk("public.user_stats")
+	require.True(t, ok)
+	assert.True(t, v.Materialized)
+	require.NotNil(t, v.RenameFrom)
+	assert.Equal(t, "public.old_stats", *v.RenameFrom)
+}
+
+func TestParseSQL_MaterializedView_Duplicate(t *testing.T) {
+	sql := `CREATE MATERIALIZED VIEW public.mv AS SELECT 1;
+CREATE MATERIALIZED VIEW public.mv AS SELECT 2;`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate materialized view")
+}
+
+func TestParseSQL_MaterializedView_IndexDuplicate(t *testing.T) {
+	sql := `CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+CREATE MATERIALIZED VIEW public.mv AS SELECT count(*) AS cnt FROM public.users;
+CREATE INDEX idx ON public.mv (cnt);
+CREATE INDEX idx ON public.mv (cnt);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate index")
+}
+
 func TestParseSQL_IndexOnUnknownTableSkipped(t *testing.T) {
 	sql := `CREATE INDEX idx_name ON public.nonexistent USING btree (name);`
 	result, err := parser.ParseSQL(sql)
