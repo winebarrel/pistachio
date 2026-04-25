@@ -156,6 +156,43 @@ CREATE TABLE public.users (
 	assert.NotContains(t, output, "CREATE TABLE")
 }
 
+func TestPlan_Disable_View_IncludesMatview(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.v AS SELECT id FROM public.users;
+CREATE MATERIALIZED VIEW public.mv AS SELECT count(*) AS cnt FROM public.users;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		FilterOptions: pistachio.FilterOptions{Disable: []string{"view"}},
+		Files:         []string{desiredFile},
+	})
+	require.NoError(t, err)
+	// --disable view should suppress both regular views AND materialized views
+	assert.NotContains(t, got.SQL, "CREATE OR REPLACE VIEW")
+	assert.NotContains(t, got.SQL, "CREATE MATERIALIZED VIEW")
+	assert.Contains(t, got.SQL, "ADD COLUMN name")
+}
+
 func TestPlan_Disable_Table(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
