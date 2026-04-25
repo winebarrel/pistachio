@@ -43,6 +43,6 @@ fi
 run_step "04 set not null" "SET NOT NULL" "$DATA/steps/04_set_not_null.sql"
 
 # --- Step 5: Drop CHECK constraint ---
-run_step "05 drop check constraint" "DROP CONSTRAINT" "$DATA/steps/05_drop_check.sql"
+run_step "05 drop check constraint" "DROP CONSTRAINT chk_email_not_null" "$DATA/steps/05_drop_check.sql"
 
 summary
