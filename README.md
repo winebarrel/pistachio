@@ -69,6 +69,8 @@ pist plan schema.sql --pre-sql "SET search_path TO myschema;"
 pist plan schema.sql --pre-sql-file pre.sql
 ```
 
+`--pre-sql` / `--pre-sql-file` are also available as `$PIST_PRE_SQL` / `$PIST_PRE_SQL_FILE`.
+
 ### apply
 
 Apply the diff to the database.
