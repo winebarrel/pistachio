@@ -509,6 +509,45 @@ CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);`)
 	assert.NotContains(t, s, "ON public.user_stats")
 }
 
+func TestDumpResult_OmitSchema_ViewDefinition(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	// Use a non-default schema so pg_get_viewdef includes the schema prefix
+	// in the view definition. With public, pg_get_viewdef omits it.
+	_, err := conn.Exec(ctx, "DROP SCHEMA IF EXISTS app CASCADE")
+	require.NoError(t, err)
+	_, err = conn.Exec(ctx, "CREATE SCHEMA app")
+	require.NoError(t, err)
+	defer conn.Exec(ctx, "DROP SCHEMA app CASCADE") //nolint:errcheck
+
+	_, err = conn.Exec(ctx, `
+CREATE TABLE app.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW app.active_users AS SELECT id, name FROM app.users WHERE name IS NOT NULL;`)
+	require.NoError(t, err)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"app"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+	s := got.String()
+	// View name should not have schema prefix
+	assert.Contains(t, s, "CREATE OR REPLACE VIEW active_users")
+	assert.NotContains(t, s, "app.active_users")
+	// Note: pg_get_viewdef includes schema prefix for non-search_path schemas
+	// in the view definition (FROM clause). This is PostgreSQL behavior and
+	// --omit-schema currently does not rewrite view definition internals.
+	assert.Contains(t, s, "FROM app.users")
+}
+
 func TestDumpResult_Files_DuplicateFileName(t *testing.T) {
 	// When a table and view produce the same file name, the second should be renamed
 	tables := orderedmap.New[string, *model.Table]()
