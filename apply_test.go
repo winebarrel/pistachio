@@ -701,6 +701,39 @@ func TestApply_IndexConcurrently_WithTx_NoIndexChanges_OK(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestApply_ConcurrentlyDirective_WithTx_NoIndexChanges_OK(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	// Schema already has the index — no changes will be generated
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_id ON public.users USING btree (id);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	// Should succeed: no index DDL is generated, so --with-tx is safe
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:  []string{desiredFile},
+		WithTx: true,
+	}, io.Discard)
+	require.NoError(t, err)
+}
+
 func TestApply_ConcurrentlyDirective_WithTx_Error(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
