@@ -12,8 +12,8 @@ type PlanOptions struct {
 	FilterOptions
 	DropPolicy
 	Files             []string `arg:"" help:"Path to the desired schema SQL file(s)."`
-	PreSQL            string   `xor:"pre-sql" help:"SQL to prepend to the plan output."`
-	PreSQLFile        string   `type:"path" xor:"pre-sql" help:"Path to a SQL file to prepend to the plan output."`
+	PreSQL            string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to prepend to the plan output."`
+	PreSQLFile        string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to prepend to the plan output."`
 	IndexConcurrently bool     `env:"PIST_INDEX_CONCURRENTLY" help:"Use CREATE/DROP INDEX CONCURRENTLY for index operations."`
 }
 

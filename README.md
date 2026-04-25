@@ -80,7 +80,7 @@ pist apply schema.sql
 pist apply tables.sql views.sql
 ```
 
-Use `--pre-sql` or `--pre-sql-file` to run SQL before applying changes (mutually exclusive). Use `--with-tx` to wrap everything in a transaction.
+Use `--pre-sql` or `--pre-sql-file` to run SQL before applying changes (mutually exclusive). Also available as `$PIST_PRE_SQL` / `$PIST_PRE_SQL_FILE`. Use `--with-tx` to wrap everything in a transaction.
 
 ```bash
 # Inline SQL

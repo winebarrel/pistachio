@@ -14,8 +14,8 @@ type ApplyOptions struct {
 	FilterOptions
 	DropPolicy
 	Files             []string `arg:"" help:"Path to the desired schema SQL file(s)."`
-	PreSQL            string   `xor:"pre-sql" help:"SQL to execute before applying changes."`
-	PreSQLFile        string   `type:"path" xor:"pre-sql" help:"Path to a SQL file to execute before applying changes."`
+	PreSQL            string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to execute before applying changes."`
+	PreSQLFile        string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
 	WithTx            bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
 	IndexConcurrently bool     `env:"PIST_INDEX_CONCURRENTLY" help:"Use CREATE/DROP INDEX CONCURRENTLY for index operations."`
 }
