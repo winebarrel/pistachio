@@ -317,6 +317,7 @@ func extractObjectName(sql string) string {
 		{"CREATE MATERIALIZED VIEW "},
 		{"CREATE OR REPLACE VIEW "},
 		{"CREATE VIEW "},
+		{"CREATE UNIQUE INDEX "},
 		{"CREATE INDEX "},
 		{"ALTER INDEX "},
 		{"DROP INDEX "},
@@ -345,7 +346,8 @@ func extractObjectName(sql string) string {
 			continue
 		}
 
-		if strings.HasPrefix(upper, "CREATE INDEX ") ||
+		if strings.HasPrefix(upper, "CREATE UNIQUE INDEX ") ||
+			strings.HasPrefix(upper, "CREATE INDEX ") ||
 			strings.HasPrefix(upper, "DROP INDEX ") {
 			// CREATE/DROP INDEX name ON [ONLY] schema.table ...
 			return extractIndexTable(sql)

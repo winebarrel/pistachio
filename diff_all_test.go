@@ -45,6 +45,8 @@ func TestExtractObjectName(t *testing.T) {
 		{`CREATE TABLE public.$foo (id integer);`, "public.$foo"},
 		{`COMMENT ON COLUMN "S""x"."T".col IS 'x';`, `"S""x"."T"`},
 		{`ALTER MATERIALIZED VIEW public.mv RENAME TO mv2;`, "public.mv"},
+		// CREATE UNIQUE INDEX should be recognized like CREATE INDEX
+		{"CREATE UNIQUE INDEX idx_users_email ON public.users USING btree (email);", "public.users"},
 	}
 
 	for _, tt := range tests {
@@ -263,6 +265,49 @@ func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {
 	// RENAME (unknown pos) must come before ADD COLUMN (known pos)
 	assert.Contains(t, result[0], "RENAME TO accounts")
 	assert.Contains(t, result[1], "ADD COLUMN name")
+}
+
+func TestOrderStatements_CreateUniqueIndexAfterTable(t *testing.T) {
+	// CREATE UNIQUE INDEX must be ordered after the CREATE TABLE it belongs to.
+	// Bug: extractObjectName did not recognize "CREATE UNIQUE INDEX" so the
+	// statement got pos=-1 and was placed before the CREATE TABLE.
+	currentEnums := orderedmap.New[string, *model.Enum]()
+	currentDomains := orderedmap.New[string, *model.Domain]()
+	currentTables := orderedmap.New[string, *model.Table]()
+	currentViews := orderedmap.New[string, *model.View]()
+
+	desiredEnums := orderedmap.New[string, *model.Enum]()
+	desiredDomains := orderedmap.New[string, *model.Domain]()
+	desiredViews := orderedmap.New[string, *model.View]()
+
+	// Desired: one table with a unique index
+	tbl := &model.Table{Schema: "public", Name: "deposits"}
+	tbl.Columns = orderedmap.New[string, *model.Column]()
+	tbl.Indexes = orderedmap.New[string, *model.Index]()
+	tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+	tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	desiredTables := orderedmap.New[string, *model.Table]()
+	desiredTables.Set("public.deposits", tbl)
+
+	enumDiff := &diff.EnumDiffResult{}
+	domainDiff := &diff.DomainDiffResult{}
+	tableDiff := &diff.TableDiffResult{
+		Stmts: []string{
+			"CREATE TABLE public.deposits (\n  id integer,\n  account_id integer,\n  item_key text\n);",
+			"CREATE UNIQUE INDEX ix_deposits_account_item ON public.deposits USING btree (account_id, item_key);",
+		},
+	}
+	viewDiff := &diff.ViewDiffResult{}
+
+	result := pistachio.OrderStatements(
+		currentEnums, currentDomains, currentTables, currentViews,
+		desiredEnums, desiredDomains, desiredTables, desiredViews,
+		enumDiff, domainDiff, tableDiff, viewDiff,
+	)
+
+	require.Len(t, result, 2)
+	assert.Contains(t, result[0], "CREATE TABLE", "table must be created first")
+	assert.Contains(t, result[1], "CREATE UNIQUE INDEX", "unique index must come after table")
 }
 
 func TestExtractObjectName_QuotedWithEscapedQuote(t *testing.T) {
