@@ -123,28 +123,17 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		PreSQL:               preSQL,
 		Count:                count,
 		ExecuteStmts:         desired.ExecuteStmts,
-		HasConcurrentlyIndex: hasConcurrentlyIndex(desiredTables, desiredViews),
+		HasConcurrentlyIndex: hasConcurrentlyStmt(stmts),
 	}, nil
 }
 
-// hasConcurrentlyIndex returns true if any index in the desired schema has the
-// -- pist:concurrently directive.
-func hasConcurrentlyIndex(
-	tables *orderedmap.Map[string, *model.Table],
-	views *orderedmap.Map[string, *model.View],
-) bool {
-	for _, t := range tables.CollectValues() {
-		for _, idx := range t.Indexes.CollectValues() {
-			if idx.Concurrently {
-				return true
-			}
-		}
-	}
-	for _, v := range views.CollectValues() {
-		for _, idx := range v.Indexes.CollectValues() {
-			if idx.Concurrently {
-				return true
-			}
+// hasConcurrentlyStmt returns true if any generated statement uses
+// CREATE/DROP INDEX CONCURRENTLY.
+func hasConcurrentlyStmt(stmts []string) bool {
+	for _, stmt := range stmts {
+		upper := strings.ToUpper(stmt)
+		if strings.Contains(upper, "INDEX CONCURRENTLY") {
+			return true
 		}
 	}
 	return false

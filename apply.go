@@ -21,10 +21,6 @@ type ApplyOptions struct {
 }
 
 func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ObjectCount, error) {
-	if options.IndexConcurrently && options.WithTx {
-		return nil, fmt.Errorf("--index-concurrently and --with-tx cannot be used together (CONCURRENTLY cannot run inside a transaction)")
-	}
-
 	conn, err := client.connect()
 	if err != nil {
 		return nil, err
@@ -44,7 +40,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	}
 
 	if options.WithTx && result.HasConcurrentlyIndex {
-		return nil, fmt.Errorf("--with-tx cannot be used when schema contains -- pist:concurrently directive (CONCURRENTLY cannot run inside a transaction)")
+		return nil, fmt.Errorf("--with-tx cannot be used with CONCURRENTLY index operations (from --index-concurrently flag or -- pist:concurrently directive)")
 	}
 
 	count := &result.Count
