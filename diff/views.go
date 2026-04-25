@@ -196,6 +196,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	}
 	result.CreateStmts = append(result.CreateStmts, renameStmts...)
 
+	// Track views that are recreated (DROP+CREATE) so comments can be re-applied
+	recreated := make(map[string]bool)
+
 	// New or modified views (CREATE OR REPLACE / recreate for materialized)
 	for k, desiredView := range desired.All() {
 		currentView, ok := current.GetOk(k)
@@ -225,6 +228,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 							result.CreateStmts = append(result.CreateStmts, idx.SQL())
 						}
 					}
+					recreated[k] = true
 				}
 			} else {
 				// Regular view: CREATE OR REPLACE
@@ -260,7 +264,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		}
 
 		var currentComment *string
-		if ok {
+		if ok && !recreated[k] {
+			// If the view was recreated (DROP+CREATE), the comment was lost,
+			// so treat it as nil to re-apply the desired comment.
 			currentComment = currentView.Comment
 		}
 		if !equalPtr(currentComment, desiredView.Comment) {
