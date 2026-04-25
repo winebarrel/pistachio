@@ -271,6 +271,20 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	assert.Len(t, skip, 1)
 }
 
+func TestExtractExecuteDirectives_CheckSQLTrailingSemicolon(t *testing.T) {
+	sql := `-- pist:execute SELECT true;
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, _, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	// Trailing semicolon should be stripped from check SQL
+	assert.Equal(t, "SELECT true", stmts[0].CheckSQL)
+}
+
 func TestExtractExecuteDirectives_WithoutCheckSQL(t *testing.T) {
 	sql := `-- pist:execute
 GRANT SELECT ON public.users TO readonly_role;`
