@@ -231,6 +231,34 @@ pist apply schema.sql --pre-sql "CREATE EXTENSION IF NOT EXISTS pgcrypto;" --wit
 pist apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 
+### Executing arbitrary SQL
+
+Use the `-- pist:execute` directive to include SQL statements that pistachio doesn't manage declaratively (functions, triggers, grants, etc.). These are executed after schema changes during `apply`.
+
+```sql
+-- pist:execute
+CREATE OR REPLACE FUNCTION public.update_timestamp() RETURNS trigger AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+Add a check SQL after `-- pist:execute` to conditionally execute — the SQL runs only when the check returns `true`:
+
+```sql
+-- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_timestamp')
+CREATE OR REPLACE FUNCTION public.update_timestamp() RETURNS trigger AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+Execute statements appear in `plan` output and are preserved by `fmt`. During `apply`, the check SQL is evaluated and the statement is skipped if it returns `false`.
+
 ## CI integration
 
 A typical CI pipeline:

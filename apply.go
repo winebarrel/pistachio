@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
+
+	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 type ApplyOptions struct {
@@ -35,11 +39,12 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 	count := &result.Count
 
-	if len(result.Stmts) == 0 {
+	if len(result.Stmts) == 0 && len(result.ExecuteStmts) == 0 {
 		return count, nil
 	}
 
 	exec := conn.Exec
+	queryRow := conn.QueryRow
 	commit := func(context.Context) error { return nil }
 
 	if options.WithTx {
@@ -49,6 +54,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		}
 		defer tx.Rollback(ctx) //nolint:errcheck
 		exec = tx.Exec
+		queryRow = tx.QueryRow
 		commit = tx.Commit
 	}
 
@@ -63,6 +69,36 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		fmt.Fprintln(w, stmt) //nolint:errcheck
 		if _, err := exec(ctx, stmt); err != nil {
 			return nil, fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
+		}
+	}
+
+	// Execute -- pist:execute statements after schema changes.
+	// Set search_path so unqualified names resolve to the configured schemas.
+	if len(result.ExecuteStmts) > 0 && len(client.Schemas) > 0 {
+		quoted := make([]string, len(client.Schemas))
+		for i, s := range client.Schemas {
+			quoted[i] = model.Ident(s)
+		}
+		searchPath := "SET search_path TO " + strings.Join(quoted, ", ")
+		if _, err := exec(ctx, searchPath); err != nil {
+			return nil, fmt.Errorf("failed to set search_path: %w", err)
+		}
+	}
+
+	for _, es := range result.ExecuteStmts {
+		shouldExecute := true
+
+		if es.CheckSQL != "" {
+			if err := queryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
+				return nil, fmt.Errorf("failed to evaluate check SQL: %s: %w", es.CheckSQL, err)
+			}
+		}
+
+		if shouldExecute {
+			fmt.Fprintln(w, parser.FormatExecuteStmt(es)) //nolint:errcheck
+			if _, err := exec(ctx, es.SQL); err != nil {
+				return nil, fmt.Errorf("failed to execute SQL: %s: %w", es.SQL, err)
+			}
 		}
 	}
 

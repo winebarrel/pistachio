@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -8,7 +9,81 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-var renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:renamed-from[ \t]+(.+?)[ \t]*$`)
+var (
+	renameDirectivePattern  = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:renamed-from[ \t]+(.+?)[ \t]*$`)
+	executeDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:execute(?:[ \t]+(.+?))?[ \t]*$`)
+)
+
+// ExecuteStmt represents an arbitrary SQL statement marked with -- pist:execute.
+type ExecuteStmt struct {
+	SQL      string // The SQL statement to execute
+	CheckSQL string // Optional condition check SQL (empty = always execute)
+}
+
+// ExtractExecuteDirectives scans raw SQL for `-- pist:execute [<check SQL>]`
+// comments and pairs them with the following SQL statement.
+// Returns the execute statements and a set of statement locations to skip
+// during normal parsing.
+func ExtractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*ExecuteStmt, map[int32]bool, error) {
+	var executeStmts []*ExecuteStmt
+	skipLocations := make(map[int32]bool)
+
+	for _, stmt := range stmts {
+		loc := stmt.StmtLocation
+		end := loc + stmt.StmtLen
+		if end > int32(len(rawSQL)) {
+			end = int32(len(rawSQL))
+		}
+
+		region := rawSQL[loc:end]
+		leadingEnd := findLeadingCommentEnd(region)
+		leading := region[:leadingEnd]
+
+		matches := executeDirectivePattern.FindAllStringSubmatch(leading, -1)
+		if len(matches) == 0 {
+			continue
+		}
+
+		// Deparse the statement to get canonical SQL
+		deparsed, err := pg_query.Deparse(&pg_query.ParseResult{
+			Stmts: []*pg_query.RawStmt{stmt},
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to deparse execute statement: %w", err)
+		}
+
+		// Use the last match (closest to the actual SQL statement)
+		lastMatch := matches[len(matches)-1]
+		checkSQL := ""
+		if len(lastMatch) > 1 {
+			checkSQL = strings.TrimSpace(lastMatch[1])
+			// Remove trailing semicolons — pgx extended protocol doesn't allow them
+			checkSQL = strings.TrimRight(checkSQL, ";")
+			checkSQL = strings.TrimSpace(checkSQL)
+		}
+
+		executeStmts = append(executeStmts, &ExecuteStmt{
+			SQL:      deparsed,
+			CheckSQL: checkSQL,
+		})
+		skipLocations[loc] = true
+	}
+
+	return executeStmts, skipLocations, nil
+}
+
+// FormatExecuteStmt formats an ExecuteStmt as SQL with the directive comment.
+func FormatExecuteStmt(es *ExecuteStmt) string {
+	directive := "-- pist:execute"
+	if es.CheckSQL != "" {
+		directive += " " + es.CheckSQL
+	}
+	sql := strings.TrimRight(es.SQL, " \t\r\n")
+	if !strings.HasSuffix(sql, ";") {
+		sql += ";"
+	}
+	return fmt.Sprintf("%s\n%s", directive, sql)
+}
 
 // QualifyRenameFrom qualifies a renamed-from value with the default schema
 // if it does not already contain a schema. Quoted identifiers containing

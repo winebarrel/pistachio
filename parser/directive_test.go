@@ -255,3 +255,109 @@ func TestExtractColumnName(t *testing.T) {
 	// Unquoted names are lowercased
 	assert.Equal(t, "displayname", extractColumnName("DisplayName text NOT NULL"))
 }
+
+func TestExtractExecuteDirectives_WithCheckSQL(t *testing.T) {
+	sql := `-- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
+	assert.Equal(t, "SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')", stmts[0].CheckSQL)
+	assert.Len(t, skip, 1)
+}
+
+func TestExtractExecuteDirectives_CheckSQLTrailingSemicolon(t *testing.T) {
+	sql := `-- pist:execute SELECT true;
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, _, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	// Trailing semicolon should be stripped from check SQL
+	assert.Equal(t, "SELECT true", stmts[0].CheckSQL)
+}
+
+func TestExtractExecuteDirectives_WithoutCheckSQL(t *testing.T) {
+	sql := `-- pist:execute
+GRANT SELECT ON public.users TO readonly_role;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.Contains(t, stmts[0].SQL, "GRANT select")
+	assert.Equal(t, "", stmts[0].CheckSQL)
+	assert.Len(t, skip, 1)
+}
+
+func TestExtractExecuteDirectives_MixedWithManaged(t *testing.T) {
+	sql := `CREATE TABLE public.users (id integer NOT NULL);
+-- pist:execute
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
+	assert.Len(t, skip, 1)
+	// The CREATE TABLE should NOT be in skip
+	assert.False(t, skip[result.Stmts[0].StmtLocation])
+}
+
+func TestExtractExecuteDirectives_Multiple(t *testing.T) {
+	sql := `-- pist:execute
+CREATE OR REPLACE FUNCTION public.func1() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+-- pist:execute SELECT true
+CREATE OR REPLACE FUNCTION public.func2() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+	assert.Equal(t, "", stmts[0].CheckSQL)
+	assert.Equal(t, "SELECT true", stmts[1].CheckSQL)
+	assert.Len(t, skip, 2)
+}
+
+func TestExtractExecuteDirectives_None(t *testing.T) {
+	sql := `CREATE TABLE public.users (id integer NOT NULL);`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+	assert.Empty(t, skip)
+}
+
+func TestFormatExecuteStmt_WithCheck(t *testing.T) {
+	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true"}
+	assert.Equal(t, "-- pist:execute SELECT true\nCREATE FUNCTION f();", FormatExecuteStmt(es))
+}
+
+func TestFormatExecuteStmt_WithoutSemicolon(t *testing.T) {
+	// Deparse output has no trailing semicolon — FormatExecuteStmt should add one
+	es := &ExecuteStmt{SQL: "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql", CheckSQL: ""}
+	assert.Equal(t, "-- pist:execute\nCREATE FUNCTION f() RETURNS void LANGUAGE plpgsql;", FormatExecuteStmt(es))
+}
+
+func TestFormatExecuteStmt_WithoutCheck(t *testing.T) {
+	es := &ExecuteStmt{SQL: "GRANT SELECT ON t TO r;", CheckSQL: ""}
+	assert.Equal(t, "-- pist:execute\nGRANT SELECT ON t TO r;", FormatExecuteStmt(es))
+}
