@@ -87,6 +87,10 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		return nil, fmt.Errorf("failed to parse SQL: %w", err)
 	}
 
+	if err := ValidateDirectives(sql); err != nil {
+		return nil, err
+	}
+
 	tables := orderedmap.New[string, *model.Table]()
 	views := orderedmap.New[string, *model.View]()
 	enums := orderedmap.New[string, *model.Enum]()
