@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
 )
 
@@ -74,7 +75,11 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// Execute -- pist:execute statements after schema changes.
 	// Set search_path so unqualified names resolve to the configured schemas.
 	if len(result.ExecuteStmts) > 0 && len(client.Schemas) > 0 {
-		searchPath := "SET search_path TO " + strings.Join(client.Schemas, ", ")
+		quoted := make([]string, len(client.Schemas))
+		for i, s := range client.Schemas {
+			quoted[i] = model.Ident(s)
+		}
+		searchPath := "SET search_path TO " + strings.Join(quoted, ", ")
 		if _, err := exec(ctx, searchPath); err != nil {
 			return nil, fmt.Errorf("failed to set search_path: %w", err)
 		}
