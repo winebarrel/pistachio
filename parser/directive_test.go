@@ -389,6 +389,12 @@ func TestValidateDirectives_Valid(t *testing.T) {
 	assert.NoError(t, ValidateDirectives("SELECT 1; -- no directives"))
 }
 
+func TestValidateDirectives_ConcurrentlyWithArgs(t *testing.T) {
+	err := ValidateDirectives("-- pist:concurrently extra")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "-- pist:concurrently does not accept arguments")
+}
+
 func TestValidateDirectives_UnknownDirective(t *testing.T) {
 	err := ValidateDirectives("-- pist:exec")
 	require.Error(t, err)

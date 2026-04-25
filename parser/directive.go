@@ -13,6 +13,8 @@ var (
 	renameDirectivePattern       = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:renamed-from[ \t]+(.+?)[ \t]*$`)
 	executeDirectivePattern      = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:execute(?:[ \t]+(.+?))?[ \t]*$`)
 	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:concurrently[ \t]*$`)
+	// Matches -- pist:concurrently with trailing content (invalid usage).
+	concurrentlyWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:concurrently[ \t]+\S`)
 	// Matches any -- pist: directive, capturing the name (if any) after the colon.
 	anyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:[ \t]*(\S*)`)
 )
@@ -37,6 +39,11 @@ func ValidateDirectives(rawSQL string) error {
 			return fmt.Errorf("unknown directive: -- pist:%s", name)
 		}
 	}
+
+	if concurrentlyWithArgsPattern.MatchString(rawSQL) {
+		return fmt.Errorf("-- pist:concurrently does not accept arguments")
+	}
+
 	return nil
 }
 
