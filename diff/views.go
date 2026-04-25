@@ -185,7 +185,7 @@ type ViewDiffResult struct {
 	CreateStmts []string // ALTER VIEW RENAME, CREATE OR REPLACE VIEW, CREATE MATERIALIZED VIEW, indexes, comments (should run after table changes)
 }
 
-func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker) (*ViewDiffResult, error) {
+func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker, indexConcurrently bool) (*ViewDiffResult, error) {
 	dc = NormalizeDropChecker(dc)
 	result := &ViewDiffResult{}
 
@@ -208,7 +208,11 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			// Add indexes for new materialized views
 			if desiredView.Materialized && desiredView.Indexes != nil {
 				for _, idx := range desiredView.Indexes.CollectValues() {
-					result.CreateStmts = append(result.CreateStmts, idx.SQL())
+					stmt, err := createIndexSQL(idx.Definition, indexConcurrently || idx.Concurrently)
+					if err != nil {
+						return nil, err
+					}
+					result.CreateStmts = append(result.CreateStmts, stmt)
 				}
 			}
 		} else if !equalViewDef(currentView.Definition, desiredView.Definition) || currentView.Materialized != desiredView.Materialized {
@@ -225,7 +229,11 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 					if desiredView.Materialized && desiredView.Indexes != nil {
 						for _, idx := range desiredView.Indexes.CollectValues() {
-							result.CreateStmts = append(result.CreateStmts, idx.SQL())
+							stmt, err := createIndexSQL(idx.Definition, indexConcurrently || idx.Concurrently)
+							if err != nil {
+								return nil, err
+							}
+							result.CreateStmts = append(result.CreateStmts, stmt)
 						}
 					}
 					recreated[k] = true
@@ -236,7 +244,11 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			}
 		} else if desiredView.Materialized {
 			// Definition unchanged, diff indexes
-			result.CreateStmts = append(result.CreateStmts, diffViewIndexes(currentView, desiredView)...)
+			viewIdxStmts, err := diffViewIndexes(currentView, desiredView, indexConcurrently)
+			if err != nil {
+				return nil, err
+			}
+			result.CreateStmts = append(result.CreateStmts, viewIdxStmts...)
 		}
 	}
 
@@ -287,7 +299,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 }
 
 // diffViewIndexes generates DDL for index changes on materialized views.
-func diffViewIndexes(current, desired *model.View) []string {
+func diffViewIndexes(current, desired *model.View, concurrently bool) ([]string, error) {
 	var stmts []string
 
 	currentIndexes := orderedmap.New[string, *model.Index]()
@@ -303,7 +315,19 @@ func diffViewIndexes(current, desired *model.View) []string {
 	for name, currentIdx := range currentIndexes.All() {
 		desiredIdx, ok := desiredIndexes.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmts = append(stmts, "DROP INDEX "+model.Ident(currentIdx.Schema, name)+";")
+			useConcurrently := concurrently
+			if !useConcurrently {
+				if ok {
+					useConcurrently = desiredIdx.Concurrently
+				} else {
+					useConcurrently = currentIdx.Concurrently
+				}
+			}
+			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
+			if err != nil {
+				return nil, err
+			}
+			stmts = append(stmts, stmt)
 		}
 	}
 
@@ -311,9 +335,13 @@ func diffViewIndexes(current, desired *model.View) []string {
 	for name, desiredIdx := range desiredIndexes.All() {
 		currentIdx, ok := currentIndexes.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmts = append(stmts, desiredIdx.SQL())
+			stmt, err := createIndexSQL(desiredIdx.Definition, concurrently || desiredIdx.Concurrently)
+			if err != nil {
+				return nil, err
+			}
+			stmts = append(stmts, stmt)
 		}
 	}
 
-	return stmts
+	return stmts, nil
 }

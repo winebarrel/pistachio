@@ -102,7 +102,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
 
-	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy)
+	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy, options.IndexConcurrently)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff views: %w", err)
 	}
