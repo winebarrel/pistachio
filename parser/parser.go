@@ -82,6 +82,10 @@ func ParseSQL(sql string) (*ParseResult, error) {
 }
 
 func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {
+	if err := ValidateDirectives(sql); err != nil {
+		return nil, err
+	}
+
 	result, err := pg_query.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL: %w", err)

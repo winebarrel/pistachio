@@ -12,7 +12,31 @@ import (
 var (
 	renameDirectivePattern  = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:renamed-from[ \t]+(.+?)[ \t]*$`)
 	executeDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:execute(?:[ \t]+(.+?))?[ \t]*$`)
+	// Matches any -- pist: directive, capturing the name (if any) after the colon.
+	anyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:[ \t]*(\S*)`)
 )
+
+// knownDirectives lists all recognized directive names.
+var knownDirectives = map[string]bool{
+	"renamed-from": true,
+	"execute":      true,
+}
+
+// ValidateDirectives checks for unknown -- pist: directives in the raw SQL
+// and returns an error if any are found.
+func ValidateDirectives(rawSQL string) error {
+	matches := anyDirectivePattern.FindAllStringSubmatch(rawSQL, -1)
+	for _, m := range matches {
+		name := strings.TrimSpace(m[1])
+		if name == "" {
+			return fmt.Errorf("invalid directive: -- pist: (missing directive name)")
+		}
+		if !knownDirectives[name] {
+			return fmt.Errorf("unknown directive: -- pist:%s", name)
+		}
+	}
+	return nil
+}
 
 // ExecuteStmt represents an arbitrary SQL statement marked with -- pist:execute.
 type ExecuteStmt struct {

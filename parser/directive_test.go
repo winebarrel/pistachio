@@ -346,6 +346,43 @@ func TestExtractExecuteDirectives_None(t *testing.T) {
 	assert.Empty(t, skip)
 }
 
+func TestValidateDirectives_Valid(t *testing.T) {
+	assert.NoError(t, ValidateDirectives("-- pist:renamed-from old"))
+	assert.NoError(t, ValidateDirectives("-- pist:execute SELECT true"))
+	assert.NoError(t, ValidateDirectives("-- pist:execute"))
+	assert.NoError(t, ValidateDirectives("SELECT 1; -- no directives"))
+}
+
+func TestValidateDirectives_UnknownDirective(t *testing.T) {
+	err := ValidateDirectives("-- pist:exec")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown directive: -- pist:exec")
+}
+
+func TestValidateDirectives_Typo(t *testing.T) {
+	err := ValidateDirectives("-- pist:rename-from old")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown directive: -- pist:rename-from")
+}
+
+func TestValidateDirectives_UnknownFoobar(t *testing.T) {
+	err := ValidateDirectives("-- pist:foobar something")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown directive: -- pist:foobar")
+}
+
+func TestValidateDirectives_SpaceAfterColon(t *testing.T) {
+	err := ValidateDirectives("-- pist: exec")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown directive: -- pist:exec")
+}
+
+func TestValidateDirectives_MissingName(t *testing.T) {
+	err := ValidateDirectives("-- pist:")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing directive name")
+}
+
 func TestFormatExecuteStmt_WithCheck(t *testing.T) {
 	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true"}
 	assert.Equal(t, "-- pist:execute SELECT true\nCREATE FUNCTION f();", FormatExecuteStmt(es))
