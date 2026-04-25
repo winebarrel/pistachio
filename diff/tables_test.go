@@ -674,6 +674,7 @@ func TestDiffIndexes_partialIndex_concurrently(t *testing.T) {
 	assert.Len(t, idxResult.Stmts, 1)
 	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
 	assert.Contains(t, idxResult.Stmts[0], "WHERE")
+	assert.True(t, idxResult.HasConcurrently)
 }
 
 func TestDiffIndexes_expressionIndex_concurrently(t *testing.T) {
@@ -686,6 +687,7 @@ func TestDiffIndexes_expressionIndex_concurrently(t *testing.T) {
 	assert.Len(t, idxResult.Stmts, 1)
 	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
 	assert.Contains(t, idxResult.Stmts[0], "lower")
+	assert.True(t, idxResult.HasConcurrently)
 }
 
 func TestDiffIndexes_hasConcurrently_flag(t *testing.T) {
@@ -697,11 +699,15 @@ func TestDiffIndexes_hasConcurrently_flag(t *testing.T) {
 	idxResult, err := diffIndexes(current, desired, true)
 	require.NoError(t, err)
 	assert.True(t, idxResult.HasConcurrently)
+	assert.Len(t, idxResult.Stmts, 1)
+	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
 
 	// No concurrently: HasConcurrently should be false
 	idxResult, err = diffIndexes(current, desired, false)
 	require.NoError(t, err)
 	assert.False(t, idxResult.HasConcurrently)
+	assert.Len(t, idxResult.Stmts, 1)
+	assert.NotContains(t, idxResult.Stmts[0], "CONCURRENTLY")
 }
 
 func TestDiffIndexes_hasConcurrently_directive(t *testing.T) {
