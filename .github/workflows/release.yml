@@ -12,7 +12,27 @@ env:
   GOLANG_CROSS_VERSION: v1.26.0
 
 jobs:
-  release:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Run GoReleaser
+        run: |
+          docker run -q \
+            --rm \
+            -e CGO_ENABLED=1 \
+            -e GITHUB_TOKEN \
+            -v "$GITHUB_WORKSPACE:/src" \
+            -w /src \
+            ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
+            release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+
+  docker:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -38,15 +58,3 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             PIST_VERSION=${{ github.ref_name }}
-      - name: Run GoReleaser
-        run: |
-          docker run -q \
-            --rm \
-            -e CGO_ENABLED=1 \
-            -e GITHUB_TOKEN \
-            -v "$GITHUB_WORKSPACE:/src" \
-            -w /src \
-            ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
-            release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
