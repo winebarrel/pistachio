@@ -723,3 +723,28 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE INDEX CONCURRENTLY idx_users_name")
 }
+
+func TestApply_ConcurrentlyDirective_MatviewIndex_WithTx_Error(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE MATERIALIZED VIEW public.mv AS SELECT 1 AS n;
+-- pist:concurrently
+CREATE INDEX idx_mv_n ON public.mv USING btree (n);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:  []string{desiredFile},
+		WithTx: true,
+	}, io.Discard)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pist:concurrently")
+}

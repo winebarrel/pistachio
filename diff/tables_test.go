@@ -655,6 +655,18 @@ func TestCreateIndexSQL_notIndexStmt(t *testing.T) {
 	assert.Contains(t, err.Error(), "expected IndexStmt")
 }
 
+func TestDropIndexSQL_concurrently(t *testing.T) {
+	stmt, err := dropIndexSQL("public", "idx_name", true)
+	require.NoError(t, err)
+	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", stmt)
+}
+
+func TestDropIndexSQL_noConcurrently(t *testing.T) {
+	stmt, err := dropIndexSQL("public", "idx_name", false)
+	require.NoError(t, err)
+	assert.Equal(t, "DROP INDEX public.idx_name;", stmt)
+}
+
 func TestDiffForeignKeys_add(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	desired := orderedmap.New[string, *model.ForeignKey]()
