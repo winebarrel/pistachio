@@ -597,6 +597,52 @@ func TestDiffIndexes_noChange_concurrently(t *testing.T) {
 	assert.Empty(t, stmts)
 }
 
+func TestDiffIndexes_add_perIndexConcurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
+
+	stmts, err := diffIndexes(current, desired, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, stmts)
+}
+
+func TestDiffIndexes_drop_perIndexConcurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
+	desired := orderedmap.New[string, *model.Index]()
+
+	stmts, err := diffIndexes(current, desired, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"DROP INDEX CONCURRENTLY public.idx_name;"}, stmts)
+}
+
+func TestDiffIndexes_change_perIndexConcurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)", Concurrently: true})
+
+	stmts, err := diffIndexes(current, desired, false)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 2)
+	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", stmts[0])
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING hash (name);", stmts[1])
+}
+
+func TestDiffIndexes_mixedConcurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
+	desired.Set("idx_email", &model.Index{Schema: "public", Name: "idx_email", Definition: "CREATE INDEX idx_email ON public.users USING btree (email)"})
+
+	stmts, err := diffIndexes(current, desired, false)
+	require.NoError(t, err)
+	assert.Len(t, stmts, 2)
+	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);", stmts[0])
+	assert.Equal(t, "CREATE INDEX idx_email ON public.users USING btree (email);", stmts[1])
+}
+
 func TestCreateIndexSQL_parseError(t *testing.T) {
 	_, err := createIndexSQL("NOT VALID SQL {{{{", true)
 	require.Error(t, err)

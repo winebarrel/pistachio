@@ -346,10 +346,46 @@ func TestExtractExecuteDirectives_None(t *testing.T) {
 	assert.Empty(t, skip)
 }
 
+func TestExtractConcurrentlyDirectives(t *testing.T) {
+	sql := `-- pist:concurrently
+CREATE INDEX idx_name ON public.users USING btree (name);
+CREATE INDEX idx_email ON public.users USING btree (email);`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	directives := ExtractConcurrentlyDirectives(sql, result.Stmts)
+	assert.True(t, directives[result.Stmts[0].StmtLocation])
+	assert.False(t, directives[result.Stmts[1].StmtLocation])
+}
+
+func TestExtractConcurrentlyDirectives_withRenamedFrom(t *testing.T) {
+	sql := `-- pist:renamed-from idx_old
+-- pist:concurrently
+CREATE INDEX idx_name ON public.users USING btree (name);`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	directives := ExtractConcurrentlyDirectives(sql, result.Stmts)
+	assert.True(t, directives[result.Stmts[0].StmtLocation])
+}
+
+func TestExtractConcurrentlyDirectives_noDirective(t *testing.T) {
+	sql := `CREATE INDEX idx_name ON public.users USING btree (name);`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	directives := ExtractConcurrentlyDirectives(sql, result.Stmts)
+	assert.Empty(t, directives)
+}
+
 func TestValidateDirectives_Valid(t *testing.T) {
 	assert.NoError(t, ValidateDirectives("-- pist:renamed-from old"))
 	assert.NoError(t, ValidateDirectives("-- pist:execute SELECT true"))
 	assert.NoError(t, ValidateDirectives("-- pist:execute"))
+	assert.NoError(t, ValidateDirectives("-- pist:concurrently"))
 	assert.NoError(t, ValidateDirectives("SELECT 1; -- no directives"))
 }
 

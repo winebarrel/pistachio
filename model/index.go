@@ -1,13 +1,14 @@
 package model
 
 type Index struct {
-	OID        uint32
-	Schema     string
-	Name       string
-	RenameFrom *string
-	Table      string
-	Definition string
-	TableSpace *string
+	OID          uint32
+	Schema       string
+	Name         string
+	RenameFrom   *string
+	Table        string
+	Definition   string
+	TableSpace   *string
+	Concurrently bool
 }
 
 func (idx Index) FQTN() string {

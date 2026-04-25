@@ -27,10 +27,11 @@ type diffAllOptions struct {
 
 // diffAllResult holds the result of diffAll.
 type diffAllResult struct {
-	Stmts        []string
-	PreSQL       string
-	Count        ObjectCount
-	ExecuteStmts []*parser.ExecuteStmt
+	Stmts                []string
+	PreSQL               string
+	Count                ObjectCount
+	ExecuteStmts         []*parser.ExecuteStmt
+	HasConcurrentlyIndex bool
 }
 
 // diffAll performs the common catalog fetch, parse, diff, and statement
@@ -118,11 +119,35 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 
 	return &diffAllResult{
-		Stmts:        stmts,
-		PreSQL:       preSQL,
-		Count:        count,
-		ExecuteStmts: desired.ExecuteStmts,
+		Stmts:                stmts,
+		PreSQL:               preSQL,
+		Count:                count,
+		ExecuteStmts:         desired.ExecuteStmts,
+		HasConcurrentlyIndex: hasConcurrentlyIndex(desiredTables, desiredViews),
 	}, nil
+}
+
+// hasConcurrentlyIndex returns true if any index in the desired schema has the
+// -- pist:concurrently directive.
+func hasConcurrentlyIndex(
+	tables *orderedmap.Map[string, *model.Table],
+	views *orderedmap.Map[string, *model.View],
+) bool {
+	for _, t := range tables.CollectValues() {
+		for _, idx := range t.Indexes.CollectValues() {
+			if idx.Concurrently {
+				return true
+			}
+		}
+	}
+	for _, v := range views.CollectValues() {
+		for _, idx := range v.Indexes.CollectValues() {
+			if idx.Concurrently {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // orderStatements uses topological sort to determine the correct execution

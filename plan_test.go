@@ -369,3 +369,38 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`)
 	require.NoError(t, err)
 	assert.Contains(t, got.SQL, "DROP INDEX CONCURRENTLY public.idx_users_name;")
 }
+
+func TestPlan_ConcurrentlyDirective(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);
+CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files: []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_users_name")
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_id")
+	assert.NotContains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_users_id")
+}

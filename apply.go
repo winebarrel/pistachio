@@ -43,6 +43,10 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return nil, err
 	}
 
+	if options.WithTx && result.HasConcurrentlyIndex {
+		return nil, fmt.Errorf("--with-tx cannot be used when schema contains -- pist:concurrently directive (CONCURRENTLY cannot run inside a transaction)")
+	}
+
 	count := &result.Count
 
 	if len(result.Stmts) == 0 && len(result.ExecuteStmts) == 0 {

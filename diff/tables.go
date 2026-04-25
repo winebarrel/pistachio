@@ -74,7 +74,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 // newTableExtras returns non-FK extras and FK statements separately.
 func newTableExtras(t *model.Table, indexConcurrently bool) (stmts []string, fkStmts []string, err error) {
 	for _, idx := range t.Indexes.CollectValues() {
-		stmt, err := createIndexSQL(idx.Definition, indexConcurrently)
+		stmt, err := createIndexSQL(idx.Definition, indexConcurrently || idx.Concurrently)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -458,7 +458,19 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], concurr
 	for name, currentIdx := range current.All() {
 		desiredIdx, ok := desired.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmt, err := dropIndexSQL(currentIdx.Schema, name, concurrently)
+			// Use CONCURRENTLY if the global flag is set, or if the desired index
+			// (when it exists and is being changed) has the per-index directive.
+			// For pure drops (index removed), use the current index's directive
+			// or the global flag.
+			useConcurrently := concurrently
+			if !useConcurrently {
+				if ok {
+					useConcurrently = desiredIdx.Concurrently
+				} else {
+					useConcurrently = currentIdx.Concurrently
+				}
+			}
+			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
 				return nil, err
 			}
@@ -470,7 +482,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], concurr
 	for name, desiredIdx := range desired.All() {
 		currentIdx, ok := current.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmt, err := createIndexSQL(desiredIdx.Definition, concurrently)
+			stmt, err := createIndexSQL(desiredIdx.Definition, concurrently || desiredIdx.Concurrently)
 			if err != nil {
 				return nil, err
 			}
