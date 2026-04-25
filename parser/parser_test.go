@@ -869,6 +869,50 @@ CREATE INDEX idx ON public.mv (cnt);`
 	assert.Contains(t, err.Error(), "duplicate index")
 }
 
+func TestParseSQL_IndexOnSchemalessTable(t *testing.T) {
+	// When using --omit-schema, indexes reference tables without schema prefix.
+	// The parser should still attach the index to the correct table.
+	sql := `CREATE TABLE users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON users USING btree (name);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Tables.Len())
+
+	t1, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	assert.Equal(t, 1, t1.Indexes.Len())
+
+	idx, ok := t1.Indexes.GetOk("idx_users_name")
+	require.True(t, ok)
+	assert.Equal(t, "users", idx.Table)
+}
+
+func TestParseSQL_IndexOnSchemalessMatview(t *testing.T) {
+	sql := `CREATE TABLE users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW user_stats AS SELECT count(*) AS cnt FROM users;
+CREATE INDEX idx_user_stats_cnt ON user_stats (cnt);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	v, ok := result.Views.GetOk("public.user_stats")
+	require.True(t, ok)
+	assert.True(t, v.Materialized)
+	assert.Equal(t, 1, v.Indexes.Len())
+
+	idx, ok := v.Indexes.GetOk("idx_user_stats_cnt")
+	require.True(t, ok)
+	assert.Equal(t, "user_stats", idx.Table)
+}
+
 func TestParseSQL_IndexOnUnknownTableSkipped(t *testing.T) {
 	sql := `CREATE INDEX idx_name ON public.nonexistent USING btree (name);`
 	result, err := parser.ParseSQL(sql)

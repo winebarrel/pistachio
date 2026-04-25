@@ -581,17 +581,20 @@ func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Co
 }
 
 func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt, defaultSchema string) (*model.Index, error) {
+	schema := is.Relation.Schemaname
+	if schema == "" {
+		schema = defaultSchema
+		// Qualify the relation with the default schema before deparsing
+		// so the Definition contains the fully-qualified table name.
+		is.Relation.Schemaname = defaultSchema
+	}
+
 	result := &pg_query.ParseResult{
 		Stmts: []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},
 	}
 	def, err := pg_query.Deparse(result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deparse index: %w", err)
-	}
-
-	schema := is.Relation.Schemaname
-	if schema == "" {
-		schema = defaultSchema
 	}
 
 	var tablespace *string
