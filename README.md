@@ -92,6 +92,17 @@ pist apply schema.sql --pre-sql-file pre.sql --with-tx
 
 By default, `plan` and `apply` do not drop tables, views, enums, domains, or columns. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`). Also available as `$PIST_ALLOW_DROP`.
 
+### Executing arbitrary SQL
+
+Use `-- pist:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. Add a check SQL to skip execution conditionally:
+
+```sql
+-- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ ... $$ LANGUAGE plpgsql;
+```
+
+See [Getting Started](getting-started.md) for details.
+
 ```bash
 # Allow all drops
 pist plan --allow-drop all schema.sql

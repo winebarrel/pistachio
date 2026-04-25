@@ -913,6 +913,41 @@ CREATE INDEX idx_user_stats_cnt ON user_stats (cnt);`
 	assert.Equal(t, "user_stats", idx.Table)
 }
 
+func TestParseSQL_ExecuteDirective(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	// Table should be parsed normally
+	assert.Equal(t, 1, result.Tables.Len())
+	// Function should be in ExecuteStmts, not Views/Tables
+	assert.Equal(t, 0, result.Views.Len())
+	require.Len(t, result.ExecuteStmts, 1)
+	assert.Contains(t, result.ExecuteStmts[0].SQL, "CREATE OR REPLACE FUNCTION")
+	assert.Contains(t, result.ExecuteStmts[0].CheckSQL, "pg_proc")
+}
+
+func TestParseSQL_ExecuteDirective_NoCheck(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:execute
+GRANT SELECT ON public.users TO readonly_role;`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Tables.Len())
+	require.Len(t, result.ExecuteStmts, 1)
+	assert.Contains(t, result.ExecuteStmts[0].SQL, "GRANT select")
+	assert.Equal(t, "", result.ExecuteStmts[0].CheckSQL)
+}
+
 func TestParseSQL_IndexOnUnknownTableSkipped(t *testing.T) {
 	sql := `CREATE INDEX idx_name ON public.nonexistent USING btree (name);`
 	result, err := parser.ParseSQL(sql)

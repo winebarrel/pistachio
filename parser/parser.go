@@ -12,10 +12,11 @@ import (
 )
 
 type ParseResult struct {
-	Tables  *orderedmap.Map[string, *model.Table]
-	Views   *orderedmap.Map[string, *model.View]
-	Enums   *orderedmap.Map[string, *model.Enum]
-	Domains *orderedmap.Map[string, *model.Domain]
+	Tables       *orderedmap.Map[string, *model.Table]
+	Views        *orderedmap.Map[string, *model.View]
+	Enums        *orderedmap.Map[string, *model.Enum]
+	Domains      *orderedmap.Map[string, *model.Domain]
+	ExecuteStmts []*ExecuteStmt
 }
 
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
@@ -92,8 +93,14 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	domains := orderedmap.New[string, *model.Domain]()
 
 	stmtDirectives := ExtractStmtDirectives(sql, result.Stmts)
+	executeStmts, executeSkipLocations := ExtractExecuteDirectives(sql, result.Stmts)
 
 	for _, rawStmt := range result.Stmts {
+		// Skip statements marked with -- pist:execute
+		if executeSkipLocations[rawStmt.StmtLocation] {
+			continue
+		}
+
 		node := rawStmt.Stmt
 		renameFrom := stmtDirectives[rawStmt.StmtLocation]
 
@@ -250,7 +257,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		}
 	}
 
-	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains}, nil
+	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, ExecuteStmts: executeStmts}, nil
 }
 
 func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Table, error) {

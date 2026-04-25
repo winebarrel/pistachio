@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+
+	"github.com/winebarrel/pistachio/parser"
 )
 
 type ApplyOptions struct {
@@ -35,11 +37,12 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 	count := &result.Count
 
-	if len(result.Stmts) == 0 {
+	if len(result.Stmts) == 0 && len(result.ExecuteStmts) == 0 {
 		return count, nil
 	}
 
 	exec := conn.Exec
+	query := conn.Query
 	commit := func(context.Context) error { return nil }
 
 	if options.WithTx {
@@ -49,6 +52,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		}
 		defer tx.Rollback(ctx) //nolint:errcheck
 		exec = tx.Exec
+		query = tx.Query
 		commit = tx.Commit
 	}
 
@@ -63,6 +67,32 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		fmt.Fprintln(w, stmt) //nolint:errcheck
 		if _, err := exec(ctx, stmt); err != nil {
 			return nil, fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
+		}
+	}
+
+	// Execute -- pist:execute statements after schema changes
+	for _, es := range result.ExecuteStmts {
+		shouldExecute := true
+
+		if es.CheckSQL != "" {
+			rows, err := query(ctx, es.CheckSQL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to execute check SQL: %s: %w", es.CheckSQL, err)
+			}
+			if rows.Next() {
+				if err := rows.Scan(&shouldExecute); err != nil {
+					rows.Close()
+					return nil, fmt.Errorf("failed to scan check SQL result: %s: %w", es.CheckSQL, err)
+				}
+			}
+			rows.Close()
+		}
+
+		if shouldExecute {
+			fmt.Fprintln(w, parser.FormatExecuteStmt(es)) //nolint:errcheck
+			if _, err := exec(ctx, es.SQL); err != nil {
+				return nil, fmt.Errorf("failed to execute SQL: %s: %w", es.SQL, err)
+			}
 		}
 	}
 

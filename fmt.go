@@ -29,7 +29,21 @@ func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse SQL file %q: %w", path, err)
 		}
-		results[path] = formatSchemaSQL(result.Domains, result.Enums, result.Tables, result.Views)
+		formatted := formatSchemaSQL(result.Domains, result.Enums, result.Tables, result.Views)
+
+		// Append execute statements
+		if len(result.ExecuteStmts) > 0 {
+			var executeParts []string
+			for _, es := range result.ExecuteStmts {
+				executeParts = append(executeParts, parser.FormatExecuteStmt(es))
+			}
+			if formatted != "" {
+				formatted += "\n\n"
+			}
+			formatted += strings.Join(executeParts, "\n\n")
+		}
+
+		results[path] = formatted
 	}
 
 	return results, nil

@@ -26,9 +26,10 @@ type diffAllOptions struct {
 
 // diffAllResult holds the result of diffAll.
 type diffAllResult struct {
-	Stmts  []string
-	PreSQL string
-	Count  ObjectCount
+	Stmts        []string
+	PreSQL       string
+	Count        ObjectCount
+	ExecuteStmts []*parser.ExecuteStmt
 }
 
 // diffAll performs the common catalog fetch, parse, diff, and statement
@@ -116,9 +117,10 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 
 	return &diffAllResult{
-		Stmts:  stmts,
-		PreSQL: preSQL,
-		Count:  count,
+		Stmts:        stmts,
+		PreSQL:       preSQL,
+		Count:        count,
+		ExecuteStmts: desired.ExecuteStmts,
 	}, nil
 }
 

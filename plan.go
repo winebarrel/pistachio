@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/winebarrel/pistachio/parser"
 )
 
 type PlanOptions struct {
@@ -73,6 +75,11 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	stmts := result.Stmts
 	if result.PreSQL != "" && len(stmts) > 0 {
 		stmts = append([]string{result.PreSQL}, stmts...)
+	}
+
+	// Append execute statements after schema changes
+	for _, es := range result.ExecuteStmts {
+		stmts = append(stmts, parser.FormatExecuteStmt(es))
 	}
 
 	return &PlanResult{
