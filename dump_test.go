@@ -509,6 +509,31 @@ CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);`)
 	assert.NotContains(t, s, "ON public.user_stats")
 }
 
+func TestDumpResult_OmitSchema_View(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.active_users AS SELECT id, name FROM public.users WHERE name IS NOT NULL;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+	s := got.String()
+	assert.Contains(t, s, "CREATE OR REPLACE VIEW active_users")
+	assert.NotContains(t, s, "public.active_users")
+}
+
 func TestDumpResult_Files_DuplicateFileName(t *testing.T) {
 	// When a table and view produce the same file name, the second should be renamed
 	tables := orderedmap.New[string, *model.Table]()
