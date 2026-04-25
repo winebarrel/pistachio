@@ -316,12 +316,8 @@ func diffViewIndexes(current, desired *model.View, concurrently bool) ([]string,
 		desiredIdx, ok := desiredIndexes.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
 			useConcurrently := concurrently
-			if !useConcurrently {
-				if ok {
-					useConcurrently = desiredIdx.Concurrently
-				} else {
-					useConcurrently = currentIdx.Concurrently
-				}
+			if !useConcurrently && ok {
+				useConcurrently = desiredIdx.Concurrently
 			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {

@@ -607,12 +607,18 @@ func TestDiffIndexes_add_perIndexConcurrently(t *testing.T) {
 	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, stmts)
 }
 
-func TestDiffIndexes_drop_perIndexConcurrently(t *testing.T) {
+func TestDiffIndexes_drop_perIndexConcurrently_pureDropUsesGlobalFlag(t *testing.T) {
+	// Pure drops (index removed from desired) only use the global flag,
+	// since catalog-derived indexes don't carry the Concurrently field.
 	current := orderedmap.New[string, *model.Index]()
-	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
+	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
 	stmts, err := diffIndexes(current, desired, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, stmts)
+
+	stmts, err = diffIndexes(current, desired, true)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP INDEX CONCURRENTLY public.idx_name;"}, stmts)
 }

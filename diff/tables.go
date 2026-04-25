@@ -460,15 +460,10 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], concurr
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
 			// Use CONCURRENTLY if the global flag is set, or if the desired index
 			// (when it exists and is being changed) has the per-index directive.
-			// For pure drops (index removed), use the current index's directive
-			// or the global flag.
+			// For pure drops (index removed), only the global flag applies.
 			useConcurrently := concurrently
-			if !useConcurrently {
-				if ok {
-					useConcurrently = desiredIdx.Concurrently
-				} else {
-					useConcurrently = currentIdx.Concurrently
-				}
+			if !useConcurrently && ok {
+				useConcurrently = desiredIdx.Concurrently
 			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
