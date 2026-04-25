@@ -80,7 +80,8 @@ func stripQualifications(node *pg_query.Node) {
 
 	if cr := node.GetColumnRef(); cr != nil {
 		// "table.column" → "column" (remove table prefix)
-		if len(cr.Fields) == 2 {
+		// Only strip when both parts are plain identifiers (not table.*)
+		if len(cr.Fields) == 2 && cr.Fields[1].GetString_() != nil {
 			cr.Fields = cr.Fields[1:]
 		}
 		return
