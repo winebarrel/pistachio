@@ -414,6 +414,47 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	assert.Contains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
 }
 
+func TestApply_ExecuteSchemalessFunction(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	// Schemaless function — should resolve to public via search_path
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TABLE users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:execute
+CREATE OR REPLACE FUNCTION get_count() RETURNS bigint AS $$
+  SELECT count(*) FROM users;
+$$ LANGUAGE sql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
+
+	// Verify function was created in public schema
+	var schema string
+	err = conn.QueryRow(ctx, "SELECT n.nspname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE p.proname = 'get_count'").Scan(&schema)
+	require.NoError(t, err)
+	assert.Equal(t, "public", schema)
+}
+
 func TestApply_NoDiff(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
