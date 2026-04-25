@@ -19,17 +19,19 @@ import (
 type diffAllOptions struct {
 	FilterOptions
 	DropPolicy
-	Files      []string
-	PreSQL     string
-	PreSQLFile string
+	Files             []string
+	PreSQL            string
+	PreSQLFile        string
+	IndexConcurrently bool
 }
 
 // diffAllResult holds the result of diffAll.
 type diffAllResult struct {
-	Stmts        []string
-	PreSQL       string
-	Count        ObjectCount
-	ExecuteStmts []*parser.ExecuteStmt
+	Stmts                []string
+	PreSQL               string
+	Count                ObjectCount
+	ExecuteStmts         []*parser.ExecuteStmt
+	HasConcurrentlyIndex bool
 }
 
 // diffAll performs the common catalog fetch, parse, diff, and statement
@@ -95,12 +97,12 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to diff domains: %w", err)
 	}
 
-	tableDiff, err := diff.DiffTables(filteredTables, desiredTables, &options.DropPolicy)
+	tableDiff, err := diff.DiffTables(filteredTables, desiredTables, &options.DropPolicy, options.IndexConcurrently)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
 
-	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy)
+	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy, options.IndexConcurrently)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff views: %w", err)
 	}
@@ -117,10 +119,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 
 	return &diffAllResult{
-		Stmts:        stmts,
-		PreSQL:       preSQL,
-		Count:        count,
-		ExecuteStmts: desired.ExecuteStmts,
+		Stmts:                stmts,
+		PreSQL:               preSQL,
+		Count:                count,
+		ExecuteStmts:         desired.ExecuteStmts,
+		HasConcurrentlyIndex: tableDiff.HasConcurrently || viewDiff.HasConcurrently,
 	}, nil
 }
 
@@ -317,9 +320,12 @@ func extractObjectName(sql string) string {
 		{"CREATE MATERIALIZED VIEW "},
 		{"CREATE OR REPLACE VIEW "},
 		{"CREATE VIEW "},
+		{"CREATE UNIQUE INDEX CONCURRENTLY "},
 		{"CREATE UNIQUE INDEX "},
+		{"CREATE INDEX CONCURRENTLY "},
 		{"CREATE INDEX "},
 		{"ALTER INDEX "},
+		{"DROP INDEX CONCURRENTLY "},
 		{"DROP INDEX "},
 		{"ALTER TABLE ONLY "},
 		{"ALTER TABLE "},
@@ -346,10 +352,14 @@ func extractObjectName(sql string) string {
 			continue
 		}
 
-		if strings.HasPrefix(upper, "CREATE UNIQUE INDEX ") ||
+		if strings.HasPrefix(upper, "CREATE UNIQUE INDEX CONCURRENTLY ") ||
+			strings.HasPrefix(upper, "CREATE UNIQUE INDEX ") ||
+			strings.HasPrefix(upper, "CREATE INDEX CONCURRENTLY ") ||
 			strings.HasPrefix(upper, "CREATE INDEX ") ||
+			strings.HasPrefix(upper, "DROP INDEX CONCURRENTLY ") ||
 			strings.HasPrefix(upper, "DROP INDEX ") {
-			// CREATE/DROP INDEX name ON [ONLY] schema.table ...
+			// CREATE INDEX ... ON [ONLY] schema.table ...
+			// DROP INDEX returns "" (no ON clause) → pos=-1
 			return extractIndexTable(sql)
 		}
 

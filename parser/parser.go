@@ -97,6 +97,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	domains := orderedmap.New[string, *model.Domain]()
 
 	stmtDirectives := ExtractStmtDirectives(sql, result.Stmts)
+	concurrentlyDirectives := ExtractConcurrentlyDirectives(sql, result.Stmts)
 	executeStmts, executeSkipLocations, err := ExtractExecuteDirectives(sql, result.Stmts)
 	if err != nil {
 		return nil, err
@@ -212,6 +213,9 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if renameFrom != "" {
 				unquoted := normalizeUnqualifiedDirective(renameFrom)
 				idx.RenameFrom = &unquoted
+			}
+			if concurrentlyDirectives[rawStmt.StmtLocation] {
+				idx.Concurrently = true
 			}
 			fqtn := model.Ident(idx.Schema, idx.Table)
 			if t, ok := tables.GetOk(fqtn); ok {

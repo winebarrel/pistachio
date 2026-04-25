@@ -10,8 +10,11 @@ import (
 )
 
 var (
-	renameDirectivePattern  = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:renamed-from[ \t]+(.+?)[ \t]*$`)
-	executeDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:execute(?:[ \t]+(.+?))?[ \t]*$`)
+	renameDirectivePattern       = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:renamed-from[ \t]+(.+?)[ \t]*$`)
+	executeDirectivePattern      = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:execute(?:[ \t]+(.+?))?[ \t]*$`)
+	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:concurrently[ \t]*$`)
+	// Matches -- pist:concurrently with trailing content (invalid usage).
+	concurrentlyWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:concurrently[ \t]+\S`)
 	// Matches any -- pist: directive, capturing the name (if any) after the colon.
 	anyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:[ \t]*(\S*)`)
 )
@@ -20,6 +23,7 @@ var (
 var knownDirectives = map[string]bool{
 	"renamed-from": true,
 	"execute":      true,
+	"concurrently": true,
 }
 
 // ValidateDirectives checks for unknown -- pist: directives in the raw SQL
@@ -35,6 +39,11 @@ func ValidateDirectives(rawSQL string) error {
 			return fmt.Errorf("unknown directive: -- pist:%s", name)
 		}
 	}
+
+	if concurrentlyWithArgsPattern.MatchString(rawSQL) {
+		return fmt.Errorf("-- pist:concurrently does not accept arguments")
+	}
+
 	return nil
 }
 
@@ -219,6 +228,31 @@ func ExtractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]s
 			if renameFrom != "" {
 				directives[loc] = renameFrom
 			}
+		}
+	}
+
+	return directives
+}
+
+// ExtractConcurrentlyDirectives scans raw SQL for `-- pist:concurrently` comments
+// that appear in each statement's leading comment region.
+// Returns a set of StmtLocations that have the directive.
+func ExtractConcurrentlyDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]bool {
+	directives := make(map[int32]bool)
+
+	for _, stmt := range stmts {
+		loc := stmt.StmtLocation
+		end := loc + stmt.StmtLen
+		if end > int32(len(rawSQL)) {
+			end = int32(len(rawSQL))
+		}
+
+		region := rawSQL[loc:end]
+		leadingEnd := findLeadingCommentEnd(region)
+		leading := region[:leadingEnd]
+
+		if concurrentlyDirectivePattern.MatchString(leading) {
+			directives[loc] = true
 		}
 	}
 

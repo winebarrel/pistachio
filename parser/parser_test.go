@@ -1717,3 +1717,62 @@ func TestParseSQL_NoRenameDirective(t *testing.T) {
 	col, _ := tbl.Columns.GetOk("name")
 	assert.Nil(t, col.RenameFrom)
 }
+
+func TestParseSQL_ConcurrentlyDirective_Index(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_name ON public.users (name);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("idx_name")
+	require.True(t, ok)
+	assert.True(t, idx.Concurrently)
+}
+
+func TestParseSQL_ConcurrentlyDirective_NotSet(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_name ON public.users (name);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("idx_name")
+	require.True(t, ok)
+	assert.False(t, idx.Concurrently)
+}
+
+func TestParseSQL_ConcurrentlyDirective_WithRenamed(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:renamed-from idx_old
+-- pist:concurrently
+CREATE INDEX idx_name ON public.users (name);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("idx_name")
+	require.True(t, ok)
+	assert.True(t, idx.Concurrently)
+	require.NotNil(t, idx.RenameFrom)
+	assert.Equal(t, "idx_old", *idx.RenameFrom)
+}
