@@ -59,4 +59,16 @@ else
   fail "matview index not found in dump"
 fi
 
+# --- Step 5: dump --omit-schema → apply to empty DB → no drift ---
+step "05 dump --omit-schema → apply → no drift"
+setup_db ""
+apply_output=$("$PIST" apply "$tmp_dir/schema.sql" 2>&1) || { fail "apply failed: $apply_output"; summary; exit 1; }
+plan_output=$("$PIST" plan "$tmp_dir/schema.sql" 2>&1)
+if echo "$plan_output" | grep -q 'No changes'; then
+  pass
+else
+  fail "drift after apply with omit-schema dump"
+  echo "    $plan_output" >&2
+fi
+
 summary
