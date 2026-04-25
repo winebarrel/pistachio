@@ -12,7 +12,8 @@ import (
 var (
 	renameDirectivePattern  = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:renamed-from[ \t]+(.+?)[ \t]*$`)
 	executeDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:execute(?:[ \t]+(.+?))?[ \t]*$`)
-	unknownDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:(\S+)`)
+	// Matches any -- pist: directive, capturing the name (if any) after the colon.
+	anyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:[ \t]*(\S*)`)
 )
 
 // knownDirectives lists all recognized directive names.
@@ -24,9 +25,12 @@ var knownDirectives = map[string]bool{
 // ValidateDirectives checks for unknown -- pist: directives in the raw SQL
 // and returns an error if any are found.
 func ValidateDirectives(rawSQL string) error {
-	matches := unknownDirectivePattern.FindAllStringSubmatch(rawSQL, -1)
+	matches := anyDirectivePattern.FindAllStringSubmatch(rawSQL, -1)
 	for _, m := range matches {
-		name := m[1]
+		name := strings.TrimSpace(m[1])
+		if name == "" {
+			return fmt.Errorf("invalid directive: -- pist: (missing directive name)")
+		}
 		if !knownDirectives[name] {
 			return fmt.Errorf("unknown directive: -- pist:%s", name)
 		}

@@ -371,6 +371,18 @@ func TestValidateDirectives_UnknownFoobar(t *testing.T) {
 	assert.Contains(t, err.Error(), "unknown directive: -- pist:foobar")
 }
 
+func TestValidateDirectives_SpaceAfterColon(t *testing.T) {
+	err := ValidateDirectives("-- pist: exec")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown directive: -- pist:exec")
+}
+
+func TestValidateDirectives_MissingName(t *testing.T) {
+	err := ValidateDirectives("-- pist:")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing directive name")
+}
+
 func TestFormatExecuteStmt_WithCheck(t *testing.T) {
 	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true"}
 	assert.Equal(t, "-- pist:execute SELECT true\nCREATE FUNCTION f();", FormatExecuteStmt(es))
