@@ -174,6 +174,22 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 
+		case node.GetCreateTableAsStmt() != nil:
+			as := node.GetCreateTableAsStmt()
+			if as.Objtype == pg_query.ObjectType_OBJECT_MATVIEW {
+				view, err := parseCreateMatViewStmt(as, defaultSchema)
+				if err != nil {
+					return nil, err
+				}
+				if renameFrom != "" {
+					qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+					view.RenameFrom = &qualified
+				}
+				if err := setUnique(views, view.FQVN(), "materialized view", view); err != nil {
+					return nil, err
+				}
+			}
+
 		case node.GetIndexStmt() != nil:
 			idx, err := parseIndexStmt(node.GetIndexStmt(), rawStmt, defaultSchema)
 			if err != nil {
@@ -186,6 +202,10 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			fqtn := model.Ident(idx.Schema, idx.Table)
 			if t, ok := tables.GetOk(fqtn); ok {
 				if err := setUnique(t.Indexes, idx.Name, "index", idx); err != nil {
+					return nil, err
+				}
+			} else if v, ok := views.GetOk(fqtn); ok && v.Materialized {
+				if err := setUnique(v.Indexes, idx.Name, "index", idx); err != nil {
 					return nil, err
 				}
 			}
@@ -610,6 +630,38 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 		Schema:     schema,
 		Name:       vs.View.Relname,
 		Definition: def,
+		Indexes:    orderedmap.New[string, *model.Index](),
+	}, nil
+}
+
+func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string) (*model.View, error) {
+	into := as.Into
+	if into == nil || into.Rel == nil {
+		return nil, fmt.Errorf("materialized view has no target relation")
+	}
+
+	schema := into.Rel.Schemaname
+	if schema == "" {
+		schema = defaultSchema
+	}
+
+	// Deparse the SELECT query
+	selectResult := &pg_query.ParseResult{
+		Stmts: []*pg_query.RawStmt{{
+			Stmt: as.Query,
+		}},
+	}
+	def, err := pg_query.Deparse(selectResult)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deparse materialized view query: %w", err)
+	}
+
+	return &model.View{
+		Schema:       schema,
+		Name:         into.Rel.Relname,
+		Definition:   def,
+		Materialized: true,
+		Indexes:      orderedmap.New[string, *model.Index](),
 	}, nil
 }
 
@@ -839,7 +891,7 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 				t.Comment = nil
 			}
 		}
-	case pg_query.ObjectType_OBJECT_VIEW:
+	case pg_query.ObjectType_OBJECT_VIEW, pg_query.ObjectType_OBJECT_MATVIEW:
 		schema := defaultSchema
 		viewName := names[0]
 		if len(names) >= 2 {

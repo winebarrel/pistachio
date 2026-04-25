@@ -1,0 +1,16 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+  CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);
+plan: |
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt FROM public.users;
+  CREATE INDEX idx_user_stats_cnt ON public.user_stats USING btree (cnt);

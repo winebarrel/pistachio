@@ -75,7 +75,7 @@ assert_no_drop() {
   local plan_output
   plan_output=$(pist_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
-  if echo "$plan_output" | grep -qiE '^[[:space:]]*(DROP TABLE |DROP VIEW |DROP TYPE |DROP DOMAIN |ALTER TABLE .* DROP COLUMN)'; then
+  if echo "$plan_output" | grep -qiE '^[[:space:]]*(DROP TABLE |DROP VIEW |DROP MATERIALIZED VIEW |DROP TYPE |DROP DOMAIN |ALTER TABLE .* DROP COLUMN)'; then
     fail "unexpected DROP in plan without --allow-drop"
     echo "    $plan_output" >&2
     return 1
@@ -102,14 +102,14 @@ assert_no_drop_type() {
   local drop_pattern
   case "$protected_type" in
     table)  drop_pattern='DROP TABLE' ;;
-    view)   drop_pattern='DROP VIEW' ;;
+    view)   drop_pattern='DROP (MATERIALIZED )?VIEW' ;;
     column) drop_pattern='DROP COLUMN' ;;
     enum)   drop_pattern='DROP TYPE' ;;
     domain) drop_pattern='DROP DOMAIN' ;;
     *) fail "unknown protected_type: $protected_type"; return 1 ;;
   esac
 
-  if echo "$plan_output" | grep -qi "$drop_pattern"; then
+  if echo "$plan_output" | grep -qiE "$drop_pattern"; then
     fail "unexpected $protected_type drop in plan with --allow-drop $allowed_types"
     echo "    $plan_output" >&2
     return 1
@@ -135,14 +135,14 @@ assert_drop_type_present() {
   local drop_pattern
   case "$expected_type" in
     table)  drop_pattern='DROP TABLE' ;;
-    view)   drop_pattern='DROP VIEW' ;;
+    view)   drop_pattern='DROP (MATERIALIZED )?VIEW' ;;
     column) drop_pattern='DROP COLUMN' ;;
     enum)   drop_pattern='DROP TYPE' ;;
     domain) drop_pattern='DROP DOMAIN' ;;
     *) fail "unknown expected_type: $expected_type"; return 1 ;;
   esac
 
-  if echo "$plan_output" | grep -qi "$drop_pattern"; then
+  if echo "$plan_output" | grep -qiE "$drop_pattern"; then
     pass
   else
     fail "expected $expected_type drop in plan with --allow-drop $allowed_types"

@@ -37,12 +37,16 @@ assert_no_drop "no-drop: enum removed" "$DATA/desired_drop_enum.sql" || true
 setup_db "$DATA/init.sql"
 assert_no_drop "no-drop: domain removed" "$DATA/desired_drop_domain.sql" || true
 
+# --- matview removed: no drop ---
+setup_db "$DATA/init.sql"
+assert_no_drop "no-drop: matview removed" "$DATA/desired_drop_matview.sql" || true
+
 # ============================================================
 # Part 2: Individual --allow-drop types
 # Each type allows only its own drop; others are suppressed.
 # ============================================================
 
-# --allow-drop table: table dropped, but not view/column/enum/domain
+# --allow-drop table: table dropped, but not view/matview/column/enum/domain
 setup_db "$DATA/init.sql"
 assert_drop_type_present "allow-drop table: table drop present" "table" "table" "$DATA/desired_drop_table.sql" || true
 setup_db "$DATA/init.sql"
@@ -54,9 +58,11 @@ assert_no_drop_type "allow-drop table: no enum drop" "enum" "table" "$DATA/desir
 setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop table: no domain drop" "domain" "table" "$DATA/desired_drop_all.sql" || true
 
-# --allow-drop view: view dropped, but not table/column/enum/domain
+# --allow-drop view: view dropped (incl. matview), but not table/column/enum/domain
 setup_db "$DATA/init.sql"
 assert_drop_type_present "allow-drop view: view drop present" "view" "view" "$DATA/desired_drop_view.sql" || true
+setup_db "$DATA/init.sql"
+assert_drop_type_present "allow-drop view: matview drop present" "view" "view" "$DATA/desired_drop_matview.sql" || true
 setup_db "$DATA/init.sql"
 assert_no_drop_type "allow-drop view: no table drop" "table" "view" "$DATA/desired_drop_all.sql" || true
 setup_db "$DATA/init.sql"
@@ -114,6 +120,7 @@ else
   has_all=true
   echo "$plan_output" | grep -qi 'DROP TABLE' || has_all=false
   echo "$plan_output" | grep -qi 'DROP VIEW' || has_all=false
+  echo "$plan_output" | grep -qi 'DROP MATERIALIZED VIEW' || has_all=false
   echo "$plan_output" | grep -qi 'DROP COLUMN' || has_all=false
   echo "$plan_output" | grep -qi 'DROP TYPE' || has_all=false
   echo "$plan_output" | grep -qi 'DROP DOMAIN' || has_all=false

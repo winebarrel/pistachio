@@ -1,4 +1,4 @@
--- Drop: view (active_users)
+-- Drop: materialized view (user_stats)
 -- Everything else unchanged.
 
 CREATE TYPE public.status AS ENUM ('active', 'inactive');
@@ -23,5 +23,7 @@ CREATE TABLE public.posts (
 
 ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
 
-CREATE MATERIALIZED VIEW public.user_stats AS
-SELECT count(*) AS cnt FROM public.users;
+CREATE OR REPLACE VIEW public.active_users AS
+SELECT users.id,
+    users.name
+   FROM users;

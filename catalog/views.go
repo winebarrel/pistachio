@@ -20,6 +20,19 @@ func (c *Catalog) Views(ctx context.Context) (*orderedmap.Map[string, *model.Vie
 		viewByKey.Set(v.FQVN(), v)
 	}
 
+	// Attach indexes to materialized views
+	indexes, err := c.ListIndexes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, idx := range indexes {
+		fqvn := model.Ident(idx.Schema, idx.Table)
+		if v, ok := viewByKey.GetOk(fqvn); ok && v.Materialized {
+			v.Indexes.Set(idx.Name, idx)
+		}
+	}
+
 	return viewByKey, nil
 }
 
@@ -39,6 +52,7 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			n.nspname,
 			c.relname,
 			pg_catalog.pg_get_viewdef(c.oid, true) AS definition,
+			c.relkind = 'm' AS materialized,
 			d.description
 		FROM
 			pg_catalog.pg_class c
@@ -47,7 +61,7 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = c.oid
 			AND d.objsubid = 0
 		WHERE
-			c.relkind = 'v'
+			c.relkind IN ('v', 'm')
 			AND n.nspname = ANY(@schemas)
 			AND de.objid IS NULL
 		ORDER BY
@@ -73,11 +87,13 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			&v.Schema,
 			&v.Name,
 			&v.Definition,
+			&v.Materialized,
 			&v.Comment,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan view info: %w", err)
 		}
+		v.Indexes = orderedmap.New[string, *model.Index]()
 		views = append(views, &v)
 	}
 

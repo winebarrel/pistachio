@@ -182,7 +182,15 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 			return nil, nil, fmt.Errorf("cannot rename %s to %s: cross-schema rename is not supported", oldKey, newKey)
 		}
 
-		stmts = append(stmts, "ALTER VIEW "+oldKey+" RENAME TO "+model.Ident(desiredView.Name)+";")
+		if oldView.Materialized != desiredView.Materialized {
+			return nil, nil, fmt.Errorf("cannot rename %s to %s: view type mismatch (cannot rename between VIEW and MATERIALIZED VIEW)", oldKey, newKey)
+		}
+
+		objType := "VIEW"
+		if oldView.Materialized {
+			objType = "MATERIALIZED VIEW"
+		}
+		stmts = append(stmts, "ALTER "+objType+" "+oldKey+" RENAME TO "+model.Ident(desiredView.Name)+";")
 
 		adjusted.Delete(oldKey)
 		renamed := *oldView

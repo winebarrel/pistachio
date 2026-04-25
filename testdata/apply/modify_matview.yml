@@ -1,0 +1,27 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt, max(id) AS max_id FROM public.users;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_stats
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt,
+      max(users.id) AS max_id
+     FROM users;
