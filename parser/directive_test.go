@@ -337,6 +337,12 @@ func TestFormatExecuteStmt_WithCheck(t *testing.T) {
 	assert.Equal(t, "-- pist:execute SELECT true\nCREATE FUNCTION f();", FormatExecuteStmt(es))
 }
 
+func TestFormatExecuteStmt_WithoutSemicolon(t *testing.T) {
+	// Deparse output has no trailing semicolon — FormatExecuteStmt should add one
+	es := &ExecuteStmt{SQL: "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql", CheckSQL: ""}
+	assert.Equal(t, "-- pist:execute\nCREATE FUNCTION f() RETURNS void LANGUAGE plpgsql;", FormatExecuteStmt(es))
+}
+
 func TestFormatExecuteStmt_WithoutCheck(t *testing.T) {
 	es := &ExecuteStmt{SQL: "GRANT SELECT ON t TO r;", CheckSQL: ""}
 	assert.Equal(t, "-- pist:execute\nGRANT SELECT ON t TO r;", FormatExecuteStmt(es))

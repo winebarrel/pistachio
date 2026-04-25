@@ -75,7 +75,11 @@ func FormatExecuteStmt(es *ExecuteStmt) string {
 	if es.CheckSQL != "" {
 		directive += " " + es.CheckSQL
 	}
-	return fmt.Sprintf("%s\n%s", directive, es.SQL)
+	sql := strings.TrimRight(es.SQL, " \t\r\n")
+	if !strings.HasSuffix(sql, ";") {
+		sql += ";"
+	}
+	return fmt.Sprintf("%s\n%s", directive, sql)
 }
 
 // QualifyRenameFrom qualifies a renamed-from value with the default schema
