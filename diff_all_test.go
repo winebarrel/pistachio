@@ -47,6 +47,10 @@ func TestExtractObjectName(t *testing.T) {
 		{`ALTER MATERIALIZED VIEW public.mv RENAME TO mv2;`, "public.mv"},
 		// CREATE UNIQUE INDEX should be recognized like CREATE INDEX
 		{"CREATE UNIQUE INDEX idx_users_email ON public.users USING btree (email);", "public.users"},
+		// CONCURRENTLY variants
+		{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);", "public.users"},
+		{"CREATE UNIQUE INDEX CONCURRENTLY idx_email ON public.users USING btree (email);", "public.users"},
+		{"DROP INDEX CONCURRENTLY public.idx_name;", ""},
 	}
 
 	for _, tt := range tests {

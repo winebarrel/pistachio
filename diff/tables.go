@@ -19,7 +19,7 @@ type TableDiffResult struct {
 	DropStmts   []string // DROP TABLE (separate from Stmts for ordering)
 }
 
-func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker) (*TableDiffResult, error) {
+func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker, indexConcurrently bool) (*TableDiffResult, error) {
 	dc = NormalizeDropChecker(dc)
 	result := &TableDiffResult{}
 
@@ -34,7 +34,10 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	for k, v := range desired.All() {
 		if _, ok := current.GetOk(k); !ok {
 			result.Stmts = append(result.Stmts, v.SQL())
-			stmts, fkStmts := newTableExtras(v)
+			stmts, fkStmts, err := newTableExtras(v, indexConcurrently)
+			if err != nil {
+				return nil, err
+			}
 			result.Stmts = append(result.Stmts, stmts...)
 			result.FKAddStmts = append(result.FKAddStmts, fkStmts...)
 		}
@@ -43,7 +46,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	// Modified tables
 	for k, desiredTable := range desired.All() {
 		if currentTable, ok := current.GetOk(k); ok {
-			tableResult, err := diffTable(currentTable, desiredTable, dc)
+			tableResult, err := diffTable(currentTable, desiredTable, dc, indexConcurrently)
 			if err != nil {
 				return nil, err
 			}
@@ -69,9 +72,13 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 }
 
 // newTableExtras returns non-FK extras and FK statements separately.
-func newTableExtras(t *model.Table) (stmts []string, fkStmts []string) {
+func newTableExtras(t *model.Table, indexConcurrently bool) (stmts []string, fkStmts []string, err error) {
 	for _, idx := range t.Indexes.CollectValues() {
-		stmts = append(stmts, idx.SQL())
+		stmt, err := createIndexSQL(idx.Definition, indexConcurrently)
+		if err != nil {
+			return nil, nil, err
+		}
+		stmts = append(stmts, stmt)
 	}
 	for _, fk := range t.ForeignKeys.CollectValues() {
 		fkStmts = append(fkStmts, fk.SQL())
@@ -88,7 +95,7 @@ type tableDiffResult struct {
 	FKAddStmts  []string
 }
 
-func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult, error) {
+func diffTable(current, desired *model.Table, dc DropChecker, indexConcurrently bool) (*tableDiffResult, error) {
 	dc = NormalizeDropChecker(dc)
 	result := &tableDiffResult{}
 	fqtn := desired.FQTN()
@@ -96,7 +103,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// Partition children inherit columns and constraints from the parent,
 	// so skip diffing them to avoid false DROP statements.
 	if desired.PartitionOf != nil && desired.PartitionBound != nil {
-		idxStmts, err := diffIndexes(current.Indexes, desired.Indexes)
+		idxStmts, err := diffIndexes(current.Indexes, desired.Indexes, indexConcurrently)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +129,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	}
 	result.Stmts = append(result.Stmts, conStmts...)
 
-	idxStmts, err := diffIndexes(current.Indexes, desired.Indexes)
+	idxStmts, err := diffIndexes(current.Indexes, desired.Indexes, indexConcurrently)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +444,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	return stmts, nil
 }
 
-func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) ([]string, error) {
+func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], concurrently bool) ([]string, error) {
 	var stmts []string
 
 	// Detect renames
@@ -451,7 +458,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) ([]stri
 	for name, currentIdx := range current.All() {
 		desiredIdx, ok := desired.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmts = append(stmts, "DROP INDEX "+model.Ident(currentIdx.Schema, name)+";")
+			stmts = append(stmts, dropIndexSQL(currentIdx.Schema, name, concurrently))
 		}
 	}
 
@@ -459,11 +466,52 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) ([]stri
 	for name, desiredIdx := range desired.All() {
 		currentIdx, ok := current.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmts = append(stmts, desiredIdx.Definition+";")
+			stmt, err := createIndexSQL(desiredIdx.Definition, concurrently)
+			if err != nil {
+				return nil, err
+			}
+			stmts = append(stmts, stmt)
 		}
 	}
 
 	return stmts, nil
+}
+
+// dropIndexSQL builds a DROP INDEX statement, optionally with CONCURRENTLY.
+func dropIndexSQL(schema, name string, concurrently bool) string {
+	stmt := "DROP INDEX "
+	if concurrently {
+		stmt += "CONCURRENTLY "
+	}
+	stmt += model.Ident(schema, name) + ";"
+	return stmt
+}
+
+// createIndexSQL returns a CREATE INDEX statement with the CONCURRENTLY flag
+// set via the pg_query AST when concurrently is true.
+func createIndexSQL(def string, concurrently bool) (string, error) {
+	if !concurrently {
+		return def + ";", nil
+	}
+
+	result, err := pg_query.Parse(def)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse index definition: %w", err)
+	}
+
+	is := result.Stmts[0].Stmt.GetIndexStmt()
+	if is == nil {
+		return "", fmt.Errorf("expected IndexStmt for: %s", def)
+	}
+
+	is.Concurrent = true
+
+	deparsed, err := pg_query.Deparse(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to deparse index definition: %w", err)
+	}
+
+	return deparsed + ";", nil
 }
 
 // diffForeignKeys returns (dropStmts, addStmts, error).

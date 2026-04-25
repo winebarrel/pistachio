@@ -607,3 +607,55 @@ func TestApply_InvalidPreSQLFile(t *testing.T) {
 	}, io.Discard)
 	require.Error(t, err)
 }
+
+func TestApply_IndexConcurrently(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:             []string{desiredFile},
+		IndexConcurrently: true,
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "CREATE INDEX CONCURRENTLY idx_users_name")
+}
+
+func TestApply_IndexConcurrently_WithTx_Error(t *testing.T) {
+	ctx := context.Background()
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: "postgres://postgres@localhost/postgres",
+		Schemas:    []string{"public"},
+	})
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:             []string{desiredFile},
+		IndexConcurrently: true,
+		WithTx:            true,
+	}, io.Discard)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--index-concurrently and --with-tx cannot be used together")
+}

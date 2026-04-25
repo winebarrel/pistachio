@@ -13,13 +13,18 @@ import (
 type ApplyOptions struct {
 	FilterOptions
 	DropPolicy
-	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
-	PreSQL     string   `xor:"pre-sql" help:"SQL to execute before applying changes."`
-	PreSQLFile string   `type:"path" xor:"pre-sql" help:"Path to a SQL file to execute before applying changes."`
-	WithTx     bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
+	Files             []string `arg:"" help:"Path to the desired schema SQL file(s)."`
+	PreSQL            string   `xor:"pre-sql" help:"SQL to execute before applying changes."`
+	PreSQLFile        string   `type:"path" xor:"pre-sql" help:"Path to a SQL file to execute before applying changes."`
+	WithTx            bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
+	IndexConcurrently bool     `env:"PIST_INDEX_CONCURRENTLY" help:"Use CREATE/DROP INDEX CONCURRENTLY for index operations."`
 }
 
 func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ObjectCount, error) {
+	if options.IndexConcurrently && options.WithTx {
+		return nil, fmt.Errorf("--index-concurrently and --with-tx cannot be used together (CONCURRENTLY cannot run inside a transaction)")
+	}
+
 	conn, err := client.connect()
 	if err != nil {
 		return nil, err
@@ -27,11 +32,12 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	defer conn.Close(ctx) //nolint:errcheck
 
 	result, err := client.diffAll(ctx, conn, &diffAllOptions{
-		FilterOptions: options.FilterOptions,
-		DropPolicy:    options.DropPolicy,
-		Files:         options.Files,
-		PreSQL:        options.PreSQL,
-		PreSQLFile:    options.PreSQLFile,
+		FilterOptions:     options.FilterOptions,
+		DropPolicy:        options.DropPolicy,
+		Files:             options.Files,
+		PreSQL:            options.PreSQL,
+		PreSQLFile:        options.PreSQLFile,
+		IndexConcurrently: options.IndexConcurrently,
 	})
 	if err != nil {
 		return nil, err

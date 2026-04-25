@@ -90,6 +90,13 @@ pist apply schema.sql --pre-sql "SET search_path TO myschema;" --with-tx
 pist apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 
+Use `--index-concurrently` to generate `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY` statements. Also available as `$PIST_INDEX_CONCURRENTLY`. This option cannot be used with `--with-tx` because `CONCURRENTLY` operations cannot run inside a transaction.
+
+```bash
+pist plan --index-concurrently schema.sql
+pist apply --index-concurrently schema.sql
+```
+
 By default, `plan` and `apply` do not drop tables, views, enums, domains, or columns. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`). Also available as `$PIST_ALLOW_DROP`.
 
 ```bash
