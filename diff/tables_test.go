@@ -71,6 +71,69 @@ func TestDiffTables_newTable_withExtras_concurrently(t *testing.T) {
 	assert.Len(t, result.Stmts, 2)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE")
 	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);", result.Stmts[1])
+	assert.True(t, result.HasConcurrently)
+}
+
+func TestDiffTables_modifyTable_addIndex_concurrently(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "users")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	ct.Columns.Set("name", &model.Column{Name: "name", TypeName: "text"})
+	current.Set("public.users", ct)
+
+	dt := newTable("public", "users")
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	dt.Columns.Set("name", &model.Column{Name: "name", TypeName: "text"})
+	dt.Indexes.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Table: "users", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
+	desired.Set("public.users", dt)
+
+	result, err := DiffTables(current, desired, AllowAllDrops{}, true)
+	require.NoError(t, err)
+	assert.Len(t, result.Stmts, 1)
+	assert.Contains(t, result.Stmts[0], "CREATE INDEX CONCURRENTLY")
+	assert.True(t, result.HasConcurrently)
+}
+
+func TestDiffTables_modifyTable_addIndex_perDirective(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "users")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	current.Set("public.users", ct)
+
+	dt := newTable("public", "users")
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	dt.Indexes.Set("idx_id", &model.Index{Schema: "public", Name: "idx_id", Table: "users", Definition: "CREATE INDEX idx_id ON public.users USING btree (id)", Concurrently: true})
+	desired.Set("public.users", dt)
+
+	result, err := DiffTables(current, desired, AllowAllDrops{}, false)
+	require.NoError(t, err)
+	assert.Len(t, result.Stmts, 1)
+	assert.Contains(t, result.Stmts[0], "CREATE INDEX CONCURRENTLY")
+	assert.True(t, result.HasConcurrently)
+}
+
+func TestDiffTables_noChange_concurrently_hasConcurrentlyFalse(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "users")
+	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	ct.Indexes.Set("idx_id", &model.Index{Schema: "public", Name: "idx_id", Table: "users", Definition: "CREATE INDEX idx_id ON public.users USING btree (id)"})
+	current.Set("public.users", ct)
+
+	dt := newTable("public", "users")
+	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	dt.Indexes.Set("idx_id", &model.Index{Schema: "public", Name: "idx_id", Table: "users", Definition: "CREATE INDEX idx_id ON public.users USING btree (id)"})
+	desired.Set("public.users", dt)
+
+	result, err := DiffTables(current, desired, AllowAllDrops{}, true)
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.False(t, result.HasConcurrently)
 }
 
 func TestDiffTables_dropTable(t *testing.T) {
