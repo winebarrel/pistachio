@@ -458,7 +458,11 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], concurr
 	for name, currentIdx := range current.All() {
 		desiredIdx, ok := desired.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmts = append(stmts, dropIndexSQL(currentIdx.Schema, name, concurrently))
+			stmt, err := dropIndexSQL(currentIdx.Schema, name, concurrently)
+			if err != nil {
+				return nil, err
+			}
+			stmts = append(stmts, stmt)
 		}
 	}
 
@@ -477,14 +481,32 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], concurr
 	return stmts, nil
 }
 
-// dropIndexSQL builds a DROP INDEX statement, optionally with CONCURRENTLY.
-func dropIndexSQL(schema, name string, concurrently bool) string {
-	stmt := "DROP INDEX "
-	if concurrently {
-		stmt += "CONCURRENTLY "
+// dropIndexSQL builds a DROP INDEX statement, optionally with CONCURRENTLY
+// set via the pg_query AST.
+func dropIndexSQL(schema, name string, concurrently bool) (string, error) {
+	base := "DROP INDEX " + model.Ident(schema, name)
+	if !concurrently {
+		return base + ";", nil
 	}
-	stmt += model.Ident(schema, name) + ";"
-	return stmt
+
+	result, err := pg_query.Parse(base)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse drop index statement: %w", err)
+	}
+
+	ds := result.Stmts[0].Stmt.GetDropStmt()
+	if ds == nil {
+		return "", fmt.Errorf("expected DropStmt for: %s", base)
+	}
+
+	ds.Concurrent = true
+
+	deparsed, err := pg_query.Deparse(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to deparse drop index statement: %w", err)
+	}
+
+	return deparsed + ";", nil
 }
 
 // createIndexSQL returns a CREATE INDEX statement with the CONCURRENTLY flag

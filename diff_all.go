@@ -356,7 +356,8 @@ func extractObjectName(sql string) string {
 			strings.HasPrefix(upper, "CREATE INDEX ") ||
 			strings.HasPrefix(upper, "DROP INDEX CONCURRENTLY ") ||
 			strings.HasPrefix(upper, "DROP INDEX ") {
-			// CREATE/DROP INDEX name ON [ONLY] schema.table ...
+			// CREATE INDEX ... ON [ONLY] schema.table ...
+			// DROP INDEX returns "" (no ON clause) → pos=-1
 			return extractIndexTable(sql)
 		}
 
