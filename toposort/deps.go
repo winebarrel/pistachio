@@ -80,7 +80,7 @@ func objectName(rawStmt *pg_query.RawStmt, defaultSchema string) string {
 	case *pg_query.Node_CreateDomainStmt:
 		return typeNameFromNames(n.CreateDomainStmt.Domainname, defaultSchema)
 	case *pg_query.Node_CreateTableAsStmt:
-		if n.CreateTableAsStmt.Objtype == pg_query.ObjectType_OBJECT_MATVIEW && n.CreateTableAsStmt.Into != nil {
+		if n.CreateTableAsStmt.Objtype == pg_query.ObjectType_OBJECT_MATVIEW && n.CreateTableAsStmt.Into != nil && n.CreateTableAsStmt.Into.Rel != nil {
 			return qualifyRangeVar(n.CreateTableAsStmt.Into.Rel, defaultSchema)
 		}
 	}
@@ -107,7 +107,7 @@ func extractStmtDeps(rawStmt *pg_query.RawStmt, defaultSchema string, defined ma
 	case *pg_query.Node_CreateDomainStmt:
 		extractDomainDeps(n.CreateDomainStmt, defaultSchema, seen)
 	case *pg_query.Node_CreateTableAsStmt:
-		if n.CreateTableAsStmt.Objtype == pg_query.ObjectType_OBJECT_MATVIEW {
+		if n.CreateTableAsStmt.Objtype == pg_query.ObjectType_OBJECT_MATVIEW && n.CreateTableAsStmt.Query != nil {
 			extractSelectDeps(n.CreateTableAsStmt.Query, defaultSchema, seen)
 		}
 	}
