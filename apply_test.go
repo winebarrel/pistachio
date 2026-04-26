@@ -509,6 +509,68 @@ CREATE TABLE public.users (
 	assert.Contains(t, got.String(), "name text")
 }
 
+func TestApply_ExecuteCheckSQLError(t *testing.T) {
+	// User-supplied check SQL that itself errors (e.g., references a missing
+	// table) must surface as a "failed to evaluate check SQL" error.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:execute SELECT EXISTS (SELECT 1 FROM public.does_not_exist)
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to evaluate check SQL")
+}
+
+func TestApply_ExecuteSQLError(t *testing.T) {
+	// User-supplied execute SQL that fails at execution time must surface as
+	// a "failed to execute SQL" error.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:execute
+INSERT INTO public.does_not_exist VALUES (1);
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to execute SQL")
+}
+
 func TestApply_ExecError(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
