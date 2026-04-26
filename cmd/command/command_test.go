@@ -325,6 +325,53 @@ func TestPlan_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	}
 }
 
+func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
+	// pre-SQL is prepended to executable SQL and must appear above any
+	// "-- skipped:" comments so the output remains a runnable script when
+	// piped to psql.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    legacy text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	// Desired removes "legacy" (suppressed by default --allow-drop) and adds
+	// "name" so we get both an executable diff and a skipped comment.
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{
+		Files:  []string{desiredFile},
+		PreSQL: "SELECT 1;",
+	}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+
+	preSQLPos := strings.Index(got, "SELECT 1;")
+	addColPos := strings.Index(got, "ADD COLUMN name")
+	skippedPos := strings.Index(got, "-- skipped:")
+	require.NotEqual(t, -1, preSQLPos, "pre-SQL should be present")
+	require.NotEqual(t, -1, addColPos, "executable diff should be present")
+	require.NotEqual(t, -1, skippedPos, "skipped comment should be present")
+	assert.Less(t, preSQLPos, addColPos, "pre-SQL must precede executable diff")
+	assert.Less(t, addColPos, skippedPos, "skipped comments must follow executable SQL")
+}
+
 func TestApply_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	// Apply CLI counterpart of TestPlan_Run_DropDeniedShowsNoChanges.
 	// When the only diff is a suppressed DROP, the apply prints the skipped
