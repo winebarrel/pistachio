@@ -23,6 +23,14 @@ export PIST_CONN_STR='postgres://user:pass@host:5432/mydb'
 pist dump
 ```
 
+If you'd rather not embed credentials in the connection string, supply the password separately via `--password` or `$PIST_PASSWORD`:
+
+```bash
+export PIST_CONN_STR='postgres://user@host:5432/mydb'
+export PIST_PASSWORD='s3cret'
+pist dump
+```
+
 ## Step 2: Dump the current schema
 
 Export your existing database schema to a SQL file:
