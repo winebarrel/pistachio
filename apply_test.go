@@ -526,7 +526,7 @@ func TestApply_ExecuteCheckSQLError(t *testing.T) {
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute SELECT * FROM public.does_not_exist
+-- pist:execute SELECT EXISTS (SELECT 1 FROM public.does_not_exist)
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
