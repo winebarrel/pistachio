@@ -372,6 +372,46 @@ func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
 	assert.Less(t, addColPos, skippedPos, "skipped comments must follow executable SQL")
 }
 
+func TestApply_Run_RealDiffPlusSkippedDrop(t *testing.T) {
+	// Apply CLI must emit both the executed diff and the suppressed DROPs as
+	// "-- skipped:" comments, with skipped lines after the executable SQL.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    legacy text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	// Removes "legacy" (suppressed by default --allow-drop) and adds "name".
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+
+	addColPos := strings.Index(got, "ADD COLUMN name")
+	skippedPos := strings.Index(got, "-- skipped: ALTER TABLE public.users DROP COLUMN legacy")
+	require.NotEqual(t, -1, addColPos, "executable diff should be emitted")
+	require.NotEqual(t, -1, skippedPos, "skipped column drop should be emitted")
+	assert.Less(t, addColPos, skippedPos, "skipped lines must follow executable SQL")
+	assert.NotContains(t, got, "-- No changes")
+}
+
 func TestApply_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	// Apply CLI counterpart of TestPlan_Run_DropDeniedShowsNoChanges.
 	// When the only diff is a suppressed DROP, the apply prints the skipped
