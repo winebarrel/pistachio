@@ -372,6 +372,78 @@ func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
 	assert.Less(t, addColPos, skippedPos, "skipped comments must follow executable SQL")
 }
 
+func TestPlan_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
+	// When the only diff is a -- pist:execute statement (no schema diff),
+	// the plan must surface the execute SQL and must NOT print "-- No changes".
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL+`
+-- pist:execute
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func")
+	assert.NotContains(t, got, "-- No changes")
+}
+
+func TestApply_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
+	// CLI Apply counterpart: only -- pist:execute runs (no schema diff).
+	// "No changes" must not be printed since the function gets emitted and
+	// executed.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL+`
+-- pist:execute
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func")
+	assert.NotContains(t, got, "-- No changes")
+
+	// Function should actually exist in DB.
+	var exists bool
+	require.NoError(t, conn.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')").Scan(&exists))
+	assert.True(t, exists)
+}
+
 func TestApply_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	// Apply CLI counterpart of TestPlan_Run_DropDeniedShowsNoChanges.
 	// When the only diff is a suppressed DROP, the apply prints the skipped
