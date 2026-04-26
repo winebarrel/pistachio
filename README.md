@@ -134,7 +134,9 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so
 ```
 
 > [!NOTE]
-> Constraints and indexes are always dropped when their definitions change or they are removed from the desired schema, regardless of `--allow-drop`. This is because PostgreSQL does not support `ALTER CONSTRAINT` or `ALTER INDEX` for definition changes — the only way to update them is DROP + ADD.
+> Constraints and indexes whose definitions change or are removed from the desired schema are always dropped, regardless of `--allow-drop`. This is because PostgreSQL does not support `ALTER CONSTRAINT` or `ALTER INDEX` for definition changes — the only way to update them is DROP + ADD.
+>
+> Foreign-key `DROP CONSTRAINT` statements that exist only to unblock a table drop follow the table-drop policy: if the table drop is suppressed, the FK drop is suppressed too and surfaces as `-- skipped:` alongside the table.
 
 ### Executing arbitrary SQL
 
