@@ -134,7 +134,7 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so
 ```
 
 > [!NOTE]
-> Only **pure removals** of constraints, foreign keys, and indexes (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index`. **Definition changes** still execute as DROP + ADD regardless of `--allow-drop`, because PostgreSQL has no `ALTER CONSTRAINT` or `ALTER INDEX` for definition changes.
+> Only **pure removals** of constraints, foreign keys, and indexes (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index`. **Definition changes** still execute regardless of `--allow-drop`: constraints and foreign keys as DROP + ADD, and indexes as DROP + CREATE, because PostgreSQL has no `ALTER CONSTRAINT` and no general `ALTER INDEX` form for definition changes.
 >
 > Foreign-key drops emitted because the owning table is being dropped follow the table-drop policy (not `foreign_key`): if the table drop is suppressed, the FK drop is suppressed too and surfaces as `-- skipped:` alongside the table.
 
