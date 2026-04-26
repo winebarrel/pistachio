@@ -200,8 +200,12 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	}
 	result.CreateStmts = append(result.CreateStmts, renameStmts...)
 
-	// Track views that are recreated (DROP+CREATE) so comments can be re-applied
+	// Track views that are recreated (DROP+CREATE) so comments can be re-applied.
 	recreated := make(map[string]bool)
+	// Track views whose recreation was suppressed by --allow-drop. For these we
+	// skip the executable comment diff too, so the output reflects "nothing
+	// executable" rather than emitting half of the intended change.
+	recreateDenied := make(map[string]bool)
 
 	// New or modified views (CREATE OR REPLACE / recreate for materialized)
 	for k, desiredView := range desired.All() {
@@ -255,6 +259,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					} else {
 						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP VIEW "+k+";")
 					}
+					recreateDenied[k] = true
 				}
 			} else {
 				// Regular view: CREATE OR REPLACE
@@ -292,6 +297,14 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	// Comment changes
 	for k, desiredView := range desired.All() {
 		currentView, ok := current.GetOk(k)
+
+		// If the recreation was blocked by --allow-drop (type change or
+		// matview definition change), the object on disk still matches the
+		// pre-recreation shape, so skip comment diff to keep the output
+		// consistent with "nothing executable was emitted for this view".
+		if recreateDenied[k] {
+			continue
+		}
 
 		// If the type changed (VIEW ↔ MATERIALIZED VIEW) but drop was denied,
 		// the object type hasn't changed yet — skip comment diff.

@@ -402,6 +402,34 @@ func TestDiffViews_modifyMatview_dropDenied(t *testing.T) {
 	assert.Equal(t, []string{"-- skipped: DROP MATERIALIZED VIEW public.mv;"}, result.DisallowedDropStmts)
 }
 
+func TestDiffViews_modifyMatview_dropDenied_withCommentChange(t *testing.T) {
+	// When a matview definition change is blocked by --allow-drop and the
+	// desired matview also has a different comment, the comment change must
+	// NOT be emitted: the matview on disk still has the old definition, so
+	// only suppressing the recreation but updating the comment would be a
+	// half-applied change. The whole recreation is skipped instead.
+	oldComment := "old"
+	newComment := "new"
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Comment: &oldComment,
+		Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 2 AS n", Comment: &newComment,
+		Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.CreateStmts, "no executable DDL when recreation is denied, even if comment differs")
+	assert.Equal(t, []string{"-- skipped: DROP MATERIALIZED VIEW public.mv;"}, result.DisallowedDropStmts)
+}
+
 func TestDiffViews_matviewIndexAdd(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.mv", &model.View{

@@ -67,7 +67,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 
 	// Dropped tables: drop FKs on dropped tables first to avoid dependency errors.
 	// When the table-drop policy disallows it, emit the same DROPs as comments
-	// (with "-- " prefix) into DisallowedDropStmts for visibility.
+	// (with "-- skipped: " prefix) into DisallowedDropStmts for visibility.
 	tableAllowed := dc.IsDropAllowed("table")
 	for k, tbl := range current.All() {
 		if _, ok := desired.GetOk(k); !ok {
