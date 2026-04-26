@@ -7,26 +7,18 @@ source "$SCRIPT_DIR/helper.sh"
 
 DATA="$SCRIPT_DIR/testdata/index_concurrently"
 
-pist_plan_drop() {
-  "$PIST" plan --allow-drop all "$@" 2>&1
-}
-
-pist_apply_drop() {
-  "$PIST" apply --allow-drop all "$@" 2>&1
-}
-
 # --- Setup: load initial schema ---
 setup_db "$DATA/init.sql"
 
 # --- Step 1: ADD INDEX with CONCURRENTLY directive ---
 step "01 add index (concurrently)"
-plan_output=$(pist_plan_drop "$DATA/steps/01_add_index.sql") || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pist_plan "$DATA/steps/01_add_index.sql") || { fail "plan failed: $plan_output"; true; }
 if ! echo "$plan_output" | grep -qF 'CREATE INDEX CONCURRENTLY'; then
   fail "expected CREATE INDEX CONCURRENTLY in plan"
   echo "    $plan_output" >&2
 else
-  apply_output=$(pist_apply_drop "$DATA/steps/01_add_index.sql") || { fail "apply failed: $apply_output"; true; }
-  drift=$(pist_plan_drop "$DATA/steps/01_add_index.sql") || { fail "drift check failed: $drift"; true; }
+  apply_output=$(pist_apply "$DATA/steps/01_add_index.sql") || { fail "apply failed: $apply_output"; true; }
+  drift=$(pist_plan "$DATA/steps/01_add_index.sql") || { fail "drift check failed: $drift"; true; }
   if echo "$drift" | grep -q 'No changes'; then
     pass
   else
@@ -37,13 +29,13 @@ fi
 
 # --- Step 2: ADD UNIQUE INDEX with CONCURRENTLY directive ---
 step "02 add unique index (concurrently)"
-plan_output=$(pist_plan_drop "$DATA/steps/02_add_unique_index.sql") || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pist_plan "$DATA/steps/02_add_unique_index.sql") || { fail "plan failed: $plan_output"; true; }
 if ! echo "$plan_output" | grep -qF 'CREATE UNIQUE INDEX CONCURRENTLY'; then
   fail "expected CREATE UNIQUE INDEX CONCURRENTLY in plan"
   echo "    $plan_output" >&2
 else
-  apply_output=$(pist_apply_drop "$DATA/steps/02_add_unique_index.sql") || { fail "apply failed: $apply_output"; true; }
-  drift=$(pist_plan_drop "$DATA/steps/02_add_unique_index.sql") || { fail "drift check failed: $drift"; true; }
+  apply_output=$(pist_apply "$DATA/steps/02_add_unique_index.sql") || { fail "apply failed: $apply_output"; true; }
+  drift=$(pist_plan "$DATA/steps/02_add_unique_index.sql") || { fail "drift check failed: $drift"; true; }
   if echo "$drift" | grep -q 'No changes'; then
     pass
   else
@@ -54,7 +46,7 @@ fi
 
 # --- Step 3: CHANGE INDEX with CONCURRENTLY directive (drop + create) ---
 step "03 change index (concurrently)"
-plan_output=$(pist_plan_drop "$DATA/steps/03_change_index.sql") || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pist_plan "$DATA/steps/03_change_index.sql") || { fail "plan failed: $plan_output"; true; }
 if ! echo "$plan_output" | grep -qF 'DROP INDEX CONCURRENTLY'; then
   fail "expected DROP INDEX CONCURRENTLY in plan"
   echo "    $plan_output" >&2
@@ -62,8 +54,8 @@ elif ! echo "$plan_output" | grep -qF 'CREATE INDEX CONCURRENTLY'; then
   fail "expected CREATE INDEX CONCURRENTLY in plan"
   echo "    $plan_output" >&2
 else
-  apply_output=$(pist_apply_drop "$DATA/steps/03_change_index.sql") || { fail "apply failed: $apply_output"; true; }
-  drift=$(pist_plan_drop "$DATA/steps/03_change_index.sql") || { fail "drift check failed: $drift"; true; }
+  apply_output=$(pist_apply "$DATA/steps/03_change_index.sql") || { fail "apply failed: $apply_output"; true; }
+  drift=$(pist_plan "$DATA/steps/03_change_index.sql") || { fail "drift check failed: $drift"; true; }
   if echo "$drift" | grep -q 'No changes'; then
     pass
   else
@@ -74,7 +66,7 @@ fi
 
 # --- Step 4: DROP INDEX (pure drop never uses CONCURRENTLY) ---
 step "04 drop index (pure drop)"
-plan_output=$(pist_plan_drop "$DATA/steps/04_drop_index.sql") || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pist_plan "$DATA/steps/04_drop_index.sql") || { fail "plan failed: $plan_output"; true; }
 if ! echo "$plan_output" | grep -qE 'DROP INDEX (public\.)?idx_users_name;'; then
   fail "expected DROP INDEX idx_users_name in plan"
   echo "    $plan_output" >&2
@@ -82,8 +74,8 @@ elif echo "$plan_output" | grep -qF 'DROP INDEX CONCURRENTLY'; then
   fail "pure drop should not use CONCURRENTLY"
   echo "    $plan_output" >&2
 else
-  apply_output=$(pist_apply_drop "$DATA/steps/04_drop_index.sql") || { fail "apply failed: $apply_output"; true; }
-  drift=$(pist_plan_drop "$DATA/steps/04_drop_index.sql") || { fail "drift check failed: $drift"; true; }
+  apply_output=$(pist_apply "$DATA/steps/04_drop_index.sql") || { fail "apply failed: $apply_output"; true; }
+  drift=$(pist_plan "$DATA/steps/04_drop_index.sql") || { fail "drift check failed: $drift"; true; }
   if echo "$drift" | grep -q 'No changes'; then
     pass
   else

@@ -666,8 +666,8 @@ CREATE MATERIALIZED VIEW public.user_names AS SELECT id, name FROM public.users;
 -- pist:concurrently
 CREATE INDEX idx_user_names ON public.user_names USING btree (name);
 
--- A regular view (no indexes) coexists with the matview to exercise the
--- v.Indexes == nil branch in clearConcurrentlyDirectives.
+-- A regular view (parsed with an empty Indexes map) coexists with the matview
+-- to exercise the regular-view path in clearConcurrentlyDirectives.
 CREATE VIEW public.user_view AS SELECT id FROM public.users;`), 0o644))
 
 	client := pistachio.NewClient(&pistachio.Options{
