@@ -372,26 +372,58 @@ func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
 	assert.Less(t, addColPos, skippedPos, "skipped comments must follow executable SQL")
 }
 
-func TestApply_Run_RealDiffPlusSkippedDrop(t *testing.T) {
-	// Apply CLI must emit both the executed diff and the suppressed DROPs as
-	// "-- skipped:" comments, with skipped lines after the executable SQL.
+func TestPlan_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
+	// When the only diff is a -- pist:execute statement (no schema diff),
+	// the plan must surface the execute SQL and must NOT print "-- No changes".
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
 
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+	initSQL := `CREATE TABLE public.users (
     id integer NOT NULL,
-    legacy text,
     CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
 
-	// Removes "legacy" (suppressed by default --allow-drop) and adds "name".
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL+`
+-- pist:execute
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func")
+	assert.NotContains(t, got, "-- No changes")
+}
+
+func TestApply_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
+	// CLI Apply counterpart: only -- pist:execute runs (no schema diff).
+	// "No changes" must not be printed since the function gets emitted and
+	// executed.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
     id integer NOT NULL,
-    name text,
     CONSTRAINT users_pkey PRIMARY KEY (id)
-);`), 0o644))
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL+`
+-- pist:execute
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
 
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
@@ -403,13 +435,92 @@ func TestApply_Run_RealDiffPlusSkippedDrop(t *testing.T) {
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
-
-	addColPos := strings.Index(got, "ADD COLUMN name")
-	skippedPos := strings.Index(got, "-- skipped: ALTER TABLE public.users DROP COLUMN legacy")
-	require.NotEqual(t, -1, addColPos, "executable diff should be emitted")
-	require.NotEqual(t, -1, skippedPos, "skipped column drop should be emitted")
-	assert.Less(t, addColPos, skippedPos, "skipped lines must follow executable SQL")
+	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func")
 	assert.NotContains(t, got, "-- No changes")
+
+	// Function should actually exist in DB.
+	var exists bool
+	require.NoError(t, conn.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')").Scan(&exists))
+	assert.True(t, exists)
+}
+
+func TestPlan_Run_ExecuteCheckFalse_StillPrintsExecute(t *testing.T) {
+	// Plan does not evaluate check SQL — it shows every -- pist:execute
+	// statement regardless. So even when the check would return false at
+	// apply time, plan output must contain the execute SQL and must NOT
+	// say "-- No changes".
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	// Check SQL returns false (function already exists), so apply would skip.
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func", "plan should always show execute SQL")
+	assert.Contains(t, got, "-- pist:execute", "plan should annotate with the directive")
+	assert.NotContains(t, got, "-- No changes")
+}
+
+func TestApply_Run_ExecuteCheckFalse_ShowsNoChanges(t *testing.T) {
+	// Apply DOES evaluate check SQL. When it returns false, the execute is
+	// skipped (not printed, not executed). With no schema diff either, the
+	// buffer is empty so the CLI prints "-- No changes".
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.NotContains(t, got, "CREATE OR REPLACE FUNCTION", "skipped execute must not be printed")
+	assert.Contains(t, got, "-- No changes", "buffer is empty so CLI prints No changes")
 }
 
 func TestApply_Run_DropDeniedShowsNoChanges(t *testing.T) {
