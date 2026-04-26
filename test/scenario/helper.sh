@@ -123,6 +123,40 @@ assert_commented_drop() {
   pass
 }
 
+# Assert that plan output contains a commented DROP for a specific type
+# even when --allow-drop is set for other types.
+# Usage: assert_commented_drop_with_allowed "step name" "expected_type" "allowed_types" files...
+assert_commented_drop_with_allowed() {
+  local step_name="$1"
+  local expected_type="$2"
+  local allowed_types="$3"
+  shift 3
+  local files=("$@")
+
+  step "$step_name"
+
+  local plan_output
+  plan_output=$(pist_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+
+  local drop_pattern
+  case "$expected_type" in
+    table)  drop_pattern='^-- skipped: DROP TABLE' ;;
+    view)   drop_pattern='^-- skipped: DROP (MATERIALIZED )?VIEW' ;;
+    column) drop_pattern='^-- skipped: ALTER TABLE .* DROP COLUMN' ;;
+    enum)   drop_pattern='^-- skipped: DROP TYPE' ;;
+    domain) drop_pattern='^-- skipped: DROP DOMAIN' ;;
+    *) fail "unknown expected_type: $expected_type"; return 1 ;;
+  esac
+
+  if ! echo "$plan_output" | grep -qE "$drop_pattern"; then
+    fail "expected skipped $expected_type drop in plan with --allow-drop $allowed_types"
+    echo "    $plan_output" >&2
+    return 1
+  fi
+
+  pass
+}
+
 # Assert that plan output does NOT contain DROP for a specific type,
 # even when other drop types are allowed.
 # Usage: assert_no_drop_type "step name" "protected_type" "allowed_types" files...

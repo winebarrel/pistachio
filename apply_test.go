@@ -705,6 +705,46 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 	assert.Contains(t, buf.String(), "CREATE INDEX CONCURRENTLY idx_users_name")
 }
 
+func TestApply_DisallowedDrops_MultipleTypes(t *testing.T) {
+	// ApplyResult.DisallowedDrops aggregates skipped DROPs across object types
+	// when --allow-drop is empty. The buffer must stay empty (no executable DDL).
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    legacy text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TYPE public.color AS ENUM ('red', 'blue');`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	result, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files: []string{desiredFile},
+	}, &buf)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String(), "no executable DDL should be written")
+	assert.Contains(t, result.DisallowedDrops, "-- skipped: ALTER TABLE public.users DROP COLUMN legacy;")
+	assert.Contains(t, result.DisallowedDrops, "-- skipped: DROP TYPE public.color;")
+
+	// Confirm DB state was not mutated by the comments.
+	var n int
+	require.NoError(t, conn.QueryRow(ctx, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='legacy'").Scan(&n))
+	assert.Equal(t, 1, n, "skipped column drop must not actually drop the column")
+}
+
 func TestApply_InlineConcurrently_NoDriftAfterApply(t *testing.T) {
 	// Regression: after applying inline CREATE INDEX CONCURRENTLY, a subsequent
 	// plan against the same SQL must produce no diff. Validates that the parser

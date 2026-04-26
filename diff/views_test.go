@@ -395,9 +395,11 @@ func TestDiffViews_modifyMatview_dropDenied(t *testing.T) {
 
 	result, err := DiffViews(current, desired, DenyAllDrops{})
 	require.NoError(t, err)
-	// Drop denied: no DROP or CREATE should be generated
+	// Drop denied: no executable DROP or CREATE; the suppressed recreation
+	// is surfaced as a skipped comment so users can see what was blocked.
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts)
+	assert.Equal(t, []string{"-- skipped: DROP MATERIALIZED VIEW public.mv;"}, result.DisallowedDropStmts)
 }
 
 func TestDiffViews_matviewIndexAdd(t *testing.T) {
@@ -613,9 +615,11 @@ func TestDiffViews_viewToMatview_dropDenied(t *testing.T) {
 
 	result, err := DiffViews(current, desired, DenyAllDrops{})
 	require.NoError(t, err)
-	// Type change denied: no DROP, no CREATE, no comment change
+	// Type change denied: no executable DROP/CREATE/comment change; the
+	// suppressed recreation is surfaced as a skipped comment.
 	assert.Empty(t, result.DropStmts)
 	assert.Empty(t, result.CreateStmts)
+	assert.Equal(t, []string{"-- skipped: DROP VIEW public.v;"}, result.DisallowedDropStmts)
 }
 
 func TestDiffViews_renameTypeMismatch(t *testing.T) {

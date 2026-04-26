@@ -325,6 +325,42 @@ func TestPlan_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	}
 }
 
+func TestApply_Run_DropDeniedShowsNoChanges(t *testing.T) {
+	// Apply CLI counterpart of TestPlan_Run_DropDeniedShowsNoChanges.
+	// When the only diff is a suppressed DROP, the apply prints the skipped
+	// DROP as a comment AND reports "-- No changes" (no DDL was executed).
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(""), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "-- skipped: DROP TABLE public.users;")
+	assert.Contains(t, got, "-- No changes")
+
+	// The table must still exist in the database (skip is only emitted as a
+	// comment; no DDL is actually executed).
+	var n int
+	require.NoError(t, conn.QueryRow(ctx, "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename = 'users'").Scan(&n))
+	assert.Equal(t, 1, n)
+}
+
 func TestApply_Run_NoChanges(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
