@@ -319,3 +319,25 @@ func TestExtractObjectName_QuotedWithEscapedQuote(t *testing.T) {
 	got := pistachio.ExtractObjectName(`COMMENT ON COLUMN "My""Schema"."My""Table".col IS 'x';`)
 	assert.Equal(t, `"My""Schema"."My""Table"`, got)
 }
+
+func TestCompareTaggedPos(t *testing.T) {
+	// Both unknown: preserve original order via stable sort
+	assert.False(t, pistachio.CompareTaggedPos(-1, -1, false))
+	assert.False(t, pistachio.CompareTaggedPos(-1, -1, true))
+
+	// Only i unknown: unknown sorts before known
+	assert.True(t, pistachio.CompareTaggedPos(-1, 0, false))
+	assert.True(t, pistachio.CompareTaggedPos(-1, 5, true))
+
+	// Only j unknown: known never precedes unknown
+	assert.False(t, pistachio.CompareTaggedPos(0, -1, false))
+	assert.False(t, pistachio.CompareTaggedPos(5, -1, true))
+
+	// Both known: forward sort
+	assert.True(t, pistachio.CompareTaggedPos(1, 2, false))
+	assert.False(t, pistachio.CompareTaggedPos(2, 1, false))
+
+	// Both known: reverse sort
+	assert.True(t, pistachio.CompareTaggedPos(2, 1, true))
+	assert.False(t, pistachio.CompareTaggedPos(1, 2, true))
+}
