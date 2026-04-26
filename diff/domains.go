@@ -56,7 +56,7 @@ func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc Dro
 			if domainAllowed {
 				result.DropStmts = append(result.DropStmts, "DROP DOMAIN "+k+";")
 			} else {
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- DROP DOMAIN "+k+";")
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP DOMAIN "+k+";")
 			}
 		}
 	}

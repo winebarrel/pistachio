@@ -78,9 +78,9 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 				result.DropStmts = append(result.DropStmts, "DROP TABLE "+k+";")
 			} else {
 				for name := range tbl.ForeignKeys.Keys() {
-					result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- ALTER TABLE "+k+" DROP CONSTRAINT "+model.Ident(name)+";")
+					result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: ALTER TABLE "+k+" DROP CONSTRAINT "+model.Ident(name)+";")
 				}
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- DROP TABLE "+k+";")
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP TABLE "+k+";")
 			}
 		}
 	}
@@ -208,7 +208,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 			if colAllowed {
 				stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
 			} else {
-				disallowed = append(disallowed, "-- ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
+				disallowed = append(disallowed, "-- skipped: ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
 			}
 		}
 	}

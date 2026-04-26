@@ -65,7 +65,7 @@ func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChe
 			if enumAllowed {
 				result.DropStmts = append(result.DropStmts, "DROP TYPE "+k+";")
 			} else {
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- DROP TYPE "+k+";")
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP TYPE "+k+";")
 			}
 		}
 	}

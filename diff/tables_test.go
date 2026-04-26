@@ -146,9 +146,9 @@ func TestDiffTables_dropTable_withFK_denied(t *testing.T) {
 	assert.Empty(t, result.FKDropStmts)
 	assert.Empty(t, result.DropStmts)
 	assert.Equal(t, []string{
-		"-- DROP TABLE public.users;",
-		"-- ALTER TABLE public.posts DROP CONSTRAINT posts_user_id_fkey;",
-		"-- DROP TABLE public.posts;",
+		"-- skipped: DROP TABLE public.users;",
+		"-- skipped: ALTER TABLE public.posts DROP CONSTRAINT posts_user_id_fkey;",
+		"-- skipped: DROP TABLE public.posts;",
 	}, result.DisallowedDropStmts)
 }
 
@@ -184,7 +184,7 @@ func TestDiffTables_dropTable_denied(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
-	assert.Equal(t, []string{"-- DROP TABLE public.users;"}, result.DisallowedDropStmts)
+	assert.Equal(t, []string{"-- skipped: DROP TABLE public.users;"}, result.DisallowedDropStmts)
 }
 
 func TestDiffColumns_dropColumn_denied(t *testing.T) {
@@ -198,7 +198,7 @@ func TestDiffColumns_dropColumn_denied(t *testing.T) {
 	stmts, disallowed, err := diffColumns("public.users", current, desired, DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
-	assert.Equal(t, []string{"-- ALTER TABLE public.users DROP COLUMN name;"}, disallowed)
+	assert.Equal(t, []string{"-- skipped: ALTER TABLE public.users DROP COLUMN name;"}, disallowed)
 }
 
 func TestDiffTables_noChange(t *testing.T) {

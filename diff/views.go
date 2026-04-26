@@ -251,9 +251,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					recreated[k] = true
 				} else {
 					if currentView.Materialized {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- DROP MATERIALIZED VIEW "+k+";")
+						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP MATERIALIZED VIEW "+k+";")
 					} else {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- DROP VIEW "+k+";")
+						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP VIEW "+k+";")
 					}
 				}
 			} else {
@@ -284,7 +284,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			if viewAllowed {
 				result.DropStmts = append(result.DropStmts, drop)
 			} else {
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- "+drop)
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: "+drop)
 			}
 		}
 	}

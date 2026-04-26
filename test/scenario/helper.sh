@@ -100,16 +100,16 @@ assert_commented_drop() {
 
   local drop_pattern
   case "$expected_type" in
-    table)  drop_pattern='^-- DROP TABLE' ;;
-    view)   drop_pattern='^-- DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='^-- ALTER TABLE .* DROP COLUMN' ;;
-    enum)   drop_pattern='^-- DROP TYPE' ;;
-    domain) drop_pattern='^-- DROP DOMAIN' ;;
+    table)  drop_pattern='^-- skipped: DROP TABLE' ;;
+    view)   drop_pattern='^-- skipped: DROP (MATERIALIZED )?VIEW' ;;
+    column) drop_pattern='^-- skipped: ALTER TABLE .* DROP COLUMN' ;;
+    enum)   drop_pattern='^-- skipped: DROP TYPE' ;;
+    domain) drop_pattern='^-- skipped: DROP DOMAIN' ;;
     *) fail "unknown expected_type: $expected_type"; return 1 ;;
   esac
 
   if ! echo "$plan_output" | grep -qE "$drop_pattern"; then
-    fail "expected commented $expected_type drop in plan"
+    fail "expected skipped $expected_type drop in plan"
     echo "    $plan_output" >&2
     return 1
   fi

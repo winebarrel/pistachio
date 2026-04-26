@@ -314,7 +314,7 @@ func TestPlan_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
-	assert.Contains(t, got, "-- DROP TABLE public.users;")
+	assert.Contains(t, got, "-- skipped: DROP TABLE public.users;")
 	assert.Contains(t, got, "-- No changes")
 	// Plain DROP (no comment) must NOT appear.
 	for _, line := range strings.Split(got, "\n") {
