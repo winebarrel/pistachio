@@ -478,6 +478,32 @@ func TestDiffViews_matviewIndexDrop(t *testing.T) {
 	assert.Contains(t, result.CreateStmts[0], "DROP INDEX")
 }
 
+func TestDiffViews_matviewIndexAdd_concurrently_parseError(t *testing.T) {
+	// createIndexSQL with concurrently=true parses the definition through
+	// pg_query; an unparseable definition surfaces as a wrapped error from
+	// diffViewIndexes.
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_bad", &model.Index{
+		Schema: "public", Name: "idx_bad", Table: "mv",
+		Definition:   "NOT VALID SQL {{{{",
+		Concurrently: true,
+	})
+	desired.Set("public.mv", mv)
+
+	_, err := DiffViews(current, desired, AllowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "create index")
+}
+
 func TestDiffViews_matviewIndexDrop_denied(t *testing.T) {
 	// Matview definition unchanged, only its index is removed.
 	// With --allow-drop denying index drops, the DROP INDEX is suppressed.
