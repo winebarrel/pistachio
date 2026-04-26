@@ -115,7 +115,7 @@ pist apply --disable-index-concurrently --with-tx schema.sql
 > [!NOTE]
 > When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`.
 
-By default, `plan` and `apply` do not drop tables, views, enums, domains, or columns. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`). Also available as `$PIST_ALLOW_DROP`.
+By default, `plan` and `apply` do not drop tables, views, enums, domains, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `foreign_key`, `index`). Also available as `$PIST_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately.
 
 ```bash
 # Allow all drops
@@ -134,9 +134,9 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so
 ```
 
 > [!NOTE]
-> Constraints and indexes whose definitions change or are removed from the desired schema are always dropped, regardless of `--allow-drop`. This is because PostgreSQL does not support `ALTER CONSTRAINT` or `ALTER INDEX` for definition changes — the only way to update them is DROP + ADD.
+> Only **pure removals** of constraints, foreign keys, and indexes (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index`. **Definition changes** still execute as DROP + ADD regardless of `--allow-drop`, because PostgreSQL has no `ALTER CONSTRAINT` or `ALTER INDEX` for definition changes.
 >
-> Foreign-key `DROP CONSTRAINT` statements that exist only to unblock a table drop follow the table-drop policy: if the table drop is suppressed, the FK drop is suppressed too and surfaces as `-- skipped:` alongside the table.
+> Foreign-key drops emitted because the owning table is being dropped follow the table-drop policy (not `foreign_key`): if the table drop is suppressed, the FK drop is suppressed too and surfaces as `-- skipped:` alongside the table.
 
 ### Executing arbitrary SQL
 

@@ -478,6 +478,32 @@ func TestDiffViews_matviewIndexDrop(t *testing.T) {
 	assert.Contains(t, result.CreateStmts[0], "DROP INDEX")
 }
 
+func TestDiffViews_matviewIndexDrop_denied(t *testing.T) {
+	// Matview definition unchanged, only its index is removed.
+	// With --allow-drop denying index drops, the DROP INDEX is suppressed.
+	current := orderedmap.New[string, *model.View]()
+	mv := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mv.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	current.Set("public.mv", mv)
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.CreateStmts)
+	assert.Equal(t, []string{"-- skipped: DROP INDEX public.idx_mv_n;"}, result.DisallowedDropStmts)
+}
+
 func TestDiffViews_matviewCommentAdd(t *testing.T) {
 	comment := "stats"
 	current := orderedmap.New[string, *model.View]()

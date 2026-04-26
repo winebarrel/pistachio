@@ -267,11 +267,12 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			}
 		} else if desiredView.Materialized {
 			// Definition unchanged, diff indexes
-			viewIdxStmts, viewIdxHasConcurrently, err := diffViewIndexes(currentView, desiredView)
+			viewIdxStmts, viewIdxDisallowed, viewIdxHasConcurrently, err := diffViewIndexes(currentView, desiredView, dc)
 			if err != nil {
 				return nil, err
 			}
 			result.CreateStmts = append(result.CreateStmts, viewIdxStmts...)
+			result.DisallowedDropStmts = append(result.DisallowedDropStmts, viewIdxDisallowed...)
 			if viewIdxHasConcurrently {
 				result.HasConcurrently = true
 			}
@@ -336,7 +337,8 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 }
 
 // diffViewIndexes generates DDL for index changes on materialized views.
-func diffViewIndexes(current, desired *model.View) (stmts []string, hasConcurrently bool, err error) {
+func diffViewIndexes(current, desired *model.View, dc DropChecker) (stmts []string, disallowed []string, hasConcurrently bool, err error) {
+	dc = NormalizeDropChecker(dc)
 	currentIndexes := orderedmap.New[string, *model.Index]()
 	if current.Indexes != nil {
 		currentIndexes = current.Indexes
@@ -346,7 +348,9 @@ func diffViewIndexes(current, desired *model.View) (stmts []string, hasConcurren
 		desiredIndexes = desired.Indexes
 	}
 
-	// Drop removed or changed indexes
+	// Drop removed or changed indexes. Pure removals honor the index-drop
+	// policy; definition changes still run DROP+CREATE.
+	idxAllowed := dc.IsDropAllowed("index")
 	for name, currentIdx := range currentIndexes.All() {
 		desiredIdx, ok := desiredIndexes.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
@@ -356,7 +360,11 @@ func diffViewIndexes(current, desired *model.View) (stmts []string, hasConcurren
 			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
-				return nil, false, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
+				return nil, nil, false, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
+			}
+			if !ok && !idxAllowed {
+				disallowed = append(disallowed, "-- skipped: "+stmt)
+				continue
 			}
 			stmts = append(stmts, stmt)
 			if useConcurrently {
@@ -371,7 +379,7 @@ func diffViewIndexes(current, desired *model.View) (stmts []string, hasConcurren
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
 			stmt, err := createIndexSQL(desiredIdx.Definition, desiredIdx.Concurrently)
 			if err != nil {
-				return nil, false, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
+				return nil, nil, false, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
 			}
 			stmts = append(stmts, stmt)
 			if desiredIdx.Concurrently {
@@ -380,5 +388,5 @@ func diffViewIndexes(current, desired *model.View) (stmts []string, hasConcurren
 		}
 	}
 
-	return stmts, hasConcurrently, nil
+	return stmts, disallowed, hasConcurrently, nil
 }

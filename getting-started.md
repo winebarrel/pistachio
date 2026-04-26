@@ -195,7 +195,7 @@ pist dump --enable table,enum        # dump tables and enums only
 
 ### Controlling drops
 
-By default, `plan` and `apply` do **not** drop tables, views, enums, domains, or columns. Use `--allow-drop` to opt in:
+By default, `plan` and `apply` do **not** drop tables, views, enums, domains, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to opt in:
 
 ```bash
 # Allow all drops
@@ -209,10 +209,10 @@ pist apply --allow-drop column,table schema.sql
 PIST_ALLOW_DROP=all pist plan schema.sql
 ```
 
-Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`.
+Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `foreign_key`, `index`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately.
 
 > [!NOTE]
-> Constraints and indexes are dropped when their definitions change or they are removed from the desired schema, regardless of `--allow-drop`. PostgreSQL does not support altering their definitions in place — the only way to update them is DROP + ADD.
+> `--allow-drop=constraint`, `--allow-drop=foreign_key`, and `--allow-drop=index` only govern **pure removals** (objects absent from the desired schema). **Definition changes** still execute as DROP + ADD regardless of `--allow-drop`, because PostgreSQL has no `ALTER CONSTRAINT` or `ALTER INDEX` for definition changes.
 
 ### Using transactions
 

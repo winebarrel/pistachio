@@ -421,7 +421,7 @@ func TestDiffConstraints_add(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users ADD CONSTRAINT chk_age CHECK (age > 0);"}, stmts)
 }
@@ -431,9 +431,37 @@ func TestDiffConstraints_drop(t *testing.T) {
 	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
 	desired := orderedmap.New[string, *model.Constraint]()
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users DROP CONSTRAINT chk_age;"}, stmts)
+}
+
+func TestDiffConstraints_drop_denied(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
+	desired := orderedmap.New[string, *model.Constraint]()
+
+	stmts, disallowed, err := diffConstraints("public.users", current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+	assert.Equal(t, []string{"-- skipped: ALTER TABLE public.users DROP CONSTRAINT chk_age;"}, disallowed)
+}
+
+func TestDiffConstraints_change_denied_alwaysExecutes(t *testing.T) {
+	// Definition changes go through DROP+ADD regardless of policy because
+	// PostgreSQL has no ALTER CONSTRAINT for definitions.
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age >= 18)", Validated: true})
+
+	stmts, disallowed, err := diffConstraints("public.users", current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, disallowed)
+	assert.Equal(t, []string{
+		"ALTER TABLE public.users DROP CONSTRAINT chk_age;",
+		"ALTER TABLE public.users ADD CONSTRAINT chk_age CHECK (age >= 18);",
+	}, stmts)
 }
 
 func TestDiffConstraints_change(t *testing.T) {
@@ -442,7 +470,7 @@ func TestDiffConstraints_change(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age >= 18)", Validated: true})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_age;", stmts[0])
@@ -454,7 +482,7 @@ func TestDiffConstraints_addNotValid(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: false})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ADD CONSTRAINT chk_age CHECK (age > 0) NOT VALID;", stmts[0])
@@ -466,7 +494,7 @@ func TestDiffConstraints_validatedToNotValid(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: false})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_age;", stmts[0])
@@ -479,7 +507,7 @@ func TestDiffConstraints_notValidToValidated(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: true})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users VALIDATE CONSTRAINT chk_age;", stmts[0])
@@ -491,7 +519,7 @@ func TestDiffConstraints_bothNotValid_noChange(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age > 0)", Validated: false})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -502,7 +530,7 @@ func TestDiffConstraints_changeDefinitionAndValidated(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_age", &model.Constraint{Name: "chk_age", Definition: "CHECK (age >= 18)", Validated: false})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_age;", stmts[0])
@@ -515,7 +543,7 @@ func TestDiffConstraints_renameAndNotValid(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: false, RenameFrom: ptr("chk_old")})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_old;", stmts[0])
@@ -528,7 +556,7 @@ func TestDiffConstraints_renameAndChangeDefinition(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age >= 18)", Validated: true, RenameFrom: ptr("chk_old")})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_old;", stmts[0])
@@ -541,7 +569,7 @@ func TestDiffConstraints_renameAndValidate(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true, RenameFrom: ptr("chk_old")})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.users RENAME CONSTRAINT chk_old TO chk_new;", stmts[0])
@@ -554,7 +582,7 @@ func TestDiffConstraints_renameOnly(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true, RenameFrom: ptr("chk_old")})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users RENAME CONSTRAINT chk_old TO chk_new;", stmts[0])
@@ -566,7 +594,7 @@ func TestDiffConstraints_renameAlreadyAppliedAndNotValid(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: false, RenameFrom: ptr("chk_old")})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 2)
 	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_new;", stmts[0])
@@ -578,7 +606,7 @@ func TestDiffIndexes_add(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE INDEX idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
@@ -588,9 +616,35 @@ func TestDiffIndexes_drop(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
+}
+
+func TestDiffIndexes_drop_denied(t *testing.T) {
+	current := orderedmap.New[string, *model.Index]()
+	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
+	desired := orderedmap.New[string, *model.Index]()
+
+	idxResult, err := diffIndexes(current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, idxResult.Stmts)
+	assert.Equal(t, []string{"-- skipped: DROP INDEX public.idx_name;"}, idxResult.DisallowedDropStmts)
+}
+
+func TestDiffIndexes_change_denied_alwaysExecutes(t *testing.T) {
+	// Definition changes go through DROP+CREATE regardless of policy because
+	// PostgreSQL has no ALTER INDEX for definitions.
+	current := orderedmap.New[string, *model.Index]()
+	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)"})
+
+	idxResult, err := diffIndexes(current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, idxResult.DisallowedDropStmts)
+	assert.Len(t, idxResult.Stmts, 2)
+	assert.Equal(t, "DROP INDEX public.idx_name;", idxResult.Stmts[0])
 }
 
 func TestDiffIndexes_change(t *testing.T) {
@@ -599,7 +653,7 @@ func TestDiffIndexes_change(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)"})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 2)
 	assert.Equal(t, "DROP INDEX public.idx_name;", idxResult.Stmts[0])
@@ -611,7 +665,7 @@ func TestDiffIndexes_add_uniqueConcurrently_perDirective(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE UNIQUE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE UNIQUE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
@@ -621,7 +675,7 @@ func TestDiffIndexes_add_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
@@ -633,7 +687,7 @@ func TestDiffIndexes_drop_pureDrop_neverConcurrently(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
 }
@@ -644,7 +698,7 @@ func TestDiffIndexes_change_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 2)
 	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", idxResult.Stmts[0])
@@ -657,7 +711,7 @@ func TestDiffIndexes_mixedConcurrently(t *testing.T) {
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 	desired.Set("idx_email", &model.Index{Schema: "public", Name: "idx_email", Definition: "CREATE INDEX idx_email ON public.users USING btree (email)"})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 2)
 	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);", idxResult.Stmts[0])
@@ -672,7 +726,7 @@ func TestDiffIndexes_rename_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	// Rename should NOT use CONCURRENTLY even with per-index directive
 	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, idxResult.Stmts)
@@ -684,7 +738,7 @@ func TestDiffIndexes_partialIndex_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_active", &model.Index{Schema: "public", Name: "idx_active", Definition: "CREATE INDEX idx_active ON public.users USING btree (name) WHERE (active = true)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 1)
 	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
@@ -697,7 +751,7 @@ func TestDiffIndexes_expressionIndex_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_lower", &model.Index{Schema: "public", Name: "idx_lower", Definition: "CREATE INDEX idx_lower ON public.users USING btree (lower(name))", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 1)
 	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
@@ -710,7 +764,7 @@ func TestDiffIndexes_hasConcurrently_directive(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.True(t, idxResult.HasConcurrently)
 }
@@ -748,7 +802,7 @@ func TestDiffForeignKeys_add(t *testing.T) {
 		Table:      "orders",
 	})
 
-	_, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	_, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, addStmts, 1)
 	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
@@ -764,7 +818,7 @@ func TestDiffForeignKeys_addNotValid(t *testing.T) {
 		Table:      "orders",
 	})
 
-	_, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	_, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, addStmts, 1)
 	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
@@ -780,10 +834,95 @@ func TestDiffForeignKeys_drop(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, dropStmts)
 	assert.Empty(t, addStmts)
+}
+
+func TestDiffForeignKeys_drop_denied(t *testing.T) {
+	// Pure FK removals (FK absent from desired while the owning table stays)
+	// honor --allow-drop=constraint.
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired := orderedmap.New[string, *model.ForeignKey]()
+
+	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, dropStmts)
+	assert.Empty(t, addStmts)
+	assert.Equal(t, []string{"-- skipped: ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, disallowed)
+}
+
+func TestDiffForeignKeys_change_denied_alwaysExecutes(t *testing.T) {
+	// FK definition changes still go through DROP+ADD even when constraint
+	// drops are denied.
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired := orderedmap.New[string, *model.ForeignKey]()
+	desired.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, disallowed)
+	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, dropStmts)
+	require.Len(t, addStmts, 1)
+	assert.Contains(t, addStmts[0], "ON DELETE CASCADE")
+}
+
+func TestDiffForeignKeys_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
+	// Renamed FK with definition change → DROP (old name) + ADD (new name).
+	// The new name is in desired so it's not a "pure removal" — deny does not
+	// suppress it.
+	current := orderedmap.New[string, *model.ForeignKey]()
+	current.Set("fk_old", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	desired := orderedmap.New[string, *model.ForeignKey]()
+	desired.Set("fk_new", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true, RenameFrom: ptr("fk_old")},
+		Schema:     "public",
+		Table:      "orders",
+	})
+
+	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, disallowed)
+	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_old;"}, dropStmts)
+	require.Len(t, addStmts, 1)
+	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_new")
+	assert.Contains(t, addStmts[0], "ON DELETE CASCADE")
+}
+
+func TestDiffConstraints_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
+	// Renamed-with-definition-change goes through DROP (old name) + ADD (new
+	// name). Since the new name still exists in desired, it is not a "pure
+	// removal" and is not suppressed by the deny policy.
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: true})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age >= 18)", Validated: true, RenameFrom: ptr("chk_old")})
+
+	stmts, disallowed, err := diffConstraints("public.users", current, desired, DenyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, disallowed)
+	require.Len(t, stmts, 2)
+	assert.Equal(t, "ALTER TABLE public.users DROP CONSTRAINT chk_old;", stmts[0])
+	assert.Contains(t, stmts[1], "ADD CONSTRAINT chk_new")
 }
 
 func TestDiffComments_tableComment_add(t *testing.T) {
@@ -947,7 +1086,7 @@ func TestDiffForeignKeys_change(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, append(dropStmts, addStmts...), 2)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
@@ -968,7 +1107,7 @@ func TestDiffForeignKeys_validatedToNotValid(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
@@ -990,7 +1129,7 @@ func TestDiffForeignKeys_notValidToValidated(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 1)
@@ -1011,7 +1150,7 @@ func TestDiffForeignKeys_bothNotValid_noChange(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Empty(t, addStmts)
@@ -1031,7 +1170,7 @@ func TestDiffForeignKeys_changeDefinitionAndValidated(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
@@ -1054,7 +1193,7 @@ func TestDiffForeignKeys_renameAndValidate(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 2)
@@ -1076,7 +1215,7 @@ func TestDiffForeignKeys_renameOnly(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 1)
@@ -1097,7 +1236,7 @@ func TestDiffForeignKeys_renameAndNotValid(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_old;", dropStmts[0])
@@ -1122,7 +1261,7 @@ func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_new;", dropStmts[0])
@@ -1145,7 +1284,7 @@ func TestDiffForeignKeys_renameAndChangeDefinition(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_old;", dropStmts[0])
@@ -1397,7 +1536,7 @@ func TestDiffConstraints_noChangeWithTextCast(t *testing.T) {
 		Definition: "CHECK (name <> '')",
 	})
 
-	stmts, err := diffConstraints("public.items", current, desired)
+	stmts, _, err := diffConstraints("public.items", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1414,7 +1553,7 @@ func TestDiffConstraints_noChangeWithInVsAny(t *testing.T) {
 		Definition: "CHECK (status IN ('active', 'pending'))",
 	})
 
-	stmts, err := diffConstraints("public.items", current, desired)
+	stmts, _, err := diffConstraints("public.items", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1431,7 +1570,7 @@ func TestDiffConstraints_noChangeWithFormattingDiff(t *testing.T) {
 		Definition: "CHECK (kind = ANY(ARRAY['x'::text, 'y'::text]))",
 	})
 
-	stmts, err := diffConstraints("public.items", current, desired)
+	stmts, _, err := diffConstraints("public.items", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1673,7 +1812,7 @@ func TestDiffConstraints_rename_selfRename_skipped(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("con", &model.Constraint{Name: "con", RenameFrom: &oldName, Definition: "UNIQUE (code)"})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1686,7 +1825,7 @@ func TestDiffIndexes_rename_selfRename_skipped(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx", &model.Index{Schema: "public", Name: "idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX idx ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 }
@@ -1707,7 +1846,7 @@ func TestDiffForeignKeys_rename_selfRename_skipped(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Empty(t, addStmts)
@@ -1877,7 +2016,7 @@ func TestDiffConstraints_rename(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("new_con", &model.Constraint{Name: "new_con", RenameFrom: &oldName, Definition: "UNIQUE (code)"})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users RENAME CONSTRAINT old_con TO new_con;"}, stmts)
 }
@@ -1890,7 +2029,7 @@ func TestDiffIndexes_rename(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, idxResult.Stmts)
 }
@@ -1903,7 +2042,7 @@ func TestDiffConstraints_rename_alreadyApplied(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("new_con", &model.Constraint{Name: "new_con", RenameFrom: &oldName, Definition: "UNIQUE (code)"})
 
-	stmts, err := diffConstraints("public.users", current, desired)
+	stmts, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1915,7 +2054,7 @@ func TestDiffConstraints_rename_sourceNotFound(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("new_con", &model.Constraint{Name: "new_con", RenameFrom: &oldName, Definition: "UNIQUE (code)"})
 
-	_, err := diffConstraints("public.users", current, desired)
+	_, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source constraint")
 }
@@ -1928,7 +2067,7 @@ func TestDiffIndexes_rename_alreadyApplied(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired)
+	idxResult, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 }
@@ -1940,7 +2079,7 @@ func TestDiffIndexes_rename_sourceNotFound(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	_, err := diffIndexes(current, desired)
+	_, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source index")
 }
@@ -1961,7 +2100,7 @@ func TestDiffForeignKeys_rename(t *testing.T) {
 		Table:      "orders",
 	})
 
-	dropStmts, addStmts, err := diffForeignKeys("public.orders", "public", current, desired)
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME CONSTRAINT old_fk TO new_fk;"}, addStmts)
@@ -1983,7 +2122,7 @@ func TestDiffForeignKeys_rename_alreadyApplied(t *testing.T) {
 		Table:      "orders",
 	})
 
-	_, _, err := diffForeignKeys("public.orders", "public", current, desired)
+	_, _, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 }
 
@@ -1998,7 +2137,7 @@ func TestDiffForeignKeys_rename_sourceNotFound(t *testing.T) {
 		Table:      "orders",
 	})
 
-	_, _, err := diffForeignKeys("public.orders", "public", current, desired)
+	_, _, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -2012,7 +2151,7 @@ func TestDiffConstraints_rename_destinationExists_error(t *testing.T) {
 	desired := orderedmap.New[string, *model.Constraint]()
 	desired.Set("new_con", &model.Constraint{Name: "new_con", RenameFrom: &oldName, Definition: "UNIQUE (code)"})
 
-	_, err := diffConstraints("public.users", current, desired)
+	_, _, err := diffConstraints("public.users", current, desired, AllowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -2026,7 +2165,7 @@ func TestDiffIndexes_rename_destinationExists_error(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	_, err := diffIndexes(current, desired)
+	_, err := diffIndexes(current, desired, AllowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -2052,7 +2191,7 @@ func TestDiffForeignKeys_rename_destinationExists_error(t *testing.T) {
 		Table:      "orders",
 	})
 
-	_, _, err := diffForeignKeys("public.orders", "public", current, desired)
+	_, _, _, err := diffForeignKeys("public.orders", "public", current, desired, AllowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
