@@ -39,6 +39,7 @@ func TestDiffViews_dropView_denied(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.CreateStmts)
 	assert.Empty(t, result.DropStmts)
+	assert.Equal(t, []string{"-- DROP VIEW public.v1;"}, result.DisallowedDropStmts)
 }
 
 func TestDiffViews_modifyView(t *testing.T) {
@@ -332,6 +333,7 @@ func TestDiffViews_dropMatview_denied(t *testing.T) {
 	result, err := DiffViews(current, desired, DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
+	assert.Equal(t, []string{"-- DROP MATERIALIZED VIEW public.mv;"}, result.DisallowedDropStmts)
 }
 
 func TestDiffViews_modifyMatview(t *testing.T) {

@@ -76,14 +76,14 @@ CREATE TABLE other.stuff (
 	})
 
 	var buf bytes.Buffer
-	count, err := client.Apply(ctx, &pistachio.ApplyOptions{
+	result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
 		Files:      []string{desiredFile},
 	}, &buf)
 	require.NoError(t, err)
 	// No changes (other.stuff ignored)
 	assert.Empty(t, buf.String())
-	assert.Equal(t, 1, count.Tables)
+	assert.Equal(t, 1, result.Count.Tables)
 }
 
 func TestObjectCount_SchemaLabel(t *testing.T) {

@@ -183,9 +183,10 @@ func stripQualifications(node *pg_query.Node) {
 // ViewDiffResult separates view DROP and CREATE/MODIFY statements.
 // Drops should run before table changes, creates after.
 type ViewDiffResult struct {
-	DropStmts       []string // DROP VIEW / DROP MATERIALIZED VIEW (should run before table changes)
-	CreateStmts     []string // ALTER VIEW RENAME, CREATE OR REPLACE VIEW, CREATE MATERIALIZED VIEW, indexes, comments (should run after table changes)
-	HasConcurrently bool     // true if any index operation uses CONCURRENTLY
+	DropStmts           []string // DROP VIEW / DROP MATERIALIZED VIEW (should run before table changes)
+	CreateStmts         []string // ALTER VIEW RENAME, CREATE OR REPLACE VIEW, CREATE MATERIALIZED VIEW, indexes, comments (should run after table changes)
+	DisallowedDropStmts []string // DROP VIEW / DROP MATERIALIZED VIEW suppressed by DropChecker, with "-- " prefix
+	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
 }
 
 func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker) (*ViewDiffResult, error) {
@@ -225,7 +226,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			needsDropCreate := desiredView.Materialized || currentView.Materialized != desiredView.Materialized
 			if needsDropCreate {
 				// Materialized views or type changes (VIEW ↔ MATERIALIZED VIEW)
-				// require DROP and recreate. Only proceed if drops are allowed.
+				// require DROP and recreate. Only proceed if drops are allowed;
+				// otherwise emit a commented DROP for visibility (no CREATE,
+				// since recreation requires the drop).
 				if dc.IsDropAllowed("view") {
 					if currentView.Materialized {
 						result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+k+";")
@@ -246,6 +249,12 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 						}
 					}
 					recreated[k] = true
+				} else {
+					if currentView.Materialized {
+						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- DROP MATERIALIZED VIEW "+k+";")
+					} else {
+						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- DROP VIEW "+k+";")
+					}
 				}
 			} else {
 				// Regular view: CREATE OR REPLACE
@@ -264,15 +273,18 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		}
 	}
 
-	// Dropped views
-	if dc.IsDropAllowed("view") {
-		for k, v := range current.All() {
-			if _, ok := desired.GetOk(k); !ok {
-				if v.Materialized {
-					result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+k+";")
-				} else {
-					result.DropStmts = append(result.DropStmts, "DROP VIEW "+k+";")
-				}
+	// Dropped views. When the view-drop policy disallows it, emit a commented DROP.
+	viewAllowed := dc.IsDropAllowed("view")
+	for k, v := range current.All() {
+		if _, ok := desired.GetOk(k); !ok {
+			drop := "DROP VIEW " + k + ";"
+			if v.Materialized {
+				drop = "DROP MATERIALIZED VIEW " + k + ";"
+			}
+			if viewAllowed {
+				result.DropStmts = append(result.DropStmts, drop)
+			} else {
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- "+drop)
 			}
 		}
 	}

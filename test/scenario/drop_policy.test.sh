@@ -42,6 +42,29 @@ setup_db "$DATA/init.sql"
 assert_no_drop "no-drop: matview removed" "$DATA/desired_drop_matview.sql" || true
 
 # ============================================================
+# Part 1b: Suppressed drops are surfaced as commented DROPs,
+# while -- No changes is still reported (no executable DDL).
+# ============================================================
+
+setup_db "$DATA/init.sql"
+assert_commented_drop "no-drop: table commented" "table" "$DATA/desired_drop_table.sql" || true
+
+setup_db "$DATA/init.sql"
+assert_commented_drop "no-drop: view commented" "view" "$DATA/desired_drop_view.sql" || true
+
+setup_db "$DATA/init.sql"
+assert_commented_drop "no-drop: column commented" "column" "$DATA/desired_drop_column.sql" || true
+
+setup_db "$DATA/init.sql"
+assert_commented_drop "no-drop: enum commented" "enum" "$DATA/desired_drop_enum.sql" || true
+
+setup_db "$DATA/init.sql"
+assert_commented_drop "no-drop: domain commented" "domain" "$DATA/desired_drop_domain.sql" || true
+
+setup_db "$DATA/init.sql"
+assert_commented_drop "no-drop: matview commented" "view" "$DATA/desired_drop_matview.sql" || true
+
+# ============================================================
 # Part 2: Individual --allow-drop types
 # Each type allows only its own drop; others are suppressed.
 # ============================================================

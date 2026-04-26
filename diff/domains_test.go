@@ -54,6 +54,7 @@ func TestDiffDomains_Drop_Denied(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
+	assert.Equal(t, []string{"-- DROP DOMAIN public.pos_int;"}, result.DisallowedDropStmts)
 }
 
 func TestDiffDomains_NoDiff(t *testing.T) {

@@ -13,11 +13,12 @@ import (
 // TableDiffResult separates FK operations from other statements to allow
 // correct ordering: FK drops first, then schema changes, then FK adds last.
 type TableDiffResult struct {
-	FKDropStmts     []string // FK drops (should run first)
-	Stmts           []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
-	FKAddStmts      []string // FK adds and renames (should run last)
-	DropStmts       []string // DROP TABLE (separate from Stmts for ordering)
-	HasConcurrently bool     // true if any index operation uses CONCURRENTLY
+	FKDropStmts         []string // FK drops (should run first)
+	Stmts               []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
+	FKAddStmts          []string // FK adds and renames (should run last)
+	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
+	DisallowedDropStmts []string // DROP TABLE/COLUMN suppressed by DropChecker, with "-- " prefix
+	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
 }
 
 func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker) (*TableDiffResult, error) {
@@ -57,20 +58,29 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			result.FKDropStmts = append(result.FKDropStmts, tableResult.FKDropStmts...)
 			result.Stmts = append(result.Stmts, tableResult.Stmts...)
 			result.FKAddStmts = append(result.FKAddStmts, tableResult.FKAddStmts...)
+			result.DisallowedDropStmts = append(result.DisallowedDropStmts, tableResult.DisallowedDropStmts...)
 			if tableResult.HasConcurrently {
 				result.HasConcurrently = true
 			}
 		}
 	}
 
-	// Dropped tables: drop FKs on dropped tables first to avoid dependency errors
-	if dc.IsDropAllowed("table") {
-		for k, tbl := range current.All() {
-			if _, ok := desired.GetOk(k); !ok {
+	// Dropped tables: drop FKs on dropped tables first to avoid dependency errors.
+	// When the table-drop policy disallows it, emit the same DROPs as comments
+	// (with "-- " prefix) into DisallowedDropStmts for visibility.
+	tableAllowed := dc.IsDropAllowed("table")
+	for k, tbl := range current.All() {
+		if _, ok := desired.GetOk(k); !ok {
+			if tableAllowed {
 				for name := range tbl.ForeignKeys.Keys() {
 					result.FKDropStmts = append(result.FKDropStmts, "ALTER TABLE "+k+" DROP CONSTRAINT "+model.Ident(name)+";")
 				}
 				result.DropStmts = append(result.DropStmts, "DROP TABLE "+k+";")
+			} else {
+				for name := range tbl.ForeignKeys.Keys() {
+					result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- ALTER TABLE "+k+" DROP CONSTRAINT "+model.Ident(name)+";")
+				}
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- DROP TABLE "+k+";")
 			}
 		}
 	}
@@ -100,10 +110,11 @@ func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcur
 }
 
 type tableDiffResult struct {
-	FKDropStmts     []string
-	Stmts           []string
-	FKAddStmts      []string
-	HasConcurrently bool
+	FKDropStmts         []string
+	Stmts               []string
+	FKAddStmts          []string
+	DisallowedDropStmts []string
+	HasConcurrently     bool
 }
 
 func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult, error) {
@@ -131,11 +142,12 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		return result, nil
 	}
 
-	colStmts, err := diffColumns(fqtn, current.Columns, desired.Columns, dc)
+	colStmts, colDisallowed, err := diffColumns(fqtn, current.Columns, desired.Columns, dc)
 	if err != nil {
 		return nil, err
 	}
 	result.Stmts = append(result.Stmts, colStmts...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, colDisallowed...)
 
 	conStmts, err := diffConstraints(fqtn, current.Constraints, desired.Constraints)
 	if err != nil {
@@ -164,14 +176,13 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	return result, nil
 }
 
-func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) ([]string, error) {
+func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) (stmts []string, disallowed []string, err error) {
 	dc = NormalizeDropChecker(dc)
-	var stmts []string
 
 	// Detect renames
 	renameStmts, current, err := detectColumnRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	stmts = append(stmts, renameStmts...)
 
@@ -189,16 +200,20 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 		}
 	}
 
-	// Drop removed columns
-	if dc.IsDropAllowed("column") {
-		for name := range current.Keys() {
-			if _, ok := desired.GetOk(name); !ok {
+	// Drop removed columns. When the column-drop policy disallows it, emit
+	// the same DROP as a comment for visibility.
+	colAllowed := dc.IsDropAllowed("column")
+	for name := range current.Keys() {
+		if _, ok := desired.GetOk(name); !ok {
+			if colAllowed {
 				stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
+			} else {
+				disallowed = append(disallowed, "-- ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
 			}
 		}
 	}
 
-	return stmts, nil
+	return stmts, disallowed, nil
 }
 
 func addColumnSQL(fqtn string, col *model.Column) string {

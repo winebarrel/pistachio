@@ -51,8 +51,9 @@ func pluralize(n int, singular string) string {
 
 // PlanResult holds the result of a Plan operation.
 type PlanResult struct {
-	SQL   string
-	Count ObjectCount
+	SQL             string
+	DisallowedDrops string
+	Count           ObjectCount
 }
 
 func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResult, error) {
@@ -86,7 +87,8 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	}
 
 	return &PlanResult{
-		SQL:   strings.Join(stmts, "\n"),
-		Count: result.Count,
+		SQL:             strings.Join(stmts, "\n"),
+		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
+		Count:           result.Count,
 	}, nil
 }

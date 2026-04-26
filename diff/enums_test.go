@@ -56,6 +56,7 @@ func TestDiffEnums_DropExisting_Denied(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
+	assert.Equal(t, []string{"-- DROP TYPE public.status;"}, result.DisallowedDropStmts)
 }
 
 func TestDiffEnums_AddValue(t *testing.T) {

@@ -28,6 +28,7 @@ type diffAllOptions struct {
 // diffAllResult holds the result of diffAll.
 type diffAllResult struct {
 	Stmts                []string
+	DisallowedDrops      []string
 	PreSQL               string
 	Count                ObjectCount
 	ExecuteStmts         []*parser.ExecuteStmt
@@ -122,8 +123,15 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, err
 	}
 
+	var disallowed []string
+	disallowed = append(disallowed, viewDiff.DisallowedDropStmts...)
+	disallowed = append(disallowed, tableDiff.DisallowedDropStmts...)
+	disallowed = append(disallowed, domainDiff.DisallowedDropStmts...)
+	disallowed = append(disallowed, enumDiff.DisallowedDropStmts...)
+
 	return &diffAllResult{
 		Stmts:                stmts,
+		DisallowedDrops:      disallowed,
 		PreSQL:               preSQL,
 		Count:                count,
 		ExecuteStmts:         desired.ExecuteStmts,

@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -287,10 +288,9 @@ func TestPlan_Run_NoChanges(t *testing.T) {
 }
 
 func TestPlan_Run_DropDeniedShowsNoChanges(t *testing.T) {
-	// Current behavior: when the only diff would be a DROP and --allow-drop
-	// is not set, the DROP is silently suppressed and the plan reports
-	// "-- No changes". This documents the existing UX so any change to it
-	// (e.g., emitting commented DROPs) is intentional.
+	// When the only diff would be a DROP and --allow-drop is not set,
+	// the DROP is emitted as a comment for visibility while the "No changes"
+	// message is preserved (since no executable DDL is generated).
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -313,8 +313,16 @@ func TestPlan_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "-- No changes")
-	assert.NotContains(t, buf.String(), "DROP TABLE")
+	got := buf.String()
+	assert.Contains(t, got, "-- DROP TABLE public.users;")
+	assert.Contains(t, got, "-- No changes")
+	// Plain DROP (no comment) must NOT appear.
+	for _, line := range strings.Split(got, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "DROP TABLE") {
+			t.Fatalf("unexpected uncommented DROP TABLE: %q", line)
+		}
+	}
 }
 
 func TestApply_Run_NoChanges(t *testing.T) {

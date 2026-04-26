@@ -84,6 +84,45 @@ assert_no_drop() {
   pass
 }
 
+# Assert that plan output contains a commented DROP for a specific type.
+# Used to verify that suppressed drops are still surfaced as comments.
+# Usage: assert_commented_drop "step name" "expected_type" files...
+assert_commented_drop() {
+  local step_name="$1"
+  local expected_type="$2"
+  shift 2
+  local files=("$@")
+
+  step "$step_name"
+
+  local plan_output
+  plan_output=$(pist_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+
+  local drop_pattern
+  case "$expected_type" in
+    table)  drop_pattern='^-- DROP TABLE' ;;
+    view)   drop_pattern='^-- DROP (MATERIALIZED )?VIEW' ;;
+    column) drop_pattern='^-- ALTER TABLE .* DROP COLUMN' ;;
+    enum)   drop_pattern='^-- DROP TYPE' ;;
+    domain) drop_pattern='^-- DROP DOMAIN' ;;
+    *) fail "unknown expected_type: $expected_type"; return 1 ;;
+  esac
+
+  if ! echo "$plan_output" | grep -qE "$drop_pattern"; then
+    fail "expected commented $expected_type drop in plan"
+    echo "    $plan_output" >&2
+    return 1
+  fi
+
+  if ! echo "$plan_output" | grep -qF -e '-- No changes'; then
+    fail "expected -- No changes when only commented drops were emitted"
+    echo "    $plan_output" >&2
+    return 1
+  fi
+
+  pass
+}
+
 # Assert that plan output does NOT contain DROP for a specific type,
 # even when other drop types are allowed.
 # Usage: assert_no_drop_type "step name" "protected_type" "allowed_types" files...
@@ -101,11 +140,11 @@ assert_no_drop_type() {
 
   local drop_pattern
   case "$protected_type" in
-    table)  drop_pattern='DROP TABLE' ;;
-    view)   drop_pattern='DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='DROP COLUMN' ;;
-    enum)   drop_pattern='DROP TYPE' ;;
-    domain) drop_pattern='DROP DOMAIN' ;;
+    table)  drop_pattern='^[[:space:]]*DROP TABLE' ;;
+    view)   drop_pattern='^[[:space:]]*DROP (MATERIALIZED )?VIEW' ;;
+    column) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP COLUMN' ;;
+    enum)   drop_pattern='^[[:space:]]*DROP TYPE' ;;
+    domain) drop_pattern='^[[:space:]]*DROP DOMAIN' ;;
     *) fail "unknown protected_type: $protected_type"; return 1 ;;
   esac
 
@@ -134,11 +173,11 @@ assert_drop_type_present() {
 
   local drop_pattern
   case "$expected_type" in
-    table)  drop_pattern='DROP TABLE' ;;
-    view)   drop_pattern='DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='DROP COLUMN' ;;
-    enum)   drop_pattern='DROP TYPE' ;;
-    domain) drop_pattern='DROP DOMAIN' ;;
+    table)  drop_pattern='^[[:space:]]*DROP TABLE' ;;
+    view)   drop_pattern='^[[:space:]]*DROP (MATERIALIZED )?VIEW' ;;
+    column) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP COLUMN' ;;
+    enum)   drop_pattern='^[[:space:]]*DROP TYPE' ;;
+    domain) drop_pattern='^[[:space:]]*DROP DOMAIN' ;;
     *) fail "unknown expected_type: $expected_type"; return 1 ;;
   esac
 
