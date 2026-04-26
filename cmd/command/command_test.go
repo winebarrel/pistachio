@@ -658,8 +658,12 @@ func TestApply_Run_ExecutedWithSkippedDrops(t *testing.T) {
 	require.NoError(t, err)
 	got := buf.String()
 
-	assert.Contains(t, got, "ADD COLUMN name")
-	assert.Contains(t, got, "-- skipped: ALTER TABLE public.users DROP COLUMN legacy;")
+	addColPos := strings.Index(got, "ADD COLUMN name")
+	skippedPos := strings.Index(got, "-- skipped: ALTER TABLE public.users DROP COLUMN legacy;")
+	require.NotEqual(t, -1, addColPos, "executed DDL should be present")
+	require.NotEqual(t, -1, skippedPos, "skipped drop comment should be present")
+	// Apply mirrors Plan: executed SQL first, then "-- skipped:" comments.
+	assert.Less(t, addColPos, skippedPos, "executed DDL must precede skipped drop comment")
 	assert.NotContains(t, got, "-- No changes")
 }
 
