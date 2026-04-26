@@ -608,99 +608,6 @@ func TestApply_InvalidPreSQLFile(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestApply_IndexConcurrently(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
-		Files:             []string{desiredFile},
-		IndexConcurrently: true,
-	}, &buf)
-	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "CREATE INDEX CONCURRENTLY idx_users_name")
-}
-
-func TestApply_IndexConcurrently_WithTx_Error(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
-		Files:             []string{desiredFile},
-		IndexConcurrently: true,
-		WithTx:            true,
-	}, io.Discard)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CONCURRENTLY")
-}
-
-func TestApply_IndexConcurrently_WithTx_NoIndexChanges_OK(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
-		Files:             []string{desiredFile},
-		IndexConcurrently: true,
-		WithTx:            true,
-	}, io.Discard)
-	require.NoError(t, err)
-}
-
 func TestApply_ConcurrentlyDirective_WithTx_NoIndexChanges_OK(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -762,7 +669,7 @@ CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 		WithTx: true,
 	}, io.Discard)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "pist:concurrently")
+	assert.Contains(t, err.Error(), "CONCURRENTLY")
 }
 
 func TestApply_ConcurrentlyDirective(t *testing.T) {
@@ -798,6 +705,220 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 	assert.Contains(t, buf.String(), "CREATE INDEX CONCURRENTLY idx_users_name")
 }
 
+func TestApply_InlineConcurrently_Preserved(t *testing.T) {
+	// Inline CREATE INDEX CONCURRENTLY (without -- pist:concurrently and
+	// without --disable-index-concurrently) must round-trip to CONCURRENTLY
+	// in the emitted DDL.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);
+CREATE UNIQUE INDEX CONCURRENTLY idx_users_id ON public.users USING btree (id);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files: []string{desiredFile},
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "CREATE INDEX CONCURRENTLY idx_users_name")
+	assert.Contains(t, buf.String(), "CREATE UNIQUE INDEX CONCURRENTLY idx_users_id")
+}
+
+func TestApply_InlineConcurrently_WithTx_Error(t *testing.T) {
+	// Inline CREATE INDEX CONCURRENTLY (without -- pist:concurrently directive)
+	// must still set HasConcurrentlyIndex so --with-tx is rejected.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX CONCURRENTLY idx_users_id ON public.users USING btree (id);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:  []string{desiredFile},
+		WithTx: true,
+	}, io.Discard)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CONCURRENTLY")
+}
+
+func TestApply_InlineConcurrently_DisableSuppresses(t *testing.T) {
+	// --disable-index-concurrently must strip CONCURRENTLY from inline
+	// CREATE INDEX CONCURRENTLY in the input SQL, not just the directive.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+		WithTx:                   true,
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "CREATE INDEX idx_users_name")
+	assert.NotContains(t, buf.String(), "CONCURRENTLY")
+}
+
+func TestApply_DisableIndexConcurrently(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "CREATE INDEX idx_users_name")
+	assert.NotContains(t, buf.String(), "CONCURRENTLY")
+}
+
+func TestApply_DisableIndexConcurrently_WithTx_OK(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	// CONCURRENTLY is suppressed, so --with-tx is safe even though the directive is present.
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+		WithTx:                   true,
+	}, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "CREATE INDEX idx_users_id ON public.users USING btree (id);")
+	assert.NotContains(t, got, "CONCURRENTLY")
+}
+
+func TestApply_DisableIndexConcurrently_DropIndex(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING hash (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		DropPolicy:               pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "DROP INDEX public.idx_users_name;")
+	assert.NotContains(t, buf.String(), "CONCURRENTLY")
+}
+
 func TestApply_ConcurrentlyDirective_MatviewIndex_WithTx_Error(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -820,5 +941,5 @@ CREATE INDEX idx_mv_n ON public.mv USING btree (n);`), 0o644))
 		WithTx: true,
 	}, io.Discard)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "pist:concurrently")
+	assert.Contains(t, err.Error(), "CONCURRENTLY")
 }

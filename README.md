@@ -92,25 +92,28 @@ pist apply schema.sql --pre-sql "SET search_path TO myschema;" --with-tx
 pist apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 
-Use `--index-concurrently` to generate `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY` for **all** index operations. Also available as `$PIST_INDEX_CONCURRENTLY`.
-
-```bash
-pist plan --index-concurrently schema.sql
-pist apply --index-concurrently schema.sql
-```
-
-To apply `CONCURRENTLY` to **individual** indexes, use the `-- pist:concurrently` directive before the `CREATE INDEX` statement:
+To apply `CONCURRENTLY` to individual indexes, either write `CREATE INDEX CONCURRENTLY` directly or use the `-- pist:concurrently` directive before the `CREATE INDEX` statement. Both are treated equivalently:
 
 ```sql
 -- pist:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);
 
+-- Equivalent: inline CONCURRENTLY
+CREATE INDEX CONCURRENTLY idx_users_email ON public.users USING btree (email);
+
 -- This index will NOT use CONCURRENTLY
-CREATE INDEX idx_users_email ON public.users USING btree (email);
+CREATE INDEX idx_users_id ON public.users USING btree (id);
+```
+
+Use `--disable-index-concurrently` to ignore all `CONCURRENTLY` opt-ins (both inline and directive) and emit plain `CREATE INDEX` / `DROP INDEX` instead. Useful when you want to keep the directives / inline `CONCURRENTLY` in your schema files but run a one-off plan/apply inside a transaction. Also available as `$PIST_DISABLE_INDEX_CONCURRENTLY`.
+
+```bash
+pist plan --disable-index-concurrently schema.sql
+pist apply --disable-index-concurrently --with-tx schema.sql
 ```
 
 > [!NOTE]
-> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY` (via `--index-concurrently` or `-- pist:concurrently`), `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when the flag or directive is present.
+> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`.
 
 By default, `plan` and `apply` do not drop tables, views, enums, domains, or columns. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`). Also available as `$PIST_ALLOW_DROP`.
 

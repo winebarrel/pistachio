@@ -19,10 +19,10 @@ import (
 type diffAllOptions struct {
 	FilterOptions
 	DropPolicy
-	Files             []string
-	PreSQL            string
-	PreSQLFile        string
-	IndexConcurrently bool
+	Files                    []string
+	PreSQL                   string
+	PreSQLFile               string
+	DisableIndexConcurrently bool
 }
 
 // diffAllResult holds the result of diffAll.
@@ -87,6 +87,10 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	desiredTables := options.filterTables(client.reverseRemapTableSchemas(desired.Tables))
 	desiredViews := options.filterViews(client.reverseRemapViewSchemas(desired.Views))
 
+	if options.DisableIndexConcurrently {
+		clearConcurrentlyDirectives(desiredTables, desiredViews)
+	}
+
 	enumDiff, err := diff.DiffEnums(filteredEnums, desiredEnums, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff enums: %w", err)
@@ -97,12 +101,12 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to diff domains: %w", err)
 	}
 
-	tableDiff, err := diff.DiffTables(filteredTables, desiredTables, &options.DropPolicy, options.IndexConcurrently)
+	tableDiff, err := diff.DiffTables(filteredTables, desiredTables, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
 
-	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy, options.IndexConcurrently)
+	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff views: %w", err)
 	}
@@ -125,6 +129,25 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		ExecuteStmts:         desired.ExecuteStmts,
 		HasConcurrentlyIndex: tableDiff.HasConcurrently || viewDiff.HasConcurrently,
 	}, nil
+}
+
+// clearConcurrentlyDirectives wipes the per-index Concurrently flag on every
+// table and materialized view index in the desired schema, used to implement
+// --disable-index-concurrently.
+func clearConcurrentlyDirectives(
+	tables *orderedmap.Map[string, *model.Table],
+	views *orderedmap.Map[string, *model.View],
+) {
+	for _, t := range tables.CollectValues() {
+		for _, idx := range t.Indexes.CollectValues() {
+			idx.Concurrently = false
+		}
+	}
+	for _, v := range views.CollectValues() {
+		for _, idx := range v.Indexes.CollectValues() {
+			idx.Concurrently = false
+		}
+	}
 }
 
 // orderStatements uses topological sort to determine the correct execution

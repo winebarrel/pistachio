@@ -6,7 +6,4 @@ CREATE TABLE public.users (
 );
 
 -- pist:concurrently
-CREATE INDEX idx_users_name ON public.users USING btree (name);
-
--- pist:concurrently
-CREATE UNIQUE INDEX idx_users_email ON public.users USING btree (email);
+CREATE INDEX idx_users_name ON public.users USING hash (name);

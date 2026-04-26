@@ -1777,6 +1777,69 @@ CREATE INDEX idx_name ON public.users (name);`
 	assert.Equal(t, "idx_old", *idx.RenameFrom)
 }
 
+func TestParseSQL_InlineConcurrently_SetsConcurrentlyFlag(t *testing.T) {
+	// CREATE INDEX CONCURRENTLY in input SQL must set Index.Concurrently so
+	// that --with-tx detection and --disable-index-concurrently work correctly.
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX CONCURRENTLY idx_name ON public.users (name);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("idx_name")
+	require.True(t, ok)
+	assert.True(t, idx.Concurrently)
+	// Definition must be canonical (without CONCURRENTLY) — Concurrently
+	// is the single source of truth and gets re-applied at diff time.
+	assert.NotContains(t, idx.Definition, "CONCURRENTLY")
+}
+
+func TestParseSQL_InlineConcurrently_Unique(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX CONCURRENTLY idx_name ON public.users (name);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("idx_name")
+	require.True(t, ok)
+	assert.True(t, idx.Concurrently)
+	assert.NotContains(t, idx.Definition, "CONCURRENTLY")
+	assert.Contains(t, idx.Definition, "CREATE UNIQUE INDEX")
+}
+
+func TestParseSQL_InlineConcurrently_AndDirective(t *testing.T) {
+	// Directive on top of inline CONCURRENTLY must still resolve to true (idempotent).
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX CONCURRENTLY idx_name ON public.users (name);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("idx_name")
+	require.True(t, ok)
+	assert.True(t, idx.Concurrently)
+}
+
 func TestParseSQL_ConcurrentlyDirective_IgnoredOnNonIndex(t *testing.T) {
 	// -- pist:concurrently before a CREATE TABLE should be silently ignored
 	// and should NOT leak to the following CREATE INDEX

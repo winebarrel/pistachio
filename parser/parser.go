@@ -607,6 +607,14 @@ func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt, defaultSc
 		is.Relation.Schemaname = defaultSchema
 	}
 
+	// Capture and clear the Concurrent flag before deparsing so the stored
+	// Definition is canonical (without CONCURRENTLY). Whether to emit
+	// CONCURRENTLY is decided per-operation via Index.Concurrently, which
+	// keeps HasConcurrently tracking and --disable-index-concurrently
+	// accurate even when input SQL uses CREATE INDEX CONCURRENTLY directly.
+	concurrent := is.Concurrent
+	is.Concurrent = false
+
 	result := &pg_query.ParseResult{
 		Stmts: []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},
 	}
@@ -622,11 +630,12 @@ func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt, defaultSc
 	}
 
 	return &model.Index{
-		Schema:     schema,
-		Name:       is.Idxname,
-		Table:      is.Relation.Relname,
-		Definition: def,
-		TableSpace: tablespace,
+		Schema:       schema,
+		Name:         is.Idxname,
+		Table:        is.Relation.Relname,
+		Definition:   def,
+		TableSpace:   tablespace,
+		Concurrently: concurrent,
 	}, nil
 }
 

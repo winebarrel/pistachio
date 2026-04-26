@@ -4,6 +4,3 @@ CREATE TABLE public.users (
     email text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
-
--- pist:concurrently
-CREATE UNIQUE INDEX idx_users_email ON public.users USING btree (email);
