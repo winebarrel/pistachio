@@ -877,7 +877,9 @@ CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 		WithTx:                   true,
 	}, &buf)
 	require.NoError(t, err)
-	assert.NotContains(t, buf.String(), "CONCURRENTLY")
+	got := buf.String()
+	assert.Contains(t, got, "CREATE INDEX idx_users_id ON public.users USING btree (id);")
+	assert.NotContains(t, got, "CONCURRENTLY")
 }
 
 func TestApply_DisableIndexConcurrently_DropIndex(t *testing.T) {

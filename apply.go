@@ -17,7 +17,7 @@ type ApplyOptions struct {
 	PreSQL                   string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to execute before applying changes."`
 	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
 	WithTx                   bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
-	DisableIndexConcurrently bool     `env:"PIST_DISABLE_INDEX_CONCURRENTLY" help:"Ignore -- pist:concurrently directives and emit plain CREATE/DROP INDEX."`
+	DisableIndexConcurrently bool     `env:"PIST_DISABLE_INDEX_CONCURRENTLY" help:"Ignore all CONCURRENTLY opt-ins (both -- pist:concurrently directives and inline CREATE/DROP INDEX CONCURRENTLY) and emit plain CREATE/DROP INDEX."`
 }
 
 func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ObjectCount, error) {
