@@ -272,6 +272,54 @@ func TestDiffColumns_alterType_withCollation(t *testing.T) {
 	assert.Contains(t, stmts[0], `COLLATE "en_US"`)
 }
 
+func TestDiffColumns_alterCollation_change(t *testing.T) {
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("fr_FR")})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{`ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text COLLATE "fr_FR";`}, stmts)
+}
+
+func TestDiffColumns_alterCollation_add(t *testing.T) {
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text"})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{`ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text COLLATE "en_US";`}, stmts)
+}
+
+func TestDiffColumns_alterCollation_drop(t *testing.T) {
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text;"}, stmts)
+}
+
+func TestDiffColumns_alterCollation_unchanged(t *testing.T) {
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
 func TestDiffColumns_alterDefault_set(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
 	current.Set("age", &model.Column{Name: "age", TypeName: "integer"})

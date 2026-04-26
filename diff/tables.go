@@ -246,8 +246,10 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	var stmts []string
 	colIdent := model.Ident(desired.Name)
 
-	// Type change
-	if !equalTypeName(current.TypeName, desired.TypeName) {
+	// Type or collation change. Collation is altered via SET DATA TYPE
+	// because PostgreSQL has no separate "set collation" syntax — re-issuing
+	// SET DATA TYPE without COLLATE reverts to the type's default collation.
+	if !equalTypeName(current.TypeName, desired.TypeName) || !equalPtr(current.Collation, desired.Collation) {
 		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + desired.TypeName
 		if desired.Collation != nil {
 			sql += " COLLATE " + model.Ident(*desired.Collation)
