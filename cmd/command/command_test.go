@@ -627,6 +627,42 @@ func TestApply_Run(t *testing.T) {
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
 }
 
+func TestApply_Run_ExecutedWithSkippedDrops(t *testing.T) {
+	// Apply executes some changes AND has suppressed drops: both the executed
+	// SQL and the "-- skipped:" comment must appear in the output.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    legacy text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+
+	assert.Contains(t, got, "ADD COLUMN name")
+	assert.Contains(t, got, "-- skipped: ALTER TABLE public.users DROP COLUMN legacy;")
+	assert.NotContains(t, got, "-- No changes")
+}
+
 func TestFmt_Run(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "test.sql")
 	require.NoError(t, os.WriteFile(tmpFile, []byte(`CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`), 0o644))

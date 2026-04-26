@@ -4,4 +4,5 @@ var (
 	ResolvePreSQL     = resolvePreSQL
 	ExtractObjectName = extractObjectName
 	OrderStatements   = orderStatements
+	CompareTaggedPos  = compareTaggedPos
 )
