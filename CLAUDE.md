@@ -7,15 +7,17 @@ Pistachio is a declarative schema management tool for PostgreSQL, written in Go.
 ## Build & test
 
 ```sh
-make build          # go build ./cmd/pist
+make build          # go build ./cmd/pist (outputs ./pist at the repo root)
 make vet            # go vet ./...
 make test           # go test -p 1 -v ./... $(TEST_OPTS)
 make test-scenario  # CLI scenario tests (bash, requires PostgreSQL)
 make lint           # golangci-lint run
+make fix            # golangci-lint run --fix (auto-fix lint errors)
 ```
 
 - Tests require a running PostgreSQL instance (default: `postgres://postgres@localhost/postgres`, override with `TEST_PIST_CONN_STR`).
 - Tests run with `-p 1` (sequential packages) because integration tests share a single database.
+- `make schema` and other `psql`-based targets rely on `PGHOST=localhost` / `PGUSER=postgres` (exported from the Makefile).
 
 ## Project structure
 
