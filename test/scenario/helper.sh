@@ -64,7 +64,8 @@ pist_plan_allow_drop() {
   "$PIST" plan --allow-drop "$drop_types" "$@" 2>&1
 }
 
-# Assert that plan output does NOT contain any DROP/drop statements.
+# Assert that plan output does NOT contain any executable (uncommented) DROP
+# statements. Commented "-- skipped: ..." DROPs may still be present.
 assert_no_drop() {
   local step_name="$1"
   shift
@@ -157,8 +158,9 @@ assert_commented_drop_with_allowed() {
   pass
 }
 
-# Assert that plan output does NOT contain DROP for a specific type,
-# even when other drop types are allowed.
+# Assert that plan output does NOT contain an executable (uncommented) DROP
+# for a specific type, even when other drop types are allowed. Commented
+# "-- skipped: ..." DROPs are not flagged by this check.
 # Usage: assert_no_drop_type "step name" "protected_type" "allowed_types" files...
 assert_no_drop_type() {
   local step_name="$1"
@@ -191,7 +193,8 @@ assert_no_drop_type() {
   pass
 }
 
-# Assert that plan output DOES contain DROP for a specific type.
+# Assert that plan output DOES contain an executable (uncommented) DROP
+# for a specific type when --allow-drop covers it.
 # Usage: assert_drop_type_present "step name" "expected_type" "allowed_types" files...
 assert_drop_type_present() {
   local step_name="$1"
