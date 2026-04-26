@@ -13,10 +13,11 @@ import (
 type ApplyOptions struct {
 	FilterOptions
 	DropPolicy
-	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
-	PreSQL     string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to execute before applying changes."`
-	PreSQLFile string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
-	WithTx     bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
+	Files                    []string `arg:"" help:"Path to the desired schema SQL file(s)."`
+	PreSQL                   string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to execute before applying changes."`
+	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
+	WithTx                   bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
+	DisableIndexConcurrently bool     `env:"PIST_DISABLE_INDEX_CONCURRENTLY" help:"Ignore -- pist:concurrently directives and emit plain CREATE/DROP INDEX."`
 }
 
 func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ObjectCount, error) {
@@ -27,11 +28,12 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	defer conn.Close(ctx) //nolint:errcheck
 
 	result, err := client.diffAll(ctx, conn, &diffAllOptions{
-		FilterOptions: options.FilterOptions,
-		DropPolicy:    options.DropPolicy,
-		Files:         options.Files,
-		PreSQL:        options.PreSQL,
-		PreSQLFile:    options.PreSQLFile,
+		FilterOptions:            options.FilterOptions,
+		DropPolicy:               options.DropPolicy,
+		Files:                    options.Files,
+		PreSQL:                   options.PreSQL,
+		PreSQLFile:               options.PreSQLFile,
+		DisableIndexConcurrently: options.DisableIndexConcurrently,
 	})
 	if err != nil {
 		return nil, err

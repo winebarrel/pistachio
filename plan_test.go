@@ -339,3 +339,348 @@ CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_id")
 	assert.NotContains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_users_id")
 }
+
+func TestPlan_DisableIndexConcurrently_AddIndex(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_name")
+	assert.NotContains(t, got.SQL, "CONCURRENTLY")
+}
+
+func TestPlan_DisableIndexConcurrently_ChangeIndex(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING hash (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy:               pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP INDEX public.idx_users_name;")
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_name")
+	assert.NotContains(t, got.SQL, "CONCURRENTLY")
+}
+
+func TestPlan_DisableIndexConcurrently_NewTable(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);
+-- pist:concurrently
+CREATE UNIQUE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_name")
+	assert.Contains(t, got.SQL, "CREATE UNIQUE INDEX idx_users_id")
+	assert.NotContains(t, got.SQL, "CONCURRENTLY")
+}
+
+func TestPlan_DisableIndexConcurrently_ExistingMatview_AddIndex(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_names AS
+SELECT id, name FROM public.users;`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_names AS
+SELECT id, name FROM public.users;
+-- pist:concurrently
+CREATE INDEX idx_user_names_name ON public.user_names USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_user_names_name")
+	assert.NotContains(t, got.SQL, "CREATE MATERIALIZED VIEW")
+	assert.NotContains(t, got.SQL, "CONCURRENTLY")
+}
+
+func TestPlan_DisableIndexConcurrently_ExistingMatview_ChangeIndex(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_names AS
+SELECT id, name FROM public.users;
+CREATE INDEX idx_user_names_name ON public.user_names USING btree (name);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_names AS
+SELECT id, name FROM public.users;
+-- pist:concurrently
+CREATE INDEX idx_user_names_name ON public.user_names USING hash (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy:               pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP INDEX public.idx_user_names_name;")
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_user_names_name")
+	assert.NotContains(t, got.SQL, "CREATE MATERIALIZED VIEW")
+	assert.NotContains(t, got.SQL, "CONCURRENTLY")
+}
+
+func TestPlan_DisableIndexConcurrently_RecreatedMatview(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	// Matview definition change forces DROP MATERIALIZED VIEW + CREATE,
+	// which exercises the second matview index loop in DiffViews.
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_names AS
+SELECT id, name FROM public.users;
+CREATE INDEX idx_user_names_name ON public.user_names USING btree (name);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_names AS
+SELECT id, name, name AS display_name FROM public.users;
+-- pist:concurrently
+CREATE INDEX idx_user_names_name ON public.user_names USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy:               pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP MATERIALIZED VIEW public.user_names;")
+	assert.Contains(t, got.SQL, "CREATE MATERIALIZED VIEW public.user_names")
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_user_names_name")
+	assert.NotContains(t, got.SQL, "CONCURRENTLY")
+}
+
+func TestPlan_DisableIndexConcurrently_NoOpWithoutDirectives(t *testing.T) {
+	// Regression: --disable-index-concurrently is a no-op when no index has
+	// the directive, and must not mangle plain CREATE INDEX output.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_name")
+	assert.NotContains(t, got.SQL, "CONCURRENTLY")
+}
+
+func TestPlan_DisableIndexConcurrently_MixedDirectives(t *testing.T) {
+	// Some indexes have the directive, some don't. With the flag, both should
+	// produce plain CREATE INDEX.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    email text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    email text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);
+CREATE INDEX idx_users_email ON public.users USING btree (email);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_name")
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_email")
+	assert.NotContains(t, got.SQL, "CONCURRENTLY")
+}
+
+func TestPlan_DisableIndexConcurrently_MatviewIndex(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE MATERIALIZED VIEW public.user_names AS SELECT id, name FROM public.users;
+-- pist:concurrently
+CREATE INDEX idx_user_names ON public.user_names USING btree (name);
+
+-- A regular view (no indexes) coexists with the matview to exercise the
+-- v.Indexes == nil branch in clearConcurrentlyDirectives.
+CREATE VIEW public.user_view AS SELECT id FROM public.users;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_user_names")
+	assert.Contains(t, got.SQL, "VIEW public.user_view")
+	assert.NotContains(t, got.SQL, "CONCURRENTLY")
+}

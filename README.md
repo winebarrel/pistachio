@@ -102,8 +102,15 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);
 CREATE INDEX idx_users_email ON public.users USING btree (email);
 ```
 
+Use `--disable-index-concurrently` to ignore all `-- pist:concurrently` directives and emit plain `CREATE INDEX` / `DROP INDEX` instead. Useful when you want to keep the directives in your schema files but run a one-off plan/apply inside a transaction. Also available as `$PIST_DISABLE_INDEX_CONCURRENTLY`.
+
+```bash
+pist plan --disable-index-concurrently schema.sql
+pist apply --disable-index-concurrently --with-tx schema.sql
+```
+
 > [!NOTE]
-> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY` (via `-- pist:concurrently`), `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when the directive is present.
+> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY` (via `-- pist:concurrently`), `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when the directive is present. To run such a plan inside a transaction, combine `--with-tx` with `--disable-index-concurrently`.
 
 By default, `plan` and `apply` do not drop tables, views, enums, domains, or columns. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`). Also available as `$PIST_ALLOW_DROP`.
 
