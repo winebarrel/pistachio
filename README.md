@@ -110,7 +110,7 @@ pist apply --disable-index-concurrently --with-tx schema.sql
 ```
 
 > [!NOTE]
-> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY` (via `-- pist:concurrently`), `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when the directive is present. To run such a plan inside a transaction, combine `--with-tx` with `--disable-index-concurrently`.
+> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY` (via `-- pist:concurrently`), `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when the directive is present. To run `apply` inside a transaction in spite of the directive, combine `--with-tx` with `--disable-index-concurrently`.
 
 By default, `plan` and `apply` do not drop tables, views, enums, domains, or columns. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`). Also available as `$PIST_ALLOW_DROP`.
 
