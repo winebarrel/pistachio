@@ -842,7 +842,7 @@ func TestDiffForeignKeys_drop(t *testing.T) {
 
 func TestDiffForeignKeys_drop_denied(t *testing.T) {
 	// Pure FK removals (FK absent from desired while the owning table stays)
-	// honor --allow-drop=constraint.
+	// honor --allow-drop=foreign_key.
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{
 		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
@@ -859,7 +859,7 @@ func TestDiffForeignKeys_drop_denied(t *testing.T) {
 }
 
 func TestDiffForeignKeys_change_denied_alwaysExecutes(t *testing.T) {
-	// FK definition changes still go through DROP+ADD even when constraint
+	// FK definition changes still go through DROP+ADD even when foreign_key
 	// drops are denied.
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{

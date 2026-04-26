@@ -17,7 +17,7 @@ type TableDiffResult struct {
 	Stmts               []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
 	FKAddStmts          []string // FK adds and renames (should run last)
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
-	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / FK DROP CONSTRAINT suppressed by DropChecker, with "-- skipped: " prefix
+	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
 }
 

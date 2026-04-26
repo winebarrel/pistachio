@@ -185,7 +185,7 @@ func stripQualifications(node *pg_query.Node) {
 type ViewDiffResult struct {
 	DropStmts           []string // DROP VIEW / DROP MATERIALIZED VIEW (should run before table changes)
 	CreateStmts         []string // ALTER VIEW RENAME, CREATE OR REPLACE VIEW, CREATE MATERIALIZED VIEW, indexes, comments (should run after table changes)
-	DisallowedDropStmts []string // DROP VIEW / DROP MATERIALIZED VIEW suppressed by DropChecker, with "-- skipped: " prefix
+	DisallowedDropStmts []string // DROP VIEW / DROP MATERIALIZED VIEW / DROP INDEX (on matview) suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
 }
 
