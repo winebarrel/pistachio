@@ -40,7 +40,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	}
 
 	if options.WithTx && result.HasConcurrentlyIndex {
-		return nil, fmt.Errorf("--with-tx cannot be used with CONCURRENTLY index operations (from -- pist:concurrently directive)")
+		return nil, fmt.Errorf("--with-tx cannot be used with CONCURRENTLY index operations")
 	}
 
 	count := &result.Count

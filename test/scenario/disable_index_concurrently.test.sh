@@ -139,10 +139,10 @@ apply_output=$("$PIST" apply --allow-drop all --with-tx "$DATA/steps/05_with_tx.
   echo "    $apply_output" >&2
   true
 }
-if echo "$apply_output" | grep -qF 'pist:concurrently'; then
+if echo "$apply_output" | grep -qF 'CONCURRENTLY'; then
   pass
 else
-  fail "expected error mentioning pist:concurrently"
+  fail "expected error mentioning CONCURRENTLY"
   echo "    $apply_output" >&2
 fi
 

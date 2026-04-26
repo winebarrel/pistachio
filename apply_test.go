@@ -669,7 +669,7 @@ CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 		WithTx: true,
 	}, io.Discard)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "pist:concurrently")
+	assert.Contains(t, err.Error(), "CONCURRENTLY")
 }
 
 func TestApply_ConcurrentlyDirective(t *testing.T) {
@@ -939,5 +939,5 @@ CREATE INDEX idx_mv_n ON public.mv USING btree (n);`), 0o644))
 		WithTx: true,
 	}, io.Discard)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "pist:concurrently")
+	assert.Contains(t, err.Error(), "CONCURRENTLY")
 }
