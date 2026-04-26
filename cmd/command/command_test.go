@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -284,6 +285,127 @@ func TestPlan_Run_NoChanges(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- Plan for schema public (")
 	assert.Contains(t, buf.String(), "-- No changes")
+}
+
+func TestPlan_Run_DropDeniedShowsNoChanges(t *testing.T) {
+	// When the only diff would be a DROP and --allow-drop is not set,
+	// the DROP is emitted as a comment for visibility while the "No changes"
+	// message is preserved (since no executable DDL is generated).
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	// Desired schema removes public.users entirely.
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(""), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "-- skipped: DROP TABLE public.users;")
+	assert.Contains(t, got, "-- No changes")
+	// Plain DROP (no comment) must NOT appear.
+	for _, line := range strings.Split(got, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "DROP TABLE") {
+			t.Fatalf("unexpected uncommented DROP TABLE: %q", line)
+		}
+	}
+}
+
+func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
+	// pre-SQL is prepended to executable SQL and must appear above any
+	// "-- skipped:" comments so the output remains a runnable script when
+	// piped to psql.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    legacy text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	// Desired removes "legacy" (suppressed by default --allow-drop) and adds
+	// "name" so we get both an executable diff and a skipped comment.
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{
+		Files:  []string{desiredFile},
+		PreSQL: "SELECT 1;",
+	}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+
+	preSQLPos := strings.Index(got, "SELECT 1;")
+	addColPos := strings.Index(got, "ADD COLUMN name")
+	skippedPos := strings.Index(got, "-- skipped:")
+	require.NotEqual(t, -1, preSQLPos, "pre-SQL should be present")
+	require.NotEqual(t, -1, addColPos, "executable diff should be present")
+	require.NotEqual(t, -1, skippedPos, "skipped comment should be present")
+	assert.Less(t, preSQLPos, addColPos, "pre-SQL must precede executable diff")
+	assert.Less(t, addColPos, skippedPos, "skipped comments must follow executable SQL")
+}
+
+func TestApply_Run_DropDeniedShowsNoChanges(t *testing.T) {
+	// Apply CLI counterpart of TestPlan_Run_DropDeniedShowsNoChanges.
+	// When the only diff is a suppressed DROP, the apply prints the skipped
+	// DROP as a comment AND reports "-- No changes" (no DDL was executed).
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(""), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "-- skipped: DROP TABLE public.users;")
+	assert.Contains(t, got, "-- No changes")
+
+	// The table must still exist in the database (skip is only emitted as a
+	// comment; no DDL is actually executed).
+	var n int
+	require.NoError(t, conn.QueryRow(ctx, "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename = 'users'").Scan(&n))
+	assert.Equal(t, 1, n)
 }
 
 func TestApply_Run_NoChanges(t *testing.T) {

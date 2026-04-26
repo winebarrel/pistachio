@@ -9,8 +9,9 @@ import (
 )
 
 type EnumDiffResult struct {
-	Stmts     []string
-	DropStmts []string
+	Stmts               []string
+	DropStmts           []string
+	DisallowedDropStmts []string
 }
 
 func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChecker) (*EnumDiffResult, error) {
@@ -57,11 +58,14 @@ func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChe
 		}
 	}
 
-	// Dropped enums
-	if dc.IsDropAllowed("enum") {
-		for k := range current.Keys() {
-			if _, ok := desired.GetOk(k); !ok {
+	// Dropped enums. When the enum-drop policy disallows it, emit a commented DROP.
+	enumAllowed := dc.IsDropAllowed("enum")
+	for k := range current.Keys() {
+		if _, ok := desired.GetOk(k); !ok {
+			if enumAllowed {
 				result.DropStmts = append(result.DropStmts, "DROP TYPE "+k+";")
+			} else {
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP TYPE "+k+";")
 			}
 		}
 	}

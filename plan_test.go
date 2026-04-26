@@ -305,6 +305,96 @@ func TestPlan(t *testing.T) {
 	}
 }
 
+func TestPlan_DisallowedDrops_MultipleTypes(t *testing.T) {
+	// PlanResult.DisallowedDrops aggregates skipped DROPs across object types
+	// (table, view, matview, column, enum, domain) when --allow-drop is empty.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    legacy text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.user_v AS SELECT id FROM public.users;
+CREATE MATERIALIZED VIEW public.user_mv AS SELECT id FROM public.users;
+CREATE TYPE public.color AS ENUM ('red', 'blue');
+CREATE DOMAIN public.pos_int AS integer CHECK (VALUE > 0);
+CREATE TABLE public.legacy_users (
+    id integer NOT NULL,
+    CONSTRAINT legacy_users_pkey PRIMARY KEY (id)
+);`)
+
+	// Desired removes everything except public.users (and even the legacy
+	// column on public.users).
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files: []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, got.SQL, "no executable DDL should be generated when all drops are denied")
+	dd := got.DisallowedDrops
+	assert.Contains(t, dd, "-- skipped: DROP VIEW public.user_v;")
+	assert.Contains(t, dd, "-- skipped: DROP MATERIALIZED VIEW public.user_mv;")
+	assert.Contains(t, dd, "-- skipped: DROP TABLE public.legacy_users;")
+	assert.Contains(t, dd, "-- skipped: ALTER TABLE public.users DROP COLUMN legacy;")
+	assert.Contains(t, dd, "-- skipped: DROP TYPE public.color;")
+	assert.Contains(t, dd, "-- skipped: DROP DOMAIN public.pos_int;")
+}
+
+func TestPlan_DisallowedDrops_PartiallyAllowed(t *testing.T) {
+	// When only --allow-drop=table is set, table DROPs execute while other
+	// type DROPs are surfaced as skipped comments.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    legacy text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.legacy_users (
+    id integer NOT NULL,
+    CONSTRAINT legacy_users_pkey PRIMARY KEY (id)
+);
+CREATE TYPE public.color AS ENUM ('red', 'blue');`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    legacy text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"table"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	// Table drop is executable.
+	assert.Contains(t, got.SQL, "DROP TABLE public.legacy_users;")
+	// Enum drop is skipped.
+	assert.Contains(t, got.DisallowedDrops, "-- skipped: DROP TYPE public.color;")
+	assert.NotContains(t, got.SQL, "DROP TYPE")
+}
+
 func TestPlan_ConcurrentlyDirective(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

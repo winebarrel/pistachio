@@ -20,7 +20,13 @@ type ApplyOptions struct {
 	DisableIndexConcurrently bool     `env:"PIST_DISABLE_INDEX_CONCURRENTLY" help:"Ignore all CONCURRENTLY opt-ins (both -- pist:concurrently directives and inline CREATE/DROP INDEX CONCURRENTLY) and emit plain CREATE/DROP INDEX."`
 }
 
-func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ObjectCount, error) {
+// ApplyResult holds the result of an Apply operation.
+type ApplyResult struct {
+	Count           ObjectCount
+	DisallowedDrops string
+}
+
+func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ApplyResult, error) {
 	conn, err := client.connect()
 	if err != nil {
 		return nil, err
@@ -43,10 +49,13 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return nil, fmt.Errorf("--with-tx cannot be used with CONCURRENTLY index operations")
 	}
 
-	count := &result.Count
+	applyResult := &ApplyResult{
+		Count:           result.Count,
+		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
+	}
 
 	if len(result.Stmts) == 0 && len(result.ExecuteStmts) == 0 {
-		return count, nil
+		return applyResult, nil
 	}
 
 	exec := conn.Exec
@@ -112,5 +121,5 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return count, nil
+	return applyResult, nil
 }

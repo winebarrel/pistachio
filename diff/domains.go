@@ -9,8 +9,9 @@ import (
 )
 
 type DomainDiffResult struct {
-	Stmts     []string
-	DropStmts []string
+	Stmts               []string
+	DropStmts           []string
+	DisallowedDropStmts []string
 }
 
 func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc DropChecker) (*DomainDiffResult, error) {
@@ -48,11 +49,14 @@ func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc Dro
 		result.Stmts = append(result.Stmts, stmts...)
 	}
 
-	// Dropped domains
-	if dc.IsDropAllowed("domain") {
-		for k := range current.Keys() {
-			if _, ok := desired.GetOk(k); !ok {
+	// Dropped domains. When the domain-drop policy disallows it, emit a commented DROP.
+	domainAllowed := dc.IsDropAllowed("domain")
+	for k := range current.Keys() {
+		if _, ok := desired.GetOk(k); !ok {
+			if domainAllowed {
 				result.DropStmts = append(result.DropStmts, "DROP DOMAIN "+k+";")
+			} else {
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP DOMAIN "+k+";")
 			}
 		}
 	}

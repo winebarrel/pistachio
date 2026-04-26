@@ -145,6 +145,11 @@ func TestDiffTables_dropTable_withFK_denied(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.FKDropStmts)
 	assert.Empty(t, result.DropStmts)
+	assert.Equal(t, []string{
+		"-- skipped: DROP TABLE public.users;",
+		"-- skipped: ALTER TABLE public.posts DROP CONSTRAINT posts_user_id_fkey;",
+		"-- skipped: DROP TABLE public.posts;",
+	}, result.DisallowedDropStmts)
 }
 
 func TestNormalizeDropChecker_nil(t *testing.T) {
@@ -178,6 +183,8 @@ func TestDiffTables_dropTable_denied(t *testing.T) {
 	result, err := DiffTables(current, desired, DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.DropStmts)
+	assert.Equal(t, []string{"-- skipped: DROP TABLE public.users;"}, result.DisallowedDropStmts)
 }
 
 func TestDiffColumns_dropColumn_denied(t *testing.T) {
@@ -188,9 +195,10 @@ func TestDiffColumns_dropColumn_denied(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 
-	stmts, err := diffColumns("public.users", current, desired, DenyAllDrops{})
+	stmts, disallowed, err := diffColumns("public.users", current, desired, DenyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
+	assert.Equal(t, []string{"-- skipped: ALTER TABLE public.users DROP COLUMN name;"}, disallowed)
 }
 
 func TestDiffTables_noChange(t *testing.T) {
@@ -218,7 +226,7 @@ func TestDiffColumns_addColumn(t *testing.T) {
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN name text NOT NULL;", stmts[0])
@@ -232,7 +240,7 @@ func TestDiffColumns_dropColumn(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users DROP COLUMN name;", stmts[0])
@@ -245,7 +253,7 @@ func TestDiffColumns_alterType(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text;", stmts[0])
@@ -258,7 +266,7 @@ func TestDiffColumns_alterType_withCollation(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], `COLLATE "en_US"`)
@@ -271,7 +279,7 @@ func TestDiffColumns_alterDefault_set(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("age", &model.Column{Name: "age", TypeName: "integer", Default: ptr("0")})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN age SET DEFAULT 0;", stmts[0])
@@ -284,7 +292,7 @@ func TestDiffColumns_alterDefault_drop(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("age", &model.Column{Name: "age", TypeName: "integer"})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN age DROP DEFAULT;", stmts[0])
@@ -297,7 +305,7 @@ func TestDiffColumns_alterNotNull_set(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN name SET NOT NULL;", stmts[0])
@@ -310,7 +318,7 @@ func TestDiffColumns_alterNotNull_drop(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, stmts, 1)
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN name DROP NOT NULL;", stmts[0])
@@ -323,7 +331,7 @@ func TestDiffColumns_identitySkipsNotNull(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", Identity: model.ColumnIdentity('a')})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1604,7 +1612,7 @@ func TestDiffColumns_renameColumn_selfRename_skipped(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", RenameFrom: &oldName, TypeName: "text"})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -1763,7 +1771,7 @@ func TestDiffColumns_renameColumn_destinationExists_error(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("display_name", &model.Column{Name: "display_name", RenameFrom: &oldName, TypeName: "text"})
 
-	_, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	_, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -1795,7 +1803,7 @@ func TestDiffColumns_renameColumn(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("display_name", &model.Column{Name: "display_name", RenameFrom: &oldName, TypeName: "text"})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.users RENAME COLUMN name TO display_name;"}, stmts)
 }
@@ -1808,7 +1816,7 @@ func TestDiffColumns_renameColumn_alreadyApplied(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("display_name", &model.Column{Name: "display_name", RenameFrom: &oldName, TypeName: "text"})
 
-	stmts, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
@@ -2042,7 +2050,7 @@ func TestDiffColumns_renameColumn_sourceNotFound(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("display_name", &model.Column{Name: "display_name", RenameFrom: &oldName, TypeName: "text"})
 
-	_, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	_, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source column")
 }
