@@ -19,10 +19,9 @@ import (
 type diffAllOptions struct {
 	FilterOptions
 	DropPolicy
-	Files             []string
-	PreSQL            string
-	PreSQLFile        string
-	IndexConcurrently bool
+	Files      []string
+	PreSQL     string
+	PreSQLFile string
 }
 
 // diffAllResult holds the result of diffAll.
@@ -97,12 +96,12 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to diff domains: %w", err)
 	}
 
-	tableDiff, err := diff.DiffTables(filteredTables, desiredTables, &options.DropPolicy, options.IndexConcurrently)
+	tableDiff, err := diff.DiffTables(filteredTables, desiredTables, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
 
-	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy, options.IndexConcurrently)
+	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff views: %w", err)
 	}

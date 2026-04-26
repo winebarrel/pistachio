@@ -11,10 +11,9 @@ import (
 type PlanOptions struct {
 	FilterOptions
 	DropPolicy
-	Files             []string `arg:"" help:"Path to the desired schema SQL file(s)."`
-	PreSQL            string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to prepend to the plan output."`
-	PreSQLFile        string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to prepend to the plan output."`
-	IndexConcurrently bool     `env:"PIST_INDEX_CONCURRENTLY" help:"Use CREATE/DROP INDEX CONCURRENTLY for index operations."`
+	Files      []string `arg:"" help:"Path to the desired schema SQL file(s)."`
+	PreSQL     string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to prepend to the plan output."`
+	PreSQLFile string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to prepend to the plan output."`
 }
 
 // ObjectCount holds the number of objects inspected by type.
@@ -63,12 +62,11 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	defer conn.Close(ctx) //nolint:errcheck
 
 	result, err := client.diffAll(ctx, conn, &diffAllOptions{
-		FilterOptions:     options.FilterOptions,
-		DropPolicy:        options.DropPolicy,
-		Files:             options.Files,
-		PreSQL:            options.PreSQL,
-		PreSQLFile:        options.PreSQLFile,
-		IndexConcurrently: options.IndexConcurrently,
+		FilterOptions: options.FilterOptions,
+		DropPolicy:    options.DropPolicy,
+		Files:         options.Files,
+		PreSQL:        options.PreSQL,
+		PreSQLFile:    options.PreSQLFile,
 	})
 	if err != nil {
 		return nil, err
