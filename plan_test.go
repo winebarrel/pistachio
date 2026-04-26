@@ -395,6 +395,284 @@ CREATE TYPE public.color AS ENUM ('red', 'blue');`)
 	assert.NotContains(t, got.SQL, "DROP TYPE")
 }
 
+func TestPlan_DisallowedDrops_Constraint(t *testing.T) {
+	// Pure removals of constraints honor --allow-drop=constraint.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    CONSTRAINT users_email_key UNIQUE (email)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got.SQL)
+	assert.Contains(t, got.DisallowedDrops, "-- skipped: ALTER TABLE public.users DROP CONSTRAINT users_email_key;")
+
+	got, err = client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"constraint"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "ALTER TABLE public.users DROP CONSTRAINT users_email_key;")
+	assert.Empty(t, got.DisallowedDrops)
+}
+
+func TestPlan_DisallowedDrops_Index(t *testing.T) {
+	// Pure removals of indexes honor --allow-drop=index.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got.SQL)
+	assert.Contains(t, got.DisallowedDrops, "-- skipped: DROP INDEX public.idx_users_name;")
+
+	got, err = client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"index"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP INDEX public.idx_users_name;")
+	assert.Empty(t, got.DisallowedDrops)
+}
+
+func TestPlan_DisallowedDrops_IndexChange_AlwaysExecutes(t *testing.T) {
+	// Definition changes still produce DROP+CREATE because PostgreSQL has no
+	// ALTER INDEX for definitions, even when --allow-drop is empty.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING hash (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP INDEX public.idx_users_name;")
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_name")
+	assert.Empty(t, got.DisallowedDrops)
+}
+
+func TestPlan_DisallowedDrops_ConstraintAllowed_IndexDenied(t *testing.T) {
+	// --allow-drop=constraint allows constraint drops but does NOT allow index drops.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    CONSTRAINT users_email_key UNIQUE (email)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"constraint"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "ALTER TABLE public.users DROP CONSTRAINT users_email_key;")
+	assert.NotContains(t, got.SQL, "DROP INDEX")
+	assert.Contains(t, got.DisallowedDrops, "-- skipped: DROP INDEX public.idx_users_name;")
+}
+
+func TestPlan_DisallowedDrops_FK_byForeignKeyPolicy(t *testing.T) {
+	// FK pure removals follow --allow-drop=foreign_key, NOT --allow-drop=constraint.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.orders (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    CONSTRAINT orders_pkey PRIMARY KEY (id),
+    CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.orders (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	// Default (no --allow-drop): FK drop is suppressed.
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got.SQL)
+	assert.Contains(t, got.DisallowedDrops, "-- skipped: ALTER TABLE public.orders DROP CONSTRAINT orders_user_id_fkey;")
+
+	// --allow-drop=constraint alone does NOT allow FK drop.
+	got, err = client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"constraint"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, got.SQL)
+	assert.Contains(t, got.DisallowedDrops, "-- skipped: ALTER TABLE public.orders DROP CONSTRAINT orders_user_id_fkey;")
+
+	// --allow-drop=foreign_key allows FK drop.
+	got, err = client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"foreign_key"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "ALTER TABLE public.orders DROP CONSTRAINT orders_user_id_fkey;")
+	assert.Empty(t, got.DisallowedDrops)
+}
+
+func TestPlan_DisallowedDrops_ConstraintAndForeignKey_Orthogonal(t *testing.T) {
+	// constraint and foreign_key are independent --allow-drop keys.
+	// constraint covers CHECK/UNIQUE/PK/EXCLUSION; FKs require foreign_key.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.orders (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    qty integer NOT NULL,
+    CONSTRAINT orders_pkey PRIMARY KEY (id),
+    CONSTRAINT orders_qty_check CHECK (qty > 0),
+    CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);`)
+
+	// Desired removes both the CHECK and the FK.
+	desired := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.orders (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    qty integer NOT NULL,
+    CONSTRAINT orders_pkey PRIMARY KEY (id)
+);`
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(desired), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	// constraint only → CHECK drops, FK suppressed.
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"constraint"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP CONSTRAINT orders_qty_check;")
+	assert.NotContains(t, got.SQL, "orders_user_id_fkey")
+	assert.Contains(t, got.DisallowedDrops, "-- skipped: ALTER TABLE public.orders DROP CONSTRAINT orders_user_id_fkey;")
+
+	// foreign_key only → FK drops, CHECK suppressed.
+	got, err = client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"foreign_key"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP CONSTRAINT orders_user_id_fkey;")
+	assert.NotContains(t, got.SQL, "orders_qty_check")
+	assert.Contains(t, got.DisallowedDrops, "-- skipped: ALTER TABLE public.orders DROP CONSTRAINT orders_qty_check;")
+
+	// Both → both drop.
+	got, err = client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"constraint", "foreign_key"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP CONSTRAINT orders_qty_check;")
+	assert.Contains(t, got.SQL, "DROP CONSTRAINT orders_user_id_fkey;")
+	assert.Empty(t, got.DisallowedDrops)
+}
+
 func TestPlan_ConcurrentlyDirective(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

@@ -15,6 +15,9 @@ func TestDropPolicy_IsDropAllowed(t *testing.T) {
 		assert.False(t, p.IsDropAllowed("enum"))
 		assert.False(t, p.IsDropAllowed("domain"))
 		assert.False(t, p.IsDropAllowed("column"))
+		assert.False(t, p.IsDropAllowed("constraint"))
+		assert.False(t, p.IsDropAllowed("foreign_key"))
+		assert.False(t, p.IsDropAllowed("index"))
 	})
 
 	t.Run("all", func(t *testing.T) {
@@ -24,6 +27,9 @@ func TestDropPolicy_IsDropAllowed(t *testing.T) {
 		assert.True(t, p.IsDropAllowed("enum"))
 		assert.True(t, p.IsDropAllowed("domain"))
 		assert.True(t, p.IsDropAllowed("column"))
+		assert.True(t, p.IsDropAllowed("constraint"))
+		assert.True(t, p.IsDropAllowed("foreign_key"))
+		assert.True(t, p.IsDropAllowed("index"))
 	})
 
 	t.Run("specific types", func(t *testing.T) {

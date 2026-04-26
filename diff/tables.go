@@ -17,7 +17,7 @@ type TableDiffResult struct {
 	Stmts               []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
 	FKAddStmts          []string // FK adds and renames (should run last)
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
-	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / FK DROP CONSTRAINT suppressed by DropChecker, with "-- skipped: " prefix
+	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
 }
 
@@ -125,20 +125,22 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// Partition children inherit columns and constraints from the parent,
 	// so skip diffing them to avoid false DROP statements.
 	if desired.PartitionOf != nil && desired.PartitionBound != nil {
-		idxResult, err := diffIndexes(current.Indexes, desired.Indexes)
+		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, dc)
 		if err != nil {
 			return nil, err
 		}
 		result.Stmts = append(result.Stmts, idxResult.Stmts...)
+		result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult.DisallowedDropStmts...)
 		if idxResult.HasConcurrently {
 			result.HasConcurrently = true
 		}
-		fkDrops, fkAdds, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)
+		fkDrops, fkAdds, fkDisallowed, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys, dc)
 		if err != nil {
 			return nil, err
 		}
 		result.FKDropStmts = append(result.FKDropStmts, fkDrops...)
 		result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
+		result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 		return result, nil
 	}
 
@@ -149,27 +151,30 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	result.Stmts = append(result.Stmts, colStmts...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, colDisallowed...)
 
-	conStmts, err := diffConstraints(fqtn, current.Constraints, desired.Constraints)
+	conStmts, conDisallowed, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
 	if err != nil {
 		return nil, err
 	}
 	result.Stmts = append(result.Stmts, conStmts...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, conDisallowed...)
 
-	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes)
+	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, dc)
 	if err != nil {
 		return nil, err
 	}
 	result.Stmts = append(result.Stmts, idxResult2.Stmts...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult2.DisallowedDropStmts...)
 	if idxResult2.HasConcurrently {
 		result.HasConcurrently = true
 	}
 
-	fkDrops, fkAdds, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys)
+	fkDrops, fkAdds, fkDisallowed, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys, dc)
 	if err != nil {
 		return nil, err
 	}
 	result.FKDropStmts = append(result.FKDropStmts, fkDrops...)
 	result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 
 	result.Stmts = append(result.Stmts, diffComments(current, desired)...)
 
@@ -401,13 +406,13 @@ func equalConstraintDef(a, b string) bool {
 	return normA == normB
 }
 
-func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint]) ([]string, error) {
-	var stmts []string
+func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, disallowed []string, err error) {
+	dc = NormalizeDropChecker(dc)
 
 	// Detect renames
 	renameStmts, current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Determine which renamed constraints need recreation instead of just rename
@@ -442,7 +447,10 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		}
 	}
 
-	// Drop removed or changed constraints
+	// Drop removed or changed constraints. Pure removals (constraint absent
+	// from desired) honor the constraint-drop policy; definition changes still
+	// run DROP+ADD because PostgreSQL has no ALTER CONSTRAINT for definitions.
+	conAllowed := dc.IsDropAllowed("constraint")
 	for name, currentCon := range current.All() {
 		desiredCon, ok := desired.GetOk(name)
 		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
@@ -454,7 +462,12 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 			if oldName, renamed := renamedFrom[name]; renamed {
 				dropName = oldName
 			}
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(dropName)+";")
+			drop := "ALTER TABLE " + fqtn + " DROP CONSTRAINT " + model.Ident(dropName) + ";"
+			if !ok && !conAllowed {
+				disallowed = append(disallowed, "-- skipped: "+drop)
+				continue
+			}
+			stmts = append(stmts, drop)
 		}
 	}
 
@@ -475,15 +488,17 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		}
 	}
 
-	return stmts, nil
+	return stmts, disallowed, nil
 }
 
 type diffIndexesResult struct {
-	Stmts           []string
-	HasConcurrently bool
+	Stmts               []string
+	DisallowedDropStmts []string
+	HasConcurrently     bool
 }
 
-func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) (*diffIndexesResult, error) {
+func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc DropChecker) (*diffIndexesResult, error) {
+	dc = NormalizeDropChecker(dc)
 	result := &diffIndexesResult{}
 
 	// Detect renames
@@ -493,7 +508,10 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) (*diffI
 	}
 	result.Stmts = append(result.Stmts, renameStmts...)
 
-	// Drop removed or changed indexes
+	// Drop removed or changed indexes. Pure removals (index absent from
+	// desired) honor the index-drop policy; definition changes still run
+	// DROP+CREATE because PostgreSQL has no ALTER INDEX for definitions.
+	idxAllowed := dc.IsDropAllowed("index")
 	for name, currentIdx := range current.All() {
 		desiredIdx, ok := desired.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
@@ -508,6 +526,10 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index]) (*diffI
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
 				return nil, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
+			}
+			if !ok && !idxAllowed {
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: "+stmt)
+				continue
 			}
 			result.Stmts = append(result.Stmts, stmt)
 			if useConcurrently {
@@ -589,15 +611,18 @@ func createIndexSQL(def string, concurrently bool) (string, error) {
 	return deparsed + ";", nil
 }
 
-// diffForeignKeys returns (dropStmts, addStmts, error).
+// diffForeignKeys returns (dropStmts, addStmts, disallowed, error).
 // Rename statements are included in addStmts (they depend on table renames being done first).
-func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey]) ([]string, []string, error) {
-	var dropStmts, addStmts []string
+// Pure FK removals (FK absent from desired while the owning table stays) honor
+// --allow-drop=foreign_key; FK drops emitted because the owning table is being
+// dropped follow the table policy (handled in DiffTables).
+func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey], dc DropChecker) (dropStmts, addStmts, disallowed []string, err error) {
+	dc = NormalizeDropChecker(dc)
 
 	// Detect renames (renames go into addStmts since they may depend on table renames)
 	renameStmts, current, renamedFrom, err := detectForeignKeyRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Determine which renamed FKs need recreation (drop+add) instead of just rename
@@ -635,6 +660,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	}
 
 	// Drop removed or changed FKs
+	fkAllowed := dc.IsDropAllowed("foreign_key")
 	for name := range current.All() {
 		desiredFk, ok := desired.GetOk(name)
 		currentFk := current.Get(name)
@@ -647,7 +673,12 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 			if oldName, renamed := renamedFrom[name]; renamed {
 				dropName = oldName
 			}
-			dropStmts = append(dropStmts, "ALTER TABLE "+fqtn+" DROP CONSTRAINT "+model.Ident(dropName)+";")
+			drop := "ALTER TABLE " + fqtn + " DROP CONSTRAINT " + model.Ident(dropName) + ";"
+			if !ok && !fkAllowed {
+				disallowed = append(disallowed, "-- skipped: "+drop)
+				continue
+			}
+			dropStmts = append(dropStmts, drop)
 		}
 	}
 
@@ -664,7 +695,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 		}
 	}
 
-	return dropStmts, addStmts, nil
+	return dropStmts, addStmts, disallowed, nil
 }
 
 func diffComments(current, desired *model.Table) []string {
