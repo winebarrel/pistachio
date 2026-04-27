@@ -140,10 +140,10 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so
 
 ### Executing arbitrary SQL
 
-Use `-- pist:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated each run — when it returns `true` the statement is executed, otherwise it is skipped. The simplest form skips when an object already exists:
+Use `-- pist:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated during `apply` — when it returns `true` the statement is executed, otherwise it is skipped. The simplest form skips when an object already exists:
 
 ```sql
--- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')
+-- pist:execute SELECT to_regprocedure('public.my_func()') IS NULL
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ ... $$ LANGUAGE plpgsql;
 ```
 
