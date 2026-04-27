@@ -13,8 +13,8 @@ type Options struct {
 }
 
 type FilterOptions struct {
-	Include []string `short:"I" help:"Include only tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
-	Exclude []string `short:"E" help:"Exclude tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
+	Include []string `short:"I" env:"PIST_INCLUDE" help:"Include only tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
+	Exclude []string `short:"E" env:"PIST_EXCLUDE" help:"Exclude tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
 	Enable  []string `enum:"table,view,enum,domain" env:"PIST_ENABLE" help:"Enable only specified object types (can be repeated)."`
 	Disable []string `enum:"table,view,enum,domain" env:"PIST_DISABLE" help:"Disable specified object types (can be repeated)."`
 }

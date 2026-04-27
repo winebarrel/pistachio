@@ -198,7 +198,7 @@ pist -n staging -m staging=public apply schema.sql
 
 ### Filtering objects
 
-Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names).
+Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names). Also available as `$PIST_INCLUDE` / `$PIST_EXCLUDE` environment variables.
 
 Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`. Can be repeated. Also available as `$PIST_ENABLE` / `$PIST_DISABLE` environment variables.
 
@@ -229,6 +229,8 @@ pist plan --enable enum schema.sql
 # Using environment variables
 PIST_ENABLE=enum pist dump
 PIST_DISABLE=view pist dump
+PIST_INCLUDE='user*' pist dump
+PIST_EXCLUDE='tmp_*' pist plan schema.sql
 ```
 
 > [!NOTE]
