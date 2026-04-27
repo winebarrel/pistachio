@@ -79,10 +79,17 @@ func (t Table) SQL() string {
 					if col.NotNull && !col.Identity.IsIdentityColumn() {
 						q += " NOT NULL"
 					}
+					if col.RenameFrom != nil {
+						q = "    -- pist:renamed-from " + *col.RenameFrom + "\n" + q
+					}
 					return q
 				}),
 				orderedmap.TransformSlice(t.Constraints, func(_ string, con *Constraint) string {
-					return "    CONSTRAINT " + Ident(con.Name) + " " + con.Definition
+					q := "    CONSTRAINT " + Ident(con.Name) + " " + con.Definition
+					if con.RenameFrom != nil {
+						q = "    -- pist:renamed-from " + *con.RenameFrom + "\n" + q
+					}
+					return q
 				}),
 			),
 			",\n",

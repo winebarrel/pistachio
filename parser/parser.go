@@ -36,6 +36,21 @@ type ParseResult struct {
 	ExecuteStmts []*ExecuteStmt
 	Order        []EntityRef
 	Comments     []Comment
+
+	rawSQL   string
+	rawStmts []*pg_query.RawStmt
+}
+
+// AttachComments scans top-level comments from the SQL that produced r and
+// stores them in r.Comments. It reuses the parse tree captured during the
+// original ParseSQLWithSchema call, so no second pg_query.Parse pass is needed.
+func (r *ParseResult) AttachComments() error {
+	all, err := ScanComments(r.rawSQL)
+	if err != nil {
+		return err
+	}
+	r.Comments = filterTopLevelComments(r.rawSQL, all, r.rawStmts)
+	return nil
 }
 
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
@@ -337,6 +352,8 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		Domains:      domains,
 		ExecuteStmts: executeStmts,
 		Order:        order,
+		rawSQL:       sql,
+		rawStmts:     result.Stmts,
 	}, nil
 }
 

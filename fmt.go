@@ -111,16 +111,11 @@ func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 	results := make(map[string]string, len(options.Files))
 
 	for _, path := range options.Files {
-		sql, err := parser.ReadSQLFile(path)
-		if err != nil {
-			return nil, err
-		}
-		result, err := parser.ParseSQLWithSchema(sql, defaultSchema)
+		result, err := parser.ParseSQLFileWithSchema(path, defaultSchema)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse SQL file %q: %w", path, err)
 		}
-		result.Comments, err = parser.ScanTopLevelComments(sql)
-		if err != nil {
+		if err := result.AttachComments(); err != nil {
 			return nil, fmt.Errorf("failed to scan comments in %q: %w", path, err)
 		}
 		results[path] = formatWithComments(result)

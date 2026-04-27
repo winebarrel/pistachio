@@ -1,0 +1,16 @@
+input: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pist:renamed-from old_name
+      name text NOT NULL,
+      -- pist:renamed-from old_pkey
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+expected: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pist:renamed-from old_name
+      name text NOT NULL,
+      -- pist:renamed-from old_pkey
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
