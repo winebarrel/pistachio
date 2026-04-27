@@ -12,23 +12,19 @@ import (
 func formatEntity(result *parser.ParseResult, ref parser.EntityRef) string {
 	switch ref.Kind {
 	case parser.EntityKindEnum:
-		if e, ok := result.Enums.GetOk(ref.FQN); ok {
-			return model.EnumToSQLBare(e)
-		}
+		e, _ := result.Enums.GetOk(ref.FQN)
+		return model.EnumToSQLBare(e)
 	case parser.EntityKindDomain:
-		if d, ok := result.Domains.GetOk(ref.FQN); ok {
-			return model.DomainToSQLBare(d)
-		}
+		d, _ := result.Domains.GetOk(ref.FQN)
+		return model.DomainToSQLBare(d)
 	case parser.EntityKindTable:
-		if t, ok := result.Tables.GetOk(ref.FQN); ok {
-			return model.TableToSQLBare(t)
-		}
+		t, _ := result.Tables.GetOk(ref.FQN)
+		return model.TableToSQLBare(t)
 	case parser.EntityKindView:
-		if v, ok := result.Views.GetOk(ref.FQN); ok {
-			return model.ViewToSQLBare(v)
-		}
+		v, _ := result.Views.GetOk(ref.FQN)
+		return model.ViewToSQLBare(v)
 	}
-	return ""
+	panic(fmt.Sprintf("unknown entity kind: %v", ref.Kind))
 }
 
 // formatWithComments emits entities in source order. Each entity gets:
@@ -50,9 +46,6 @@ func formatWithComments(result *parser.ParseResult) string {
 			cIdx++
 		}
 		entity := formatEntity(result, ref)
-		if entity == "" {
-			continue
-		}
 		var trailing []string
 		for cIdx < len(result.Comments) && result.Comments[cIdx].End <= ref.OwnershipEnd {
 			trailing = append(trailing, result.Comments[cIdx].Text)

@@ -115,39 +115,30 @@ func isDirectiveComment(text string) bool {
 }
 
 // commentStmtTargetFQN returns the FQN of the entity targeted by a COMMENT ON
-// statement. For COMMENT ON COLUMN/CONSTRAINT, the FQN of the parent table is
-// returned. The second return value is false if the target cannot be determined.
+// statement. For COMMENT ON COLUMN, the FQN of the parent table is returned.
+// The second return value is false if the objtype is not supported.
 func commentStmtTargetFQN(cs *pg_query.CommentStmt, defaultSchema string) (string, bool) {
+	var names []string
 	switch cs.Objtype {
 	case pg_query.ObjectType_OBJECT_TYPE, pg_query.ObjectType_OBJECT_DOMAIN:
-		tn := cs.Object.GetTypeName()
-		if tn == nil {
-			return "", false
-		}
-		names := stringSvalNames(tn.Names)
-		if len(names) == 0 {
-			return "", false
-		}
-		return identFromQualified(names, defaultSchema), true
+		names = stringSvalNames(cs.Object.GetTypeName().GetNames())
 	case pg_query.ObjectType_OBJECT_TABLE,
 		pg_query.ObjectType_OBJECT_VIEW,
 		pg_query.ObjectType_OBJECT_MATVIEW:
-		items := cs.Object.GetList().GetItems()
-		names := stringSvalNames(items)
-		if len(names) == 0 {
-			return "", false
-		}
-		return identFromQualified(names, defaultSchema), true
+		names = stringSvalNames(cs.Object.GetList().GetItems())
 	case pg_query.ObjectType_OBJECT_COLUMN:
-		items := cs.Object.GetList().GetItems()
-		names := stringSvalNames(items)
-		if len(names) < 2 {
-			return "", false
+		// names: [table, col] or [schema, table, col]; drop the column.
+		items := stringSvalNames(cs.Object.GetList().GetItems())
+		if len(items) >= 2 {
+			names = items[:len(items)-1]
 		}
-		// names: [table, col] or [schema, table, col]
-		return identFromQualified(names[:len(names)-1], defaultSchema), true
+	default:
+		return "", false
 	}
-	return "", false
+	if len(names) == 0 {
+		return "", false
+	}
+	return identFromQualified(names, defaultSchema), true
 }
 
 func stringSvalNames(nodes []*pg_query.Node) []string {

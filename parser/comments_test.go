@@ -25,6 +25,12 @@ func TestScanComments_filtersDirective(t *testing.T) {
 	assert.Equal(t, "-- regular comment", cs[0].Text)
 }
 
+func TestScanComments_invalidSQL(t *testing.T) {
+	_, err := ScanComments("/* unterminated")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to scan SQL for comments")
+}
+
 func TestCodeStart_skipsLeadingCommentsAndWhitespace(t *testing.T) {
 	sql := "-- header\n  /* note */\n\nCREATE TABLE x (id integer);"
 	pos := CodeStart(sql, 0)
@@ -35,6 +41,12 @@ func TestCodeStart_alreadyAtCode(t *testing.T) {
 	sql := "CREATE TABLE x (id integer);"
 	pos := CodeStart(sql, 0)
 	assert.Equal(t, int32(0), pos)
+}
+
+func TestCodeStart_runsToEnd(t *testing.T) {
+	sql := "-- only comments\n  /* and whitespace */\n"
+	pos := CodeStart(sql, 0)
+	assert.Equal(t, int32(len(sql)), pos)
 }
 
 func TestFilterTopLevelComments_dropsInline(t *testing.T) {
