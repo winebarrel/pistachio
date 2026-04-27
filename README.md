@@ -140,12 +140,26 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so
 
 ### Executing arbitrary SQL
 
-Use `-- pist:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. Add a check SQL to skip execution conditionally:
+Use `-- pist:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated each run — when it returns `true` the statement is executed, otherwise it is skipped. The simplest form skips when an object already exists:
 
 ```sql
 -- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ ... $$ LANGUAGE plpgsql;
 ```
+
+For idempotent management of a function whose body changes over time, embed a version tag in `COMMENT ON FUNCTION` and execute only when the installed comment differs. Wrap the `CREATE` and `COMMENT` in a `DO` block so they are a single statement:
+
+```sql
+-- pist:execute SELECT obj_description(to_regprocedure('public.get_user_count()'), 'pg_proc') IS DISTINCT FROM 'v1'
+DO $do$ BEGIN
+  CREATE OR REPLACE FUNCTION public.get_user_count() RETURNS bigint AS $body$
+    SELECT count(*) FROM public.users;
+  $body$ LANGUAGE sql;
+  COMMENT ON FUNCTION public.get_user_count() IS 'v1';
+END $do$;
+```
+
+When you change the body, bump the tag in both places (e.g. `'v1'` → `'v2'`); the next `apply` will re-run.
 
 See [Getting Started](getting-started.md) for details.
 
