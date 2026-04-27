@@ -47,21 +47,7 @@ You can also split into one file per object:
 pist dump --split ./schema/
 ```
 
-## Step 3: Normalize with fmt
-
-Format the dumped schema into a consistent canonical form:
-
-```bash
-pist fmt -w schema.sql
-```
-
-This ensures the file is in the exact format pistachio expects. From now on, `fmt --check` can be used in CI to enforce formatting:
-
-```bash
-pist fmt --check schema.sql
-```
-
-## Step 4: Make changes
+## Step 3: Make changes
 
 Edit your schema file to add, modify, or remove objects. For example, add a new column:
 
@@ -74,7 +60,7 @@ CREATE TABLE public.users (
 );
 ```
 
-## Step 5: Preview the diff
+## Step 4: Preview the diff
 
 Use `plan` to see what SQL pistachio would execute without actually changing anything:
 
@@ -89,7 +75,7 @@ Output:
 ALTER TABLE public.users ADD COLUMN email text;
 ```
 
-## Step 6: Apply the changes
+## Step 5: Apply the changes
 
 When you're happy with the plan, apply it:
 
@@ -105,9 +91,9 @@ pist plan schema.sql
 # => -- No changes
 ```
 
-## Step 7: Iterate
+## Step 6: Iterate
 
-Repeat steps 4-6 as your schema evolves. Your schema file is always the source of truth.
+Repeat steps 3-5 as your schema evolves. Your schema file is always the source of truth.
 
 ## Common workflows
 
@@ -265,16 +251,13 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-Execute statements appear in `plan` output and are preserved by `fmt`. During `apply`, the check SQL is evaluated and the statement is skipped if it returns `false`.
+Execute statements appear in `plan` output. During `apply`, the check SQL is evaluated and the statement is skipped if it returns `false`.
 
 ## CI integration
 
 A typical CI pipeline:
 
 ```bash
-# Check formatting
-pist fmt --check schema.sql
-
 # Verify no drift from database
 pist plan schema.sql | grep -q "No changes"
 ```
