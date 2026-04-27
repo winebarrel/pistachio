@@ -93,7 +93,7 @@ pist plan schema.sql
 
 ## Step 6: Iterate
 
-Repeat steps 4-6 as your schema evolves. Your schema file is always the source of truth.
+Repeat steps 3-5 as your schema evolves. Your schema file is always the source of truth.
 
 ## Common workflows
 

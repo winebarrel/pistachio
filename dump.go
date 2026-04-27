@@ -117,15 +117,15 @@ func (r *DumpResult) domains() *orderedmap.Map[string, *model.Domain] {
 }
 
 func (r *DumpResult) String() string {
-	return formatSchemaSQL(r.domains(), r.enums(), r.tables(), r.views())
+	return formatSchemaSQL(r.enums(), r.domains(), r.tables(), r.views())
 }
 
-// formatSchemaSQL formats domains, enums, tables, and views into canonical SQL
+// formatSchemaSQL formats enums, domains, tables, and views into canonical SQL
 // output for dump.
 // Order: enums → domains → tables → views (enums first since domains may depend on them).
 func formatSchemaSQL(
-	domains *orderedmap.Map[string, *model.Domain],
 	enums *orderedmap.Map[string, *model.Enum],
+	domains *orderedmap.Map[string, *model.Domain],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 ) string {
