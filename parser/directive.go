@@ -51,6 +51,8 @@ func ValidateDirectives(rawSQL string) error {
 type ExecuteStmt struct {
 	SQL      string // The SQL statement to execute
 	CheckSQL string // Optional condition check SQL (empty = always execute)
+	Location int32  // Source position of the executed statement's CREATE keyword
+	StmtEnd  int32  // Source position of the executed statement's end
 }
 
 // ExtractExecuteDirectives scans raw SQL for `-- pist:execute [<check SQL>]`
@@ -98,6 +100,8 @@ func ExtractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 		executeStmts = append(executeStmts, &ExecuteStmt{
 			SQL:      deparsed,
 			CheckSQL: checkSQL,
+			Location: CodeStart(rawSQL, loc),
+			StmtEnd:  end,
 		})
 		skipLocations[loc] = true
 	}

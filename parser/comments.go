@@ -78,6 +78,22 @@ type Comment struct {
 	Text  string
 }
 
+// ScanTopLevelComments returns SQL comments that appear between (not inside)
+// top-level statements. pist:* directive comments are filtered out. This is a
+// separate pass from the main parser; callers that don't need comments (e.g.
+// plan/apply) should not invoke it.
+func ScanTopLevelComments(sql string) ([]Comment, error) {
+	parsed, err := pg_query.Parse(sql)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SQL: %w", err)
+	}
+	all, err := ScanComments(sql)
+	if err != nil {
+		return nil, err
+	}
+	return filterTopLevelComments(sql, all, parsed.Stmts), nil
+}
+
 // ScanComments returns SQL line comments (--) and C-style block comments (/* */)
 // from sql, in source order, with byte offsets into sql.
 // Comments matching pistachio directives (-- pist:...) are filtered out.

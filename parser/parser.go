@@ -330,12 +330,6 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		}
 	}
 
-	allComments, err := ScanComments(sql)
-	if err != nil {
-		return nil, err
-	}
-	comments := filterTopLevelComments(sql, allComments, result.Stmts)
-
 	return &ParseResult{
 		Tables:       tables,
 		Views:        views,
@@ -343,7 +337,6 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		Domains:      domains,
 		ExecuteStmts: executeStmts,
 		Order:        order,
-		Comments:     comments,
 	}, nil
 }
 

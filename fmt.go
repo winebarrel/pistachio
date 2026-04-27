@@ -2,6 +2,7 @@ package pistachio
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/winebarrel/orderedmap"
@@ -27,31 +28,55 @@ func formatEntity(result *parser.ParseResult, ref parser.EntityRef) string {
 	panic(fmt.Sprintf("unknown entity kind: %v", ref.Kind))
 }
 
-// formatWithComments emits entities in source order. Each entity gets:
-//   - leading comments: those between the previous entity's ownership end and
-//     this entity's CREATE keyword.
-//   - the entity's bare SQL (CREATE + indexes + FKs + COMMENT ON statements).
-//   - trailing comments: those between this entity's CREATE statement end and
-//     its ownership end (e.g. a comment placed before a CREATE INDEX that
-//     belongs to this entity).
+// fmtItem represents a top-level statement (entity or pist:execute) for
+// source-order emission with surrounding comments.
+type fmtItem struct {
+	location     int32
+	ownershipEnd int32
+	sql          string
+}
+
+// formatWithComments emits entities and pist:execute statements in source
+// order. Each item gets:
+//   - leading comments: those between the previous item's ownership end and
+//     this item's start.
+//   - the item's bare SQL.
+//   - trailing comments: those between this item's stmt end and its ownership
+//     end (e.g. a comment placed before a CREATE INDEX owned by an entity).
 //
-// Comments after the last entity's ownership end are appended at the very end.
+// Comments after the last item's ownership end are appended at the very end.
 func formatWithComments(result *parser.ParseResult) string {
+	items := make([]fmtItem, 0, len(result.Order)+len(result.ExecuteStmts))
+	for _, ref := range result.Order {
+		items = append(items, fmtItem{
+			location:     ref.Location,
+			ownershipEnd: ref.OwnershipEnd,
+			sql:          formatEntity(result, ref),
+		})
+	}
+	for _, es := range result.ExecuteStmts {
+		items = append(items, fmtItem{
+			location:     es.Location,
+			ownershipEnd: es.StmtEnd,
+			sql:          parser.FormatExecuteStmt(es),
+		})
+	}
+	sort.SliceStable(items, func(i, j int) bool { return items[i].location < items[j].location })
+
 	var parts []string
 	cIdx := 0
-	for _, ref := range result.Order {
+	for _, it := range items {
 		var leading []string
-		for cIdx < len(result.Comments) && result.Comments[cIdx].End <= ref.Location {
+		for cIdx < len(result.Comments) && result.Comments[cIdx].End <= it.location {
 			leading = append(leading, result.Comments[cIdx].Text)
 			cIdx++
 		}
-		entity := formatEntity(result, ref)
 		var trailing []string
-		for cIdx < len(result.Comments) && result.Comments[cIdx].End <= ref.OwnershipEnd {
+		for cIdx < len(result.Comments) && result.Comments[cIdx].End <= it.ownershipEnd {
 			trailing = append(trailing, result.Comments[cIdx].Text)
 			cIdx++
 		}
-		block := entity
+		block := it.sql
 		if len(leading) > 0 {
 			block = strings.Join(leading, "\n") + "\n" + block
 		}
@@ -86,25 +111,19 @@ func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 	results := make(map[string]string, len(options.Files))
 
 	for _, path := range options.Files {
-		result, err := parser.ParseSQLFileWithSchema(path, defaultSchema)
+		sql, err := parser.ReadSQLFile(path)
+		if err != nil {
+			return nil, err
+		}
+		result, err := parser.ParseSQLWithSchema(sql, defaultSchema)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse SQL file %q: %w", path, err)
 		}
-		formatted := formatWithComments(result)
-
-		// Append execute statements
-		if len(result.ExecuteStmts) > 0 {
-			var executeParts []string
-			for _, es := range result.ExecuteStmts {
-				executeParts = append(executeParts, parser.FormatExecuteStmt(es))
-			}
-			if formatted != "" {
-				formatted += "\n\n"
-			}
-			formatted += strings.Join(executeParts, "\n\n")
+		result.Comments, err = parser.ScanTopLevelComments(sql)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan comments in %q: %w", path, err)
 		}
-
-		results[path] = formatted
+		results[path] = formatWithComments(result)
 	}
 
 	return results, nil

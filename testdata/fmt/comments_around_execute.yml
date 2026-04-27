@@ -1,0 +1,25 @@
+input: |
+  CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+  -- describe my_func
+  -- pist:execute SELECT true
+  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+  -- after my_func
+  CREATE TABLE public.posts (id integer NOT NULL, CONSTRAINT posts_pkey PRIMARY KEY (id));
+  -- end of file
+expected: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- describe my_func
+  -- pist:execute SELECT true
+  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+
+  -- after my_func
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  -- end of file
