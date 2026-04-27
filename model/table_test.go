@@ -156,6 +156,38 @@ func TestTable_IdxSQL(t *testing.T) {
 	assert.Equal(t, "CREATE INDEX idx_name ON public.users USING btree (name);", tbl.IdxSQL())
 }
 
+func TestTable_IdxSQL_withDirectives(t *testing.T) {
+	tbl := newTable("public", "users")
+	old := "old_idx"
+	tbl.Indexes.Set("idx_name", &Index{
+		Definition:   "CREATE INDEX idx_name ON public.users USING btree (name)",
+		Concurrently: true,
+		RenameFrom:   &old,
+	})
+	got := tbl.IdxSQL()
+	assert.Equal(t, "-- pist:renamed-from old_idx\n-- pist:concurrently\nCREATE INDEX idx_name ON public.users USING btree (name);", got)
+}
+
+func TestTable_FkSQL_renamed(t *testing.T) {
+	tbl := newTable("public", "orders")
+	old := "old_fk"
+	tbl.ForeignKeys.Set("fk_user", &ForeignKey{
+		Constraint: Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", RenameFrom: &old, Validated: true},
+		Schema:     "public",
+		Table:      "orders",
+	})
+	assert.Contains(t, tbl.FkSQL(), "-- pist:renamed-from old_fk\nALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user")
+}
+
+func TestTableToSQLBare_renamed(t *testing.T) {
+	tbl := newTable("public", "users")
+	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true})
+	old := "public.old_users"
+	tbl.RenameFrom = &old
+	got := TableToSQLBare(tbl)
+	assert.Contains(t, got, "-- pist:renamed-from public.old_users\nCREATE TABLE public.users")
+}
+
 func TestTable_IdxSQL_empty(t *testing.T) {
 	tbl := newTable("public", "users")
 	assert.Equal(t, "", tbl.IdxSQL())

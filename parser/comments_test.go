@@ -36,6 +36,22 @@ func TestScanComments_invalidSQL(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to scan SQL for comments")
 }
 
+func TestScanTopLevelComments(t *testing.T) {
+	sql := "-- top\nCREATE TABLE x (\n  id integer, -- inline\n  name text\n);\n-- after\n"
+	cs, err := ScanTopLevelComments(sql)
+	require.NoError(t, err)
+	got := make([]string, len(cs))
+	for i, c := range cs {
+		got[i] = c.Text
+	}
+	assert.Equal(t, []string{"-- top", "-- after"}, got)
+}
+
+func TestScanTopLevelComments_invalidSQL(t *testing.T) {
+	_, err := ScanTopLevelComments("/* unterminated")
+	require.Error(t, err)
+}
+
 func TestCodeStart_skipsLeadingCommentsAndWhitespace(t *testing.T) {
 	sql := "-- header\n  /* note */\n\nCREATE TABLE x (id integer);"
 	pos := CodeStart(sql, 0)
