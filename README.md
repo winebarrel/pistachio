@@ -48,9 +48,6 @@ Commands:
   dump [flags]
     Dump the current database schema as SQL.
 
-  fmt <files> ... [flags]
-    Format SQL file(s) into canonical form.
-
 Run "pist <command> --help" for more information on a command.
 ```
 
@@ -170,27 +167,6 @@ Dump the current database schema as SQL. Output can be used directly as a schema
 ```bash
 pist dump
 ```
-
-### fmt
-
-Format SQL file(s) into the canonical form used by `dump`. Useful for normalizing hand-written schema files.
-
-```bash
-# Print formatted SQL to stdout
-pist fmt schema.sql
-
-# Format multiple files to stdout (combined)
-pist fmt tables.sql views.sql
-
-# Overwrite file(s) in place
-pist fmt -w schema.sql
-
-# Check if files are formatted (exit 1 if not, useful for CI)
-pist fmt --check schema.sql
-```
-
-> [!NOTE]
-> `dump` output uses PostgreSQL's own formatting (e.g. `pg_get_viewdef`), while `fmt` normalizes through the pg_query parser. This means `dump` output may not pass `fmt --check` directly. Run `fmt -w` once after the initial `dump` to normalize, then use `--check` in CI going forward.
 
 ### Schema name mapping
 

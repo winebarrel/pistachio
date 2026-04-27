@@ -120,6 +120,31 @@ func (r *DumpResult) String() string {
 	return formatSchemaSQL(r.domains(), r.enums(), r.tables(), r.views())
 }
 
+// formatSchemaSQL formats domains, enums, tables, and views into canonical SQL
+// output for dump.
+// Order: enums → domains → tables → views (enums first since domains may depend on them).
+func formatSchemaSQL(
+	domains *orderedmap.Map[string, *model.Domain],
+	enums *orderedmap.Map[string, *model.Enum],
+	tables *orderedmap.Map[string, *model.Table],
+	views *orderedmap.Map[string, *model.View],
+) string {
+	var parts []string
+	if enums != nil && enums.Len() > 0 {
+		parts = append(parts, model.EnumsToSQL(enums))
+	}
+	if domains != nil && domains.Len() > 0 {
+		parts = append(parts, model.DomainsToSQL(domains))
+	}
+	if tables != nil && tables.Len() > 0 {
+		parts = append(parts, model.TablesToSQL(tables))
+	}
+	if views != nil && views.Len() > 0 {
+		parts = append(parts, model.ViewsToSQL(views))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
 func (r *DumpResult) Files() map[string]string {
 	files := make(map[string]string)
 	seen := make(map[string]bool)
