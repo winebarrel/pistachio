@@ -40,30 +40,36 @@ func CodeStart(sql string, pos int32) int32 {
 // filterTopLevelComments drops comments whose byte range falls inside any
 // parsed statement's actual code region (after leading comments are skipped).
 // Such comments (e.g. inline column comments) cannot be safely relocated.
+//
+// Both comments and spans are in source order, so the scan is a linear
+// two-pointer walk over them.
 func filterTopLevelComments(sql string, comments []Comment, stmts []*pg_query.RawStmt) []Comment {
 	if len(comments) == 0 || len(stmts) == 0 {
 		return comments
 	}
+	sqlLen := int32(len(sql))
 	type span struct{ start, end int32 }
 	spans := make([]span, 0, len(stmts))
 	for _, s := range stmts {
 		if s.StmtLen == 0 {
 			continue
 		}
+		end := s.StmtLocation + s.StmtLen
+		if end > sqlLen {
+			end = sqlLen
+		}
 		spans = append(spans, span{
 			start: CodeStart(sql, s.StmtLocation),
-			end:   s.StmtLocation + s.StmtLen,
+			end:   end,
 		})
 	}
 	out := make([]Comment, 0, len(comments))
+	spanIdx := 0
 	for _, c := range comments {
-		inside := false
-		for _, sp := range spans {
-			if c.Start >= sp.start && c.End <= sp.end {
-				inside = true
-				break
-			}
+		for spanIdx < len(spans) && spans[spanIdx].end < c.Start {
+			spanIdx++
 		}
+		inside := spanIdx < len(spans) && c.Start >= spans[spanIdx].start && c.End <= spans[spanIdx].end
 		if !inside {
 			out = append(out, c)
 		}

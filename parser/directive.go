@@ -51,7 +51,7 @@ func ValidateDirectives(rawSQL string) error {
 type ExecuteStmt struct {
 	SQL      string // The SQL statement to execute
 	CheckSQL string // Optional condition check SQL (empty = always execute)
-	Location int32  // Source position of the executed statement's CREATE keyword
+	Location int32  // Source position of the executed statement's start, after leading comments
 	StmtEnd  int32  // Source position of the executed statement's end
 }
 
