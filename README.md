@@ -236,6 +236,9 @@ PIST_EXCLUDE='tmp_*' pist plan schema.sql
 > [!NOTE]
 > `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference), so use them primarily for inspection (`dump`, `plan`) rather than `apply`.
 
+> [!NOTE]
+> When both a CLI flag and its corresponding environment variable are set, the CLI flag overrides the environment variable (values are not merged). For example, running `PIST_EXCLUDE='tmp_*' pist plan -E 'foo_*' schema.sql` excludes only `foo_*`; `tmp_*` is ignored.
+
 ### Omit schema
 
 Use `--omit-schema` to omit schema names from the dump output.
