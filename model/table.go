@@ -102,14 +102,18 @@ func (t Table) SQL() string {
 
 func (t Table) IdxSQL() string {
 	return strings.Join(
-		orderedmap.TransformSlice(t.Indexes, func(_ string, idx *Index) string { return idx.SQL() }),
+		orderedmap.TransformSlice(t.Indexes, func(_ string, idx *Index) string {
+			return withDirectives(idx.SQL(), renamedFromDirective(idx.RenameFrom), concurrentlyDirective(idx.Concurrently))
+		}),
 		"\n",
 	)
 }
 
 func (t Table) FkSQL() string {
 	return strings.Join(
-		orderedmap.TransformSlice(t.ForeignKeys, func(_ string, fk *ForeignKey) string { return fk.SQL() }),
+		orderedmap.TransformSlice(t.ForeignKeys, func(_ string, fk *ForeignKey) string {
+			return withDirectives(fk.SQL(), renamedFromDirective(fk.RenameFrom))
+		}),
 		"\n",
 	)
 }
@@ -132,7 +136,7 @@ func TableToSQL(t *Table) string {
 }
 
 func TableToSQLBare(t *Table) string {
-	parts := []string{t.SQL()}
+	parts := []string{withDirectives(t.SQL(), renamedFromDirective(t.RenameFrom))}
 	if s := t.IdxSQL(); s != "" {
 		parts = append(parts, s)
 	}

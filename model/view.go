@@ -46,10 +46,10 @@ func ViewToSQL(v *View) string {
 }
 
 func ViewToSQLBare(v *View) string {
-	parts := []string{v.SQL()}
+	parts := []string{withDirectives(v.SQL(), renamedFromDirective(v.RenameFrom))}
 	if v.Indexes != nil {
 		for _, idx := range v.Indexes.CollectValues() {
-			parts = append(parts, idx.SQL())
+			parts = append(parts, withDirectives(idx.SQL(), renamedFromDirective(idx.RenameFrom), concurrentlyDirective(idx.Concurrently)))
 		}
 	}
 	if s := v.CommentSQL(); s != "" {

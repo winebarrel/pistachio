@@ -17,8 +17,13 @@ func TestScanComments_lineAndBlock(t *testing.T) {
 	assert.Equal(t, "/* block */", cs[1].Text)
 }
 
-func TestScanComments_filtersDirective(t *testing.T) {
-	sql := "-- pist:execute SELECT 1\n-- regular comment\nCREATE TABLE x (id integer);\n"
+func TestScanComments_filtersAllPistDirectives(t *testing.T) {
+	sql := `-- pist:execute SELECT 1
+-- pist:renamed-from old_name
+-- pist:concurrently
+-- regular comment
+CREATE TABLE x (id integer);
+`
 	cs, err := ScanComments(sql)
 	require.NoError(t, err)
 	require.Len(t, cs, 1)

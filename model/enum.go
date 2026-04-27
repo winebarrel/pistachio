@@ -40,7 +40,7 @@ func EnumToSQL(e *Enum) string {
 }
 
 func EnumToSQLBare(e *Enum) string {
-	parts := []string{e.SQL()}
+	parts := []string{withDirectives(e.SQL(), renamedFromDirective(e.RenameFrom))}
 	if s := e.CommentSQL(); s != "" {
 		parts = append(parts, s)
 	}

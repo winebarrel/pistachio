@@ -1,0 +1,21 @@
+input: |
+  -- pist:renamed-from old_users
+  CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+
+  -- pist:concurrently
+  CREATE INDEX users_id_idx ON public.users (id);
+
+  -- pist:renamed-from public.old_view
+  CREATE VIEW public.active AS SELECT id FROM public.users;
+expected: |
+  -- pist:renamed-from public.old_users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pist:concurrently
+  CREATE INDEX users_id_idx ON public.users USING btree (id);
+
+  -- pist:renamed-from public.old_view
+  CREATE OR REPLACE VIEW public.active AS
+  SELECT id FROM public.users;

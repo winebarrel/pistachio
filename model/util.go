@@ -51,3 +51,32 @@ func quote(name string) string {
 func QuoteLiteral(s string) string {
 	return `'` + strings.ReplaceAll(s, `'`, `''`) + `'`
 }
+
+// withDirectives prepends pist:* directive lines (joined with \n) to sql.
+// Empty directive entries are skipped.
+func withDirectives(sql string, directives ...string) string {
+	var lines []string
+	for _, d := range directives {
+		if d != "" {
+			lines = append(lines, d)
+		}
+	}
+	if len(lines) == 0 {
+		return sql
+	}
+	return strings.Join(lines, "\n") + "\n" + sql
+}
+
+func renamedFromDirective(renameFrom *string) string {
+	if renameFrom == nil {
+		return ""
+	}
+	return "-- pist:renamed-from " + *renameFrom
+}
+
+func concurrentlyDirective(concurrently bool) string {
+	if !concurrently {
+		return ""
+	}
+	return "-- pist:concurrently"
+}

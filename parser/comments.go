@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/pistachio/model"
@@ -113,7 +112,7 @@ func ScanComments(sql string) ([]Comment, error) {
 			continue
 		}
 		text := sql[start:end]
-		if isDirectiveComment(text) {
+		if isPistDirectiveComment(text) {
 			continue
 		}
 		out = append(out, Comment{Start: start, End: end, Text: text})
@@ -121,13 +120,12 @@ func ScanComments(sql string) ([]Comment, error) {
 	return out, nil
 }
 
-func isDirectiveComment(text string) bool {
-	t := strings.TrimSpace(text)
-	if !strings.HasPrefix(t, "--") {
-		return false
-	}
-	t = strings.TrimSpace(strings.TrimPrefix(t, "--"))
-	return strings.HasPrefix(t, "pist:")
+// isPistDirectiveComment reports whether text is a `-- pist:*` directive line.
+// All such directives are re-emitted from the model layer (ExecuteStmts for
+// execute, *ToSQLBare for renamed-from/concurrently), so they are stripped
+// here to avoid duplication or position drift on `pist fmt -w` round-trips.
+func isPistDirectiveComment(text string) bool {
+	return anyDirectivePattern.MatchString(text)
 }
 
 // commentStmtTargetFQN returns the FQN of the entity targeted by a COMMENT ON

@@ -68,7 +68,7 @@ func DomainToSQL(d *Domain) string {
 }
 
 func DomainToSQLBare(d *Domain) string {
-	parts := []string{d.SQL()}
+	parts := []string{withDirectives(d.SQL(), renamedFromDirective(d.RenameFrom))}
 	if s := d.CommentSQL(); s != "" {
 		parts = append(parts, s)
 	}
