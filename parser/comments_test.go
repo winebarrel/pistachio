@@ -94,6 +94,14 @@ func TestFilterTopLevelComments_keepsBetweenStmts(t *testing.T) {
 	assert.Equal(t, "-- between", filtered[0].Text)
 }
 
+func TestFilterTopLevelComments_emptyInputs(t *testing.T) {
+	parsed, err := pg_query.Parse("CREATE TABLE x (id integer);")
+	require.NoError(t, err)
+	assert.Empty(t, filterTopLevelComments("CREATE TABLE x (id integer);", nil, parsed.Stmts))
+	assert.Equal(t, []Comment{{Start: 0, End: 7, Text: "-- foo"}},
+		filterTopLevelComments("-- foo", []Comment{{Start: 0, End: 7, Text: "-- foo"}}, nil))
+}
+
 func TestCommentStmtTargetFQN(t *testing.T) {
 	cases := []struct {
 		name string
