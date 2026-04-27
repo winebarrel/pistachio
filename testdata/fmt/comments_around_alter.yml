@@ -1,0 +1,18 @@
+input: |
+  CREATE TABLE public.a (id integer NOT NULL, CONSTRAINT a_pkey PRIMARY KEY (id));
+  CREATE TABLE public.b (id integer NOT NULL, CONSTRAINT b_pkey PRIMARY KEY (id));
+  -- foreign key from b to a
+  ALTER TABLE public.b ADD CONSTRAINT b_a_fk FOREIGN KEY (id) REFERENCES public.a(id);
+expected: |
+  CREATE TABLE public.a (
+      id integer NOT NULL,
+      CONSTRAINT a_pkey PRIMARY KEY (id)
+  );
+
+  CREATE TABLE public.b (
+      id integer NOT NULL,
+      CONSTRAINT b_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.b ADD CONSTRAINT b_a_fk FOREIGN KEY (id) REFERENCES public.a (id);
+  -- foreign key from b to a

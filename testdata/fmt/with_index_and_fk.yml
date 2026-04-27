@@ -4,13 +4,11 @@ input: |
   CREATE INDEX idx_posts_user_id ON public.posts (user_id);
   ALTER TABLE public.posts ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);
 expected: |
-  -- public.users
   CREATE TABLE public.users (
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 
-  -- public.posts
   CREATE TABLE public.posts (
       id integer NOT NULL,
       user_id integer NOT NULL,

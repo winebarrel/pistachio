@@ -1,7 +1,6 @@
 input: |
   CREATE TYPE public.status AS ENUM ('active','inactive','pending');
 expected: |
-  -- public.status
   CREATE TYPE public.status AS ENUM (
       'active',
       'inactive',

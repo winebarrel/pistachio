@@ -36,7 +36,11 @@ func (e Enum) CommentSQL() string {
 }
 
 func EnumToSQL(e *Enum) string {
-	parts := []string{"-- " + e.FQEN(), e.SQL()}
+	return "-- " + e.FQEN() + "\n" + EnumToSQLBare(e)
+}
+
+func EnumToSQLBare(e *Enum) string {
+	parts := []string{e.SQL()}
 	if s := e.CommentSQL(); s != "" {
 		parts = append(parts, s)
 	}

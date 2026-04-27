@@ -1,0 +1,19 @@
+input: |
+  CREATE TABLE public.a (id integer NOT NULL, CONSTRAINT a_pkey PRIMARY KEY (id));
+  -- index for a
+  CREATE INDEX a_idx ON public.a (id);
+  -- before b
+  CREATE TABLE public.b (id integer NOT NULL, CONSTRAINT b_pkey PRIMARY KEY (id));
+expected: |
+  CREATE TABLE public.a (
+      id integer NOT NULL,
+      CONSTRAINT a_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX a_idx ON public.a USING btree (id);
+  -- index for a
+
+  -- before b
+  CREATE TABLE public.b (
+      id integer NOT NULL,
+      CONSTRAINT b_pkey PRIMARY KEY (id)
+  );

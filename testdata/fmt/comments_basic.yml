@@ -1,0 +1,25 @@
+input: |
+  -- file header
+  -- second line of header
+  -- users table
+  CREATE TABLE public.users (id integer NOT NULL, name text NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+  /* posts table */
+  CREATE TABLE public.posts (id integer NOT NULL, CONSTRAINT posts_pkey PRIMARY KEY (id));
+  -- trailing
+expected: |
+  -- file header
+  -- second line of header
+  -- users table
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  /* posts table */
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  -- trailing

@@ -1,0 +1,15 @@
+input: |
+  -- daily summary
+  CREATE MATERIALIZED VIEW public.daily AS SELECT 1 AS n;
+  -- index for daily
+  CREATE INDEX daily_n_idx ON public.daily (n);
+  -- desc
+  COMMENT ON MATERIALIZED VIEW public.daily IS 'rollup';
+expected: |
+  -- daily summary
+  CREATE MATERIALIZED VIEW public.daily AS
+  SELECT 1 AS n;
+  CREATE INDEX daily_n_idx ON public.daily USING btree (n);
+  COMMENT ON MATERIALIZED VIEW public.daily IS 'rollup';
+  -- index for daily
+  -- desc

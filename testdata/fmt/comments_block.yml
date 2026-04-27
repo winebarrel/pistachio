@@ -1,0 +1,32 @@
+input: |
+  /* file header
+     with multiple
+     lines */
+  CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+  /* between table and index */
+  CREATE INDEX users_id_idx ON public.users (id);
+  /* multi-line
+     leading for posts */
+  -- mixed with line comment
+  CREATE TABLE public.posts (id integer NOT NULL, CONSTRAINT posts_pkey PRIMARY KEY (id));
+  /* trailing block */
+expected: |
+  /* file header
+     with multiple
+     lines */
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_id_idx ON public.users USING btree (id);
+  /* between table and index */
+
+  /* multi-line
+     leading for posts */
+  -- mixed with line comment
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  /* trailing block */

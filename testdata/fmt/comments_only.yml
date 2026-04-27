@@ -1,0 +1,6 @@
+input: |
+  -- just a comment
+  -- no entities
+expected: |
+  -- just a comment
+  -- no entities

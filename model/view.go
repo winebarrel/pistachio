@@ -42,7 +42,11 @@ func (v View) CommentSQL() string {
 }
 
 func ViewToSQL(v *View) string {
-	parts := []string{"-- " + v.FQVN(), v.SQL()}
+	return "-- " + v.FQVN() + "\n" + ViewToSQLBare(v)
+}
+
+func ViewToSQLBare(v *View) string {
+	parts := []string{v.SQL()}
 	if v.Indexes != nil {
 		for _, idx := range v.Indexes.CollectValues() {
 			parts = append(parts, idx.SQL())

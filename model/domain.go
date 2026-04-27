@@ -64,7 +64,11 @@ func (d Domain) CommentSQL() string {
 }
 
 func DomainToSQL(d *Domain) string {
-	parts := []string{"-- " + d.FQDN(), d.SQL()}
+	return "-- " + d.FQDN() + "\n" + DomainToSQLBare(d)
+}
+
+func DomainToSQLBare(d *Domain) string {
+	parts := []string{d.SQL()}
 	if s := d.CommentSQL(); s != "" {
 		parts = append(parts, s)
 	}

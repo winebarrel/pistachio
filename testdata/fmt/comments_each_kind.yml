@@ -1,0 +1,29 @@
+input: |
+  -- enum
+  CREATE TYPE public.status AS ENUM ('on','off');
+  -- domain
+  CREATE DOMAIN public.pos_int AS integer CHECK (VALUE > 0);
+  -- table
+  CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+  -- view
+  CREATE VIEW public.active AS SELECT id FROM public.users;
+expected: |
+  -- enum
+  CREATE TYPE public.status AS ENUM (
+      'on',
+      'off'
+  );
+
+  -- domain
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_int_check CHECK (value > 0);
+
+  -- table
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- view
+  CREATE OR REPLACE VIEW public.active AS
+  SELECT id FROM public.users;

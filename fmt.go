@@ -9,6 +9,74 @@ import (
 	"github.com/winebarrel/pistachio/parser"
 )
 
+func formatEntity(result *parser.ParseResult, ref parser.EntityRef) string {
+	switch ref.Kind {
+	case parser.EntityKindEnum:
+		if e, ok := result.Enums.GetOk(ref.FQN); ok {
+			return model.EnumToSQLBare(e)
+		}
+	case parser.EntityKindDomain:
+		if d, ok := result.Domains.GetOk(ref.FQN); ok {
+			return model.DomainToSQLBare(d)
+		}
+	case parser.EntityKindTable:
+		if t, ok := result.Tables.GetOk(ref.FQN); ok {
+			return model.TableToSQLBare(t)
+		}
+	case parser.EntityKindView:
+		if v, ok := result.Views.GetOk(ref.FQN); ok {
+			return model.ViewToSQLBare(v)
+		}
+	}
+	return ""
+}
+
+// formatWithComments emits entities in source order. Each entity gets:
+//   - leading comments: those between the previous entity's ownership end and
+//     this entity's CREATE keyword.
+//   - the entity's bare SQL (CREATE + indexes + FKs + COMMENT ON statements).
+//   - trailing comments: those between this entity's CREATE statement end and
+//     its ownership end (e.g. a comment placed before a CREATE INDEX that
+//     belongs to this entity).
+//
+// Comments after the last entity's ownership end are appended at the very end.
+func formatWithComments(result *parser.ParseResult) string {
+	var parts []string
+	cIdx := 0
+	for _, ref := range result.Order {
+		var leading []string
+		for cIdx < len(result.Comments) && result.Comments[cIdx].End <= ref.Location {
+			leading = append(leading, result.Comments[cIdx].Text)
+			cIdx++
+		}
+		entity := formatEntity(result, ref)
+		if entity == "" {
+			continue
+		}
+		var trailing []string
+		for cIdx < len(result.Comments) && result.Comments[cIdx].End <= ref.OwnershipEnd {
+			trailing = append(trailing, result.Comments[cIdx].Text)
+			cIdx++
+		}
+		block := entity
+		if len(leading) > 0 {
+			block = strings.Join(leading, "\n") + "\n" + block
+		}
+		if len(trailing) > 0 {
+			block = block + "\n" + strings.Join(trailing, "\n")
+		}
+		parts = append(parts, block)
+	}
+	if cIdx < len(result.Comments) {
+		var tail []string
+		for ; cIdx < len(result.Comments); cIdx++ {
+			tail = append(tail, result.Comments[cIdx].Text)
+		}
+		parts = append(parts, strings.Join(tail, "\n"))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
 type FmtOptions struct {
 	Files []string `arg:"" help:"Path to the SQL file(s) to format."`
 	Write bool     `short:"w" xor:"mode" help:"Write result to source file(s) instead of stdout."`
@@ -29,7 +97,7 @@ func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse SQL file %q: %w", path, err)
 		}
-		formatted := formatSchemaSQL(result.Domains, result.Enums, result.Tables, result.Views)
+		formatted := formatWithComments(result)
 
 		// Append execute statements
 		if len(result.ExecuteStmts) > 0 {
@@ -49,8 +117,9 @@ func (client *Client) Format(options *FmtOptions) (map[string]string, error) {
 	return results, nil
 }
 
-// formatSchemaSQL formats domains, enums, tables, and views into canonical SQL output.
-// This is the shared formatting logic used by both dump and fmt.
+// formatSchemaSQL formats domains, enums, tables, and views into canonical SQL
+// output for dump. fmt uses formatWithComments instead, which preserves source
+// order and SQL comments.
 // Order: enums → domains → tables → views (enums first since domains may depend on them).
 func formatSchemaSQL(
 	domains *orderedmap.Map[string, *model.Domain],

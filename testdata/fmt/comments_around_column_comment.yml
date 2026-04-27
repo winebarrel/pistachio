@@ -1,0 +1,18 @@
+input: |
+  CREATE TABLE public.users (id integer NOT NULL, name text, CONSTRAINT users_pkey PRIMARY KEY (id));
+  -- describe name column
+  COMMENT ON COLUMN public.users.name IS 'display name';
+  CREATE TABLE public.posts (id integer NOT NULL, CONSTRAINT posts_pkey PRIMARY KEY (id));
+expected: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON COLUMN public.users.name IS 'display name';
+  -- describe name column
+
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );

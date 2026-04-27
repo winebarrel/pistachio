@@ -192,6 +192,9 @@ pist fmt --check schema.sql
 > [!NOTE]
 > `dump` output uses PostgreSQL's own formatting (e.g. `pg_get_viewdef`), while `fmt` normalizes through the pg_query parser. This means `dump` output may not pass `fmt --check` directly. Run `fmt -w` once after the initial `dump` to normalize, then use `--check` in CI going forward.
 
+> [!NOTE]
+> `fmt` preserves `--` and `/* */` comments between top-level statements. Each comment is attached to the entity that owns the surrounding region: a comment between an entity's `CREATE` and its associated `CREATE INDEX` / `ALTER TABLE ADD CONSTRAINT` / `COMMENT ON` belongs to that entity; otherwise it becomes a leading comment of the next entity. Comments inside a `CREATE` body (e.g. inline column comments) are dropped by the underlying parser and cannot be recovered.
+
 ### Schema name mapping
 
 Use `-m` / `--schema-map` to remap schema names. This is useful when you want to manage a database whose schema name differs from the one used in your SQL files.

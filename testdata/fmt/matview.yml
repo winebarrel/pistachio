@@ -3,13 +3,11 @@ input: |
   CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
   CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);
 expected: |
-  -- public.users
   CREATE TABLE public.users (
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 
-  -- public.user_stats
   CREATE MATERIALIZED VIEW public.user_stats AS
   SELECT count(*) AS cnt FROM public.users;
   CREATE INDEX idx_user_stats_cnt ON public.user_stats USING btree (cnt);

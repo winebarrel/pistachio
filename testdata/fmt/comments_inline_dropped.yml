@@ -1,5 +1,9 @@
 input: |
-  CREATE TABLE public.users (id integer NOT NULL, name text NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+  CREATE TABLE public.users (
+    id integer NOT NULL, -- inline column comment
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
 expected: |
   CREATE TABLE public.users (
       id integer NOT NULL,

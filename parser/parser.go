@@ -11,12 +11,31 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
+type EntityKind string
+
+const (
+	EntityKindEnum   EntityKind = "enum"
+	EntityKindDomain EntityKind = "domain"
+	EntityKindTable  EntityKind = "table"
+	EntityKindView   EntityKind = "view"
+)
+
+type EntityRef struct {
+	Kind         EntityKind
+	FQN          string
+	Location     int32 // start of CREATE keyword (after any leading comments)
+	StmtEnd      int32 // end of own CREATE statement
+	OwnershipEnd int32 // end of last owned statement (CREATE INDEX, ALTER TABLE, COMMENT ON)
+}
+
 type ParseResult struct {
 	Tables       *orderedmap.Map[string, *model.Table]
 	Views        *orderedmap.Map[string, *model.View]
 	Enums        *orderedmap.Map[string, *model.Enum]
 	Domains      *orderedmap.Map[string, *model.Domain]
 	ExecuteStmts []*ExecuteStmt
+	Order        []EntityRef
+	Comments     []Comment
 }
 
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
@@ -95,6 +114,37 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	views := orderedmap.New[string, *model.View]()
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()
+	var order []EntityRef
+	orderIdx := map[string]int{}
+
+	stmtEnd := func(raw *pg_query.RawStmt) int32 {
+		end := raw.StmtLocation + raw.StmtLen
+		if end > int32(len(sql)) {
+			end = int32(len(sql))
+		}
+		return end
+	}
+	recordEntity := func(kind EntityKind, fqn string, raw *pg_query.RawStmt) {
+		end := stmtEnd(raw)
+		order = append(order, EntityRef{
+			Kind:         kind,
+			FQN:          fqn,
+			Location:     CodeStart(sql, raw.StmtLocation),
+			StmtEnd:      end,
+			OwnershipEnd: end,
+		})
+		orderIdx[fqn] = len(order) - 1
+	}
+	extendOwnership := func(fqn string, raw *pg_query.RawStmt) {
+		i, ok := orderIdx[fqn]
+		if !ok {
+			return
+		}
+		end := stmtEnd(raw)
+		if end > order[i].OwnershipEnd {
+			order[i].OwnershipEnd = end
+		}
+	}
 
 	stmtDirectives := ExtractStmtDirectives(sql, result.Stmts)
 	concurrentlyDirectives := ExtractConcurrentlyDirectives(sql, result.Stmts)
@@ -125,6 +175,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
 				return nil, err
 			}
+			recordEntity(EntityKindEnum, enum.FQEN(), rawStmt)
 
 		case node.GetCreateDomainStmt() != nil:
 			domain, err := parseCreateDomainStmt(node.GetCreateDomainStmt(), rawStmt, defaultSchema)
@@ -138,6 +189,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if err := setUnique(domains, domain.FQDN(), "domain", domain); err != nil {
 				return nil, err
 			}
+			recordEntity(EntityKindDomain, domain.FQDN(), rawStmt)
 
 		case node.GetCreateStmt() != nil:
 			table, err := parseCreateStmt(node.GetCreateStmt(), defaultSchema)
@@ -175,6 +227,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if err := setUnique(tables, table.FQTN(), "table", table); err != nil {
 				return nil, err
 			}
+			recordEntity(EntityKindTable, table.FQTN(), rawStmt)
 
 		case node.GetViewStmt() != nil:
 			view, err := parseViewStmt(node.GetViewStmt(), defaultSchema)
@@ -188,6 +241,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if err := setUnique(views, view.FQVN(), "view", view); err != nil {
 				return nil, err
 			}
+			recordEntity(EntityKindView, view.FQVN(), rawStmt)
 
 		case node.GetCreateTableAsStmt() != nil:
 			as := node.GetCreateTableAsStmt()
@@ -203,6 +257,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				if err := setUnique(views, view.FQVN(), "materialized view", view); err != nil {
 					return nil, err
 				}
+				recordEntity(EntityKindView, view.FQVN(), rawStmt)
 			}
 
 		case node.GetIndexStmt() != nil:
@@ -222,10 +277,12 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				if err := setUnique(t.Indexes, idx.Name, "index", idx); err != nil {
 					return nil, err
 				}
+				extendOwnership(fqtn, rawStmt)
 			} else if v, ok := views.GetOk(fqtn); ok && v.Materialized {
 				if err := setUnique(v.Indexes, idx.Name, "index", idx); err != nil {
 					return nil, err
 				}
+				extendOwnership(fqtn, rawStmt)
 			}
 
 		case node.GetAlterTableStmt() != nil:
@@ -252,6 +309,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
 					return nil, err
 				}
+				extendOwnership(fqtn, rawStmt)
 			} else if con != nil {
 				if renameFrom != "" {
 					unquoted := normalizeUnqualifiedDirective(renameFrom)
@@ -260,15 +318,33 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				if err := setUnique(t.Constraints, con.Name, "constraint", con); err != nil {
 					return nil, err
 				}
+				extendOwnership(fqtn, rawStmt)
 			}
 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
 			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains)
+			if fqn, ok := commentStmtTargetFQN(cs, defaultSchema); ok {
+				extendOwnership(fqn, rawStmt)
+			}
 		}
 	}
 
-	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, ExecuteStmts: executeStmts}, nil
+	allComments, err := ScanComments(sql)
+	if err != nil {
+		return nil, err
+	}
+	comments := filterTopLevelComments(sql, allComments, result.Stmts)
+
+	return &ParseResult{
+		Tables:       tables,
+		Views:        views,
+		Enums:        enums,
+		Domains:      domains,
+		ExecuteStmts: executeStmts,
+		Order:        order,
+		Comments:     comments,
+	}, nil
 }
 
 func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Table, error) {

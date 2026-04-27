@@ -128,7 +128,11 @@ func (t Table) CommentSQL() string {
 }
 
 func TableToSQL(t *Table) string {
-	parts := []string{"-- " + t.FQTN(), t.SQL()}
+	return "-- " + t.FQTN() + "\n" + TableToSQLBare(t)
+}
+
+func TableToSQLBare(t *Table) string {
+	parts := []string{t.SQL()}
 	if s := t.IdxSQL(); s != "" {
 		parts = append(parts, s)
 	}

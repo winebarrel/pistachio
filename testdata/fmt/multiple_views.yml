@@ -3,17 +3,14 @@ input: |
   CREATE VIEW public.active_users AS SELECT id, name FROM public.users WHERE name IS NOT NULL;
   CREATE VIEW public.user_ids AS SELECT id FROM public.users;
 expected: |
-  -- public.users
   CREATE TABLE public.users (
       id integer NOT NULL,
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 
-  -- public.active_users
   CREATE OR REPLACE VIEW public.active_users AS
   SELECT id, name FROM public.users WHERE name IS NOT NULL;
 
-  -- public.user_ids
   CREATE OR REPLACE VIEW public.user_ids AS
   SELECT id FROM public.users;
