@@ -94,6 +94,85 @@ func TestDumpResult_String_Empty(t *testing.T) {
 	assert.Equal(t, "", got.String())
 }
 
+func TestDump_Count(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"public"}, got.Count.Schemas)
+	assert.Equal(t, 1, got.Count.Tables)
+	assert.Equal(t, 1, got.Count.Views)
+	assert.Equal(t, 1, got.Count.Enums)
+	assert.Equal(t, 1, got.Count.Domains)
+	assert.Equal(t, "schema public", got.Count.SchemaLabel())
+	assert.Equal(t, "1 table, 1 view, 1 enum, 1 domain", got.Count.Summary())
+}
+
+func TestDump_Count_Empty(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, got.Count.Tables)
+	assert.Equal(t, 0, got.Count.Views)
+	assert.Equal(t, 0, got.Count.Enums)
+	assert.Equal(t, 0, got.Count.Domains)
+	assert.Equal(t, "0 tables, 0 views, 0 enums, 0 domains", got.Count.Summary())
+}
+
+func TestDump_Count_Filtered(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.posts (
+    id integer NOT NULL,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{Exclude: []string{"posts"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, got.Count.Tables)
+	assert.Equal(t, "1 table, 0 views, 0 enums, 0 domains", got.Count.Summary())
+}
+
 func TestDumpResult_Files_Tables(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

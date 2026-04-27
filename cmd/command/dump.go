@@ -21,7 +21,8 @@ func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 	}
 
 	if cmd.Split == "" {
-		fmt.Fprintln(w, result) //nolint:errcheck
+		fmt.Fprintf(w, "-- Dump of %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
+		fmt.Fprintln(w, result)                                                                    //nolint:errcheck
 		return nil
 	}
 

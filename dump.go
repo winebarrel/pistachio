@@ -22,6 +22,7 @@ type DumpResult struct {
 	Enums      *orderedmap.Map[string, *model.Enum]
 	Domains    *orderedmap.Map[string, *model.Domain]
 	OmitSchema bool
+	Count      ObjectCount
 }
 
 func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
@@ -208,11 +209,23 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		return nil, fmt.Errorf("failed to fetch domains: %w", err)
 	}
 
+	filteredTables := options.filterTables(client.remapTableSchemas(tables))
+	filteredViews := options.filterViews(client.remapViewSchemas(views))
+	filteredEnums := options.filterEnums(client.remapEnumSchemas(enums))
+	filteredDomains := options.filterDomains(client.remapDomainSchemas(domains))
+
 	return &DumpResult{
-		Tables:     options.filterTables(client.remapTableSchemas(tables)),
-		Views:      options.filterViews(client.remapViewSchemas(views)),
-		Enums:      options.filterEnums(client.remapEnumSchemas(enums)),
-		Domains:    options.filterDomains(client.remapDomainSchemas(domains)),
+		Tables:     filteredTables,
+		Views:      filteredViews,
+		Enums:      filteredEnums,
+		Domains:    filteredDomains,
 		OmitSchema: options.OmitSchema,
+		Count: ObjectCount{
+			Schemas: client.Schemas,
+			Tables:  filteredTables.Len(),
+			Views:   filteredViews.Len(),
+			Enums:   filteredEnums.Len(),
+			Domains: filteredDomains.Len(),
+		},
 	}, nil
 }
