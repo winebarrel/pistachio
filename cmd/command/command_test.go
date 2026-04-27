@@ -59,6 +59,7 @@ func TestDump_Run(t *testing.T) {
 	cmd := &command.Dump{}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "-- Dump of schema public (1 table, 0 views, 0 enums, 0 domains)")
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
 }
 
@@ -98,6 +99,26 @@ CREATE TABLE public.posts (
 
 	assert.Contains(t, buf.String(), "public.users.sql")
 	assert.Contains(t, buf.String(), "public.posts.sql")
+	assert.NotContains(t, buf.String(), "-- Dump of")
+}
+
+func TestDump_Run_Empty(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Dump{}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "-- Dump of schema public (0 tables, 0 views, 0 enums, 0 domains)")
 }
 
 func TestDump_Run_Split_WithView(t *testing.T) {
