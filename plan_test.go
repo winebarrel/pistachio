@@ -237,6 +237,70 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 	assert.Less(t, concPos, idxPos)
 }
 
+func TestPlan_WithConcurrentlyPreSQLFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	tmpDir := t.TempDir()
+	desiredFile := filepath.Join(tmpDir, "desired.sql")
+	preSQLFile := filepath.Join(tmpDir, "concurrently-pre.sql")
+
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SET lock_timeout = '5s';`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:                  []string{desiredFile},
+		ConcurrentlyPreSQLFile: preSQLFile,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "SET lock_timeout = '5s';")
+	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_users_name")
+}
+
+func TestPlan_InvalidConcurrentlyPreSQLFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:                  []string{desiredFile},
+		ConcurrentlyPreSQLFile: "/nonexistent/file.sql",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read concurrently-pre-SQL file")
+}
+
 func TestPlan_ConcurrentlyPreSQL_SkippedWhenNoConcurrentlyDDL(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
