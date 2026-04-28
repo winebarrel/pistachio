@@ -86,12 +86,18 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		stmts = append(stmts, parser.FormatExecuteStmt(es))
 	}
 
-	if result.ConcurrentlyPreSQL != "" && result.HasConcurrentlyIndex && len(stmts) > 0 {
-		stmts = append([]string{result.ConcurrentlyPreSQL}, stmts...)
-	}
-
-	if result.PreSQL != "" && len(stmts) > 0 {
-		stmts = append([]string{result.PreSQL}, stmts...)
+	// Prefix order matches apply: PreSQL → concurrently-pre-SQL → DDL.
+	// Skipped entirely when there is nothing to execute, so an empty plan
+	// stays empty instead of leaking a bare SET / pre-SQL line.
+	if len(stmts) > 0 {
+		var prefix []string
+		if result.PreSQL != "" {
+			prefix = append(prefix, result.PreSQL)
+		}
+		if result.ConcurrentlyPreSQL != "" && result.HasConcurrentlyIndex {
+			prefix = append(prefix, result.ConcurrentlyPreSQL)
+		}
+		stmts = append(prefix, stmts...)
 	}
 
 	return &PlanResult{
