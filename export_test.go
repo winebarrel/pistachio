@@ -1,8 +1,9 @@
 package pistachio
 
 var (
-	ResolvePreSQL     = resolvePreSQL
-	ExtractObjectName = extractObjectName
-	OrderStatements   = orderStatements
-	CompareTaggedPos  = compareTaggedPos
+	ResolvePreSQL             = resolvePreSQL
+	ResolveConcurrentlyPreSQL = resolveConcurrentlyPreSQL
+	ExtractObjectName         = extractObjectName
+	OrderStatements           = orderStatements
+	CompareTaggedPos          = compareTaggedPos
 )

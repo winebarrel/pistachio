@@ -22,6 +22,8 @@ type diffAllOptions struct {
 	Files                    []string
 	PreSQL                   string
 	PreSQLFile               string
+	ConcurrentlyPreSQL       string
+	ConcurrentlyPreSQLFile   string
 	DisableIndexConcurrently bool
 }
 
@@ -30,6 +32,7 @@ type diffAllResult struct {
 	Stmts                []string
 	DisallowedDrops      []string
 	PreSQL               string
+	ConcurrentlyPreSQL   string
 	Count                ObjectCount
 	ExecuteStmts         []*parser.ExecuteStmt
 	HasConcurrentlyIndex bool
@@ -123,6 +126,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, err
 	}
 
+	concurrentlyPreSQL, err := resolveConcurrentlyPreSQL(options.ConcurrentlyPreSQL, options.ConcurrentlyPreSQLFile)
+	if err != nil {
+		return nil, err
+	}
+
 	var disallowed []string
 	disallowed = append(disallowed, viewDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, tableDiff.DisallowedDropStmts...)
@@ -133,6 +141,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		Stmts:                stmts,
 		DisallowedDrops:      disallowed,
 		PreSQL:               preSQL,
+		ConcurrentlyPreSQL:   concurrentlyPreSQL,
 		Count:                count,
 		ExecuteStmts:         desired.ExecuteStmts,
 		HasConcurrentlyIndex: tableDiff.HasConcurrently || viewDiff.HasConcurrently,

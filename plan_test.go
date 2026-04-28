@@ -156,6 +156,120 @@ func TestPlan_WithPreSQL(t *testing.T) {
 	assert.Less(t, preSQLPos, diffPos)
 }
 
+func TestPlan_WithConcurrentlyPreSQL(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:              []string{desiredFile},
+		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "SET lock_timeout = '5s';")
+	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_users_name")
+
+	setPos := strings.Index(got.SQL, "SET lock_timeout")
+	idxPos := strings.Index(got.SQL, "CREATE INDEX CONCURRENTLY")
+	assert.Less(t, setPos, idxPos)
+}
+
+func TestPlan_PreSQL_And_ConcurrentlyPreSQL_Order(t *testing.T) {
+	// When both pre-SQL and concurrently-pre-SQL are set, plan output order
+	// must be: pre-SQL → concurrently-pre-SQL → schema DDL.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:              []string{desiredFile},
+		PreSQL:             "SET statement_timeout = '10s';",
+		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+	})
+	require.NoError(t, err)
+	preSQLPos := strings.Index(got.SQL, "SET statement_timeout")
+	concPos := strings.Index(got.SQL, "SET lock_timeout")
+	idxPos := strings.Index(got.SQL, "CREATE INDEX CONCURRENTLY")
+	require.GreaterOrEqual(t, preSQLPos, 0)
+	require.GreaterOrEqual(t, concPos, 0)
+	require.GreaterOrEqual(t, idxPos, 0)
+	assert.Less(t, preSQLPos, concPos)
+	assert.Less(t, concPos, idxPos)
+}
+
+func TestPlan_ConcurrentlyPreSQL_SkippedWhenNoConcurrentlyDDL(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		Files:              []string{desiredFile},
+		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, got.SQL, "SET lock_timeout")
+	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_name")
+}
+
 func TestPlan_WithPreSQLFile_InvalidFile(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
