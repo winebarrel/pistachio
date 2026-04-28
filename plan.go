@@ -14,7 +14,7 @@ type PlanOptions struct {
 	Files                    []string `arg:"" help:"Path to the desired schema SQL file(s)."`
 	PreSQL                   string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to prepend to the plan output."`
 	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to prepend to the plan output."`
-	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PIST_CONCURRENTLY_PRE_SQL" help:"SQL to run before CONCURRENTLY index operations (e.g. SET lock_timeout). Only emitted when the plan contains CONCURRENTLY index DDL."`
+	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PIST_CONCURRENTLY_PRE_SQL" help:"SQL to run before CONCURRENTLY index operations (e.g. SET lock_timeout). Only emitted when the diff includes CONCURRENTLY index DDL."`
 	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PIST_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to run before CONCURRENTLY index operations."`
 	DisableIndexConcurrently bool     `env:"PIST_DISABLE_INDEX_CONCURRENTLY" help:"Ignore all CONCURRENTLY opt-ins (both -- pist:concurrently directives and inline CREATE/DROP INDEX CONCURRENTLY) and emit plain CREATE/DROP INDEX."`
 }
