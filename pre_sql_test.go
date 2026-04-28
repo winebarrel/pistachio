@@ -45,3 +45,15 @@ func TestResolvePreSQL_FileNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read pre-SQL file")
 }
+
+func TestResolveConcurrentlyPreSQL_DirectString(t *testing.T) {
+	got, err := pistachio.ResolveConcurrentlyPreSQL("SET lock_timeout = '5s';", "")
+	require.NoError(t, err)
+	assert.Equal(t, "SET lock_timeout = '5s';", got)
+}
+
+func TestResolveConcurrentlyPreSQL_FileNotFound(t *testing.T) {
+	_, err := pistachio.ResolveConcurrentlyPreSQL("", "/nonexistent/pre.sql")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read concurrently-pre-SQL file")
+}

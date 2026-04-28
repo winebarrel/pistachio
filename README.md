@@ -102,6 +102,12 @@ CREATE INDEX CONCURRENTLY idx_users_email ON public.users USING btree (email);
 CREATE INDEX idx_users_id ON public.users USING btree (id);
 ```
 
+Use `--concurrently-pre-sql` (or `--concurrently-pre-sql-file`) to run SQL — typically `SET lock_timeout = '...'` — before any `CONCURRENTLY` index DDL. The SQL is only emitted/executed when the plan actually contains `CREATE/DROP INDEX CONCURRENTLY`, so it's safe to set unconditionally. Because `SET` is session-scoped and `CONCURRENTLY` runs outside a transaction, the value carries over to every subsequent `CONCURRENTLY` statement in the same `apply`. Also available as `$PIST_CONCURRENTLY_PRE_SQL` / `$PIST_CONCURRENTLY_PRE_SQL_FILE`.
+
+```bash
+pist apply schema.sql --concurrently-pre-sql "SET lock_timeout = '5s';"
+```
+
 Use `--disable-index-concurrently` to ignore all `CONCURRENTLY` opt-ins (both inline and directive) and emit plain `CREATE INDEX` / `DROP INDEX` instead. Useful when you want to keep the directives / inline `CONCURRENTLY` in your schema files but run a one-off plan/apply inside a transaction. Also available as `$PIST_DISABLE_INDEX_CONCURRENTLY`.
 
 ```bash

@@ -16,6 +16,8 @@ type ApplyOptions struct {
 	Files                    []string `arg:"" help:"Path to the desired schema SQL file(s)."`
 	PreSQL                   string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to execute before applying changes."`
 	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
+	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PIST_CONCURRENTLY_PRE_SQL" help:"SQL to execute before CONCURRENTLY index operations (e.g. SET lock_timeout). Only run when the plan contains CONCURRENTLY index DDL; runs outside any transaction."`
+	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PIST_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to execute before CONCURRENTLY index operations."`
 	WithTx                   bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
 	DisableIndexConcurrently bool     `env:"PIST_DISABLE_INDEX_CONCURRENTLY" help:"Ignore all CONCURRENTLY opt-ins (both -- pist:concurrently directives and inline CREATE/DROP INDEX CONCURRENTLY) and emit plain CREATE/DROP INDEX."`
 }
@@ -39,6 +41,8 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		Files:                    options.Files,
 		PreSQL:                   options.PreSQL,
 		PreSQLFile:               options.PreSQLFile,
+		ConcurrentlyPreSQL:       options.ConcurrentlyPreSQL,
+		ConcurrentlyPreSQLFile:   options.ConcurrentlyPreSQLFile,
 		DisableIndexConcurrently: options.DisableIndexConcurrently,
 	})
 	if err != nil {
@@ -77,6 +81,16 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		fmt.Fprintln(w, result.PreSQL) //nolint:errcheck
 		if _, err := exec(ctx, result.PreSQL); err != nil {
 			return nil, fmt.Errorf("failed to execute pre-SQL: %w", err)
+		}
+	}
+
+	// concurrently-pre-SQL is gated on HasConcurrentlyIndex so it only runs
+	// when there is CONCURRENTLY index DDL to apply. WithTx + HasConcurrentlyIndex
+	// is rejected above, so this always runs outside a transaction.
+	if result.ConcurrentlyPreSQL != "" && result.HasConcurrentlyIndex {
+		fmt.Fprintln(w, result.ConcurrentlyPreSQL) //nolint:errcheck
+		if _, err := exec(ctx, result.ConcurrentlyPreSQL); err != nil {
+			return nil, fmt.Errorf("failed to execute concurrently-pre-SQL: %w", err)
 		}
 	}
 

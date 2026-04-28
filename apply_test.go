@@ -767,6 +767,352 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 	assert.Contains(t, buf.String(), "CREATE INDEX CONCURRENTLY idx_users_name")
 }
 
+func TestApply_WithConcurrentlyPreSQL(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:              []string{desiredFile},
+		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+	}, &buf)
+	require.NoError(t, err)
+	output := buf.String()
+	assert.Contains(t, output, "SET lock_timeout = '5s';")
+	assert.Contains(t, output, "CREATE INDEX CONCURRENTLY idx_users_name")
+	// concurrently-pre-SQL must be emitted before the CONCURRENTLY DDL.
+	setPos := strings.Index(output, "SET lock_timeout")
+	idxPos := strings.Index(output, "CREATE INDEX CONCURRENTLY")
+	assert.Less(t, setPos, idxPos)
+}
+
+func TestApply_ConcurrentlyPreSQL_SkippedWhenNoConcurrentlyDDL(t *testing.T) {
+	// concurrently-pre-SQL is gated on the diff producing CONCURRENTLY index DDL.
+	// A plain CREATE INDEX must not trigger it.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:              []string{desiredFile},
+		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+	}, &buf)
+	require.NoError(t, err)
+	assert.NotContains(t, buf.String(), "SET lock_timeout")
+	assert.Contains(t, buf.String(), "CREATE INDEX idx_users_name")
+}
+
+func TestApply_WithConcurrentlyPreSQLFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	tmpDir := t.TempDir()
+	desiredFile := filepath.Join(tmpDir, "desired.sql")
+	preSQLFile := filepath.Join(tmpDir, "concurrently-pre.sql")
+
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SET lock_timeout = '5s';`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:                  []string{desiredFile},
+		ConcurrentlyPreSQLFile: preSQLFile,
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "SET lock_timeout = '5s';")
+	assert.Contains(t, buf.String(), "CREATE INDEX CONCURRENTLY idx_users_name")
+}
+
+func TestApply_ConcurrentlyPreSQL_SkippedWhenDisableIndexConcurrently(t *testing.T) {
+	// --disable-index-concurrently strips CONCURRENTLY from the diff, so
+	// HasConcurrentlyIndex becomes false and concurrently-pre-SQL must not run.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:                    []string{desiredFile},
+		ConcurrentlyPreSQL:       "SET lock_timeout = '5s';",
+		DisableIndexConcurrently: true,
+	}, &buf)
+	require.NoError(t, err)
+	output := buf.String()
+	assert.NotContains(t, output, "SET lock_timeout")
+	assert.NotContains(t, output, "CONCURRENTLY")
+	assert.Contains(t, output, "CREATE INDEX idx_users_name")
+}
+
+func TestApply_ConcurrentlyPreSQL_TriggersOnInlineConcurrently(t *testing.T) {
+	// Inline CREATE INDEX CONCURRENTLY (no directive) must also trigger
+	// concurrently-pre-SQL via HasConcurrentlyIndex.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:              []string{desiredFile},
+		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+	}, &buf)
+	require.NoError(t, err)
+	output := buf.String()
+	assert.Contains(t, output, "SET lock_timeout = '5s';")
+	assert.Contains(t, output, "CREATE INDEX CONCURRENTLY idx_users_name")
+	setPos := strings.Index(output, "SET lock_timeout")
+	idxPos := strings.Index(output, "CREATE INDEX CONCURRENTLY")
+	assert.Less(t, setPos, idxPos)
+}
+
+func TestApply_ConcurrentlyPreSQL_TriggersOnDropConcurrently(t *testing.T) {
+	// DROP INDEX CONCURRENTLY (driven by --disable-index-concurrently being
+	// off and the desired removing an existing concurrently-flagged index)
+	// must also set HasConcurrentlyIndex.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	// Definition change forces DROP+CREATE; both go through CONCURRENTLY because
+	// the desired index carries the directive.
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING hash (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		DropPolicy:         pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:              []string{desiredFile},
+		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+	}, &buf)
+	require.NoError(t, err)
+	output := buf.String()
+	assert.Contains(t, output, "SET lock_timeout = '5s';")
+	assert.Contains(t, output, "DROP INDEX CONCURRENTLY public.idx_users_name;")
+	setPos := strings.Index(output, "SET lock_timeout")
+	dropPos := strings.Index(output, "DROP INDEX CONCURRENTLY")
+	assert.Less(t, setPos, dropPos)
+}
+
+func TestApply_PreSQL_And_ConcurrentlyPreSQL_Order(t *testing.T) {
+	// When both --pre-sql and --concurrently-pre-sql are set, order must be:
+	// pre-SQL → concurrently-pre-SQL → schema DDL.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:              []string{desiredFile},
+		PreSQL:             "SET statement_timeout = '10s';",
+		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+	}, &buf)
+	require.NoError(t, err)
+	output := buf.String()
+	preSQLPos := strings.Index(output, "SET statement_timeout")
+	concPos := strings.Index(output, "SET lock_timeout")
+	idxPos := strings.Index(output, "CREATE INDEX CONCURRENTLY")
+	require.GreaterOrEqual(t, preSQLPos, 0)
+	require.GreaterOrEqual(t, concPos, 0)
+	require.GreaterOrEqual(t, idxPos, 0)
+	assert.Less(t, preSQLPos, concPos)
+	assert.Less(t, concPos, idxPos)
+}
+
+func TestApply_ConcurrentlyPreSQL_ExecError(t *testing.T) {
+	// concurrently-pre-SQL that fails at execution must surface as a
+	// "failed to execute concurrently-pre-SQL" error.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:              []string{desiredFile},
+		ConcurrentlyPreSQL: "SELECT * FROM public.does_not_exist;",
+	}, io.Discard)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to execute concurrently-pre-SQL")
+}
+
+func TestApply_InvalidConcurrentlyPreSQLFile(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:                  []string{desiredFile},
+		ConcurrentlyPreSQLFile: "/nonexistent/file.sql",
+	}, io.Discard)
+	require.Error(t, err)
+}
+
 func TestApply_DisallowedDrops_MultipleTypes(t *testing.T) {
 	// ApplyResult.DisallowedDrops aggregates skipped DROPs across object types
 	// when --allow-drop is empty. The buffer must stay empty (no executable DDL).
