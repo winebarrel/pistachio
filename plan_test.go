@@ -448,6 +448,37 @@ CREATE TABLE public.users (
 	assert.Empty(t, got.SQL)
 }
 
+func TestPlan_RenameColumn_NonPublicSchema(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.events (
+    id integer NOT NULL,
+    occurred_at timestamp NOT NULL,
+    CONSTRAINT events_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_events_time ON myschema.events (occurred_at);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE myschema.events (
+    id integer NOT NULL,
+    -- pist:renamed-from occurred_at
+    event_time timestamp NOT NULL,
+    CONSTRAINT events_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_events_time ON myschema.events (event_time);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Equal(t, "ALTER TABLE myschema.events RENAME COLUMN occurred_at TO event_time;", strings.TrimSpace(got.SQL))
+}
+
 func TestPlan(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
