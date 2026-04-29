@@ -67,8 +67,8 @@ Origin: #125.
 The catalog and parser populate `Table.TableSpace` and `Index.TableSpace`,
 but the diff layer never compares them. Changing a tablespace in desired
 SQL after the object exists has no effect on the generated plan. Should
-emit `ALTER TABLE ... SET TABLESPACE <new>` (and the equivalent
-`ALTER INDEX`).
+emit `ALTER TABLE ... SET TABLESPACE <new>` and
+`ALTER INDEX ... SET TABLESPACE <new>`.
 
 Origin: post-#125 audit.
 
