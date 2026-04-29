@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      deleted_at timestamp,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_active ON public.users (id) WHERE deleted_at IS NULL;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pist:renamed-from deleted_at
+      removed_at timestamp,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_active ON public.users (id) WHERE removed_at IS NULL;
+plan: |
+  ALTER TABLE public.users RENAME COLUMN deleted_at TO removed_at;
