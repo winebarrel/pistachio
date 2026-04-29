@@ -276,12 +276,18 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		stmts = append(stmts, sql+";")
 	}
 
-	// Default change
-	if !equalDefault(current.Default, desired.Default) {
-		if desired.Default != nil {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET DEFAULT "+*desired.Default+";")
-		} else {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
+	// Default change. Generated column expressions are stored in Default but
+	// cannot be altered via SET DEFAULT (PostgreSQL requires DROP COLUMN +
+	// ADD COLUMN); skip the default diff when either side is a generated
+	// column so we don't emit invalid DDL. Also skip when catalog and
+	// desired expressions only differ by pg_get_expr's added type casts.
+	if !current.Generated.IsStoredGeneratedColumn() && !desired.Generated.IsStoredGeneratedColumn() {
+		if !equalDefault(current.Default, desired.Default) {
+			if desired.Default != nil {
+				stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET DEFAULT "+*desired.Default+";")
+			} else {
+				stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
+			}
 		}
 	}
 
