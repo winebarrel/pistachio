@@ -148,6 +148,61 @@ func TestRewriteColumnInConstraintDef_ParseError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestRewriteColumnInConstraintDef_CheckTypeCast(t *testing.T) {
+	got, err := rewriteColumnInConstraintDef("CHECK ((col::text = 'x'))", "col", "value")
+	require.NoError(t, err)
+	assert.Contains(t, got, "value")
+	assert.NotContains(t, got, "(col")
+}
+
+func TestRewriteColumnInConstraintDef_CheckCoalesce(t *testing.T) {
+	got, err := rewriteColumnInConstraintDef("CHECK ((COALESCE(col, 0) > 0))", "col", "value")
+	require.NoError(t, err)
+	assert.Contains(t, got, "COALESCE(value")
+}
+
+func TestRewriteColumnInConstraintDef_CheckCase(t *testing.T) {
+	got, err := rewriteColumnInConstraintDef(
+		"CHECK (((CASE WHEN col > 0 THEN 1 ELSE 0 END) = 1))",
+		"col", "value",
+	)
+	require.NoError(t, err)
+	assert.Contains(t, got, "value")
+}
+
+func TestRewriteColumnInConstraintDef_CheckAnyArray(t *testing.T) {
+	got, err := rewriteColumnInConstraintDef(
+		"CHECK ((status = ANY (ARRAY['a'::text, 'b'::text])))",
+		"status", "state",
+	)
+	require.NoError(t, err)
+	assert.Contains(t, got, "state")
+}
+
+func TestRewriteColumnInConstraintDef_CheckInList(t *testing.T) {
+	got, err := rewriteColumnInConstraintDef(
+		"CHECK ((status IN ('a', 'b')))",
+		"status", "state",
+	)
+	require.NoError(t, err)
+	assert.Contains(t, got, "state")
+}
+
+func TestRewriteColumnInIndexDef_EmptyInput(t *testing.T) {
+	_, err := rewriteColumnInIndexDef("", "a", "b")
+	require.Error(t, err)
+}
+
+func TestRewriteColumnInIndexDef_NotIndexStmt(t *testing.T) {
+	_, err := rewriteColumnInIndexDef("SELECT 1", "a", "b")
+	require.Error(t, err)
+}
+
+func TestRewriteColumnInConstraintDef_EmptyInput(t *testing.T) {
+	_, err := rewriteColumnInConstraintDef("", "a", "b")
+	require.Error(t, err)
+}
+
 func TestRewriteColumnRefsInIndexes_RewritesAndClones(t *testing.T) {
 	in := orderedmap.New[string, *model.Index]()
 	original := &model.Index{
