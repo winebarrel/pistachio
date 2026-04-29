@@ -546,6 +546,24 @@ func rewriteColumnInConstraintDef(def, oldName, newName string) (string, error) 
 	rewriteStringList(con.Including)
 	rewriteStringList(con.FkAttrs)
 	rewriteColumnRefInExpr(con.RawExpr, oldName, newName)
+	// EXCLUDE constraints encode each (column, operator) pair as a List node
+	// with an IndexElem followed by an operator. Walk the IndexElem side.
+	for _, ex := range con.Exclusions {
+		list := ex.GetList()
+		if list == nil {
+			continue
+		}
+		for _, item := range list.Items {
+			ie := item.GetIndexElem()
+			if ie == nil {
+				continue
+			}
+			if ie.Name == oldName {
+				ie.Name = newName
+			}
+			rewriteColumnRefInExpr(ie.Expr, oldName, newName)
+		}
+	}
 
 	deparsed, err := pg_query.Deparse(result)
 	if err != nil {
