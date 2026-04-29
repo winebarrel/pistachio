@@ -14,14 +14,22 @@ import (
 // definition on a desired table references a column that does not exist in
 // that table's desired column set. All violations across all tables are
 // aggregated via errors.Join so a single plan run reports every problem.
+// Within a single object (index / constraint / FK), each missing column
+// name is reported at most once so multiple references to the same name
+// don't produce duplicate error lines.
 //
 // Scope: only same-table references are checked. Foreign-key referenced
-// columns (PkAttrs, on the parent table) are out of scope. Partition
-// children that inherit columns from the parent are skipped.
+// columns (PkAttrs, on the parent table) are out of scope. Tables that
+// inherit columns from a parent (declarative partition children and
+// INHERITS-style children) are skipped.
 func ValidateColumnRefs(tables *orderedmap.Map[string, *model.Table]) error {
 	var errs []error
 	for fqtn, t := range tables.All() {
-		if t.PartitionOf != nil && t.PartitionBound != nil {
+		// Skip both partition children (PartitionOf + PartitionBound set) and
+		// INHERITS-style children (PartitionOf set, PartitionBound nil) — both
+		// inherit their columns from the parent rather than declaring their
+		// own complete column list.
+		if t.PartitionOf != nil {
 			continue
 		}
 
@@ -31,34 +39,41 @@ func ValidateColumnRefs(tables *orderedmap.Map[string, *model.Table]) error {
 		}
 
 		for _, idx := range t.Indexes.CollectValues() {
-			for _, ref := range collectColumnRefsInIndexDef(idx.Definition) {
-				if !cols[ref] {
-					errs = append(errs, fmt.Errorf("column %s referenced in index %s does not exist on table %s",
-						model.Ident(ref), model.Ident(idx.Name), fqtn))
-				}
-			}
+			reportMissing(&errs, cols, collectColumnRefsInIndexDef(idx.Definition), func(ref string) error {
+				return fmt.Errorf("column %s referenced in index %s does not exist on table %s",
+					model.Ident(ref), model.Ident(idx.Name), fqtn)
+			})
 		}
 
 		for _, con := range t.Constraints.CollectValues() {
 			kind := constraintKindLabel(con.Type)
-			for _, ref := range collectColumnRefsInConstraintDef(con.Definition) {
-				if !cols[ref] {
-					errs = append(errs, fmt.Errorf("column %s referenced in %s %s does not exist on table %s",
-						model.Ident(ref), kind, model.Ident(con.Name), fqtn))
-				}
-			}
+			reportMissing(&errs, cols, collectColumnRefsInConstraintDef(con.Definition), func(ref string) error {
+				return fmt.Errorf("column %s referenced in %s %s does not exist on table %s",
+					model.Ident(ref), kind, model.Ident(con.Name), fqtn)
+			})
 		}
 
 		for _, fk := range t.ForeignKeys.CollectValues() {
-			for _, ref := range collectColumnRefsInFKDef(fk.Definition) {
-				if !cols[ref] {
-					errs = append(errs, fmt.Errorf("column %s referenced in foreign key %s does not exist on table %s",
-						model.Ident(ref), model.Ident(fk.Name), fqtn))
-				}
-			}
+			reportMissing(&errs, cols, collectColumnRefsInFKDef(fk.Definition), func(ref string) error {
+				return fmt.Errorf("column %s referenced in foreign key %s does not exist on table %s",
+					model.Ident(ref), model.Ident(fk.Name), fqtn)
+			})
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// reportMissing appends one error per distinct refs[i] that is not in cols,
+// preserving first-encounter order so the aggregated error is deterministic.
+func reportMissing(errs *[]error, cols map[string]bool, refs []string, mkErr func(string) error) {
+	seen := map[string]bool{}
+	for _, ref := range refs {
+		if cols[ref] || seen[ref] {
+			continue
+		}
+		seen[ref] = true
+		*errs = append(*errs, mkErr(ref))
+	}
 }
 
 func constraintKindLabel(ct model.ConstraintType) string {

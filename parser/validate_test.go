@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -106,6 +107,44 @@ func TestValidateColumnRefs_AggregatesMultiple(t *testing.T) {
 	msg := err.Error()
 	assert.Contains(t, msg, "column a referenced in index idx_a")
 	assert.Contains(t, msg, "column b referenced in CHECK constraint c_b")
+}
+
+func TestValidateColumnRefs_InheritsChildSkipped(t *testing.T) {
+	// INHERITS-style children are represented with PartitionOf set and
+	// PartitionBound nil. Their column list is inherited from the parent,
+	// so validating their definitions against an empty Columns map would
+	// produce false positives.
+	parent := "public.events"
+	tbl := &model.Table{
+		Schema:      "public",
+		Name:        "events_v2",
+		PartitionOf: &parent,
+		Columns:     orderedmap.New[string, *model.Column](),
+		Constraints: orderedmap.New[string, *model.Constraint](),
+		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
+		Indexes:     orderedmap.New[string, *model.Index](),
+	}
+	tbl.Constraints.Set("pk", &model.Constraint{
+		Name:       "pk",
+		Type:       model.ConstraintType('p'),
+		Definition: "PRIMARY KEY (id)",
+	})
+	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
+}
+
+func TestValidateColumnRefs_DeduplicatesPerObject(t *testing.T) {
+	// CHECK with multiple references to the same missing column must report
+	// the column only once.
+	tbl := newValidatableTable("t", "id")
+	tbl.Constraints.Set("c", &model.Constraint{
+		Name:       "c",
+		Type:       model.ConstraintType('c'),
+		Definition: "CHECK ((qty > 0 AND qty < 100))",
+	})
+	err := ValidateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	count := strings.Count(err.Error(), "column qty referenced")
+	assert.Equal(t, 1, count)
 }
 
 func TestValidateColumnRefs_PartitionChildSkipped(t *testing.T) {
