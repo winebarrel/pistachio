@@ -296,6 +296,30 @@ ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFER
 > [!TIP]
 > Rename directives that have already been applied are silently skipped, so you can safely leave them in your schema files until cleanup.
 
+#### Column rename caveats
+
+When a column is renamed, pistachio rewrites column references in **same-table** indexes, constraints, and foreign keys (including `EXCLUDE`, partial / expression / `INCLUDE` indexes) on the current side, so a single `ALTER TABLE ... RENAME COLUMN` is emitted without redundant `DROP/CREATE` on the dependents.
+
+The desired-side SQL must use the **new** column name in those dependent definitions:
+
+```sql
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    -- pist:renamed-from name
+    display_name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- Reference the new column name here:
+CREATE INDEX idx_users_name ON public.users (display_name);
+```
+
+If the desired side still references the old name, `pist plan` will emit a `DROP/CREATE INDEX` that re-references the missing column and the subsequent `pist apply` will fail with `column "name" does not exist`.
+
+The following references are **not** auto-rewritten and may produce a redundant `DROP/CREATE` on the first plan (the second run after applying the rename comes out clean):
+
+- View / materialized view definitions that `SELECT` the renamed column
+- Foreign keys in *other* tables whose `REFERENCES this_table(renamed_col)` points at the renamed column
+
 ### Split dump
 
 Use `--split` to output each table/view/enum as a separate file in the specified directory.
