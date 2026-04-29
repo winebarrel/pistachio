@@ -74,11 +74,10 @@ Origin: post-#125 audit.
 
 ## Silent drift on `Table.Unlogged` toggle
 
-`model.Table.Unlogged` is set on parse and used to emit `CREATE UNLOGGED
-TABLE`, but transitions on existing tables (logged ⇄ unlogged) are not
-diffed. PostgreSQL has `ALTER TABLE ... SET LOGGED` / `SET UNLOGGED`.
-The current `no_diff_unlogged_table.yml` fixture only covers the
-unchanged case.
+`model.Table.Unlogged` is set on parse and used to emit `CREATE UNLOGGED TABLE`,
+but transitions on existing tables (logged ⇄ unlogged) are not diffed.
+PostgreSQL has `ALTER TABLE ... SET LOGGED` / `SET UNLOGGED`. The current
+`no_diff_unlogged_table.yml` fixture only covers the unchanged case.
 
 Origin: post-#125 audit.
 
@@ -97,9 +96,9 @@ Origin: post-#125 audit.
 catalog but not compared directly in the diff. Changes are still
 detected because they end up in the `pg_get_constraintdef` Definition
 string, which means a deferrable toggle currently triggers DROP+ADD
-of the constraint. PostgreSQL supports `ALTER CONSTRAINT ... [NOT]
-DEFERRABLE [INITIALLY ...]` for in-place changes; using it would avoid
-the round-trip.
+of the constraint. PostgreSQL supports
+`ALTER TABLE ... ALTER CONSTRAINT ... [NOT] DEFERRABLE [INITIALLY ...]`
+for in-place changes; using it would avoid the round-trip.
 
 Origin: post-#125 audit. Optimisation rather than a bug — current
 behaviour is correct, just heavier than necessary.
@@ -118,14 +117,13 @@ Origin: post-#125 audit.
 ## Table rename: cross-table dependents
 
 `detectTableRenames` rewrites the renamed table's own indexes and FKs
-in the adjusted current state, but other tables' `FOREIGN KEY ...
-REFERENCES old_table(...)` and view definitions that reference the old
-table name are not rewritten. PostgreSQL auto-updates these on RENAME,
-so a second plan/apply comes out clean, but the first plan can emit
-redundant DROP/CREATE for the dependent objects. The same scope as
-the existing column-rename TODO above ("Auto-rewrite of column
-references in views and cross-table FKs"), extended to table-level
-renames.
+in the adjusted current state, but other tables' `FOREIGN KEY ... REFERENCES old_table(...)`
+and view definitions that reference the old table name are not rewritten.
+PostgreSQL auto-updates these on RENAME, so a second plan/apply comes out
+clean, but the first plan can emit redundant drop/recreate operations for
+the dependent objects. Same scope as the existing column-rename TODO above
+("Auto-rewrite of column references in views and cross-table FKs"),
+extended to table-level renames.
 
 Origin: pre-existing NOTE in `diff/rename.go:detectTableRenames`.
 

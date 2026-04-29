@@ -207,9 +207,9 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 // rewritten in the adjusted current state by `rewriteColumnRefsInIndexes`,
 // `rewriteColumnRefsInConstraints`, and `rewriteColumnRefsInForeignKeys`
 // (called from diffTable), so a plain rename does not produce redundant
-// DROP/ADD on those dependents. View definitions and foreign-key references
-// in *other* tables are still not rewritten — see TODO.md
-// "Auto-rewrite of column references in views and cross-table FKs".
+// drop/recreate operations on those dependents. View definitions and
+// foreign-key references in *other* tables are still not rewritten — see
+// TODO.md "Auto-rewrite of column references in views and cross-table FKs".
 func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Column]) ([]string, *orderedmap.Map[string, *model.Column], error) {
 	var stmts []string
 	adjusted := cloneMap(current)
