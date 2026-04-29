@@ -289,6 +289,33 @@ func TestCollectColumnRefsInConstraintDef_HandlesUnparseable(t *testing.T) {
 	assert.Nil(t, collectColumnRefsInConstraintDef(""))
 }
 
+func TestParseSQLWithSchema_RejectsUnresolvedColumnRef(t *testing.T) {
+	// End-to-end through ParseSQLWithSchema so the validation call site in
+	// parser.go is exercised by the parser package's own tests.
+	sql := `CREATE TABLE users (
+    id integer NOT NULL,
+    display_name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON users (name);`
+
+	_, err := ParseSQLWithSchema(sql, "public")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "column name referenced in index idx_users_name does not exist on table public.users")
+}
+
+func TestParseSQLWithSchema_AcceptsResolvedColumnRefs(t *testing.T) {
+	sql := `CREATE TABLE users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON users (name);`
+
+	_, err := ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+}
+
 func TestConstraintKindLabel(t *testing.T) {
 	assert.Equal(t, "CHECK constraint", constraintKindLabel(model.ConstraintType('c')))
 	assert.Equal(t, "PRIMARY KEY constraint", constraintKindLabel(model.ConstraintType('p')))
