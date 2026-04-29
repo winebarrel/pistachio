@@ -1,0 +1,13 @@
+init: |
+  CREATE UNLOGGED TABLE public.sessions (
+      id integer NOT NULL,
+      token text NOT NULL,
+      CONSTRAINT sessions_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE UNLOGGED TABLE public.sessions (
+      id integer NOT NULL,
+      token text NOT NULL,
+      CONSTRAINT sessions_pkey PRIMARY KEY (id)
+  );
+plan: ""

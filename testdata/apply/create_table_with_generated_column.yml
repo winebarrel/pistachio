@@ -1,0 +1,18 @@
+init: ''
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      price numeric(10,2) NOT NULL,
+      quantity integer NOT NULL,
+      total numeric(10,2) GENERATED ALWAYS AS (price * quantity) STORED,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      price numeric(10,2) NOT NULL,
+      quantity integer NOT NULL,
+      total numeric(10,2) GENERATED ALWAYS AS ((price * (quantity)::numeric)) STORED,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );

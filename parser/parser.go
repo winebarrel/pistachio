@@ -429,9 +429,10 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 				col.Identity = model.ColumnIdentity('d')
 			}
 		case pg_query.ConstrType_CONSTR_GENERATED:
-			if con.GeneratedWhen == "s" {
-				col.Generated = model.ColumnGenerated('s')
-			}
+			// pg_query reports GeneratedWhen="a" (ALWAYS) for STORED generated
+			// columns. PostgreSQL only supports STORED at this time, so any
+			// CONSTR_GENERATED implies stored. Map to the catalog form ('s').
+			col.Generated = model.ColumnGenerated('s')
 			if con.RawExpr != nil {
 				def, err := deparseExpr(con.RawExpr)
 				if err != nil {
