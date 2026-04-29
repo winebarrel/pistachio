@@ -268,6 +268,10 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		}
 	}
 
+	if err := ValidateColumnRefs(tables); err != nil {
+		return nil, err
+	}
+
 	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, ExecuteStmts: executeStmts}, nil
 }
 

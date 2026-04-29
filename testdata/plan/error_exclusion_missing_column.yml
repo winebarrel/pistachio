@@ -1,0 +1,18 @@
+init: |
+  CREATE EXTENSION IF NOT EXISTS btree_gist;
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      during tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      -- pist:renamed-from during
+      time_range tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&)
+  );
+error: 'column during referenced in EXCLUDE constraint no_overlap does not exist on table public.reservations'

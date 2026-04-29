@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pist:renamed-from email
+      email_addr text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email)
+  );
+error: 'column email referenced in UNIQUE constraint users_email_key does not exist on table public.users'
