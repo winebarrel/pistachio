@@ -165,6 +165,49 @@ func TestValidateColumnRefs_PartitionChildSkipped(t *testing.T) {
 	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
 }
 
+func TestValidateColumnRefs_ExpressionIndexMissingColumn(t *testing.T) {
+	// The renamed column reference is inside a function call expression.
+	tbl := newValidatableTable("users", "id", "email_addr")
+	tbl.Indexes.Set("idx_users_email_lower", &model.Index{
+		Name:       "idx_users_email_lower",
+		Definition: "CREATE INDEX idx_users_email_lower ON public.users (lower(email))",
+	})
+	err := ValidateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "column email referenced in index idx_users_email_lower")
+}
+
+func TestValidateColumnRefs_FKCompositeLocalPartialMiss(t *testing.T) {
+	// FK (a, b) REFERENCES ... where a exists but b is missing locally.
+	tbl := newValidatableTable("orders", "id", "tenant_id")
+	tbl.ForeignKeys.Set("fk_buyer", &model.ForeignKey{
+		Constraint: model.Constraint{
+			Name:       "fk_buyer",
+			Type:       model.ConstraintType('f'),
+			Definition: "FOREIGN KEY (tenant_id, user_id) REFERENCES public.users(tenant_id, id)",
+		},
+	})
+	err := ValidateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	msg := err.Error()
+	assert.Contains(t, msg, "column user_id referenced in foreign key fk_buyer")
+	assert.NotContains(t, msg, "column tenant_id referenced")
+}
+
+func TestValidateColumnRefs_SelfReferencingFK(t *testing.T) {
+	// Local-side parent_id resolves to the table's own column set; PkAttrs
+	// (id) are out of scope. Validation must pass.
+	tbl := newValidatableTable("nodes", "id", "parent_id")
+	tbl.ForeignKeys.Set("fk_parent", &model.ForeignKey{
+		Constraint: model.Constraint{
+			Name:       "fk_parent",
+			Type:       model.ConstraintType('f'),
+			Definition: "FOREIGN KEY (parent_id) REFERENCES public.nodes(id)",
+		},
+	})
+	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
+}
+
 func TestValidateColumnRefs_ExpressionIndexValid(t *testing.T) {
 	tbl := newValidatableTable("users", "id", "email")
 	tbl.Indexes.Set("idx", &model.Index{
