@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pist:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_qty_check CHECK (qty > 0)
+  );
+error: 'column qty referenced in CHECK constraint products_qty_check does not exist on table public.products'
