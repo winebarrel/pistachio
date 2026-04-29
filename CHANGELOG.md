@@ -6,6 +6,7 @@
 * Track column comments across `-- pist:renamed-from` renames: comment changes (including drops) on a renamed column are now detected, and unchanged comments no longer emit a redundant `COMMENT ON COLUMN` statement. ([#123](https://github.com/winebarrel/pistachio/pull/123))
 * Validate column references in desired schema at plan time: indexes, constraints (CHECK / UNIQUE / PK / EXCLUDE), and foreign keys (local side) whose definitions reference columns absent from the owning table's desired column set are reported as a single aggregated error before any DDL is executed. Catches the common mistake of renaming a column via `-- pist:renamed-from` while forgetting to update the dependent definition. ([#124](https://github.com/winebarrel/pistachio/pull/124))
 * Fix `GENERATED ALWAYS AS (<expr>) STORED` column handling: parsed desired columns now correctly retain the GENERATED form (previously emitted as `DEFAULT <expr>`), and no-diff plans on generated columns no longer produce a spurious `ALTER COLUMN ... SET DEFAULT` (which PostgreSQL rejects on generated columns). ([#125](https://github.com/winebarrel/pistachio/pull/125))
+* Reject GENERATED toggles at plan time: changing a column between generated and non-generated now errors with `cannot toggle GENERATED — DROP COLUMN + ADD COLUMN is required` instead of silently emitting no DDL. ([#125](https://github.com/winebarrel/pistachio/pull/125))
 
 ## [1.1.0] - 2026-04-28
 
