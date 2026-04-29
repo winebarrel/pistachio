@@ -203,12 +203,12 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 }
 
 // detectColumnRenames finds desired columns with RenameFrom that match a current column.
-//
-// NOTE: After a column rename, constraint/index/FK definitions that reference the
-// old column name are not updated in the adjusted current state. PostgreSQL
-// automatically updates these on RENAME COLUMN, so running plan/apply a second
-// time will produce a clean diff. A single plan may emit redundant DROP/ADD for
-// dependent constraints or indexes.
+// Column references in same-table indexes, constraints, and foreign keys are
+// rewritten in the adjusted current state by rewriteColumnRefsInIndexes/
+// Constraints/ForeignKeys (called from diffTable), so a plain rename does not
+// produce redundant DROP/ADD on those dependents. View definitions and
+// foreign-key references in *other* tables are still not rewritten — see
+// TODO.md "Auto-rewrite of column references in views and cross-table FKs".
 func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Column]) ([]string, *orderedmap.Map[string, *model.Column], error) {
 	var stmts []string
 	adjusted := cloneMap(current)
