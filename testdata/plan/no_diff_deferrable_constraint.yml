@@ -12,4 +12,4 @@ desired: |
       CONSTRAINT users_pkey PRIMARY KEY (id),
       CONSTRAINT users_code_key UNIQUE (code) DEFERRABLE INITIALLY DEFERRED
   );
-plan: ''
+plan: ""

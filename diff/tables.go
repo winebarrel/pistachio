@@ -215,6 +215,12 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 	// Alter existing columns
 	for name, desiredCol := range desired.All() {
 		if currentCol, ok := current.GetOk(name); ok {
+			cur := currentCol.Generated.IsStoredGeneratedColumn()
+			des := desiredCol.Generated.IsStoredGeneratedColumn()
+			if cur != des {
+				return nil, nil, fmt.Errorf("column %s.%s: cannot toggle GENERATED — DROP COLUMN + ADD COLUMN is required",
+					fqtn, model.Ident(name))
+			}
 			stmts = append(stmts, alterColumnSQL(fqtn, currentCol, desiredCol)...)
 		}
 	}
@@ -276,11 +282,13 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		stmts = append(stmts, sql+";")
 	}
 
-	// Default change. Generated column expressions are stored in Default but
-	// cannot be altered via SET DEFAULT (PostgreSQL requires DROP COLUMN +
-	// ADD COLUMN); skip the default diff when either side is a generated
-	// column so we don't emit invalid DDL. Also skip when catalog and
-	// desired expressions only differ by pg_get_expr's added type casts.
+	// Default change. For non-generated columns, emit SET DEFAULT / DROP
+	// DEFAULT as usual. For generated columns, the "default" stores the
+	// generated expression and cannot be altered via SET DEFAULT — caller
+	// (diffColumns) already errors on a Generated state toggle, and
+	// expression-only changes within a generated column are not surfaced
+	// here because catalog renders pg_get_expr-added type casts that don't
+	// reliably compare with the desired-side raw expression. See TODO.md.
 	if !current.Generated.IsStoredGeneratedColumn() && !desired.Generated.IsStoredGeneratedColumn() {
 		if !equalDefault(current.Default, desired.Default) {
 			if desired.Default != nil {
