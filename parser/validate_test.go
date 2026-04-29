@@ -241,6 +241,43 @@ func TestValidateColumnRefs_CheckAnyArrayChecked(t *testing.T) {
 	assert.Contains(t, err.Error(), "column status referenced")
 }
 
+func TestValidateColumnRefs_MultiTableScoping(t *testing.T) {
+	// One table is valid, another has a missing reference. The error must
+	// name only the offending table.
+	good := newValidatableTable("good", "id", "name")
+	good.Indexes.Set("idx_good", &model.Index{
+		Name:       "idx_good",
+		Definition: "CREATE INDEX idx_good ON public.good (name)",
+	})
+
+	bad := newValidatableTable("bad", "id", "display_name")
+	bad.Indexes.Set("idx_bad", &model.Index{
+		Name:       "idx_bad",
+		Definition: "CREATE INDEX idx_bad ON public.bad (name)",
+	})
+
+	err := ValidateColumnRefs(tablesMap(good, bad))
+	require.Error(t, err)
+	msg := err.Error()
+	assert.Contains(t, msg, "table public.bad")
+	assert.NotContains(t, msg, "table public.good")
+}
+
+func TestValidateColumnRefs_CompositeKeyPartialMiss(t *testing.T) {
+	// In INDEX (a, b) with only b in the desired column set, only "a" must
+	// be reported — not "b".
+	tbl := newValidatableTable("t", "id", "b")
+	tbl.Indexes.Set("idx", &model.Index{
+		Name:       "idx",
+		Definition: "CREATE INDEX idx ON public.t (a, b)",
+	})
+	err := ValidateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	msg := err.Error()
+	assert.Contains(t, msg, "column a referenced in index idx")
+	assert.NotContains(t, msg, "column b referenced")
+}
+
 func TestCollectColumnRefsInIndexDef_HandlesUnparseable(t *testing.T) {
 	assert.Nil(t, collectColumnRefsInIndexDef("not valid sql"))
 	assert.Nil(t, collectColumnRefsInIndexDef(""))
