@@ -1,0 +1,7 @@
+init: |
+  CREATE DOMAIN public.positive_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+desired: |
+  -- pist:renamed-from public.positive_int
+  CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+plan: |
+  ALTER DOMAIN public.positive_int RENAME TO pos_int;
