@@ -1,0 +1,23 @@
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_qty_check CHECK (qty > 0)
+  );
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pist:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_qty_check CHECK (quantity > 0)
+  );
+applied: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_qty_check CHECK (quantity > 0)
+  );

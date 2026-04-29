@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
@@ -404,4 +405,209 @@ func cloneMap[K comparable, V any](m *orderedmap.Map[K, V]) *orderedmap.Map[K, V
 		clone.Set(k, v)
 	}
 	return clone
+}
+
+// collectColumnRenames returns a map of old column name → new column name
+// for desired columns annotated with -- pist:renamed-from.
+func collectColumnRenames(desired *orderedmap.Map[string, *model.Column]) map[string]string {
+	renames := make(map[string]string)
+	for name, col := range desired.All() {
+		if col.RenameFrom != nil && *col.RenameFrom != name {
+			renames[*col.RenameFrom] = name
+		}
+	}
+	return renames
+}
+
+// rewriteColumnRefInExpr walks an expression tree and rewrites unqualified
+// ColumnRef nodes whose name matches oldName to newName, mutating the tree
+// in place. Qualified references (table.col) are left untouched because the
+// renamed column belongs to a single table and its diff context is local.
+func rewriteColumnRefInExpr(node *pg_query.Node, oldName, newName string) {
+	if node == nil {
+		return
+	}
+	switch n := node.Node.(type) {
+	case *pg_query.Node_ColumnRef:
+		if len(n.ColumnRef.Fields) == 1 {
+			if s := n.ColumnRef.Fields[0].GetString_(); s != nil && s.Sval == oldName {
+				s.Sval = newName
+			}
+		}
+	case *pg_query.Node_AExpr:
+		rewriteColumnRefInExpr(n.AExpr.Lexpr, oldName, newName)
+		rewriteColumnRefInExpr(n.AExpr.Rexpr, oldName, newName)
+	case *pg_query.Node_BoolExpr:
+		for _, arg := range n.BoolExpr.Args {
+			rewriteColumnRefInExpr(arg, oldName, newName)
+		}
+	case *pg_query.Node_TypeCast:
+		rewriteColumnRefInExpr(n.TypeCast.Arg, oldName, newName)
+	case *pg_query.Node_FuncCall:
+		for _, arg := range n.FuncCall.Args {
+			rewriteColumnRefInExpr(arg, oldName, newName)
+		}
+	case *pg_query.Node_NullTest:
+		rewriteColumnRefInExpr(n.NullTest.Arg, oldName, newName)
+	case *pg_query.Node_AArrayExpr:
+		for _, elem := range n.AArrayExpr.Elements {
+			rewriteColumnRefInExpr(elem, oldName, newName)
+		}
+	case *pg_query.Node_List:
+		for _, item := range n.List.Items {
+			rewriteColumnRefInExpr(item, oldName, newName)
+		}
+	case *pg_query.Node_CoalesceExpr:
+		for _, arg := range n.CoalesceExpr.Args {
+			rewriteColumnRefInExpr(arg, oldName, newName)
+		}
+	case *pg_query.Node_CaseExpr:
+		rewriteColumnRefInExpr(n.CaseExpr.Arg, oldName, newName)
+		rewriteColumnRefInExpr(n.CaseExpr.Defresult, oldName, newName)
+		for _, when := range n.CaseExpr.Args {
+			if w := when.GetCaseWhen(); w != nil {
+				rewriteColumnRefInExpr(w.Expr, oldName, newName)
+				rewriteColumnRefInExpr(w.Result, oldName, newName)
+			}
+		}
+	}
+}
+
+// rewriteColumnInIndexDef returns a new index definition with column references
+// to oldName replaced by newName. Returns the original definition unchanged
+// if pg_query parse/deparse fails.
+func rewriteColumnInIndexDef(def, oldName, newName string) (string, error) {
+	result, err := pg_query.Parse(def)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse index definition: %w", err)
+	}
+	if len(result.Stmts) == 0 {
+		return "", fmt.Errorf("empty index definition")
+	}
+	is := result.Stmts[0].Stmt.GetIndexStmt()
+	if is == nil {
+		return "", fmt.Errorf("expected IndexStmt in index definition")
+	}
+	rewriteIndexElems := func(params []*pg_query.Node) {
+		for _, p := range params {
+			ie := p.GetIndexElem()
+			if ie == nil {
+				continue
+			}
+			if ie.Name == oldName {
+				ie.Name = newName
+			}
+			rewriteColumnRefInExpr(ie.Expr, oldName, newName)
+		}
+	}
+	rewriteIndexElems(is.IndexParams)
+	rewriteIndexElems(is.IndexIncludingParams)
+	rewriteColumnRefInExpr(is.WhereClause, oldName, newName)
+	return pg_query.Deparse(result)
+}
+
+const constraintDefWrapPrefix = "ALTER TABLE _t ADD CONSTRAINT _c "
+
+// rewriteColumnInConstraintDef returns a new constraint definition fragment
+// (e.g. "PRIMARY KEY (id)", "CHECK ((x > 0))", "FOREIGN KEY (a) REFERENCES t(b)")
+// with column references to oldName replaced by newName. PkAttrs (referenced
+// columns on the foreign side) are intentionally NOT rewritten because they
+// refer to a different table.
+func rewriteColumnInConstraintDef(def, oldName, newName string) (string, error) {
+	sql := constraintDefWrapPrefix + def
+	result, err := pg_query.Parse(sql)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse constraint definition: %w", err)
+	}
+	if len(result.Stmts) == 0 {
+		return "", fmt.Errorf("empty constraint definition")
+	}
+	as := result.Stmts[0].Stmt.GetAlterTableStmt()
+	if as == nil || len(as.Cmds) == 0 {
+		return "", fmt.Errorf("unexpected parse result for constraint definition")
+	}
+	cmd := as.Cmds[0].GetAlterTableCmd()
+	if cmd == nil || cmd.Def == nil {
+		return "", fmt.Errorf("unexpected parse result for constraint definition")
+	}
+	con := cmd.Def.GetConstraint()
+	if con == nil {
+		return "", fmt.Errorf("unexpected parse result for constraint definition")
+	}
+
+	rewriteStringList := func(nodes []*pg_query.Node) {
+		for _, n := range nodes {
+			if s := n.GetString_(); s != nil && s.Sval == oldName {
+				s.Sval = newName
+			}
+		}
+	}
+	rewriteStringList(con.Keys)
+	rewriteStringList(con.Including)
+	rewriteStringList(con.FkAttrs)
+	rewriteColumnRefInExpr(con.RawExpr, oldName, newName)
+
+	deparsed, err := pg_query.Deparse(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to deparse constraint definition: %w", err)
+	}
+	deparsed = strings.TrimSuffix(deparsed, ";")
+	if !strings.HasPrefix(deparsed, constraintDefWrapPrefix) {
+		return "", fmt.Errorf("unexpected deparsed form: %s", deparsed)
+	}
+	return strings.TrimPrefix(deparsed, constraintDefWrapPrefix), nil
+}
+
+// rewriteColumnRefsInIndexes returns a clone of indexes with each Definition
+// updated to reflect the column renames. Definitions that fail to parse/deparse
+// are left unchanged so downstream comparison still functions (will fall back
+// to redundant DROP/CREATE in that case).
+func rewriteColumnRefsInIndexes(indexes *orderedmap.Map[string, *model.Index], renames map[string]string) *orderedmap.Map[string, *model.Index] {
+	out := orderedmap.New[string, *model.Index]()
+	for name, idx := range indexes.All() {
+		clone := *idx
+		for old, n := range renames {
+			updated, err := rewriteColumnInIndexDef(clone.Definition, old, n)
+			if err == nil {
+				clone.Definition = updated
+			}
+		}
+		out.Set(name, &clone)
+	}
+	return out
+}
+
+// rewriteColumnRefsInConstraints returns a clone of constraints with each
+// Definition updated to reflect column renames.
+func rewriteColumnRefsInConstraints(cons *orderedmap.Map[string, *model.Constraint], renames map[string]string) *orderedmap.Map[string, *model.Constraint] {
+	out := orderedmap.New[string, *model.Constraint]()
+	for name, con := range cons.All() {
+		clone := *con
+		for old, n := range renames {
+			updated, err := rewriteColumnInConstraintDef(clone.Definition, old, n)
+			if err == nil {
+				clone.Definition = updated
+			}
+		}
+		out.Set(name, &clone)
+	}
+	return out
+}
+
+// rewriteColumnRefsInForeignKeys returns a clone of FKs with each Definition
+// updated to reflect column renames on the local side (FkAttrs). Referenced
+// columns are not touched.
+func rewriteColumnRefsInForeignKeys(fks *orderedmap.Map[string, *model.ForeignKey], renames map[string]string) *orderedmap.Map[string, *model.ForeignKey] {
+	out := orderedmap.New[string, *model.ForeignKey]()
+	for name, fk := range fks.All() {
+		clone := *fk
+		for old, n := range renames {
+			updated, err := rewriteColumnInConstraintDef(clone.Definition, old, n)
+			if err == nil {
+				clone.Definition = updated
+			}
+		}
+		out.Set(name, &clone)
+	}
+	return out
 }

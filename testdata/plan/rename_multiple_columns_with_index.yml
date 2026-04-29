@@ -1,0 +1,21 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      first_name text NOT NULL,
+      last_name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_name ON public.users (first_name, last_name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pist:renamed-from first_name
+      given_name text NOT NULL,
+      -- pist:renamed-from last_name
+      family_name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_name ON public.users (given_name, family_name);
+plan: |
+  ALTER TABLE public.users RENAME COLUMN first_name TO given_name;
+  ALTER TABLE public.users RENAME COLUMN last_name TO family_name;

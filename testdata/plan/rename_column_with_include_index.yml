@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      sku text NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_products_sku ON public.products (sku) INCLUDE (name);
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      sku text NOT NULL,
+      -- pist:renamed-from name
+      product_name text NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_products_sku ON public.products (sku) INCLUDE (product_name);
+plan: |
+  ALTER TABLE public.products RENAME COLUMN name TO product_name;

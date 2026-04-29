@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      -- pist:renamed-from id
+      user_id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (user_id)
+  );
+plan: |
+  ALTER TABLE public.users RENAME COLUMN id TO user_id;
