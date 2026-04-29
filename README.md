@@ -313,7 +313,7 @@ CREATE TABLE public.users (
 CREATE INDEX idx_users_name ON public.users (display_name);
 ```
 
-If the desired side still references the old name, `pist plan` errors out at parse time with a message like `column "name" referenced in index "idx_users_name" does not exist on table "public.users"`. All such unresolved references are reported in a single error.
+If the desired side still references the old name, `pist plan` errors out at parse time with a message like `column name referenced in index idx_users_name does not exist on table public.users` (identifiers are quoted only when they aren't safe unquoted). All such unresolved references are reported in a single error.
 
 The following references are **not** auto-rewritten and may produce a redundant `DROP/CREATE` on the first plan (the second run after applying the rename comes out clean):
 

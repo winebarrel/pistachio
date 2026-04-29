@@ -6,6 +6,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -109,13 +110,11 @@ func collectColumnRefsInIndexDef(def string) []string {
 	return refs
 }
 
-const constraintWrapPrefix = "ALTER TABLE _t ADD CONSTRAINT _c "
-
 // collectColumnRefsInConstraintDef returns the unqualified column names
 // referenced by a constraint definition fragment (Keys, Including, RawExpr,
 // EXCLUDE Exclusions IndexElem).
 func collectColumnRefsInConstraintDef(def string) []string {
-	con := parseConstraint(def)
+	con := pgast.ParseConstraintDef(def)
 	if con == nil {
 		return nil
 	}
@@ -153,7 +152,7 @@ func collectColumnRefsInConstraintDef(def string) []string {
 // referenced by a foreign-key definition. PkAttrs (parent-table columns) are
 // intentionally excluded; cross-table validation is out of scope.
 func collectColumnRefsInFKDef(def string) []string {
-	con := parseConstraint(def)
+	con := pgast.ParseConstraintDef(def)
 	if con == nil {
 		return nil
 	}
@@ -166,72 +165,14 @@ func collectColumnRefsInFKDef(def string) []string {
 	return refs
 }
 
-func parseConstraint(def string) *pg_query.Constraint {
-	result, err := pg_query.Parse(constraintWrapPrefix + def)
-	if err != nil || len(result.Stmts) == 0 {
-		return nil
-	}
-	as := result.Stmts[0].Stmt.GetAlterTableStmt()
-	if as == nil || len(as.Cmds) == 0 {
-		return nil
-	}
-	cmd := as.Cmds[0].GetAlterTableCmd()
-	if cmd == nil || cmd.Def == nil {
-		return nil
-	}
-	return cmd.Def.GetConstraint()
-}
-
 // walkExprColumnRefs returns the unqualified ColumnRef names found in an
-// expression tree. Read-only mirror of diff.rewriteColumnRefsInExpr.
+// expression tree.
 func walkExprColumnRefs(node *pg_query.Node) []string {
-	if node == nil {
-		return nil
-	}
 	var refs []string
-	switch n := node.Node.(type) {
-	case *pg_query.Node_ColumnRef:
-		if len(n.ColumnRef.Fields) == 1 {
-			if s := n.ColumnRef.Fields[0].GetString_(); s != nil && s.Sval != "" {
-				refs = append(refs, s.Sval)
-			}
+	pgast.WalkExprColumnRefs(node, func(s *pg_query.String) {
+		if s.Sval != "" {
+			refs = append(refs, s.Sval)
 		}
-	case *pg_query.Node_AExpr:
-		refs = append(refs, walkExprColumnRefs(n.AExpr.Lexpr)...)
-		refs = append(refs, walkExprColumnRefs(n.AExpr.Rexpr)...)
-	case *pg_query.Node_BoolExpr:
-		for _, arg := range n.BoolExpr.Args {
-			refs = append(refs, walkExprColumnRefs(arg)...)
-		}
-	case *pg_query.Node_TypeCast:
-		refs = append(refs, walkExprColumnRefs(n.TypeCast.Arg)...)
-	case *pg_query.Node_FuncCall:
-		for _, arg := range n.FuncCall.Args {
-			refs = append(refs, walkExprColumnRefs(arg)...)
-		}
-	case *pg_query.Node_NullTest:
-		refs = append(refs, walkExprColumnRefs(n.NullTest.Arg)...)
-	case *pg_query.Node_AArrayExpr:
-		for _, elem := range n.AArrayExpr.Elements {
-			refs = append(refs, walkExprColumnRefs(elem)...)
-		}
-	case *pg_query.Node_List:
-		for _, item := range n.List.Items {
-			refs = append(refs, walkExprColumnRefs(item)...)
-		}
-	case *pg_query.Node_CoalesceExpr:
-		for _, arg := range n.CoalesceExpr.Args {
-			refs = append(refs, walkExprColumnRefs(arg)...)
-		}
-	case *pg_query.Node_CaseExpr:
-		refs = append(refs, walkExprColumnRefs(n.CaseExpr.Arg)...)
-		refs = append(refs, walkExprColumnRefs(n.CaseExpr.Defresult)...)
-		for _, when := range n.CaseExpr.Args {
-			if w := when.GetCaseWhen(); w != nil {
-				refs = append(refs, walkExprColumnRefs(w.Expr)...)
-				refs = append(refs, walkExprColumnRefs(w.Result)...)
-			}
-		}
-	}
+	})
 	return refs
 }

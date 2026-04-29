@@ -2,10 +2,10 @@ package diff
 
 import (
 	"fmt"
-	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -423,59 +423,13 @@ func collectColumnRenames(desired *orderedmap.Map[string, *model.Column]) map[st
 // unqualified ColumnRef whose name appears in renames to the mapped new
 // name, mutating the tree in place. Each ColumnRef is matched against the
 // original-name set in a single pass, so chained renames (a→b alongside
-// b→c) cannot cascade. Qualified references (table.col) are left untouched
-// because the renamed column belongs to a single table and the diff context
-// is local.
+// b→c) cannot cascade.
 func rewriteColumnRefsInExpr(node *pg_query.Node, renames map[string]string) {
-	if node == nil {
-		return
-	}
-	switch n := node.Node.(type) {
-	case *pg_query.Node_ColumnRef:
-		if len(n.ColumnRef.Fields) == 1 {
-			if s := n.ColumnRef.Fields[0].GetString_(); s != nil {
-				if newName, ok := renames[s.Sval]; ok {
-					s.Sval = newName
-				}
-			}
+	pgast.WalkExprColumnRefs(node, func(s *pg_query.String) {
+		if newName, ok := renames[s.Sval]; ok {
+			s.Sval = newName
 		}
-	case *pg_query.Node_AExpr:
-		rewriteColumnRefsInExpr(n.AExpr.Lexpr, renames)
-		rewriteColumnRefsInExpr(n.AExpr.Rexpr, renames)
-	case *pg_query.Node_BoolExpr:
-		for _, arg := range n.BoolExpr.Args {
-			rewriteColumnRefsInExpr(arg, renames)
-		}
-	case *pg_query.Node_TypeCast:
-		rewriteColumnRefsInExpr(n.TypeCast.Arg, renames)
-	case *pg_query.Node_FuncCall:
-		for _, arg := range n.FuncCall.Args {
-			rewriteColumnRefsInExpr(arg, renames)
-		}
-	case *pg_query.Node_NullTest:
-		rewriteColumnRefsInExpr(n.NullTest.Arg, renames)
-	case *pg_query.Node_AArrayExpr:
-		for _, elem := range n.AArrayExpr.Elements {
-			rewriteColumnRefsInExpr(elem, renames)
-		}
-	case *pg_query.Node_List:
-		for _, item := range n.List.Items {
-			rewriteColumnRefsInExpr(item, renames)
-		}
-	case *pg_query.Node_CoalesceExpr:
-		for _, arg := range n.CoalesceExpr.Args {
-			rewriteColumnRefsInExpr(arg, renames)
-		}
-	case *pg_query.Node_CaseExpr:
-		rewriteColumnRefsInExpr(n.CaseExpr.Arg, renames)
-		rewriteColumnRefsInExpr(n.CaseExpr.Defresult, renames)
-		for _, when := range n.CaseExpr.Args {
-			if w := when.GetCaseWhen(); w != nil {
-				rewriteColumnRefsInExpr(w.Expr, renames)
-				rewriteColumnRefsInExpr(w.Result, renames)
-			}
-		}
-	}
+	})
 }
 
 // rewriteColumnsInIndexDef returns a new index definition with column
@@ -516,8 +470,6 @@ func rewriteColumnsInIndexDef(def string, renames map[string]string) (string, er
 	return pg_query.Deparse(result)
 }
 
-const constraintDefWrapPrefix = "ALTER TABLE _t ADD CONSTRAINT _c "
-
 // rewriteColumnsInConstraintDef returns a new constraint definition fragment
 // (e.g. "PRIMARY KEY (id)", "CHECK ((x > 0))", "FOREIGN KEY (a) REFERENCES t(b)")
 // with column references rewritten according to the renames map (old → new).
@@ -527,25 +479,9 @@ const constraintDefWrapPrefix = "ALTER TABLE _t ADD CONSTRAINT _c "
 // All renames are applied in a single AST walk so chained renames cannot
 // cascade.
 func rewriteColumnsInConstraintDef(def string, renames map[string]string) (string, error) {
-	sql := constraintDefWrapPrefix + def
-	result, err := pg_query.Parse(sql)
+	result, con, err := pgast.ParseConstraintDefStrict(def)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse constraint definition: %w", err)
-	}
-	if len(result.Stmts) == 0 {
-		return "", fmt.Errorf("empty constraint definition")
-	}
-	as := result.Stmts[0].Stmt.GetAlterTableStmt()
-	if as == nil || len(as.Cmds) == 0 {
-		return "", fmt.Errorf("unexpected parse result for constraint definition")
-	}
-	cmd := as.Cmds[0].GetAlterTableCmd()
-	if cmd == nil || cmd.Def == nil {
-		return "", fmt.Errorf("unexpected parse result for constraint definition")
-	}
-	con := cmd.Def.GetConstraint()
-	if con == nil {
-		return "", fmt.Errorf("unexpected parse result for constraint definition")
+		return "", err
 	}
 
 	rewriteStringList := func(nodes []*pg_query.Node) {
@@ -580,15 +516,7 @@ func rewriteColumnsInConstraintDef(def string, renames map[string]string) (strin
 		}
 	}
 
-	deparsed, err := pg_query.Deparse(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to deparse constraint definition: %w", err)
-	}
-	deparsed = strings.TrimSuffix(deparsed, ";")
-	if !strings.HasPrefix(deparsed, constraintDefWrapPrefix) {
-		return "", fmt.Errorf("unexpected deparsed form: %s", deparsed)
-	}
-	return strings.TrimPrefix(deparsed, constraintDefWrapPrefix), nil
+	return pgast.DeparseConstraintDef(result)
 }
 
 // rewriteColumnRefsInIndexes returns a clone of indexes with each Definition
