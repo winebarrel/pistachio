@@ -621,6 +621,22 @@ func rewriteColumnRefsInConstraints(cons *orderedmap.Map[string, *model.Constrai
 	return out
 }
 
+// renameColumnKeys returns a clone of the columns map where each key in
+// renames is replaced by its mapped new name. Iteration is single-pass
+// (each existing key is matched once against the renames map) so chained
+// renames such as a→b alongside b→c do not cascade. Order is preserved.
+func renameColumnKeys(cols *orderedmap.Map[string, *model.Column], renames map[string]string) *orderedmap.Map[string, *model.Column] {
+	out := orderedmap.New[string, *model.Column]()
+	for name, col := range cols.All() {
+		if newName, ok := renames[name]; ok {
+			out.Set(newName, col)
+		} else {
+			out.Set(name, col)
+		}
+	}
+	return out
+}
+
 // rewriteColumnRefsInForeignKeys returns a clone of FKs with each Definition
 // updated to reflect column renames on the local side (FkAttrs). Referenced
 // columns are not touched.

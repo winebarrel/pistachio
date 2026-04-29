@@ -276,6 +276,34 @@ func TestRewriteColumnRefsInConstraints_RewritesAndClones(t *testing.T) {
 	assert.Contains(t, original.Definition, "(email)")
 }
 
+func TestRenameColumnKeys_RemapsAndPreservesOrder(t *testing.T) {
+	in := orderedmap.New[string, *model.Column]()
+	in.Set("a", &model.Column{Name: "a"})
+	in.Set("b", &model.Column{Name: "b"})
+	in.Set("c", &model.Column{Name: "c"})
+
+	out := renameColumnKeys(in, map[string]string{"b": "d"})
+	keys := []string{}
+	for k := range out.All() {
+		keys = append(keys, k)
+	}
+	assert.Equal(t, []string{"a", "d", "c"}, keys)
+}
+
+func TestRenameColumnKeys_NoCascadeOnChain(t *testing.T) {
+	// a→b alongside b→c must not cascade through a single column to c.
+	in := orderedmap.New[string, *model.Column]()
+	in.Set("a", &model.Column{Name: "a"})
+	in.Set("b", &model.Column{Name: "b"})
+
+	out := renameColumnKeys(in, map[string]string{"a": "b", "b": "c"})
+	keys := []string{}
+	for k := range out.All() {
+		keys = append(keys, k)
+	}
+	assert.Equal(t, []string{"b", "c"}, keys)
+}
+
 func TestRewriteColumnRefsInForeignKeys_RewritesLocalAttrs(t *testing.T) {
 	in := orderedmap.New[string, *model.ForeignKey]()
 	in.Set("fk", &model.ForeignKey{
