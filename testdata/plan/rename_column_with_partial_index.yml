@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_products_qty ON public.products (qty) WHERE qty > 0;
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pist:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_products_qty ON public.products (quantity) WHERE quantity > 0;
+plan: |
+  ALTER TABLE public.products RENAME COLUMN qty TO quantity;

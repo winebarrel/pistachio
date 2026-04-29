@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      occurred_at timestamp NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_events_user_time ON public.events (user_id, occurred_at);
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      -- pist:renamed-from occurred_at
+      event_time timestamp NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_events_user_time ON public.events (user_id, event_time);
+plan: |
+  ALTER TABLE public.events RENAME COLUMN occurred_at TO event_time;

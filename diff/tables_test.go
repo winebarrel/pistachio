@@ -1400,6 +1400,44 @@ func TestDiffTable_fkRenameError(t *testing.T) {
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
 
+func TestDiffTable_columnRenameRewritesDependents(t *testing.T) {
+	current := newTable("public", "users")
+	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	current.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, Comment: ptr("legacy")})
+	current.Indexes.Set("idx_users_name", &model.Index{
+		Schema:     "public",
+		Name:       "idx_users_name",
+		Table:      "users",
+		Definition: "CREATE INDEX idx_users_name ON public.users USING btree (name)",
+	})
+
+	desired := newTable("public", "users")
+	desired.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	oldName := "name"
+	desired.Columns.Set("display_name", &model.Column{
+		Name:       "display_name",
+		TypeName:   "text",
+		NotNull:    true,
+		RenameFrom: &oldName,
+		Comment:    ptr("legacy"),
+	})
+	desired.Indexes.Set("idx_users_name", &model.Index{
+		Schema:     "public",
+		Name:       "idx_users_name",
+		Table:      "users",
+		Definition: "CREATE INDEX idx_users_name ON public.users USING btree (display_name)",
+	})
+
+	tableResult, err := diffTable(current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+
+	// Only the RENAME COLUMN should be emitted; no redundant DROP/CREATE
+	// INDEX, and no comment statement (the comment is preserved through
+	// RENAME).
+	require.Len(t, tableResult.Stmts, 1)
+	assert.Equal(t, "ALTER TABLE public.users RENAME COLUMN name TO display_name;", tableResult.Stmts[0])
+}
+
 func TestEqualConstraintDef_same(t *testing.T) {
 	assert.True(t, equalConstraintDef(
 		"PRIMARY KEY (id)",

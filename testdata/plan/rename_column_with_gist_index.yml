@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      during tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_reservations_during ON public.reservations USING gist (during);
+desired: |
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      -- pist:renamed-from during
+      time_range tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_reservations_during ON public.reservations USING gist (time_range);
+plan: |
+  ALTER TABLE public.reservations RENAME COLUMN during TO time_range;

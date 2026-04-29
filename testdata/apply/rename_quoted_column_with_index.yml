@@ -1,0 +1,23 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      "MyName" text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_myname ON public.users ("MyName");
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pist:renamed-from "MyName"
+      "DisplayName" text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_myname ON public.users ("DisplayName");
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      "DisplayName" text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_myname ON public.users USING btree ("DisplayName");

@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_email_lower ON public.users (lower(email));
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pist:renamed-from email
+      email_addr text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_email_lower ON public.users (lower(email_addr));
+plan: |
+  ALTER TABLE public.users RENAME COLUMN email TO email_addr;

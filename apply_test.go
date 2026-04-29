@@ -54,6 +54,47 @@ func TestApply(t *testing.T) {
 	}
 }
 
+func TestApply_RenameColumn_NonPublicSchema(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.events (
+    id integer NOT NULL,
+    occurred_at timestamp NOT NULL,
+    CONSTRAINT events_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_events_time ON myschema.events (occurred_at);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE myschema.events (
+    id integer NOT NULL,
+    -- pist:renamed-from occurred_at
+    event_time timestamp NOT NULL,
+    CONSTRAINT events_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_events_time ON myschema.events (event_time);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	require.NoError(t, err)
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	expected := `-- myschema.events
+CREATE TABLE myschema.events (
+    id integer NOT NULL,
+    event_time timestamp without time zone NOT NULL,
+    CONSTRAINT events_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_events_time ON myschema.events USING btree (event_time);`
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(got.String()))
+}
+
 func TestApply_WithPreSQL(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

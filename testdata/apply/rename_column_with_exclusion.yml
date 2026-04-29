@@ -1,0 +1,27 @@
+init: |
+  CREATE EXTENSION IF NOT EXISTS btree_gist;
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      during tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&)
+  );
+desired: |
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      -- pist:renamed-from during
+      time_range tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, time_range WITH &&)
+  );
+applied: |
+  -- public.reservations
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      time_range tsrange NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, time_range WITH &&)
+  );

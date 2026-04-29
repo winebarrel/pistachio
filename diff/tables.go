@@ -151,6 +151,20 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	result.Stmts = append(result.Stmts, colStmts...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, colDisallowed...)
 
+	// Rewrite column references in dependent objects so that subsequent diffs
+	// don't see the renamed column as a definition change. PostgreSQL applies
+	// RENAME COLUMN transparently to indexes/constraints/FKs on the same table.
+	// Also rekey current.Columns so diffComments looks up the right entry by
+	// the new column name.
+	if columnRenames := collectColumnRenames(desired.Columns); len(columnRenames) > 0 {
+		clone := *current
+		clone.Indexes = rewriteColumnRefsInIndexes(current.Indexes, columnRenames)
+		clone.Constraints = rewriteColumnRefsInConstraints(current.Constraints, columnRenames)
+		clone.ForeignKeys = rewriteColumnRefsInForeignKeys(current.ForeignKeys, columnRenames)
+		clone.Columns = renameColumnKeys(current.Columns, columnRenames)
+		current = &clone
+	}
+
 	conStmts, conDisallowed, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
 	if err != nil {
 		return nil, err
