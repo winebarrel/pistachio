@@ -474,8 +474,8 @@ func rewriteColumnRefInExpr(node *pg_query.Node, oldName, newName string) {
 }
 
 // rewriteColumnInIndexDef returns a new index definition with column references
-// to oldName replaced by newName. Returns the original definition unchanged
-// if pg_query parse/deparse fails.
+// to oldName replaced by newName. Returns an error (and an empty string) if
+// pg_query parse/deparse fails; callers fall back to the original definition.
 func rewriteColumnInIndexDef(def, oldName, newName string) (string, error) {
 	result, err := pg_query.Parse(def)
 	if err != nil {
