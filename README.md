@@ -313,7 +313,7 @@ CREATE TABLE public.users (
 CREATE INDEX idx_users_name ON public.users (display_name);
 ```
 
-If the desired side still references the old name, `pist plan` will emit a `DROP/CREATE INDEX` that re-references the missing column and the subsequent `pist apply` will fail with `column "name" does not exist`.
+If the desired side still references the old name, `pist plan` may emit `DROP/CREATE` for dependent indexes, constraints, or foreign keys that re-reference the missing column, and the subsequent `pist apply` will fail with `column "name" does not exist`.
 
 The following references are **not** auto-rewritten and may produce a redundant `DROP/CREATE` on the first plan (the second run after applying the rename comes out clean):
 
