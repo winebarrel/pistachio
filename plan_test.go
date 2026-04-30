@@ -22,9 +22,13 @@ type planTestCase struct {
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
 	DisableIndexConcurrently bool            `yaml:"disable_index_concurrently,omitempty"`
 	PreSQL                   string          `yaml:"pre_sql,omitempty"`
-	PreSQLFile               string          `yaml:"pre_sql_file,omitempty"`
-	ConcurrentlyPreSQL       string          `yaml:"concurrently_pre_sql,omitempty"`
-	ConcurrentlyPreSQLFile   string          `yaml:"concurrently_pre_sql_file,omitempty"`
+	// PreSQLFile holds SQL content; the runner writes it to a temp file and
+	// passes the path to PlanOptions.PreSQLFile.
+	PreSQLFile         string `yaml:"pre_sql_file,omitempty"`
+	ConcurrentlyPreSQL string `yaml:"concurrently_pre_sql,omitempty"`
+	// ConcurrentlyPreSQLFile holds SQL content; the runner writes it to a temp
+	// file and passes the path to PlanOptions.ConcurrentlyPreSQLFile.
+	ConcurrentlyPreSQLFile string `yaml:"concurrently_pre_sql_file,omitempty"`
 }
 
 type planDropPolicy struct {

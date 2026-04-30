@@ -23,9 +23,18 @@ type applyTestCase struct {
 	DropPolicy               *applyDropPolicy `yaml:"drop_policy,omitempty"`
 	DisableIndexConcurrently bool             `yaml:"disable_index_concurrently,omitempty"`
 	PreSQL                   string           `yaml:"pre_sql,omitempty"`
-	PreSQLFile               string           `yaml:"pre_sql_file,omitempty"`
-	ConcurrentlyPreSQL       string           `yaml:"concurrently_pre_sql,omitempty"`
-	ConcurrentlyPreSQLFile   string           `yaml:"concurrently_pre_sql_file,omitempty"`
+	// PreSQLFile holds SQL content; the runner writes it to a temp file and
+	// passes the path to ApplyOptions.PreSQLFile.
+	PreSQLFile         string `yaml:"pre_sql_file,omitempty"`
+	ConcurrentlyPreSQL string `yaml:"concurrently_pre_sql,omitempty"`
+	// ConcurrentlyPreSQLFile holds SQL content; the runner writes it to a temp
+	// file and passes the path to ApplyOptions.ConcurrentlyPreSQLFile.
+	ConcurrentlyPreSQLFile string `yaml:"concurrently_pre_sql_file,omitempty"`
+	// VerifyNoDrift, when true, runs Plan against the same desired SQL after
+	// Apply and asserts that no further DDL is produced. This catches cases
+	// where the apply succeeds but a parser/diff bug would generate a spurious
+	// diff on the next run (e.g. CONCURRENTLY not stripped from index defs).
+	VerifyNoDrift bool `yaml:"verify_no_drift,omitempty"`
 }
 
 type applyDropPolicy struct {
@@ -87,6 +96,20 @@ func TestApply(t *testing.T) {
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Applied), strings.TrimSpace(got.String()))
+
+			if tc.VerifyNoDrift {
+				plan, err := client.Plan(ctx, &pistachio.PlanOptions{
+					DropPolicy:               dropPolicy,
+					Files:                    []string{desiredFile},
+					DisableIndexConcurrently: tc.DisableIndexConcurrently,
+					PreSQL:                   tc.PreSQL,
+					PreSQLFile:               preSQLFile,
+					ConcurrentlyPreSQL:       tc.ConcurrentlyPreSQL,
+					ConcurrentlyPreSQLFile:   concurrentlyPreSQLFile,
+				})
+				require.NoError(t, err)
+				assert.Empty(t, plan.SQL, "expected no drift after apply")
+			}
 		})
 	}
 }
