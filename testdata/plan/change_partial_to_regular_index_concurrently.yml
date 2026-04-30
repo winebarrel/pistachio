@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_products_qty ON public.products (qty) WHERE qty > 0;
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  -- pist:concurrently
+  CREATE INDEX idx_products_qty ON public.products (qty);
+plan: |
+  DROP INDEX CONCURRENTLY public.idx_products_qty;
+  CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty);
