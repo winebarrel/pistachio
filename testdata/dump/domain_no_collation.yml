@@ -1,0 +1,5 @@
+init: |
+  CREATE DOMAIN public.email AS varchar(255) NOT NULL DEFAULT ''::varchar;
+dump: |
+  -- public.email
+  CREATE DOMAIN public.email AS character varying(255) DEFAULT ''::character varying NOT NULL;

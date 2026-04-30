@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

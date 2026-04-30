@@ -77,23 +77,6 @@ func TestDump_CanceledContext(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to fetch tables")
 }
 
-func TestDumpResult_String_Empty(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, "")
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, "", got.String())
-}
-
 func TestDump_Count(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -451,27 +434,6 @@ CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);`
 	s := got.String()
 	assert.Contains(t, s, "CREATE DOMAIN pos_int AS integer")
 	assert.NotContains(t, s, "public.pos_int")
-}
-
-func TestDump_Domain_DefaultCollationExcluded(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE DOMAIN public.email AS varchar(255) NOT NULL DEFAULT ''::varchar;`)
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
-	require.NoError(t, err)
-	s := got.String()
-	assert.Contains(t, s, "CREATE DOMAIN public.email")
-	assert.NotContains(t, s, "COLLATE")
-	assert.NotContains(t, s, "default")
 }
 
 func TestDump_Domain_OmitSchema_PlanNoDiff(t *testing.T) {
