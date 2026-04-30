@@ -988,6 +988,123 @@ CREATE INDEX idx_users_name ON public.users USING hash (name);`), 0o644))
 	assert.NotContains(t, got.SQL, "CONCURRENTLY")
 }
 
+// TestPlan_ConcurrentlyDirective_AddPartialPredicate verifies that turning a
+// regular index into a partial index (adding a WHERE clause) under the
+// per-index `-- pist:concurrently` directive emits DROP INDEX CONCURRENTLY
+// followed by CREATE INDEX CONCURRENTLY ... WHERE ..., since PostgreSQL has no
+// ALTER INDEX form for changing predicates.
+func TestPlan_ConcurrentlyDirective_AddPartialPredicate(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.products (
+    id integer NOT NULL,
+    qty integer NOT NULL,
+    CONSTRAINT products_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_products_qty ON public.products (qty);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.products (
+    id integer NOT NULL,
+    qty integer NOT NULL,
+    CONSTRAINT products_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_products_qty ON public.products (qty) WHERE qty > 0;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP INDEX CONCURRENTLY public.idx_products_qty;")
+	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty) WHERE qty > 0;")
+}
+
+// TestPlan_ConcurrentlyDirective_ChangePartialPredicate verifies that changing
+// a partial index's WHERE predicate under `-- pist:concurrently` emits a
+// CONCURRENTLY-flavored DROP+CREATE recreate.
+func TestPlan_ConcurrentlyDirective_ChangePartialPredicate(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.products (
+    id integer NOT NULL,
+    qty integer NOT NULL,
+    CONSTRAINT products_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_products_qty ON public.products (qty) WHERE qty > 0;`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.products (
+    id integer NOT NULL,
+    qty integer NOT NULL,
+    CONSTRAINT products_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_products_qty ON public.products (qty) WHERE qty > 100;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP INDEX CONCURRENTLY public.idx_products_qty;")
+	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty) WHERE qty > 100;")
+}
+
+// TestPlan_ConcurrentlyDirective_DropPartialPredicate verifies that turning a
+// partial index back into a regular index (removing the WHERE clause) under
+// the concurrently directive recreates it without a predicate.
+func TestPlan_ConcurrentlyDirective_DropPartialPredicate(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.products (
+    id integer NOT NULL,
+    qty integer NOT NULL,
+    CONSTRAINT products_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_products_qty ON public.products (qty) WHERE qty > 0;`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.products (
+    id integer NOT NULL,
+    qty integer NOT NULL,
+    CONSTRAINT products_pkey PRIMARY KEY (id)
+);
+-- pist:concurrently
+CREATE INDEX idx_products_qty ON public.products (qty);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "DROP INDEX CONCURRENTLY public.idx_products_qty;")
+	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty);")
+	assert.NotContains(t, got.SQL, "WHERE")
+}
+
 func TestPlan_DisableIndexConcurrently_NewTable(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
