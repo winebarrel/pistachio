@@ -20,9 +20,12 @@ type applyTestCase struct {
 	Desired                  string           `yaml:"desired"`
 	Applied                  string           `yaml:"applied"`
 	AppliedSQL               *string          `yaml:"applied_sql,omitempty"`
+	Count                    *expectedCount   `yaml:"count,omitempty"`
 	DisallowedDrops          string           `yaml:"disallowed_drops,omitempty"`
 	DropPolicy               *applyDropPolicy `yaml:"drop_policy,omitempty"`
 	DisableIndexConcurrently bool             `yaml:"disable_index_concurrently,omitempty"`
+	Include                  []string         `yaml:"include,omitempty"`
+	Exclude                  []string         `yaml:"exclude,omitempty"`
 	PreSQL                   string           `yaml:"pre_sql,omitempty"`
 	// PreSQLFile holds SQL content; the runner writes it to a temp file and
 	// passes the path to ApplyOptions.PreSQLFile.
@@ -81,6 +84,7 @@ func TestApply(t *testing.T) {
 			var buf bytes.Buffer
 			result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 				DropPolicy:               dropPolicy,
+				FilterOptions:            pistachio.FilterOptions{Include: tc.Include, Exclude: tc.Exclude},
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				PreSQL:                   tc.PreSQL,
@@ -93,6 +97,7 @@ func TestApply(t *testing.T) {
 				assert.Equal(t, strings.TrimSpace(*tc.AppliedSQL), strings.TrimSpace(buf.String()))
 			}
 			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(result.DisallowedDrops))
+			assertExpectedCount(t, tc.Count, result.Count)
 
 			// Verify
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{})
@@ -102,6 +107,7 @@ func TestApply(t *testing.T) {
 			if tc.VerifyNoDrift {
 				plan, err := client.Plan(ctx, &pistachio.PlanOptions{
 					DropPolicy:               dropPolicy,
+					FilterOptions:            pistachio.FilterOptions{Include: tc.Include, Exclude: tc.Exclude},
 					Files:                    []string{desiredFile},
 					DisableIndexConcurrently: tc.DisableIndexConcurrently,
 					PreSQL:                   tc.PreSQL,
@@ -155,48 +161,6 @@ CREATE TABLE myschema.events (
 );
 CREATE INDEX idx_events_time ON myschema.events USING btree (event_time);`
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(got.String()))
-}
-
-func TestApply_WithPreSQLFile_Output(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, "")
-
-	tmpDir := t.TempDir()
-	desiredFile := filepath.Join(tmpDir, "desired.sql")
-	preSQLFile := filepath.Join(tmpDir, "pre.sql")
-
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`), 0o644))
-	require.NoError(t, os.WriteFile(preSQLFile, []byte(`CREATE TABLE public.pre_hook (
-    id integer NOT NULL,
-    CONSTRAINT pre_hook_pkey PRIMARY KEY (id)
-);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
-		Files:      []string{desiredFile},
-		PreSQLFile: preSQLFile,
-	}, &buf)
-	require.NoError(t, err)
-
-	output := buf.String()
-	assert.Contains(t, output, "CREATE TABLE public.pre_hook")
-	assert.Contains(t, output, "CREATE TABLE public.users")
-
-	// pre-SQL should appear before diff statements
-	preSQLPos := strings.Index(output, "CREATE TABLE public.pre_hook")
-	diffPos := strings.Index(output, "CREATE TABLE public.users")
-	assert.Less(t, preSQLPos, diffPos)
 }
 
 func TestApply_WithTx(t *testing.T) {
@@ -716,51 +680,6 @@ CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 	}, io.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CONCURRENTLY")
-}
-
-func TestApply_PreSQL_And_ConcurrentlyPreSQL_Order(t *testing.T) {
-	// When both --pre-sql and --concurrently-pre-sql are set, order must be:
-	// pre-SQL → concurrently-pre-SQL → schema DDL.
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
--- pist:concurrently
-CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	var buf bytes.Buffer
-	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
-		Files:              []string{desiredFile},
-		PreSQL:             "SET statement_timeout = '10s';",
-		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
-	}, &buf)
-	require.NoError(t, err)
-	output := buf.String()
-	preSQLPos := strings.Index(output, "SET statement_timeout")
-	concPos := strings.Index(output, "SET lock_timeout")
-	idxPos := strings.Index(output, "CREATE INDEX CONCURRENTLY")
-	require.GreaterOrEqual(t, preSQLPos, 0)
-	require.GreaterOrEqual(t, concPos, 0)
-	require.GreaterOrEqual(t, idxPos, 0)
-	assert.Less(t, preSQLPos, concPos)
-	assert.Less(t, concPos, idxPos)
 }
 
 func TestApply_ConcurrentlyPreSQL_ExecError(t *testing.T) {

@@ -18,9 +18,12 @@ type planTestCase struct {
 	Desired                  string          `yaml:"desired"`
 	Plan                     string          `yaml:"plan"`
 	Error                    string          `yaml:"error"`
+	Count                    *expectedCount  `yaml:"count,omitempty"`
 	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
 	DisableIndexConcurrently bool            `yaml:"disable_index_concurrently,omitempty"`
+	Include                  []string        `yaml:"include,omitempty"`
+	Exclude                  []string        `yaml:"exclude,omitempty"`
 	PreSQL                   string          `yaml:"pre_sql,omitempty"`
 	// PreSQLFile holds SQL content; the runner writes it to a temp file and
 	// passes the path to PlanOptions.PreSQLFile.
@@ -33,6 +36,35 @@ type planTestCase struct {
 
 type planDropPolicy struct {
 	AllowDrop []string `yaml:"allow_drop"`
+}
+
+// expectedCount holds optional assertions for ObjectCount fields. Each pointer
+// is checked only when set, so a fixture can pin individual counts without
+// having to specify every field.
+type expectedCount struct {
+	Tables  *int `yaml:"tables,omitempty"`
+	Views   *int `yaml:"views,omitempty"`
+	Enums   *int `yaml:"enums,omitempty"`
+	Domains *int `yaml:"domains,omitempty"`
+}
+
+func assertExpectedCount(t *testing.T, want *expectedCount, got pistachio.ObjectCount) {
+	t.Helper()
+	if want == nil {
+		return
+	}
+	if want.Tables != nil {
+		assert.Equal(t, *want.Tables, got.Tables, "Count.Tables")
+	}
+	if want.Views != nil {
+		assert.Equal(t, *want.Views, got.Views, "Count.Views")
+	}
+	if want.Enums != nil {
+		assert.Equal(t, *want.Enums, got.Enums, "Count.Enums")
+	}
+	if want.Domains != nil {
+		assert.Equal(t, *want.Domains, got.Domains, "Count.Domains")
+	}
 }
 
 func TestPlan_InvalidConnString(t *testing.T) {
@@ -102,49 +134,6 @@ func TestPlan_EmptySchemas(t *testing.T) {
 
 	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.Error(t, err)
-}
-
-func TestPlan_PreSQL_And_ConcurrentlyPreSQL_Order(t *testing.T) {
-	// When both pre-SQL and concurrently-pre-SQL are set, plan output order
-	// must be: pre-SQL → concurrently-pre-SQL → schema DDL.
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
--- pist:concurrently
-CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{
-		Files:              []string{desiredFile},
-		PreSQL:             "SET statement_timeout = '10s';",
-		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
-	})
-	require.NoError(t, err)
-	preSQLPos := strings.Index(got.SQL, "SET statement_timeout")
-	concPos := strings.Index(got.SQL, "SET lock_timeout")
-	idxPos := strings.Index(got.SQL, "CREATE INDEX CONCURRENTLY")
-	require.GreaterOrEqual(t, preSQLPos, 0)
-	require.GreaterOrEqual(t, concPos, 0)
-	require.GreaterOrEqual(t, idxPos, 0)
-	assert.Less(t, preSQLPos, concPos)
-	assert.Less(t, concPos, idxPos)
 }
 
 func TestPlan_InvalidConcurrentlyPreSQLFile(t *testing.T) {
@@ -268,6 +257,7 @@ func TestPlan(t *testing.T) {
 			}
 			got, err := client.Plan(ctx, &pistachio.PlanOptions{
 				DropPolicy:               dropPolicy,
+				FilterOptions:            pistachio.FilterOptions{Include: tc.Include, Exclude: tc.Exclude},
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				PreSQL:                   tc.PreSQL,
@@ -283,6 +273,7 @@ func TestPlan(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got.SQL))
 			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(got.DisallowedDrops))
+			assertExpectedCount(t, tc.Count, got.Count)
 		})
 	}
 }

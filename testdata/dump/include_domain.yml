@@ -1,0 +1,8 @@
+include: [pos_int]
+init: |
+  CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+  CREATE DOMAIN public.email AS varchar(255);
+dump: |
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK ((VALUE > 0));

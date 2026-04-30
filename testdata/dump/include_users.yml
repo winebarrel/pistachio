@@ -1,0 +1,17 @@
+include: [users]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id FROM public.users;
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

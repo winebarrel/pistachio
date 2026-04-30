@@ -9,6 +9,16 @@ desired: |
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
+applied_sql: |
+  CREATE TABLE public.pre_hook (
+      id integer NOT NULL,
+      CONSTRAINT pre_hook_pkey PRIMARY KEY (id)
+  );
+
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
 applied: |
   -- public.pre_hook
   CREATE TABLE public.pre_hook (

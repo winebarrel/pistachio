@@ -1,0 +1,9 @@
+include: [status]
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TYPE public.role AS ENUM ('admin', 'user');
+desired: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');
+  CREATE TYPE public.role AS ENUM ('admin', 'user', 'guest');
+plan: |
+  ALTER TYPE public.status ADD VALUE 'pending' AFTER 'inactive';
