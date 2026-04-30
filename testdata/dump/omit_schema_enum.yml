@@ -1,0 +1,11 @@
+omit_schema: true
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  COMMENT ON TYPE public.status IS 'User status';
+dump: |
+  -- status
+  CREATE TYPE status AS ENUM (
+      'active',
+      'inactive'
+  );
+  COMMENT ON TYPE status IS 'User status';

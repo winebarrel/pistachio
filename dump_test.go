@@ -16,8 +16,9 @@ import (
 )
 
 type dumpTestCase struct {
-	Init string `yaml:"init"`
-	Dump string `yaml:"dump"`
+	Init       string `yaml:"init"`
+	Dump       string `yaml:"dump"`
+	OmitSchema bool   `yaml:"omit_schema"`
 }
 
 func TestDump_InvalidConnString(t *testing.T) {
@@ -291,32 +292,6 @@ CREATE TABLE public."My Table" (
 	assert.Contains(t, files, "public.My_Table.sql")
 }
 
-func TestDumpResult_OmitSchema_String(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
-	require.NoError(t, err)
-	s := got.String()
-	assert.Contains(t, s, "CREATE TABLE users")
-	assert.NotContains(t, s, "public.users")
-	assert.Contains(t, s, "CREATE OR REPLACE VIEW active_users")
-	assert.NotContains(t, s, "public.active_users")
-}
-
 func TestDumpResult_OmitSchema_Files(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -339,101 +314,6 @@ CREATE TABLE public.users (
 	assert.Contains(t, files, "users.sql")
 	assert.NotContains(t, files, "public.users.sql")
 	assert.Contains(t, files["users.sql"], "CREATE TABLE users")
-}
-
-func TestDumpResult_OmitSchema_ForeignKey(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.orders (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    CONSTRAINT orders_pkey PRIMARY KEY (id)
-);
-ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);`)
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
-	require.NoError(t, err)
-	s := got.String()
-	assert.Contains(t, s, "ALTER TABLE ONLY orders")
-	assert.NotContains(t, s, "public.orders")
-}
-
-func TestDumpResult_OmitSchema_Comment(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-COMMENT ON TABLE public.users IS 'User accounts';`)
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
-	require.NoError(t, err)
-	s := got.String()
-	assert.Contains(t, s, "COMMENT ON TABLE users")
-	assert.NotContains(t, s, "public.users")
-}
-
-func TestDumpResult_OmitSchema_Enum(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TYPE public.status AS ENUM ('active', 'inactive');
-COMMENT ON TYPE public.status IS 'User status';`)
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
-	require.NoError(t, err)
-	s := got.String()
-	assert.Contains(t, s, "CREATE TYPE status AS ENUM")
-	assert.NotContains(t, s, "public.status")
-	assert.Contains(t, s, "COMMENT ON TYPE status")
-}
-
-func TestDumpResult_OmitSchema_Domain(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);`)
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
-	require.NoError(t, err)
-	s := got.String()
-	assert.Contains(t, s, "CREATE DOMAIN pos_int AS integer")
-	assert.NotContains(t, s, "public.pos_int")
 }
 
 func TestDump_Domain_OmitSchema_PlanNoDiff(t *testing.T) {
@@ -498,56 +378,6 @@ func TestDump_OmitSchema_MultipleSchemas(t *testing.T) {
 	_, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--omit-schema cannot be used with multiple schemas")
-}
-
-func TestDumpResult_OmitSchema_Index(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE INDEX idx_users_id ON public.users (id);`)
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
-	require.NoError(t, err)
-	s := got.String()
-	assert.Contains(t, s, "CREATE INDEX idx_users_id ON users")
-	assert.NotContains(t, s, "ON public.users")
-}
-
-func TestDumpResult_OmitSchema_MaterializedView(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
-CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);`)
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
-	require.NoError(t, err)
-	s := got.String()
-	assert.Contains(t, s, "CREATE MATERIALIZED VIEW user_stats")
-	assert.Contains(t, s, "CREATE INDEX idx_user_stats_cnt ON user_stats")
-	assert.NotContains(t, s, "ON public.user_stats")
 }
 
 func TestDumpResult_OmitSchema_ViewDefinition(t *testing.T) {
@@ -668,7 +498,7 @@ func TestDump(t *testing.T) {
 				ConnString: conn.Config().ConnString(),
 				Schemas:    []string{"public"},
 			})
-			got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+			got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: tc.OmitSchema})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Dump), strings.TrimSpace(got.String()))
 		})

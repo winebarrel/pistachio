@@ -1,0 +1,20 @@
+omit_schema: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+  CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);
+dump: |
+  -- users
+  CREATE TABLE users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- user_stats
+  CREATE MATERIALIZED VIEW user_stats AS
+  SELECT count(*) AS cnt
+     FROM users;
+  CREATE INDEX idx_user_stats_cnt ON user_stats USING btree (cnt);
