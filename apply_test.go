@@ -20,6 +20,7 @@ type applyTestCase struct {
 	Desired                  string           `yaml:"desired"`
 	Applied                  string           `yaml:"applied"`
 	AppliedSQL               *string          `yaml:"applied_sql,omitempty"`
+	DisallowedDrops          string           `yaml:"disallowed_drops,omitempty"`
 	DropPolicy               *applyDropPolicy `yaml:"drop_policy,omitempty"`
 	DisableIndexConcurrently bool             `yaml:"disable_index_concurrently,omitempty"`
 	PreSQL                   string           `yaml:"pre_sql,omitempty"`
@@ -78,7 +79,7 @@ func TestApply(t *testing.T) {
 				dropPolicy = pistachio.DropPolicy{AllowDrop: tc.DropPolicy.AllowDrop}
 			}
 			var buf bytes.Buffer
-			_, err = client.Apply(ctx, &pistachio.ApplyOptions{
+			result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 				DropPolicy:               dropPolicy,
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
@@ -91,6 +92,7 @@ func TestApply(t *testing.T) {
 			if tc.AppliedSQL != nil {
 				assert.Equal(t, strings.TrimSpace(*tc.AppliedSQL), strings.TrimSpace(buf.String()))
 			}
+			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(result.DisallowedDrops))
 
 			// Verify
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{})
