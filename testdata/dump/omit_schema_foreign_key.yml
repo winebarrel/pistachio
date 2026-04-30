@@ -1,0 +1,27 @@
+omit_schema: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);
+dump: |
+  -- orders
+  CREATE TABLE orders (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);
+
+  -- users
+  CREATE TABLE users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

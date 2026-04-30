@@ -1,0 +1,29 @@
+drop_policy:
+  allow_drop: []
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      legacy text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_v AS SELECT id FROM public.users;
+  CREATE MATERIALIZED VIEW public.user_mv AS SELECT id FROM public.users;
+  CREATE TYPE public.color AS ENUM ('red', 'blue');
+  CREATE DOMAIN public.pos_int AS integer CHECK (VALUE > 0);
+  CREATE TABLE public.legacy_users (
+      id integer NOT NULL,
+      CONSTRAINT legacy_users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP MATERIALIZED VIEW public.user_mv;
+  -- skipped: DROP VIEW public.user_v;
+  -- skipped: ALTER TABLE public.users DROP COLUMN legacy;
+  -- skipped: DROP TABLE public.legacy_users;
+  -- skipped: DROP DOMAIN public.pos_int;
+  -- skipped: DROP TYPE public.color;

@@ -1,0 +1,18 @@
+omit_schema: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id FROM public.users;
+dump: |
+  -- users
+  CREATE TABLE users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- active_users
+  CREATE OR REPLACE VIEW active_users AS
+  SELECT users.id
+     FROM users;

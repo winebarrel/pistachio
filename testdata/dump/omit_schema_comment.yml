@@ -1,0 +1,14 @@
+omit_schema: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON TABLE public.users IS 'User accounts';
+dump: |
+  -- users
+  CREATE TABLE users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON TABLE users IS 'User accounts';

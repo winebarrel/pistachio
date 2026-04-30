@@ -1,0 +1,18 @@
+drop_policy:
+  allow_drop: []
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: ""
+disallowed_drops: |
+  -- skipped: ALTER TABLE public.users DROP CONSTRAINT users_email_key;

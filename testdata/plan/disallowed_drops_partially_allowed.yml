@@ -1,0 +1,23 @@
+drop_policy:
+  allow_drop: [table]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      legacy text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.legacy_users (
+      id integer NOT NULL,
+      CONSTRAINT legacy_users_pkey PRIMARY KEY (id)
+  );
+  CREATE TYPE public.color AS ENUM ('red', 'blue');
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      legacy text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  DROP TABLE public.legacy_users;
+disallowed_drops: |
+  -- skipped: DROP TYPE public.color;

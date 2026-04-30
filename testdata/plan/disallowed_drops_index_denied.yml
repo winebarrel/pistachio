@@ -1,0 +1,18 @@
+drop_policy:
+  allow_drop: []
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_name ON public.users (name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP INDEX public.idx_users_name;

@@ -1,0 +1,22 @@
+drop_policy:
+  allow_drop: [constraint]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email)
+  );
+  CREATE INDEX idx_users_name ON public.users USING btree (name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users DROP CONSTRAINT users_email_key;
+disallowed_drops: |
+  -- skipped: DROP INDEX public.idx_users_name;
