@@ -1,0 +1,26 @@
+include: ["user*"]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.user_roles (
+      id integer NOT NULL,
+      CONSTRAINT user_roles_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.user_roles
+  CREATE TABLE public.user_roles (
+      id integer NOT NULL,
+      CONSTRAINT user_roles_pkey PRIMARY KEY (id)
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

@@ -16,9 +16,11 @@ import (
 )
 
 type dumpTestCase struct {
-	Init       string `yaml:"init"`
-	Dump       string `yaml:"dump"`
-	OmitSchema bool   `yaml:"omit_schema"`
+	Init       string   `yaml:"init"`
+	Dump       string   `yaml:"dump"`
+	OmitSchema bool     `yaml:"omit_schema"`
+	Include    []string `yaml:"include,omitempty"`
+	Exclude    []string `yaml:"exclude,omitempty"`
 }
 
 func TestDump_InvalidConnString(t *testing.T) {
@@ -498,7 +500,10 @@ func TestDump(t *testing.T) {
 				ConnString: conn.Config().ConnString(),
 				Schemas:    []string{"public"},
 			})
-			got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: tc.OmitSchema})
+			got, err := client.Dump(ctx, &pistachio.DumpOptions{
+				OmitSchema:    tc.OmitSchema,
+				FilterOptions: pistachio.FilterOptions{Include: tc.Include, Exclude: tc.Exclude},
+			})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Dump), strings.TrimSpace(got.String()))
 		})
