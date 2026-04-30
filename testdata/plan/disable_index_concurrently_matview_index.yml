@@ -1,0 +1,26 @@
+disable_index_concurrently: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS SELECT id, name FROM public.users;
+  -- pist:concurrently
+  CREATE INDEX idx_user_names ON public.user_names USING btree (name);
+
+  -- A regular view (parsed with an empty Indexes map) coexists with the matview
+  -- to exercise the regular-view path in clearConcurrentlyDirectives.
+  CREATE VIEW public.user_view AS SELECT id FROM public.users;
+plan: |
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name FROM public.users;
+  CREATE INDEX idx_user_names ON public.user_names USING btree (name);
+  CREATE OR REPLACE VIEW public.user_view AS
+  SELECT id FROM public.users;
