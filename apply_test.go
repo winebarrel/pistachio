@@ -821,6 +821,7 @@ func TestApply_InvalidConcurrentlyPreSQLFile(t *testing.T) {
 		ConcurrentlyPreSQLFile: "/nonexistent/file.sql",
 	}, io.Discard)
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read concurrently-pre-SQL file")
 }
 
 func TestApply_InlineConcurrently_WithTx_Error(t *testing.T) {
