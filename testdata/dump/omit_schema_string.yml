@@ -14,5 +14,5 @@ dump: |
 
   -- active_users
   CREATE OR REPLACE VIEW active_users AS
-  SELECT id
+  SELECT users.id
      FROM users;
