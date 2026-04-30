@@ -7,6 +7,7 @@ init: |
       id integer NOT NULL,
       CONSTRAINT posts_pkey PRIMARY KEY (id)
   );
+  CREATE VIEW public.active_users AS SELECT id FROM public.users;
 dump: |
   -- public.posts
   CREATE TABLE public.posts (
@@ -19,3 +20,8 @@ dump: |
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
+
+  -- public.active_users
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT users.id
+     FROM users;
