@@ -1,0 +1,32 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS SELECT id, name FROM public.users;
+  CREATE INDEX CONCURRENTLY idx_user_names ON public.user_names USING btree (name);
+applied_sql: |
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name FROM public.users;
+  CREATE INDEX CONCURRENTLY idx_user_names ON public.user_names USING btree (name);
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_names
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT users.id,
+      users.name
+     FROM users;
+  CREATE INDEX idx_user_names ON public.user_names USING btree (name);

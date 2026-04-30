@@ -1,0 +1,26 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);
+  CREATE UNIQUE INDEX CONCURRENTLY idx_users_id ON public.users USING btree (id);
+applied_sql: |
+  CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);
+  CREATE UNIQUE INDEX CONCURRENTLY idx_users_id ON public.users USING btree (id);
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX idx_users_id ON public.users USING btree (id);
+  CREATE INDEX idx_users_name ON public.users USING btree (name);
