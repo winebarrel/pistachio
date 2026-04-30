@@ -1,0 +1,19 @@
+exclude: ["tmp_*"]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id FROM public.users;
+  CREATE VIEW public.tmp_view AS SELECT 1;
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_users
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT users.id
+     FROM users;

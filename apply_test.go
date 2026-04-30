@@ -23,6 +23,8 @@ type applyTestCase struct {
 	DisallowedDrops          string           `yaml:"disallowed_drops,omitempty"`
 	DropPolicy               *applyDropPolicy `yaml:"drop_policy,omitempty"`
 	DisableIndexConcurrently bool             `yaml:"disable_index_concurrently,omitempty"`
+	Include                  []string         `yaml:"include,omitempty"`
+	Exclude                  []string         `yaml:"exclude,omitempty"`
 	PreSQL                   string           `yaml:"pre_sql,omitempty"`
 	// PreSQLFile holds SQL content; the runner writes it to a temp file and
 	// passes the path to ApplyOptions.PreSQLFile.
@@ -81,6 +83,7 @@ func TestApply(t *testing.T) {
 			var buf bytes.Buffer
 			result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 				DropPolicy:               dropPolicy,
+				FilterOptions:            pistachio.FilterOptions{Include: tc.Include, Exclude: tc.Exclude},
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				PreSQL:                   tc.PreSQL,
@@ -102,6 +105,7 @@ func TestApply(t *testing.T) {
 			if tc.VerifyNoDrift {
 				plan, err := client.Plan(ctx, &pistachio.PlanOptions{
 					DropPolicy:               dropPolicy,
+					FilterOptions:            pistachio.FilterOptions{Include: tc.Include, Exclude: tc.Exclude},
 					Files:                    []string{desiredFile},
 					DisableIndexConcurrently: tc.DisableIndexConcurrently,
 					PreSQL:                   tc.PreSQL,

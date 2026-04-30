@@ -1,0 +1,10 @@
+include: [status]
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TYPE public.role AS ENUM ('admin', 'user');
+dump: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );

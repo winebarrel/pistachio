@@ -21,6 +21,8 @@ type planTestCase struct {
 	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
 	DisableIndexConcurrently bool            `yaml:"disable_index_concurrently,omitempty"`
+	Include                  []string        `yaml:"include,omitempty"`
+	Exclude                  []string        `yaml:"exclude,omitempty"`
 	PreSQL                   string          `yaml:"pre_sql,omitempty"`
 	// PreSQLFile holds SQL content; the runner writes it to a temp file and
 	// passes the path to PlanOptions.PreSQLFile.
@@ -225,6 +227,7 @@ func TestPlan(t *testing.T) {
 			}
 			got, err := client.Plan(ctx, &pistachio.PlanOptions{
 				DropPolicy:               dropPolicy,
+				FilterOptions:            pistachio.FilterOptions{Include: tc.Include, Exclude: tc.Exclude},
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				PreSQL:                   tc.PreSQL,
