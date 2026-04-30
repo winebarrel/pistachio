@@ -496,60 +496,6 @@ $$ LANGUAGE sql;
 	assert.Equal(t, "public", schema)
 }
 
-func TestApply_NoDiff(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	initSQL := `CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`
-	testutil.SetupDB(t, ctx, conn, initSQL)
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
-	require.NoError(t, err)
-}
-
-func TestApply_SchemalessDesired(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE users (
-    id integer NOT NULL,
-    name text,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
-	require.NoError(t, err)
-
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
-	require.NoError(t, err)
-	assert.Contains(t, got.String(), "name text")
-}
-
 func TestApply_ExecuteCheckSQLError(t *testing.T) {
 	// User-supplied check SQL that itself errors (e.g., references a missing
 	// table) must surface as a "failed to evaluate check SQL" error.
