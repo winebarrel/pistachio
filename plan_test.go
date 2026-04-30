@@ -1024,8 +1024,11 @@ CREATE INDEX idx_products_qty ON public.products (qty) WHERE qty > 0;`), 0o644))
 		Files:      []string{desiredFile},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, got.SQL, "DROP INDEX CONCURRENTLY public.idx_products_qty;")
-	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty) WHERE qty > 0;")
+	dropIdx := strings.Index(got.SQL, "DROP INDEX CONCURRENTLY public.idx_products_qty;")
+	createIdx := strings.Index(got.SQL, "CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty) WHERE qty > 0;")
+	require.NotEqual(t, -1, dropIdx, "DROP INDEX CONCURRENTLY missing from plan: %s", got.SQL)
+	require.NotEqual(t, -1, createIdx, "CREATE INDEX CONCURRENTLY missing from plan: %s", got.SQL)
+	assert.Less(t, dropIdx, createIdx, "DROP must precede CREATE on recreate")
 }
 
 // TestPlan_ConcurrentlyDirective_ChangePartialPredicate verifies that changing
@@ -1062,8 +1065,11 @@ CREATE INDEX idx_products_qty ON public.products (qty) WHERE qty > 100;`), 0o644
 		Files:      []string{desiredFile},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, got.SQL, "DROP INDEX CONCURRENTLY public.idx_products_qty;")
-	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty) WHERE qty > 100;")
+	dropIdx := strings.Index(got.SQL, "DROP INDEX CONCURRENTLY public.idx_products_qty;")
+	createIdx := strings.Index(got.SQL, "CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty) WHERE qty > 100;")
+	require.NotEqual(t, -1, dropIdx, "DROP INDEX CONCURRENTLY missing from plan: %s", got.SQL)
+	require.NotEqual(t, -1, createIdx, "CREATE INDEX CONCURRENTLY missing from plan: %s", got.SQL)
+	assert.Less(t, dropIdx, createIdx, "DROP must precede CREATE on recreate")
 }
 
 // TestPlan_ConcurrentlyDirective_DropPartialPredicate verifies that turning a
@@ -1100,8 +1106,11 @@ CREATE INDEX idx_products_qty ON public.products (qty);`), 0o644))
 		Files:      []string{desiredFile},
 	})
 	require.NoError(t, err)
-	assert.Contains(t, got.SQL, "DROP INDEX CONCURRENTLY public.idx_products_qty;")
-	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty);")
+	dropIdx := strings.Index(got.SQL, "DROP INDEX CONCURRENTLY public.idx_products_qty;")
+	createIdx := strings.Index(got.SQL, "CREATE INDEX CONCURRENTLY idx_products_qty ON public.products USING btree (qty);")
+	require.NotEqual(t, -1, dropIdx, "DROP INDEX CONCURRENTLY missing from plan: %s", got.SQL)
+	require.NotEqual(t, -1, createIdx, "CREATE INDEX CONCURRENTLY missing from plan: %s", got.SQL)
+	assert.Less(t, dropIdx, createIdx, "DROP must precede CREATE on recreate")
 	assert.NotContains(t, got.SQL, "WHERE")
 }
 
