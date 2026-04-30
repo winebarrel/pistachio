@@ -1,0 +1,26 @@
+concurrently_pre_sql: "SET lock_timeout = '5s';"
+disable_index_concurrently: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pist:concurrently
+  CREATE INDEX idx_users_name ON public.users USING btree (name);
+applied_sql: |
+  CREATE INDEX idx_users_name ON public.users USING btree (name);
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_name ON public.users USING btree (name);

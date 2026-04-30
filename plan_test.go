@@ -21,6 +21,14 @@ type planTestCase struct {
 	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
 	DisableIndexConcurrently bool            `yaml:"disable_index_concurrently,omitempty"`
+	PreSQL                   string          `yaml:"pre_sql,omitempty"`
+	// PreSQLFile holds SQL content; the runner writes it to a temp file and
+	// passes the path to PlanOptions.PreSQLFile.
+	PreSQLFile         string `yaml:"pre_sql_file,omitempty"`
+	ConcurrentlyPreSQL string `yaml:"concurrently_pre_sql,omitempty"`
+	// ConcurrentlyPreSQLFile holds SQL content; the runner writes it to a temp
+	// file and passes the path to PlanOptions.ConcurrentlyPreSQLFile.
+	ConcurrentlyPreSQLFile string `yaml:"concurrently_pre_sql_file,omitempty"`
 }
 
 type planDropPolicy struct {
@@ -96,111 +104,6 @@ func TestPlan_EmptySchemas(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestPlan_WithPreSQLFile(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, "")
-
-	tmpDir := t.TempDir()
-	desiredFile := filepath.Join(tmpDir, "desired.sql")
-	preSQLFile := filepath.Join(tmpDir, "pre.sql")
-
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`), 0o644))
-	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SELECT 1;`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{
-		Files:      []string{desiredFile},
-		PreSQLFile: preSQLFile,
-	})
-	require.NoError(t, err)
-	assert.Contains(t, got.SQL, "SELECT 1;")
-	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
-
-	// pre-SQL should appear before diff statements
-	preSQLPos := strings.Index(got.SQL, "SELECT 1;")
-	diffPos := strings.Index(got.SQL, "CREATE TABLE public.users")
-	assert.Less(t, preSQLPos, diffPos)
-}
-
-func TestPlan_WithPreSQL(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, "")
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{
-		Files:  []string{desiredFile},
-		PreSQL: "SET search_path TO public;",
-	})
-	require.NoError(t, err)
-	assert.Contains(t, got.SQL, "SET search_path TO public;")
-	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
-
-	preSQLPos := strings.Index(got.SQL, "SET search_path")
-	diffPos := strings.Index(got.SQL, "CREATE TABLE")
-	assert.Less(t, preSQLPos, diffPos)
-}
-
-func TestPlan_WithConcurrentlyPreSQL(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
--- pist:concurrently
-CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{
-		Files:              []string{desiredFile},
-		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
-	})
-	require.NoError(t, err)
-	assert.Contains(t, got.SQL, "SET lock_timeout = '5s';")
-	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_users_name")
-
-	setPos := strings.Index(got.SQL, "SET lock_timeout")
-	idxPos := strings.Index(got.SQL, "CREATE INDEX CONCURRENTLY")
-	assert.Less(t, setPos, idxPos)
-}
-
 func TestPlan_PreSQL_And_ConcurrentlyPreSQL_Order(t *testing.T) {
 	// When both pre-SQL and concurrently-pre-SQL are set, plan output order
 	// must be: pre-SQL → concurrently-pre-SQL → schema DDL.
@@ -244,44 +147,6 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 	assert.Less(t, concPos, idxPos)
 }
 
-func TestPlan_WithConcurrentlyPreSQLFile(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	tmpDir := t.TempDir()
-	desiredFile := filepath.Join(tmpDir, "desired.sql")
-	preSQLFile := filepath.Join(tmpDir, "concurrently-pre.sql")
-
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
--- pist:concurrently
-CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
-	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SET lock_timeout = '5s';`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{
-		Files:                  []string{desiredFile},
-		ConcurrentlyPreSQLFile: preSQLFile,
-	})
-	require.NoError(t, err)
-	assert.Contains(t, got.SQL, "SET lock_timeout = '5s';")
-	assert.Contains(t, got.SQL, "CREATE INDEX CONCURRENTLY idx_users_name")
-}
-
 func TestPlan_InvalidConcurrentlyPreSQLFile(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -308,39 +173,6 @@ func TestPlan_InvalidConcurrentlyPreSQLFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to read concurrently-pre-SQL file")
 }
 
-func TestPlan_ConcurrentlyPreSQL_SkippedWhenNoConcurrentlyDDL(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{
-		Files:              []string{desiredFile},
-		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
-	})
-	require.NoError(t, err)
-	assert.NotContains(t, got.SQL, "SET lock_timeout")
-	assert.Contains(t, got.SQL, "CREATE INDEX idx_users_name")
-}
-
 func TestPlan_WithPreSQLFile_InvalidFile(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -364,39 +196,6 @@ func TestPlan_WithPreSQLFile_InvalidFile(t *testing.T) {
 		PreSQLFile: "/nonexistent/pre.sql",
 	})
 	require.Error(t, err)
-}
-
-func TestPlan_WithPreSQLFile_NoDiff(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`)
-
-	tmpDir := t.TempDir()
-	desiredFile := filepath.Join(tmpDir, "desired.sql")
-	preSQLFile := filepath.Join(tmpDir, "pre.sql")
-
-	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);`), 0o644))
-	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SELECT 1;`), 0o644))
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{
-		Files:      []string{desiredFile},
-		PreSQLFile: preSQLFile,
-	})
-	require.NoError(t, err)
-	assert.Empty(t, got.SQL)
 }
 
 func TestPlan_RenameColumn_NonPublicSchema(t *testing.T) {
@@ -446,8 +245,18 @@ func TestPlan(t *testing.T) {
 			tc := loadYAML[planTestCase](t, file)
 			testutil.SetupDB(t, ctx, conn, tc.Init)
 
-			desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+			tmpDir := t.TempDir()
+			desiredFile := filepath.Join(tmpDir, "desired.sql")
 			require.NoError(t, os.WriteFile(desiredFile, []byte(tc.Desired), 0o644))
+			var preSQLFile, concurrentlyPreSQLFile string
+			if tc.PreSQLFile != "" {
+				preSQLFile = filepath.Join(tmpDir, "pre.sql")
+				require.NoError(t, os.WriteFile(preSQLFile, []byte(tc.PreSQLFile), 0o644))
+			}
+			if tc.ConcurrentlyPreSQLFile != "" {
+				concurrentlyPreSQLFile = filepath.Join(tmpDir, "concurrently-pre.sql")
+				require.NoError(t, os.WriteFile(concurrentlyPreSQLFile, []byte(tc.ConcurrentlyPreSQLFile), 0o644))
+			}
 			client := pistachio.NewClient(&pistachio.Options{
 				ConnString: conn.Config().ConnString(),
 				Schemas:    []string{"public"},
@@ -461,6 +270,10 @@ func TestPlan(t *testing.T) {
 				DropPolicy:               dropPolicy,
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
+				PreSQL:                   tc.PreSQL,
+				PreSQLFile:               preSQLFile,
+				ConcurrentlyPreSQL:       tc.ConcurrentlyPreSQL,
+				ConcurrentlyPreSQLFile:   concurrentlyPreSQLFile,
 			})
 			if tc.Error != "" {
 				require.Error(t, err)
