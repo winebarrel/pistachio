@@ -20,6 +20,7 @@ type applyTestCase struct {
 	Desired                  string           `yaml:"desired"`
 	Applied                  string           `yaml:"applied"`
 	AppliedSQL               *string          `yaml:"applied_sql,omitempty"`
+	Count                    *expectedCount   `yaml:"count,omitempty"`
 	DisallowedDrops          string           `yaml:"disallowed_drops,omitempty"`
 	DropPolicy               *applyDropPolicy `yaml:"drop_policy,omitempty"`
 	DisableIndexConcurrently bool             `yaml:"disable_index_concurrently,omitempty"`
@@ -96,6 +97,7 @@ func TestApply(t *testing.T) {
 				assert.Equal(t, strings.TrimSpace(*tc.AppliedSQL), strings.TrimSpace(buf.String()))
 			}
 			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(result.DisallowedDrops))
+			assertExpectedCount(t, tc.Count, result.Count)
 
 			// Verify
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{})

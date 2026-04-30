@@ -1,3 +1,5 @@
+count:
+  tables: 1
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,

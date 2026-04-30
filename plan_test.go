@@ -18,6 +18,7 @@ type planTestCase struct {
 	Desired                  string          `yaml:"desired"`
 	Plan                     string          `yaml:"plan"`
 	Error                    string          `yaml:"error"`
+	Count                    *expectedCount  `yaml:"count,omitempty"`
 	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
 	DisableIndexConcurrently bool            `yaml:"disable_index_concurrently,omitempty"`
@@ -35,6 +36,35 @@ type planTestCase struct {
 
 type planDropPolicy struct {
 	AllowDrop []string `yaml:"allow_drop"`
+}
+
+// expectedCount holds optional assertions for ObjectCount fields. Each pointer
+// is checked only when set, so a fixture can pin individual counts without
+// having to specify every field.
+type expectedCount struct {
+	Tables  *int `yaml:"tables,omitempty"`
+	Views   *int `yaml:"views,omitempty"`
+	Enums   *int `yaml:"enums,omitempty"`
+	Domains *int `yaml:"domains,omitempty"`
+}
+
+func assertExpectedCount(t *testing.T, want *expectedCount, got pistachio.ObjectCount) {
+	t.Helper()
+	if want == nil {
+		return
+	}
+	if want.Tables != nil {
+		assert.Equal(t, *want.Tables, got.Tables, "Count.Tables")
+	}
+	if want.Views != nil {
+		assert.Equal(t, *want.Views, got.Views, "Count.Views")
+	}
+	if want.Enums != nil {
+		assert.Equal(t, *want.Enums, got.Enums, "Count.Enums")
+	}
+	if want.Domains != nil {
+		assert.Equal(t, *want.Domains, got.Domains, "Count.Domains")
+	}
 }
 
 func TestPlan_InvalidConnString(t *testing.T) {
@@ -243,6 +273,7 @@ func TestPlan(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got.SQL))
 			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(got.DisallowedDrops))
+			assertExpectedCount(t, tc.Count, got.Count)
 		})
 	}
 }
