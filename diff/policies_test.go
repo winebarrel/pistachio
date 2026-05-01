@@ -277,3 +277,18 @@ func TestDiffPolicies_RenameAndRecreate(t *testing.T) {
 		"CREATE POLICY new ON public.documents USING (true);",
 	}, stmts)
 }
+
+// Quoted policy identifiers may contain arbitrary characters including the
+// "->" sequence. The rename-suppression bookkeeping must key on the new
+// name alone (which is unique in renamedFrom) so such identifiers don't
+// collide with concatenated keys.
+func TestDiffPolicies_Rename_QuotedIdentifierWithArrow(t *testing.T) {
+	cur := orderedmap.New[string, *model.Policy]()
+	des := orderedmap.New[string, *model.Policy]()
+	cur.Set(`a->b`, newPolicy(`a->b`, 'r', withUsing("true")))
+	des.Set(`c`, newPolicy(`c`, 'r', withUsing("true"), renameFrom(`a->b`)))
+
+	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{`ALTER POLICY "a->b" ON public.documents RENAME TO c;`}, stmts)
+}

@@ -56,20 +56,23 @@ func diffPolicies(
 	}
 
 	// Renamed policies whose definition also requires DROP+CREATE: skip the
-	// RENAME and let the recreate-with-new-name cover the change.
+	// RENAME and let the recreate-with-new-name cover the change. Keyed by
+	// newName because renamedFrom is keyed by newName (unique in desired) —
+	// concatenated keys could collide on quoted identifiers containing the
+	// separator.
 	needsRecreateRenamed := map[string]bool{}
-	for newName, oldName := range renamedFrom {
+	for newName := range renamedFrom {
 		cur, ok := current.GetOk(newName)
 		des, dok := desired.GetOk(newName)
 		if !ok || !dok {
 			continue
 		}
 		if needsRecreate(cur, des) {
-			needsRecreateRenamed[oldName+"->"+newName] = true
+			needsRecreateRenamed[newName] = true
 		}
 	}
 	for newName, oldName := range renamedFrom {
-		if needsRecreateRenamed[oldName+"->"+newName] {
+		if needsRecreateRenamed[newName] {
 			continue
 		}
 		// Find the matching rename statement (ordering preserved from desired).
