@@ -127,6 +127,42 @@ extended to table-level renames.
 
 Origin: pre-existing NOTE in `diff/rename.go:detectTableRenames`.
 
+## Policy USING / WITH CHECK normalization for subquery column refs
+
+`pg_get_expr` qualifies column references inside subqueries (e.g. emits
+`SELECT allowed.id FROM myschema.allowed` for a USING that the user wrote
+as `SELECT id FROM myschema.allowed`). The desired-side parser deparses
+without that qualification, so even semantically-identical USING /
+WITH CHECK expressions produce a spurious `ALTER POLICY` when subqueries
+are involved.
+
+`equalPolicyExpr` reuses `normalizeCheckExpr` from constraint diffs, which
+strips text-like casts and canonicalises `= ANY(ARRAY[...])` → `IN (...)`,
+but does not walk into subqueries and rewrite ColumnRef qualifications.
+
+Fix would be to walk `SubLink` / `RangeSubselect` nodes and strip column
+qualifiers that match the FROM-clause table alias. The same approach
+would also benefit constraint CHECK expressions if they ever contain
+subqueries (uncommon — PostgreSQL discourages them).
+
+Origin: post-RLS-support audit. Workaround: avoid subqueries in policy
+expressions, or use a function that wraps the subquery.
+
+## TO CURRENT_USER / SESSION_USER / CURRENT_ROLE in CREATE POLICY
+
+PostgreSQL resolves these reserved role specs at policy creation time
+and stores the resolved role OID in `pg_policy.polroles`. As a result,
+desired SQL written as `TO current_user` cannot round-trip through the
+catalog: subsequent plans see the resolved role name (e.g. `postgres`)
+and emit a spurious `ALTER POLICY ... TO`.
+
+Recommendation is to use literal role names in desired SQL. The parser
+accepts the reserved specs for convenience but the limitation should be
+documented prominently.
+
+Origin: post-RLS-support audit. No fix planned — this is a PostgreSQL
+behavior that affects the catalog round-trip, not a pistachio bug.
+
 ## Plan-time error promotion: forgotten dependent reference
 
 When desired SQL references the new column name in a dependent

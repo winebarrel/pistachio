@@ -240,6 +240,12 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				continue
 			}
 
+			// RLS toggles and constraint subcommands can coexist in one
+			// ALTER TABLE statement. applyAlterTableRLS picks up only the RLS
+			// subtypes; parseAlterTableConstraint picks up AT_AddConstraint.
+			// They walk the same cmd list independently, so run both.
+			applyAlterTableRLS(as, t)
+
 			con, fk, err := parseAlterTableConstraint(as, defaultSchema)
 			if err != nil {
 				return nil, err
@@ -260,6 +266,16 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				if err := setUnique(t.Constraints, con.Name, "constraint", con); err != nil {
 					return nil, err
 				}
+			}
+
+		case node.GetCreatePolicyStmt() != nil:
+			policy, err := parseCreatePolicyStmt(node.GetCreatePolicyStmt(), defaultSchema, tables)
+			if err != nil {
+				return nil, err
+			}
+			if renameFrom != "" {
+				unquoted := normalizeUnqualifiedDirective(renameFrom)
+				policy.RenameFrom = &unquoted
 			}
 
 		case node.GetCommentStmt() != nil:
@@ -290,6 +306,7 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 		Constraints: orderedmap.New[string, *model.Constraint](),
 		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
 		Indexes:     orderedmap.New[string, *model.Index](),
+		Policies:    orderedmap.New[string, *model.Policy](),
 	}
 
 	if cs.Tablespacename != "" {

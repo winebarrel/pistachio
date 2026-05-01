@@ -1,0 +1,21 @@
+omit_schema: true
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.documents FORCE ROW LEVEL SECURITY;
+  CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = current_user);
+dump: |
+  -- documents
+  CREATE TABLE documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE documents FORCE ROW LEVEL SECURITY;
+  CREATE POLICY owner_select ON documents FOR SELECT USING ((owner = CURRENT_USER));

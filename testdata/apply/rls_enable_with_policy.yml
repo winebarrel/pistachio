@@ -1,0 +1,25 @@
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = current_user);
+applied: |
+  -- public.documents
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY owner_select ON public.documents FOR SELECT USING ((owner = CURRENT_USER));
+verify_no_drift: true

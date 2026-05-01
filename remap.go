@@ -58,10 +58,35 @@ func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Ta
 			}
 		}
 
+		remapPolicies(t.Policies, client.RemapSchema, replacer)
+
 		remapped.Set(t.FQTN(), t)
 	}
 
 	return remapped
+}
+
+// remapPolicies rewrites the Schema field on each policy and applies the
+// schema replacer to USING / WITH CHECK expressions so cross-schema
+// references in subqueries / function calls follow the table schema.
+// `policies` is always non-nil because both parser and catalog initialize
+// Table.Policies.
+func remapPolicies(
+	policies *orderedmap.Map[string, *model.Policy],
+	mapSchema func(string) string,
+	replacer *strings.Replacer,
+) {
+	for _, p := range policies.CollectValues() {
+		p.Schema = mapSchema(p.Schema)
+		if p.Using != nil {
+			expr := replacer.Replace(*p.Using)
+			p.Using = &expr
+		}
+		if p.WithCheck != nil {
+			expr := replacer.Replace(*p.WithCheck)
+			p.WithCheck = &expr
+		}
+	}
 }
 
 func (client *Client) remapViewSchemas(views *orderedmap.Map[string, *model.View]) *orderedmap.Map[string, *model.View] {
@@ -105,6 +130,8 @@ func (client *Client) reverseRemapTableSchemas(tables *orderedmap.Map[string, *m
 				fk.RefSchema = &mapped
 			}
 		}
+
+		remapPolicies(t.Policies, client.ReverseRemapSchema, replacer)
 
 		remapped.Set(t.FQTN(), t)
 	}

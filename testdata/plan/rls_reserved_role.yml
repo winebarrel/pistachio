@@ -1,0 +1,23 @@
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+desired: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  -- Reserved role specs in TO are emitted verbatim by the parser; PostgreSQL
+  -- resolves them at apply time to the actual current/session role, so the
+  -- desired SQL cannot round-trip through the catalog. This fixture only
+  -- verifies the parse → emit path, not no-drift.
+  CREATE POLICY current_user_select ON public.documents FOR SELECT TO current_user USING (owner = current_user);
+  CREATE POLICY session_user_select ON public.documents FOR SELECT TO session_user USING (owner = session_user);
+plan: |
+  CREATE POLICY current_user_select ON public.documents FOR SELECT TO current_user USING (owner = current_user);
+  CREATE POLICY session_user_select ON public.documents FOR SELECT TO session_user USING (owner = session_user);

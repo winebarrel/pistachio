@@ -103,6 +103,9 @@ func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcur
 	for _, fk := range t.ForeignKeys.CollectValues() {
 		fkStmts = append(fkStmts, fk.SQL())
 	}
+	if rlsSQL := t.RLSSQL(); rlsSQL != "" {
+		stmts = append(stmts, strings.Split(rlsSQL, "\n")...)
+	}
 	if commentSQL := t.CommentSQL(); commentSQL != "" {
 		stmts = append(stmts, strings.Split(commentSQL, "\n")...)
 	}
@@ -123,7 +126,9 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	fqtn := desired.FQTN()
 
 	// Partition children inherit columns and constraints from the parent,
-	// so skip diffing them to avoid false DROP statements.
+	// so skip diffing them to avoid false DROP statements. RLS flags and
+	// policies are owned per-relation (children do not auto-inherit them),
+	// so they're still diffed here, mirroring how indexes and FKs work.
 	if desired.PartitionOf != nil && desired.PartitionBound != nil {
 		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, dc)
 		if err != nil {
@@ -141,6 +146,15 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		result.FKDropStmts = append(result.FKDropStmts, fkDrops...)
 		result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
+
+		result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
+		polStmts, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
+		if err != nil {
+			return nil, err
+		}
+		result.Stmts = append(result.Stmts, polStmts...)
+		result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
+
 		return result, nil
 	}
 
@@ -189,6 +203,18 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	result.FKDropStmts = append(result.FKDropStmts, fkDrops...)
 	result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
+
+	// RLS toggles run before CREATE POLICY so a newly enabled table has its
+	// flag set when policies attach. Disabling RLS likewise comes before any
+	// policy DROP that the user may have stacked alongside.
+	result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
+
+	polStmts, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
+	if err != nil {
+		return nil, err
+	}
+	result.Stmts = append(result.Stmts, polStmts...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
 
 	result.Stmts = append(result.Stmts, diffComments(current, desired)...)
 

@@ -367,6 +367,9 @@ func extractObjectName(sql string) string {
 		{"ALTER INDEX "},
 		{"DROP INDEX CONCURRENTLY "},
 		{"DROP INDEX "},
+		{"CREATE POLICY "},
+		{"ALTER POLICY "},
+		{"DROP POLICY "},
 		{"ALTER TABLE ONLY "},
 		{"ALTER TABLE "},
 		{"ALTER TYPE "},
@@ -408,6 +411,13 @@ func extractObjectName(sql string) string {
 			// Index statements belong to the table they're on, but ALTER INDEX
 			// doesn't contain the table name directly. Return "" to use pos=-1.
 			return ""
+		}
+
+		if strings.HasPrefix(upper, "CREATE POLICY ") ||
+			strings.HasPrefix(upper, "ALTER POLICY ") ||
+			strings.HasPrefix(upper, "DROP POLICY ") {
+			// {CREATE,ALTER,DROP} POLICY name ON schema.table ...
+			return extractIndexTable(sql)
 		}
 
 		rest := sql[len(p.prefix):]

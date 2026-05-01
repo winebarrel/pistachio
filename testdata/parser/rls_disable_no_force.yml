@@ -1,0 +1,20 @@
+input: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  -- Explicit DISABLE / NO FORCE in desired SQL is unusual (the declarative
+  -- form is to omit ENABLE / FORCE), but pistachio's parser must accept the
+  -- statements and resolve them to the corresponding flag-cleared state.
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.documents DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.documents FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.documents NO FORCE ROW LEVEL SECURITY;
+expected: |
+  -- public.documents
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );

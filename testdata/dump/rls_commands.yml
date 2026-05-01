@@ -1,0 +1,22 @@
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY ins_pol ON public.documents FOR INSERT WITH CHECK ((owner = CURRENT_USER));
+  CREATE POLICY upd_pol ON public.documents FOR UPDATE USING ((owner = CURRENT_USER)) WITH CHECK ((owner = CURRENT_USER));
+  CREATE POLICY del_pol ON public.documents FOR DELETE USING ((owner = CURRENT_USER));
+dump: |
+  -- public.documents
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY del_pol ON public.documents FOR DELETE USING ((owner = CURRENT_USER));
+  CREATE POLICY ins_pol ON public.documents FOR INSERT WITH CHECK ((owner = CURRENT_USER));
+  CREATE POLICY upd_pol ON public.documents FOR UPDATE USING ((owner = CURRENT_USER)) WITH CHECK ((owner = CURRENT_USER));

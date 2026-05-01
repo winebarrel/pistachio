@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY owner_select ON public.documents FOR SELECT TO postgres USING (owner = current_user);
+desired: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = current_user);
+plan: |
+  ALTER POLICY owner_select ON public.documents TO public;

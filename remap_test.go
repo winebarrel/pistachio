@@ -782,3 +782,150 @@ CREATE TABLE myschema.users (
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "name text")
 }
+
+// Verifies that --schema-map remaps the table schema in CREATE POLICY / ALTER
+// POLICY / DROP POLICY targets, and that USING / WITH CHECK expressions get
+// the same schema substitution applied so cross-schema references stay
+// consistent on the desired side.
+func TestPlan_WithSchemaMap_Policy_NoDiff(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.documents (
+    id bigint NOT NULL,
+    owner text NOT NULL,
+    CONSTRAINT documents_pkey PRIMARY KEY (id)
+);
+ALTER TABLE myschema.documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY owner_select ON myschema.documents FOR SELECT USING (owner = current_user);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.documents (
+    id bigint NOT NULL,
+    owner text NOT NULL,
+    CONSTRAINT documents_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = current_user);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got.SQL)
+}
+
+// Verifies that the schema replacer rewrites schema-qualified references
+// inside USING expressions. Uses a schema-qualified function call so the
+// schema prefix survives both pg_get_expr rendering on the catalog side and
+// pg_query deparsing on the desired side, isolating the replacer's behaviour
+// from unrelated normalization concerns (e.g. subquery column qualification).
+func TestPlan_WithSchemaMap_Policy_USING_SchemaRef(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE FUNCTION myschema.is_admin() RETURNS boolean AS $$ SELECT true $$ LANGUAGE SQL IMMUTABLE;
+CREATE TABLE myschema.documents (
+    id bigint NOT NULL,
+    CONSTRAINT documents_pkey PRIMARY KEY (id)
+);
+ALTER TABLE myschema.documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY visible ON myschema.documents FOR SELECT USING (myschema.is_admin());
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.documents (
+    id bigint NOT NULL,
+    CONSTRAINT documents_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY visible ON public.documents FOR SELECT USING (public.is_admin());`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got.SQL, "schema replacement on policy USING should yield no diff")
+}
+
+// Verifies that schema replacement also walks WITH CHECK expressions.
+// Together with TestPlan_WithSchemaMap_Policy_USING_SchemaRef this ensures
+// both clause replacers have coverage.
+func TestPlan_WithSchemaMap_Policy_WithCheck_SchemaRef(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE FUNCTION myschema.is_admin() RETURNS boolean AS $$ SELECT true $$ LANGUAGE SQL IMMUTABLE;
+CREATE TABLE myschema.documents (
+    id bigint NOT NULL,
+    owner text NOT NULL,
+    CONSTRAINT documents_pkey PRIMARY KEY (id)
+);
+ALTER TABLE myschema.documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY mod ON myschema.documents FOR ALL USING (myschema.is_admin()) WITH CHECK (myschema.is_admin());
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.documents (
+    id bigint NOT NULL,
+    owner text NOT NULL,
+    CONSTRAINT documents_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY mod ON public.documents FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got.SQL, "schema replacement on policy WITH CHECK should yield no diff")
+}
+
+// When the desired schema differs in policy attributes, the diff must target
+// the real database schema name (not the desired-side mapped name).
+func TestPlan_WithSchemaMap_Policy_AlterUsing(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.documents (
+    id bigint NOT NULL,
+    owner text NOT NULL,
+    CONSTRAINT documents_pkey PRIMARY KEY (id)
+);
+ALTER TABLE myschema.documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY owner_select ON myschema.documents FOR SELECT USING (owner = current_user);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.documents (
+    id bigint NOT NULL,
+    owner text NOT NULL,
+    CONSTRAINT documents_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = session_user);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "ALTER POLICY owner_select ON myschema.documents")
+	assert.NotContains(t, got.SQL, "ALTER POLICY owner_select ON public.documents")
+}
