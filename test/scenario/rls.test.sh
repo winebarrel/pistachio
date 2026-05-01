@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Scenario test: row-level security (RLS) and policies
-# Walks the desired schema through enable → policies → modify → drop → disable,
-# verifying drift-free state at every step.
+# Walks the desired schema through enable → policies → modify → recreate
+# (command change) → drop → force → disable, verifying drift-free state at
+# every step.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
