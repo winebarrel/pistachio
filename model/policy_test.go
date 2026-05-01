@@ -89,9 +89,11 @@ func TestPolicy_SQL_role_multiple(t *testing.T) {
 	assert.Equal(t, "CREATE POLICY p ON public.t TO a, b USING (true);", p.SQL())
 }
 
-// rolesClause returns "" when only PUBLIC is in the role list (catalog +
-// parser both normalize the omitted-TO case to ["public"]), so emit must
-// drop the TO clause entirely.
+// rolesClause returns "" when the role list is exactly ["public"]. The
+// catalog COALESCE normalizes empty polroles to ["public"], and pg_query
+// injects ROLESPEC_PUBLIC into cps.Roles for an omitted TO clause (which
+// parsePolicyRoles maps to "public"), so this is the form Policy.Roles
+// takes in practice when no TO is specified.
 func TestPolicy_SQL_role_public_only(t *testing.T) {
 	using := "true"
 	p := Policy{
@@ -101,9 +103,11 @@ func TestPolicy_SQL_role_public_only(t *testing.T) {
 	assert.Equal(t, "CREATE POLICY p ON public.t USING (true);", p.SQL())
 }
 
-// Empty Roles list: should also collapse to no TO clause. This branch is
-// dead code from the parser/catalog paths (both inject PUBLIC) but is
-// reachable from direct construction and worth covering.
+// Empty Roles list: the SQL emitter must also collapse to no TO clause.
+// This is a defensive path: parsePolicyRoles returns nil only when invoked
+// with an empty node list, which pg_query never produces (it injects
+// ROLESPEC_PUBLIC for omitted TO), and the catalog coalesces to ["public"]
+// instead. Reachable only via direct construction.
 func TestPolicy_SQL_role_empty(t *testing.T) {
 	using := "true"
 	p := Policy{
