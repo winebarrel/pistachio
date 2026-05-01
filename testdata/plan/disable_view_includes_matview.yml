@@ -1,0 +1,16 @@
+disable: [view]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v AS SELECT id FROM public.users;
+  CREATE MATERIALIZED VIEW public.mv AS SELECT count(*) AS cnt FROM public.users;
+plan: |
+  ALTER TABLE public.users ADD COLUMN name text;
