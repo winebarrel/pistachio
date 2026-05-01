@@ -1,0 +1,13 @@
+enable: [enum]
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );

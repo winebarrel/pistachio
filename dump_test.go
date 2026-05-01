@@ -21,6 +21,8 @@ type dumpTestCase struct {
 	OmitSchema bool     `yaml:"omit_schema"`
 	Include    []string `yaml:"include,omitempty"`
 	Exclude    []string `yaml:"exclude,omitempty"`
+	Enable     []string `yaml:"enable,omitempty"`
+	Disable    []string `yaml:"disable,omitempty"`
 }
 
 func TestDump_InvalidConnString(t *testing.T) {
@@ -501,8 +503,13 @@ func TestDump(t *testing.T) {
 				Schemas:    []string{"public"},
 			})
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{
-				OmitSchema:    tc.OmitSchema,
-				FilterOptions: pistachio.FilterOptions{Include: tc.Include, Exclude: tc.Exclude},
+				OmitSchema: tc.OmitSchema,
+				FilterOptions: pistachio.FilterOptions{
+					Include: tc.Include,
+					Exclude: tc.Exclude,
+					Enable:  tc.Enable,
+					Disable: tc.Disable,
+				},
 			})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Dump), strings.TrimSpace(got.String()))
