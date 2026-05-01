@@ -1,0 +1,20 @@
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY old_name ON public.documents FOR SELECT USING (owner = current_user);
+desired: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  -- pist:renamed-from old_name
+  CREATE POLICY new_name ON public.documents FOR SELECT USING (owner = session_user);
+plan: |
+  ALTER POLICY old_name ON public.documents RENAME TO new_name;
+  ALTER POLICY new_name ON public.documents USING (owner = session_user);

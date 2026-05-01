@@ -54,6 +54,15 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			}
 			copied.Indexes = idxs
 		}
+		if copied.Policies != nil && copied.Policies.Len() > 0 {
+			policies := orderedmap.New[string, *model.Policy]()
+			for _, p := range copied.Policies.CollectValues() {
+				pCopied := *p
+				pCopied.Schema = ""
+				policies.Set(p.Name, &pCopied)
+			}
+			copied.Policies = policies
+		}
 		tables.Set(fqtn, &copied)
 	}
 	return tables

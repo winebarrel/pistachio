@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY restrict_others ON public.documents AS RESTRICTIVE FOR ALL USING ((owner = CURRENT_USER));
+dump: |
+  -- public.documents
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY restrict_others ON public.documents AS RESTRICTIVE USING ((owner = CURRENT_USER));

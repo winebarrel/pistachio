@@ -391,6 +391,7 @@ pist apply ./schema/*.sql         # apply it
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types, domains)
+- Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
 - Renaming (tables, views, enums, domains, columns, constraints, foreign keys, indexes via `-- pist:renamed-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers

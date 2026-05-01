@@ -399,6 +399,49 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 	return stmts, adjusted, renamedFrom, nil
 }
 
+// detectPolicyRenames finds desired policies with RenameFrom that match a
+// current policy on the same table. Returns the rename statements, the
+// adjusted current map keyed by new names, and a renamedFrom[newName] = oldName
+// map so the caller can suppress the RENAME when the policy needs DROP+CREATE.
+func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Policy]) ([]string, *orderedmap.Map[string, *model.Policy], map[string]string, error) {
+	var stmts []string
+	adjusted := cloneMap(current)
+	renamedFrom := map[string]string{}
+
+	for newName, desiredPol := range desired.All() {
+		if desiredPol.RenameFrom == nil {
+			continue
+		}
+		oldName := *desiredPol.RenameFrom
+
+		if oldName == newName {
+			continue
+		}
+
+		oldPol, ok := adjusted.GetOk(oldName)
+		if !ok {
+			if _, exists := adjusted.GetOk(newName); exists {
+				continue
+			}
+			return nil, nil, nil, fmt.Errorf("rename source policy %s not found on %s", model.Ident(oldName), fqtn)
+		}
+
+		if _, exists := adjusted.GetOk(newName); exists {
+			return nil, nil, nil, fmt.Errorf("cannot rename policy %s to %s on %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
+		}
+
+		stmts = append(stmts, "ALTER POLICY "+model.Ident(oldName)+" ON "+fqtn+" RENAME TO "+model.Ident(newName)+";")
+		renamedFrom[newName] = oldName
+
+		adjusted.Delete(oldName)
+		renamed := *oldPol
+		renamed.Name = newName
+		adjusted.Set(newName, &renamed)
+	}
+
+	return stmts, adjusted, renamedFrom, nil
+}
+
 // cloneMap creates a shallow copy of an orderedmap.
 func cloneMap[K comparable, V any](m *orderedmap.Map[K, V]) *orderedmap.Map[K, V] {
 	clone := orderedmap.New[K, V]()

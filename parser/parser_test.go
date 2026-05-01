@@ -1290,6 +1290,25 @@ CREATE TABLE public.items (
 	assert.Contains(t, err.Error(), "duplicate foreign key")
 }
 
+func TestParseSQL_PolicyOnUnknownTable(t *testing.T) {
+	sql := `CREATE POLICY p ON public.missing FOR SELECT USING (true);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parent table")
+}
+
+func TestParseSQL_DuplicatePolicy(t *testing.T) {
+	sql := `CREATE TABLE public.documents (id bigint NOT NULL, owner text, CONSTRAINT documents_pkey PRIMARY KEY (id));
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY p ON public.documents FOR SELECT USING (owner = current_user);
+CREATE POLICY p ON public.documents FOR ALL USING (owner = current_user);`
+
+	_, err := parser.ParseSQL(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate policy")
+}
+
 func TestParseSQLWithSchema_ViewComment(t *testing.T) {
 	sql := `CREATE VIEW active_users AS SELECT 1;
 COMMENT ON VIEW active_users IS 'Active users';`
@@ -1474,6 +1493,27 @@ CREATE INDEX idx_new ON public.users (name);`
 	require.True(t, ok)
 	require.NotNil(t, idx.RenameFrom)
 	assert.Equal(t, "idx_old", *idx.RenameFrom)
+}
+
+func TestParseSQL_RenameDirective_Policy(t *testing.T) {
+	sql := `CREATE TABLE public.documents (
+    id bigint NOT NULL,
+    owner text NOT NULL,
+    CONSTRAINT documents_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+-- pist:renamed-from old_policy
+CREATE POLICY new_policy ON public.documents FOR SELECT USING (owner = current_user);`
+
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.documents")
+	require.True(t, ok)
+	pol, ok := tbl.Policies.GetOk("new_policy")
+	require.True(t, ok)
+	require.NotNil(t, pol.RenameFrom)
+	assert.Equal(t, "old_policy", *pol.RenameFrom)
 }
 
 func TestParseSQL_RenameDirective_Constraint(t *testing.T) {

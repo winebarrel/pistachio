@@ -8,21 +8,24 @@ import (
 )
 
 type Table struct {
-	OID            uint32
-	Schema         string
-	Name           string
-	RenameFrom     *string
-	TableSpace     *string
-	Unlogged       bool
-	Partitioned    bool
-	PartitionDef   *string
-	PartitionOf    *string
-	PartitionBound *string
-	Columns        *orderedmap.Map[string, *Column]
-	Constraints    *orderedmap.Map[string, *Constraint]
-	ForeignKeys    *orderedmap.Map[string, *ForeignKey]
-	Indexes        *orderedmap.Map[string, *Index]
-	Comment        *string
+	OID              uint32
+	Schema           string
+	Name             string
+	RenameFrom       *string
+	TableSpace       *string
+	Unlogged         bool
+	Partitioned      bool
+	PartitionDef     *string
+	PartitionOf      *string
+	PartitionBound   *string
+	RowSecurity      bool
+	ForceRowSecurity bool
+	Columns          *orderedmap.Map[string, *Column]
+	Constraints      *orderedmap.Map[string, *Constraint]
+	ForeignKeys      *orderedmap.Map[string, *ForeignKey]
+	Indexes          *orderedmap.Map[string, *Index]
+	Policies         *orderedmap.Map[string, *Policy]
+	Comment          *string
 }
 
 func (t Table) FQTN() string {
@@ -114,6 +117,22 @@ func (t Table) FkSQL() string {
 	)
 }
 
+func (t Table) RLSSQL() string {
+	var stmts []string
+	if t.RowSecurity {
+		stmts = append(stmts, "ALTER TABLE "+t.FQTN()+" ENABLE ROW LEVEL SECURITY;")
+	}
+	if t.ForceRowSecurity {
+		stmts = append(stmts, "ALTER TABLE "+t.FQTN()+" FORCE ROW LEVEL SECURITY;")
+	}
+	if t.Policies != nil {
+		for _, p := range t.Policies.CollectValues() {
+			stmts = append(stmts, p.SQL())
+		}
+	}
+	return strings.Join(stmts, "\n")
+}
+
 func (t Table) CommentSQL() string {
 	var stmts []string
 	if t.Comment != nil {
@@ -133,6 +152,9 @@ func TableToSQL(t *Table) string {
 		parts = append(parts, s)
 	}
 	if s := t.FkSQL(); s != "" {
+		parts = append(parts, "\n"+s)
+	}
+	if s := t.RLSSQL(); s != "" {
 		parts = append(parts, "\n"+s)
 	}
 	if s := t.CommentSQL(); s != "" {

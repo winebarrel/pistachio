@@ -25,7 +25,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - `cmd/command/` - CLI command implementations
 - `parser/` - SQL parser (uses pg_query_go to parse and deparse PostgreSQL SQL)
 - `catalog/` - Reads current schema state from PostgreSQL system catalogs (`pg_catalog`)
-- `model/` - Data model structs (Table, Column, Constraint, ForeignKey, Index, View, Enum, Domain)
+- `model/` - Data model structs (Table, Column, Constraint, ForeignKey, Index, Policy, View, Enum, Domain)
 - `diff/` - Generates DDL diff between current and desired schemas
 - `internal/testutil/` - Test helpers (DB connection, setup)
 - `testdata/` - YAML-based test fixtures for multiple test suites, including integration and unit tests

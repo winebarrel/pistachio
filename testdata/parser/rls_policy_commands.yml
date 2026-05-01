@@ -1,0 +1,24 @@
+input: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p_ins ON public.documents FOR INSERT WITH CHECK (owner = current_user);
+  CREATE POLICY p_upd ON public.documents FOR UPDATE USING (owner = current_user) WITH CHECK (owner = current_user);
+  CREATE POLICY p_del ON public.documents FOR DELETE USING (owner = current_user);
+  CREATE POLICY p_role ON public.documents FOR SELECT TO postgres USING (owner = current_user);
+expected: |
+  -- public.documents
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p_ins ON public.documents FOR INSERT WITH CHECK (owner = current_user);
+  CREATE POLICY p_upd ON public.documents FOR UPDATE USING (owner = current_user) WITH CHECK (owner = current_user);
+  CREATE POLICY p_del ON public.documents FOR DELETE USING (owner = current_user);
+  CREATE POLICY p_role ON public.documents FOR SELECT TO postgres USING (owner = current_user);

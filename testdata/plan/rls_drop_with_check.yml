@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY owner_modify ON public.documents FOR ALL USING (owner = current_user) WITH CHECK (owner = current_user);
+desired: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY owner_modify ON public.documents FOR ALL USING (owner = current_user);
+plan: |
+  DROP POLICY owner_modify ON public.documents;
+  CREATE POLICY owner_modify ON public.documents USING (owner = current_user);

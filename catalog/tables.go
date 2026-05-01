@@ -68,6 +68,8 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			pg_catalog.pg_get_partkeydef(c.oid) AS partition_def,
 			p.relname AS partition_of,
 			pg_catalog.pg_get_expr(c.relpartbound, c.oid) AS partition_bound,
+			c.relrowsecurity,
+			c.relforcerowsecurity,
 			d.description
 		FROM
 			-- https://www.postgresql.org/docs/current/catalog-pg-class.html
@@ -111,6 +113,8 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			&t.PartitionDef,
 			&t.PartitionOf,
 			&t.PartitionBound,
+			&t.RowSecurity,
+			&t.ForceRowSecurity,
 			&t.Comment,
 		)
 		if err != nil {
@@ -120,6 +124,7 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 		t.Indexes = orderedmap.New[string, *model.Index]()
 		t.Constraints = orderedmap.New[string, *model.Constraint]()
 		t.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+		t.Policies = orderedmap.New[string, *model.Policy]()
 		tables = append(tables, &t)
 	}
 	if err := rows.Err(); err != nil {
@@ -144,6 +149,14 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 		}
 		for _, fk := range fks {
 			t.ForeignKeys.Set(fk.Name, fk)
+		}
+
+		policies, err := c.ListPoliciesByTable(ctx, t)
+		if err != nil {
+			return nil, fmt.Errorf("catalog: failed to get policies for %s.%s: %w", t.Schema, t.Name, err)
+		}
+		for _, p := range policies {
+			t.Policies.Set(p.Name, p)
 		}
 	}
 
