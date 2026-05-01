@@ -8,14 +8,13 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// applyAlterTableRLS handles ALTER TABLE subtypes that toggle row-level
-// security flags on the table. Returns true when the statement was an RLS
-// toggle (so the caller can skip constraint parsing for the same statement).
-// Note: PostgreSQL allows mixing constraint changes with RLS toggles in one
-// ALTER TABLE statement. The desired-SQL convention here keeps each ALTER
-// TABLE single-purpose, mirroring how the rest of the parser treats them.
-func applyAlterTableRLS(as *pg_query.AlterTableStmt, t *model.Table) bool {
-	handled := false
+// applyAlterTableRLS scans an ALTER TABLE statement for row-level security
+// toggle subcommands (ENABLE / DISABLE / FORCE / NO FORCE) and applies them
+// to the table's flags. Non-RLS subcommands are ignored, so the caller can
+// invoke parseAlterTableConstraint on the same statement to pick up any
+// AT_AddConstraint subcommands — PostgreSQL allows mixing the two in one
+// ALTER TABLE.
+func applyAlterTableRLS(as *pg_query.AlterTableStmt, t *model.Table) {
 	for _, cmdNode := range as.Cmds {
 		cmd := cmdNode.GetAlterTableCmd()
 		if cmd == nil {
@@ -24,19 +23,14 @@ func applyAlterTableRLS(as *pg_query.AlterTableStmt, t *model.Table) bool {
 		switch cmd.Subtype {
 		case pg_query.AlterTableType_AT_EnableRowSecurity:
 			t.RowSecurity = true
-			handled = true
 		case pg_query.AlterTableType_AT_DisableRowSecurity:
 			t.RowSecurity = false
-			handled = true
 		case pg_query.AlterTableType_AT_ForceRowSecurity:
 			t.ForceRowSecurity = true
-			handled = true
 		case pg_query.AlterTableType_AT_NoForceRowSecurity:
 			t.ForceRowSecurity = false
-			handled = true
 		}
 	}
-	return handled
 }
 
 // parseCreatePolicyStmt converts a CreatePolicyStmt into a model.Policy and

@@ -240,9 +240,11 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				continue
 			}
 
-			if applyAlterTableRLS(as, t) {
-				continue
-			}
+			// RLS toggles and constraint subcommands can coexist in one
+			// ALTER TABLE statement. applyAlterTableRLS picks up only the RLS
+			// subtypes; parseAlterTableConstraint picks up AT_AddConstraint.
+			// They walk the same cmd list independently, so run both.
+			applyAlterTableRLS(as, t)
 
 			con, fk, err := parseAlterTableConstraint(as, defaultSchema)
 			if err != nil {

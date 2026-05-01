@@ -140,3 +140,20 @@ CREATE POLICY q ON public.t AS PERMISSIVE FOR ALL USING (true);`
 	assert.False(t, p.Permissive)
 	assert.True(t, q.Permissive)
 }
+
+// PostgreSQL allows ENABLE ROW LEVEL SECURITY and ADD CONSTRAINT in the
+// same ALTER TABLE statement. Both must take effect — earlier versions of
+// the parser short-circuited after applying the RLS toggle and silently
+// dropped the constraint.
+func TestParseSQL_Policy_MixedRLSAndConstraint(t *testing.T) {
+	sql := `CREATE TABLE public.t (id int, code text);
+ALTER TABLE public.t ENABLE ROW LEVEL SECURITY, ADD CONSTRAINT t_code_key UNIQUE (code);`
+	result, err := parser.ParseSQL(sql)
+	require.NoError(t, err)
+	tbl, _ := result.Tables.GetOk("public.t")
+	require.NotNil(t, tbl)
+	assert.True(t, tbl.RowSecurity, "RLS flag must be applied")
+	con, ok := tbl.Constraints.GetOk("t_code_key")
+	require.True(t, ok, "constraint from same ALTER TABLE must not be dropped")
+	assert.True(t, con.Type.IsUniqueConstraint())
+}
