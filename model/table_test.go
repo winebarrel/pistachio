@@ -15,7 +15,58 @@ func newTable(schema, name string) *Table {
 		Constraints: orderedmap.New[string, *Constraint](),
 		ForeignKeys: orderedmap.New[string, *ForeignKey](),
 		Indexes:     orderedmap.New[string, *Index](),
+		Policies:    orderedmap.New[string, *Policy](),
 	}
+}
+
+func TestTable_RLSSQL_Empty(t *testing.T) {
+	tbl := newTable("public", "users")
+	assert.Empty(t, tbl.RLSSQL())
+}
+
+func TestTable_RLSSQL_EnableOnly(t *testing.T) {
+	tbl := newTable("public", "users")
+	tbl.RowSecurity = true
+	assert.Equal(t, "ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;", tbl.RLSSQL())
+}
+
+func TestTable_RLSSQL_EnableAndForce(t *testing.T) {
+	tbl := newTable("public", "users")
+	tbl.RowSecurity = true
+	tbl.ForceRowSecurity = true
+	assert.Equal(t,
+		"ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;\n"+
+			"ALTER TABLE public.users FORCE ROW LEVEL SECURITY;",
+		tbl.RLSSQL())
+}
+
+func TestTable_RLSSQL_WithPolicies(t *testing.T) {
+	tbl := newTable("public", "users")
+	tbl.RowSecurity = true
+	using := "owner = current_user"
+	tbl.Policies.Set("p", &Policy{
+		Name: "p", Schema: "public", Table: "users",
+		Permissive: true, Command: 'r', Using: &using,
+	})
+	got := tbl.RLSSQL()
+	assert.Contains(t, got, "ENABLE ROW LEVEL SECURITY;")
+	assert.Contains(t, got, "CREATE POLICY p ON public.users FOR SELECT USING (owner = current_user);")
+}
+
+// nil-Policies guard: an older Table built without orderedmap-init must not
+// panic on RLSSQL even though the parser/catalog now always initialize it.
+func TestTable_RLSSQL_NilPolicies(t *testing.T) {
+	tbl := &Table{Schema: "public", Name: "users"}
+	assert.Empty(t, tbl.RLSSQL())
+}
+
+func TestTableToSQL_IncludesRLS(t *testing.T) {
+	tbl := newTable("public", "users")
+	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true})
+	tbl.RowSecurity = true
+	out := TableToSQL(tbl)
+	assert.Contains(t, out, "CREATE TABLE public.users")
+	assert.Contains(t, out, "ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;")
 }
 
 func TestTable_FQTN(t *testing.T) {

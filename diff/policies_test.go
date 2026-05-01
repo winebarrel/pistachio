@@ -202,3 +202,78 @@ func TestEqualPolicyExpr_NormalizesParens(t *testing.T) {
 	// treat both forms as equal.
 	assert.True(t, equalPolicyExpr("(owner = current_user)", "owner = current_user"))
 }
+
+// equalPolicyExpr falls back to raw string comparison when either side
+// fails to parse, to avoid losing diffs on malformed input.
+func TestEqualPolicyExpr_ParseErrorFallback(t *testing.T) {
+	assert.False(t, equalPolicyExpr("not a valid expr )", "valid"))
+	assert.True(t, equalPolicyExpr("not a valid expr )", "not a valid expr )"))
+}
+
+func TestNormalizeRoles(t *testing.T) {
+	assert.Equal(t, []string{"public"}, normalizeRoles(nil), "empty → [public]")
+	assert.Equal(t, []string{"a", "b"}, normalizeRoles([]string{"b", "a"}), "sorted")
+}
+
+func TestFormatRoles(t *testing.T) {
+	assert.Equal(t, []string{"public"}, formatRoles([]string{"public"}))
+	assert.Equal(t, []string{"current_user"}, formatRoles([]string{"current_user"}))
+	assert.Equal(t, []string{"current_role"}, formatRoles([]string{"current_role"}))
+	assert.Equal(t, []string{"session_user"}, formatRoles([]string{"session_user"}))
+	assert.Equal(t, []string{"app_user"}, formatRoles([]string{"app_user"}), "named role unquoted")
+	assert.Equal(t, []string{`"User"`}, formatRoles([]string{"User"}), "quoted when needed")
+}
+
+// ALTER POLICY ... TO <roles> covers the rolesChanged branch in alterPolicySQL.
+func TestDiffPolicies_AlterRoles(t *testing.T) {
+	cur := orderedmap.New[string, *model.Policy]()
+	des := orderedmap.New[string, *model.Policy]()
+	cur.Set("p", newPolicy("p", 'r', withUsing("true"), func(p *model.Policy) { p.Roles = []string{"public"} }))
+	des.Set("p", newPolicy("p", 'r', withUsing("true"), func(p *model.Policy) { p.Roles = []string{"app_user"} }))
+
+	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER POLICY p ON public.documents TO app_user;"}, stmts)
+}
+
+// ALTER POLICY desired.Roles=nil should normalize to TO public.
+func TestDiffPolicies_AlterRoles_EmptyToPublic(t *testing.T) {
+	cur := orderedmap.New[string, *model.Policy]()
+	des := orderedmap.New[string, *model.Policy]()
+	cur.Set("p", newPolicy("p", 'r', withUsing("true"), func(p *model.Policy) { p.Roles = []string{"app_user"} }))
+	des.Set("p", newPolicy("p", 'r', withUsing("true")))
+
+	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER POLICY p ON public.documents TO public;"}, stmts)
+}
+
+// ALTER POLICY adding WITH CHECK in place (current has none, desired adds one).
+func TestDiffPolicies_AddWithCheckInPlace(t *testing.T) {
+	cur := orderedmap.New[string, *model.Policy]()
+	des := orderedmap.New[string, *model.Policy]()
+	cur.Set("p", newPolicy("p", '*', withUsing("a")))
+	des.Set("p", newPolicy("p", '*', withUsing("a"), withWithCheck("b")))
+
+	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER POLICY p ON public.documents WITH CHECK (b);"}, stmts)
+}
+
+// Combined rename + recreate path: when the renamed policy also has a
+// definition change requiring DROP+CREATE, the RENAME must be suppressed
+// and the DROP must reference the old name (line 104-106 branch).
+func TestDiffPolicies_RenameAndRecreate(t *testing.T) {
+	cur := orderedmap.New[string, *model.Policy]()
+	des := orderedmap.New[string, *model.Policy]()
+	cur.Set("old", newPolicy("old", 'r', withUsing("true")))
+	// Rename old → new AND change command from SELECT to ALL.
+	des.Set("new", newPolicy("new", '*', withUsing("true"), renameFrom("old")))
+
+	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"DROP POLICY old ON public.documents;",
+		"CREATE POLICY new ON public.documents USING (true);",
+	}, stmts)
+}
