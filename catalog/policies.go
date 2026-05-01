@@ -11,6 +11,11 @@ import (
 // ListPoliciesByTable returns row-level security policies attached to the
 // given table, in pg_policy.polname order.
 func (c *Catalog) ListPoliciesByTable(ctx context.Context, table *model.Table) ([]*model.Policy, error) {
+	// pg_policy.polroles uses OID 0 to represent PUBLIC. pg_roles does not
+	// contain a row for OID 0, so a join would silently drop PUBLIC when it
+	// appears alongside named roles (e.g. TO PUBLIC, app_user). UNION the
+	// synthetic "public" entry with the named-role rows so all elements are
+	// preserved and sorted together.
 	q := `
 		SELECT
 			pol.polname,
@@ -18,14 +23,17 @@ func (c *Catalog) ListPoliciesByTable(ctx context.Context, table *model.Table) (
 			pol.polcmd,
 			COALESCE(
 				(
-					SELECT
-						array_agg(rolname ORDER BY rolname)
-					FROM
-						pg_catalog.pg_roles r
-					WHERE
-						r.oid = ANY(pol.polroles)
+					SELECT array_agg(rolname ORDER BY rolname)
+					FROM (
+						SELECT 'public'::name AS rolname
+						WHERE 0 = ANY(pol.polroles)
+						UNION
+						SELECT r.rolname
+						FROM pg_catalog.pg_roles r
+						WHERE r.oid = ANY(pol.polroles)
+					) AS roles
 				),
-				CASE WHEN 0 = ANY(pol.polroles) THEN ARRAY['public']::name[] ELSE ARRAY[]::name[] END
+				ARRAY[]::name[]
 			) AS roles,
 			pg_catalog.pg_get_expr(pol.polqual, pol.polrelid) AS using_expr,
 			pg_catalog.pg_get_expr(pol.polwithcheck, pol.polrelid) AS with_check

@@ -107,6 +107,33 @@ func TestListPoliciesByTable(t *testing.T) {
 		assert.Contains(t, *pol.WithCheck, "owner")
 	})
 
+	// pg_policy.polroles uses OID 0 to represent PUBLIC. The catalog query
+	// must merge OID 0 with named-role rows from pg_roles (which has no row
+	// for OID 0), and sort the result. Multiple named roles exercise the
+	// array_agg ORDER BY path. Note: PostgreSQL itself collapses
+	// "TO PUBLIC, named_role" to "TO PUBLIC" with a WARNING ("ignoring
+	// specified roles other than PUBLIC"), so the mixed-PUBLIC case is not
+	// reachable from real input.
+	t.Run("policy with multiple named roles", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.documents (
+				id bigint NOT NULL,
+				owner text NOT NULL,
+				CONSTRAINT documents_pkey PRIMARY KEY (id)
+			);
+			ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+			CREATE POLICY p ON public.documents FOR SELECT TO postgres, pg_read_all_data USING (owner = current_user);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		pol, _ := tables.Get("public.documents").Policies.GetOk("p")
+		assert.Equal(t, []string{"pg_read_all_data", "postgres"}, pol.Roles,
+			"named roles should be preserved and sorted alphabetically")
+	})
+
 	t.Run("policy with named role", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.documents (
