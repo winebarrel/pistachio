@@ -316,11 +316,12 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	switch {
 	case !curIsIdent && desIsIdent:
 		// none → identity: clear default and ensure NOT NULL, then ADD IDENTITY.
-		// Emit DROP DEFAULT unconditionally (it's a no-op in Postgres when no
-		// default is set) because catalog reports Default=nil for
-		// serial/bigserial/smallserial columns even though the underlying
-		// nextval() default would block ADD IDENTITY.
-		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
+		// Catalog reports Default=nil for serial/bigserial/smallserial columns
+		// even though they carry a hidden nextval() default that would block
+		// ADD IDENTITY, so detect those by TypeName as well.
+		if current.Default != nil || isSerialType(current.TypeName) {
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
+		}
 		if !current.NotNull {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
 		}
@@ -371,6 +372,19 @@ func identityKind(id model.ColumnIdentity) string {
 		return "ALWAYS"
 	}
 	return "BY DEFAULT"
+}
+
+// isSerialType reports whether the type name corresponds to a Postgres serial
+// pseudo-type. catalog/columns.go renders these explicitly as "serial" /
+// "bigserial" / "smallserial" while leaving the column's Default field nil,
+// so callers that need to drop the underlying nextval() default before an
+// ALTER must check the type name to detect this case.
+func isSerialType(typeName string) bool {
+	switch typeName {
+	case "serial", "bigserial", "smallserial":
+		return true
+	}
+	return false
 }
 
 // normalizeConstraintDef normalizes a constraint definition by parsing

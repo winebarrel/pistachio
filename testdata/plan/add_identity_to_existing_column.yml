@@ -11,5 +11,4 @@ desired: |
       CONSTRAINT items_pkey PRIMARY KEY (id)
   );
 plan: |
-  ALTER TABLE public.items ALTER COLUMN id DROP DEFAULT;
   ALTER TABLE public.items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;
