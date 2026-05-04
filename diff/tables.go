@@ -308,6 +308,30 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		stmts = append(stmts, sql+";")
 	}
 
+	curIsIdent := current.Identity.IsIdentityColumn()
+	desIsIdent := desired.Identity.IsIdentityColumn()
+
+	// Identity transitions. Handle before default/NOT NULL diff because adding
+	// IDENTITY requires the column to have no default and NOT NULL set.
+	switch {
+	case !curIsIdent && desIsIdent:
+		// none → identity: clear default and ensure NOT NULL, then ADD IDENTITY.
+		if current.Default != nil {
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
+		}
+		if !current.NotNull {
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
+		}
+		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" ADD GENERATED "+identityKind(desired.Identity)+" AS IDENTITY;")
+	case curIsIdent && !desIsIdent:
+		// identity → none: DROP IDENTITY. The column stays NOT NULL afterwards;
+		// the NOT NULL diff below will emit DROP NOT NULL if desired is nullable.
+		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP IDENTITY IF EXISTS;")
+	case curIsIdent && desIsIdent && current.Identity != desired.Identity:
+		// always ↔ by default
+		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET GENERATED "+identityKind(desired.Identity)+";")
+	}
+
 	// Default change. For non-generated columns, emit SET DEFAULT / DROP
 	// DEFAULT as usual. For generated columns, the "default" stores the
 	// generated expression and cannot be altered via SET DEFAULT — caller
@@ -315,7 +339,9 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// expression-only changes within a generated column are not surfaced
 	// here because catalog renders pg_get_expr-added type casts that don't
 	// reliably compare with the desired-side raw expression. See TODO.md.
-	if !current.Generated.IsStoredGeneratedColumn() && !desired.Generated.IsStoredGeneratedColumn() {
+	// Skip when desired is identity: we explicitly DROP DEFAULT above as part
+	// of the ADD IDENTITY transition.
+	if !current.Generated.IsStoredGeneratedColumn() && !desired.Generated.IsStoredGeneratedColumn() && !desIsIdent {
 		if !equalDefault(current.Default, desired.Default) {
 			if desired.Default != nil {
 				stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET DEFAULT "+*desired.Default+";")
@@ -325,10 +351,9 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		}
 	}
 
-	// NOT NULL change
-	// Identity columns are implicitly NOT NULL in PostgreSQL; skip NOT NULL diff
-	// when either side is an identity column to avoid spurious SET/DROP NOT NULL.
-	if current.NotNull != desired.NotNull && !current.Identity.IsIdentityColumn() && !desired.Identity.IsIdentityColumn() {
+	// NOT NULL change. Identity columns are implicitly NOT NULL, so skip when
+	// the desired side is identity (the ADD IDENTITY path sets NOT NULL above).
+	if current.NotNull != desired.NotNull && !desIsIdent {
 		if desired.NotNull {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
 		} else {
@@ -337,6 +362,13 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	}
 
 	return stmts
+}
+
+func identityKind(id model.ColumnIdentity) string {
+	if id.IsGeneratedAlways() {
+		return "ALWAYS"
+	}
+	return "BY DEFAULT"
 }
 
 // normalizeConstraintDef normalizes a constraint definition by parsing

@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY,
+      name text NOT NULL
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer,
+      name text NOT NULL
+  );
+plan: |
+  ALTER TABLE public.items ALTER COLUMN id DROP IDENTITY IF EXISTS;
+  ALTER TABLE public.items ALTER COLUMN id DROP NOT NULL;
