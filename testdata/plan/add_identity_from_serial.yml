@@ -1,6 +1,6 @@
 init: |
   CREATE TABLE public.items (
-      id integer NOT NULL,
+      id serial NOT NULL,
       name text NOT NULL,
       CONSTRAINT items_pkey PRIMARY KEY (id)
   );

@@ -316,9 +316,11 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	switch {
 	case !curIsIdent && desIsIdent:
 		// none → identity: clear default and ensure NOT NULL, then ADD IDENTITY.
-		if current.Default != nil {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
-		}
+		// Emit DROP DEFAULT unconditionally (it's a no-op in Postgres when no
+		// default is set) because catalog reports Default=nil for
+		// serial/bigserial/smallserial columns even though the underlying
+		// nextval() default would block ADD IDENTITY.
+		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
 		if !current.NotNull {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
 		}
