@@ -1,0 +1,14 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY,
+      name text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;

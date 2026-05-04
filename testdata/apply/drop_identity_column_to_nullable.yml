@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY,
+      name text NOT NULL
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer,
+      name text NOT NULL
+  );
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer,
+      name text NOT NULL
+  );
+verify_no_drift: true
