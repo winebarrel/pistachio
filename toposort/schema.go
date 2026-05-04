@@ -47,7 +47,9 @@ func OrderFromSchema(
 			}
 		}
 
-		// FK dependencies
+		// FK dependencies. Use model.Ident so the lookup matches the map keys
+		// (which are also model.Ident-formed) for non-safe identifiers like
+		// quoted or reserved-word names.
 		if t.ForeignKeys != nil {
 			for _, fk := range t.ForeignKeys.CollectValues() {
 				refSchema := t.Schema
@@ -55,7 +57,7 @@ func OrderFromSchema(
 					refSchema = *fk.RefSchema
 				}
 				if fk.RefTable != nil {
-					ref := refSchema + "." + *fk.RefTable
+					ref := model.Ident(refSchema, *fk.RefTable)
 					if defined[ref] {
 						g.AddEdge(k, ref)
 					}
