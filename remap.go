@@ -9,18 +9,18 @@ import (
 
 // buildDefReplacer builds a strings.Replacer that replaces schema-qualified
 // prefixes in raw SQL definitions (e.g. "staging." → "public.").
-// It handles both unquoted and quoted schema identifiers.
+//
+// All inputs to this replacer come from canonical SQL — pg_get_*def output
+// from the catalog or pg_query deparse output from the parser — so any
+// identifier that requires quoting is already wrapped in double quotes.
+// Only the model.Ident form is added to the pair list. Adding an unquoted
+// fallback (e.g. raw `a.b.` for a schema literally named `a.b`) would
+// dangerously collide with three-part references like `a.b.col` (schema
+// `a`, table `b`, column `col`).
 func buildDefReplacer(schemaMap map[string]string) *strings.Replacer {
 	var pairs []string
 	for from, to := range schemaMap {
-		fromIdent := model.Ident(from)
-		toIdent := model.Ident(to)
-		// Always add the Ident form (handles quoting)
-		pairs = append(pairs, fromIdent+".", toIdent+".")
-		// If Ident differs from raw name, also add the raw form
-		if fromIdent != from {
-			pairs = append(pairs, from+".", to+".")
-		}
+		pairs = append(pairs, model.Ident(from)+".", model.Ident(to)+".")
 	}
 	return strings.NewReplacer(pairs...)
 }

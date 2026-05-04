@@ -35,6 +35,39 @@ func setupSchemaDB(t *testing.T, ctx context.Context, schema string, initSQL str
 	return conn.Config().ConnString()
 }
 
+func TestBuildDefReplacer_QuotedSchema(t *testing.T) {
+	// Schema names that need quoting in canonical SQL (e.g. names with
+	// uppercase letters or spaces) appear in catalog/parser output as the
+	// quoted form. The replacer matches only that form.
+	replacer := pistachio.BuildDefReplacer(map[string]string{
+		"My Schema": "public",
+		"Users":     "people",
+	})
+
+	assert.Equal(t, "public.t", replacer.Replace(`"My Schema".t`))
+	assert.Equal(t, "people.t", replacer.Replace(`"Users".t`))
+}
+
+// TestBuildDefReplacer_PreservesThreePartReference guards against the trap
+// where adding an unquoted-form pair (e.g. `a.b.` for a schema literally
+// named `a.b`) would silently rewrite a legitimate three-part column
+// reference `a.b.col` (schema `a`, table `b`, column `col`) by collapsing
+// the schema+table prefix into the dotted-name schema's mapped value. The
+// schema portion may legitimately be rewritten (`a.` → `y.`), but the
+// table/column segments (`b.col`) must remain intact.
+func TestBuildDefReplacer_PreservesThreePartReference(t *testing.T) {
+	replacer := pistachio.BuildDefReplacer(map[string]string{
+		"a.b": "x", // a schema literally named "a.b"
+		"a":   "y",
+	})
+
+	// Three-part column reference for schema `a`, table `b`, column `col`.
+	// Schema `a` must be rewritten, but `b` (the table) must not be touched.
+	assert.Equal(t, "y.b.col", replacer.Replace("a.b.col"))
+	// Real reference to the dotted-name schema uses the quoted form.
+	assert.Equal(t, "x.col", replacer.Replace(`"a.b".col`))
+}
+
 func TestAfterApply(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		o := &pistachio.Options{SchemaMap: map[string]string{"staging": "public"}}
