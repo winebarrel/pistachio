@@ -278,6 +278,135 @@ func TestOrderFromSchema_PartitionChild(t *testing.T) {
 	assert.Less(t, idx["public.events"], idx["public.events_2024"], "partition parent before child")
 }
 
+func TestOrderFromSchema_FKWithQuotedRefTable(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	// Both names require quoting (mixed case). Source ("Comments") sorts
+	// before target ("Users") alphabetically, so without the FK edge being
+	// registered, the toposort fallback would emit source first — which is
+	// wrong. The edge can only be registered when the FK lookup uses the
+	// same quoted form as the map keys.
+	refTable := "Users"
+	refSchema := "public"
+
+	tables := orderedmap.New[string, *model.Table]()
+
+	users := &model.Table{Schema: "public", Name: "Users"}
+	users.Columns = orderedmap.New[string, *model.Column]()
+	users.Indexes = orderedmap.New[string, *model.Index]()
+	users.Constraints = orderedmap.New[string, *model.Constraint]()
+	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set(model.Ident("public", "Users"), users)
+
+	comments := &model.Table{Schema: "public", Name: "Comments"}
+	comments.Columns = orderedmap.New[string, *model.Column]()
+	comments.Indexes = orderedmap.New[string, *model.Index]()
+	comments.Constraints = orderedmap.New[string, *model.Constraint]()
+	comments.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	comments.ForeignKeys.Set("comments_user_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "comments_user_fk"},
+		RefSchema:  &refSchema,
+		RefTable:   &refTable,
+	})
+	tables.Set(model.Ident("public", "Comments"), comments)
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx[model.Ident("public", "Users")], idx[model.Ident("public", "Comments")], "FK target before source for quoted ref table")
+}
+
+func TestOrderFromSchema_FKWithReservedWordRefTable(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	// "order" is a reserved word; both names quoted so alphabetical fallback
+	// puts source ("Items") before target ("order").
+	refTable := "order"
+	refSchema := "public"
+
+	tables := orderedmap.New[string, *model.Table]()
+
+	orderTbl := &model.Table{Schema: "public", Name: "order"}
+	orderTbl.Columns = orderedmap.New[string, *model.Column]()
+	orderTbl.Indexes = orderedmap.New[string, *model.Index]()
+	orderTbl.Constraints = orderedmap.New[string, *model.Constraint]()
+	orderTbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set(model.Ident("public", "order"), orderTbl)
+
+	items := &model.Table{Schema: "public", Name: "Items"}
+	items.Columns = orderedmap.New[string, *model.Column]()
+	items.Indexes = orderedmap.New[string, *model.Index]()
+	items.Constraints = orderedmap.New[string, *model.Constraint]()
+	items.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	items.ForeignKeys.Set("items_order_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "items_order_fk"},
+		RefSchema:  &refSchema,
+		RefTable:   &refTable,
+	})
+	tables.Set(model.Ident("public", "Items"), items)
+
+	sorted, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range sorted {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx[model.Ident("public", "order")], idx[model.Ident("public", "Items")], "FK target before source for reserved-word ref table")
+}
+
+func TestOrderFromSchema_FKWithQuotedRefSchema(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	// Quoted schema name. Source schema "AppPublic" sorts before target
+	// schema "Refs" alphabetically, so without the edge, source would come first.
+	refTable := "users"
+	refSchema := "Refs"
+
+	tables := orderedmap.New[string, *model.Table]()
+
+	users := &model.Table{Schema: "Refs", Name: "users"}
+	users.Columns = orderedmap.New[string, *model.Column]()
+	users.Indexes = orderedmap.New[string, *model.Index]()
+	users.Constraints = orderedmap.New[string, *model.Constraint]()
+	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set(model.Ident("Refs", "users"), users)
+
+	posts := &model.Table{Schema: "AppPublic", Name: "posts"}
+	posts.Columns = orderedmap.New[string, *model.Column]()
+	posts.Indexes = orderedmap.New[string, *model.Index]()
+	posts.Constraints = orderedmap.New[string, *model.Constraint]()
+	posts.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	posts.ForeignKeys.Set("posts_user_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "posts_user_fk"},
+		RefSchema:  &refSchema,
+		RefTable:   &refTable,
+	})
+	tables.Set(model.Ident("AppPublic", "posts"), posts)
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx[model.Ident("Refs", "users")], idx[model.Ident("AppPublic", "posts")], "FK target before source across quoted schemas")
+}
+
 func TestOrderFromSchema_FKWithDefaultSchema(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()
