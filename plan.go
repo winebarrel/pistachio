@@ -59,6 +59,9 @@ type PlanResult struct {
 }
 
 func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResult, error) {
+	if err := client.validateSchemas(); err != nil {
+		return nil, err
+	}
 	conn, err := client.connect(ctx)
 	if err != nil {
 		return nil, err

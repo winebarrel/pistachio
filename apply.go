@@ -29,6 +29,9 @@ type ApplyResult struct {
 }
 
 func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ApplyResult, error) {
+	if err := client.validateSchemas(); err != nil {
+		return nil, err
+	}
 	conn, err := client.connect(ctx)
 	if err != nil {
 		return nil, err
