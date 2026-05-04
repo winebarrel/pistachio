@@ -29,7 +29,7 @@ type ApplyResult struct {
 }
 
 func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ApplyResult, error) {
-	conn, err := client.connect()
+	conn, err := client.connect(ctx)
 	if err != nil {
 		return nil, err
 	}
