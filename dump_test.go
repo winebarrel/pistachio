@@ -60,6 +60,7 @@ func TestDump_EmptySchemas(t *testing.T) {
 
 	_, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at least one schema must be specified")
 }
 
 func TestDump_CanceledContext(t *testing.T) {

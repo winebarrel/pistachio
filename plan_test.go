@@ -136,6 +136,7 @@ func TestPlan_EmptySchemas(t *testing.T) {
 
 	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at least one schema must be specified")
 }
 
 func TestPlan_InvalidConcurrentlyPreSQLFile(t *testing.T) {

@@ -573,6 +573,7 @@ func TestApply_EmptySchemas(t *testing.T) {
 
 	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at least one schema must be specified")
 }
 
 func TestApply_InvalidConnString(t *testing.T) {
