@@ -51,9 +51,10 @@ func TestBuildDefReplacer_QuotedSchema(t *testing.T) {
 // TestBuildDefReplacer_PreservesThreePartReference guards against the trap
 // where adding an unquoted-form pair (e.g. `a.b.` for a schema literally
 // named `a.b`) would silently rewrite a legitimate three-part column
-// reference `a.b.col` (schema `a`, table `b`, column `col`). Only the
-// quoted form gets added to the pair list, so the three-part reference
-// must pass through unchanged.
+// reference `a.b.col` (schema `a`, table `b`, column `col`) by collapsing
+// the schema+table prefix into the dotted-name schema's mapped value. The
+// schema portion may legitimately be rewritten (`a.` → `y.`), but the
+// table/column segments (`b.col`) must remain intact.
 func TestBuildDefReplacer_PreservesThreePartReference(t *testing.T) {
 	replacer := pistachio.BuildDefReplacer(map[string]string{
 		"a.b": "x", // a schema literally named "a.b"
