@@ -2,6 +2,7 @@ package pistachio_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,6 +138,28 @@ func TestPlan_EmptySchemas(t *testing.T) {
 	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "at least one schema must be specified")
+}
+
+func TestPlan_BlankSchemaName(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
+
+	for _, name := range []string{"", "   "} {
+		t.Run(fmt.Sprintf("%q", name), func(t *testing.T) {
+			client := pistachio.NewClient(&pistachio.Options{
+				ConnString: conn.Config().ConnString(),
+				Schemas:    []string{name},
+			})
+
+			_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "must not contain empty or whitespace-only entries")
+		})
+	}
 }
 
 func TestPlan_InvalidConcurrentlyPreSQLFile(t *testing.T) {

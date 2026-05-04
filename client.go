@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -25,9 +26,18 @@ func NewClient(options *Options) *Client {
 // catalog.NewCatalog already errors on empty Schemas, but Schemas[0] is
 // also indexed in diff_all.go before that catalog call would short-circuit
 // in some refactor paths — so guard explicitly with a clear message.
+//
+// Empty/whitespace entries are also rejected: model.Ident drops empty
+// components silently, which would otherwise produce malformed DDL or
+// route changes through search_path into an unintended schema.
 func (client *Client) validateSchemas() error {
 	if len(client.Schemas) == 0 {
 		return errors.New("pistachio: at least one schema must be specified in Options.Schemas")
+	}
+	for _, s := range client.Schemas {
+		if strings.TrimSpace(s) == "" {
+			return errors.New("pistachio: Options.Schemas must not contain empty or whitespace-only entries")
+		}
 	}
 	return nil
 }
