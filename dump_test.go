@@ -79,7 +79,7 @@ func TestDump_CanceledContext(t *testing.T) {
 
 	_, err := client.Dump(canceledCtx, &pistachio.DumpOptions{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to fetch tables")
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestDump_Count(t *testing.T) {

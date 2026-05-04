@@ -59,7 +59,7 @@ type PlanResult struct {
 }
 
 func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResult, error) {
-	conn, err := client.connect()
+	conn, err := client.connect(ctx)
 	if err != nil {
 		return nil, err
 	}

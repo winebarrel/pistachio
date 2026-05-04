@@ -18,7 +18,7 @@ func NewClient(options *Options) *Client {
 	return client
 }
 
-func (client *Client) connect() (*pgx.Conn, error) {
+func (client *Client) connect(ctx context.Context) (*pgx.Conn, error) {
 	cfg, err := pgx.ParseConfig(client.ConnString)
 	if err != nil {
 		return nil, fmt.Errorf("pistachio: failed to parse connection string: %w", err)
@@ -28,7 +28,7 @@ func (client *Client) connect() (*pgx.Conn, error) {
 		cfg.Password = client.Password
 	}
 
-	conn, err := pgx.ConnectConfig(context.Background(), cfg)
+	conn, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("pistachio: failed to connect database: %w", err)
 	}
