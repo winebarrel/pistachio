@@ -320,6 +320,53 @@ CREATE TABLE public.users (
 	assert.Contains(t, files["users.sql"], "CREATE TABLE users")
 }
 
+// TestDumpResult_OmitSchema_HelperKeyConsistency verifies that the internal
+// helpers used by String()/Files() build their map with unqualified keys when
+// OmitSchema is true, matching the schema-stripped values they store.
+// Previously the helpers stripped Schema from the value but kept the
+// schema-qualified name as the map key — invisible through String()/Files()
+// (both iterate values) but a self-inconsistent intermediate that would
+// leak to any future caller iterating by key.
+func TestDumpResult_OmitSchema_HelperKeyConsistency(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+
+	for k, v := range pistachio.DumpResultTables(got).All() {
+		assert.Equal(t, model.Ident(v.Name), k, "table key should match unqualified Ident(Name)")
+		assert.Empty(t, v.Schema, "table value Schema should be empty")
+	}
+	for k, v := range pistachio.DumpResultViews(got).All() {
+		assert.Equal(t, model.Ident(v.Name), k, "view key should match unqualified Ident(Name)")
+		assert.Empty(t, v.Schema, "view value Schema should be empty")
+	}
+	for k, v := range pistachio.DumpResultEnums(got).All() {
+		assert.Equal(t, model.Ident(v.Name), k, "enum key should match unqualified Ident(Name)")
+		assert.Empty(t, v.Schema, "enum value Schema should be empty")
+	}
+	for k, v := range pistachio.DumpResultDomains(got).All() {
+		assert.Equal(t, model.Ident(v.Name), k, "domain key should match unqualified Ident(Name)")
+		assert.Empty(t, v.Schema, "domain value Schema should be empty")
+	}
+}
+
 func TestDump_Domain_OmitSchema_PlanNoDiff(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

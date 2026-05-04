@@ -63,7 +63,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			}
 			copied.Policies = policies
 		}
-		tables.Set(fqtn, &copied)
+		tables.Set(tableName, &copied)
 	}
 	return tables
 }
@@ -88,7 +88,7 @@ func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
 			}
 			copied.Indexes = idxs
 		}
-		views.Set(fqvn, &copied)
+		views.Set(viewName, &copied)
 	}
 	return views
 }
@@ -104,7 +104,7 @@ func (r *DumpResult) enums() *orderedmap.Map[string, *model.Enum] {
 	for _, e := range r.Enums.CollectValues() {
 		copied := *e
 		copied.Schema = ""
-		enums.Set(e.FQEN(), &copied)
+		enums.Set(model.Ident(e.Name), &copied)
 	}
 	return enums
 }
@@ -120,7 +120,7 @@ func (r *DumpResult) domains() *orderedmap.Map[string, *model.Domain] {
 	for _, d := range r.Domains.CollectValues() {
 		copied := *d
 		copied.Schema = ""
-		domains.Set(d.FQDN(), &copied)
+		domains.Set(model.Ident(d.Name), &copied)
 	}
 	return domains
 }
