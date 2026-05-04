@@ -380,11 +380,8 @@ func identityKind(id model.ColumnIdentity) string {
 // so callers that need to drop the underlying nextval() default before an
 // ALTER must check the type name to detect this case.
 func isSerialType(typeName string) bool {
-	switch typeName {
-	case "serial", "bigserial", "smallserial":
-		return true
-	}
-	return false
+	_, ok := serialBaseTypes[typeName]
+	return ok
 }
 
 // normalizeConstraintDef normalizes a constraint definition by parsing
