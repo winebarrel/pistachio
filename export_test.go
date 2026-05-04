@@ -11,6 +11,7 @@ var (
 	ExtractObjectName         = extractObjectName
 	OrderStatements           = orderStatements
 	CompareTaggedPos          = compareTaggedPos
+	BuildDefReplacer          = buildDefReplacer
 )
 
 func DumpResultTables(r *DumpResult) *orderedmap.Map[string, *model.Table] {
