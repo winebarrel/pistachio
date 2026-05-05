@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.0] - 2026-05-05
+
+* Add `--bulk-alter` (also `$PIST_BULK_ALTER`) to combine consecutive `ALTER TABLE` actions on the same table into a single multi-line statement, reducing metadata-lock churn. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs are kept as separate statements so semantically distinct operations preserve their independence (`NOT VALID`'s whole point is to defer the expensive validation step). ([#147](https://github.com/winebarrel/pistachio/pull/147))
+* Change `dump --split` stdout shape: replace the per-file path listing with a `-- Dump of <schema> (<summary>)` header followed by a `-- Wrote N file(s) to <dir>` footer, matching the non-split mode header style. Empty schemas now produce visible output instead of being silent. Note: this is a behavior change — anything piping the previous per-path listing into `xargs` (or similar) needs to enumerate the directory itself. ([#148](https://github.com/winebarrel/pistachio/pull/148))
+
 ## [1.4.0] - 2026-05-05
 
 * Propagate the caller's `context.Context` through `Client.connect`, so timeout / cancellation on the `ctx` passed to `Plan` / `Apply` / `Dump` is honored at the connection establishment phase instead of being silently discarded. ([#139](https://github.com/winebarrel/pistachio/pull/139))
