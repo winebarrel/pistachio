@@ -1,0 +1,30 @@
+bulk_alter: true
+verify_no_drift: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_emails AS SELECT id, email FROM public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      age integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      age integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  DROP VIEW public.user_emails;
+  ALTER TABLE public.users
+    ADD COLUMN age integer,
+    DROP COLUMN email;

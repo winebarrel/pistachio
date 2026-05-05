@@ -1,0 +1,30 @@
+bulk_alter: true
+init: |
+  CREATE TABLE public.t1 (
+      id integer NOT NULL,
+      CONSTRAINT t1_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.t2 (
+      id integer NOT NULL,
+      CONSTRAINT t2_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.t1 (
+      id integer NOT NULL,
+      a integer,
+      b integer,
+      CONSTRAINT t1_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.t2 (
+      id integer NOT NULL,
+      x integer,
+      y integer,
+      CONSTRAINT t2_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.t1
+    ADD COLUMN a integer,
+    ADD COLUMN b integer;
+  ALTER TABLE public.t2
+    ADD COLUMN x integer,
+    ADD COLUMN y integer;

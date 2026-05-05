@@ -1,0 +1,19 @@
+bulk_alter: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      age integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_email_idx ON public.users (email);
+plan: |
+  ALTER TABLE public.users
+    ADD COLUMN email text,
+    ADD COLUMN age integer;
+  CREATE INDEX users_email_idx ON public.users USING btree (email);

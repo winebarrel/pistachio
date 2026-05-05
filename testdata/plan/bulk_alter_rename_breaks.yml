@@ -1,0 +1,22 @@
+bulk_alter: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      old_name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pist:renamed-from old_name
+      new_name text NOT NULL,
+      email text,
+      age integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users RENAME COLUMN old_name TO new_name;
+  ALTER TABLE public.users
+    ADD COLUMN email text,
+    ADD COLUMN age integer,
+    ALTER COLUMN new_name SET NOT NULL;

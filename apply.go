@@ -20,6 +20,7 @@ type ApplyOptions struct {
 	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PIST_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to execute before CONCURRENTLY index operations."`
 	WithTx                   bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
 	DisableIndexConcurrently bool     `env:"PIST_DISABLE_INDEX_CONCURRENTLY" help:"Ignore all CONCURRENTLY opt-ins (both -- pist:concurrently directives and inline CREATE/DROP INDEX CONCURRENTLY) and emit plain CREATE/DROP INDEX."`
+	BulkAlter                bool     `env:"PIST_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs are kept separate."`
 }
 
 // ApplyResult holds the result of an Apply operation.
@@ -47,6 +48,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		ConcurrentlyPreSQL:       options.ConcurrentlyPreSQL,
 		ConcurrentlyPreSQLFile:   options.ConcurrentlyPreSQLFile,
 		DisableIndexConcurrently: options.DisableIndexConcurrently,
+		BulkAlter:                options.BulkAlter,
 	})
 	if err != nil {
 		return nil, err
