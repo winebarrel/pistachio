@@ -51,6 +51,12 @@ func TestExtractObjectName(t *testing.T) {
 		{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);", "public.users"},
 		{"CREATE UNIQUE INDEX CONCURRENTLY idx_email ON public.users USING btree (email);", "public.users"},
 		{"DROP INDEX CONCURRENTLY public.idx_name;", ""},
+		// --bulk-alter merged form: fqtn is followed by a newline, then
+		// indented action lines. extractObjectName must still recover the
+		// fqtn so topological ordering can place the merged statement
+		// alongside other ops on the same table.
+		{"ALTER TABLE public.users\n  ADD COLUMN x int,\n  ADD COLUMN y int;", "public.users"},
+		{"ALTER TABLE \"MySchema\".\"MyTable\"\n  ADD COLUMN x int,\n  DROP CONSTRAINT chk;", `"MySchema"."MyTable"`},
 	}
 
 	for _, tt := range tests {

@@ -1,0 +1,31 @@
+bulk_alter: true
+verify_no_drift: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      age integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_age_pos CHECK (age > 0)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      age integer,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_age_pos CHECK (age >= 18)
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      age integer,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_age_pos CHECK (age >= 18)
+  );
+applied_sql: |
+  ALTER TABLE public.users
+    ADD COLUMN email text,
+    DROP CONSTRAINT users_age_pos,
+    ADD CONSTRAINT users_age_pos CHECK (age >= 18);
