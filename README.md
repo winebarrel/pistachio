@@ -259,6 +259,8 @@ pist dump --omit-schema
 # => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
 
 pist dump --omit-schema --split ./schema/
+# -- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains)
+# -- Wrote 2 file(s) to ./schema/
 # (writes ./schema/users.sql, ./schema/orders.sql, ...)
 ```
 

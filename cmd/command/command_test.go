@@ -229,6 +229,8 @@ CREATE TABLE public.users (
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create directory")
+	// MkdirAll runs before the header, so nothing should land on stdout.
+	assert.Empty(t, buf.String())
 }
 
 func TestDump_Run_Split_WriteError(t *testing.T) {
@@ -255,6 +257,12 @@ CREATE TABLE public.users (
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to write")
+	// On the write-failure path the header has already been emitted
+	// (it precedes the file loop) but the footer must not appear,
+	// so partial output is unambiguous from a successful run.
+	out := buf.String()
+	assert.Contains(t, out, "-- Dump of schema public")
+	assert.NotContains(t, out, "-- Wrote")
 }
 
 func TestPlan_Run_Error(t *testing.T) {
