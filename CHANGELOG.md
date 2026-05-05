@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.4.0] - 2026-05-05
 
 * Propagate the caller's `context.Context` through `Client.connect`, so timeout / cancellation on the `ctx` passed to `Plan` / `Apply` / `Dump` is honored at the connection establishment phase instead of being silently discarded. ([#139](https://github.com/winebarrel/pistachio/pull/139))
 * Detect and emit DDL for `GENERATED ... AS IDENTITY` column transitions. `none → identity`, `identity → none`, and `ALWAYS ↔ BY DEFAULT` now produce the appropriate `ALTER TABLE ... ALTER COLUMN ADD/DROP/SET GENERATED` statements with required preconditions (`DROP DEFAULT` for columns with an explicit default or `serial`/`bigserial`/`smallserial` type, `SET NOT NULL` before `ADD IDENTITY`, `DROP NOT NULL` after `DROP IDENTITY` when desired is nullable). Previously these toggles were silently ignored, leaving the schema drifted. ([#140](https://github.com/winebarrel/pistachio/pull/140))
