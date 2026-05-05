@@ -341,7 +341,9 @@ Use `--split` to output each table/view/enum as a separate file in the specified
 
 ```bash
 pist dump --split ./schema/
-# => ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...
+# -- Dump of schema public (3 tables, 0 views, 1 enum, 0 domains)
+# -- Wrote 4 file(s) to ./schema/
+# (writes ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...)
 ```
 
 ## Example

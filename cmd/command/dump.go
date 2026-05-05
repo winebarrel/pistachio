@@ -30,13 +30,17 @@ func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
+	fmt.Fprintf(w, "-- Dump of %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
+
+	count := 0
 	for name, content := range result.Files() {
 		path := filepath.Join(cmd.Split, name)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("failed to write %s: %w", path, err)
 		}
-		fmt.Fprintln(w, path) //nolint:errcheck
+		count++
 	}
 
+	fmt.Fprintf(w, "-- Wrote %d file(s) to %s\n", count, cmd.Split) //nolint:errcheck
 	return nil
 }

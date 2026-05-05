@@ -3,6 +3,7 @@ package command_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,9 +98,11 @@ CREATE TABLE public.posts (
 	require.NoError(t, err)
 	assert.Contains(t, string(postsData), "CREATE TABLE public.posts")
 
-	assert.Contains(t, buf.String(), "public.users.sql")
-	assert.Contains(t, buf.String(), "public.posts.sql")
-	assert.NotContains(t, buf.String(), "-- Dump of")
+	out := buf.String()
+	assert.Contains(t, out, "-- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains)")
+	assert.Contains(t, out, fmt.Sprintf("-- Wrote 2 file(s) to %s", splitDir))
+	assert.NotContains(t, out, "public.users.sql")
+	assert.NotContains(t, out, "public.posts.sql")
 }
 
 func TestDump_Run_Empty(t *testing.T) {
@@ -174,7 +177,9 @@ func TestDump_Run_Split_Empty(t *testing.T) {
 	entries, err := os.ReadDir(splitDir)
 	require.NoError(t, err)
 	assert.Empty(t, entries)
-	assert.Empty(t, buf.String())
+	out := buf.String()
+	assert.Contains(t, out, "-- Dump of schema public (0 tables, 0 views, 0 enums, 0 domains)")
+	assert.Contains(t, out, fmt.Sprintf("-- Wrote 0 file(s) to %s", splitDir))
 }
 
 func TestDump_Run_Split_SpecialCharacters(t *testing.T) {
