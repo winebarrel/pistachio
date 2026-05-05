@@ -12,7 +12,7 @@ import (
 
 type DumpOptions struct {
 	FilterOptions
-	Split      string `help:"Output each table/view/enum as a separate file in the specified directory."`
+	Split      string `help:"Output each table/view/enum/domain as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
 }
 

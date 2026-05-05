@@ -339,7 +339,7 @@ The following references are **not** auto-rewritten and may produce a redundant 
 
 ### Split dump
 
-Use `--split` to output each table/view/enum as a separate file in the specified directory.
+Use `--split` to output each table/view/enum/domain as a separate file in the specified directory.
 
 ```bash
 pist dump --split ./schema/
@@ -387,7 +387,7 @@ pist apply schema.sql                 # apply it
 Or split schema into multiple files and use them together:
 
 ```bash
-pist dump --split ./schema/       # dump per table/view/enum
+pist dump --split ./schema/       # dump per table/view/enum/domain
 pist plan ./schema/*.sql          # review the diff
 pist apply ./schema/*.sql         # apply it
 ```
