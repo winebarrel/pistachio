@@ -3,6 +3,7 @@ package command_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,9 +98,11 @@ CREATE TABLE public.posts (
 	require.NoError(t, err)
 	assert.Contains(t, string(postsData), "CREATE TABLE public.posts")
 
-	assert.Contains(t, buf.String(), "public.users.sql")
-	assert.Contains(t, buf.String(), "public.posts.sql")
-	assert.NotContains(t, buf.String(), "-- Dump of")
+	out := buf.String()
+	assert.Contains(t, out, "-- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains)")
+	assert.Contains(t, out, fmt.Sprintf("-- Wrote 2 file(s) to %s", splitDir))
+	assert.NotContains(t, out, "public.users.sql")
+	assert.NotContains(t, out, "public.posts.sql")
 }
 
 func TestDump_Run_Empty(t *testing.T) {
@@ -174,7 +177,9 @@ func TestDump_Run_Split_Empty(t *testing.T) {
 	entries, err := os.ReadDir(splitDir)
 	require.NoError(t, err)
 	assert.Empty(t, entries)
-	assert.Empty(t, buf.String())
+	out := buf.String()
+	assert.Contains(t, out, "-- Dump of schema public (0 tables, 0 views, 0 enums, 0 domains)")
+	assert.Contains(t, out, fmt.Sprintf("-- Wrote 0 file(s) to %s", splitDir))
 }
 
 func TestDump_Run_Split_SpecialCharacters(t *testing.T) {
@@ -224,9 +229,19 @@ CREATE TABLE public.users (
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create directory")
+	// MkdirAll runs before the header, so nothing should land on stdout.
+	assert.Empty(t, buf.String())
 }
 
 func TestDump_Run_Split_WriteError(t *testing.T) {
+	// This test forces os.WriteFile to fail by making the split dir read-only.
+	// Root bypasses the permission check, so the WriteFile call would succeed
+	// and our error-path assertions would spuriously fail. CI containers
+	// commonly run as root, so skip there rather than fake-fail.
+	if os.Geteuid() == 0 {
+		t.Skip("read-only-dir trick does not block root")
+	}
+
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -250,6 +265,12 @@ CREATE TABLE public.users (
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to write")
+	// On the write-failure path the header has already been emitted
+	// (it precedes the file loop) but the footer must not appear,
+	// so partial output is unambiguous from a successful run.
+	out := buf.String()
+	assert.Contains(t, out, "-- Dump of schema public")
+	assert.NotContains(t, out, "-- Wrote")
 }
 
 func TestPlan_Run_Error(t *testing.T) {

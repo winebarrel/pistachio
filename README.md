@@ -259,7 +259,9 @@ pist dump --omit-schema
 # => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
 
 pist dump --omit-schema --split ./schema/
-# => ./schema/users.sql, ./schema/orders.sql, ...
+# -- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains)
+# -- Wrote 2 file(s) to ./schema/
+# (writes ./schema/users.sql, ./schema/orders.sql, ...)
 ```
 
 When schema is omitted in SQL files, `plan` and `apply` use the schema specified by `-n`:
@@ -337,11 +339,13 @@ The following references are **not** auto-rewritten and may produce a redundant 
 
 ### Split dump
 
-Use `--split` to output each table/view/enum as a separate file in the specified directory.
+Use `--split` to output each table/view/enum/domain as a separate file in the specified directory.
 
 ```bash
 pist dump --split ./schema/
-# => ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...
+# -- Dump of schema public (3 tables, 0 views, 1 enum, 0 domains)
+# -- Wrote 4 file(s) to ./schema/
+# (writes ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...)
 ```
 
 ## Example
@@ -383,7 +387,7 @@ pist apply schema.sql                 # apply it
 Or split schema into multiple files and use them together:
 
 ```bash
-pist dump --split ./schema/       # dump per table/view/enum
+pist dump --split ./schema/       # dump per table/view/enum/domain
 pist plan ./schema/*.sql          # review the diff
 pist apply ./schema/*.sql         # apply it
 ```
