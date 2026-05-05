@@ -25,6 +25,7 @@ type diffAllOptions struct {
 	ConcurrentlyPreSQL       string
 	ConcurrentlyPreSQLFile   string
 	DisableIndexConcurrently bool
+	BulkAlter                bool
 }
 
 // diffAllResult holds the result of diffAll.
@@ -108,6 +109,10 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	tableDiff, err := diff.DiffTables(filteredTables, desiredTables, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
+	}
+
+	if options.BulkAlter {
+		tableDiff.Stmts = mergeAlterTable(tableDiff.Stmts)
 	}
 
 	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy)

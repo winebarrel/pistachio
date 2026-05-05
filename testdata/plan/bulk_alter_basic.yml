@@ -1,0 +1,17 @@
+bulk_alter: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      age integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users
+    ADD COLUMN email text,
+    ADD COLUMN age integer;

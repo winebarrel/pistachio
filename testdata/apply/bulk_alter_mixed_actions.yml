@@ -1,0 +1,33 @@
+bulk_alter: true
+verify_no_drift: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      legacy text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.users (id, name, legacy) VALUES (1, 'a', 'old');
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_id_pos CHECK (id > 0)
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_id_pos CHECK (id > 0)
+  );
+applied_sql: |
+  ALTER TABLE public.users
+    ADD COLUMN email text,
+    ALTER COLUMN name SET NOT NULL,
+    DROP COLUMN legacy,
+    ADD CONSTRAINT users_id_pos CHECK (id > 0);

@@ -1,0 +1,21 @@
+bulk_alter: true
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      title text,
+      owner text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.docs FORCE ROW LEVEL SECURITY;
+plan: |
+  ALTER TABLE public.docs
+    ADD COLUMN title text,
+    ADD COLUMN owner text;
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.docs FORCE ROW LEVEL SECURITY;

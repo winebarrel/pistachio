@@ -118,6 +118,21 @@ pist apply --disable-index-concurrently --with-tx schema.sql
 > [!NOTE]
 > When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`.
 
+Use `--bulk-alter` to combine consecutive `ALTER TABLE` actions on the same table into a single statement with comma-separated actions. This reduces the number of metadata locks acquired and lets PostgreSQL plan the changes together. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs are kept as separate statements. Also available as `$PIST_BULK_ALTER`.
+
+```bash
+pist plan --bulk-alter schema.sql
+pist apply --bulk-alter schema.sql
+```
+
+```sql
+ALTER TABLE public.users
+  ADD COLUMN email text,
+  ALTER COLUMN name SET NOT NULL,
+  DROP COLUMN legacy,
+  ADD CONSTRAINT users_id_pos CHECK (id > 0);
+```
+
 By default, `plan` and `apply` do not drop tables, views, enums, domains, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `foreign_key`, `index`). Also available as `$PIST_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately.
 
 ```bash
