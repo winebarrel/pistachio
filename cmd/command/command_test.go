@@ -234,6 +234,14 @@ CREATE TABLE public.users (
 }
 
 func TestDump_Run_Split_WriteError(t *testing.T) {
+	// This test forces os.WriteFile to fail by making the split dir read-only.
+	// Root bypasses the permission check, so the WriteFile call would succeed
+	// and our error-path assertions would spuriously fail. CI containers
+	// commonly run as root, so skip there rather than fake-fail.
+	if os.Geteuid() == 0 {
+		t.Skip("read-only-dir trick does not block root")
+	}
+
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
