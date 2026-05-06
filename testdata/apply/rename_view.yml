@@ -26,3 +26,17 @@ applied: |
   SELECT users.id,
       users.name
      FROM users;
+applied_pg16: &applied_pg16plus |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_list
+  CREATE OR REPLACE VIEW public.user_list AS
+  SELECT id,
+      name
+     FROM users;
+applied_pg17: *applied_pg16plus

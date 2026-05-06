@@ -10,3 +10,9 @@ dump: |
   CREATE OR REPLACE VIEW public.active_users AS
   SELECT users.id
      FROM users;
+dump_pg16: &dump_pg16plus |
+  -- public.active_users
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT id
+     FROM users;
+dump_pg17: *dump_pg16plus

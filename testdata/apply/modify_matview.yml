@@ -25,3 +25,17 @@ applied: |
   SELECT count(*) AS cnt,
       max(users.id) AS max_id
      FROM users;
+applied_pg16: &applied_pg16plus |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_stats
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt,
+      max(id) AS max_id
+     FROM users;
+applied_pg17: *applied_pg16plus

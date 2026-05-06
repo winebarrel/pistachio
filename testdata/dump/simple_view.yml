@@ -18,3 +18,17 @@ dump: |
   SELECT users.id,
       users.name
      FROM users;
+dump_pg16: &dump_pg16plus |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_users
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT id,
+      name
+     FROM users;
+dump_pg17: *dump_pg16plus

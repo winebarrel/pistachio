@@ -20,6 +20,14 @@ func ConnectDB(t *testing.T) *pgx.Conn {
 	return conn
 }
 
+func ServerMajorVersion(t *testing.T, ctx context.Context, conn *pgx.Conn) int {
+	t.Helper()
+	var num int
+	err := conn.QueryRow(ctx, "SELECT current_setting('server_version_num')::int").Scan(&num)
+	require.NoError(t, err)
+	return num / 10000
+}
+
 func SetupDB(t *testing.T, ctx context.Context, conn *pgx.Conn, initSQL string) {
 	t.Helper()
 	_, err := conn.Exec(ctx, "DROP SCHEMA public CASCADE")
