@@ -46,6 +46,10 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 			LEFT JOIN column_t col ON col.attrelid = con.conrelid
 		WHERE
 			con.conrelid = @table_oid
+			-- PG18 exposes per-column NOT NULL constraints (contype='n') as
+			-- pg_constraint rows. They are already represented by the column's
+			-- attnotnull and have no analogue in PG<18, so skip them here.
+			AND con.contype <> 'n'
 		ORDER BY
 			array_position('{p,u,c,x,f}'::"char"[], con.contype),
 			con.conname

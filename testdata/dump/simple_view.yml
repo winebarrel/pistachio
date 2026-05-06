@@ -32,3 +32,4 @@ dump_pg16: &dump_pg16plus |
       name
      FROM users;
 dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus
