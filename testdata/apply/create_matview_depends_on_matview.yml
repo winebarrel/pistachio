@@ -43,3 +43,4 @@ applied_pg16: &applied_pg16plus |
   SELECT count(*) AS cnt
      FROM users;
 applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

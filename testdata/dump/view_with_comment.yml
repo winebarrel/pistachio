@@ -35,3 +35,4 @@ dump_pg16: &dump_pg16plus |
      FROM users;
   COMMENT ON VIEW public.active_users IS 'Active users only';
 dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus

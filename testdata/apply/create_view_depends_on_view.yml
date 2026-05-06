@@ -51,3 +51,4 @@ applied_pg16: &applied_pg16plus |
      FROM users
     WHERE name IS NOT NULL;
 applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

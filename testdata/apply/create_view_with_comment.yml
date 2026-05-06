@@ -41,3 +41,4 @@ applied_pg16: &applied_pg16plus |
      FROM users;
   COMMENT ON VIEW public.active_users IS 'Active users only';
 applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus
