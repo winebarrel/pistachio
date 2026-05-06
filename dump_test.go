@@ -18,11 +18,32 @@ import (
 type dumpTestCase struct {
 	Init       string   `yaml:"init"`
 	Dump       string   `yaml:"dump"`
+	DumpPG16   string   `yaml:"dump_pg16,omitempty"`
+	DumpPG17   string   `yaml:"dump_pg17,omitempty"`
+	DumpPG18   string   `yaml:"dump_pg18,omitempty"`
 	OmitSchema bool     `yaml:"omit_schema"`
 	Include    []string `yaml:"include,omitempty"`
 	Exclude    []string `yaml:"exclude,omitempty"`
 	Enable     []string `yaml:"enable,omitempty"`
 	Disable    []string `yaml:"disable,omitempty"`
+}
+
+func (tc *dumpTestCase) expectedDump(major int) string {
+	switch major {
+	case 16:
+		if tc.DumpPG16 != "" {
+			return tc.DumpPG16
+		}
+	case 17:
+		if tc.DumpPG17 != "" {
+			return tc.DumpPG17
+		}
+	case 18:
+		if tc.DumpPG18 != "" {
+			return tc.DumpPG18
+		}
+	}
+	return tc.Dump
 }
 
 func TestDump_InvalidConnString(t *testing.T) {
@@ -536,6 +557,7 @@ func TestDump(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
+	pgMajor := testutil.ServerMajorVersion(t, ctx, conn)
 
 	files, err := filepath.Glob("testdata/dump/*.yml")
 	require.NoError(t, err)
@@ -560,7 +582,7 @@ func TestDump(t *testing.T) {
 				},
 			})
 			require.NoError(t, err)
-			assert.Equal(t, strings.TrimSpace(tc.Dump), strings.TrimSpace(got.String()))
+			assert.Equal(t, strings.TrimSpace(tc.expectedDump(pgMajor)), strings.TrimSpace(got.String()))
 		})
 	}
 }

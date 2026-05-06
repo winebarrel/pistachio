@@ -19,6 +19,9 @@ type applyTestCase struct {
 	Init                     string           `yaml:"init"`
 	Desired                  string           `yaml:"desired"`
 	Applied                  string           `yaml:"applied"`
+	AppliedPG16              string           `yaml:"applied_pg16,omitempty"`
+	AppliedPG17              string           `yaml:"applied_pg17,omitempty"`
+	AppliedPG18              string           `yaml:"applied_pg18,omitempty"`
 	AppliedSQL               *string          `yaml:"applied_sql,omitempty"`
 	Count                    *expectedCount   `yaml:"count,omitempty"`
 	DisallowedDrops          string           `yaml:"disallowed_drops,omitempty"`
@@ -48,10 +51,29 @@ type applyDropPolicy struct {
 	AllowDrop []string `yaml:"allow_drop"`
 }
 
+func (tc *applyTestCase) expectedApplied(major int) string {
+	switch major {
+	case 16:
+		if tc.AppliedPG16 != "" {
+			return tc.AppliedPG16
+		}
+	case 17:
+		if tc.AppliedPG17 != "" {
+			return tc.AppliedPG17
+		}
+	case 18:
+		if tc.AppliedPG18 != "" {
+			return tc.AppliedPG18
+		}
+	}
+	return tc.Applied
+}
+
 func TestApply(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
+	pgMajor := testutil.ServerMajorVersion(t, ctx, conn)
 
 	files, err := filepath.Glob("testdata/apply/*.yml")
 	require.NoError(t, err)
@@ -111,7 +133,7 @@ func TestApply(t *testing.T) {
 			// Verify
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 			require.NoError(t, err)
-			assert.Equal(t, strings.TrimSpace(tc.Applied), strings.TrimSpace(got.String()))
+			assert.Equal(t, strings.TrimSpace(tc.expectedApplied(pgMajor)), strings.TrimSpace(got.String()))
 
 			if tc.VerifyNoDrift {
 				plan, err := client.Plan(ctx, &pistachio.PlanOptions{
