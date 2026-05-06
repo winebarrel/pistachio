@@ -421,3 +421,10 @@ pist apply ./schema/*.sql         # apply it
 docker compose up -d
 make test
 ```
+
+## Related projects
+
+- [myschema](https://github.com/winebarrel/myschema) — declarative
+  schema management for MySQL.
+- [ridgepole](https://github.com/ridgepole/ridgepole) — DB schema
+  management using a Rails DSL.
