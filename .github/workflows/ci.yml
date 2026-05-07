@@ -32,7 +32,9 @@ jobs:
             -p 5432:5432 \
             -e POSTGRES_HOST_AUTH_METHOD=trust \
             postgres:${{ matrix.postgres }}
-          for i in {1..60}; do pg_isready -U postgres -h 127.0.0.1 -p 5432 && break; sleep 1; done
+      - name: Wait for PostgreSQL
+        timeout-minutes: 1
+        run: until pg_isready -U postgres -h 127.0.0.1 -p 5432; do sleep 1; done
       - run: make TEST_OPTS='-coverprofile=coverage.txt'
       - run: make test-scenario
       - uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
