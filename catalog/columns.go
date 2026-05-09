@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/pistachio/model"
@@ -24,6 +25,10 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 				ELSE pg_catalog.format_type(a.atttypid, a.atttypmod)
 			END AS type_name,
 			a.attnotnull,
+			-- PG18 stores per-column NOT NULL as pg_constraint rows with
+			-- contype='n' and a single conkey entry. Pre-PG18 has no such row,
+			-- so the LEFT JOIN yields NULL there.
+			nn.conname AS not_null_name,
 			CASE
 				WHEN a.attidentity = '' AND pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname) IS NOT NULL
 				THEN NULL
@@ -43,6 +48,9 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = a.attrelid
 			AND d.objsubid = a.attnum
+			LEFT JOIN pg_catalog.pg_constraint nn ON nn.conrelid = a.attrelid
+			AND nn.contype = 'n'
+			AND nn.conkey = ARRAY[a.attnum]
 		WHERE
 			a.attrelid = @table_oid
 			AND a.attnum >= 1
@@ -68,6 +76,7 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 			&col.Name,
 			&col.TypeName,
 			&col.NotNull,
+			&col.NotNullName,
 			&col.Default,
 			&col.Identity,
 			&col.Generated,
@@ -76,6 +85,16 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan column info: %w", err)
+		}
+		// PG18 auto-names unnamed NOT NULL constraints as <table>_<col>_not_null
+		// (see ChooseConstraintName in src/backend/catalog/pg_constraint.c). The
+		// auto-name does not follow column or table renames, so checking the
+		// current <table>_<col>_ prefix is too strict. Strip any name with the
+		// _not_null suffix as a heuristic so unnamed declarations round-trip as
+		// unnamed across renames; the trade-off is that a user-supplied explicit
+		// name ending in "_not_null" would be lost on round-trip.
+		if col.NotNullName != nil && strings.HasSuffix(*col.NotNullName, "_not_null") {
+			col.NotNullName = nil
 		}
 		cols = append(cols, &col)
 	}

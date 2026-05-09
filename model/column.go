@@ -37,6 +37,7 @@ type Column struct {
 	RenameFrom  *string
 	TypeName    string
 	NotNull     bool
+	NotNullName *string
 	Default     *string
 	Identity    ColumnIdentity
 	Generated   ColumnGenerated

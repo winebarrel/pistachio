@@ -80,6 +80,9 @@ func (t Table) SQL() string {
 						q += " DEFAULT " + *col.Default
 					}
 					if col.NotNull && !col.Identity.IsIdentityColumn() {
+						if col.NotNullName != nil {
+							q += " CONSTRAINT " + Ident(*col.NotNullName)
+						}
 						q += " NOT NULL"
 					}
 					return q
