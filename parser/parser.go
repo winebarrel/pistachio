@@ -60,10 +60,6 @@ func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult
 	return ParseSQLWithSchema(strings.Join(sqls, "\n"), defaultSchema)
 }
 
-func ParseSQL(sql string) (*ParseResult, error) {
-	return ParseSQLWithSchema(sql, "public")
-}
-
 func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {
 	if err := ValidateDirectives(sql); err != nil {
 		return nil, err

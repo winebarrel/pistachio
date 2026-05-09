@@ -31,7 +31,7 @@ func TestParseSQL(t *testing.T) {
 			var tc parseTestCase
 			require.NoError(t, yaml.Unmarshal(data, &tc))
 
-			result, err := parser.ParseSQL(tc.Input)
+			result, err := parseSQLWithPublicSchema(tc.Input)
 			require.NoError(t, err)
 			got := model.TablesToSQL(result.Tables)
 			assert.Equal(t, strings.TrimSpace(tc.Expected), strings.TrimSpace(got))
@@ -91,7 +91,7 @@ func TestReadSQLFile_Stdin_ReadAll(t *testing.T) {
 }
 
 func TestParseSQL_InvalidSQL(t *testing.T) {
-	_, err := parser.ParseSQL("NOT VALID SQL AT ALL ;;; {{{}}")
+	_, err := parseSQLWithPublicSchema("NOT VALID SQL AT ALL ;;; {{{}}")
 	require.Error(t, err)
 }
 
@@ -104,7 +104,7 @@ func TestParseSQL_View(t *testing.T) {
 CREATE VIEW public.active_users AS SELECT id, name FROM users WHERE (name IS NOT NULL);
 COMMENT ON VIEW public.active_users IS 'Active users';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Tables.Len())
 	assert.Equal(t, 1, result.Views.Len())
@@ -132,7 +132,7 @@ func TestParseSQL_ViewCommentOnColumn(t *testing.T) {
 );
 COMMENT ON COLUMN public.users.name IS 'User name';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -151,7 +151,7 @@ func TestParseSQL_SchemaQualifiedView(t *testing.T) {
 );
 CREATE VIEW myschema.active_users AS SELECT id, name FROM myschema.users;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Views.Len())
 
@@ -168,7 +168,7 @@ func TestParseSQL_CommentOnTable(t *testing.T) {
 );
 COMMENT ON TABLE myschema.users IS 'Users table';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("myschema.users")
@@ -184,7 +184,7 @@ func TestParseSQL_CommentOnTable_Schemaless(t *testing.T) {
 );
 COMMENT ON TABLE users IS 'Users table';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -200,7 +200,7 @@ func TestParseSQL_CommentOnColumn_Schemaless(t *testing.T) {
 );
 COMMENT ON COLUMN users.name IS 'User name';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -215,7 +215,7 @@ func TestParseSQL_CommentOnView_Schemaless(t *testing.T) {
 	sql := `CREATE VIEW active_users AS SELECT 1;
 COMMENT ON VIEW active_users IS 'Active users';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	v, ok := result.Views.GetOk("public.active_users")
@@ -236,7 +236,7 @@ CREATE TABLE public.orders (
 );
 ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) NOT VALID;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.orders")
@@ -262,7 +262,7 @@ CREATE TABLE public.members (
     CONSTRAINT members_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.members")
@@ -290,7 +290,7 @@ CREATE TABLE myapp.items (
     CONSTRAINT items_category_id_fkey FOREIGN KEY (category_id) REFERENCES myapp.categories(id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("myapp.items")
@@ -317,7 +317,7 @@ CREATE TABLE public.members (
     FOREIGN KEY (group_id) REFERENCES public.groups(id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public.members")
 	require.NotNil(t, tbl)
@@ -332,7 +332,7 @@ func TestParseSQL_ColumnLevelNamedCheck(t *testing.T) {
     CONSTRAINT items_pkey PRIMARY KEY (id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.items")
@@ -350,7 +350,7 @@ func TestParseSQL_CheckConstraintNotValid(t *testing.T) {
 );
 ALTER TABLE public.items ADD CONSTRAINT items_id_check CHECK (id > 0) NOT VALID;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.items")
@@ -373,7 +373,7 @@ CREATE TABLE public.members (
     CONSTRAINT members_pkey PRIMARY KEY (id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.members")
@@ -395,7 +395,7 @@ func TestParseSQL_ColumnLevelNamedUnique(t *testing.T) {
     CONSTRAINT items_pkey PRIMARY KEY (id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.items")
@@ -411,7 +411,7 @@ func TestParseSQL_ColumnLevelNamedPrimaryKey(t *testing.T) {
     name text NOT NULL
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.items")
@@ -434,7 +434,7 @@ CREATE TABLE public.items (
     val integer NOT NULL CONSTRAINT items_val_check CHECK (val > 0)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.items")
@@ -491,7 +491,7 @@ func TestParseSQL_ColumnLevelUnnamedConstraintsAutoNamed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parser.ParseSQL(tt.sql)
+			result, err := parseSQLWithPublicSchema(tt.sql)
 			require.NoError(t, err)
 			tbl := result.Tables.Get(tt.table)
 			require.NotNil(t, tbl)
@@ -514,7 +514,7 @@ func TestParseSQL_TableLevelUnnamedExclusionAutoNamed(t *testing.T) {
     CONSTRAINT reservations_pkey PRIMARY KEY (id),
     EXCLUDE USING gist (room WITH =, during WITH &&)
 );`
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public.reservations")
 	require.NotNil(t, tbl)
@@ -528,7 +528,7 @@ func TestParseSQL_TablespaceOnCreate(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 ) TABLESPACE my_ts;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -544,7 +544,7 @@ func TestParseSQL_AlterTableNonFK(t *testing.T) {
 );
 ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl := result.Tables.Get("public.items")
@@ -556,7 +556,7 @@ ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);`
 func TestParseSQL_AlterTableUnknownTable(t *testing.T) {
 	// ALTER TABLE referencing a table not in parsed result is silently skipped
 	sql := `ALTER TABLE public.nonexistent ADD CONSTRAINT fk FOREIGN KEY (id) REFERENCES public.other(id);`
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Tables.Len())
 }
@@ -564,7 +564,7 @@ func TestParseSQL_AlterTableUnknownTable(t *testing.T) {
 func TestParseSQL_CommentOnUnknownTable(t *testing.T) {
 	// COMMENT on unknown table is silently skipped
 	sql := `COMMENT ON TABLE public.nonexistent IS 'test';`
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Tables.Len())
 }
@@ -578,7 +578,7 @@ func TestParseSQL_PartitionListType(t *testing.T) {
 PARTITION BY LIST (region);
 CREATE TABLE public.sales_east PARTITION OF public.sales FOR VALUES IN ('east');`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Tables.Len())
 
@@ -602,7 +602,7 @@ func TestParseSQL_InlineUniqueConstraint(t *testing.T) {
     CONSTRAINT items_code_key UNIQUE (code),
     CONSTRAINT items_code_check CHECK (code <> '')
 );`
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl := result.Tables.Get("public.items")
@@ -626,7 +626,7 @@ func TestParseSQL_MultipleViews(t *testing.T) {
 CREATE VIEW public.v1 AS SELECT id FROM users;
 CREATE VIEW public.v2 AS SELECT name FROM users;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Views.Len())
 }
@@ -638,7 +638,7 @@ func TestParseSQL_UnnamedTableConstraintAutoNamed(t *testing.T) {
     name text,
     PRIMARY KEY (id)
 );`
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public.items")
 	require.NotNil(t, tbl)
@@ -656,7 +656,7 @@ func TestParseSQL_CommentRemove(t *testing.T) {
 COMMENT ON TABLE public.users IS 'Users';
 COMMENT ON TABLE public.users IS '';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl := result.Tables.Get("public.users")
@@ -673,7 +673,7 @@ CREATE VIEW public.v1 AS SELECT id FROM users;
 COMMENT ON VIEW public.v1 IS 'my view';
 COMMENT ON VIEW public.v1 IS '';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	v := result.Views.Get("public.v1")
@@ -690,7 +690,7 @@ func TestParseSQL_ColumnCommentRemove(t *testing.T) {
 COMMENT ON COLUMN public.users.name IS 'Name';
 COMMENT ON COLUMN public.users.name IS '';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl := result.Tables.Get("public.users")
@@ -707,7 +707,7 @@ func TestParseSQL_MaterializedView(t *testing.T) {
 );
 CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Tables.Len())
 	assert.Equal(t, 1, result.Views.Len())
@@ -727,7 +727,7 @@ func TestParseSQL_MaterializedView_Schemaless(t *testing.T) {
 );
 CREATE MATERIALIZED VIEW user_stats AS SELECT count(*) AS cnt FROM users;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Views.Len())
 
@@ -745,7 +745,7 @@ func TestParseSQL_MaterializedView_Comment(t *testing.T) {
 CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
 COMMENT ON MATERIALIZED VIEW public.user_stats IS 'User statistics';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	v, ok := result.Views.GetOk("public.user_stats")
@@ -763,7 +763,7 @@ func TestParseSQL_MaterializedViewWithIndex(t *testing.T) {
 CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
 CREATE INDEX idx_user_stats_cnt ON public.user_stats (cnt);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	v, ok := result.Views.GetOk("public.user_stats")
@@ -784,7 +784,7 @@ func TestParseSQL_MaterializedView_RenameDirective(t *testing.T) {
 -- pist:renamed-from public.old_stats
 CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	v, ok := result.Views.GetOk("public.user_stats")
@@ -798,7 +798,7 @@ func TestParseSQL_MaterializedView_Duplicate(t *testing.T) {
 	sql := `CREATE MATERIALIZED VIEW public.mv AS SELECT 1;
 CREATE MATERIALIZED VIEW public.mv AS SELECT 2;`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate materialized view")
 }
@@ -809,7 +809,7 @@ CREATE MATERIALIZED VIEW public.mv AS SELECT count(*) AS cnt FROM public.users;
 CREATE INDEX idx ON public.mv (cnt);
 CREATE INDEX idx ON public.mv (cnt);`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate index")
 }
@@ -824,7 +824,7 @@ func TestParseSQL_IndexOnSchemalessTable(t *testing.T) {
 );
 CREATE INDEX idx_users_name ON users USING btree (name);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Tables.Len())
 
@@ -845,7 +845,7 @@ func TestParseSQL_IndexOnSchemalessMatview(t *testing.T) {
 CREATE MATERIALIZED VIEW user_stats AS SELECT count(*) AS cnt FROM users;
 CREATE INDEX idx_user_stats_cnt ON user_stats (cnt);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	v, ok := result.Views.GetOk("public.user_stats")
@@ -866,7 +866,7 @@ func TestParseSQL_ExecuteDirective(t *testing.T) {
 -- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	// Table should be parsed normally
 	assert.Equal(t, 1, result.Tables.Len())
@@ -885,7 +885,7 @@ func TestParseSQL_ExecuteDirective_NoCheck(t *testing.T) {
 -- pist:execute
 GRANT SELECT ON public.users TO readonly_role;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Tables.Len())
 	require.Len(t, result.ExecuteStmts, 1)
@@ -895,7 +895,7 @@ GRANT SELECT ON public.users TO readonly_role;`
 
 func TestParseSQL_IndexOnUnknownTableSkipped(t *testing.T) {
 	sql := `CREATE INDEX idx_name ON public.nonexistent USING btree (name);`
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Tables.Len())
 }
@@ -912,7 +912,7 @@ CREATE TABLE myschema.orders (
 );
 ALTER TABLE myschema.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES myschema.users(id);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("myschema.orders")
@@ -1013,7 +1013,7 @@ func TestParseSQL_AlterTableExclusionConstraint(t *testing.T) {
 );
 ALTER TABLE public.reservations ADD CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.reservations")
@@ -1032,7 +1032,7 @@ func TestParseSQL_DeferrableConstraint(t *testing.T) {
     CONSTRAINT items_code_key UNIQUE (code) DEFERRABLE INITIALLY DEFERRED
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.items")
@@ -1053,7 +1053,7 @@ func TestParseSQL_StoredGeneratedColumn(t *testing.T) {
     CONSTRAINT people_pkey PRIMARY KEY (id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.people")
@@ -1073,7 +1073,7 @@ func TestParseSQL_IndexWithTablespace(t *testing.T) {
 );
 CREATE INDEX idx_users_name ON public.users USING btree (name) TABLESPACE fast_ssd;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1093,7 +1093,7 @@ func TestParseSQL_AlterTableNonAddConstraint(t *testing.T) {
 );
 ALTER TABLE public.users DROP COLUMN name;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1113,7 +1113,7 @@ func TestParseSQL_TableLevelExclusionConstraint(t *testing.T) {
     CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.reservations")
@@ -1128,7 +1128,7 @@ func TestParseSQL_DuplicateTable(t *testing.T) {
 	sql := `CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
 CREATE TABLE public.users (id integer NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate table")
 }
@@ -1137,7 +1137,7 @@ func TestParseSQL_DuplicateView(t *testing.T) {
 	sql := `CREATE VIEW public.v1 AS SELECT 1;
 CREATE VIEW public.v1 AS SELECT 2;`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate view")
 }
@@ -1147,7 +1147,7 @@ func TestParseSQL_DuplicateIndex(t *testing.T) {
 CREATE INDEX idx_name ON public.users (name);
 CREATE INDEX idx_name ON public.users (name);`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate index")
 }
@@ -1160,7 +1160,7 @@ func TestParseSQL_DuplicateConstraint(t *testing.T) {
     CONSTRAINT items_pkey PRIMARY KEY (id)
 );`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate constraint")
 }
@@ -1172,7 +1172,7 @@ func TestParseSQL_DuplicateColumn(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate column")
 }
@@ -1183,7 +1183,7 @@ CREATE TABLE public.orders (id integer NOT NULL, user_id integer NOT NULL, CONST
 ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);
 ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate foreign key")
 }
@@ -1193,7 +1193,7 @@ func TestParseSQL_DuplicateConstraintAlterTable(t *testing.T) {
 ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);
 ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate constraint")
 }
@@ -1207,7 +1207,7 @@ CREATE TABLE public.items (
     CONSTRAINT items_fk FOREIGN KEY (id) REFERENCES public.groups(id)
 );`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate foreign key")
 }
@@ -1218,7 +1218,7 @@ func TestParseSQL_DuplicateColumnLevelConstraint(t *testing.T) {
     code text NOT NULL CONSTRAINT items_pkey UNIQUE
 );`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate constraint")
 }
@@ -1230,7 +1230,7 @@ CREATE TABLE public.items (
     code integer NOT NULL CONSTRAINT items_fk REFERENCES public.groups(id)
 );`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate foreign key")
 }
@@ -1238,7 +1238,7 @@ CREATE TABLE public.items (
 func TestParseSQL_PolicyOnUnknownTable(t *testing.T) {
 	sql := `CREATE POLICY p ON public.missing FOR SELECT USING (true);`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "parent table")
 }
@@ -1249,7 +1249,7 @@ ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY p ON public.documents FOR SELECT USING (owner = current_user);
 CREATE POLICY p ON public.documents FOR ALL USING (owner = current_user);`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate policy")
 }
@@ -1270,7 +1270,7 @@ COMMENT ON VIEW active_users IS 'Active users';`
 func TestParseSQL_Enum(t *testing.T) {
 	sql := `CREATE TYPE public.status AS ENUM ('active', 'inactive', 'pending');`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Enums.Len())
 
@@ -1294,7 +1294,7 @@ func TestParseSQL_EnumWithComment(t *testing.T) {
 	sql := `CREATE TYPE public.status AS ENUM ('active', 'inactive');
 COMMENT ON TYPE public.status IS 'User status';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	e, ok := result.Enums.GetOk("public.status")
@@ -1308,7 +1308,7 @@ func TestParseSQL_EnumCommentRemove(t *testing.T) {
 COMMENT ON TYPE public.status IS 'User status';
 COMMENT ON TYPE public.status IS '';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	e, ok := result.Enums.GetOk("public.status")
@@ -1334,7 +1334,7 @@ COMMENT ON TYPE status IS 'User status';`
 func TestParseSQL_EnumSchemaQualified(t *testing.T) {
 	sql := `CREATE TYPE myschema.status AS ENUM ('active', 'inactive');`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	e, ok := result.Enums.GetOk("myschema.status")
@@ -1347,14 +1347,14 @@ func TestParseSQL_DuplicateEnum(t *testing.T) {
 	sql := `CREATE TYPE public.status AS ENUM ('active');
 CREATE TYPE public.status AS ENUM ('inactive');`
 
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate enum")
 }
 
 func TestParseSQL_CommentOnUnknownEnum(t *testing.T) {
 	sql := `COMMENT ON TYPE public.nonexistent IS 'test';`
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Enums.Len())
 }
@@ -1363,7 +1363,7 @@ func TestParseSQL_RenameDirective_Enum(t *testing.T) {
 	sql := `-- pist:renamed-from public.old_status
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	e, ok := result.Enums.GetOk("public.new_status")
@@ -1379,7 +1379,7 @@ CREATE TABLE public.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1392,7 +1392,7 @@ func TestParseSQL_RenameDirective_View(t *testing.T) {
 	sql := `-- pist:renamed-from public.old_view
 CREATE VIEW public.new_view AS SELECT 1;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	v, ok := result.Views.GetOk("public.new_view")
@@ -1409,7 +1409,7 @@ func TestParseSQL_RenameDirective_Column(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1429,7 +1429,7 @@ func TestParseSQL_RenameDirective_Index(t *testing.T) {
 -- pist:renamed-from idx_old
 CREATE INDEX idx_new ON public.users (name);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1450,7 +1450,7 @@ ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 -- pist:renamed-from old_policy
 CREATE POLICY new_policy ON public.documents FOR SELECT USING (owner = current_user);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.documents")
@@ -1470,7 +1470,7 @@ func TestParseSQL_RenameDirective_Constraint(t *testing.T) {
     CONSTRAINT new_unique UNIQUE (code)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1494,7 +1494,7 @@ CREATE TABLE public.orders (
 -- pist:renamed-from old_fk
 ALTER TABLE public.orders ADD CONSTRAINT new_fk FOREIGN KEY (user_id) REFERENCES public.users(id);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.orders")
@@ -1513,7 +1513,7 @@ func TestParseSQL_RenameDirective_AlterTableConstraint(t *testing.T) {
 -- pist:renamed-from old_unique
 ALTER TABLE public.users ADD CONSTRAINT new_unique UNIQUE (code);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1557,7 +1557,7 @@ CREATE VIEW new_view AS SELECT 1;`
 func TestParseSQL_Domain(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Domains.Len())
 
@@ -1573,7 +1573,7 @@ func TestParseSQL_Domain(t *testing.T) {
 func TestParseSQL_DomainWithDefault(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer NOT NULL DEFAULT 1;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	d := result.Domains.Get("public.pos_int")
@@ -1587,7 +1587,7 @@ func TestParseSQL_DomainWithComment(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer;
 COMMENT ON DOMAIN public.pos_int IS 'Positive integer';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	d := result.Domains.Get("public.pos_int")
@@ -1610,7 +1610,7 @@ func TestParseSQLWithSchema_Domain(t *testing.T) {
 func TestParseSQL_DomainWithCollation(t *testing.T) {
 	sql := `CREATE DOMAIN public.name AS text COLLATE "en_US";`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	d := result.Domains.Get("public.name")
@@ -1622,7 +1622,7 @@ func TestParseSQL_DomainWithCollation(t *testing.T) {
 func TestParseSQL_DomainDefaultCollationExcluded(t *testing.T) {
 	sql := `CREATE DOMAIN public.name AS text COLLATE "default";`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	d := result.Domains.Get("public.name")
@@ -1635,7 +1635,7 @@ func TestParseSQL_DomainCommentRemove(t *testing.T) {
 COMMENT ON DOMAIN public.pos_int IS 'Positive integer';
 COMMENT ON DOMAIN public.pos_int IS '';`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	d := result.Domains.Get("public.pos_int")
@@ -1648,7 +1648,7 @@ func TestParseSQL_DomainMultipleConstraints(t *testing.T) {
     CONSTRAINT min_check CHECK (VALUE >= 0)
     CONSTRAINT max_check CHECK (VALUE <= 100);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	d := result.Domains.Get("public.bounded_int")
@@ -1660,7 +1660,7 @@ func TestParseSQL_DomainRenameDirective(t *testing.T) {
 	sql := `-- pist:renamed-from public.old_domain
 CREATE DOMAIN public.new_domain AS integer;`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	d := result.Domains.Get("public.new_domain")
@@ -1671,7 +1671,7 @@ CREATE DOMAIN public.new_domain AS integer;`
 
 func TestParseSQL_DomainUnnamedConstraintAutoNamed(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer CHECK (VALUE > 0);`
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 	d := result.Domains.Get("public.pos_int")
 	require.NotNil(t, d)
@@ -1682,7 +1682,7 @@ func TestParseSQL_DomainUnnamedConstraintAutoNamed(t *testing.T) {
 func TestParseSQL_DuplicateDomain(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer;
 CREATE DOMAIN public.pos_int AS bigint;`
-	_, err := parser.ParseSQL(sql)
+	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate domain")
 }
@@ -1694,7 +1694,7 @@ func TestParseSQL_NoRenameDirective(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl := result.Tables.Get("public.users")
@@ -1712,7 +1712,7 @@ func TestParseSQL_ConcurrentlyDirective_Index(t *testing.T) {
 -- pist:concurrently
 CREATE INDEX idx_name ON public.users (name);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1730,7 +1730,7 @@ func TestParseSQL_ConcurrentlyDirective_NotSet(t *testing.T) {
 );
 CREATE INDEX idx_name ON public.users (name);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1750,7 +1750,7 @@ func TestParseSQL_ConcurrentlyDirective_WithRenamed(t *testing.T) {
 -- pist:concurrently
 CREATE INDEX idx_name ON public.users (name);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1772,7 +1772,7 @@ func TestParseSQL_InlineConcurrently_SetsConcurrentlyFlag(t *testing.T) {
 );
 CREATE INDEX CONCURRENTLY idx_name ON public.users (name);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1793,7 +1793,7 @@ func TestParseSQL_InlineConcurrently_Unique(t *testing.T) {
 );
 CREATE UNIQUE INDEX CONCURRENTLY idx_name ON public.users (name);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1815,7 +1815,7 @@ func TestParseSQL_InlineConcurrently_AndDirective(t *testing.T) {
 -- pist:concurrently
 CREATE INDEX CONCURRENTLY idx_name ON public.users (name);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
@@ -1835,7 +1835,7 @@ CREATE TABLE public.users (
 );
 CREATE INDEX idx_users_id ON public.users (id);`
 
-	result, err := parser.ParseSQL(sql)
+	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("public.users")
