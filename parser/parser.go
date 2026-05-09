@@ -27,7 +27,7 @@ func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error
 	return nil
 }
 
-func ReadSQLFile(path string) (string, error) {
+func readSQLFile(path string) (string, error) {
 	var data []byte
 	var err error
 
@@ -50,18 +50,18 @@ func ReadSQLFile(path string) (string, error) {
 func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult, error) {
 	var sqls []string
 	for _, path := range paths {
-		sql, err := ReadSQLFile(path)
+		sql, err := readSQLFile(path)
 		if err != nil {
 			return nil, err
 		}
 		sqls = append(sqls, sql)
 	}
 
-	return ParseSQLWithSchema(strings.Join(sqls, "\n"), defaultSchema)
+	return parseSQLWithSchema(strings.Join(sqls, "\n"), defaultSchema)
 }
 
-func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {
-	if err := ValidateDirectives(sql); err != nil {
+func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {
+	if err := validateDirectives(sql); err != nil {
 		return nil, err
 	}
 
@@ -75,9 +75,9 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()
 
-	stmtDirectives := ExtractStmtDirectives(sql, result.Stmts)
-	concurrentlyDirectives := ExtractConcurrentlyDirectives(sql, result.Stmts)
-	executeStmts, executeSkipLocations, err := ExtractExecuteDirectives(sql, result.Stmts)
+	stmtDirectives := extractStmtDirectives(sql, result.Stmts)
+	concurrentlyDirectives := extractConcurrentlyDirectives(sql, result.Stmts)
+	executeStmts, executeSkipLocations, err := extractExecuteDirectives(sql, result.Stmts)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if renameFrom != "" {
-				qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				enum.RenameFrom = &qualified
 			}
 			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
@@ -111,7 +111,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if renameFrom != "" {
-				qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				domain.RenameFrom = &qualified
 			}
 			if err := setUnique(domains, domain.FQDN(), "domain", domain); err != nil {
@@ -124,7 +124,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if renameFrom != "" {
-				qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				table.RenameFrom = &qualified
 			}
 
@@ -134,7 +134,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				stmtEnd = int32(len(sql))
 			}
 			rawStmtSQL := sql[rawStmt.StmtLocation:stmtEnd]
-			inlineDirectives := ExtractInlineDirectives(rawStmtSQL)
+			inlineDirectives := extractInlineDirectives(rawStmtSQL)
 			for colName, oldName := range inlineDirectives.Columns {
 				if col, ok := table.Columns.GetOk(colName); ok {
 					old := oldName
@@ -161,7 +161,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				return nil, err
 			}
 			if renameFrom != "" {
-				qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				view.RenameFrom = &qualified
 			}
 			if err := setUnique(views, view.FQVN(), "view", view); err != nil {
@@ -176,7 +176,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 					return nil, err
 				}
 				if renameFrom != "" {
-					qualified := QualifyRenameFrom(renameFrom, defaultSchema)
+					qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 					view.RenameFrom = &qualified
 				}
 				if err := setUnique(views, view.FQVN(), "materialized view", view); err != nil {
@@ -263,7 +263,7 @@ func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		}
 	}
 
-	if err := ValidateColumnRefs(tables); err != nil {
+	if err := validateColumnRefs(tables); err != nil {
 		return nil, err
 	}
 
