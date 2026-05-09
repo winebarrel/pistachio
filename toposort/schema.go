@@ -292,6 +292,19 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 	}
 }
 
+// qualifyRangeVar returns the "schema.relation" form of a RangeVar, falling
+// back to defaultSchema when the schema is omitted.
+func qualifyRangeVar(rv *pg_query.RangeVar, defaultSchema string) string {
+	if rv == nil || rv.Relname == "" {
+		return ""
+	}
+	schema := rv.Schemaname
+	if schema == "" {
+		schema = defaultSchema
+	}
+	return schema + "." + rv.Relname
+}
+
 // extractViewDepsFallback uses substring matching as a fallback when
 // pg_query parsing fails. It checks both fully-qualified names and
 // unqualified names (with defaultSchema prefix) to handle schemaless refs.
