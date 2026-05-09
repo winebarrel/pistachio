@@ -47,23 +47,6 @@ func ReadSQLFile(path string) (string, error) {
 	return string(data), nil
 }
 
-func ParseSQLFile(path string) (*ParseResult, error) {
-	return ParseSQLFileWithSchema(path, "public")
-}
-
-func ParseSQLFileWithSchema(path string, defaultSchema string) (*ParseResult, error) {
-	sql, err := ReadSQLFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	return ParseSQLWithSchema(sql, defaultSchema)
-}
-
-func ParseSQLFiles(paths []string) (*ParseResult, error) {
-	return ParseSQLFilesWithSchema(paths, "public")
-}
-
 func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult, error) {
 	var sqls []string
 	for _, path := range paths {
