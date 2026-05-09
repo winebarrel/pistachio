@@ -26,9 +26,9 @@ var knownDirectives = map[string]bool{
 	"concurrently": true,
 }
 
-// ValidateDirectives checks for unknown -- pist: directives in the raw SQL
+// validateDirectives checks for unknown -- pist: directives in the raw SQL
 // and returns an error if any are found.
-func ValidateDirectives(rawSQL string) error {
+func validateDirectives(rawSQL string) error {
 	matches := anyDirectivePattern.FindAllStringSubmatch(rawSQL, -1)
 	for _, m := range matches {
 		name := strings.TrimSpace(m[1])
@@ -53,11 +53,11 @@ type ExecuteStmt struct {
 	CheckSQL string // Optional condition check SQL (empty = always execute)
 }
 
-// ExtractExecuteDirectives scans raw SQL for `-- pist:execute [<check SQL>]`
+// extractExecuteDirectives scans raw SQL for `-- pist:execute [<check SQL>]`
 // comments and pairs them with the following SQL statement.
 // Returns the execute statements and a set of statement locations to skip
 // during normal parsing.
-func ExtractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*ExecuteStmt, map[int32]bool, error) {
+func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*ExecuteStmt, map[int32]bool, error) {
 	var executeStmts []*ExecuteStmt
 	skipLocations := make(map[int32]bool)
 
@@ -118,10 +118,10 @@ func FormatExecuteStmt(es *ExecuteStmt) string {
 	return fmt.Sprintf("%s\n%s", directive, sql)
 }
 
-// QualifyRenameFrom qualifies a renamed-from value with the default schema
+// qualifyRenameFrom qualifies a renamed-from value with the default schema
 // if it does not already contain a schema. Quoted identifiers containing
 // dots (e.g. `"a.b"`) are treated as a single identifier.
-func QualifyRenameFrom(value, defaultSchema string) string {
+func qualifyRenameFrom(value, defaultSchema string) string {
 	parts := splitQualifiedName(value)
 	for i, p := range parts {
 		parts[i] = unquoteIdent(p)
@@ -199,12 +199,12 @@ func splitQualifiedName(s string) []string {
 	return parts
 }
 
-// ExtractStmtDirectives scans raw SQL for `-- pist:renamed-from <name>` comments
+// extractStmtDirectives scans raw SQL for `-- pist:renamed-from <name>` comments
 // that appear in each statement's raw text region (including leading comments).
 // pg_query includes leading comments in StmtLocation/StmtLen, so we scan the
 // raw text of each statement for the directive.
 // Returns a map from StmtLocation to the old name string.
-func ExtractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]string {
+func extractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]string {
 	directives := make(map[int32]string)
 
 	for _, stmt := range stmts {
@@ -234,10 +234,10 @@ func ExtractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]s
 	return directives
 }
 
-// ExtractConcurrentlyDirectives scans raw SQL for `-- pist:concurrently` comments
+// extractConcurrentlyDirectives scans raw SQL for `-- pist:concurrently` comments
 // that appear in each statement's leading comment region.
 // Returns a set of StmtLocations that have the directive.
-func ExtractConcurrentlyDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]bool {
+func extractConcurrentlyDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]bool {
 	directives := make(map[int32]bool)
 
 	for _, stmt := range stmts {
@@ -278,17 +278,17 @@ func findLeadingCommentEnd(s string) int {
 	return offset
 }
 
-// InlineDirectives holds rename directives for columns and constraints within a CREATE TABLE.
-type InlineDirectives struct {
+// inlineDirectives holds rename directives for columns and constraints within a CREATE TABLE.
+type inlineDirectives struct {
 	Columns     map[string]string // new column name → old column name
 	Constraints map[string]string // new constraint name → old constraint name
 }
 
-// ExtractInlineDirectives scans the raw text of a CREATE TABLE statement for
+// extractInlineDirectives scans the raw text of a CREATE TABLE statement for
 // `-- pist:renamed-from <old_name>` directives that appear on lines immediately
 // before column or constraint definitions.
-func ExtractInlineDirectives(rawCreateTableSQL string) *InlineDirectives {
-	result := &InlineDirectives{
+func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
+	result := &inlineDirectives{
 		Columns:     make(map[string]string),
 		Constraints: make(map[string]string),
 	}

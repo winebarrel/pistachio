@@ -10,7 +10,7 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// ValidateColumnRefs returns an error if any index, constraint, or foreign-key
+// validateColumnRefs returns an error if any index, constraint, or foreign-key
 // definition on a desired table references a column that does not exist in
 // that table's desired column set. All violations across all tables are
 // aggregated via errors.Join so a single plan run reports every problem.
@@ -22,7 +22,7 @@ import (
 // columns (PkAttrs, on the parent table) are out of scope. Tables that
 // inherit columns from a parent (declarative partition children and
 // INHERITS-style children) are skipped.
-func ValidateColumnRefs(tables *orderedmap.Map[string, *model.Table]) error {
+func validateColumnRefs(tables *orderedmap.Map[string, *model.Table]) error {
 	var errs []error
 	for fqtn, t := range tables.All() {
 		// Skip both partition children (PartitionOf + PartitionBound set) and

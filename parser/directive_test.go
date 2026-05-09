@@ -14,7 +14,7 @@ func TestExtractStmtDirectives(t *testing.T) {
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "public.old_status", dirs[result.Stmts[0].StmtLocation])
 	})
@@ -26,7 +26,7 @@ CREATE TYPE public.new_status AS ENUM ('active');
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 2)
 		assert.Equal(t, "public.old_status", dirs[result.Stmts[0].StmtLocation])
 		assert.Equal(t, "public.old_users", dirs[result.Stmts[1].StmtLocation])
@@ -36,7 +36,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 		sql := `CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
 	})
 
@@ -46,7 +46,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 CREATE TABLE public.posts (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "public.old_posts", dirs[result.Stmts[1].StmtLocation])
 	})
@@ -56,7 +56,7 @@ CREATE TABLE public.posts (id integer NOT NULL);`
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Equal(t, "public.old_name", dirs[result.Stmts[0].StmtLocation])
 	})
 
@@ -65,7 +65,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Equal(t, "old_name", dirs[result.Stmts[0].StmtLocation])
 	})
 
@@ -74,7 +74,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
 	})
 
@@ -83,7 +83,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 CREATE TABLE public.users (id integer NOT NULL);`
 		result, err := pg_query.Parse(sql)
 		require.NoError(t, err)
-		dirs := ExtractStmtDirectives(sql, result.Stmts)
+		dirs := extractStmtDirectives(sql, result.Stmts)
 		assert.Empty(t, dirs)
 	})
 }
@@ -96,7 +96,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
-		dirs := ExtractInlineDirectives(sql).Columns
+		dirs := extractInlineDirectives(sql).Columns
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "name", dirs["display_name"])
 	})
@@ -108,7 +108,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     -- pist:renamed-from name
     display_name text NOT NULL
 );`
-		dirs := ExtractInlineDirectives(sql).Columns
+		dirs := extractInlineDirectives(sql).Columns
 		assert.Len(t, dirs, 2)
 		assert.Equal(t, "uid", dirs["id"])
 		assert.Equal(t, "name", dirs["display_name"])
@@ -119,7 +119,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     id integer NOT NULL,
     name text NOT NULL
 );`
-		dirs := ExtractInlineDirectives(sql).Columns
+		dirs := extractInlineDirectives(sql).Columns
 		assert.Empty(t, dirs)
 	})
 
@@ -128,7 +128,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     -- pist:renamed-from "Old Name"
     "New Name" text NOT NULL
 );`
-		dirs := ExtractInlineDirectives(sql).Columns
+		dirs := extractInlineDirectives(sql).Columns
 		assert.Equal(t, "Old Name", dirs["New Name"])
 	})
 
@@ -139,7 +139,7 @@ func TestExtractInlineDirectives_Columns(t *testing.T) {
     new_col text,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
-		dirs := ExtractInlineDirectives(sql).Columns
+		dirs := extractInlineDirectives(sql).Columns
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "old_col", dirs["new_col"])
 	})
@@ -153,7 +153,7 @@ func TestExtractInlineDirectives_Constraint(t *testing.T) {
     -- pist:renamed-from users_code_key
     CONSTRAINT users_code_unique UNIQUE (code)
 );`
-	dirs := ExtractInlineDirectives(sql)
+	dirs := extractInlineDirectives(sql)
 	assert.Empty(t, dirs.Columns)
 	assert.Len(t, dirs.Constraints, 1)
 	assert.Equal(t, "users_code_key", dirs.Constraints["users_code_unique"])
@@ -168,7 +168,7 @@ func TestExtractInlineDirectives_Mixed(t *testing.T) {
     -- pist:renamed-from old_unique
     CONSTRAINT new_unique UNIQUE (display_name)
 );`
-	dirs := ExtractInlineDirectives(sql)
+	dirs := extractInlineDirectives(sql)
 	assert.Len(t, dirs.Columns, 1)
 	assert.Equal(t, "name", dirs.Columns["display_name"])
 	assert.Len(t, dirs.Constraints, 1)
@@ -210,12 +210,12 @@ func TestNormalizeUnqualifiedDirective(t *testing.T) {
 }
 
 func TestQualifyRenameFrom(t *testing.T) {
-	assert.Equal(t, "public.old_name", QualifyRenameFrom("old_name", "public"))
-	assert.Equal(t, "public.old_name", QualifyRenameFrom("public.old_name", "public"))
-	assert.Equal(t, "myschema.old_name", QualifyRenameFrom("myschema.old_name", "public"))
-	assert.Equal(t, `public."Old Name"`, QualifyRenameFrom(`"Old Name"`, "public"))
+	assert.Equal(t, "public.old_name", qualifyRenameFrom("old_name", "public"))
+	assert.Equal(t, "public.old_name", qualifyRenameFrom("public.old_name", "public"))
+	assert.Equal(t, "myschema.old_name", qualifyRenameFrom("myschema.old_name", "public"))
+	assert.Equal(t, `public."Old Name"`, qualifyRenameFrom(`"Old Name"`, "public"))
 	// Quoted identifier containing a dot should be treated as single name
-	assert.Equal(t, `public."a.b"`, QualifyRenameFrom(`"a.b"`, "public"))
+	assert.Equal(t, `public."a.b"`, qualifyRenameFrom(`"a.b"`, "public"))
 }
 
 func TestExtractStmtDirectives_QuotedName(t *testing.T) {
@@ -223,7 +223,7 @@ func TestExtractStmtDirectives_QuotedName(t *testing.T) {
 CREATE TABLE public.users (id integer NOT NULL);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
-	dirs := ExtractStmtDirectives(sql, result.Stmts)
+	dirs := extractStmtDirectives(sql, result.Stmts)
 	assert.Equal(t, `"My Schema"."Old Name"`, dirs[result.Stmts[0].StmtLocation])
 }
 
@@ -263,7 +263,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
@@ -278,7 +278,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, _, err := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	// Trailing semicolon should be stripped from check SQL
@@ -292,7 +292,7 @@ GRANT SELECT ON public.users TO readonly_role;`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "GRANT select")
@@ -308,7 +308,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
@@ -326,7 +326,7 @@ CREATE OR REPLACE FUNCTION public.func2() RETURNS void AS $$ BEGIN END; $$ LANGU
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 2)
 	assert.Equal(t, "", stmts[0].CheckSQL)
@@ -340,7 +340,7 @@ func TestExtractExecuteDirectives_None(t *testing.T) {
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	stmts, skip, err := ExtractExecuteDirectives(sql, result.Stmts)
+	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Empty(t, skip)
@@ -354,7 +354,7 @@ CREATE INDEX idx_email ON public.users USING btree (email);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	directives := ExtractConcurrentlyDirectives(sql, result.Stmts)
+	directives := extractConcurrentlyDirectives(sql, result.Stmts)
 	assert.True(t, directives[result.Stmts[0].StmtLocation])
 	assert.False(t, directives[result.Stmts[1].StmtLocation])
 }
@@ -367,7 +367,7 @@ CREATE INDEX idx_name ON public.users USING btree (name);`
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	directives := ExtractConcurrentlyDirectives(sql, result.Stmts)
+	directives := extractConcurrentlyDirectives(sql, result.Stmts)
 	assert.True(t, directives[result.Stmts[0].StmtLocation])
 }
 
@@ -377,50 +377,50 @@ func TestExtractConcurrentlyDirectives_noDirective(t *testing.T) {
 	result, err := pg_query.Parse(sql)
 	require.NoError(t, err)
 
-	directives := ExtractConcurrentlyDirectives(sql, result.Stmts)
+	directives := extractConcurrentlyDirectives(sql, result.Stmts)
 	assert.Empty(t, directives)
 }
 
 func TestValidateDirectives_Valid(t *testing.T) {
-	assert.NoError(t, ValidateDirectives("-- pist:renamed-from old"))
-	assert.NoError(t, ValidateDirectives("-- pist:execute SELECT true"))
-	assert.NoError(t, ValidateDirectives("-- pist:execute"))
-	assert.NoError(t, ValidateDirectives("-- pist:concurrently"))
-	assert.NoError(t, ValidateDirectives("SELECT 1; -- no directives"))
+	assert.NoError(t, validateDirectives("-- pist:renamed-from old"))
+	assert.NoError(t, validateDirectives("-- pist:execute SELECT true"))
+	assert.NoError(t, validateDirectives("-- pist:execute"))
+	assert.NoError(t, validateDirectives("-- pist:concurrently"))
+	assert.NoError(t, validateDirectives("SELECT 1; -- no directives"))
 }
 
 func TestValidateDirectives_ConcurrentlyWithArgs(t *testing.T) {
-	err := ValidateDirectives("-- pist:concurrently extra")
+	err := validateDirectives("-- pist:concurrently extra")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "-- pist:concurrently does not accept arguments")
 }
 
 func TestValidateDirectives_UnknownDirective(t *testing.T) {
-	err := ValidateDirectives("-- pist:exec")
+	err := validateDirectives("-- pist:exec")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown directive: -- pist:exec")
 }
 
 func TestValidateDirectives_Typo(t *testing.T) {
-	err := ValidateDirectives("-- pist:rename-from old")
+	err := validateDirectives("-- pist:rename-from old")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown directive: -- pist:rename-from")
 }
 
 func TestValidateDirectives_UnknownFoobar(t *testing.T) {
-	err := ValidateDirectives("-- pist:foobar something")
+	err := validateDirectives("-- pist:foobar something")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown directive: -- pist:foobar")
 }
 
 func TestValidateDirectives_SpaceAfterColon(t *testing.T) {
-	err := ValidateDirectives("-- pist: exec")
+	err := validateDirectives("-- pist: exec")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown directive: -- pist:exec")
 }
 
 func TestValidateDirectives_MissingName(t *testing.T) {
-	err := ValidateDirectives("-- pist:")
+	err := validateDirectives("-- pist:")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing directive name")
 }

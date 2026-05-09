@@ -44,7 +44,7 @@ func TestValidateColumnRefs_Valid(t *testing.T) {
 		Type:       model.ConstraintType('u'),
 		Definition: "UNIQUE (name)",
 	})
-	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
 
 func TestValidateColumnRefs_IndexMissingColumn(t *testing.T) {
@@ -53,7 +53,7 @@ func TestValidateColumnRefs_IndexMissingColumn(t *testing.T) {
 		Name:       "idx_users_name",
 		Definition: "CREATE INDEX idx_users_name ON public.users (name)",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column name referenced in index idx_users_name does not exist on table public.users")
 }
@@ -65,7 +65,7 @@ func TestValidateColumnRefs_CheckMissingColumn(t *testing.T) {
 		Type:       model.ConstraintType('c'),
 		Definition: "CHECK ((qty > 0))",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column qty referenced in CHECK constraint products_qty_check does not exist on table public.products")
 }
@@ -79,7 +79,7 @@ func TestValidateColumnRefs_FKMissingLocalColumn(t *testing.T) {
 			Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
 		},
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column user_id referenced in foreign key fk does not exist on table public.orders")
 }
@@ -95,14 +95,14 @@ func TestValidateColumnRefs_FKReferencedColumnNotChecked(t *testing.T) {
 			Definition: "FOREIGN KEY (user_id) REFERENCES public.users(nonexistent_pk)",
 		},
 	})
-	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
 
 func TestValidateColumnRefs_AggregatesMultiple(t *testing.T) {
 	tbl := newValidatableTable("t", "id")
 	tbl.Indexes.Set("idx_a", &model.Index{Name: "idx_a", Definition: "CREATE INDEX idx_a ON public.t (a)"})
 	tbl.Constraints.Set("c_b", &model.Constraint{Name: "c_b", Type: model.ConstraintType('c'), Definition: "CHECK ((b > 0))"})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	msg := err.Error()
 	assert.Contains(t, msg, "column a referenced in index idx_a")
@@ -129,7 +129,7 @@ func TestValidateColumnRefs_InheritsChildSkipped(t *testing.T) {
 		Type:       model.ConstraintType('p'),
 		Definition: "PRIMARY KEY (id)",
 	})
-	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
 
 func TestValidateColumnRefs_DeduplicatesPerObject(t *testing.T) {
@@ -141,7 +141,7 @@ func TestValidateColumnRefs_DeduplicatesPerObject(t *testing.T) {
 		Type:       model.ConstraintType('c'),
 		Definition: "CHECK ((qty > 0 AND qty < 100))",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	count := strings.Count(err.Error(), "column qty referenced")
 	assert.Equal(t, 1, count)
@@ -162,7 +162,7 @@ func TestValidateColumnRefs_PartitionChildSkipped(t *testing.T) {
 	}
 	// Index references a column not in the (empty) inherited child column set.
 	tbl.Indexes.Set("idx", &model.Index{Name: "idx", Definition: "CREATE INDEX idx ON public.events_2024 (id)"})
-	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
 
 func TestValidateColumnRefs_ExpressionIndexMissingColumn(t *testing.T) {
@@ -172,7 +172,7 @@ func TestValidateColumnRefs_ExpressionIndexMissingColumn(t *testing.T) {
 		Name:       "idx_users_email_lower",
 		Definition: "CREATE INDEX idx_users_email_lower ON public.users (lower(email))",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column email referenced in index idx_users_email_lower")
 }
@@ -187,7 +187,7 @@ func TestValidateColumnRefs_FKCompositeLocalPartialMiss(t *testing.T) {
 			Definition: "FOREIGN KEY (tenant_id, user_id) REFERENCES public.users(tenant_id, id)",
 		},
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	msg := err.Error()
 	assert.Contains(t, msg, "column user_id referenced in foreign key fk_buyer")
@@ -205,7 +205,7 @@ func TestValidateColumnRefs_SelfReferencingFK(t *testing.T) {
 			Definition: "FOREIGN KEY (parent_id) REFERENCES public.nodes(id)",
 		},
 	})
-	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
 
 func TestValidateColumnRefs_ExpressionIndexValid(t *testing.T) {
@@ -214,7 +214,7 @@ func TestValidateColumnRefs_ExpressionIndexValid(t *testing.T) {
 		Name:       "idx",
 		Definition: "CREATE INDEX idx ON public.users (lower(email))",
 	})
-	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
 
 func TestValidateColumnRefs_PartialIndexWhereChecked(t *testing.T) {
@@ -223,7 +223,7 @@ func TestValidateColumnRefs_PartialIndexWhereChecked(t *testing.T) {
 		Name:       "idx",
 		Definition: "CREATE INDEX idx ON public.users (id) WHERE deleted_at IS NULL",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column deleted_at referenced in index idx")
 }
@@ -235,7 +235,7 @@ func TestValidateColumnRefs_ExclusionChecked(t *testing.T) {
 		Type:       model.ConstraintType('x'),
 		Definition: "EXCLUDE USING gist (room WITH =, during WITH &&)",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column during referenced in EXCLUDE constraint no_overlap")
 }
@@ -246,7 +246,7 @@ func TestValidateColumnRefs_QuotedIdentifier(t *testing.T) {
 		Name:       "idx",
 		Definition: `CREATE INDEX idx ON public.t ("MyName")`,
 	})
-	require.NoError(t, ValidateColumnRefs(tablesMap(tbl)))
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
 
 func TestValidateColumnRefs_CheckBoolExprChecked(t *testing.T) {
@@ -256,7 +256,7 @@ func TestValidateColumnRefs_CheckBoolExprChecked(t *testing.T) {
 		Type:       model.ConstraintType('c'),
 		Definition: "CHECK ((a > 0 AND b < 100))",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	msg := err.Error()
 	assert.Contains(t, msg, "column a referenced")
@@ -270,7 +270,7 @@ func TestValidateColumnRefs_CheckTypeCastChecked(t *testing.T) {
 		Type:       model.ConstraintType('c'),
 		Definition: "CHECK ((status::text = 'a'))",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column status referenced")
 }
@@ -282,7 +282,7 @@ func TestValidateColumnRefs_CheckCoalesceChecked(t *testing.T) {
 		Type:       model.ConstraintType('c'),
 		Definition: "CHECK ((COALESCE(qty, 0) > 0))",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column qty referenced")
 }
@@ -294,7 +294,7 @@ func TestValidateColumnRefs_CheckCaseChecked(t *testing.T) {
 		Type:       model.ConstraintType('c'),
 		Definition: "CHECK (((CASE WHEN flag THEN 1 ELSE 0 END) = 1))",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column flag referenced")
 }
@@ -306,7 +306,7 @@ func TestValidateColumnRefs_CheckInListChecked(t *testing.T) {
 		Type:       model.ConstraintType('c'),
 		Definition: "CHECK ((status IN ('a', 'b')))",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column status referenced")
 }
@@ -318,7 +318,7 @@ func TestValidateColumnRefs_CheckAnyArrayChecked(t *testing.T) {
 		Type:       model.ConstraintType('c'),
 		Definition: "CHECK ((status = ANY (ARRAY['a'::text, 'b'::text])))",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column status referenced")
 }
@@ -338,7 +338,7 @@ func TestValidateColumnRefs_MultiTableScoping(t *testing.T) {
 		Definition: "CREATE INDEX idx_bad ON public.bad (name)",
 	})
 
-	err := ValidateColumnRefs(tablesMap(good, bad))
+	err := validateColumnRefs(tablesMap(good, bad))
 	require.Error(t, err)
 	msg := err.Error()
 	assert.Contains(t, msg, "table public.bad")
@@ -353,7 +353,7 @@ func TestValidateColumnRefs_CompositeKeyPartialMiss(t *testing.T) {
 		Name:       "idx",
 		Definition: "CREATE INDEX idx ON public.t (a, b)",
 	})
-	err := ValidateColumnRefs(tablesMap(tbl))
+	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	msg := err.Error()
 	assert.Contains(t, msg, "column a referenced in index idx")
