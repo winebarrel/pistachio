@@ -381,7 +381,7 @@ func TestParseSQLWithSchema_RejectsUnresolvedColumnRef(t *testing.T) {
 );
 CREATE INDEX idx_users_name ON users (name);`
 
-	_, err := ParseSQLWithSchema(sql, "public")
+	_, err := parseSQLWithSchema(sql, "public")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column name referenced in index idx_users_name does not exist on table public.users")
 }
@@ -394,7 +394,7 @@ func TestParseSQLWithSchema_AcceptsResolvedColumnRefs(t *testing.T) {
 );
 CREATE INDEX idx_users_name ON users (name);`
 
-	_, err := ParseSQLWithSchema(sql, "public")
+	_, err := parseSQLWithSchema(sql, "public")
 	require.NoError(t, err)
 }
 
