@@ -1,0 +1,31 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text CONSTRAINT users_email_nn NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+# PG<18 silently discards the explicit NOT NULL constraint name at apply time,
+# so the dump round-trips back as unnamed.
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+# PG18 stores the explicit name in pg_constraint, so it round-trips.
+applied_pg18: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text CONSTRAINT users_email_nn NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+# Confirm a re-plan produces no further DDL on PG18 (the named NOT NULL on the
+# new column matches between desired and current).
+verify_no_drift: true

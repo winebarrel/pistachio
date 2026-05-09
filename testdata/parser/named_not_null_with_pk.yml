@@ -1,0 +1,12 @@
+input: |
+  CREATE TABLE public.users (
+      id integer CONSTRAINT users_id_pk PRIMARY KEY,
+      email text CONSTRAINT users_email_nn NOT NULL
+  );
+expected: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text CONSTRAINT users_email_nn NOT NULL,
+      CONSTRAINT users_id_pk PRIMARY KEY (id)
+  );

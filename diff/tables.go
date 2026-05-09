@@ -287,6 +287,9 @@ func addColumnSQL(fqtn string, col *model.Column) string {
 	}
 
 	if col.NotNull && !col.Identity.IsIdentityColumn() {
+		if col.NotNullName != nil {
+			sql += " CONSTRAINT " + model.Ident(*col.NotNullName)
+		}
 		sql += " NOT NULL"
 	}
 
@@ -362,6 +365,17 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		} else {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP NOT NULL;")
 		}
+	} else if current.NotNull && desired.NotNull && !desIsIdent &&
+		current.NotNullName != nil && desired.NotNullName != nil &&
+		*current.NotNullName != *desired.NotNullName {
+		// Both sides NOT NULL with explicit but different names — rename in place.
+		// Adding/removing a name on an existing NOT NULL needs PG18's standalone
+		// ALTER ... ADD CONSTRAINT NOT NULL syntax (not yet supported by
+		// pg_query_go); left out of v1. Identity columns are skipped to match
+		// Table.SQL / addColumnSQL, which intentionally do not render
+		// "CONSTRAINT <name> NOT NULL" on identity columns — emitting a rename
+		// here would surface a name the dumper hides.
+		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME CONSTRAINT "+model.Ident(*current.NotNullName)+" TO "+model.Ident(*desired.NotNullName)+";")
 	}
 
 	return stmts

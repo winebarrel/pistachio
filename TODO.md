@@ -163,6 +163,40 @@ documented prominently.
 Origin: post-RLS-support audit. No fix planned — this is a PostgreSQL
 behavior that affects the catalog round-trip, not a pistachio bug.
 
+## Named NOT NULL constraints: name add/remove on existing columns
+
+`Column.NotNullName` round-trips on PG18, and a name change between two
+named NOT NULL constraints is emitted as `RENAME CONSTRAINT`. The
+following transitions are no-ops in v1:
+
+- nullable → NOT NULL with an explicit desired name: emits `SET NOT NULL`
+  (PG auto-generates a name) but does not apply the desired name.
+- NOT NULL with explicit current name → still NOT NULL but unnamed: keeps
+  the current name in place.
+
+Both require PG18's standalone `ALTER TABLE ... ADD CONSTRAINT name NOT NULL col`
+syntax, which `pg_query_go` does not yet parse (libpg_query PR #317 is
+still in draft as of 2026-05). Once that lands, the parser can accept
+the standalone form and the diff can drop the no-op branches.
+
+A second limitation: `catalog.ListColumnsByTable` strips any constraint
+name with the `_not_null` suffix to mask PG18's auto-naming (which does
+not follow column or table renames). An explicit user name that happens
+to end in `_not_null` is therefore lost on round-trip. A more precise
+heuristic would need to compare against the auto-name pattern at the
+time of the most recent rename, which is not available from the
+catalog alone.
+
+A third limitation: on PG<18 the parser still captures the inline name,
+but PostgreSQL silently drops it at apply time. The diff layer treats
+the resulting "current has no name, desired has a name" mismatch as a
+no-op (the same v1 behavior used for adding a name to an existing
+NOT NULL on PG18), so no drift loop occurs — the explicit name is
+simply not honored on PG<18. This is a PG18-only feature and should
+be documented as such if it ever surfaces in user-facing docs.
+
+Origin: [#157](https://github.com/winebarrel/pistachio/pull/157).
+
 ## Plan-time error promotion: forgotten dependent reference
 
 When desired SQL references the new column name in a dependent

@@ -86,6 +86,27 @@ func TestTable_SQL_simple(t *testing.T) {
 	assert.Equal(t, expected, tbl.SQL())
 }
 
+func TestTable_SQL_namedNotNull(t *testing.T) {
+	name := "users_email_nn"
+	tbl := newTable("public", "users")
+	tbl.Columns.Set("email", &Column{Name: "email", TypeName: "text", NotNull: true, NotNullName: &name})
+
+	assert.Contains(t, tbl.SQL(), "email text CONSTRAINT users_email_nn NOT NULL")
+}
+
+func TestTable_SQL_namedNotNull_identityColumnSuppresses(t *testing.T) {
+	// Identity columns are implicitly NOT NULL; the SQL renderer must not emit
+	// either the "NOT NULL" tail or the CONSTRAINT name on identity columns.
+	name := "users_id_nn"
+	tbl := newTable("public", "users")
+	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true, NotNullName: &name, Identity: ColumnIdentity('a')})
+
+	out := tbl.SQL()
+	assert.Contains(t, out, "GENERATED ALWAYS AS IDENTITY")
+	assert.NotContains(t, out, "CONSTRAINT users_id_nn")
+	assert.NotContains(t, out, "NOT NULL")
+}
+
 func TestTable_SQL_unlogged(t *testing.T) {
 	tbl := newTable("public", "temp_data")
 	tbl.Unlogged = true

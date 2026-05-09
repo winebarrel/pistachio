@@ -430,6 +430,10 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 		switch con.Contype {
 		case pg_query.ConstrType_CONSTR_NOTNULL:
 			col.NotNull = true
+			if con.Conname != "" {
+				name := con.Conname
+				col.NotNullName = &name
+			}
 		case pg_query.ConstrType_CONSTR_DEFAULT:
 			if con.RawExpr != nil {
 				def, err := deparseExpr(con.RawExpr)

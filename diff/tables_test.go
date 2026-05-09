@@ -373,6 +373,131 @@ func TestDiffColumns_alterNotNull_drop(t *testing.T) {
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN name DROP NOT NULL;", stmts[0])
 }
 
+func TestDiffColumns_renameNotNullConstraint(t *testing.T) {
+	oldName := "users_name_nn_old"
+	newName := "users_name_nn_new"
+
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &oldName})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &newName})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.users RENAME CONSTRAINT users_name_nn_old TO users_name_nn_new;"}, stmts)
+}
+
+func TestDiffColumns_notNullName_sameName_isNoOp(t *testing.T) {
+	name := "users_name_nn"
+
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &name})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &name})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+func TestDiffColumns_notNullName_addOrDrop_isNoOp(t *testing.T) {
+	name := "users_name_nn"
+
+	// Adding a name to an existing unnamed NOT NULL: no-op in v1.
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &name})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+
+	// Dropping a name from a named NOT NULL: also no-op in v1.
+	current = orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &name})
+
+	desired = orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true})
+
+	stmts, _, err = diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+func TestDiffColumns_renameNotNullConstraint_skipsIdentityColumn(t *testing.T) {
+	// Identity columns are implicitly NOT NULL, and Table.SQL / addColumnSQL
+	// intentionally do not render "CONSTRAINT <name> NOT NULL" on identity
+	// columns. The rename branch must therefore also skip them — emitting a
+	// RENAME CONSTRAINT here would surface a name the dumper hides.
+	oldName := "users_id_nn_old"
+	newName := "users_id_nn_new"
+
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("id", &model.Column{
+		Name: "id", TypeName: "integer", NotNull: true,
+		NotNullName: &oldName, Identity: model.ColumnIdentity('a'),
+	})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("id", &model.Column{
+		Name: "id", TypeName: "integer", NotNull: true,
+		NotNullName: &newName, Identity: model.ColumnIdentity('a'),
+	})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+func TestDiffColumns_setNotNull_withDesiredName_ignoresName(t *testing.T) {
+	// Nullable → NOT NULL with explicit desired name. v1 emits SET NOT NULL only;
+	// the name is not applied (it would require PG18's standalone ADD CONSTRAINT
+	// NOT NULL syntax).
+	name := "users_name_nn"
+
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text"})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &name})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN name SET NOT NULL;"}, stmts)
+}
+
+func TestDiffColumns_dropNotNull_loseCurrentName(t *testing.T) {
+	// NOT NULL with explicit current name → nullable. DROP NOT NULL implicitly
+	// drops the constraint (and the name with it).
+	name := "users_name_nn"
+
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, NotNullName: &name})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.users ALTER COLUMN name DROP NOT NULL;"}, stmts)
+}
+
+func TestDiffColumns_addColumn_withNotNullName(t *testing.T) {
+	name := "users_email_nn"
+
+	current := orderedmap.New[string, *model.Column]()
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("email", &model.Column{Name: "email", TypeName: "text", NotNull: true, NotNullName: &name})
+
+	stmts, _, err := diffColumns("public.users", current, desired, AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.users ADD COLUMN email text CONSTRAINT users_email_nn NOT NULL;"}, stmts)
+}
+
 func TestDiffColumns_identitySkipsNotNull(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
 	current.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('a')})
