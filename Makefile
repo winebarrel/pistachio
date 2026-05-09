@@ -24,6 +24,10 @@ lint:
 fix:
 	golangci-lint run --fix
 
+.PHONY: deadcode
+deadcode:
+	bash scripts/check-deadcode.sh
+
 .PHONY: schema
 schema: clean-schema
 	$(MAKE) sample-db SQL_FILE=chinook.sql

@@ -14,6 +14,8 @@ import (
 // consumed by the diff/apply pipeline. It is intentionally kept as the
 // foundation for future sequence-aware schema management; do not delete
 // it as dead code.
+//
+//deadcode:keep
 func (c *Catalog) Sequences(ctx context.Context) ([]model.Sequence, error) {
 	q := `
 		WITH
