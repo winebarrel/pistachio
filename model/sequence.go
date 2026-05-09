@@ -21,6 +21,10 @@ type Sequence struct {
 	OwnerColumn *string
 }
 
+// String returns a debug-friendly representation. Kept alongside Sequence as
+// part of the future sequence-aware schema management foundation.
+//
+//deadcode:keep
 func (seq *Sequence) String() string {
 	return fmt.Sprintf("%#v", *seq)
 }
