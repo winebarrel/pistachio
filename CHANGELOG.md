@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.5.2] - 2026-05-09
+
+* Fix `Constraint.Columns` returned by `catalog.ListConstraintsByTable` to contain only the columns owned by each constraint. The `column_t` CTE previously grouped by `attrelid`, so every constraint on a table received the union of all sibling constraints' `conkey` columns; on PG18 the additional `contype='n'` rows compounded this with duplicates. Latent since the first commit because no diff/dump path consumed the field, but the catalog now reports the correct per-constraint column list. ([#158](https://github.com/winebarrel/pistachio/pull/158))
+
 ## [1.5.1] - 2026-05-06
 
 * Add PostgreSQL 18 support. PG18 represents per-column NOT NULL as first-class `pg_constraint` rows (`contype='n'`); pistachio now filters them in `catalog.ListConstraintsByTable` since NOT NULL is already surfaced via `pg_attribute.attnotnull`. Without this filter the diff produced spurious `ALTER TABLE ... DROP CONSTRAINT <col>_not_null` statements that PG18 rejects with `column "X" is in a primary key (SQLSTATE 42P16)`. CI now exercises PG15/16/17/18. ([#151](https://github.com/winebarrel/pistachio/pull/151), [#152](https://github.com/winebarrel/pistachio/pull/152))
