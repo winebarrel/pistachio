@@ -189,15 +189,6 @@ func TestSplitQualifiedName_SpacesAroundDot(t *testing.T) {
 	assert.Equal(t, []string{"public", "old_table"}, parts)
 }
 
-func TestNormalizeDirectiveValue(t *testing.T) {
-	assert.Equal(t, "public.old_name", normalizeDirectiveValue("public.old_name"))
-	assert.Equal(t, `"Old Name"`, normalizeDirectiveValue(`"Old Name"`))
-	assert.Equal(t, `"My Schema"."Old Name"`, normalizeDirectiveValue(`"My Schema"."Old Name"`))
-	assert.Equal(t, `public."Old Name"`, normalizeDirectiveValue(`public."Old Name"`))
-	assert.Equal(t, `"has""quote"`, normalizeDirectiveValue(`"has""quote"`))
-	assert.Equal(t, "simple", normalizeDirectiveValue("simple"))
-}
-
 func TestNormalizeUnqualifiedDirective(t *testing.T) {
 	assert.Equal(t, "old_name", normalizeUnqualifiedDirective("old_name"))
 	assert.Equal(t, "Old Name", normalizeUnqualifiedDirective(`"Old Name"`))

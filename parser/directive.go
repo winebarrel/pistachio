@@ -143,18 +143,6 @@ func unquoteIdent(s string) string {
 	return strings.ToLower(s)
 }
 
-// normalizeDirectiveValue normalizes a renamed-from directive value by
-// unquoting each part and re-quoting via model.Ident to match the
-// canonical identifier format used by the parser and diff layer.
-// Used for schema-qualified names (tables, views, enums).
-func normalizeDirectiveValue(s string) string {
-	parts := splitQualifiedName(s)
-	for i, p := range parts {
-		parts[i] = unquoteIdent(p)
-	}
-	return model.Ident(parts...)
-}
-
 // normalizeUnqualifiedDirective normalizes a renamed-from directive value
 // for unqualified names (columns, constraints, indexes, foreign keys)
 // by unquoting the identifier. If a schema-qualified name is provided
