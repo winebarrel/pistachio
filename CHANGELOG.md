@@ -1,7 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [1.6.0] - 2026-05-09
 
+* Internal cleanup with no user-visible behavior change: shrink the public API surface of `parser`, `toposort`, `diff`, and `internal/pgast` by unexporting helpers only reachable from same-package tests; delete dead code (`ParseSQL*` wrappers, `ExtractColumnDirectives`, `normalizeDirectiveValue`, the raw-SQL toposort path); and add a `make deadcode` / CI check (`golang.org/x/tools/cmd/deadcode`) with `//deadcode:keep` marker support to prevent regressions. ([#160](https://github.com/winebarrel/pistachio/pull/160), [#161](https://github.com/winebarrel/pistachio/pull/161), [#162](https://github.com/winebarrel/pistachio/pull/162), [#163](https://github.com/winebarrel/pistachio/pull/163), [#164](https://github.com/winebarrel/pistachio/pull/164), [#165](https://github.com/winebarrel/pistachio/pull/165), [#166](https://github.com/winebarrel/pistachio/pull/166), [#167](https://github.com/winebarrel/pistachio/pull/167), [#168](https://github.com/winebarrel/pistachio/pull/168), [#169](https://github.com/winebarrel/pistachio/pull/169))
 * Round-trip named NOT NULL constraints on PG18. Inline `CONSTRAINT <name> NOT NULL` is now captured by the parser, read from `pg_constraint` (`contype='n'`) by `catalog.ListColumnsByTable`, rendered in `CREATE TABLE` / `ADD COLUMN`, and renamed via `ALTER TABLE ... RENAME CONSTRAINT` when both sides are NOT NULL with explicit but different names. PG18's auto-generated `<table>_<col>_not_null` names are stripped on read so unnamed declarations round-trip cleanly across column and table renames. Adding or removing a name on an already-NOT-NULL column requires PG18's standalone `ALTER ... ADD CONSTRAINT NOT NULL` syntax (not yet supported by `pg_query_go`) and is a documented no-op in v1; PG<18 silently drops user-supplied names at apply time. ([#157](https://github.com/winebarrel/pistachio/pull/157))
 
 ## [1.5.2] - 2026-05-09
