@@ -12,20 +12,28 @@ import (
 func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table) ([]*model.Constraint, []*model.ForeignKey, error) {
 	q := `
 		WITH
+			-- One row per pg_constraint row: the conkey columns in conkey
+			-- order. Grouped by con.oid so each constraint gets only its own
+			-- columns; previously this CTE grouped by attrelid, which made
+			-- every constraint on the same table inherit the union of all
+			-- constraint columns (and on PG18 the contype='n' rows added
+			-- duplicates).
 			column_t AS (
 				SELECT
-					a.attrelid,
+					con.oid AS con_oid,
 					array_agg(
 						a.attname
 						ORDER BY
 							array_position(con.conkey, a.attnum)
 					) AS attnames
 				FROM
-					pg_catalog.pg_attribute a
-					JOIN pg_catalog.pg_constraint con ON con.conrelid = a.attrelid
+					pg_catalog.pg_constraint con
+					JOIN pg_catalog.pg_attribute a ON a.attrelid = con.conrelid
 					AND a.attnum = ANY(con.conkey)
+				WHERE
+					con.conrelid = @table_oid
 				GROUP BY
-					a.attrelid
+					con.oid
 			)
 		SELECT
 			con.oid,
@@ -43,7 +51,7 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 			pg_catalog.pg_constraint con
 			LEFT JOIN pg_catalog.pg_class rc ON rc.oid = con.confrelid
 			LEFT JOIN pg_catalog.pg_namespace rn ON rn.oid = rc.relnamespace
-			LEFT JOIN column_t col ON col.attrelid = con.conrelid
+			LEFT JOIN column_t col ON col.con_oid = con.oid
 		WHERE
 			con.conrelid = @table_oid
 			-- PG18 exposes per-column NOT NULL constraints (contype='n') as
