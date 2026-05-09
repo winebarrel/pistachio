@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Round-trip named NOT NULL constraints on PG18. Inline `CONSTRAINT <name> NOT NULL` is now captured by the parser, read from `pg_constraint` (`contype='n'`) by `catalog.ListColumnsByTable`, rendered in `CREATE TABLE` / `ADD COLUMN`, and renamed via `ALTER TABLE ... RENAME CONSTRAINT` when both sides are NOT NULL with explicit but different names. PG18's auto-generated `<table>_<col>_not_null` names are stripped on read so unnamed declarations round-trip cleanly across column and table renames. Adding or removing a name on an already-NOT-NULL column requires PG18's standalone `ALTER ... ADD CONSTRAINT NOT NULL` syntax (not yet supported by `pg_query_go`) and is a documented no-op in v1; PG<18 silently drops user-supplied names at apply time. ([#157](https://github.com/winebarrel/pistachio/pull/157))
+
 ## [1.5.2] - 2026-05-09
 
 * Fix `Constraint.Columns` returned by `catalog.ListConstraintsByTable` to contain only the columns owned by each constraint. The `column_t` CTE previously grouped by `attrelid`, so every constraint on a table received the union of all sibling constraints' `conkey` columns; on PG18 the additional `contype='n'` rows compounded this with duplicates. Latent since the first commit because no diff/dump path consumed the field, but the catalog now reports the correct per-constraint column list. ([#158](https://github.com/winebarrel/pistachio/pull/158))
