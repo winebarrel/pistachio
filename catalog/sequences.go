@@ -9,6 +9,11 @@ import (
 )
 
 // Sequences returns all sequences in the filtered schemas.
+//
+// Currently this method has no production callers — sequences are not yet
+// consumed by the diff/apply pipeline. It is intentionally kept as the
+// foundation for future sequence-aware schema management; do not delete
+// it as dead code.
 func (c *Catalog) Sequences(ctx context.Context) ([]model.Sequence, error) {
 	q := `
 		WITH
