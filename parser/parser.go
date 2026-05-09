@@ -27,7 +27,7 @@ func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error
 	return nil
 }
 
-func ReadSQLFile(path string) (string, error) {
+func readSQLFile(path string) (string, error) {
 	var data []byte
 	var err error
 
@@ -50,7 +50,7 @@ func ReadSQLFile(path string) (string, error) {
 func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult, error) {
 	var sqls []string
 	for _, path := range paths {
-		sql, err := ReadSQLFile(path)
+		sql, err := readSQLFile(path)
 		if err != nil {
 			return nil, err
 		}
