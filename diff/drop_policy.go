@@ -5,11 +5,6 @@ type DropChecker interface {
 	IsDropAllowed(objectType string) bool
 }
 
-// allowAllDrops is a DropChecker that allows all drops.
-type allowAllDrops struct{}
-
-func (allowAllDrops) IsDropAllowed(string) bool { return true }
-
 // denyAllDrops is a DropChecker that denies all drops.
 type denyAllDrops struct{}
 
