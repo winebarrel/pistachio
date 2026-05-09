@@ -15,7 +15,7 @@ type DomainDiffResult struct {
 }
 
 func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc DropChecker) (*DomainDiffResult, error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 	result := &DomainDiffResult{}
 
 	// Detect renames

@@ -190,7 +190,7 @@ type ViewDiffResult struct {
 }
 
 func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker) (*ViewDiffResult, error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 	result := &ViewDiffResult{}
 
 	// Detect renames
@@ -338,7 +338,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 
 // diffViewIndexes generates DDL for index changes on materialized views.
 func diffViewIndexes(current, desired *model.View, dc DropChecker) (stmts []string, disallowed []string, hasConcurrently bool, err error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 	currentIndexes := orderedmap.New[string, *model.Index]()
 	if current.Indexes != nil {
 		currentIndexes = current.Indexes
