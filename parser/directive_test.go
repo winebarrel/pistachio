@@ -88,7 +88,7 @@ CREATE TABLE public.users (id integer NOT NULL);`
 	})
 }
 
-func TestExtractColumnDirectives(t *testing.T) {
+func TestExtractInlineDirectives_Columns(t *testing.T) {
 	t.Run("single column directive", func(t *testing.T) {
 		sql := `CREATE TABLE public.users (
     id integer NOT NULL,
@@ -96,7 +96,7 @@ func TestExtractColumnDirectives(t *testing.T) {
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
-		dirs := ExtractColumnDirectives(sql)
+		dirs := ExtractInlineDirectives(sql).Columns
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "name", dirs["display_name"])
 	})
@@ -108,7 +108,7 @@ func TestExtractColumnDirectives(t *testing.T) {
     -- pist:renamed-from name
     display_name text NOT NULL
 );`
-		dirs := ExtractColumnDirectives(sql)
+		dirs := ExtractInlineDirectives(sql).Columns
 		assert.Len(t, dirs, 2)
 		assert.Equal(t, "uid", dirs["id"])
 		assert.Equal(t, "name", dirs["display_name"])
@@ -119,7 +119,7 @@ func TestExtractColumnDirectives(t *testing.T) {
     id integer NOT NULL,
     name text NOT NULL
 );`
-		dirs := ExtractColumnDirectives(sql)
+		dirs := ExtractInlineDirectives(sql).Columns
 		assert.Empty(t, dirs)
 	})
 
@@ -128,7 +128,7 @@ func TestExtractColumnDirectives(t *testing.T) {
     -- pist:renamed-from "Old Name"
     "New Name" text NOT NULL
 );`
-		dirs := ExtractColumnDirectives(sql)
+		dirs := ExtractInlineDirectives(sql).Columns
 		assert.Equal(t, "Old Name", dirs["New Name"])
 	})
 
@@ -139,7 +139,7 @@ func TestExtractColumnDirectives(t *testing.T) {
     new_col text,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
-		dirs := ExtractColumnDirectives(sql)
+		dirs := ExtractInlineDirectives(sql).Columns
 		assert.Len(t, dirs, 1)
 		assert.Equal(t, "old_col", dirs["new_col"])
 	})
