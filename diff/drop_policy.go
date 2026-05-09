@@ -5,20 +5,20 @@ type DropChecker interface {
 	IsDropAllowed(objectType string) bool
 }
 
-// AllowAllDrops is a DropChecker that allows all drops.
-type AllowAllDrops struct{}
+// allowAllDrops is a DropChecker that allows all drops.
+type allowAllDrops struct{}
 
-func (AllowAllDrops) IsDropAllowed(string) bool { return true }
+func (allowAllDrops) IsDropAllowed(string) bool { return true }
 
-// DenyAllDrops is a DropChecker that denies all drops.
-type DenyAllDrops struct{}
+// denyAllDrops is a DropChecker that denies all drops.
+type denyAllDrops struct{}
 
-func (DenyAllDrops) IsDropAllowed(string) bool { return false }
+func (denyAllDrops) IsDropAllowed(string) bool { return false }
 
-// NormalizeDropChecker returns dc if non-nil, otherwise returns DenyAllDrops.
-func NormalizeDropChecker(dc DropChecker) DropChecker {
+// normalizeDropChecker returns dc if non-nil, otherwise returns denyAllDrops.
+func normalizeDropChecker(dc DropChecker) DropChecker {
 	if dc == nil {
-		return DenyAllDrops{}
+		return denyAllDrops{}
 	}
 	return dc
 }

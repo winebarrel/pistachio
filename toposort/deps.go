@@ -8,17 +8,17 @@ import (
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
-// StmtInfo holds a parsed statement and its extracted metadata.
-type StmtInfo struct {
+// stmtInfo holds a parsed statement and its extracted metadata.
+type stmtInfo struct {
 	Name string   // Fully qualified object name (e.g. "public.users")
 	SQL  string   // Deparsed SQL statement
 	Deps []string // Names of objects this statement depends on
 }
 
-// ExtractDeps parses SQL containing multiple CREATE statements and returns
+// extractDeps parses SQL containing multiple CREATE statements and returns
 // dependency information for each object. It uses defaultSchema to qualify
 // unqualified identifiers.
-func ExtractDeps(sql string, defaultSchema ...string) ([]*StmtInfo, error) {
+func extractDeps(sql string, defaultSchema ...string) ([]*stmtInfo, error) {
 	schema := "public"
 	if len(defaultSchema) > 0 && defaultSchema[0] != "" {
 		schema = defaultSchema[0]
@@ -37,7 +37,7 @@ func ExtractDeps(sql string, defaultSchema ...string) ([]*StmtInfo, error) {
 		}
 	}
 
-	var stmts []*StmtInfo
+	var stmts []*stmtInfo
 	for _, rawStmt := range result.Stmts {
 		name := objectName(rawStmt, schema)
 		if name == "" {
@@ -53,7 +53,7 @@ func ExtractDeps(sql string, defaultSchema ...string) ([]*StmtInfo, error) {
 
 		deps := extractStmtDeps(rawStmt, schema, defined)
 
-		stmts = append(stmts, &StmtInfo{
+		stmts = append(stmts, &stmtInfo{
 			Name: name,
 			SQL:  deparsed,
 			Deps: deps,

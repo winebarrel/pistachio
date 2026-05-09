@@ -43,7 +43,7 @@ func diffPolicies(
 	current, desired *orderedmap.Map[string, *model.Policy],
 	dc DropChecker,
 ) (stmts []string, disallowed []string, err error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 
 	// Callers (diffTable) always pass initialized maps from parser/catalog,
 	// so no nil-guard is needed here.

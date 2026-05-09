@@ -66,7 +66,7 @@ func TestDiffPolicies_NoChange(t *testing.T) {
 	cur.Set("p", newPolicy("p", 'r', withUsing("true")))
 	des.Set("p", newPolicy("p", 'r', withUsing("true")))
 
-	stmts, disallowed, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, disallowed, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Empty(t, disallowed)
@@ -77,7 +77,7 @@ func TestDiffPolicies_AddPolicy(t *testing.T) {
 	des := orderedmap.New[string, *model.Policy]()
 	des.Set("p", newPolicy("p", 'r', withUsing("true")))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE POLICY p ON public.documents FOR SELECT USING (true);"}, stmts)
 }
@@ -87,7 +87,7 @@ func TestDiffPolicies_DropPolicy_Allowed(t *testing.T) {
 	cur.Set("p", newPolicy("p", 'r', withUsing("true")))
 	des := orderedmap.New[string, *model.Policy]()
 
-	stmts, disallowed, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, disallowed, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP POLICY p ON public.documents;"}, stmts)
 	assert.Empty(t, disallowed)
@@ -98,7 +98,7 @@ func TestDiffPolicies_DropPolicy_Disallowed(t *testing.T) {
 	cur.Set("p", newPolicy("p", 'r', withUsing("true")))
 	des := orderedmap.New[string, *model.Policy]()
 
-	stmts, disallowed, err := diffPolicies("public.documents", cur, des, DenyAllDrops{})
+	stmts, disallowed, err := diffPolicies("public.documents", cur, des, denyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Equal(t, []string{"-- skipped: DROP POLICY p ON public.documents;"}, disallowed)
@@ -110,7 +110,7 @@ func TestDiffPolicies_AlterUsing(t *testing.T) {
 	cur.Set("p", newPolicy("p", 'r', withUsing("a")))
 	des.Set("p", newPolicy("p", 'r', withUsing("b")))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER POLICY p ON public.documents USING (b);"}, stmts)
 }
@@ -121,7 +121,7 @@ func TestDiffPolicies_RecreateOnCommandChange(t *testing.T) {
 	cur.Set("p", newPolicy("p", 'r', withUsing("true")))
 	des.Set("p", newPolicy("p", '*', withUsing("true")))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"DROP POLICY p ON public.documents;",
@@ -135,7 +135,7 @@ func TestDiffPolicies_RecreateOnPermissiveChange(t *testing.T) {
 	cur.Set("p", newPolicy("p", '*', withUsing("true")))
 	des.Set("p", newPolicy("p", '*', withUsing("true"), restrictive()))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"DROP POLICY p ON public.documents;",
@@ -149,7 +149,7 @@ func TestDiffPolicies_RecreateOnUsingRemoval(t *testing.T) {
 	cur.Set("p", newPolicy("p", '*', withUsing("a"), withWithCheck("b")))
 	des.Set("p", newPolicy("p", '*', withWithCheck("b")))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"DROP POLICY p ON public.documents;",
@@ -163,7 +163,7 @@ func TestDiffPolicies_Rename(t *testing.T) {
 	cur.Set("old", newPolicy("old", 'r', withUsing("true")))
 	des.Set("new", newPolicy("new", 'r', withUsing("true"), renameFrom("old")))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER POLICY old ON public.documents RENAME TO new;"}, stmts)
 }
@@ -173,7 +173,7 @@ func TestDiffPolicies_RenameSourceMissing(t *testing.T) {
 	des := orderedmap.New[string, *model.Policy]()
 	des.Set("new", newPolicy("new", 'r', withUsing("true"), renameFrom("nonexistent")))
 
-	_, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	_, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source policy nonexistent not found")
 }
@@ -231,7 +231,7 @@ func TestDiffPolicies_AlterRoles(t *testing.T) {
 	cur.Set("p", newPolicy("p", 'r', withUsing("true"), func(p *model.Policy) { p.Roles = []string{"public"} }))
 	des.Set("p", newPolicy("p", 'r', withUsing("true"), func(p *model.Policy) { p.Roles = []string{"app_user"} }))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER POLICY p ON public.documents TO app_user;"}, stmts)
 }
@@ -243,7 +243,7 @@ func TestDiffPolicies_AlterRoles_EmptyToPublic(t *testing.T) {
 	cur.Set("p", newPolicy("p", 'r', withUsing("true"), func(p *model.Policy) { p.Roles = []string{"app_user"} }))
 	des.Set("p", newPolicy("p", 'r', withUsing("true")))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER POLICY p ON public.documents TO public;"}, stmts)
 }
@@ -255,7 +255,7 @@ func TestDiffPolicies_AddWithCheckInPlace(t *testing.T) {
 	cur.Set("p", newPolicy("p", '*', withUsing("a")))
 	des.Set("p", newPolicy("p", '*', withUsing("a"), withWithCheck("b")))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER POLICY p ON public.documents WITH CHECK (b);"}, stmts)
 }
@@ -270,7 +270,7 @@ func TestDiffPolicies_RenameAndRecreate(t *testing.T) {
 	// Rename old → new AND change command from SELECT to ALL.
 	des.Set("new", newPolicy("new", '*', withUsing("true"), renameFrom("old")))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"DROP POLICY old ON public.documents;",
@@ -288,7 +288,7 @@ func TestDiffPolicies_Rename_QuotedIdentifierWithArrow(t *testing.T) {
 	cur.Set(`a->b`, newPolicy(`a->b`, 'r', withUsing("true")))
 	des.Set(`c`, newPolicy(`c`, 'r', withUsing("true"), renameFrom(`a->b`)))
 
-	stmts, _, err := diffPolicies("public.documents", cur, des, AllowAllDrops{})
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{`ALTER POLICY "a->b" ON public.documents RENAME TO c;`}, stmts)
 }

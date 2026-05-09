@@ -18,7 +18,7 @@ func OrderFromSchema(
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 ) ([]string, error) {
-	g := NewGraph()
+	g := newGraph()
 	defined := collectDefined(enums, domains, tables, views)
 
 	// Enums: no dependencies (leaf nodes)

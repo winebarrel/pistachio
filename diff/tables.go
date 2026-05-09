@@ -22,7 +22,7 @@ type TableDiffResult struct {
 }
 
 func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker) (*TableDiffResult, error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 	result := &TableDiffResult{}
 
 	// Detect renames
@@ -121,7 +121,7 @@ type tableDiffResult struct {
 }
 
 func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult, error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 	result := &tableDiffResult{}
 	fqtn := desired.FQTN()
 
@@ -222,7 +222,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 }
 
 func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) (stmts []string, disallowed []string, err error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 
 	// Detect renames
 	renameStmts, current, err := detectColumnRenames(fqtn, current, desired)
@@ -520,7 +520,7 @@ func equalConstraintDef(a, b string) bool {
 }
 
 func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, disallowed []string, err error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 
 	// Detect renames
 	renameStmts, current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
@@ -611,7 +611,7 @@ type diffIndexesResult struct {
 }
 
 func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc DropChecker) (*diffIndexesResult, error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 	result := &diffIndexesResult{}
 
 	// Detect renames
@@ -730,7 +730,7 @@ func createIndexSQL(def string, concurrently bool) (string, error) {
 // --allow-drop=foreign_key; FK drops emitted because the owning table is being
 // dropped follow the table policy (handled in DiffTables).
 func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey], dc DropChecker) (dropStmts, addStmts, disallowed []string, err error) {
-	dc = NormalizeDropChecker(dc)
+	dc = normalizeDropChecker(dc)
 
 	// Detect renames (renames go into addStmts since they may depend on table renames)
 	renameStmts, current, renamedFrom, err := detectForeignKeyRenames(fqtn, current, desired)

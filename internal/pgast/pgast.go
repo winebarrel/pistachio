@@ -10,10 +10,10 @@ import (
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
-// ConstraintWrapPrefix is the wrapper used to parse a constraint definition
+// constraintWrapPrefix is the wrapper used to parse a constraint definition
 // fragment (e.g. "PRIMARY KEY (id)") as part of a full statement so that
 // pg_query produces a Constraint node we can inspect or mutate.
-const ConstraintWrapPrefix = "ALTER TABLE _t ADD CONSTRAINT _c "
+const constraintWrapPrefix = "ALTER TABLE _t ADD CONSTRAINT _c "
 
 // ParseConstraintDef parses a constraint definition fragment and returns
 // the underlying *pg_query.Constraint. Returns nil for unparseable or
@@ -30,7 +30,7 @@ func ParseConstraintDef(def string) *pg_query.Constraint {
 // full ParseResult and a typed error, so callers that need to mutate the
 // AST and deparse it back can distinguish failure modes.
 func ParseConstraintDefStrict(def string) (*pg_query.ParseResult, *pg_query.Constraint, error) {
-	result, err := pg_query.Parse(ConstraintWrapPrefix + def)
+	result, err := pg_query.Parse(constraintWrapPrefix + def)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse constraint definition: %w", err)
 	}
@@ -61,10 +61,10 @@ func DeparseConstraintDef(result *pg_query.ParseResult) (string, error) {
 		return "", fmt.Errorf("failed to deparse constraint definition: %w", err)
 	}
 	deparsed = strings.TrimSuffix(deparsed, ";")
-	if !strings.HasPrefix(deparsed, ConstraintWrapPrefix) {
+	if !strings.HasPrefix(deparsed, constraintWrapPrefix) {
 		return "", fmt.Errorf("unexpected deparsed form: %s", deparsed)
 	}
-	return strings.TrimPrefix(deparsed, ConstraintWrapPrefix), nil
+	return strings.TrimPrefix(deparsed, constraintWrapPrefix), nil
 }
 
 // WalkExprColumnRefs walks an expression tree and invokes visit for each
