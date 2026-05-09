@@ -5,28 +5,28 @@ import (
 	"sort"
 )
 
-// Graph is a directed acyclic graph for topological sorting.
-type Graph struct {
+// graph is a directed acyclic graph for topological sorting.
+type graph struct {
 	nodes map[string]bool
 	edges map[string][]string // from → [to ...] meaning "from depends on to"
 }
 
-// NewGraph creates a new empty graph.
-func NewGraph() *Graph {
-	return &Graph{
+// newGraph creates a new empty graph.
+func newGraph() *graph {
+	return &graph{
 		nodes: make(map[string]bool),
 		edges: make(map[string][]string),
 	}
 }
 
 // AddNode adds a node to the graph.
-func (g *Graph) AddNode(name string) {
+func (g *graph) AddNode(name string) {
 	g.nodes[name] = true
 }
 
 // AddEdge adds a dependency edge: "from" depends on "to".
 // Both nodes are implicitly added.
-func (g *Graph) AddEdge(from, to string) {
+func (g *graph) AddEdge(from, to string) {
 	g.nodes[from] = true
 	g.nodes[to] = true
 	g.edges[from] = append(g.edges[from], to)
@@ -36,7 +36,7 @@ func (g *Graph) AddEdge(from, to string) {
 // Returns nodes in dependency order (dependencies first).
 // Returns an error if a cycle is detected.
 // Nodes with no dependency ordering are sorted alphabetically for stability.
-func (g *Graph) Sort() ([]string, error) {
+func (g *graph) Sort() ([]string, error) {
 	// Build in-degree map and reverse adjacency list
 	inDegree := make(map[string]int)
 	dependents := make(map[string][]string) // to → [from ...] (who depends on to)

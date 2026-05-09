@@ -2,12 +2,12 @@ package toposort
 
 import "fmt"
 
-// SortSQL parses SQL containing multiple CREATE statements and returns
+// sortSQL parses SQL containing multiple CREATE statements and returns
 // the individual statements sorted in dependency order (dependencies first).
 // An optional defaultSchema can be provided to qualify unqualified identifiers
 // (defaults to "public").
-func SortSQL(sql string, defaultSchema ...string) ([]string, error) {
-	stmts, err := ExtractDeps(sql, defaultSchema...)
+func sortSQL(sql string, defaultSchema ...string) ([]string, error) {
+	stmts, err := extractDeps(sql, defaultSchema...)
 	if err != nil {
 		return nil, err
 	}
@@ -16,8 +16,8 @@ func SortSQL(sql string, defaultSchema ...string) ([]string, error) {
 		return nil, nil
 	}
 
-	g := NewGraph()
-	stmtByName := make(map[string]*StmtInfo, len(stmts))
+	g := newGraph()
+	stmtByName := make(map[string]*stmtInfo, len(stmts))
 
 	for _, s := range stmts {
 		g.AddNode(s.Name)
