@@ -41,6 +41,9 @@ jobs:
       - run: make TEST_OPTS='-coverprofile=coverage.txt'
       - run: make test-scenario
       - uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
-        if: matrix.postgres == 15
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          flags: pg${{ matrix.postgres }}
+          # Each matrix job uploads its own coverage; Codecov merges them so
+          # PG-version-specific paths (e.g. PG18-only catalog reads) are
+          # counted as covered when any matrix entry exercises them.
