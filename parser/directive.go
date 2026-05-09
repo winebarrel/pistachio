@@ -334,11 +334,6 @@ func ExtractInlineDirectives(rawCreateTableSQL string) *InlineDirectives {
 	return result
 }
 
-// ExtractColumnDirectives is a convenience wrapper for backward compatibility.
-func ExtractColumnDirectives(rawCreateTableSQL string) map[string]string {
-	return ExtractInlineDirectives(rawCreateTableSQL).Columns
-}
-
 // scanQuotedIdent scans a quoted identifier from the start of s, handling ""
 // escape sequences. Returns the unquoted name and true if successful.
 func scanQuotedIdent(s string) (string, bool) {
