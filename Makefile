@@ -1,6 +1,13 @@
 export PGHOST := localhost
 export PGUSER := postgres
 
+# Ensure failures in any stage of a piped recipe (e.g. curl | awk | psql)
+# fail the target. Default /bin/sh on most systems lacks pipefail, so a
+# failing curl can be masked by a successful psql. -o pipefail must be
+# on SHELL itself (not .SHELLFLAGS) so make passes it as a separate arg.
+SHELL := /bin/bash -o pipefail
+.SHELLFLAGS := -c
+
 .PHONY: all
 all: vet test build
 
@@ -60,7 +67,7 @@ sample-db-url:
 # Production.ProductReview INSERT (FK target rows aren't loaded).
 .PHONY: sample-db-adventureworks
 sample-db-adventureworks:
-	curl -sSf https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/master/install.sql \
+	curl -sSfL https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/master/install.sql \
 	  | awk '/^\\copy/ { next } /^INSERT INTO Production.ProductReview/ { skip=1 } skip { if (/\);[[:space:]]*$$/) skip=0; next } { print }' \
 	  | psql
 
