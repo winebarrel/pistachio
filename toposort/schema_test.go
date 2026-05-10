@@ -400,6 +400,97 @@ func TestOrderFromSchema_ViewInOtherSchemaReferencesUnqualifiedPublicTable(t *te
 	assert.Less(t, idx["public.users"], idx["app.user_summary"], "view in other schema referencing unqualified public table is ordered after it")
 }
 
+// `defined` is keyed by model.Ident(schema, name), which quotes identifiers
+// that need it (uppercase, reserved, etc.). The search_path-fallback helpers
+// must construct lookup keys the same way; raw "schema.name" concat would
+// miss any schema that requires quoting.
+
+func TestOrderFromSchema_UnqualifiedTypeInQuoteRequiringSchema(t *testing.T) {
+	d := &model.Domain{Schema: "MySchema", Name: "name_t", BaseType: "varchar(50)"}
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set(d.FQDN(), d)
+
+	tbl := newTable("MySchema", "department", &model.Column{Name: "name", TypeName: "name_t"})
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set(tbl.FQTN(), tbl)
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](), domains, tables, orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx[d.FQDN()], idx[tbl.FQTN()], "domain in quote-requiring schema before table referencing its type unqualified")
+}
+
+func TestOrderFromSchema_UnqualifiedFKInQuoteRequiringSchema(t *testing.T) {
+	users := newTable("MySchema", "users", &model.Column{Name: "id", TypeName: "integer"})
+	refTable := "users"
+	posts := newTable("MySchema", "posts", &model.Column{Name: "user_id", TypeName: "integer"})
+	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Constraint: model.Constraint{Name: "fk_user"}, RefTable: &refTable})
+
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set(users.FQTN(), users)
+	tables.Set(posts.FQTN(), posts)
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx[users.FQTN()], idx[posts.FQTN()], "FK target in quote-requiring schema resolved when referenced unqualified")
+}
+
+func TestOrderFromSchema_ViewBodyTableRefInQuoteRequiringSchema(t *testing.T) {
+	users := newTable("MySchema", "users", &model.Column{Name: "id", TypeName: "integer"})
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set(users.FQTN(), users)
+
+	v := &model.View{
+		Schema:     "MySchema",
+		Name:       "user_summary",
+		Definition: "SELECT id FROM users",
+	}
+	views := orderedmap.New[string, *model.View]()
+	views.Set(model.Ident(v.Schema, v.Name), v)
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		orderedmap.New[string, *model.Domain](), tables, views)
+	require.NoError(t, err)
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx[users.FQTN()], idx[model.Ident(v.Schema, v.Name)], "table in quote-requiring schema before view referencing it unqualified")
+}
+
+func TestOrderFromSchema_ViewBodyFallbackInQuoteRequiringSchema(t *testing.T) {
+	// extractViewDepsFallback path: trigger by giving a definition that
+	// pg_query cannot parse standalone, while still containing the table name.
+	users := newTable("MySchema", "users", &model.Column{Name: "id", TypeName: "integer"})
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set(users.FQTN(), users)
+
+	v := &model.View{
+		Schema:     "MySchema",
+		Name:       "user_summary",
+		Definition: "this is not parseable but mentions users somewhere",
+	}
+	views := orderedmap.New[string, *model.View]()
+	views.Set(model.Ident(v.Schema, v.Name), v)
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		orderedmap.New[string, *model.Domain](), tables, views)
+	require.NoError(t, err)
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx[users.FQTN()], idx[model.Ident(v.Schema, v.Name)], "fallback substring matcher recognizes table in quote-requiring schema")
+}
+
 func TestOrderFromSchema_PartitionChild(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()

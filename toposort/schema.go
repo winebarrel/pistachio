@@ -148,8 +148,14 @@ func resolveTypeDep(typeName, defaultSchema string, defined map[string]bool) str
 // resolveUnqualified returns the schema-qualified FQDN of an unqualified
 // identifier by modeling PostgreSQL's default search_path: try defaultSchema
 // first, then fall back to public. Returns "" if no defined object matches.
+//
+// `defined` keys are model.Ident-formed (schema quoted when needed), so the
+// schema component must go through model.Ident too — raw concatenation would
+// miss schemas like "MySchema". `name` is taken as-is because callers already
+// normalize it to the form that appears in `defined` (typically the deparsed
+// identifier for type names, or model.Ident-quoted for raw RangeVar names).
 func resolveUnqualified(name, defaultSchema string, defined map[string]bool) string {
-	if q := defaultSchema + "." + name; defined[q] {
+	if q := model.Ident(defaultSchema) + "." + name; defined[q] {
 		return q
 	}
 	if defaultSchema != "public" {
@@ -310,18 +316,21 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 // in defined. If the RangeVar has no schema, defaultSchema and "public" are
 // tried in order, modeling PostgreSQL's default search_path. Returns "" when
 // the RangeVar does not match any defined object.
+//
+// rv.Schemaname / rv.Relname are raw identifiers from pg_query, so both are
+// run through model.Ident to match the way `defined` keys are formed.
 func qualifyRangeVar(rv *pg_query.RangeVar, defaultSchema string, defined map[string]bool) string {
 	if rv == nil || rv.Relname == "" {
 		return ""
 	}
 	if rv.Schemaname != "" {
-		q := rv.Schemaname + "." + rv.Relname
+		q := model.Ident(rv.Schemaname, rv.Relname)
 		if defined[q] {
 			return q
 		}
 		return ""
 	}
-	return resolveUnqualified(rv.Relname, defaultSchema, defined)
+	return resolveUnqualified(model.Ident(rv.Relname), defaultSchema, defined)
 }
 
 // extractViewDepsFallback uses substring matching as a fallback when
@@ -335,9 +344,11 @@ func extractViewDepsFallback(definition, defaultSchema string, defined map[strin
 			seen[name] = true
 			continue
 		}
-		// Try matching the unqualified part (e.g., "users" for "public.users")
+		// Try matching the unqualified part (e.g., "users" for "public.users").
+		// `name` is a model.Ident-formed key, so its schema portion may be
+		// quoted (e.g. `"MySchema"`); compare against the same form.
 		parts := strings.SplitN(name, ".", 2)
-		if len(parts) == 2 && (parts[0] == defaultSchema || parts[0] == "public") {
+		if len(parts) == 2 && (parts[0] == model.Ident(defaultSchema) || parts[0] == "public") {
 			if strings.Contains(definition, parts[1]) {
 				seen[name] = true
 			}
