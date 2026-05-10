@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.6.1] - 2026-05-10
+
+* Fix `toposort` to honor PostgreSQL's default `search_path` fallback to `public` when resolving unqualified references from a non-public schema. Previously a `CREATE TABLE` whose column referenced an unqualified DOMAIN/ENUM in `public`, an FK pointing at an unqualified `public` table, or a view body selecting from an unqualified `public` table was treated as having no dependency edge, so the dependent statement could be ordered before its prerequisite and `pist apply` would fail with `type "..." does not exist` (and similar). The schema component is also now run through `model.Ident` so quote-requiring schemas (e.g. `"MySchema"`) match the keys used by the dependency graph. ([#172](https://github.com/winebarrel/pistachio/pull/172))
+
 ## [1.6.0] - 2026-05-09
 
 * Internal cleanup with no user-visible behavior change: shrink the public API surface of `parser`, `toposort`, `diff`, and `internal/pgast` by unexporting helpers only reachable from same-package tests; delete dead code (`ParseSQL*` wrappers, `ExtractColumnDirectives`, `normalizeDirectiveValue`, the raw-SQL toposort path); and add a `make deadcode` / CI check (`golang.org/x/tools/cmd/deadcode`) with `//deadcode:keep` marker support to prevent regressions. ([#160](https://github.com/winebarrel/pistachio/pull/160), [#161](https://github.com/winebarrel/pistachio/pull/161), [#162](https://github.com/winebarrel/pistachio/pull/162), [#163](https://github.com/winebarrel/pistachio/pull/163), [#164](https://github.com/winebarrel/pistachio/pull/164), [#165](https://github.com/winebarrel/pistachio/pull/165), [#166](https://github.com/winebarrel/pistachio/pull/166), [#167](https://github.com/winebarrel/pistachio/pull/167), [#168](https://github.com/winebarrel/pistachio/pull/168), [#169](https://github.com/winebarrel/pistachio/pull/169))
