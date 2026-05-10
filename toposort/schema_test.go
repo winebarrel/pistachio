@@ -400,6 +400,43 @@ func TestOrderFromSchema_ViewInOtherSchemaReferencesUnqualifiedPublicTable(t *te
 	assert.Less(t, idx["public.users"], idx["app.user_summary"], "view in other schema referencing unqualified public table is ordered after it")
 }
 
+// FK with a nil RefTable can occur when a model.ForeignKey lacks the
+// reference target metadata (e.g. partial parse output). The toposort must
+// skip it without panicking and without adding a spurious edge.
+func TestOrderFromSchema_FKWithNilRefTable(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	tbl := newTable("public", "events", &model.Column{Name: "id", TypeName: "integer"})
+	tbl.ForeignKeys.Set("orphan_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "orphan_fk"},
+		// RefTable intentionally nil
+	})
+	tables.Set("public.events", tbl)
+
+	require.NotPanics(t, func() {
+		_, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+			orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
+		require.NoError(t, err)
+	})
+}
+
+// A view body referencing an explicitly schema-qualified table that is not in
+// `defined` (e.g. a system table or a table outside the configured schemas)
+// must produce no dependency edge — qualifyRangeVar returns "".
+func TestOrderFromSchema_ViewBodyExplicitRefToUndefinedTable(t *testing.T) {
+	views := orderedmap.New[string, *model.View]()
+	views.Set("app.from_pg_catalog", &model.View{
+		Schema:     "app",
+		Name:       "from_pg_catalog",
+		Definition: "SELECT relname FROM pg_catalog.pg_class",
+	})
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		orderedmap.New[string, *model.Domain](),
+		orderedmap.New[string, *model.Table](), views)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"app.from_pg_catalog"}, order)
+}
+
 // `defined` is keyed by model.Ident(schema, name), which quotes identifiers
 // that need it (uppercase, reserved, etc.). The search_path-fallback helpers
 // must construct lookup keys the same way; raw "schema.name" concat would
