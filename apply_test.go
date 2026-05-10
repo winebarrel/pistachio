@@ -199,6 +199,44 @@ CREATE INDEX idx_events_time ON myschema.events USING btree (event_time);`
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(got.String()))
 }
 
+// Regression: a CREATE TABLE in a non-public schema whose column type is an
+// unqualified DOMAIN defined in public must come AFTER the CREATE DOMAIN in
+// the apply order. Toposort previously did not model PostgreSQL's default
+// search_path fallback to public, leaving the two as independent nodes; the
+// table could land first and the apply failed with `type "..." does not exist`.
+func TestApply_UnqualifiedDomainInPublicFromOtherSchema(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	_, err := conn.Exec(ctx, "DROP SCHEMA IF EXISTS myschema CASCADE")
+	require.NoError(t, err)
+	testutil.SetupDB(t, ctx, conn, "")
+	_, err = conn.Exec(ctx, "CREATE SCHEMA myschema")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = conn.Exec(ctx, "DROP SCHEMA IF EXISTS myschema CASCADE")
+	})
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE DOMAIN public.short_name AS character varying(50);
+CREATE TABLE myschema.department (
+    id serial NOT NULL,
+    name short_name NOT NULL,
+    CONSTRAINT department_pkey PRIMARY KEY (id)
+);
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public", "myschema"},
+	})
+
+	_, err = client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	require.NoError(t, err)
+}
+
 func TestApply_WithTx(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

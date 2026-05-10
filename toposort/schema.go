@@ -52,15 +52,16 @@ func OrderFromSchema(
 		// quoted or reserved-word names.
 		if t.ForeignKeys != nil {
 			for _, fk := range t.ForeignKeys.CollectValues() {
-				refSchema := t.Schema
-				if fk.RefSchema != nil {
-					refSchema = *fk.RefSchema
+				if fk.RefTable == nil {
+					continue
 				}
-				if fk.RefTable != nil {
-					ref := model.Ident(refSchema, *fk.RefTable)
+				if fk.RefSchema != nil {
+					ref := model.Ident(*fk.RefSchema, *fk.RefTable)
 					if defined[ref] {
 						g.AddEdge(k, ref)
 					}
+				} else if ref := resolveUnqualified(model.Ident(*fk.RefTable), t.Schema, defined); ref != "" {
+					g.AddEdge(k, ref)
 				}
 			}
 		}
@@ -128,11 +129,10 @@ func resolveTypeDep(typeName, defaultSchema string, defined map[string]bool) str
 		return typeName
 	}
 
-	// Try with default schema prefix for unqualified names
+	// Unqualified names: try default schema, then public (search_path fallback).
 	if !strings.Contains(typeName, ".") {
-		qualified := defaultSchema + "." + typeName
-		if defined[qualified] {
-			return qualified
+		if q := resolveUnqualified(typeName, defaultSchema, defined); q != "" {
+			return q
 		}
 	}
 
@@ -142,6 +142,27 @@ func resolveTypeDep(typeName, defaultSchema string, defined map[string]bool) str
 		return resolveTypeDep(base, defaultSchema, defined)
 	}
 
+	return ""
+}
+
+// resolveUnqualified returns the schema-qualified FQDN of an unqualified
+// identifier by modeling PostgreSQL's default search_path: try defaultSchema
+// first, then fall back to public. Returns "" if no defined object matches.
+//
+// `defined` keys are model.Ident-formed (schema quoted when needed), so the
+// schema component must go through model.Ident too — raw concatenation would
+// miss schemas like "MySchema". `name` is taken as-is because callers already
+// normalize it to the form that appears in `defined` (typically the deparsed
+// identifier for type names, or model.Ident-quoted for raw RangeVar names).
+func resolveUnqualified(name, defaultSchema string, defined map[string]bool) string {
+	if q := model.Ident(defaultSchema) + "." + name; defined[q] {
+		return q
+	}
+	if defaultSchema != "public" {
+		if q := "public." + name; defined[q] {
+			return q
+		}
+	}
 	return ""
 }
 
@@ -182,8 +203,7 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 
 	// Check if this node is a RangeVar
 	if rv := node.GetRangeVar(); rv != nil {
-		name := qualifyRangeVar(rv, defaultSchema)
-		if name != "" && defined[name] {
+		if name := qualifyRangeVar(rv, defaultSchema, defined); name != "" {
 			seen[name] = true
 		}
 		return
@@ -292,22 +312,31 @@ func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[str
 	}
 }
 
-// qualifyRangeVar returns the "schema.relation" form of a RangeVar, falling
-// back to defaultSchema when the schema is omitted.
-func qualifyRangeVar(rv *pg_query.RangeVar, defaultSchema string) string {
+// qualifyRangeVar returns the schema-qualified FQDN of a RangeVar that exists
+// in defined. If the RangeVar has no schema, defaultSchema and "public" are
+// tried in order, modeling PostgreSQL's default search_path. Returns "" when
+// the RangeVar does not match any defined object.
+//
+// rv.Schemaname / rv.Relname are raw identifiers from pg_query, so both are
+// run through model.Ident to match the way `defined` keys are formed.
+func qualifyRangeVar(rv *pg_query.RangeVar, defaultSchema string, defined map[string]bool) string {
 	if rv == nil || rv.Relname == "" {
 		return ""
 	}
-	schema := rv.Schemaname
-	if schema == "" {
-		schema = defaultSchema
+	if rv.Schemaname != "" {
+		q := model.Ident(rv.Schemaname, rv.Relname)
+		if defined[q] {
+			return q
+		}
+		return ""
 	}
-	return schema + "." + rv.Relname
+	return resolveUnqualified(model.Ident(rv.Relname), defaultSchema, defined)
 }
 
 // extractViewDepsFallback uses substring matching as a fallback when
 // pg_query parsing fails. It checks both fully-qualified names and
-// unqualified names (with defaultSchema prefix) to handle schemaless refs.
+// unqualified names (with defaultSchema or public prefix, matching the
+// search_path semantics modeled elsewhere) to handle schemaless refs.
 func extractViewDepsFallback(definition, defaultSchema string, defined map[string]bool) []string {
 	seen := make(map[string]bool)
 	for name := range defined {
@@ -315,9 +344,11 @@ func extractViewDepsFallback(definition, defaultSchema string, defined map[strin
 			seen[name] = true
 			continue
 		}
-		// Try matching the unqualified part (e.g., "users" for "public.users")
+		// Try matching the unqualified part (e.g., "users" for "public.users").
+		// `name` is a model.Ident-formed key, so its schema portion may be
+		// quoted (e.g. `"MySchema"`); compare against the same form.
 		parts := strings.SplitN(name, ".", 2)
-		if len(parts) == 2 && parts[0] == defaultSchema {
+		if len(parts) == 2 && (parts[0] == model.Ident(defaultSchema) || parts[0] == "public") {
 			if strings.Contains(definition, parts[1]) {
 				seen[name] = true
 			}

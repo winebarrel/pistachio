@@ -244,6 +244,253 @@ func TestOrderFromSchema_UnqualifiedDomainBaseType(t *testing.T) {
 	assert.Less(t, idx["public.status"], idx["public.user_status"], "enum before domain with unqualified base type")
 }
 
+func newTable(schema, name string, columns ...*model.Column) *model.Table {
+	t := &model.Table{Schema: schema, Name: name}
+	t.Columns = orderedmap.New[string, *model.Column]()
+	for _, c := range columns {
+		t.Columns.Set(c.Name, c)
+	}
+	t.Indexes = orderedmap.New[string, *model.Index]()
+	t.Constraints = orderedmap.New[string, *model.Constraint]()
+	t.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	return t
+}
+
+func TestOrderFromSchema_UnqualifiedTypeInPublicFromOtherSchema(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set(`public."Name"`, &model.Domain{Schema: "public", Name: `"Name"`, BaseType: "character varying(50)"})
+
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("humanresources.department", newTable("humanresources", "department",
+		&model.Column{Name: "name", TypeName: `"Name"`}))
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	// PostgreSQL's default search_path includes public, so an unqualified type
+	// reference from a non-public schema resolves to public. The toposort must
+	// model this so CREATE DOMAIN is emitted before the CREATE TABLE that uses it.
+	assert.Less(t, idx[`public."Name"`], idx["humanresources.department"], "domain in public before table in other schema referencing it unqualified")
+}
+
+func TestOrderFromSchema_UnqualifiedEnumInPublicFromOtherSchema(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	enums.Set("public.status", &model.Enum{Schema: "public", Name: "status", Values: []string{"a", "b"}})
+
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("app.users", newTable("app", "users",
+		&model.Column{Name: "s", TypeName: "status"}))
+
+	order, err := toposort.OrderFromSchema(enums, orderedmap.New[string, *model.Domain](),
+		tables, orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx["public.status"], idx["app.users"], "enum in public before table in other schema")
+}
+
+func TestOrderFromSchema_UnqualifiedDomainBaseTypeFromPublic(t *testing.T) {
+	domains := orderedmap.New[string, *model.Domain]()
+	// app.short_name's base type "name_t" is defined in public.
+	domains.Set("public.name_t", &model.Domain{Schema: "public", Name: "name_t", BaseType: "varchar(50)"})
+	domains.Set("app.short_name", &model.Domain{Schema: "app", Name: "short_name", BaseType: "name_t"})
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](), domains,
+		orderedmap.New[string, *model.Table](), orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx["public.name_t"], idx["app.short_name"], "public domain before non-public domain that uses it as unqualified base type")
+}
+
+func TestOrderFromSchema_UnqualifiedArrayTypeInPublicFromOtherSchema(t *testing.T) {
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set("public.tag", &model.Domain{Schema: "public", Name: "tag", BaseType: "text"})
+
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("app.posts", newTable("app", "posts",
+		&model.Column{Name: "tags", TypeName: "tag[]"}))
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](), domains,
+		tables, orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx["public.tag"], idx["app.posts"], "array of public domain resolved when used unqualified from other schema")
+}
+
+func TestOrderFromSchema_UnqualifiedTypeShadowedByDefaultSchema(t *testing.T) {
+	// Same type name exists in both default schema and public; the default
+	// schema's definition must win, matching PostgreSQL's search_path order.
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set("public.name_t", &model.Domain{Schema: "public", Name: "name_t", BaseType: "varchar(10)"})
+	domains.Set("app.name_t", &model.Domain{Schema: "app", Name: "name_t", BaseType: "varchar(20)"})
+
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("app.t", newTable("app", "t",
+		&model.Column{Name: "n", TypeName: "name_t"}))
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](), domains,
+		tables, orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx["app.name_t"], idx["app.t"], "default schema wins over public when both define the same type")
+}
+
+func TestOrderFromSchema_UnqualifiedFKInPublicFromOtherSchema(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	users := newTable("public", "users", &model.Column{Name: "id", TypeName: "integer"})
+	tables.Set("public.users", users)
+
+	refTable := "users"
+	posts := newTable("app", "posts", &model.Column{Name: "user_id", TypeName: "integer"})
+	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Constraint: model.Constraint{Name: "fk_user"}, RefTable: &refTable})
+	tables.Set("app.posts", posts)
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx["public.users"], idx["app.posts"], "public table referenced by unqualified FK from other schema is ordered first")
+}
+
+func TestOrderFromSchema_ViewInOtherSchemaReferencesUnqualifiedPublicTable(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("public.users", newTable("public", "users", &model.Column{Name: "id", TypeName: "integer"}))
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("app.user_summary", &model.View{
+		Schema:     "app",
+		Name:       "user_summary",
+		Definition: "SELECT id FROM users",
+	})
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		orderedmap.New[string, *model.Domain](), tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx["public.users"], idx["app.user_summary"], "view in other schema referencing unqualified public table is ordered after it")
+}
+
+// `defined` is keyed by model.Ident(schema, name), which quotes identifiers
+// that need it (uppercase, reserved, etc.). The search_path-fallback helpers
+// must construct lookup keys the same way; raw "schema.name" concat would
+// miss any schema that requires quoting.
+
+func TestOrderFromSchema_UnqualifiedTypeInQuoteRequiringSchema(t *testing.T) {
+	d := &model.Domain{Schema: "MySchema", Name: "name_t", BaseType: "varchar(50)"}
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set(d.FQDN(), d)
+
+	tbl := newTable("MySchema", "department", &model.Column{Name: "name", TypeName: "name_t"})
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set(tbl.FQTN(), tbl)
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](), domains, tables, orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx[d.FQDN()], idx[tbl.FQTN()], "domain in quote-requiring schema before table referencing its type unqualified")
+}
+
+func TestOrderFromSchema_UnqualifiedFKInQuoteRequiringSchema(t *testing.T) {
+	users := newTable("MySchema", "users", &model.Column{Name: "id", TypeName: "integer"})
+	refTable := "users"
+	posts := newTable("MySchema", "posts", &model.Column{Name: "user_id", TypeName: "integer"})
+	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Constraint: model.Constraint{Name: "fk_user"}, RefTable: &refTable})
+
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set(users.FQTN(), users)
+	tables.Set(posts.FQTN(), posts)
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
+	require.NoError(t, err)
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx[users.FQTN()], idx[posts.FQTN()], "FK target in quote-requiring schema resolved when referenced unqualified")
+}
+
+func TestOrderFromSchema_ViewBodyTableRefInQuoteRequiringSchema(t *testing.T) {
+	users := newTable("MySchema", "users", &model.Column{Name: "id", TypeName: "integer"})
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set(users.FQTN(), users)
+
+	v := &model.View{
+		Schema:     "MySchema",
+		Name:       "user_summary",
+		Definition: "SELECT id FROM users",
+	}
+	views := orderedmap.New[string, *model.View]()
+	views.Set(model.Ident(v.Schema, v.Name), v)
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		orderedmap.New[string, *model.Domain](), tables, views)
+	require.NoError(t, err)
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx[users.FQTN()], idx[model.Ident(v.Schema, v.Name)], "table in quote-requiring schema before view referencing it unqualified")
+}
+
+func TestOrderFromSchema_ViewBodyFallbackInQuoteRequiringSchema(t *testing.T) {
+	// extractViewDepsFallback path: trigger by giving a definition that
+	// pg_query cannot parse standalone, while still containing the table name.
+	users := newTable("MySchema", "users", &model.Column{Name: "id", TypeName: "integer"})
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set(users.FQTN(), users)
+
+	v := &model.View{
+		Schema:     "MySchema",
+		Name:       "user_summary",
+		Definition: "this is not parseable but mentions users somewhere",
+	}
+	views := orderedmap.New[string, *model.View]()
+	views.Set(model.Ident(v.Schema, v.Name), v)
+
+	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		orderedmap.New[string, *model.Domain](), tables, views)
+	require.NoError(t, err)
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx[users.FQTN()], idx[model.Ident(v.Schema, v.Name)], "fallback substring matcher recognizes table in quote-requiring schema")
+}
+
 func TestOrderFromSchema_PartitionChild(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()
