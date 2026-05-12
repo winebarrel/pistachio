@@ -1173,11 +1173,18 @@ func formatTimeTypeName(tn *pg_query.TypeName) (string, bool) {
 	if len(tn.Names) == 0 || len(tn.Names) > 2 {
 		return "", false
 	}
-	if len(tn.Names) == 2 && tn.Names[0].GetString_().GetSval() != "pg_catalog" {
+	if len(tn.Names) == 2 {
+		q := tn.Names[0].GetString_()
+		if q == nil || q.GetSval() != "pg_catalog" {
+			return "", false
+		}
+	}
+	last := tn.Names[len(tn.Names)-1].GetString_()
+	if last == nil {
 		return "", false
 	}
 	var bare, zone string
-	switch tn.Names[len(tn.Names)-1].GetString_().GetSval() {
+	switch last.GetSval() {
 	case "timestamp":
 		bare, zone = "timestamp", "without time zone"
 	case "timestamptz":
@@ -1191,7 +1198,11 @@ func formatTimeTypeName(tn *pg_query.TypeName) (string, bool) {
 	}
 	prec := ""
 	if len(tn.Typmods) > 0 {
-		ival := tn.Typmods[0].GetAConst().GetIval()
+		c := tn.Typmods[0].GetAConst()
+		if c == nil {
+			return "", false
+		}
+		ival := c.GetIval()
 		if ival == nil {
 			return "", false
 		}
