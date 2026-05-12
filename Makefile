@@ -15,6 +15,10 @@ all: vet test build
 build:
 	go build ./cmd/pista
 
+.PHONY: install
+install:
+	go install ./cmd/pista
+
 .PHONY: vet
 vet:
 	go vet ./...
