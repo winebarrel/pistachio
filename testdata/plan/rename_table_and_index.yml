@@ -6,13 +6,13 @@ init: |
   );
   CREATE INDEX idx_users_name ON public.users (name);
 desired: |
-  -- pist:renamed-from public.users
+  -- pista:renamed-from public.users
   CREATE TABLE public.accounts (
       id integer NOT NULL,
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-  -- pist:renamed-from idx_users_name
+  -- pista:renamed-from idx_users_name
   CREATE INDEX idx_accounts_name ON public.accounts (name);
 plan: |
   ALTER TABLE public.users RENAME TO accounts;

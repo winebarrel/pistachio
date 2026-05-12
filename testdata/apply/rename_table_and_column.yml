@@ -5,10 +5,10 @@ init: |
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 desired: |
-  -- pist:renamed-from public.users
+  -- pista:renamed-from public.users
   CREATE TABLE public.accounts (
       id integer NOT NULL,
-      -- pist:renamed-from name
+      -- pista:renamed-from name
       display_name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );

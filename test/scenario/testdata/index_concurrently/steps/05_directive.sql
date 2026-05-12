@@ -5,7 +5,7 @@ CREATE TABLE public.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);
 
 CREATE UNIQUE INDEX idx_users_email ON public.users USING btree (email);

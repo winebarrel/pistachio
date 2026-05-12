@@ -13,22 +13,22 @@ pistachio connects to PostgreSQL using a connection string. The default is `post
 
 ```bash
 # Use the default connection
-pist dump
+pista dump
 
 # Or specify a connection string
-pist -c 'postgres://user:pass@host:5432/mydb' dump
+pista -c 'postgres://user:pass@host:5432/mydb' dump
 
 # Or use an environment variable
-export PIST_CONN_STR='postgres://user:pass@host:5432/mydb'
-pist dump
+export PISTA_CONN_STR='postgres://user:pass@host:5432/mydb'
+pista dump
 ```
 
-If you'd rather not embed credentials in the connection string, supply the password separately via `--password` or `$PIST_PASSWORD`:
+If you'd rather not embed credentials in the connection string, supply the password separately via `--password` or `$PISTA_PASSWORD`:
 
 ```bash
-export PIST_CONN_STR='postgres://user@host:5432/mydb'
-export PIST_PASSWORD='s3cret'
-pist dump
+export PISTA_CONN_STR='postgres://user@host:5432/mydb'
+export PISTA_PASSWORD='s3cret'
+pista dump
 ```
 
 ## Step 2: Dump the current schema
@@ -36,7 +36,7 @@ pist dump
 Export your existing database schema to a SQL file:
 
 ```bash
-pist dump > schema.sql
+pista dump > schema.sql
 ```
 
 This produces a canonical SQL file with your tables, views, enums, indexes, constraints, and comments.
@@ -44,7 +44,7 @@ This produces a canonical SQL file with your tables, views, enums, indexes, cons
 You can also split into one file per object:
 
 ```bash
-pist dump --split ./schema/
+pista dump --split ./schema/
 ```
 
 ## Step 3: Make changes
@@ -65,7 +65,7 @@ CREATE TABLE public.users (
 Use `plan` to see what SQL pistachio would execute without actually changing anything:
 
 ```bash
-pist plan schema.sql
+pista plan schema.sql
 ```
 
 Output:
@@ -80,13 +80,13 @@ ALTER TABLE public.users ADD COLUMN email text;
 When you're happy with the plan, apply it:
 
 ```bash
-pist apply schema.sql
+pista apply schema.sql
 ```
 
 Verify by running plan again:
 
 ```bash
-pist plan schema.sql
+pista plan schema.sql
 # => -- Plan for schema public (1 table, 0 views, 0 enums, 0 domains)
 # => -- No changes
 ```
@@ -99,19 +99,19 @@ Repeat steps 3-5 as your schema evolves. Your schema file is always the source o
 
 ### Renaming objects
 
-Use the `-- pist:renamed-from` directive to rename objects without dropping and recreating them:
+Use the `-- pista:renamed-from` directive to rename objects without dropping and recreating them:
 
 ```sql
 CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:renamed-from name
+    -- pista:renamed-from name
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 ```
 
 ```bash
-pist plan schema.sql
+pista plan schema.sql
 # => ALTER TABLE public.users RENAME COLUMN name TO display_name;
 ```
 
@@ -119,25 +119,25 @@ After applying, you can leave the directive in place (it will be silently skippe
 
 ### Working with specific schemas
 
-By default, pistachio targets the `public` schema. Use `-n` or `$PIST_SCHEMAS` to specify a different schema:
+By default, pistachio targets the `public` schema. Use `-n` or `$PISTA_SCHEMAS` to specify a different schema:
 
 ```bash
 # Dump the "myschema" schema
-pist -n myschema dump
+pista -n myschema dump
 
 # Or use environment variable
-export PIST_SCHEMAS=myschema
-pist dump
+export PISTA_SCHEMAS=myschema
+pista dump
 
 # Plan/apply against "myschema"
-pist -n myschema plan schema.sql
-pist -n myschema apply schema.sql
+pista -n myschema plan schema.sql
+pista -n myschema apply schema.sql
 ```
 
 You can also manage multiple schemas at once:
 
 ```bash
-pist -n public,myschema dump
+pista -n public,myschema dump
 ```
 
 ### Schema name mapping
@@ -146,11 +146,11 @@ Use `-m` / `--schema-map` when your SQL files use a different schema name than t
 
 ```bash
 # Dump "staging" schema but output as "public"
-pist -n staging -m staging=public dump
+pista -n staging -m staging=public dump
 
 # Plan/apply: SQL files use "public", but changes target "staging"
-pist -n staging -m staging=public plan schema.sql
-pist -n staging -m staging=public apply schema.sql
+pista -n staging -m staging=public plan schema.sql
+pista -n staging -m staging=public apply schema.sql
 ```
 
 ### Schema-less SQL files
@@ -159,14 +159,14 @@ If your SQL files omit schema names (e.g. `CREATE TABLE users` instead of `CREAT
 
 ```bash
 # Schema-less SQL is treated as "myschema"
-pist -n myschema plan schema.sql
-pist -n myschema apply schema.sql
+pista -n myschema plan schema.sql
+pista -n myschema apply schema.sql
 ```
 
 Use `--omit-schema` with dump to produce schema-less output:
 
 ```bash
-pist dump --omit-schema > schema.sql
+pista dump --omit-schema > schema.sql
 # => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
 ```
 
@@ -175,16 +175,16 @@ pist dump --omit-schema > schema.sql
 Focus on specific objects with `-I` (include) and `-E` (exclude):
 
 ```bash
-pist dump -I 'user*'           # dump only user-related objects
-pist plan -E 'tmp_*' schema.sql  # ignore temporary tables
+pista dump -I 'user*'           # dump only user-related objects
+pista plan -E 'tmp_*' schema.sql  # ignore temporary tables
 ```
 
 Use `--enable` / `--disable` to filter by object type:
 
 ```bash
-pist dump --enable enum              # dump only enums
-pist dump --disable view             # dump everything except views
-pist dump --enable table,enum        # dump tables and enums only
+pista dump --enable enum              # dump only enums
+pista dump --disable view             # dump everything except views
+pista dump --enable table,enum        # dump tables and enums only
 ```
 
 ### Controlling drops
@@ -193,14 +193,14 @@ By default, `plan` and `apply` do **not** drop tables, views, enums, domains, co
 
 ```bash
 # Allow all drops
-pist plan --allow-drop all schema.sql
-pist apply --allow-drop all schema.sql
+pista plan --allow-drop all schema.sql
+pista apply --allow-drop all schema.sql
 
 # Allow only specific drop types (comma-separated or repeated)
-pist apply --allow-drop column,table schema.sql
+pista apply --allow-drop column,table schema.sql
 
 # Using environment variable
-PIST_ALLOW_DROP=all pist plan schema.sql
+PISTA_ALLOW_DROP=all pista plan schema.sql
 ```
 
 Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `foreign_key`, `index`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately.
@@ -213,7 +213,7 @@ Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `
 Wrap apply in a transaction so all changes succeed or fail together:
 
 ```bash
-pist apply schema.sql --with-tx
+pista apply schema.sql --with-tx
 ```
 
 ### Running pre-migration SQL
@@ -221,16 +221,16 @@ pist apply schema.sql --with-tx
 Execute SQL before applying schema changes (e.g. installing extensions). Use `--pre-sql` for inline SQL or `--pre-sql-file` for a file (mutually exclusive):
 
 ```bash
-pist apply schema.sql --pre-sql "CREATE EXTENSION IF NOT EXISTS pgcrypto;" --with-tx
-pist apply schema.sql --pre-sql-file pre.sql --with-tx
+pista apply schema.sql --pre-sql "CREATE EXTENSION IF NOT EXISTS pgcrypto;" --with-tx
+pista apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 
 ### Executing arbitrary SQL
 
-Use the `-- pist:execute` directive to include SQL statements that pistachio doesn't manage declaratively (functions, triggers, grants, etc.). These are executed after schema changes during `apply`.
+Use the `-- pista:execute` directive to include SQL statements that pistachio doesn't manage declaratively (functions, triggers, grants, etc.). These are executed after schema changes during `apply`.
 
 ```sql
--- pist:execute
+-- pista:execute
 CREATE OR REPLACE FUNCTION public.update_timestamp() RETURNS trigger AS $$
 BEGIN
     NEW.updated_at = NOW();
@@ -239,10 +239,10 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-Add a check SQL after `-- pist:execute` to conditionally execute — the SQL runs only when the check returns `true`:
+Add a check SQL after `-- pista:execute` to conditionally execute — the SQL runs only when the check returns `true`:
 
 ```sql
--- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_timestamp')
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_timestamp')
 CREATE OR REPLACE FUNCTION public.update_timestamp() RETURNS trigger AS $$
 BEGIN
     NEW.updated_at = NOW();
@@ -259,11 +259,11 @@ A typical CI pipeline:
 
 ```bash
 # Verify no drift from database
-pist plan schema.sql | grep -q "No changes"
+pista plan schema.sql | grep -q "No changes"
 ```
 
 ## Tips
 
 - Unnamed constraints are auto-named following PostgreSQL's convention, but pistachio does not currently emulate PostgreSQL's identifier truncation (63 bytes) or collision suffixing, so generated names may differ. **Use explicit `CONSTRAINT <name>` clauses** to avoid ambiguity.
-- Run `pist plan` before `pist apply` to review changes.
+- Run `pista plan` before `pista apply` to review changes.
 - Keep your schema file(s) in version control alongside your application code.

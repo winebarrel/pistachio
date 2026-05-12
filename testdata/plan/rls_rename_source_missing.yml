@@ -12,6 +12,6 @@ desired: |
       CONSTRAINT documents_pkey PRIMARY KEY (id)
   );
   ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
-  -- pist:renamed-from nonexistent
+  -- pista:renamed-from nonexistent
   CREATE POLICY new_name ON public.documents FOR SELECT USING (owner = current_user);
 error: rename source policy nonexistent not found

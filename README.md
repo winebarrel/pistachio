@@ -24,16 +24,16 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 ## Usage
 
 ```
-Usage: pist <command> [flags]
+Usage: pista <command> [flags]
 
 Flags:
   -h, --help                  Show context-sensitive help.
   -c, --conn-string="postgres://postgres@localhost/postgres"
                               PostgreSQL connection string. See
                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-                              ($PIST_CONN_STR)
-      --password=STRING       PostgreSQL password ($PIST_PASSWORD).
-  -n, --schemas=public,...    Schemas to inspect and modify ($PIST_SCHEMAS).
+                              ($PISTA_CONN_STR)
+      --password=STRING       PostgreSQL password ($PISTA_PASSWORD).
+  -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
       --version
@@ -48,7 +48,7 @@ Commands:
   dump [flags]
     Dump the current database schema as SQL.
 
-Run "pist <command> --help" for more information on a command.
+Run "pista <command> --help" for more information on a command.
 ```
 
 ### plan
@@ -56,43 +56,43 @@ Run "pist <command> --help" for more information on a command.
 Compare schema file(s) against the current database and print the SQL needed to reconcile them.
 
 ```bash
-pist plan schema.sql
+pista plan schema.sql
 
 # Multiple files
-pist plan tables.sql views.sql
+pista plan tables.sql views.sql
 
 # Include pre-SQL in the output
-pist plan schema.sql --pre-sql "SET search_path TO myschema;"
-pist plan schema.sql --pre-sql-file pre.sql
+pista plan schema.sql --pre-sql "SET search_path TO myschema;"
+pista plan schema.sql --pre-sql-file pre.sql
 ```
 
-`--pre-sql` / `--pre-sql-file` are also available as `$PIST_PRE_SQL` / `$PIST_PRE_SQL_FILE`.
+`--pre-sql` / `--pre-sql-file` are also available as `$PISTA_PRE_SQL` / `$PISTA_PRE_SQL_FILE`.
 
 ### apply
 
 Apply the diff to the database.
 
 ```bash
-pist apply schema.sql
+pista apply schema.sql
 
 # Multiple files
-pist apply tables.sql views.sql
+pista apply tables.sql views.sql
 ```
 
-Use `--pre-sql` or `--pre-sql-file` to run SQL before applying changes (mutually exclusive). Also available as `$PIST_PRE_SQL` / `$PIST_PRE_SQL_FILE`. Use `--with-tx` to wrap everything in a transaction.
+Use `--pre-sql` or `--pre-sql-file` to run SQL before applying changes (mutually exclusive). Also available as `$PISTA_PRE_SQL` / `$PISTA_PRE_SQL_FILE`. Use `--with-tx` to wrap everything in a transaction.
 
 ```bash
 # Inline SQL
-pist apply schema.sql --pre-sql "SET search_path TO myschema;" --with-tx
+pista apply schema.sql --pre-sql "SET search_path TO myschema;" --with-tx
 
 # From file
-pist apply schema.sql --pre-sql-file pre.sql --with-tx
+pista apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 
-To apply `CONCURRENTLY` to individual indexes, either write `CREATE INDEX CONCURRENTLY` directly or use the `-- pist:concurrently` directive before the `CREATE INDEX` statement. Both are treated equivalently:
+To apply `CONCURRENTLY` to individual indexes, either write `CREATE INDEX CONCURRENTLY` directly or use the `-- pista:concurrently` directive before the `CREATE INDEX` statement. Both are treated equivalently:
 
 ```sql
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);
 
 -- Equivalent: inline CONCURRENTLY
@@ -102,27 +102,27 @@ CREATE INDEX CONCURRENTLY idx_users_email ON public.users USING btree (email);
 CREATE INDEX idx_users_id ON public.users USING btree (id);
 ```
 
-Use `--concurrently-pre-sql` (or `--concurrently-pre-sql-file`) to run SQL — typically `SET lock_timeout = '...'` — before any `CONCURRENTLY` index DDL. The SQL is only emitted/executed when the plan actually contains `CREATE/DROP INDEX CONCURRENTLY`, so it's safe to set unconditionally. Because `SET` is session-scoped and `CONCURRENTLY` runs outside a transaction, the value carries over to every subsequent `CONCURRENTLY` statement in the same `apply`. Also available as `$PIST_CONCURRENTLY_PRE_SQL` / `$PIST_CONCURRENTLY_PRE_SQL_FILE`.
+Use `--concurrently-pre-sql` (or `--concurrently-pre-sql-file`) to run SQL — typically `SET lock_timeout = '...'` — before any `CONCURRENTLY` index DDL. The SQL is only emitted/executed when the plan actually contains `CREATE/DROP INDEX CONCURRENTLY`, so it's safe to set unconditionally. Because `SET` is session-scoped and `CONCURRENTLY` runs outside a transaction, the value carries over to every subsequent `CONCURRENTLY` statement in the same `apply`. Also available as `$PISTA_CONCURRENTLY_PRE_SQL` / `$PISTA_CONCURRENTLY_PRE_SQL_FILE`.
 
 ```bash
-pist apply schema.sql --concurrently-pre-sql "SET lock_timeout = '5s';"
+pista apply schema.sql --concurrently-pre-sql "SET lock_timeout = '5s';"
 ```
 
-Use `--disable-index-concurrently` to ignore all `CONCURRENTLY` opt-ins (both inline and directive) and emit plain `CREATE INDEX` / `DROP INDEX` instead. Useful when you want to keep the directives / inline `CONCURRENTLY` in your schema files but run a one-off plan/apply inside a transaction. Also available as `$PIST_DISABLE_INDEX_CONCURRENTLY`.
+Use `--disable-index-concurrently` to ignore all `CONCURRENTLY` opt-ins (both inline and directive) and emit plain `CREATE INDEX` / `DROP INDEX` instead. Useful when you want to keep the directives / inline `CONCURRENTLY` in your schema files but run a one-off plan/apply inside a transaction. Also available as `$PISTA_DISABLE_INDEX_CONCURRENTLY`.
 
 ```bash
-pist plan --disable-index-concurrently schema.sql
-pist apply --disable-index-concurrently --with-tx schema.sql
+pista plan --disable-index-concurrently schema.sql
+pista apply --disable-index-concurrently --with-tx schema.sql
 ```
 
 > [!NOTE]
 > When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`.
 
-Use `--bulk-alter` to combine consecutive `ALTER TABLE` actions on the same table into a single statement with comma-separated actions. This reduces the number of metadata locks acquired and lets PostgreSQL plan the changes together. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs are kept as separate statements. Also available as `$PIST_BULK_ALTER`.
+Use `--bulk-alter` to combine consecutive `ALTER TABLE` actions on the same table into a single statement with comma-separated actions. This reduces the number of metadata locks acquired and lets PostgreSQL plan the changes together. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs are kept as separate statements. Also available as `$PISTA_BULK_ALTER`.
 
 ```bash
-pist plan --bulk-alter schema.sql
-pist apply --bulk-alter schema.sql
+pista plan --bulk-alter schema.sql
+pista apply --bulk-alter schema.sql
 ```
 
 ```sql
@@ -133,14 +133,14 @@ ALTER TABLE public.users
   ADD CONSTRAINT users_id_pos CHECK (id > 0);
 ```
 
-By default, `plan` and `apply` do not drop tables, views, enums, domains, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `foreign_key`, `index`). Also available as `$PIST_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately.
+By default, `plan` and `apply` do not drop tables, views, enums, domains, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `foreign_key`, `index`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately.
 
 ```bash
 # Allow all drops
-pist plan --allow-drop all schema.sql
+pista plan --allow-drop all schema.sql
 
 # Allow only column and table drops
-pist apply --allow-drop column,table schema.sql
+pista apply --allow-drop column,table schema.sql
 ```
 
 Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so you can see what would be dropped without executing it. The plan still reports `-- No changes` when the only diff would be a suppressed drop, since no executable DDL is generated:
@@ -158,17 +158,17 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so
 
 ### Executing arbitrary SQL
 
-Use `-- pist:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated during `apply` — when it returns `true` the statement is executed, otherwise it is skipped. The simplest form skips when an object already exists:
+Use `-- pista:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated during `apply` — when it returns `true` the statement is executed, otherwise it is skipped. The simplest form skips when an object already exists:
 
 ```sql
--- pist:execute SELECT to_regprocedure('public.my_func()') IS NULL
+-- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ ... $$ LANGUAGE plpgsql;
 ```
 
 For idempotent management of a function whose body changes over time, embed a version tag in `COMMENT ON FUNCTION` and execute only when the installed comment differs. Wrap the `CREATE` and `COMMENT` in a `DO` block so they are a single statement:
 
 ```sql
--- pist:execute SELECT obj_description(to_regprocedure('public.get_user_count()'), 'pg_proc') IS DISTINCT FROM 'v1'
+-- pista:execute SELECT obj_description(to_regprocedure('public.get_user_count()'), 'pg_proc') IS DISTINCT FROM 'v1'
 DO $do$ BEGIN
   CREATE OR REPLACE FUNCTION public.get_user_count() RETURNS bigint AS $body$
     SELECT count(*) FROM public.users;
@@ -186,7 +186,7 @@ See [Getting Started](getting-started.md) for details.
 Dump the current database schema as SQL. Output can be used directly as a schema file.
 
 ```bash
-pist dump
+pista dump
 ```
 
 ### Schema name mapping
@@ -196,69 +196,69 @@ Use `-m` / `--schema-map` to remap schema names. This is useful when you want to
 For example, to dump a `staging` schema as if it were `public`:
 
 ```bash
-pist -n staging -m staging=public dump
+pista -n staging -m staging=public dump
 ```
 
 You can also use it with `plan` and `apply`. The desired SQL files use the mapped name (`public`), while the generated SQL targets the real database schema (`staging`):
 
 ```bash
 # schema.sql uses "public" as the schema name
-pist -n staging -m staging=public plan schema.sql
-pist -n staging -m staging=public apply schema.sql
+pista -n staging -m staging=public plan schema.sql
+pista -n staging -m staging=public apply schema.sql
 ```
 
 ### Filtering objects
 
-Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names). Also available as `$PIST_INCLUDE` / `$PIST_EXCLUDE` environment variables.
+Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names). Also available as `$PISTA_INCLUDE` / `$PISTA_EXCLUDE` environment variables.
 
-Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`. Can be repeated. Also available as `$PIST_ENABLE` / `$PIST_DISABLE` environment variables.
+Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`. Can be repeated. Also available as `$PISTA_ENABLE` / `$PISTA_DISABLE` environment variables.
 
 These flags are available on the `dump`, `plan`, and `apply` subcommands.
 
 ```bash
 # Dump only objects matching "user*"
-pist dump -I 'user*'
+pista dump -I 'user*'
 
 # Plan changes excluding temporary tables
-pist plan -E 'tmp_*' schema.sql
+pista plan -E 'tmp_*' schema.sql
 
 # Combine include and exclude
-pist apply -I 'user*' -E 'user_tmp' schema.sql
+pista apply -I 'user*' -E 'user_tmp' schema.sql
 
 # Dump only enums
-pist dump --enable enum
+pista dump --enable enum
 
 # Dump only tables and views
-pist dump --enable table,view
+pista dump --enable table,view
 
 # Dump everything except views
-pist dump --disable view
+pista dump --disable view
 
 # Plan changes for enums only
-pist plan --enable enum schema.sql
+pista plan --enable enum schema.sql
 
 # Using environment variables
-PIST_ENABLE=enum pist dump
-PIST_DISABLE=view pist dump
-PIST_INCLUDE='user*' pist dump
-PIST_EXCLUDE='tmp_*' pist plan schema.sql
+PISTA_ENABLE=enum pista dump
+PISTA_DISABLE=view pista dump
+PISTA_INCLUDE='user*' pista dump
+PISTA_EXCLUDE='tmp_*' pista plan schema.sql
 ```
 
 > [!NOTE]
 > `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference), so use them primarily for inspection (`dump`, `plan`) rather than `apply`.
 
 > [!NOTE]
-> When both a CLI flag and its corresponding environment variable are set, the CLI flag overrides the environment variable (values are not merged). For example, running `PIST_EXCLUDE='tmp_*' pist plan -E 'foo_*' schema.sql` excludes only `foo_*`; `tmp_*` is ignored.
+> When both a CLI flag and its corresponding environment variable are set, the CLI flag overrides the environment variable (values are not merged). For example, running `PISTA_EXCLUDE='tmp_*' pista plan -E 'foo_*' schema.sql` excludes only `foo_*`; `tmp_*` is ignored.
 
 ### Omit schema
 
 Use `--omit-schema` to omit schema names from the dump output.
 
 ```bash
-pist dump --omit-schema
+pista dump --omit-schema
 # => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
 
-pist dump --omit-schema --split ./schema/
+pista dump --omit-schema --split ./schema/
 # -- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains)
 # -- Wrote 2 file(s) to ./schema/
 # (writes ./schema/users.sql, ./schema/orders.sql, ...)
@@ -267,27 +267,27 @@ pist dump --omit-schema --split ./schema/
 When schema is omitted in SQL files, `plan` and `apply` use the schema specified by `-n`:
 
 ```bash
-pist -n staging plan schema.sql   # schema-less SQL is treated as "staging"
-pist -n staging apply schema.sql
+pista -n staging plan schema.sql   # schema-less SQL is treated as "staging"
+pista -n staging apply schema.sql
 ```
 
 ### Renaming objects
 
-Use `-- pist:renamed-from <old_name>` directives to rename objects instead of dropping and recreating them.
+Use `-- pista:renamed-from <old_name>` directives to rename objects instead of dropping and recreating them.
 
 **Tables, views, enums:**
 
 ```sql
--- pist:renamed-from public.old_status
+-- pista:renamed-from public.old_status
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');
 
--- pist:renamed-from public.old_users
+-- pista:renamed-from public.old_users
 CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 
--- pist:renamed-from public.old_view
+-- pista:renamed-from public.old_view
 CREATE VIEW public.new_view AS SELECT 1;
 ```
 
@@ -296,17 +296,17 @@ CREATE VIEW public.new_view AS SELECT 1;
 ```sql
 CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:renamed-from name
+    -- pista:renamed-from name
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id),
-    -- pist:renamed-from users_name_key
+    -- pista:renamed-from users_name_key
     CONSTRAINT users_display_name_key UNIQUE (display_name)
 );
 
--- pist:renamed-from idx_users_name
+-- pista:renamed-from idx_users_name
 CREATE INDEX idx_users_display_name ON public.users (display_name);
 
--- pist:renamed-from fk_old_name
+-- pista:renamed-from fk_old_name
 ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFERENCES public.users(id);
 ```
 
@@ -322,7 +322,7 @@ The desired-side SQL must use the **new** column name in those dependent definit
 ```sql
 CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:renamed-from name
+    -- pista:renamed-from name
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
@@ -330,7 +330,7 @@ CREATE TABLE public.users (
 CREATE INDEX idx_users_name ON public.users (display_name);
 ```
 
-If the desired side still references the old name, `pist plan` errors out at parse time with a message like `column name referenced in index idx_users_name does not exist on table public.users` (identifiers are quoted only when they aren't safe unquoted). All such unresolved references are reported in a single error.
+If the desired side still references the old name, `pista plan` errors out at parse time with a message like `column name referenced in index idx_users_name does not exist on table public.users` (identifiers are quoted only when they aren't safe unquoted). All such unresolved references are reported in a single error.
 
 The following references are **not** auto-rewritten and may produce a redundant `DROP/CREATE` on the first plan (the second run after applying the rename comes out clean):
 
@@ -342,7 +342,7 @@ The following references are **not** auto-rewritten and may produce a redundant 
 Use `--split` to output each table/view/enum/domain as a separate file in the specified directory.
 
 ```bash
-pist dump --split ./schema/
+pista dump --split ./schema/
 # -- Dump of schema public (3 tables, 0 views, 1 enum, 0 domains)
 # -- Wrote 4 file(s) to ./schema/
 # (writes ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...)
@@ -379,17 +379,17 @@ ALTER TABLE ONLY public.posts
 Preview and apply:
 
 ```bash
-pist plan schema.sql                  # review the diff (drops suppressed by default)
-pist plan --allow-drop all schema.sql # review the diff (with drops)
-pist apply schema.sql                 # apply it
+pista plan schema.sql                  # review the diff (drops suppressed by default)
+pista plan --allow-drop all schema.sql # review the diff (with drops)
+pista apply schema.sql                 # apply it
 ```
 
 Or split schema into multiple files and use them together:
 
 ```bash
-pist dump --split ./schema/       # dump per table/view/enum/domain
-pist plan ./schema/*.sql          # review the diff
-pist apply ./schema/*.sql         # apply it
+pista dump --split ./schema/       # dump per table/view/enum/domain
+pista plan ./schema/*.sql          # review the diff
+pista apply ./schema/*.sql         # apply it
 ```
 
 > [!NOTE]
@@ -411,7 +411,7 @@ pist apply ./schema/*.sql         # apply it
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types, domains)
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
-- Renaming (tables, views, enums, domains, columns, constraints, foreign keys, indexes, policies via `-- pist:renamed-from` directive)
+- Renaming (tables, views, enums, domains, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 

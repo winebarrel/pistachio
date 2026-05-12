@@ -83,7 +83,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	}
 
 	for _, rawStmt := range result.Stmts {
-		// Skip statements marked with -- pist:execute
+		// Skip statements marked with -- pista:execute
 		if executeSkipLocations[rawStmt.StmtLocation] {
 			continue
 		}

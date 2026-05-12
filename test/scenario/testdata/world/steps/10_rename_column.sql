@@ -36,7 +36,7 @@ ALTER TABLE ONLY public.country ADD CONSTRAINT country_capital_fkey FOREIGN KEY 
 
 CREATE TABLE public.countrylanguage (
     countrycode character(3) NOT NULL,
-    -- pist:renamed-from language
+    -- pista:renamed-from language
     lang text NOT NULL,
     isofficial boolean NOT NULL,
     percentage real NOT NULL,

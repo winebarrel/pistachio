@@ -12,7 +12,7 @@ desired: |
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
   CREATE MATERIALIZED VIEW public.user_names AS SELECT id, name FROM public.users;
-  -- pist:concurrently
+  -- pista:concurrently
   CREATE INDEX idx_user_names ON public.user_names USING btree (name);
 
   -- A regular view (parsed with an empty Indexes map) coexists with the matview

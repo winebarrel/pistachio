@@ -4,9 +4,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
-echo "Building pist..."
-go build -o pist ./cmd/pist
-export PIST="./pist"
+echo "Building pista..."
+go build -o pista ./cmd/pista
+export PISTA="./pista"
 
 rc=0
 for script in test/scenario/*.test.sh; do

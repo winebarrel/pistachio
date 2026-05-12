@@ -11,7 +11,7 @@ desired: |
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-  -- pist:concurrently
+  -- pista:concurrently
   CREATE INDEX idx_users_name ON public.users USING btree (name);
 plan: |
   SET lock_timeout = '5s';

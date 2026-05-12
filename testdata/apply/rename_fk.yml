@@ -19,7 +19,7 @@ desired: |
       user_id integer NOT NULL,
       CONSTRAINT orders_pkey PRIMARY KEY (id)
   );
-  -- pist:renamed-from fk_user
+  -- pista:renamed-from fk_user
   ALTER TABLE public.orders ADD CONSTRAINT fk_buyer FOREIGN KEY (user_id) REFERENCES public.users(id);
 applied: |
   -- public.orders

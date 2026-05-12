@@ -415,7 +415,7 @@ func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
 }
 
 func TestPlan_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
-	// When the only diff is a -- pist:execute statement (no schema diff),
+	// When the only diff is a -- pista:execute statement (no schema diff),
 	// the plan must surface the execute SQL and must NOT print "-- No changes".
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -429,7 +429,7 @@ func TestPlan_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL+`
--- pist:execute
+-- pista:execute
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
@@ -448,7 +448,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 }
 
 func TestApply_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
-	// CLI Apply counterpart: only -- pist:execute runs (no schema diff).
+	// CLI Apply counterpart: only -- pista:execute runs (no schema diff).
 	// "No changes" must not be printed since the function gets emitted and
 	// executed.
 	ctx := context.Background()
@@ -463,7 +463,7 @@ func TestApply_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL+`
--- pist:execute
+-- pista:execute
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
@@ -487,7 +487,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 }
 
 func TestPlan_Run_ExecuteCheckFalse_StillPrintsExecute(t *testing.T) {
-	// Plan does not evaluate check SQL — it shows every -- pist:execute
+	// Plan does not evaluate check SQL — it shows every -- pista:execute
 	// statement regardless. So even when the check would return false at
 	// apply time, plan output must contain the execute SQL and must NOT
 	// say "-- No changes".
@@ -508,7 +508,7 @@ CREATE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plp
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
@@ -523,7 +523,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	require.NoError(t, err)
 	got := buf.String()
 	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func", "plan should always show execute SQL")
-	assert.Contains(t, got, "-- pist:execute", "plan should annotate with the directive")
+	assert.Contains(t, got, "-- pista:execute", "plan should annotate with the directive")
 	assert.NotContains(t, got, "-- No changes")
 }
 
@@ -547,7 +547,7 @@ CREATE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plp
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 

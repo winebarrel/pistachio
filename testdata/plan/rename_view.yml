@@ -11,7 +11,7 @@ desired: |
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-  -- pist:renamed-from public.active_users
+  -- pista:renamed-from public.active_users
   CREATE VIEW public.user_list AS SELECT id, name FROM public.users;
 plan: |
   ALTER VIEW public.active_users RENAME TO user_list;

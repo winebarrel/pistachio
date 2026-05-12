@@ -11,7 +11,7 @@ desired: |
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-  -- pist:renamed-from idx_users_name
+  -- pista:renamed-from idx_users_name
   CREATE INDEX idx_users_display_name ON public.users (name);
 applied: |
   -- public.users

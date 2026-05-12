@@ -6,9 +6,9 @@ desired: |
       name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-  -- pist:concurrently
+  -- pista:concurrently
   CREATE INDEX idx_users_name ON public.users USING btree (name);
-  -- pist:concurrently
+  -- pista:concurrently
   CREATE UNIQUE INDEX idx_users_id ON public.users USING btree (id);
 plan: |
   CREATE TABLE public.users (

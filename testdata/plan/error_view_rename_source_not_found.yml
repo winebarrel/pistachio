@@ -9,6 +9,6 @@ desired: |
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-  -- pist:renamed-from public.nonexistent
+  -- pista:renamed-from public.nonexistent
   CREATE VIEW public.new_view AS SELECT id FROM public.users;
 error: "rename source"

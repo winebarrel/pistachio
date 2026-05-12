@@ -10,7 +10,7 @@ desired: |
   CREATE TABLE public.products (
       id integer NOT NULL,
       sku text NOT NULL,
-      -- pist:renamed-from name
+      -- pista:renamed-from name
       product_name text NOT NULL,
       CONSTRAINT products_pkey PRIMARY KEY (id)
   );

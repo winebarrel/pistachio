@@ -7,7 +7,7 @@ Pistachio is a declarative schema management tool for PostgreSQL, written in Go.
 ## Build & test
 
 ```sh
-make build          # go build ./cmd/pist (outputs ./pist at the repo root)
+make build          # go build ./cmd/pista (outputs ./pista at the repo root)
 make vet            # go vet ./...
 make test           # go test -p 1 -v ./... $(TEST_OPTS)
 make test-scenario  # CLI scenario tests (bash, requires PostgreSQL)
@@ -15,13 +15,13 @@ make lint           # golangci-lint run
 make fix            # golangci-lint run --fix (auto-fix lint errors)
 ```
 
-- Tests require a running PostgreSQL instance (default: `postgres://postgres@localhost/postgres`, override with `TEST_PIST_CONN_STR`).
+- Tests require a running PostgreSQL instance (default: `postgres://postgres@localhost/postgres`, override with `TEST_PISTA_CONN_STR`).
 - Tests run with `-p 1` (sequential packages) because integration tests share a single database.
 - `make schema` and other `psql`-based targets rely on `PGHOST=localhost` / `PGUSER=postgres` (exported from the Makefile).
 
 ## Project structure
 
-- `cmd/pist/` - CLI entrypoint
+- `cmd/pista/` - CLI entrypoint
 - `cmd/command/` - CLI command implementations
 - `parser/` - SQL parser (uses pg_query_go to parse and deparse PostgreSQL SQL)
 - `catalog/` - Reads current schema state from PostgreSQL system catalogs (`pg_catalog`)
@@ -29,7 +29,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - `diff/` - Generates DDL diff between current and desired schemas
 - `internal/testutil/` - Test helpers (DB connection, setup)
 - `testdata/` - YAML-based test fixtures for multiple test suites, including integration and unit tests
-- `test/scenario/` - CLI-level scenario tests (shell scripts that run `pist` CLI against sample schemas)
+- `test/scenario/` - CLI-level scenario tests (shell scripts that run `pista` CLI against sample schemas)
 
 ## Development workflow
 
@@ -41,7 +41,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
    - Verify coverage has not decreased and cover any reachable paths that can be tested naturally (do not write unnatural tests for unreachable defensive code).
    - Consider whether similar issues exist elsewhere in the codebase.
    - Run `make lint` to check for lint errors.
-   - Run `make schema` to load sample schema SQL files into the local database (requires `psql`, `curl`, and network access), then verify behavior with `pist plan` / `pist dump` against them.
+   - Run `make schema` to load sample schema SQL files into the local database (requires `psql`, `curl`, and network access), then verify behavior with `pista plan` / `pista dump` against them.
 5. Do not run tests in parallel (`make test` uses `-p 1`).
 
 ## Code conventions

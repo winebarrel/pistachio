@@ -14,13 +14,13 @@ type ApplyOptions struct {
 	FilterOptions
 	DropPolicy
 	Files                    []string `arg:"" help:"Path to the desired schema SQL file(s)."`
-	PreSQL                   string   `xor:"pre-sql" env:"PIST_PRE_SQL" help:"SQL to execute before applying changes."`
-	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PIST_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
-	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PIST_CONCURRENTLY_PRE_SQL" help:"SQL to execute before CONCURRENTLY index operations (e.g. SET lock_timeout). Only run when the diff includes CONCURRENTLY index DDL; runs outside any transaction."`
-	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PIST_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to execute before CONCURRENTLY index operations."`
+	PreSQL                   string   `xor:"pre-sql" env:"PISTA_PRE_SQL" help:"SQL to execute before applying changes."`
+	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PISTA_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
+	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL" help:"SQL to execute before CONCURRENTLY index operations (e.g. SET lock_timeout). Only run when the diff includes CONCURRENTLY index DDL; runs outside any transaction."`
+	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to execute before CONCURRENTLY index operations."`
 	WithTx                   bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
-	DisableIndexConcurrently bool     `env:"PIST_DISABLE_INDEX_CONCURRENTLY" help:"Ignore all CONCURRENTLY opt-ins (both -- pist:concurrently directives and inline CREATE/DROP INDEX CONCURRENTLY) and emit plain CREATE/DROP INDEX."`
-	BulkAlter                bool     `env:"PIST_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs are kept separate."`
+	DisableIndexConcurrently bool     `env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore all CONCURRENTLY opt-ins (both -- pista:concurrently directives and inline CREATE/DROP INDEX CONCURRENTLY) and emit plain CREATE/DROP INDEX."`
+	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs are kept separate."`
 }
 
 // ApplyResult holds the result of an Apply operation.
@@ -106,7 +106,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		}
 	}
 
-	// Execute -- pist:execute statements after schema changes.
+	// Execute -- pista:execute statements after schema changes.
 	// Set search_path so unqualified names resolve to the configured schemas.
 	if len(result.ExecuteStmts) > 0 && len(client.Schemas) > 0 {
 		quoted := make([]string, len(client.Schemas))

@@ -11,7 +11,7 @@ desired: |
       qty integer NOT NULL,
       CONSTRAINT products_pkey PRIMARY KEY (id)
   );
-  -- pist:concurrently
+  -- pista:concurrently
   CREATE INDEX idx_products_qty ON public.products (qty);
 plan: |
   DROP INDEX CONCURRENTLY public.idx_products_qty;

@@ -781,7 +781,7 @@ func TestParseSQL_MaterializedView_RenameDirective(t *testing.T) {
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:renamed-from public.old_stats
+-- pista:renamed-from public.old_stats
 CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -863,7 +863,7 @@ func TestParseSQL_ExecuteDirective(t *testing.T) {
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'my_func')
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -882,7 +882,7 @@ func TestParseSQL_ExecuteDirective_NoCheck(t *testing.T) {
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute
+-- pista:execute
 GRANT SELECT ON public.users TO readonly_role;`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1360,7 +1360,7 @@ func TestParseSQL_CommentOnUnknownEnum(t *testing.T) {
 }
 
 func TestParseSQL_RenameDirective_Enum(t *testing.T) {
-	sql := `-- pist:renamed-from public.old_status
+	sql := `-- pista:renamed-from public.old_status
 CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1373,7 +1373,7 @@ CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 }
 
 func TestParseSQL_RenameDirective_Table(t *testing.T) {
-	sql := `-- pist:renamed-from public.old_users
+	sql := `-- pista:renamed-from public.old_users
 CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
@@ -1389,7 +1389,7 @@ CREATE TABLE public.users (
 }
 
 func TestParseSQL_RenameDirective_View(t *testing.T) {
-	sql := `-- pist:renamed-from public.old_view
+	sql := `-- pista:renamed-from public.old_view
 CREATE VIEW public.new_view AS SELECT 1;`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1404,7 +1404,7 @@ CREATE VIEW public.new_view AS SELECT 1;`
 func TestParseSQL_RenameDirective_Column(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,
-    -- pist:renamed-from name
+    -- pista:renamed-from name
     display_name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`
@@ -1426,7 +1426,7 @@ func TestParseSQL_RenameDirective_Index(t *testing.T) {
     name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:renamed-from idx_old
+-- pista:renamed-from idx_old
 CREATE INDEX idx_new ON public.users (name);`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1447,7 +1447,7 @@ func TestParseSQL_RenameDirective_Policy(t *testing.T) {
     CONSTRAINT documents_pkey PRIMARY KEY (id)
 );
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
--- pist:renamed-from old_policy
+-- pista:renamed-from old_policy
 CREATE POLICY new_policy ON public.documents FOR SELECT USING (owner = current_user);`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1466,7 +1466,7 @@ func TestParseSQL_RenameDirective_Constraint(t *testing.T) {
     id integer NOT NULL,
     code text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id),
-    -- pist:renamed-from old_unique
+    -- pista:renamed-from old_unique
     CONSTRAINT new_unique UNIQUE (code)
 );`
 
@@ -1491,7 +1491,7 @@ CREATE TABLE public.orders (
     user_id integer NOT NULL,
     CONSTRAINT orders_pkey PRIMARY KEY (id)
 );
--- pist:renamed-from old_fk
+-- pista:renamed-from old_fk
 ALTER TABLE public.orders ADD CONSTRAINT new_fk FOREIGN KEY (user_id) REFERENCES public.users(id);`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1510,7 +1510,7 @@ func TestParseSQL_RenameDirective_AlterTableConstraint(t *testing.T) {
     id integer NOT NULL,
     code text NOT NULL
 );
--- pist:renamed-from old_unique
+-- pista:renamed-from old_unique
 ALTER TABLE public.users ADD CONSTRAINT new_unique UNIQUE (code);`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1525,14 +1525,14 @@ ALTER TABLE public.users ADD CONSTRAINT new_unique UNIQUE (code);`
 }
 
 func TestParseSQLWithSchema_RenameDirective_Qualifies(t *testing.T) {
-	sql := `-- pist:renamed-from old_status
+	sql := `-- pista:renamed-from old_status
 CREATE TYPE new_status AS ENUM ('active', 'inactive');
--- pist:renamed-from old_users
+-- pista:renamed-from old_users
 CREATE TABLE users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:renamed-from old_view
+-- pista:renamed-from old_view
 CREATE VIEW new_view AS SELECT 1;`
 
 	result, err := parser.ParseSQLWithSchema(sql, "myschema")
@@ -1657,7 +1657,7 @@ func TestParseSQL_DomainMultipleConstraints(t *testing.T) {
 }
 
 func TestParseSQL_DomainRenameDirective(t *testing.T) {
-	sql := `-- pist:renamed-from public.old_domain
+	sql := `-- pista:renamed-from public.old_domain
 CREATE DOMAIN public.new_domain AS integer;`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1709,7 +1709,7 @@ func TestParseSQL_ConcurrentlyDirective_Index(t *testing.T) {
     name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX idx_name ON public.users (name);`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1746,8 +1746,8 @@ func TestParseSQL_ConcurrentlyDirective_WithRenamed(t *testing.T) {
     name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:renamed-from idx_old
--- pist:concurrently
+-- pista:renamed-from idx_old
+-- pista:concurrently
 CREATE INDEX idx_name ON public.users (name);`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1812,7 +1812,7 @@ func TestParseSQL_InlineConcurrently_AndDirective(t *testing.T) {
     name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX CONCURRENTLY idx_name ON public.users (name);`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -1826,9 +1826,9 @@ CREATE INDEX CONCURRENTLY idx_name ON public.users (name);`
 }
 
 func TestParseSQL_ConcurrentlyDirective_IgnoredOnNonIndex(t *testing.T) {
-	// -- pist:concurrently before a CREATE TABLE should be silently ignored
+	// -- pista:concurrently before a CREATE TABLE should be silently ignored
 	// and should NOT leak to the following CREATE INDEX
-	sql := `-- pist:concurrently
+	sql := `-- pista:concurrently
 CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)

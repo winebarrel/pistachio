@@ -10,7 +10,7 @@ import (
 )
 
 func TestConnect_PropagatesCancelledContext(t *testing.T) {
-	connStr := os.Getenv("TEST_PIST_CONN_STR")
+	connStr := os.Getenv("TEST_PISTA_CONN_STR")
 	if connStr == "" {
 		connStr = "postgres://postgres@localhost/postgres"
 	}

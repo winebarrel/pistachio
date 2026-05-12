@@ -5,7 +5,7 @@ init: |
   );
 desired: |
   CREATE TABLE public.users (
-      -- pist:renamed-from id
+      -- pista:renamed-from id
       user_id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (user_id)
   );

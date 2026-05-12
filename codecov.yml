@@ -9,4 +9,4 @@ coverage:
 
 ignore:
   - "internal/testutil"
-  - "cmd/pist"
+  - "cmd/pista"

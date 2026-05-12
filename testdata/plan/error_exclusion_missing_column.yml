@@ -10,7 +10,7 @@ desired: |
   CREATE TABLE public.reservations (
       id integer NOT NULL,
       room integer NOT NULL,
-      -- pist:renamed-from during
+      -- pista:renamed-from during
       time_range tsrange NOT NULL,
       CONSTRAINT reservations_pkey PRIMARY KEY (id),
       CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&)
