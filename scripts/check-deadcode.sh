@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-output=$(go tool deadcode -test=false ./cmd/pist)
+output=$(go tool deadcode -test=false ./cmd/pista)
 [ -z "$output" ] && exit 0
 
 unmarked=""

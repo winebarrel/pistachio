@@ -173,7 +173,7 @@ CREATE INDEX idx_events_time ON myschema.events (occurred_at);
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE myschema.events (
     id integer NOT NULL,
-    -- pist:renamed-from occurred_at
+    -- pista:renamed-from occurred_at
     event_time timestamp NOT NULL,
     CONSTRAINT events_pkey PRIMARY KEY (id)
 );
@@ -326,7 +326,7 @@ CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
@@ -366,7 +366,7 @@ CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
@@ -400,7 +400,7 @@ CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute
+-- pista:execute
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
@@ -433,7 +433,7 @@ CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute SELECT true
+-- pista:execute SELECT true
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
@@ -474,7 +474,7 @@ CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute
+-- pista:execute
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
@@ -508,7 +508,7 @@ CREATE TABLE users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute
+-- pista:execute
 CREATE OR REPLACE FUNCTION get_count() RETURNS bigint AS $$
   SELECT count(*) FROM users;
 $$ LANGUAGE sql;
@@ -548,7 +548,7 @@ func TestApply_ExecuteCheckSQLError(t *testing.T) {
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute SELECT EXISTS (SELECT 1 FROM public.does_not_exist)
+-- pista:execute SELECT EXISTS (SELECT 1 FROM public.does_not_exist)
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
@@ -579,7 +579,7 @@ func TestApply_ExecuteSQLError(t *testing.T) {
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:execute
+-- pista:execute
 INSERT INTO public.does_not_exist VALUES (1);
 `), 0o644))
 
@@ -710,7 +710,7 @@ CREATE INDEX idx_users_id ON public.users USING btree (id);`)
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 
 	client := pistachio.NewClient(&pistachio.Options{
@@ -741,7 +741,7 @@ func TestApply_ConcurrentlyDirective_WithTx_Error(t *testing.T) {
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 
 	client := pistachio.NewClient(&pistachio.Options{
@@ -776,7 +776,7 @@ func TestApply_ConcurrentlyPreSQL_ExecError(t *testing.T) {
     name text NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 
 	client := pistachio.NewClient(&pistachio.Options{
@@ -819,7 +819,7 @@ func TestApply_InvalidConcurrentlyPreSQLFile(t *testing.T) {
 }
 
 func TestApply_InlineConcurrently_WithTx_Error(t *testing.T) {
-	// Inline CREATE INDEX CONCURRENTLY (without -- pist:concurrently directive)
+	// Inline CREATE INDEX CONCURRENTLY (without -- pista:concurrently directive)
 	// must still set HasConcurrentlyIndex so --with-tx is rejected.
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -865,7 +865,7 @@ func TestApply_DisableIndexConcurrently_WithTx_OK(t *testing.T) {
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 
 	client := pistachio.NewClient(&pistachio.Options{
@@ -895,7 +895,7 @@ func TestApply_ConcurrentlyDirective_MatviewIndex_WithTx_Error(t *testing.T) {
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE MATERIALIZED VIEW public.mv AS SELECT 1 AS n;
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX idx_mv_n ON public.mv USING btree (n);`), 0o644))
 
 	client := pistachio.NewClient(&pistachio.Options{

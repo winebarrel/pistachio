@@ -7,13 +7,13 @@ COPY go.* /src/
 RUN go mod download
 
 COPY . /src/
-ARG PIST_VERSION
-RUN CGO_ENABLED=1 go build -o pist -ldflags "-X main.version=${PIST_VERSION#v}" ./cmd/pist
+ARG PISTA_VERSION
+RUN CGO_ENABLED=1 go build -o pista -ldflags "-X main.version=${PISTA_VERSION#v}" ./cmd/pista
 
 FROM alpine:3
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=build /src/pist /usr/local/bin/
+COPY --from=build /src/pista /usr/local/bin/
 
-ENTRYPOINT ["pist"]
+ENTRYPOINT ["pista"]

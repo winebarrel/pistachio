@@ -10,7 +10,7 @@ desired: |
   CREATE TABLE public.users (
       id integer NOT NULL,
       tenant_id integer NOT NULL,
-      -- pist:renamed-from email
+      -- pista:renamed-from email
       email_address text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id),
       CONSTRAINT users_tenant_email_key UNIQUE (tenant_id, email_address)

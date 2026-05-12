@@ -6,17 +6,17 @@ import (
 )
 
 type Options struct {
-	ConnString string            `short:"c" env:"PIST_CONN_STR" default:"postgres://postgres@localhost/postgres" help:"PostgreSQL connection string. See https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING"`
-	Password   string            `env:"PIST_PASSWORD" help:"PostgreSQL password."`
-	Schemas    []string          `short:"n" env:"PIST_SCHEMAS" default:"public" help:"Schemas to inspect and modify."`
+	ConnString string            `short:"c" env:"PISTA_CONN_STR" default:"postgres://postgres@localhost/postgres" help:"PostgreSQL connection string. See https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING"`
+	Password   string            `env:"PISTA_PASSWORD" help:"PostgreSQL password."`
+	Schemas    []string          `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schemas to inspect and modify."`
 	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
 }
 
 type FilterOptions struct {
-	Include []string `short:"I" env:"PIST_INCLUDE" help:"Include only tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
-	Exclude []string `short:"E" env:"PIST_EXCLUDE" help:"Exclude tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
-	Enable  []string `enum:"table,view,enum,domain" env:"PIST_ENABLE" help:"Enable only specified object types (can be repeated)."`
-	Disable []string `enum:"table,view,enum,domain" env:"PIST_DISABLE" help:"Disable specified object types (can be repeated)."`
+	Include []string `short:"I" env:"PISTA_INCLUDE" help:"Include only tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
+	Exclude []string `short:"E" env:"PISTA_EXCLUDE" help:"Exclude tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
+	Enable  []string `enum:"table,view,enum,domain" env:"PISTA_ENABLE" help:"Enable only specified object types (can be repeated)."`
+	Disable []string `enum:"table,view,enum,domain" env:"PISTA_DISABLE" help:"Disable specified object types (can be repeated)."`
 }
 
 // IsTypeEnabled returns true if the given object type should be included.

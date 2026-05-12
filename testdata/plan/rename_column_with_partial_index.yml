@@ -8,7 +8,7 @@ init: |
 desired: |
   CREATE TABLE public.products (
       id integer NOT NULL,
-      -- pist:renamed-from qty
+      -- pista:renamed-from qty
       quantity integer NOT NULL,
       CONSTRAINT products_pkey PRIMARY KEY (id)
   );

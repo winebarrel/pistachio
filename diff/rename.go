@@ -452,7 +452,7 @@ func cloneMap[K comparable, V any](m *orderedmap.Map[K, V]) *orderedmap.Map[K, V
 }
 
 // collectColumnRenames returns a map of old column name → new column name
-// for desired columns annotated with -- pist:renamed-from.
+// for desired columns annotated with -- pista:renamed-from.
 func collectColumnRenames(desired *orderedmap.Map[string, *model.Column]) map[string]string {
 	renames := make(map[string]string)
 	for name, col := range desired.All() {

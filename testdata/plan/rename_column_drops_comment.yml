@@ -8,7 +8,7 @@ init: |
 desired: |
   CREATE TABLE public.users (
       id integer NOT NULL,
-      -- pist:renamed-from name
+      -- pista:renamed-from name
       display_name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );

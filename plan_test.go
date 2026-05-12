@@ -229,7 +229,7 @@ CREATE INDEX idx_events_time ON myschema.events (occurred_at);
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE myschema.events (
     id integer NOT NULL,
-    -- pist:renamed-from occurred_at
+    -- pista:renamed-from occurred_at
     event_time timestamp NOT NULL,
     CONSTRAINT events_pkey PRIMARY KEY (id)
 );

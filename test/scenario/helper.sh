@@ -3,8 +3,8 @@
 
 set -euo pipefail
 
-: "${PIST:=./pist}"
-export PIST_CONN_STR="${PIST_CONN_STR:-${TEST_PIST_CONN_STR:-postgres://postgres@localhost/postgres}}"
+: "${PISTA:=./pista}"
+export PISTA_CONN_STR="${PISTA_CONN_STR:-${TEST_PISTA_CONN_STR:-postgres://postgres@localhost/postgres}}"
 
 _pass=0
 _fail=0
@@ -36,32 +36,32 @@ summary() {
 
 # Reset the database and optionally run init SQL from a file.
 setup_db() {
-  psql -X "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 -c 'SET client_min_messages TO warning; DROP SCHEMA public CASCADE; CREATE SCHEMA public'
+  psql -X "$PISTA_CONN_STR" -q -v ON_ERROR_STOP=1 -c 'SET client_min_messages TO warning; DROP SCHEMA public CASCADE; CREATE SCHEMA public'
   if [ $# -gt 0 ] && [ -n "$1" ]; then
-    psql -X "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 -f "$1"
+    psql -X "$PISTA_CONN_STR" -q -v ON_ERROR_STOP=1 -f "$1"
   fi
 }
 
-# Run pist plan and capture output.
-pist_plan() {
-  "$PIST" plan --allow-drop all "$@" 2>&1
+# Run pista plan and capture output.
+pista_plan() {
+  "$PISTA" plan --allow-drop all "$@" 2>&1
 }
 
-# Run pist apply.
-pist_apply() {
-  "$PIST" apply --allow-drop all "$@" 2>&1
+# Run pista apply.
+pista_apply() {
+  "$PISTA" apply --allow-drop all "$@" 2>&1
 }
 
-# Run pist plan without --allow-drop (default: no drops allowed).
-pist_plan_no_drop() {
-  "$PIST" plan "$@" 2>&1
+# Run pista plan without --allow-drop (default: no drops allowed).
+pista_plan_no_drop() {
+  "$PISTA" plan "$@" 2>&1
 }
 
-# Run pist plan with specific --allow-drop types.
-pist_plan_allow_drop() {
+# Run pista plan with specific --allow-drop types.
+pista_plan_allow_drop() {
   local drop_types="$1"
   shift
-  "$PIST" plan --allow-drop "$drop_types" "$@" 2>&1
+  "$PISTA" plan --allow-drop "$drop_types" "$@" 2>&1
 }
 
 # Assert that plan output does NOT contain any executable (uncommented) DROP
@@ -74,7 +74,7 @@ assert_no_drop() {
   step "$step_name"
 
   local plan_output
-  plan_output=$(pist_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+  plan_output=$(pista_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   if echo "$plan_output" | grep -qiE '^[[:space:]]*(DROP TABLE |DROP VIEW |DROP MATERIALIZED VIEW |DROP TYPE |DROP DOMAIN |ALTER TABLE .* DROP COLUMN)'; then
     fail "unexpected DROP in plan without --allow-drop"
@@ -97,7 +97,7 @@ assert_commented_drop() {
   step "$step_name"
 
   local plan_output
-  plan_output=$(pist_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+  plan_output=$(pista_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
   case "$expected_type" in
@@ -137,7 +137,7 @@ assert_commented_drop_with_allowed() {
   step "$step_name"
 
   local plan_output
-  plan_output=$(pist_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+  plan_output=$(pista_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
   case "$expected_type" in
@@ -172,7 +172,7 @@ assert_no_drop_type() {
   step "$step_name"
 
   local plan_output
-  plan_output=$(pist_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+  plan_output=$(pista_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
   case "$protected_type" in
@@ -206,7 +206,7 @@ assert_drop_type_present() {
   step "$step_name"
 
   local plan_output
-  plan_output=$(pist_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+  plan_output=$(pista_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
   case "$expected_type" in
@@ -237,7 +237,7 @@ run_step() {
   step "$step_name"
 
   local plan_output
-  plan_output=$(pist_plan "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+  plan_output=$(pista_plan "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   if ! echo "$plan_output" | grep -qF "$expected"; then
     fail "unexpected plan output"
@@ -247,10 +247,10 @@ run_step() {
   fi
 
   local apply_output
-  apply_output=$(pist_apply "${files[@]}") || { fail "apply failed: $apply_output"; return 1; }
+  apply_output=$(pista_apply "${files[@]}") || { fail "apply failed: $apply_output"; return 1; }
 
   local drift
-  drift=$(pist_plan "${files[@]}") || { fail "post-apply plan failed: $drift"; return 1; }
+  drift=$(pista_plan "${files[@]}") || { fail "post-apply plan failed: $drift"; return 1; }
   if ! echo "$drift" | grep -q 'No changes'; then
     fail "drift after apply"
     echo "    $drift" >&2
@@ -269,7 +269,7 @@ run_step_no_diff() {
   step "$step_name"
 
   local plan_output
-  plan_output=$(pist_plan "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
+  plan_output=$(pista_plan "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   if echo "$plan_output" | grep -q 'No changes'; then
     pass

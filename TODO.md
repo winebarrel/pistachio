@@ -5,7 +5,7 @@ PR for context.
 
 ## Auto-rewrite of column references in views and cross-table FKs
 
-When a column is renamed via `-- pist:renamed-from`, the rewriter only
+When a column is renamed via `-- pista:renamed-from`, the rewriter only
 updates same-table dependents (indexes, constraints, FKs on the same
 table). The following references are **not** rewritten and may produce a
 redundant `DROP/CREATE` on the first plan (the second run after applying
@@ -200,7 +200,7 @@ Origin: [#157](https://github.com/winebarrel/pistachio/pull/157).
 ## Plan-time error promotion: forgotten dependent reference
 
 When desired SQL references the new column name in a dependent
-definition but forgets to add `-- pist:renamed-from` on the column
+definition but forgets to add `-- pista:renamed-from` on the column
 itself, current behavior is to produce DDL that fails at apply time.
 The `ValidateColumnRefs` pass added in [#124](https://github.com/winebarrel/pistachio/pull/124) already catches the
 inverse case (renamed column with stale dependent reference). The

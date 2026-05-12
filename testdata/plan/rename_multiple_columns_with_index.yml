@@ -9,9 +9,9 @@ init: |
 desired: |
   CREATE TABLE public.users (
       id integer NOT NULL,
-      -- pist:renamed-from first_name
+      -- pista:renamed-from first_name
       given_name text NOT NULL,
-      -- pist:renamed-from last_name
+      -- pista:renamed-from last_name
       family_name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );

@@ -8,12 +8,12 @@ source "$SCRIPT_DIR/helper.sh"
 
 DATA="$SCRIPT_DIR/testdata/bulk_alter"
 
-pist_plan_bulk() {
-  "$PIST" plan --allow-drop all --bulk-alter "$@" 2>&1
+pista_plan_bulk() {
+  "$PISTA" plan --allow-drop all --bulk-alter "$@" 2>&1
 }
 
-pist_apply_bulk() {
-  "$PIST" apply --allow-drop all --bulk-alter "$@" 2>&1
+pista_apply_bulk() {
+  "$PISTA" apply --allow-drop all --bulk-alter "$@" 2>&1
 }
 
 # --- Setup: load initial schema ---
@@ -21,7 +21,7 @@ setup_db "$DATA/init.sql"
 
 # --- Step 1: multi-action merge on a single table ---
 step "01 multi-action merge"
-plan_output=$(pist_plan_bulk "$DATA/steps/01_multi_action.sql") || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pista_plan_bulk "$DATA/steps/01_multi_action.sql") || { fail "plan failed: $plan_output"; true; }
 # Expect a single ALTER TABLE with multiple comma-separated actions.
 if ! echo "$plan_output" | grep -qE '^ALTER TABLE public\.users$'; then
   fail "expected merged ALTER TABLE public.users header on its own line"
@@ -36,8 +36,8 @@ elif ! echo "$plan_output" | grep -qE '^  ADD CONSTRAINT users_id_pos CHECK \(id
   fail "expected ADD CONSTRAINT as final merged action"
   echo "    $plan_output" >&2
 else
-  apply_output=$(pist_apply_bulk "$DATA/steps/01_multi_action.sql") || { fail "apply failed: $apply_output"; true; }
-  drift=$(pist_plan_bulk "$DATA/steps/01_multi_action.sql") || { fail "drift check failed: $drift"; true; }
+  apply_output=$(pista_apply_bulk "$DATA/steps/01_multi_action.sql") || { fail "apply failed: $apply_output"; true; }
+  drift=$(pista_plan_bulk "$DATA/steps/01_multi_action.sql") || { fail "drift check failed: $drift"; true; }
   if echo "$drift" | grep -q 'No changes'; then
     pass
   else
@@ -48,7 +48,7 @@ fi
 
 # --- Step 2: FK additions stay split (ALTER TABLE ONLY) ---
 step "02 fk stays split from merged ALTER TABLE"
-plan_output=$(pist_plan_bulk "$DATA/steps/02_add_fk.sql") || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pista_plan_bulk "$DATA/steps/02_add_fk.sql") || { fail "plan failed: $plan_output"; true; }
 # orders gets ADD COLUMN user_id, ADD COLUMN total merged; FK is a separate
 # ALTER TABLE ONLY ... statement.
 if ! echo "$plan_output" | grep -qE '^ALTER TABLE public\.orders$'; then
@@ -64,8 +64,8 @@ elif ! echo "$plan_output" | grep -qF 'ALTER TABLE ONLY public.orders ADD CONSTR
   fail "expected FK as separate ALTER TABLE ONLY statement"
   echo "    $plan_output" >&2
 else
-  apply_output=$(pist_apply_bulk "$DATA/steps/02_add_fk.sql") || { fail "apply failed: $apply_output"; true; }
-  drift=$(pist_plan_bulk "$DATA/steps/02_add_fk.sql") || { fail "drift check failed: $drift"; true; }
+  apply_output=$(pista_apply_bulk "$DATA/steps/02_add_fk.sql") || { fail "apply failed: $apply_output"; true; }
+  drift=$(pista_plan_bulk "$DATA/steps/02_add_fk.sql") || { fail "drift check failed: $drift"; true; }
   if echo "$drift" | grep -q 'No changes'; then
     pass
   else
@@ -76,12 +76,12 @@ fi
 
 # --- Step 3: VALIDATE CONSTRAINT stays split from merged ADDs ---
 # Seed a NOT VALID constraint directly so the next plan triggers a VALIDATE.
-psql -X "$PIST_CONN_STR" -q -v ON_ERROR_STOP=1 \
+psql -X "$PISTA_CONN_STR" -q -v ON_ERROR_STOP=1 \
   -c 'ALTER TABLE public.users DROP CONSTRAINT users_id_pos;' \
   -c 'ALTER TABLE public.users ADD CONSTRAINT users_id_pos CHECK (id > 0) NOT VALID;'
 
 step "03 validate stays split from merged ADDs"
-plan_output=$(pist_plan_bulk "$DATA/steps/03_validate.sql") || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pista_plan_bulk "$DATA/steps/03_validate.sql") || { fail "plan failed: $plan_output"; true; }
 # Single ADD COLUMN remains as a single-line statement (no merge needed).
 if ! echo "$plan_output" | grep -qF 'ALTER TABLE public.users ADD COLUMN extra text;'; then
   fail "expected single-line ADD COLUMN extra (no merge for one action)"
@@ -93,8 +93,8 @@ elif echo "$plan_output" | grep -qE '^  VALIDATE CONSTRAINT'; then
   fail "VALIDATE CONSTRAINT must NOT be merged into an ALTER TABLE group"
   echo "    $plan_output" >&2
 else
-  apply_output=$(pist_apply_bulk "$DATA/steps/03_validate.sql") || { fail "apply failed: $apply_output"; true; }
-  drift=$(pist_plan_bulk "$DATA/steps/03_validate.sql") || { fail "drift check failed: $drift"; true; }
+  apply_output=$(pista_apply_bulk "$DATA/steps/03_validate.sql") || { fail "apply failed: $apply_output"; true; }
+  drift=$(pista_plan_bulk "$DATA/steps/03_validate.sql") || { fail "drift check failed: $drift"; true; }
   if echo "$drift" | grep -q 'No changes'; then
     pass
   else

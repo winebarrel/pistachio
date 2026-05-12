@@ -10,13 +10,13 @@ import (
 )
 
 var (
-	renameDirectivePattern       = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:renamed-from[ \t]+(.+?)[ \t]*$`)
-	executeDirectivePattern      = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:execute(?:[ \t]+(.+?))?[ \t]*$`)
-	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:concurrently[ \t]*$`)
-	// Matches -- pist:concurrently with trailing content (invalid usage).
-	concurrentlyWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:concurrently[ \t]+\S`)
-	// Matches any -- pist: directive, capturing the name (if any) after the colon.
-	anyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pist:[ \t]*(\S*)`)
+	renameDirectivePattern       = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]+(.+?)[ \t]*$`)
+	executeDirectivePattern      = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute(?:[ \t]+(.+?))?[ \t]*$`)
+	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]*$`)
+	// Matches -- pista:concurrently with trailing content (invalid usage).
+	concurrentlyWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]+\S`)
+	// Matches any -- pista: directive, capturing the name (if any) after the colon.
+	anyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:[ \t]*(\S*)`)
 )
 
 // knownDirectives lists all recognized directive names.
@@ -26,34 +26,34 @@ var knownDirectives = map[string]bool{
 	"concurrently": true,
 }
 
-// validateDirectives checks for unknown -- pist: directives in the raw SQL
+// validateDirectives checks for unknown -- pista: directives in the raw SQL
 // and returns an error if any are found.
 func validateDirectives(rawSQL string) error {
 	matches := anyDirectivePattern.FindAllStringSubmatch(rawSQL, -1)
 	for _, m := range matches {
 		name := strings.TrimSpace(m[1])
 		if name == "" {
-			return fmt.Errorf("invalid directive: -- pist: (missing directive name)")
+			return fmt.Errorf("invalid directive: -- pista: (missing directive name)")
 		}
 		if !knownDirectives[name] {
-			return fmt.Errorf("unknown directive: -- pist:%s", name)
+			return fmt.Errorf("unknown directive: -- pista:%s", name)
 		}
 	}
 
 	if concurrentlyWithArgsPattern.MatchString(rawSQL) {
-		return fmt.Errorf("-- pist:concurrently does not accept arguments")
+		return fmt.Errorf("-- pista:concurrently does not accept arguments")
 	}
 
 	return nil
 }
 
-// ExecuteStmt represents an arbitrary SQL statement marked with -- pist:execute.
+// ExecuteStmt represents an arbitrary SQL statement marked with -- pista:execute.
 type ExecuteStmt struct {
 	SQL      string // The SQL statement to execute
 	CheckSQL string // Optional condition check SQL (empty = always execute)
 }
 
-// extractExecuteDirectives scans raw SQL for `-- pist:execute [<check SQL>]`
+// extractExecuteDirectives scans raw SQL for `-- pista:execute [<check SQL>]`
 // comments and pairs them with the following SQL statement.
 // Returns the execute statements and a set of statement locations to skip
 // during normal parsing.
@@ -107,7 +107,7 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 
 // FormatExecuteStmt formats an ExecuteStmt as SQL with the directive comment.
 func FormatExecuteStmt(es *ExecuteStmt) string {
-	directive := "-- pist:execute"
+	directive := "-- pista:execute"
 	if es.CheckSQL != "" {
 		directive += " " + es.CheckSQL
 	}
@@ -187,7 +187,7 @@ func splitQualifiedName(s string) []string {
 	return parts
 }
 
-// extractStmtDirectives scans raw SQL for `-- pist:renamed-from <name>` comments
+// extractStmtDirectives scans raw SQL for `-- pista:renamed-from <name>` comments
 // that appear in each statement's raw text region (including leading comments).
 // pg_query includes leading comments in StmtLocation/StmtLen, so we scan the
 // raw text of each statement for the directive.
@@ -222,7 +222,7 @@ func extractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]s
 	return directives
 }
 
-// extractConcurrentlyDirectives scans raw SQL for `-- pist:concurrently` comments
+// extractConcurrentlyDirectives scans raw SQL for `-- pista:concurrently` comments
 // that appear in each statement's leading comment region.
 // Returns a set of StmtLocations that have the directive.
 func extractConcurrentlyDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]bool {
@@ -273,7 +273,7 @@ type inlineDirectives struct {
 }
 
 // extractInlineDirectives scans the raw text of a CREATE TABLE statement for
-// `-- pist:renamed-from <old_name>` directives that appear on lines immediately
+// `-- pista:renamed-from <old_name>` directives that appear on lines immediately
 // before column or constraint definitions.
 func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	result := &inlineDirectives{

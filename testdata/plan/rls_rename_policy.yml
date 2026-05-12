@@ -13,7 +13,7 @@ desired: |
       CONSTRAINT documents_pkey PRIMARY KEY (id)
   );
   ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
-  -- pist:renamed-from old_name
+  -- pista:renamed-from old_name
   CREATE POLICY new_name ON public.documents FOR SELECT USING (owner = current_user);
 plan: |
   ALTER POLICY old_name ON public.documents RENAME TO new_name;

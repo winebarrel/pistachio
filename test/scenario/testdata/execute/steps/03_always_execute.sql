@@ -4,7 +4,7 @@ CREATE TABLE public.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 
--- pist:execute
+-- pista:execute
 CREATE OR REPLACE FUNCTION public.get_user_count() RETURNS bigint AS $$
   SELECT count(*) FROM public.users;
 $$ LANGUAGE sql;

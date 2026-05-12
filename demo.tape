@@ -33,28 +33,28 @@ Sleep 4s
 Enter
 Type "# Preview the changes to be applied (like terraform plan)" Enter
 Sleep 2s
-Type "pist plan schema.sql | colorize" Enter
+Type "pista plan schema.sql | colorize" Enter
 Sleep 4s
 
 # Apply
 Enter
 Type "# Apply the schema to the database" Enter
 Sleep 2s
-Type "pist apply schema.sql | colorize" Enter
+Type "pista apply schema.sql | colorize" Enter
 Sleep 4s
 
 # Verify no remaining diff
 Enter
 Type "# Verify that the schema is now in sync" Enter
 Sleep 2s
-Type "pist plan schema.sql | colorize" Enter
+Type "pista plan schema.sql | colorize" Enter
 Sleep 4s
 
 # Dump
 Enter
 Type "# Dump the current database schema" Enter
 Sleep 2s
-Type "pist dump | colorize" Enter
+Type "pista dump | colorize" Enter
 Sleep 4s
 
 # Backup and modify schema: add a column
@@ -77,26 +77,26 @@ Sleep 4s
 Enter
 Type "# Plan again to see the incremental changes" Enter
 Sleep 2s
-Type "pist plan schema.sql | colorize" Enter
+Type "pista plan schema.sql | colorize" Enter
 Sleep 4s
 
 # Apply the diff
 Enter
 Type "# Apply the incremental changes" Enter
 Sleep 2s
-Type "pist apply schema.sql | colorize" Enter
+Type "pista apply schema.sql | colorize" Enter
 Sleep 4s
 
 # Verify no remaining diff
 Enter
 Type "# Verify that the schema is now in sync" Enter
 Sleep 2s
-Type "pist plan schema.sql | colorize" Enter
+Type "pista plan schema.sql | colorize" Enter
 Sleep 4s
 
 # Dump
 Enter
 Type "# Dump the current database schema" Enter
 Sleep 2s
-Type "pist dump | colorize" Enter
+Type "pista dump | colorize" Enter
 Sleep 4s

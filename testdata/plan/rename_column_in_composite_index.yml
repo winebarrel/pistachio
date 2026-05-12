@@ -10,7 +10,7 @@ desired: |
   CREATE TABLE public.events (
       id integer NOT NULL,
       user_id integer NOT NULL,
-      -- pist:renamed-from occurred_at
+      -- pista:renamed-from occurred_at
       event_time timestamp NOT NULL,
       CONSTRAINT events_pkey PRIMARY KEY (id)
   );

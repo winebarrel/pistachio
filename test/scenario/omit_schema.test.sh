@@ -14,7 +14,7 @@ setup_db "$DATA/init.sql"
 
 # --- Step 1: dump --omit-schema produces no public. prefix ---
 step "01 dump --omit-schema strips schema"
-if ! dump_output=$("$PIST" dump --omit-schema 2>&1); then
+if ! dump_output=$("$PISTA" dump --omit-schema 2>&1); then
   fail "dump failed: $dump_output"
 elif echo "$dump_output" | grep -q 'public\.'; then
   fail "dump output contains 'public.' prefix"
@@ -44,7 +44,7 @@ step "03 dump --omit-schema → plan no diff"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 echo "$dump_output" > "$tmp_dir/schema.sql"
-if ! plan_output=$("$PIST" plan "$tmp_dir/schema.sql" 2>&1); then
+if ! plan_output=$("$PISTA" plan "$tmp_dir/schema.sql" 2>&1); then
   fail "plan failed: $plan_output"
 elif echo "$plan_output" | grep -q 'No changes'; then
   pass
@@ -64,9 +64,9 @@ fi
 # --- Step 5: dump --omit-schema → apply to empty DB → no drift ---
 step "05 dump --omit-schema → apply → no drift"
 setup_db ""
-if ! apply_output=$("$PIST" apply "$tmp_dir/schema.sql" 2>&1); then
+if ! apply_output=$("$PISTA" apply "$tmp_dir/schema.sql" 2>&1); then
   fail "apply failed: $apply_output"
-elif ! plan_output=$("$PIST" plan "$tmp_dir/schema.sql" 2>&1); then
+elif ! plan_output=$("$PISTA" plan "$tmp_dir/schema.sql" 2>&1); then
   fail "post-apply plan failed: $plan_output"
 elif echo "$plan_output" | grep -q 'No changes'; then
   pass

@@ -13,7 +13,7 @@ all: vet test build
 
 .PHONY: build
 build:
-	go build ./cmd/pist
+	go build ./cmd/pista
 
 .PHONY: vet
 vet:

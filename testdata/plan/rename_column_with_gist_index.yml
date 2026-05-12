@@ -8,7 +8,7 @@ init: |
 desired: |
   CREATE TABLE public.reservations (
       id integer NOT NULL,
-      -- pist:renamed-from during
+      -- pista:renamed-from during
       time_range tsrange NOT NULL,
       CONSTRAINT reservations_pkey PRIMARY KEY (id)
   );

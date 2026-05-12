@@ -8,5 +8,5 @@ CREATE TABLE public.users (
 CREATE MATERIALIZED VIEW public.user_names AS
 SELECT id, name FROM public.users;
 
--- pist:concurrently
+-- pista:concurrently
 CREATE INDEX idx_user_names ON public.user_names USING btree (name);

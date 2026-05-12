@@ -8,7 +8,7 @@ init: |
 desired: |
   CREATE TABLE public.users (
       id integer NOT NULL,
-      -- pist:renamed-from old_name
+      -- pista:renamed-from old_name
       new_name text NOT NULL,
       email text,
       age integer,
