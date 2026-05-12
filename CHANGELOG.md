@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.0] - 2026-05-12
+
+* **Breaking:** Rename the CLI binary from `pist` to `pista`, environment variable prefix from `PIST_` to `PISTA_` (including `PISTA_CONN_STR`, `PISTA_PASSWORD`, `PISTA_SCHEMAS`, `PISTA_PRE_SQL`, `PISTA_PRE_SQL_FILE`, `PISTA_CONCURRENTLY_PRE_SQL`, `PISTA_CONCURRENTLY_PRE_SQL_FILE`, `PISTA_DISABLE_INDEX_CONCURRENTLY`, `PISTA_BULK_ALTER`, `PISTA_ALLOW_DROP`, `PISTA_INCLUDE`, `PISTA_EXCLUDE`, `PISTA_ENABLE`, `PISTA_DISABLE`), and SQL comment directives from `-- pist:` to `-- pista:` (the three directives `-- pista:renamed-from`, `-- pista:execute`, `-- pista:concurrently`). Old names are no longer recognized — existing user SQL files and environment / CI configurations must be updated to the new names before upgrading.
+
 ## [1.6.2] - 2026-05-12
 
 * Fix typmod placement when deparsing `timestamp(N)` / `timestamptz(N)` / `time(N)` / `timetz(N)` column types and DOMAIN base types. `pg_query`'s deparse emits `timestamp without time zone(6)` for `timestamp(6) without time zone` (and the equivalent misorder for the other three `timestamp` / `time` variants), which is invalid SQL — `pista plan` against any schema with a precision-bearing `timestamp` / `time` column produced statements PostgreSQL rejects, and falsely reported drift against catalog state since `pg_catalog.format_type()` returns the canonical order. Pistachio now formats these four `timestamp` / `time` variants directly from the `TypeName` AST (`Names` / `Typmods` / `ArrayBounds`), so the precision lands between the bare type and the `with`/`without time zone` qualifier and explicit array bounds like `timestamp(6)[3]` are preserved instead of being collapsed to `[]`. ([#177](https://github.com/winebarrel/pistachio/pull/177))
