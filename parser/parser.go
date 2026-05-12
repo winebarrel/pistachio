@@ -1191,13 +1191,28 @@ func formatTimeTypeName(tn *pg_query.TypeName) (string, bool) {
 	}
 	prec := ""
 	if len(tn.Typmods) > 0 {
-		c := tn.Typmods[0].GetAConst()
-		if c == nil {
+		ival := tn.Typmods[0].GetAConst().GetIval()
+		if ival == nil {
 			return "", false
 		}
-		prec = fmt.Sprintf("(%d)", c.GetIval().GetIval())
+		prec = fmt.Sprintf("(%d)", ival.GetIval())
 	}
-	return bare + prec + " " + zone + strings.Repeat("[]", len(tn.ArrayBounds)), true
+	var arr strings.Builder
+	for _, b := range tn.ArrayBounds {
+		// pg_query encodes "[]" as Ival=-1; positive values are explicit
+		// array bounds like "[3]". Anything else (e.g. a non-Integer node)
+		// means we don't know how to format it — fall back to deparse.
+		i := b.GetInteger()
+		if i == nil {
+			return "", false
+		}
+		if i.GetIval() < 0 {
+			arr.WriteString("[]")
+		} else {
+			fmt.Fprintf(&arr, "[%d]", i.GetIval())
+		}
+	}
+	return bare + prec + " " + zone + arr.String(), true
 }
 
 var typeAliases = map[string]string{

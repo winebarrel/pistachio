@@ -17,7 +17,10 @@ input: |
       tstz_arr timestamptz(3)[] NOT NULL,
       t_arr time(2)[] NOT NULL,
       ttz_arr timetz[] NOT NULL,
-      ts_arr_explicit timestamp(1) without time zone[] NOT NULL
+      ts_arr_explicit timestamp(1) without time zone[] NOT NULL,
+      ts_arr_bounded timestamp(6)[3] NOT NULL,
+      tstz_arr_bounded timestamptz(3)[3][5] NOT NULL,
+      ttz_arr_bounded timetz[7] NOT NULL
   );
 expected: |
   -- public.records
@@ -39,5 +42,8 @@ expected: |
       tstz_arr timestamp(3) with time zone[] NOT NULL,
       t_arr time(2) without time zone[] NOT NULL,
       ttz_arr time with time zone[] NOT NULL,
-      ts_arr_explicit timestamp(1) without time zone[] NOT NULL
+      ts_arr_explicit timestamp(1) without time zone[] NOT NULL,
+      ts_arr_bounded timestamp(6) without time zone[3] NOT NULL,
+      tstz_arr_bounded timestamp(3) with time zone[3][5] NOT NULL,
+      ttz_arr_bounded time with time zone[7] NOT NULL
   );
