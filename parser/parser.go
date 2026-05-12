@@ -1126,6 +1126,13 @@ func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchem
 // Deparse helpers
 
 func deparseTypeName(tn *pg_query.TypeName) (string, error) {
+	// pg_query's deparse places typmod after "with/without time zone" for
+	// timestamp/time variants, producing invalid SQL like
+	// "timestamp without time zone(6)". Format these four types directly
+	// from the AST so the precision lands in the right spot.
+	if s, ok := formatTimeTypeName(tn); ok {
+		return s, nil
+	}
 	result := &pg_query.ParseResult{
 		Stmts: []*pg_query.RawStmt{{
 			Stmt: &pg_query.Node{
@@ -1160,6 +1167,63 @@ func deparseTypeName(tn *pg_query.TypeName) (string, error) {
 	// Strip the prefix so the result matches format_type() output.
 	typeName = strings.TrimPrefix(typeName, "pg_catalog.")
 	return normalizeTypeName(typeName), nil
+}
+
+func formatTimeTypeName(tn *pg_query.TypeName) (string, bool) {
+	if len(tn.Names) == 0 || len(tn.Names) > 2 {
+		return "", false
+	}
+	if len(tn.Names) == 2 {
+		q := tn.Names[0].GetString_()
+		if q == nil || q.GetSval() != "pg_catalog" {
+			return "", false
+		}
+	}
+	last := tn.Names[len(tn.Names)-1].GetString_()
+	if last == nil {
+		return "", false
+	}
+	var bare, zone string
+	switch last.GetSval() {
+	case "timestamp":
+		bare, zone = "timestamp", "without time zone"
+	case "timestamptz":
+		bare, zone = "timestamp", "with time zone"
+	case "time":
+		bare, zone = "time", "without time zone"
+	case "timetz":
+		bare, zone = "time", "with time zone"
+	default:
+		return "", false
+	}
+	prec := ""
+	if len(tn.Typmods) > 0 {
+		c := tn.Typmods[0].GetAConst()
+		if c == nil {
+			return "", false
+		}
+		ival := c.GetIval()
+		if ival == nil {
+			return "", false
+		}
+		prec = fmt.Sprintf("(%d)", ival.GetIval())
+	}
+	var arr strings.Builder
+	for _, b := range tn.ArrayBounds {
+		// pg_query encodes "[]" as Ival=-1; positive values are explicit
+		// array bounds like "[3]". Anything else (e.g. a non-Integer node)
+		// means we don't know how to format it — fall back to deparse.
+		i := b.GetInteger()
+		if i == nil {
+			return "", false
+		}
+		if i.GetIval() < 0 {
+			arr.WriteString("[]")
+		} else {
+			fmt.Fprintf(&arr, "[%d]", i.GetIval())
+		}
+	}
+	return bare + prec + " " + zone + arr.String(), true
 }
 
 var typeAliases = map[string]string{

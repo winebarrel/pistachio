@@ -1,0 +1,49 @@
+input: |
+  CREATE TABLE public.records (
+      id integer NOT NULL,
+      ts_default timestamp(6) without time zone DEFAULT now() NOT NULL,
+      ts_short timestamp(3) NOT NULL,
+      tstz_long timestamp(2) with time zone NOT NULL,
+      tstz_short timestamptz(1) NOT NULL,
+      t_default time(4) without time zone NOT NULL,
+      t_short time(3) NOT NULL,
+      ttz_long time(0) with time zone NOT NULL,
+      ttz_short timetz(5) NOT NULL,
+      ts_bare timestamp NOT NULL,
+      tstz_bare timestamptz NOT NULL,
+      t_bare time NOT NULL,
+      ttz_bare timetz NOT NULL,
+      ts_arr timestamp(6)[] NOT NULL,
+      tstz_arr timestamptz(3)[] NOT NULL,
+      t_arr time(2)[] NOT NULL,
+      ttz_arr timetz[] NOT NULL,
+      ts_arr_explicit timestamp(1) without time zone[] NOT NULL,
+      ts_arr_bounded timestamp(6)[3] NOT NULL,
+      tstz_arr_bounded timestamptz(3)[3][5] NOT NULL,
+      ttz_arr_bounded timetz[7] NOT NULL
+  );
+expected: |
+  -- public.records
+  CREATE TABLE public.records (
+      id integer NOT NULL,
+      ts_default timestamp(6) without time zone DEFAULT now() NOT NULL,
+      ts_short timestamp(3) without time zone NOT NULL,
+      tstz_long timestamp(2) with time zone NOT NULL,
+      tstz_short timestamp(1) with time zone NOT NULL,
+      t_default time(4) without time zone NOT NULL,
+      t_short time(3) without time zone NOT NULL,
+      ttz_long time(0) with time zone NOT NULL,
+      ttz_short time(5) with time zone NOT NULL,
+      ts_bare timestamp without time zone NOT NULL,
+      tstz_bare timestamp with time zone NOT NULL,
+      t_bare time without time zone NOT NULL,
+      ttz_bare time with time zone NOT NULL,
+      ts_arr timestamp(6) without time zone[] NOT NULL,
+      tstz_arr timestamp(3) with time zone[] NOT NULL,
+      t_arr time(2) without time zone[] NOT NULL,
+      ttz_arr time with time zone[] NOT NULL,
+      ts_arr_explicit timestamp(1) without time zone[] NOT NULL,
+      ts_arr_bounded timestamp(6) without time zone[3] NOT NULL,
+      tstz_arr_bounded timestamp(3) with time zone[3][5] NOT NULL,
+      ttz_arr_bounded time with time zone[7] NOT NULL
+  );
