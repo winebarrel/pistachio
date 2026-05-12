@@ -17,7 +17,7 @@ build:
 
 .PHONY: install
 install:
-	go install .
+	go install ./cmd/pista
 
 .PHONY: vet
 vet:
