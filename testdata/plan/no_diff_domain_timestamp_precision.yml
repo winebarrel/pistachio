@@ -1,0 +1,7 @@
+init: |
+  CREATE DOMAIN public.precise_ts AS timestamp(6) without time zone;
+  CREATE DOMAIN public.precise_ttz AS time(3) with time zone;
+desired: |
+  CREATE DOMAIN public.precise_ts AS timestamp(6) without time zone;
+  CREATE DOMAIN public.precise_ttz AS timetz(3);
+plan: ""

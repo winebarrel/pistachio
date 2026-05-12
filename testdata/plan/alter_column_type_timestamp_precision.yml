@@ -1,0 +1,12 @@
+init: |
+  CREATE TABLE public.records (
+      id integer NOT NULL,
+      at timestamp without time zone NOT NULL
+  );
+desired: |
+  CREATE TABLE public.records (
+      id integer NOT NULL,
+      at timestamp(6) with time zone NOT NULL
+  );
+plan: |
+  ALTER TABLE public.records ALTER COLUMN at SET DATA TYPE timestamp(6) with time zone;
