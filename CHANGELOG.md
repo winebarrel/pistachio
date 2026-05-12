@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.6.2] - 2026-05-12
+
+* Fix typmod placement when deparsing `timestamp(N)` / `timestamptz(N)` / `time(N)` / `timetz(N)` column types and DOMAIN base types. `pg_query`'s deparse emits `timestamp without time zone(6)` for `timestamp(6) without time zone` (and the equivalent misorder for the other three time-zone-aware variants), which is invalid SQL — `pist plan` against any schema with a precision-bearing `timestamp` / `time` column produced statements PostgreSQL rejects, and falsely reported drift against catalog state since `pg_catalog.format_type()` returns the canonical order. Pistachio now formats the four time-zone-aware types directly from the `TypeName` AST (`Names` / `Typmods` / `ArrayBounds`), so the precision lands between the bare type and the `with`/`without time zone` qualifier and explicit array bounds like `timestamp(6)[3]` are preserved instead of being collapsed to `[]`. ([#177](https://github.com/winebarrel/pistachio/pull/177))
+
 ## [1.6.1] - 2026-05-10
 
 * Fix `toposort` to honor PostgreSQL's default `search_path` fallback to `public` when resolving unqualified references from a non-public schema. Previously a `CREATE TABLE` whose column referenced an unqualified DOMAIN/ENUM in `public`, an FK pointing at an unqualified `public` table, or a view body selecting from an unqualified `public` table was treated as having no dependency edge, so the dependent statement could be ordered before its prerequisite and `pist apply` would fail with `type "..." does not exist` (and similar). The schema component is also now run through `model.Ident` so quote-requiring schemas (e.g. `"MySchema"`) match the keys used by the dependency graph. ([#172](https://github.com/winebarrel/pistachio/pull/172))
