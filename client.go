@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -57,6 +60,39 @@ func (client *Client) buildConnConfig() (*pgx.ConnConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// ConnInfoComment returns a SQL comment describing the connection target
+// (host/port/dbname/user) for inclusion at the top of plan/apply/dump output.
+// The password is intentionally never included.
+//
+// TCP connections render as a libpq URI (postgres://user@host:port/dbname).
+// IPv6 hosts are bracketed via net.JoinHostPort; user and dbname are
+// URL-escaped via net/url so identifiers with URI-meaningful characters
+// (including '/' in the dbname) round-trip safely — Path holds the decoded
+// form and RawPath the encoded form, so url.URL.String() uses RawPath when
+// the default encoding would differ. libpq unix-socket connections (host
+// starts with "/") render as a keyword/value string ("host=/path dbname=db
+// user=u") instead — percent-encoding the socket path into the URI host
+// component would be unreadable in a comment.
+func (client *Client) ConnInfoComment() (string, error) {
+	cfg, err := client.buildConnConfig()
+	if err != nil {
+		return "", err
+	}
+
+	if strings.HasPrefix(cfg.Host, "/") {
+		return fmt.Sprintf("-- Connected to host=%s dbname=%s user=%s", cfg.Host, cfg.Database, cfg.User), nil
+	}
+
+	u := url.URL{
+		Scheme:  "postgres",
+		User:    url.User(cfg.User),
+		Host:    net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))),
+		Path:    "/" + cfg.Database,
+		RawPath: "/" + url.PathEscape(cfg.Database),
+	}
+	return "-- Connected to " + u.String(), nil
 }
 
 func (client *Client) connect(ctx context.Context) (*pgx.Conn, error) {

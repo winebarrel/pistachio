@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.3] - 2026-05-13
+
+* Print a `-- Connected to ...` comment above the existing header in `plan` / `apply` / `dump` output so it's clear which database the command ran against. TCP connections render as a libpq URI (`postgres://<user>@<host>:<port>/<dbname>`, with IPv6 hosts bracketed and user/dbname URL-escaped); unix-socket connections render as keyword/value form (`host=<path> dbname=<dbname> user=<user>`) to keep the socket path readable. The password (whether embedded in `--conn-string` or passed via `--password` / `PISTA_PASSWORD`) is never included.
+
 ## [1.7.2] - 2026-05-13
 
 * Add `-d` / `--dbname` flag (env `PISTA_DBNAME`) that overrides the dbname embedded in `--conn-string`. Lets users keep host/user/port constant in `-c postgres://user@host:port/` while selecting the database name ad hoc per invocation, mirroring the `psql -d` convention. If `-d` is omitted, existing behavior is unchanged: pgx parses dbname from `--conn-string`, falling back to the connecting user name when absent. ([#188](https://github.com/winebarrel/pistachio/pull/188))

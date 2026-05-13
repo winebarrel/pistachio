@@ -18,6 +18,10 @@ func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 		return err
 	}
 
+	if connInfo, err := client.ConnInfoComment(); err == nil {
+		fmt.Fprintln(w, connInfo) //nolint:errcheck
+	}
+
 	fmt.Fprintf(w, "-- Plan for %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
 
 	// Order: executable SQL (incl. pre-SQL) first so it can be piped/copied

@@ -20,6 +20,10 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 		return err
 	}
 
+	if connInfo, err := client.ConnInfoComment(); err == nil {
+		fmt.Fprintln(w, connInfo) //nolint:errcheck
+	}
+
 	fmt.Fprintf(w, "-- Apply to %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
 
 	// Same ordering as Plan: executed SQL (incl. pre-SQL) first, then skipped
