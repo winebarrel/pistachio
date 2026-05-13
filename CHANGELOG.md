@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.1] - 2026-05-13
+
+* Reject `dump --split` filenames that would escape the target directory. PostgreSQL quoted identifiers may contain `/`, `..`, or absolute paths (`CREATE TABLE "../escape" (...)` parses), and the existing `fileNameReplacer` only stripped `"` and spaces before passing the result to `filepath.Join`, which does not prevent traversal. A hostile DB object name could therefore land a file outside the directory passed to `--split`. Each name is now guarded by `filepath.IsLocal` — `..` path elements, absolute paths, empty strings, and Windows-reserved names are refused with a clear error, while identifiers that legitimately contain literal dots (`foo..bar`, `..leading`, `public.v1.0`) still write through. Realistic exploit conditions are narrow (requires `CREATE` privilege on the target database) but the guard adds defense in depth.
+
 ## [1.7.0] - 2026-05-12
 
 * **Breaking:** Rename the CLI binary from `pist` to `pista`, environment variable prefix from `PIST_` to `PISTA_` (including `PISTA_CONN_STR`, `PISTA_PASSWORD`, `PISTA_SCHEMAS`, `PISTA_PRE_SQL`, `PISTA_PRE_SQL_FILE`, `PISTA_CONCURRENTLY_PRE_SQL`, `PISTA_CONCURRENTLY_PRE_SQL_FILE`, `PISTA_DISABLE_INDEX_CONCURRENTLY`, `PISTA_BULK_ALTER`, `PISTA_ALLOW_DROP`, `PISTA_INCLUDE`, `PISTA_EXCLUDE`, `PISTA_ENABLE`, `PISTA_DISABLE`), and SQL comment directives from `-- pist:` to `-- pista:` (the three directives `-- pista:renamed-from`, `-- pista:execute`, `-- pista:concurrently`). Old names are no longer recognized — existing user SQL files and environment / CI configurations must be updated to the new names before upgrading.
