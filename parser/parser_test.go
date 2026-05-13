@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,17 +100,23 @@ func TestParseSQLFilesWithSchema(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.sql")
 	b := filepath.Join(dir, "b.sql")
-	require.NoError(t, os.WriteFile(a, []byte("CREATE TABLE public.t1 (id integer NOT NULL);"), 0o644))
+	// One unqualified, one explicitly qualified: verifies both the file-join
+	// behavior and that defaultSchema is applied to unqualified names.
+	require.NoError(t, os.WriteFile(a, []byte("CREATE TABLE t1 (id integer NOT NULL);"), 0o644))
 	require.NoError(t, os.WriteFile(b, []byte("CREATE TABLE public.t2 (id integer NOT NULL);"), 0o644))
 
 	result, err := parser.ParseSQLFilesWithSchema([]string{a, b}, "public")
 	require.NoError(t, err)
-	assert.Equal(t, 2, result.Tables.Len())
+	_, ok := result.Tables.GetOk("public.t1")
+	assert.True(t, ok, "unqualified t1 should be schema-qualified to public.t1")
+	_, ok = result.Tables.GetOk("public.t2")
+	assert.True(t, ok, "qualified public.t2 should be preserved")
 }
 
 func TestParseSQLFilesWithSchema_MissingFile(t *testing.T) {
 	_, err := parser.ParseSQLFilesWithSchema([]string{filepath.Join(t.TempDir(), "missing.sql")}, "public")
 	require.Error(t, err)
+	assert.ErrorIs(t, err, fs.ErrNotExist)
 	assert.Contains(t, err.Error(), "failed to read SQL file")
 }
 
