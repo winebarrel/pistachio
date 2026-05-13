@@ -7,7 +7,7 @@ import (
 
 type Options struct {
 	ConnString string            `short:"c" env:"PISTA_CONN_STR" default:"postgres://postgres@localhost/postgres" help:"PostgreSQL connection string. See https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING"`
-	Dbname     string            `short:"d" env:"PISTA_DBNAME" help:"PostgreSQL database name. Overrides the dbname in --conn-string."`
+	DBName     string            `name:"dbname" short:"d" env:"PISTA_DBNAME" help:"PostgreSQL database name. Overrides the dbname in --conn-string."`
 	Password   string            `env:"PISTA_PASSWORD" help:"PostgreSQL password."`
 	Schemas    []string          `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schemas to inspect and modify."`
 	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`

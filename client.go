@@ -48,8 +48,8 @@ func (client *Client) buildConnConfig() (*pgx.ConnConfig, error) {
 		return nil, fmt.Errorf("pistachio: failed to parse connection string: %w", err)
 	}
 
-	if client.Dbname != "" {
-		cfg.Database = client.Dbname
+	if client.DBName != "" {
+		cfg.Database = client.DBName
 	}
 
 	if client.Password != "" {

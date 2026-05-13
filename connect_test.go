@@ -28,7 +28,7 @@ func TestConnect_PropagatesCancelledContext(t *testing.T) {
 func TestBuildConnConfig_DbnameOverridesConnString(t *testing.T) {
 	client := NewClient(&Options{
 		ConnString: "postgres://postgres@localhost/postgres",
-		Dbname:     "mydb",
+		DBName:     "mydb",
 	})
 
 	cfg, err := client.buildConnConfig()
@@ -39,7 +39,7 @@ func TestBuildConnConfig_DbnameOverridesConnString(t *testing.T) {
 func TestBuildConnConfig_DbnameWorksWithEmptyDbnameInConnString(t *testing.T) {
 	client := NewClient(&Options{
 		ConnString: "postgres://postgres@localhost:5432/",
-		Dbname:     "mydb",
+		DBName:     "mydb",
 	})
 
 	cfg, err := client.buildConnConfig()
