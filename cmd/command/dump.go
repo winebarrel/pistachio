@@ -21,10 +21,8 @@ func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 		return err
 	}
 
-	connInfo, _ := client.ConnInfoComment()
-
 	if cmd.Split == "" {
-		if connInfo != "" {
+		if connInfo, err := client.ConnInfoComment(); err == nil {
 			fmt.Fprintln(w, connInfo) //nolint:errcheck
 		}
 		fmt.Fprintf(w, "-- Dump of %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
@@ -36,7 +34,7 @@ func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if connInfo != "" {
+	if connInfo, err := client.ConnInfoComment(); err == nil {
 		fmt.Fprintln(w, connInfo) //nolint:errcheck
 	}
 	fmt.Fprintf(w, "-- Dump of %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck

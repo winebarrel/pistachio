@@ -109,6 +109,46 @@ func TestConnInfoComment_OptionsPasswordNotIncluded(t *testing.T) {
 	assert.NotContains(t, comment, "topsecret")
 }
 
+func TestConnInfoComment_IPv6HostBracketed(t *testing.T) {
+	// libpq URIs require IPv6 hosts to be bracketed; net.JoinHostPort handles
+	// this. Without brackets the "::1:5432" string is ambiguous.
+	client := NewClient(&Options{
+		ConnString: "postgres://myuser@[::1]:5433/mydb",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.Equal(t, "-- Connected to postgres://myuser@[::1]:5433/mydb", comment)
+}
+
+func TestConnInfoComment_UnixSocketHost(t *testing.T) {
+	// pgx accepts unix-socket hosts via the libpq URI's host= query parameter.
+	// We surface them as keyword/value form because percent-encoding the
+	// socket path into the URI host component is unreadable in a comment.
+	client := NewClient(&Options{
+		ConnString: "postgres://myuser@/mydb?host=/var/run/postgresql",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.Equal(t, "-- Connected to host=/var/run/postgresql dbname=mydb user=myuser", comment)
+}
+
+func TestConnInfoComment_URLEscapesSpecialChars(t *testing.T) {
+	// User / dbname with characters that have URI meaning must be escaped so
+	// the comment stays a parseable libpq URI. Round-tripping through url.URL
+	// gives us this for free.
+	client := NewClient(&Options{
+		ConnString: "postgres://my%2Fuser@myhost:5432/my%20db",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	// The user "my/user" and dbname "my db" must reappear escaped.
+	assert.Contains(t, comment, "my%2Fuser")
+	assert.Contains(t, comment, "my%20db")
+}
+
 func TestConnInfoComment_InvalidConnString(t *testing.T) {
 	client := NewClient(&Options{ConnString: "::not-valid::"})
 
