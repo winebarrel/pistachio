@@ -750,6 +750,12 @@ func TestWriteDumpFiles_RejectsUnsafeNames(t *testing.T) {
 		{"empty name", ""},
 		{"cleaned traversal", "foo/../../escape.sql"},
 		{"deep traversal", "a/b/../../../escape.sql"},
+		// Non-canonical names: IsLocal would allow these, but Clean
+		// reshapes them and would alias other entries on disk.
+		{"internal cancel", "foo/../bar.sql"},
+		{"leading dot slash", "./foo.sql"},
+		{"trailing slash", "foo.sql/"},
+		{"redundant slash", "a//b.sql"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -757,7 +763,7 @@ func TestWriteDumpFiles_RejectsUnsafeNames(t *testing.T) {
 			count, err := command.WriteDumpFiles(dir, map[string]string{tc.name: "x"})
 			require.Error(t, err)
 			assert.Equal(t, 0, count)
-			assert.Contains(t, err.Error(), "unsafe name")
+			assert.Contains(t, err.Error(), "unsafe or non-canonical name")
 			assert.Contains(t, err.Error(), "--split")
 
 			// No files should land anywhere — neither under the temp dir
@@ -789,22 +795,23 @@ func TestWriteDumpFiles_AllowsLiteralDotsInName(t *testing.T) {
 	}
 }
 
-func TestWriteDumpFiles_LocalSubpathInternalCancelOK(t *testing.T) {
-	// "foo/../bar.sql" lexically resolves to "bar.sql" so IsLocal returns
-	// true; filepath.Join produces the same Cleaned path. Verify that the
-	// resulting file actually lands directly under dir (i.e. "bar.sql"),
-	// not in any "foo/" subdirectory.
+func TestWriteDumpFiles_PreservesLiteralLeadingDots(t *testing.T) {
+	// Sanity check that the canonical-form guard does not over-restrict:
+	// names like "..foo.sql" or "foo..bar.sql" are already in Clean form
+	// (the ".."s are part of the filename, not path elements) and must
+	// still be written through.
 	dir := t.TempDir()
-	count, err := command.WriteDumpFiles(dir, map[string]string{
-		"foo/../bar.sql": "data\n",
-	})
+	files := map[string]string{
+		"..foo.sql":    "a\n",
+		"foo..bar.sql": "b\n",
+	}
+	count, err := command.WriteDumpFiles(dir, files)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-
-	_, err = os.Stat(filepath.Join(dir, "bar.sql"))
-	require.NoError(t, err, "Clean should drop foo/.. and write bar.sql directly")
-	_, err = os.Stat(filepath.Join(dir, "foo"))
-	assert.True(t, os.IsNotExist(err), "no foo/ subdirectory should be created")
+	assert.Equal(t, 2, count)
+	for name := range files {
+		_, err := os.Stat(filepath.Join(dir, name))
+		require.NoError(t, err, "expected %q to be written", name)
+	}
 }
 
 func TestWriteDumpFiles_WriteFileError(t *testing.T) {
@@ -831,7 +838,14 @@ func TestWriteDumpFiles_StopsOnUnsafeName(t *testing.T) {
 	// can only assert that the unsafe file was not written and that the
 	// returned count matches the number of files actually written before
 	// the abort.
-	dir := t.TempDir()
+	//
+	// Use a self-controlled parent directory so the negative assertion
+	// (no "escape.sql" was written above the split dir) is not confused
+	// by unrelated files in the shared OS temp directory.
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "split")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+
 	count, err := command.WriteDumpFiles(dir, map[string]string{
 		"safe.sql":      "ok\n",
 		"../escape.sql": "bad\n",
@@ -839,6 +853,6 @@ func TestWriteDumpFiles_StopsOnUnsafeName(t *testing.T) {
 	require.Error(t, err)
 	assert.LessOrEqual(t, count, 1, "at most the safe file may have been written")
 
-	_, err = os.Stat(filepath.Join(filepath.Dir(dir), "escape.sql"))
-	assert.True(t, os.IsNotExist(err), "escape.sql must not appear next to temp dir")
+	_, err = os.Stat(filepath.Join(parent, "escape.sql"))
+	assert.True(t, os.IsNotExist(err), "escape.sql must not appear next to split dir")
 }

@@ -41,14 +41,21 @@ func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 	return nil
 }
 
-// writeDumpFiles writes each entry of files into dir. Names are validated with
-// filepath.IsLocal so that hostile PostgreSQL identifiers (quoted names that
-// contain "/", "..", absolute paths, etc.) cannot escape the target directory.
+// writeDumpFiles writes each entry of files into dir. Names must satisfy two
+// guards before they are written:
+//   - filepath.IsLocal, to reject hostile PostgreSQL identifiers (quoted names
+//     containing "/", "..", absolute paths, etc.) that would otherwise escape
+//     the target directory via filepath.Join.
+//   - Canonical form (name == filepath.Clean(name)), so that the map key
+//     returned by DumpResult.Files() matches the on-disk filename. Without
+//     this a name like "foo/../bar.sql" would Clean to "bar.sql" inside Join
+//     and could silently collide with a sibling "bar.sql" entry whose dedup
+//     check ran on the original map key.
 func writeDumpFiles(dir string, files map[string]string) (int, error) {
 	count := 0
 	for name, content := range files {
-		if !filepath.IsLocal(name) {
-			return count, fmt.Errorf("refusing to write dump file with unsafe name %q: would escape --split directory", name)
+		if !filepath.IsLocal(name) || name != filepath.Clean(name) {
+			return count, fmt.Errorf("refusing to write dump file with unsafe or non-canonical name %q: would escape or alias the --split directory", name)
 		}
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
