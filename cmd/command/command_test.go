@@ -708,3 +708,168 @@ func TestApply_Run_ExecutedWithSkippedDrops(t *testing.T) {
 	assert.Less(t, addColPos, skippedPos, "executed DDL must precede skipped drop comment")
 	assert.NotContains(t, got, "-- No changes")
 }
+
+// writeDumpFiles is the helper that backs `pista dump --split`. The tests
+// below exercise it without a database, focusing on the layered guard that
+// requires every dump filename to be a flat basename directly under the
+// --split directory: no path separators ("/" or "\"), no ".."/absolute/empty
+// paths (filepath.IsLocal), and the name must already be in Clean form so
+// the on-disk filename matches the map key.
+
+func TestWriteDumpFiles_HappyPath(t *testing.T) {
+	dir := t.TempDir()
+	count, err := command.WriteDumpFiles(dir, map[string]string{
+		"public.users.sql":    "CREATE TABLE public.users (id integer);\n",
+		"public.products.sql": "CREATE TABLE public.products (id integer);\n",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+
+	got, err := os.ReadFile(filepath.Join(dir, "public.users.sql"))
+	require.NoError(t, err)
+	assert.Equal(t, "CREATE TABLE public.users (id integer);\n", string(got))
+
+	got, err = os.ReadFile(filepath.Join(dir, "public.products.sql"))
+	require.NoError(t, err)
+	assert.Equal(t, "CREATE TABLE public.products (id integer);\n", string(got))
+}
+
+func TestWriteDumpFiles_Empty(t *testing.T) {
+	dir := t.TempDir()
+	count, err := command.WriteDumpFiles(dir, map[string]string{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestWriteDumpFiles_RejectsUnsafeNames(t *testing.T) {
+	cases := []struct {
+		desc string
+		name string
+	}{
+		// Traversal / absolute / empty: rejected by filepath.IsLocal.
+		{"parent traversal", "../escape.sql"},
+		{"bare dotdot", ".."},
+		{"absolute path", "/etc/passwd"},
+		{"empty name", ""},
+		{"cleaned traversal", "foo/../../escape.sql"},
+		{"deep traversal", "a/b/../../../escape.sql"},
+		// Non-canonical names: IsLocal would allow these, but Clean
+		// reshapes them and would alias other entries on disk.
+		{"internal cancel", "foo/../bar.sql"},
+		{"leading dot slash", "./foo.sql"},
+		{"trailing slash", "foo.sql/"},
+		{"redundant slash", "a//b.sql"},
+		// Plain nested paths: IsLocal *does* accept these, and they
+		// could be redirected outside dir via a pre-existing symlink.
+		// The explicit separator check refuses them.
+		{"forward separator", "subdir/file.sql"},
+		{"backslash separator", `subdir\file.sql`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Build the split dir under a controlled parent so we can
+			// verify both that the split dir stays empty AND that the
+			// parent contains only the split dir — i.e. no file slipped
+			// out via traversal.
+			parent := t.TempDir()
+			dir := filepath.Join(parent, "split")
+			require.NoError(t, os.MkdirAll(dir, 0o755))
+
+			count, err := command.WriteDumpFiles(dir, map[string]string{tc.name: "x"})
+			require.Error(t, err)
+			assert.Equal(t, 0, count)
+			assert.Contains(t, err.Error(), "unsafe name")
+			assert.Contains(t, err.Error(), "--split")
+
+			entries, err := os.ReadDir(dir)
+			require.NoError(t, err)
+			assert.Empty(t, entries, "split dir must remain empty")
+
+			parentEntries, err := os.ReadDir(parent)
+			require.NoError(t, err)
+			require.Len(t, parentEntries, 1, "no file should escape into the parent dir")
+			assert.Equal(t, "split", parentEntries[0].Name())
+		})
+	}
+}
+
+func TestWriteDumpFiles_AllowsLiteralDotsInName(t *testing.T) {
+	// PostgreSQL identifiers may legitimately contain dots in the middle
+	// (quoted names like "v1.0"). These must pass IsLocal because they
+	// don't escape the target directory.
+	dir := t.TempDir()
+	files := map[string]string{
+		"..leading.sql":   "x\n",
+		"foo..bar.sql":    "y\n",
+		"public.v1.0.sql": "z\n",
+	}
+	count, err := command.WriteDumpFiles(dir, files)
+	require.NoError(t, err)
+	assert.Equal(t, 3, count)
+	for name := range files {
+		_, err := os.Stat(filepath.Join(dir, name))
+		require.NoError(t, err, "expected %q to be written", name)
+	}
+}
+
+func TestWriteDumpFiles_PreservesLiteralLeadingDots(t *testing.T) {
+	// Sanity check that the canonical-form guard does not over-restrict:
+	// names like "..foo.sql" or "foo..bar.sql" are already in Clean form
+	// (the ".."s are part of the filename, not path elements) and must
+	// still be written through.
+	dir := t.TempDir()
+	files := map[string]string{
+		"..foo.sql":    "a\n",
+		"foo..bar.sql": "b\n",
+	}
+	count, err := command.WriteDumpFiles(dir, files)
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+	for name := range files {
+		_, err := os.Stat(filepath.Join(dir, name))
+		require.NoError(t, err, "expected %q to be written", name)
+	}
+}
+
+func TestWriteDumpFiles_WriteFileError(t *testing.T) {
+	// Skip when running as root: a read-only directory still permits writes
+	// for uid 0 on Linux, so the failure path we're trying to hit cannot
+	// be triggered. The other CI hosts run as a regular user and exercise
+	// this branch.
+	if os.Geteuid() == 0 {
+		t.Skip("read-only dir trick does not block root")
+	}
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	count, err := command.WriteDumpFiles(dir, map[string]string{"safe.sql": "x"})
+	require.Error(t, err)
+	assert.Equal(t, 0, count)
+	assert.Contains(t, err.Error(), "failed to write")
+}
+
+func TestWriteDumpFiles_StopsOnUnsafeName(t *testing.T) {
+	// The check is per-iteration; when an unsafe name is encountered the
+	// loop returns immediately. Map iteration order is unspecified, so we
+	// can only assert that the unsafe file was not written and that the
+	// returned count matches the number of files actually written before
+	// the abort.
+	//
+	// Use a self-controlled parent directory so the negative assertion
+	// (no "escape.sql" was written above the split dir) is not confused
+	// by unrelated files in the shared OS temp directory.
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "split")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+
+	count, err := command.WriteDumpFiles(dir, map[string]string{
+		"safe.sql":      "ok\n",
+		"../escape.sql": "bad\n",
+	})
+	require.Error(t, err)
+	assert.LessOrEqual(t, count, 1, "at most the safe file may have been written")
+
+	_, err = os.Stat(filepath.Join(parent, "escape.sql"))
+	assert.True(t, os.IsNotExist(err), "escape.sql must not appear next to split dir")
+}
