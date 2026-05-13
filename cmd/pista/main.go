@@ -34,8 +34,8 @@ func main() {
 	client := pistachio.NewClient(&cli.Options)
 	runErr := kctx.Run(client)
 	// Flush write errors (broken pipe when piping to `head`, etc.) are
-	// intentionally ignored — they match the previous per-Fprintf
-	// //nolint:errcheck behavior and make `pista plan | head` exit cleanly.
-	_ = out.Flush()
+	// intentionally discarded so `pista plan | head` exits cleanly, matching
+	// the prior behavior where each per-Fprintf write error was ignored.
+	out.Flush() //nolint:errcheck
 	kctx.FatalIfErrorf(runErr)
 }

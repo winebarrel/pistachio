@@ -37,9 +37,14 @@ func (s *SQLWriter) Write(p []byte) (int, error) {
 	return s.buf.Write(p)
 }
 
-// Flush highlights and emits the buffered text. It also resets the internal
-// buffer so a second Flush is a no-op (rather than duplicating output) and
-// the buffered memory can be reclaimed.
+// Flush highlights and emits the buffered text, then resets the internal
+// buffer so a second Flush is a no-op and the buffered memory can be
+// reclaimed. quick.Highlight with our hardcoded postgres lexer / terminal256
+// formatter / monokai style never returns an error in practice (the
+// terminal256 formatter drops writer errors, the lexer can't fail
+// tokenising, and quick falls back to defaults for unknown names), so no
+// fallback path is wired here; we still propagate the returned error for
+// forward-compatibility.
 func (s *SQLWriter) Flush() error {
 	if !s.color {
 		return nil
