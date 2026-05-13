@@ -1,0 +1,19 @@
+input: |
+  CREATE TABLE public.records (
+      id integer NOT NULL,
+      a db.public.timestamp NOT NULL,
+      b db.public.timestamptz NOT NULL,
+      c db.public.time NOT NULL,
+      d db.public.timetz NOT NULL,
+      e other.public.timestamp NOT NULL
+  );
+expected: |
+  -- public.records
+  CREATE TABLE public.records (
+      id integer NOT NULL,
+      a db.public."timestamp" NOT NULL,
+      b db.public.timestamptz NOT NULL,
+      c db.public."time" NOT NULL,
+      d db.public.timetz NOT NULL,
+      e other.public."timestamp" NOT NULL
+  );
