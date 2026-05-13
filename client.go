@@ -59,6 +59,15 @@ func (client *Client) buildConnConfig() (*pgx.ConnConfig, error) {
 	return cfg, nil
 }
 
+func (client *Client) ConnInfoComment() (string, error) {
+	cfg, err := client.buildConnConfig()
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("-- Connected to postgres://%s@%s:%d/%s", cfg.User, cfg.Host, cfg.Port, cfg.Database), nil
+}
+
 func (client *Client) connect(ctx context.Context) (*pgx.Conn, error) {
 	cfg, err := client.buildConnConfig()
 	if err != nil {

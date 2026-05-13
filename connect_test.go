@@ -76,6 +76,46 @@ func TestBuildConnConfig_InvalidConnStringReturnsError(t *testing.T) {
 	assert.True(t, strings.Contains(err.Error(), "failed to parse connection string"))
 }
 
+func TestConnInfoComment(t *testing.T) {
+	client := NewClient(&Options{
+		ConnString: "postgres://myuser:secret@myhost:5433/mydb",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.Equal(t, "-- Connected to postgres://myuser@myhost:5433/mydb", comment)
+	assert.NotContains(t, comment, "secret")
+}
+
+func TestConnInfoComment_WithDBNameOverride(t *testing.T) {
+	client := NewClient(&Options{
+		ConnString: "postgres://myuser@myhost/origdb",
+		DBName:     "overridden",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.Contains(t, comment, "/overridden")
+}
+
+func TestConnInfoComment_OptionsPasswordNotIncluded(t *testing.T) {
+	client := NewClient(&Options{
+		ConnString: "postgres://myuser@myhost:5432/mydb",
+		Password:   "topsecret",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.NotContains(t, comment, "topsecret")
+}
+
+func TestConnInfoComment_InvalidConnString(t *testing.T) {
+	client := NewClient(&Options{ConnString: "::not-valid::"})
+
+	_, err := client.ConnInfoComment()
+	require.Error(t, err)
+}
+
 func TestConnect_InvalidConnStringPropagatesBuildError(t *testing.T) {
 	client := NewClient(&Options{ConnString: "::not-a-valid-conn-string::"})
 
