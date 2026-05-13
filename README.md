@@ -42,7 +42,7 @@ Flags:
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
       --[no-]color            Colorize SQL output. Auto-detected from
-                              TTY/NO_COLOR (https://no-color.org/).
+                              TTY/NO_COLOR.
       --version
 
 Commands:
