@@ -51,7 +51,7 @@ Sleep 4s
 
 # Backup and modify schema: add a column
 Enter
-Type "# Modify the schema file: add an body column to posts" Enter
+Type "# Modify the schema file: add a body column to posts" Enter
 Sleep 2s
 Type "sed -i.bak 's/title text NOT NULL,/title text NOT NULL,\n    body text NOT NULL,/' schema.sql" Enter
 Sleep 0.5s

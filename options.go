@@ -20,9 +20,12 @@ type Options struct {
 // BeforeApply seeds Options.Color from the runtime environment so the
 // --color / --no-color flag has a sensible default. Kong invokes this before
 // flag values are applied, so an explicit flag still wins. NO_COLOR is honored
-// per https://no-color.org/ — presence (regardless of value) disables color.
+// per https://no-color.org/ — presence (regardless of value, including empty)
+// disables color, so os.LookupEnv is used to distinguish "unset" from
+// "set to empty".
 func (o *Options) BeforeApply() error {
-	o.Color = isatty.IsTerminal(os.Stdout.Fd()) && os.Getenv("NO_COLOR") == ""
+	_, noColor := os.LookupEnv("NO_COLOR")
+	o.Color = isatty.IsTerminal(os.Stdout.Fd()) && !noColor
 	return nil
 }
 
