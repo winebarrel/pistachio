@@ -149,6 +149,21 @@ func TestConnInfoComment_URLEscapesSpecialChars(t *testing.T) {
 	assert.Contains(t, comment, "my%20db")
 }
 
+func TestConnInfoComment_DBNameWithSlashEscaped(t *testing.T) {
+	// url.URL.Path does NOT escape '/' by default — without setting RawPath a
+	// dbname like "team/db" would render as multiple path segments
+	// ("postgres://...:5432/team/db") and break URI round-trip. RawPath plus
+	// url.PathEscape forces the '/' to be encoded as %2F.
+	client := NewClient(&Options{
+		ConnString: "postgres://myuser@myhost:5432/postgres",
+		DBName:     "team/db",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.Equal(t, "-- Connected to postgres://myuser@myhost:5432/team%2Fdb", comment)
+}
+
 func TestConnInfoComment_InvalidConnString(t *testing.T) {
 	client := NewClient(&Options{ConnString: "::not-valid::"})
 

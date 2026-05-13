@@ -2,7 +2,7 @@
 
 ## [1.7.3] - 2026-05-13
 
-* Print a `-- Connected to postgres://<user>@<host>:<port>/<dbname>` comment above the existing header in `plan` / `apply` / `dump` output so it's clear which database the command ran against. The password (whether embedded in `--conn-string` or passed via `--password` / `PISTA_PASSWORD`) is never included.
+* Print a `-- Connected to ...` comment above the existing header in `plan` / `apply` / `dump` output so it's clear which database the command ran against. TCP connections render as a libpq URI (`postgres://<user>@<host>:<port>/<dbname>`, with IPv6 hosts bracketed and user/dbname URL-escaped); unix-socket connections render as keyword/value form (`host=<path> dbname=<dbname> user=<user>`) to keep the socket path readable. The password (whether embedded in `--conn-string` or passed via `--password` / `PISTA_PASSWORD`) is never included.
 
 ## [1.7.2] - 2026-05-13
 
