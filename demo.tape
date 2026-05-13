@@ -6,12 +6,7 @@ Set Width 800
 Set Height 600
 Set Padding 20
 
-Hide
-Type "alias colorize='bat -l sql -p --paging=never' && clear"
-Show
-
 # Create schema file
-Enter
 Type "# Create a desired schema definition file" Enter
 Sleep 2s
 Type "cat <<'EOF' > schema.sql" Enter
@@ -24,46 +19,41 @@ Type@3ms ");" Enter
 Type@3ms "" Enter
 Type@3ms "CREATE INDEX idx_posts_user_id ON public.posts USING btree (user_id);" Enter
 Type@3ms "EOF" Enter
-Sleep 0.5s
-Enter
-Type "colorize schema.sql" Enter
 Sleep 4s
 
 # Plan
 Enter
 Type "# Preview the changes to be applied (like terraform plan)" Enter
 Sleep 2s
-Type "pista plan schema.sql | colorize" Enter
+Type "pista plan schema.sql" Enter
 Sleep 4s
 
 # Apply
 Enter
 Type "# Apply the schema to the database" Enter
 Sleep 2s
-Type "pista apply schema.sql | colorize" Enter
+Type "pista apply schema.sql" Enter
 Sleep 4s
 
 # Verify no remaining diff
 Enter
 Type "# Verify that the schema is now in sync" Enter
 Sleep 2s
-Type "pista plan schema.sql | colorize" Enter
+Type "pista plan schema.sql" Enter
 Sleep 4s
 
 # Dump
 Enter
 Type "# Dump the current database schema" Enter
 Sleep 2s
-Type "pista dump | colorize" Enter
+Type "pista dump" Enter
 Sleep 4s
 
 # Backup and modify schema: add a column
 Enter
 Type "# Modify the schema file: add an body column to posts" Enter
 Sleep 2s
-Type "cp schema.sql schema.sql.bak" Enter
-Sleep 0.5s
-Type "sed -i '' 's/title text NOT NULL,/title text NOT NULL,\n    body text NOT NULL,/' schema.sql" Enter
+Type "sed -i.bak 's/title text NOT NULL,/title text NOT NULL,\n    body text NOT NULL,/' schema.sql" Enter
 Sleep 0.5s
 
 # Show diff
@@ -77,26 +67,26 @@ Sleep 4s
 Enter
 Type "# Plan again to see the incremental changes" Enter
 Sleep 2s
-Type "pista plan schema.sql | colorize" Enter
+Type "pista plan schema.sql" Enter
 Sleep 4s
 
 # Apply the diff
 Enter
 Type "# Apply the incremental changes" Enter
 Sleep 2s
-Type "pista apply schema.sql | colorize" Enter
+Type "pista apply schema.sql" Enter
 Sleep 4s
 
 # Verify no remaining diff
 Enter
 Type "# Verify that the schema is now in sync" Enter
 Sleep 2s
-Type "pista plan schema.sql | colorize" Enter
+Type "pista plan schema.sql" Enter
 Sleep 4s
 
 # Dump
 Enter
 Type "# Dump the current database schema" Enter
 Sleep 2s
-Type "pista dump | colorize" Enter
+Type "pista dump" Enter
 Sleep 4s
