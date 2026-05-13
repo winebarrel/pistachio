@@ -710,9 +710,11 @@ func TestApply_Run_ExecutedWithSkippedDrops(t *testing.T) {
 }
 
 // writeDumpFiles is the helper that backs `pista dump --split`. The tests
-// below exercise it without a database, focusing on the filepath.IsLocal
-// guard that prevents hostile PostgreSQL identifiers (quoted names with "/",
-// ".." or absolute paths) from escaping the --split target directory.
+// below exercise it without a database, focusing on the layered guard that
+// requires every dump filename to be a flat basename directly under the
+// --split directory: no path separators ("/" or "\"), no ".."/absolute/empty
+// paths (filepath.IsLocal), and the name must already be in Clean form so
+// the on-disk filename matches the map key.
 
 func TestWriteDumpFiles_HappyPath(t *testing.T) {
 	dir := t.TempDir()
@@ -744,6 +746,7 @@ func TestWriteDumpFiles_RejectsUnsafeNames(t *testing.T) {
 		desc string
 		name string
 	}{
+		// Traversal / absolute / empty: rejected by filepath.IsLocal.
 		{"parent traversal", "../escape.sql"},
 		{"bare dotdot", ".."},
 		{"absolute path", "/etc/passwd"},
@@ -756,6 +759,11 @@ func TestWriteDumpFiles_RejectsUnsafeNames(t *testing.T) {
 		{"leading dot slash", "./foo.sql"},
 		{"trailing slash", "foo.sql/"},
 		{"redundant slash", "a//b.sql"},
+		// Plain nested paths: IsLocal *does* accept these, and they
+		// could be redirected outside dir via a pre-existing symlink.
+		// The explicit separator check refuses them.
+		{"forward separator", "subdir/file.sql"},
+		{"backslash separator", `subdir\file.sql`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -770,7 +778,7 @@ func TestWriteDumpFiles_RejectsUnsafeNames(t *testing.T) {
 			count, err := command.WriteDumpFiles(dir, map[string]string{tc.name: "x"})
 			require.Error(t, err)
 			assert.Equal(t, 0, count)
-			assert.Contains(t, err.Error(), "unsafe or non-canonical name")
+			assert.Contains(t, err.Error(), "unsafe name")
 			assert.Contains(t, err.Error(), "--split")
 
 			entries, err := os.ReadDir(dir)
