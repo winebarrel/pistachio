@@ -42,14 +42,27 @@ func (client *Client) validateSchemas() error {
 	return nil
 }
 
-func (client *Client) connect(ctx context.Context) (*pgx.Conn, error) {
+func (client *Client) buildConnConfig() (*pgx.ConnConfig, error) {
 	cfg, err := pgx.ParseConfig(client.ConnString)
 	if err != nil {
 		return nil, fmt.Errorf("pistachio: failed to parse connection string: %w", err)
 	}
 
+	if client.Dbname != "" {
+		cfg.Database = client.Dbname
+	}
+
 	if client.Password != "" {
 		cfg.Password = client.Password
+	}
+
+	return cfg, nil
+}
+
+func (client *Client) connect(ctx context.Context) (*pgx.Conn, error) {
+	cfg, err := client.buildConnConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	conn, err := pgx.ConnectConfig(ctx, cfg)
