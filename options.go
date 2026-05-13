@@ -2,7 +2,10 @@ package pistachio
 
 import (
 	"fmt"
+	"os"
 	"path"
+
+	"github.com/mattn/go-isatty"
 )
 
 type Options struct {
@@ -11,6 +14,16 @@ type Options struct {
 	Password   string            `env:"PISTA_PASSWORD" help:"PostgreSQL password."`
 	Schemas    []string          `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schemas to inspect and modify."`
 	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
+	Color      bool              `negatable:"" help:"Colorize SQL output. Defaults to enabled when stdout is a TTY and the NO_COLOR environment variable is unset (see https://no-color.org/)."`
+}
+
+// BeforeApply seeds Options.Color from the runtime environment so the
+// --color / --no-color flag has a sensible default. Kong invokes this before
+// flag values are applied, so an explicit flag still wins. NO_COLOR is honored
+// per https://no-color.org/ — presence (regardless of value) disables color.
+func (o *Options) BeforeApply() error {
+	o.Color = isatty.IsTerminal(os.Stdout.Fd()) && os.Getenv("NO_COLOR") == ""
+	return nil
 }
 
 type FilterOptions struct {

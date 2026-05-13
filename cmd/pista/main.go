@@ -23,12 +23,19 @@ var cli struct {
 
 func main() {
 	ctx := context.Background()
-	kctx := kong.Parse(&cli,
-		kong.Vars{"version": version},
-		kong.BindTo(ctx, (*context.Context)(nil)),
-		kong.BindTo(os.Stdout, (*io.Writer)(nil)),
-	)
+	// Parse first so cli.Options.Color is populated (BeforeApply seeds it
+	// from isatty/NO_COLOR, then any explicit --color/--no-color overrides).
+	kctx := kong.Parse(&cli, kong.Vars{"version": version})
+
+	out := command.NewSQLWriter(os.Stdout, cli.Color)
+	kctx.BindTo(ctx, (*context.Context)(nil))
+	kctx.BindTo(out, (*io.Writer)(nil))
+
 	client := pistachio.NewClient(&cli.Options)
-	err := kctx.Run(client)
-	kctx.FatalIfErrorf(err)
+	runErr := kctx.Run(client)
+	flushErr := out.Flush()
+	if runErr != nil {
+		kctx.FatalIfErrorf(runErr)
+	}
+	kctx.FatalIfErrorf(flushErr)
 }
