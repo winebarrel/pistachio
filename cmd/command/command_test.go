@@ -759,19 +759,28 @@ func TestWriteDumpFiles_RejectsUnsafeNames(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
-			dir := t.TempDir()
+			// Build the split dir under a controlled parent so we can
+			// verify both that the split dir stays empty AND that the
+			// parent contains only the split dir — i.e. no file slipped
+			// out via traversal.
+			parent := t.TempDir()
+			dir := filepath.Join(parent, "split")
+			require.NoError(t, os.MkdirAll(dir, 0o755))
+
 			count, err := command.WriteDumpFiles(dir, map[string]string{tc.name: "x"})
 			require.Error(t, err)
 			assert.Equal(t, 0, count)
 			assert.Contains(t, err.Error(), "unsafe or non-canonical name")
 			assert.Contains(t, err.Error(), "--split")
 
-			// No files should land anywhere — neither under the temp dir
-			// nor under its parent (which is where a successful traversal
-			// would write).
 			entries, err := os.ReadDir(dir)
 			require.NoError(t, err)
-			assert.Empty(t, entries, "temp dir must remain empty")
+			assert.Empty(t, entries, "split dir must remain empty")
+
+			parentEntries, err := os.ReadDir(parent)
+			require.NoError(t, err)
+			require.Len(t, parentEntries, 1, "no file should escape into the parent dir")
+			assert.Equal(t, "split", parentEntries[0].Name())
 		})
 	}
 }
