@@ -14,7 +14,7 @@ type Options struct {
 	Password   string            `env:"PISTA_PASSWORD" help:"PostgreSQL password."`
 	Schemas    []string          `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schemas to inspect and modify."`
 	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
-	Color      bool              `negatable:"" help:"Colorize SQL output. Defaults to enabled when stdout is a TTY and the NO_COLOR environment variable is unset (see https://no-color.org/)."`
+	Color      bool              `negatable:"" help:"Colorize SQL output. Auto-detected from TTY/NO_COLOR (https://no-color.org/)."`
 }
 
 // BeforeApply seeds Options.Color from the runtime environment so the

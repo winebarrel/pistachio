@@ -41,9 +41,8 @@ Flags:
   -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
-      --[no-]color            Colorize SQL output. Defaults to enabled when
-                              stdout is a TTY and the NO_COLOR environment
-                              variable is unset (see https://no-color.org/).
+      --[no-]color            Colorize SQL output. Auto-detected from
+                              TTY/NO_COLOR (https://no-color.org/).
       --version
 
 Commands:
