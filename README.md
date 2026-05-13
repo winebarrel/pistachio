@@ -35,6 +35,8 @@ Flags:
                               PostgreSQL connection string. See
                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
                               ($PISTA_CONN_STR)
+  -d, --dbname=STRING         PostgreSQL database name. Overrides the dbname in
+                              --conn-string ($PISTA_DBNAME).
       --password=STRING       PostgreSQL password ($PISTA_PASSWORD).
   -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...

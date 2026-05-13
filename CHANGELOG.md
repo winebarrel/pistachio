@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.2] - 2026-05-13
+
+* Add `-d` / `--dbname` flag (env `PISTA_DBNAME`) that overrides the dbname embedded in `--conn-string`. Lets users keep host/user/port constant in `-c postgres://user@host:port/` while selecting the database name ad hoc per invocation, mirroring the `psql -d` convention. If `-d` is omitted, existing behavior is unchanged: pgx parses dbname from `--conn-string`, falling back to the connecting user name when absent. ([#188](https://github.com/winebarrel/pistachio/pull/188))
+
 ## [1.7.1] - 2026-05-13
 
 * Reject `dump --split` filenames that would escape the target directory or alias other entries on disk. PostgreSQL quoted identifiers may contain `/`, `..`, or absolute paths (`CREATE TABLE "../escape" (...)` parses), and the existing `fileNameReplacer` only stripped `"` and substituted `_` for spaces before passing the result to `filepath.Join`, which does not prevent traversal. A hostile DB object name could therefore land a file outside the directory passed to `--split`, and even a non-escaping but non-canonical name like `foo/../bar.sql` could silently overwrite a sibling `bar.sql` since `DumpResult.Files()`' dedup runs on the original map key. Each name is now required to be a flat basename: any path separator (`/` or `\`) is refused outright, `filepath.IsLocal` rejects `..` path elements / absolute paths / empty strings / Windows-reserved names, and a canonical-form check (`name == filepath.Clean(name)`) refuses any `./`, `foo/../bar`, double-slash, or trailing-slash shapes. Identifiers that legitimately contain literal dots (`foo..bar`, `..leading`, `public.v1.0`) still write through. Realistic exploit conditions are narrow (requires `CREATE` privilege on the target database) but the guard closes the traversal and symlink-redirect paths and keeps the on-disk filename equal to the map key. ([#186](https://github.com/winebarrel/pistachio/pull/186))
