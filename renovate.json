@@ -9,5 +9,13 @@
   ],
   "vulnerabilityAlerts": {
     "enabled": true
-  }
+  },
+  "packageRules": [
+    {
+      "matchManagers": [
+        "docker-compose"
+      ],
+      "enabled": false
+    }
+  ]
 }
