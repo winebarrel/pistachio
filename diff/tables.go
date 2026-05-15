@@ -251,14 +251,19 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 				return nil, nil, fmt.Errorf("column %s.%s: cannot toggle GENERATED — DROP COLUMN + ADD COLUMN is required",
 					fqtn, model.Ident(name))
 			}
-			if cur && des && !equalDefault(currentCol.Default, desiredCol.Default) {
+			if cur && des && exprChanged(currentCol.Default, desiredCol.Default) {
 				// Both sides are STORED GENERATED but the expression differs.
-				// PostgreSQL has no `ALTER COLUMN ... SET GENERATED AS (expr)` —
-				// the only way to change the expression is DROP COLUMN + ADD
-				// COLUMN, which loses the column's data. Surface the change as
-				// an error so the user explicitly drops/re-adds. equalDefault
-				// already handles pg_get_expr-added cast asymmetry, so this
-				// fires only on a real expression change.
+				// PostgreSQL has no `ALTER COLUMN ... SET GENERATED AS (expr)`
+				// — the only way to change the expression is DROP COLUMN +
+				// ADD COLUMN, which loses the column's data. Surface the
+				// change as an error so the user explicitly drops/re-adds.
+				// Use exprChanged (strict equalSelectExpr) rather than
+				// equalDefault: equalDefault has DEFAULT-specific semantics
+				// (symmetric top-level cast strip, `'0'::bigint` ≡
+				// `'0'::integer`) that would silently hide a real top-level
+				// cast change or a cast-target-type change on a GENERATED
+				// expression. equalSelectExpr keeps the asymmetric strip
+				// from #201 / #203 but no DEFAULT-style softening.
 				return nil, nil, fmt.Errorf("column %s.%s: cannot change GENERATED expression — DROP COLUMN + ADD COLUMN is required",
 					fqtn, model.Ident(name))
 			}
@@ -1153,7 +1158,7 @@ func normalizeIndexStmt(is *pg_query.IndexStmt) {
 // alignIndexCasts asymmetrically strips current-side TypeCast wrappers at
 // positions desired doesn't have a cast, inside the partial-index
 // WhereClause and each expression-index IndexElem.Expr. Mirrors the
-// pattern used by equalConstraintDef / equalDefault / equalPolicyExpr.
+// pattern used by equalConstraintDef / equalDefault / equalSelectExpr.
 func alignIndexCasts(desired, current *pg_query.IndexStmt) {
 	if desired == nil || current == nil {
 		return
@@ -1250,7 +1255,7 @@ func equalFKDef(a, b, schema string) bool {
 // parseSelectExpr parses a bare expression by wrapping it in `SELECT <expr>`
 // and returns the parse result plus the embedded ResTarget. Callers may
 // mutate target.Val before re-deparsing the result. Shared by equalDefault
-// (column / domain DEFAULT) and equalPolicyExpr (RLS USING / WITH CHECK)
+// (column / domain DEFAULT) and equalSelectExpr (RLS USING / WITH CHECK)
 // — both wrap the expression the same way, so the helper lives here.
 func parseSelectExpr(expr string) (*pg_query.ParseResult, *pg_query.ResTarget, error) {
 	result, err := pg_query.Parse("SELECT " + expr)
