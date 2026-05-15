@@ -208,14 +208,6 @@ places where pistachio compares user-written SQL against catalog-derived
 output, but those paths still use stricter equality and produce spurious
 diffs on every run:
 
-- **Column DEFAULT** (`diff/tables.go:equalDefault`) — currently
-  `proto.Equal` on parsed default expressions, no normalization at all.
-  `pg_get_expr` adds casts for time / date / timestamp / domain / etc.
-  default literals; `DEFAULT '00:00:00'` on a `time` column diffs against
-  the DB's `'00:00:00'::time without time zone` every run. Domain DEFAULT
-  shares the same function via `diff/domains.go:equalDomain`. Existing
-  fixtures pre-cast in init SQL (e.g. `DEFAULT 'unknown'::text`) to dodge
-  this — workaround evidence that the bug is live. Highest-impact fix.
 - **RLS USING / WITH CHECK** (`diff/policies.go:equalPolicyExpr`) —
   already reuses `normalizeCheckExpr` for symmetric paren / text-cast /
   `IN`↔`ANY` cleanup. Bare literals on non-text-column comparisons inside
