@@ -19,8 +19,9 @@ FROM postgres:18-alpine
 RUN apk add --no-cache bash
 
 COPY --from=build /out/pista /usr/local/bin/pista
-COPY demo/ /demo/
-RUN chmod +x /demo/entrypoint.sh && chown -R postgres:postgres /demo
+COPY demo/entrypoint.sh /entrypoint.sh
+COPY demo/banner.txt demo/current.sql demo/desired.sql /demo/
+RUN chmod +x /entrypoint.sh && chown -R postgres:postgres /demo
 
 ENV PGHOST=/var/run/postgresql \
     PGUSER=postgres \
@@ -39,5 +40,5 @@ RUN initdb -D /var/lib/postgresql/data >/dev/null && \
     psql -d demo -v ON_ERROR_STOP=1 -f /demo/current.sql && \
     pg_ctl -D /var/lib/postgresql/data -m fast stop
 
-ENTRYPOINT ["/demo/entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["bash"]
