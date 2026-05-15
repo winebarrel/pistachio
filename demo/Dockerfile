@@ -16,7 +16,11 @@ ARG PISTA_VERSION
 RUN CGO_ENABLED=1 go build -o /out/pista -ldflags "-X main.version=${PISTA_VERSION#v}" ./cmd/pista
 
 FROM postgres:18-alpine
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash sudo && \
+    echo 'postgres ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/postgres-nopasswd && \
+    chmod 0440 /etc/sudoers.d/postgres-nopasswd && \
+    printf "alias ll='ls -lF'\n" > /var/lib/postgresql/.bashrc && \
+    chown postgres:postgres /var/lib/postgresql/.bashrc
 
 COPY --from=build /out/pista /usr/local/bin/pista
 COPY demo/entrypoint.sh /entrypoint.sh
