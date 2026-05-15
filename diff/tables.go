@@ -1077,19 +1077,35 @@ func equalPtr[T comparable](a, b *T) bool {
 	return *a == *b
 }
 
-// normalizeIndexDef normalizes an index definition by parsing it,
-// clearing the schema, and deparsing it back to a canonical string.
-// It also canonicalises the default sort order so that explicit ASC
-// (the default) matches an omitted order, and explicit NULLS LAST
-// for ASC / NULLS FIRST for DESC matches an omitted nulls clause.
-func normalizeIndexDef(def string) (string, error) {
+// parseIndexDef parses a CREATE INDEX statement and returns the parse
+// result plus the embedded IndexStmt. Callers may mutate the IndexStmt
+// (e.g. canonicalise sort/nulls, normalize sub-expressions) before
+// re-deparsing the result.
+func parseIndexDef(def string) (*pg_query.ParseResult, *pg_query.IndexStmt, error) {
 	result, err := pg_query.Parse(def)
 	if err != nil {
-		return "", err
+		return nil, nil, err
+	}
+	if len(result.Stmts) == 0 {
+		return nil, nil, fmt.Errorf("unexpected parse result for index definition: %s", def)
 	}
 	is := result.Stmts[0].Stmt.GetIndexStmt()
 	if is == nil {
-		return "", fmt.Errorf("unexpected parse result for index definition: %s", def)
+		return nil, nil, fmt.Errorf("unexpected parse result for index definition: %s", def)
+	}
+	return result, is, nil
+}
+
+// normalizeIndexStmt applies the symmetric normalisations to an IndexStmt
+// in place: clears the schema qualification (so unqualified and qualified
+// table refs compare equal), canonicalises explicit ASC / NULLS LAST /
+// NULLS FIRST defaults, and runs normalizeCheckExpr over each
+// IndexElem.Expr (expression-index body) and the partial-index
+// WhereClause so symmetric paren / text-cast / `IN`↔`ANY` differences
+// don't surface as false diffs.
+func normalizeIndexStmt(is *pg_query.IndexStmt) {
+	if is == nil {
+		return
 	}
 	if is.Relation != nil {
 		is.Relation.Schemaname = ""
@@ -1115,20 +1131,64 @@ func normalizeIndexDef(def string) (string, error) {
 				ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
 			}
 		}
+		if ie.Expr != nil {
+			ie.Expr = normalizeCheckExpr(ie.Expr)
+		}
 	}
-	return pg_query.Deparse(result)
+	if is.WhereClause != nil {
+		is.WhereClause = normalizeCheckExpr(is.WhereClause)
+	}
 }
 
-// equalIndexDef compares two index definitions by normalizing them
-// through pg_query parse/deparse, so that schema qualification and
-// formatting differences do not cause false diffs.
-func equalIndexDef(a, b string) bool {
-	normA, errA := normalizeIndexDef(a)
-	normB, errB := normalizeIndexDef(b)
-	if errA != nil || errB != nil {
-		return a == b
+// alignIndexCasts asymmetrically strips current-side TypeCast wrappers at
+// positions desired doesn't have a cast, inside the partial-index
+// WhereClause and each expression-index IndexElem.Expr. Mirrors the
+// pattern used by equalConstraintDef / equalDefault / equalPolicyExpr.
+func alignIndexCasts(desired, current *pg_query.IndexStmt) {
+	if desired == nil || current == nil {
+		return
 	}
-	return normA == normB
+	if desired.WhereClause != nil && current.WhereClause != nil {
+		current.WhereClause = alignCurrentCasts(desired.WhereClause, current.WhereClause)
+	}
+	if len(desired.IndexParams) != len(current.IndexParams) {
+		return
+	}
+	for i := range desired.IndexParams {
+		dIe := desired.IndexParams[i].GetIndexElem()
+		cIe := current.IndexParams[i].GetIndexElem()
+		if dIe == nil || cIe == nil || dIe.Expr == nil || cIe.Expr == nil {
+			continue
+		}
+		cIe.Expr = alignCurrentCasts(dIe.Expr, cIe.Expr)
+	}
+}
+
+// equalIndexDef compares two CREATE INDEX definitions by parsing both
+// sides, canonicalising sort / nulls / schema, normalising sub-expression
+// formatting (parens, text-like casts, `IN`↔`= ANY(ARRAY[...])`), and
+// stripping any current-only TypeCast in the partial-index WhereClause
+// and expression-index IndexElem.Expr (with Sval→numeric coercion when
+// the desired side is a bare numeric A_Const) — same pipeline as
+// equalConstraintDef.
+func equalIndexDef(current, desired string) bool {
+	if current == desired {
+		return true
+	}
+	curResult, curIS, parseErrCur := parseIndexDef(current)
+	desResult, desIS, parseErrDes := parseIndexDef(desired)
+	if parseErrCur != nil || parseErrDes != nil {
+		return current == desired
+	}
+	normalizeIndexStmt(curIS)
+	normalizeIndexStmt(desIS)
+	alignIndexCasts(desIS, curIS)
+	curStr, deparseErrCur := pg_query.Deparse(curResult)
+	desStr, deparseErrDes := pg_query.Deparse(desResult)
+	if deparseErrCur != nil || deparseErrDes != nil {
+		return current == desired
+	}
+	return curStr == desStr
 }
 
 // parseFKDef parses a FK constraint definition string into a pg_query Constraint node.

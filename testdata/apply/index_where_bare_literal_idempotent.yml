@@ -1,0 +1,27 @@
+init: |
+  CREATE TABLE public.events (
+      id bigint NOT NULL,
+      occurred_at date NOT NULL,
+      vacation_hours integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX events_recent_idx ON public.events USING btree (id) WHERE (occurred_at >= '2020-01-01'::date AND vacation_hours >= '-40'::integer);
+desired: |
+  CREATE TABLE public.events (
+      id bigint NOT NULL,
+      occurred_at date NOT NULL,
+      vacation_hours integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX events_recent_idx ON public.events USING btree (id) WHERE occurred_at >= '2020-01-01' AND vacation_hours >= -40;
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id bigint NOT NULL,
+      occurred_at date NOT NULL,
+      vacation_hours integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX events_recent_idx ON public.events USING btree (id) WHERE ((occurred_at >= '2020-01-01'::date) AND (vacation_hours >= '-40'::integer));
+applied_sql: ""
+verify_no_drift: true

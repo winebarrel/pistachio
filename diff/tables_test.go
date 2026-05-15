@@ -2103,6 +2103,60 @@ func TestEqualIndexDef_whereClauseMultipleConditions(t *testing.T) {
 	))
 }
 
+func TestEqualIndexDef_whereCurrentDateCastStripped(t *testing.T) {
+	// pg_get_indexdef emits `'2020-01-01'::date` on a partial-index WHERE
+	// clause comparing a date column; users write the bare literal.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON events USING btree (id) WHERE (created_at >= '2020-01-01'::date)",
+		"CREATE INDEX idx ON events USING btree (id) WHERE created_at >= '2020-01-01'",
+	))
+}
+
+func TestEqualIndexDef_whereCurrentTimeCastStripped(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON shifts USING btree (id) WHERE (starts_at >= '00:00:00'::time without time zone)",
+		"CREATE INDEX idx ON shifts USING btree (id) WHERE starts_at >= '00:00:00'",
+	))
+}
+
+func TestEqualIndexDef_whereCurrentNegativeIntCastStripped(t *testing.T) {
+	// Negative integer literal: pg_get_indexdef emits `'-40'::integer`,
+	// user writes `-40`. Requires the Sval→Ival coercion alongside the
+	// asymmetric strip.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON balances USING btree (id) WHERE (amount >= '-40'::integer)",
+		"CREATE INDEX idx ON balances USING btree (id) WHERE amount >= -40",
+	))
+}
+
+func TestEqualIndexDef_whereCurrentCastInsideBoolExpr(t *testing.T) {
+	// Cast nested inside an AND combinator.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (id) WHERE ((visible = true) AND (starts_at >= '00:00:00'::time without time zone))",
+		"CREATE INDEX idx ON t USING btree (id) WHERE visible = true AND starts_at >= '00:00:00'",
+	))
+}
+
+func TestEqualIndexDef_whereCustomNumericNamedTypeNotCoerced(t *testing.T) {
+	// Guard: a user-defined type matching a built-in numeric name does NOT
+	// gate the Sval→numeric coercion. The cast is still stripped (asymmetric
+	// rule from #201), but the surviving Sval is not rewritten — so the
+	// desired bare integer stays unequal.
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::myapp.int4)",
+		"CREATE INDEX idx ON t USING btree (id) WHERE val > 0",
+	))
+}
+
+func TestEqualIndexDef_expressionCurrentCastStripped(t *testing.T) {
+	// Expression index: pg_get_indexdef adds `::text` on a function-call
+	// argument when the column is varchar; user writes the bare column.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON people USING btree (lower((name)::text))",
+		"CREATE INDEX idx ON people USING btree (lower(name))",
+	))
+}
+
 func TestDiffTables_indexWhereClauseSchemaInsensitive(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()
@@ -2809,13 +2863,13 @@ func TestIsTextLikeTypeName_nil(t *testing.T) {
 	assert.False(t, isTextLikeTypeName(nil))
 }
 
-func TestNormalizeIndexDef_parseError(t *testing.T) {
-	_, err := normalizeIndexDef("NOT VALID SQL")
+func TestParseIndexDef_parseError(t *testing.T) {
+	_, _, err := parseIndexDef("NOT VALID SQL")
 	require.Error(t, err)
 }
 
-func TestNormalizeIndexDef_notIndexStmt(t *testing.T) {
-	_, err := normalizeIndexDef("SELECT 1")
+func TestParseIndexDef_notIndexStmt(t *testing.T) {
+	_, _, err := parseIndexDef("SELECT 1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }

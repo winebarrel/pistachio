@@ -208,11 +208,6 @@ places where pistachio compares user-written SQL against catalog-derived
 output, but those paths still use stricter equality and produce spurious
 diffs on every run:
 
-- **Index definition** (`diff/tables.go:equalIndexDef`) — partial-index
-  `WHERE` clauses and expression-index expressions receive casts from
-  `pg_get_indexdef`. `normalizeIndexDef` only canonicalises sort / nulls
-  ordering, not casts. Need to walk `IndexStmt.WhereClause` and each
-  `IndexElem.Expr` through the same parse / normalize / align pipeline.
 - **GENERATED column expression** — the existing TODO above
   ("GENERATED column expression changes") names exactly this cast
   asymmetry (`price * (quantity)::numeric` vs `price * quantity`) as the
