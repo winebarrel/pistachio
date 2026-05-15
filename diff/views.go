@@ -384,6 +384,16 @@ func stripQualifications(node *pg_query.Node) {
 		stripQualifications(sb.Node)
 		return
 	}
+
+	if tc := node.GetTypeCast(); tc != nil {
+		// Recurse into the cast argument so qualified ColumnRefs nested under
+		// a TypeCast still get stripped. Matters because normalizeSelectExprs
+		// can later strip the text-like cast wrapper, exposing the inner
+		// reference; if its qualification stayed it would diff against the
+		// unqualified desired form.
+		stripQualifications(tc.Arg)
+		return
+	}
 }
 
 // ViewDiffResult separates view DROP and CREATE/MODIFY statements.

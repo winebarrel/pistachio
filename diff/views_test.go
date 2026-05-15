@@ -491,6 +491,18 @@ func TestEqualViewDef_targetListTopLevelTextCast_bothPresent(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_qualifiedColumnInsideTextCast(t *testing.T) {
+	// A qualified ColumnRef nested under a text-like TypeCast (e.g.
+	// `lower(users.name::text)`) must still be stripped to match the
+	// unqualified bare form. stripQualifications must recurse into
+	// TypeCast.Arg so the inner ColumnRef is reached before
+	// normalizeSelectExprs collapses the surrounding cast.
+	assert.True(t, equalViewDef(
+		"SELECT lower(users.name::text) FROM users",
+		"SELECT lower(name) FROM users",
+	))
+}
+
 func TestEqualViewDef_inSubquery_testexprQualified(t *testing.T) {
 	// `users.id IN (SELECT ...)` parses to SubLink{Testexpr: users.id, ...}.
 	// stripQualifications must recurse into Testexpr or the table-qualified
