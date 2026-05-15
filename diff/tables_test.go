@@ -3,6 +3,7 @@ package diff
 import (
 	"testing"
 
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap"
@@ -2899,6 +2900,29 @@ func TestParseIndexDef_notIndexStmt(t *testing.T) {
 	_, _, err := parseIndexDef("SELECT 1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
+}
+
+func TestNormalizeIndexStmt_nil(t *testing.T) {
+	// Must not panic on nil input.
+	normalizeIndexStmt(nil)
+}
+
+func TestAlignIndexCasts_nilInputs(t *testing.T) {
+	// Defensive: must not panic when either side is nil.
+	alignIndexCasts(nil, nil)
+	alignIndexCasts(&pg_query.IndexStmt{}, nil)
+	alignIndexCasts(nil, &pg_query.IndexStmt{})
+}
+
+func TestAlignIndexCasts_paramCountMismatch(t *testing.T) {
+	// When the two IndexStmts have different IndexParams counts (e.g. the
+	// user removed a column), the per-column alignment can't pair items
+	// meaningfully — alignIndexCasts returns early instead of indexing
+	// out-of-range. The deparse-string comparison upstream still surfaces
+	// the difference.
+	desired := &pg_query.IndexStmt{IndexParams: []*pg_query.Node{}}
+	current := &pg_query.IndexStmt{IndexParams: []*pg_query.Node{{}}}
+	alignIndexCasts(desired, current)
 }
 
 func TestDiffColumns_addIdentity_fromNotNull(t *testing.T) {
