@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -483,23 +484,40 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 	return false
 }
 
-// isNumericTypeName returns true if the TypeName refers to a Postgres numeric
-// scalar. pg_query canonicalises integer / bigint / smallint to int4 / int8 /
-// int2 and double precision / real to float8 / float4 respectively, so both
-// the catalog form (`pg_catalog.int4`) and the user-written keyword
-// (`integer`) are accepted.
+// isNumericTypeName returns true if the TypeName refers to a built-in
+// Postgres numeric scalar. pg_query canonicalises integer / bigint /
+// smallint to int4 / int8 / int2 and double precision / real to float8 /
+// float4 respectively, so both forms are accepted, but only the unqualified
+// keyword (`integer`) and the `pg_catalog`-qualified canonical form
+// (`pg_catalog.int4`) match — a user-defined type that happens to be named
+// e.g. `myapp.int4` is not considered numeric, so a cast onto it can't be
+// silently stripped or coerced.
 func isNumericTypeName(tn *pg_query.TypeName) bool {
-	if tn == nil {
+	if tn == nil || len(tn.Names) == 0 {
 		return false
 	}
-	for _, n := range tn.Names {
-		if s := n.GetString_(); s != nil {
-			switch s.Sval {
-			case "int2", "int4", "int8", "smallint", "integer", "bigint",
-				"numeric", "decimal", "float4", "float8", "real":
-				return true
-			}
+	var name string
+	switch len(tn.Names) {
+	case 1:
+		s := tn.Names[0].GetString_()
+		if s == nil {
+			return false
 		}
+		name = s.Sval
+	case 2:
+		schema := tn.Names[0].GetString_()
+		s := tn.Names[1].GetString_()
+		if schema == nil || s == nil || schema.Sval != "pg_catalog" {
+			return false
+		}
+		name = s.Sval
+	default:
+		return false
+	}
+	switch name {
+	case "int2", "int4", "int8", "smallint", "integer", "bigint",
+		"numeric", "decimal", "float4", "float8", "real":
+		return true
 	}
 	return false
 }
@@ -540,7 +558,11 @@ func numericAConstFromString(s string) *pg_query.Node {
 			},
 		}
 	}
-	if _, err := strconv.ParseFloat(s, 64); err == nil {
+	// ParseFloat returns ErrRange (with ±Inf as value) for syntactically
+	// valid numerics that exceed float64 — but PG's `numeric` carries those
+	// just fine and pg_query's Fval is just a string, so accept ErrRange as
+	// "lexically a number, store the original string verbatim".
+	if _, err := strconv.ParseFloat(s, 64); err == nil || errors.Is(err, strconv.ErrRange) {
 		return &pg_query.Node{
 			Node: &pg_query.Node_AConst{
 				AConst: &pg_query.A_Const{

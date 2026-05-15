@@ -1730,6 +1730,27 @@ func TestEqualConstraintDef_currentNegativeFloatCastStripped(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_currentLargeNumericCastStripped(t *testing.T) {
+	// Numeric literals beyond float64 range (PG `numeric` carries arbitrary
+	// precision). The Sval→Fval coercion must accept these so the strip is
+	// not silently undone for very large values.
+	assert.True(t, equalConstraintDef(
+		"CHECK (price <= '1e400'::numeric)",
+		"CHECK (price <= 1e400)",
+	))
+}
+
+func TestEqualConstraintDef_customNumericNamedTypeNotStripped(t *testing.T) {
+	// A user-defined type that happens to share a built-in numeric name
+	// (e.g. `myapp.int4`) should NOT be treated as the built-in: stripping
+	// the cast could hide a real difference. isNumericTypeName only matches
+	// unqualified or pg_catalog-qualified names.
+	assert.False(t, equalConstraintDef(
+		"CHECK (val > '0'::myapp.int4)",
+		"CHECK (val > 0)",
+	))
+}
+
 func TestEqualConstraintDef_currentSmallintCastStripped(t *testing.T) {
 	// pg_query canonicalises `smallint` to `int2` in the catalog form, so
 	// isNumericTypeName must recognise both. This exercises the int2 path.
