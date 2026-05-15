@@ -1,0 +1,19 @@
+init: |
+  CREATE TYPE public.post_status AS ENUM ('draft', 'published', 'archived');
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      status post_status NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.published_posts AS
+      SELECT id FROM public.posts WHERE status = 'published';
+desired: |
+  CREATE TYPE public.post_status AS ENUM ('draft', 'published', 'archived');
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      status post_status NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.published_posts AS
+      SELECT id FROM public.posts WHERE status = 'published';
+plan: ""

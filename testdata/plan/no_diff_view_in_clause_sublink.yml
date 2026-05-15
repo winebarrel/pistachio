@@ -1,0 +1,33 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.users_with_orders AS
+      SELECT id FROM public.users WHERE EXISTS (
+          SELECT 1 FROM public.orders
+          WHERE orders.user_id = users.id AND orders.status IN ('paid', 'shipped')
+      );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.users_with_orders AS
+      SELECT id FROM public.users WHERE EXISTS (
+          SELECT 1 FROM public.orders
+          WHERE orders.user_id = users.id AND orders.status IN ('paid', 'shipped')
+      );
+plan: ""

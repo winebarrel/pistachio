@@ -336,6 +336,31 @@ func TestEqualViewDef_inVsAnyArray_having(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_inVsAnyArray_groupBy(t *testing.T) {
+	// GROUP BY can contain expressions (here a boolean test on status).
+	// Covers the GroupClause walker position.
+	assert.True(t, equalViewDef(
+		"SELECT count(*) FROM t GROUP BY status = ANY (ARRAY['a', 'b'])",
+		"SELECT count(*) FROM t GROUP BY status IN ('a', 'b')",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_groupBy(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT count(*) FROM t GROUP BY status = 'a'::e",
+		"SELECT count(*) FROM t GROUP BY status = 'a'",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_join(t *testing.T) {
+	// Covers the JoinExpr.Quals position in alignViewCasts (the IN↔ANY
+	// variant is already tested in inVsAnyArray_join).
+	assert.True(t, equalViewDef(
+		"SELECT u.id FROM users u JOIN orders o ON o.status = 'paid'::e",
+		"SELECT u.id FROM public.users u JOIN public.orders o ON o.status = 'paid'",
+	))
+}
+
 func TestEqualViewDef_inVsAnyArray_cte(t *testing.T) {
 	assert.True(t, equalViewDef(
 		"WITH active AS (SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])) SELECT id FROM active",
@@ -406,6 +431,40 @@ func TestEqualViewDef_currentOnlyTypeCast_rangeSubselect(t *testing.T) {
 	assert.True(t, equalViewDef(
 		"SELECT s.id FROM (SELECT id FROM t WHERE status = 'a'::e) s",
 		"SELECT s.id FROM (SELECT id FROM t WHERE status = 'a') s",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_orderBy(t *testing.T) {
+	// ORDER BY can contain a comparison expression (sorts by the boolean
+	// result). Covers the SortClause walker position.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t ORDER BY CASE WHEN status = ANY (ARRAY['a', 'b']) THEN 0 ELSE 1 END",
+		"SELECT id FROM t ORDER BY CASE WHEN status IN ('a', 'b') THEN 0 ELSE 1 END",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_orderBy(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t ORDER BY CASE WHEN status = 'a'::e THEN 0 ELSE 1 END",
+		"SELECT id FROM t ORDER BY CASE WHEN status = 'a' THEN 0 ELSE 1 END",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_limit(t *testing.T) {
+	// pg_get_viewdef can emit a LIMIT/OFFSET with a TypeCast attached to the
+	// numeric literal. The desired SQL written as a bare integer must still
+	// compare equal. Covers the LimitCount walker position.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t LIMIT 5::bigint",
+		"SELECT id FROM t LIMIT 5",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_offset(t *testing.T) {
+	// Covers the LimitOffset walker position.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t OFFSET 0::bigint",
+		"SELECT id FROM t OFFSET 0",
 	))
 }
 

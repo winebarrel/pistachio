@@ -153,11 +153,6 @@ func normalizeViewExprs(node *pg_query.Node) {
 		normalizeViewExprs(sub.Subquery)
 		return
 	}
-
-	if sl := node.GetSubLink(); sl != nil {
-		normalizeViewExprs(sl.Subselect)
-		return
-	}
 }
 
 // alignViewCasts performs the same parallel walk as normalizeViewExprs but
@@ -259,13 +254,6 @@ func alignViewCasts(desired, current *pg_query.Node) {
 	if drs := desired.GetRangeSubselect(); drs != nil {
 		if crs := current.GetRangeSubselect(); crs != nil {
 			alignViewCasts(drs.Subquery, crs.Subquery)
-		}
-		return
-	}
-
-	if dsl := desired.GetSubLink(); dsl != nil {
-		if csl := current.GetSubLink(); csl != nil {
-			alignViewCasts(dsl.Subselect, csl.Subselect)
 		}
 		return
 	}
