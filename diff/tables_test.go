@@ -2157,6 +2157,33 @@ func TestEqualIndexDef_expressionCurrentCastStripped(t *testing.T) {
 	))
 }
 
+func TestEqualIndexDef_whereBothExplicitCastsMatch(t *testing.T) {
+	// When desired explicitly carries the same cast as current, normal
+	// comparison succeeds — the asymmetric strip does not over-fire.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON events USING btree (id) WHERE (occurred_at >= '2020-01-01'::date)",
+		"CREATE INDEX idx ON events USING btree (id) WHERE occurred_at >= '2020-01-01'::date",
+	))
+}
+
+func TestEqualIndexDef_whereCastsDifferTypes(t *testing.T) {
+	// Both sides cast but on different numeric types — they remain unequal.
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::bigint)",
+		"CREATE INDEX idx ON t USING btree (id) WHERE val > '0'::integer",
+	))
+}
+
+func TestEqualIndexDef_whereDesiredCastCurrentBare(t *testing.T) {
+	// Reverse direction: desired carries a cast that current doesn't. The
+	// asymmetric strip fires only on the current side, so the difference
+	// surfaces (desired's cast is preserved).
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (id) WHERE val > 0",
+		"CREATE INDEX idx ON t USING btree (id) WHERE val > '0'::integer",
+	))
+}
+
 func TestDiffTables_indexWhereClauseSchemaInsensitive(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()
