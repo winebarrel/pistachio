@@ -197,6 +197,56 @@ be documented as such if it ever surfaces in user-facing docs.
 
 Origin: [#157](https://github.com/winebarrel/pistachio/pull/157).
 
+## Asymmetric cast strip for non-CHECK comparisons
+
+[#201](https://github.com/winebarrel/pistachio/pull/201) introduced
+`alignCurrentCasts`: a pairwise AST walk that strips current-side
+`TypeCast` wrappers at positions where desired has no corresponding cast,
+collapsing the asymmetry that `pg_get_constraintdef` introduces by adding
+explicit casts to user-bare literals. The same pattern applies to other
+places where pistachio compares user-written SQL against catalog-derived
+output, but those paths still use stricter equality and produce spurious
+diffs on every run:
+
+- **Column DEFAULT** (`diff/tables.go:equalDefault`) — currently
+  `proto.Equal` on parsed default expressions, no normalization at all.
+  `pg_get_expr` adds casts for time / date / timestamp / domain / etc.
+  default literals; `DEFAULT '00:00:00'` on a `time` column diffs against
+  the DB's `'00:00:00'::time without time zone` every run. Domain DEFAULT
+  shares the same function via `diff/domains.go:equalDomain`. Existing
+  fixtures pre-cast in init SQL (e.g. `DEFAULT 'unknown'::text`) to dodge
+  this — workaround evidence that the bug is live. Highest-impact fix.
+- **RLS USING / WITH CHECK** (`diff/policies.go:equalPolicyExpr`) —
+  already reuses `normalizeCheckExpr` for symmetric paren / text-cast /
+  `IN`↔`ANY` cleanup. Bare literals on non-text-column comparisons inside
+  policies still diff. Drop-in: call `alignCurrentCasts` after the
+  existing `normalizeCheckExpr` pass on each side.
+- **Index definition** (`diff/tables.go:equalIndexDef`) — partial-index
+  `WHERE` clauses and expression-index expressions receive casts from
+  `pg_get_indexdef`. `normalizeIndexDef` only canonicalises sort / nulls
+  ordering, not casts. Need to walk `IndexStmt.WhereClause` and each
+  `IndexElem.Expr` through the same parse / normalize / align pipeline.
+- **GENERATED column expression** — the existing TODO above
+  ("GENERATED column expression changes") names exactly this cast
+  asymmetry (`price * (quantity)::numeric` vs `price * quantity`) as the
+  blocker for emitting diff/error on expression changes. The prerequisite
+  is now met: rewire the GENERATED-column comparison through
+  `alignCurrentCasts` and the toggle / error logic from #125 can move
+  forward.
+
+Lower-priority follow-ups, comparison paths not yet audited:
+
+- **Partition bound** (`pg_get_expr(c.relpartbound, c.oid)`) —
+  `FOR VALUES FROM (...) TO (...)` literals on date / time / timestamp
+  partition keys may carry casts.
+- **View body** (`diff/views.go:equalViewDef`) — `pg_get_viewdef` adds
+  many casts to SELECT-list constants; the existing `normalizeForComparison`
+  fallback handles schema qualification but not cast asymmetry, so a
+  structural pairwise walk over the parsed `SelectStmt` may close
+  remaining gaps.
+
+Origin: post-[#201](https://github.com/winebarrel/pistachio/pull/201) audit.
+
 ## Plan-time error promotion: forgotten dependent reference
 
 When desired SQL references the new column name in a dependent
