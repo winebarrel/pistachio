@@ -119,9 +119,11 @@ without that qualification, so even semantically-identical USING /
 WITH CHECK expressions produce a spurious `ALTER POLICY` when subqueries
 are involved.
 
-`equalPolicyExpr` reuses `normalizeCheckExpr` from constraint diffs, which
-strips text-like casts and canonicalises `= ANY(ARRAY[...])` → `IN (...)`,
-but does not walk into subqueries and rewrite ColumnRef qualifications.
+`equalSelectExpr` (formerly `equalPolicyExpr`, renamed in #207 for shared
+use across policy / generated-column expressions) reuses `normalizeCheckExpr`
+from constraint diffs, which strips text-like casts and canonicalises
+`= ANY(ARRAY[...])` → `IN (...)`, but does not walk into subqueries and
+rewrite ColumnRef qualifications.
 
 Fix would be to walk `SubLink` / `RangeSubselect` nodes and strip column
 qualifiers that match the FROM-clause table alias. The same approach
