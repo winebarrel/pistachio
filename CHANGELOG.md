@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.8.1] - 2026-05-15
+## [1.9.0] - 2026-05-15
 
 * Apply the same cast-stripping / `IN`↔`ANY(ARRAY[...])` fix to view body comparisons. `equalViewDef` previously only normalised whitespace and stripped schema / column qualifications, so every view containing an `IN (...)` clause or comparing a typed (notably enum-typed) column against a bare literal showed false drift on every `pista apply`: `pg_get_viewdef` stores `WHERE x IN ('a','b')` as `WHERE x = ANY (ARRAY['a','b'])`, and stores `WHERE status = 'published'` against an enum column as `WHERE status = 'published'::post_status`. `equalViewDef` now descends into every expression-bearing position of a view's `SELECT` body — target list, `WHERE`, `HAVING`, `GROUP BY`, `ORDER BY`, `LIMIT` / `OFFSET`, `JOIN ... ON`, CTE bodies, `UNION` arms, sub-SELECTs in `FROM`, and SubLinks (`EXISTS` / IN-subquery / ANY-subquery) — and runs `normalizeCheckExpr` for symmetric `= ANY(ARRAY[...])` → `IN (...)` and text-cast cleanup, plus `alignCurrentCasts` to strip TypeCasts present only on the current side. Casts the user explicitly wrote in desired are preserved (so an intentional `'x'::e` that disagrees with the DB still surfaces). `normalizeCheckExpr` and `alignCurrentCasts` themselves gained a `SubLink` case so semantically-equivalent RLS policy `USING (id IN (SELECT ...))` forms also no longer surface as drift; CHECK / DEFAULT / generated-column / index-predicate callers cannot emit SubLinks in PostgreSQL, so behavior there is unchanged.
 
