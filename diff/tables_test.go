@@ -1204,6 +1204,36 @@ func TestEqualDefault_desiredCastCurrentBareStillEqual(t *testing.T) {
 	))
 }
 
+func TestEqualDefault_currentBigintCastStripped(t *testing.T) {
+	// Bigint values that don't fit in int32 take the Fval fallback path
+	// inside numericAConstFromString — verify the coerce still matches
+	// the user's bare numeric.
+	assert.True(t, equalDefault(
+		new("'9000000000'::bigint"),
+		new("9000000000"),
+	))
+}
+
+func TestEqualDefault_currentLargeNumericCastStripped(t *testing.T) {
+	// Numeric literals beyond float64 range exercise the ErrRange-accept
+	// branch in numericAConstFromString.
+	assert.True(t, equalDefault(
+		new("'1e400'::numeric"),
+		new("1e400"),
+	))
+}
+
+func TestEqualDefault_customNumericNamedTypeNotCoerced(t *testing.T) {
+	// Same guard as the CHECK-constraint version: a user-defined type
+	// matching a built-in numeric name does not gate the Sval→numeric
+	// coercion, so the surviving Sval still compares unequal to a
+	// desired bare integer.
+	assert.False(t, equalDefault(
+		new("'0'::myapp.int4"),
+		new("0"),
+	))
+}
+
 func TestEqualFKDef(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES users (id)"
