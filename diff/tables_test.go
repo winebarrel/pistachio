@@ -1721,6 +1721,32 @@ func TestEqualConstraintDef_currentNumericFloatCastStripped(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_currentNegativeFloatCastStripped(t *testing.T) {
+	// pg_get_constraintdef emits negative float/numeric literals as
+	// `'-12.34'::numeric` for the same precedence-trap reason as integers.
+	assert.True(t, equalConstraintDef(
+		"CHECK (price >= '-12.34'::numeric)",
+		"CHECK (price >= -12.34)",
+	))
+}
+
+func TestEqualConstraintDef_currentSmallintCastStripped(t *testing.T) {
+	// pg_query canonicalises `smallint` to `int2` in the catalog form, so
+	// isNumericTypeName must recognise both. This exercises the int2 path.
+	assert.True(t, equalConstraintDef(
+		"CHECK (val >= '0'::smallint)",
+		"CHECK (val >= 0)",
+	))
+}
+
+func TestEqualConstraintDef_currentDoublePrecisionCastStripped(t *testing.T) {
+	// `double precision` canonicalises to `float8`; verify the float8 path.
+	assert.True(t, equalConstraintDef(
+		"CHECK (val >= '0.5'::double precision)",
+		"CHECK (val >= 0.5)",
+	))
+}
+
 func TestEqualConstraintDef_castsDifferNumericTypesStillDifferent(t *testing.T) {
 	// When both sides carry casts but the target types differ, the asymmetric
 	// rule does not fire and the difference still surfaces — even for numeric
