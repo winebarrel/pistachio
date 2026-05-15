@@ -598,17 +598,17 @@ func equalConstraintDef(current, desired string) bool {
 	if current == desired {
 		return true
 	}
-	curResult, curCon, errC := pgast.ParseConstraintDefStrict(current)
-	desResult, desCon, errD := pgast.ParseConstraintDefStrict(desired)
-	if errC != nil || errD != nil {
+	curResult, curCon, parseErrCur := pgast.ParseConstraintDefStrict(current)
+	desResult, desCon, parseErrDes := pgast.ParseConstraintDefStrict(desired)
+	if parseErrCur != nil || parseErrDes != nil {
 		return current == desired
 	}
 	curCon.RawExpr = normalizeCheckExpr(curCon.RawExpr)
 	desCon.RawExpr = normalizeCheckExpr(desCon.RawExpr)
 	curCon.RawExpr = alignCurrentCasts(desCon.RawExpr, curCon.RawExpr)
-	curStr, errC := pg_query.Deparse(curResult)
-	desStr, errD := pg_query.Deparse(desResult)
-	if errC != nil || errD != nil {
+	curStr, deparseErrCur := pg_query.Deparse(curResult)
+	desStr, deparseErrDes := pg_query.Deparse(desResult)
+	if deparseErrCur != nil || deparseErrDes != nil {
 		return current == desired
 	}
 	return curStr == desStr
@@ -1217,9 +1217,9 @@ func equalDefault(current, desired *string) bool {
 	if *current == *desired {
 		return true
 	}
-	curResult, curTarget, errC := parseDefaultExpr(*current)
-	desResult, desTarget, errD := parseDefaultExpr(*desired)
-	if errC != nil || errD != nil {
+	curResult, curTarget, parseErrCur := parseDefaultExpr(*current)
+	desResult, desTarget, parseErrDes := parseDefaultExpr(*desired)
+	if parseErrCur != nil || parseErrDes != nil {
 		return *current == *desired
 	}
 	curTarget.Val = stripDefaultTopLevelCast(curTarget.Val, desTarget.Val)
@@ -1227,9 +1227,9 @@ func equalDefault(current, desired *string) bool {
 	curTarget.Val = normalizeCheckExpr(curTarget.Val)
 	desTarget.Val = normalizeCheckExpr(desTarget.Val)
 	curTarget.Val = alignCurrentCasts(desTarget.Val, curTarget.Val)
-	curStr, errC := pg_query.Deparse(curResult)
-	desStr, errD := pg_query.Deparse(desResult)
-	if errC != nil || errD != nil {
+	curStr, deparseErrCur := pg_query.Deparse(curResult)
+	desStr, deparseErrDes := pg_query.Deparse(desResult)
+	if deparseErrCur != nil || deparseErrDes != nil {
 		return *current == *desired
 	}
 	return curStr == desStr
