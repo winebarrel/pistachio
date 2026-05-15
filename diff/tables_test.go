@@ -1689,6 +1689,99 @@ func TestEqualConstraintDef_currentCastInArrayLiteralStripped(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_currentNegativeIntCastStripped(t *testing.T) {
+	// pg_get_constraintdef emits negative integer literals as `'-40'::integer`
+	// to dodge the unary-minus precedence trap; user writes bare `-40`.
+	// The cast strip plus Sval→Ival coercion makes them compare equal.
+	assert.True(t, equalConstraintDef(
+		"CHECK (vacationhours >= '-40'::integer AND vacationhours <= 240)",
+		"CHECK (vacationhours >= -40 AND vacationhours <= 240)",
+	))
+}
+
+func TestEqualConstraintDef_currentPositiveIntStringCastStripped(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK (val >= '40'::integer)",
+		"CHECK (val >= 40)",
+	))
+}
+
+func TestEqualConstraintDef_currentBigintCastStripped(t *testing.T) {
+	// Value that fits in int64 but exceeds int32 should fall back to Fval form.
+	assert.True(t, equalConstraintDef(
+		"CHECK (val >= '9000000000'::bigint)",
+		"CHECK (val >= 9000000000)",
+	))
+}
+
+func TestEqualConstraintDef_currentNumericFloatCastStripped(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK (price >= '12.34'::numeric)",
+		"CHECK (price >= 12.34)",
+	))
+}
+
+func TestEqualConstraintDef_currentNegativeFloatCastStripped(t *testing.T) {
+	// pg_get_constraintdef emits negative float/numeric literals as
+	// `'-12.34'::numeric` for the same precedence-trap reason as integers.
+	assert.True(t, equalConstraintDef(
+		"CHECK (price >= '-12.34'::numeric)",
+		"CHECK (price >= -12.34)",
+	))
+}
+
+func TestEqualConstraintDef_currentLargeNumericCastStripped(t *testing.T) {
+	// Numeric literals beyond float64 range (PG `numeric` carries arbitrary
+	// precision). The Sval→Fval coercion must accept these so the strip is
+	// not silently undone for very large values.
+	assert.True(t, equalConstraintDef(
+		"CHECK (price <= '1e400'::numeric)",
+		"CHECK (price <= 1e400)",
+	))
+}
+
+func TestEqualConstraintDef_customNumericNamedTypeNotCoerced(t *testing.T) {
+	// A user-defined type that happens to share a built-in numeric name
+	// (e.g. `myapp.int4`) should NOT trigger the Sval→numeric coercion.
+	// alignCurrentCasts still strips the `::myapp.int4` wrapper (the strip
+	// itself is unconditional, per the asymmetric rule from #201), but the
+	// surviving A_Const{Sval "0"} is left as-is — so it deparses to `'0'`
+	// and compares unequal to the desired bare integer `0` (A_Const{Ival}).
+	// This is what keeps custom-type casts from silently matching unrelated
+	// built-in numeric desired forms.
+	assert.False(t, equalConstraintDef(
+		"CHECK (val > '0'::myapp.int4)",
+		"CHECK (val > 0)",
+	))
+}
+
+func TestEqualConstraintDef_currentSmallintCastStripped(t *testing.T) {
+	// pg_query canonicalises `smallint` to `int2` in the catalog form, so
+	// isNumericTypeName must recognise both. This exercises the int2 path.
+	assert.True(t, equalConstraintDef(
+		"CHECK (val >= '0'::smallint)",
+		"CHECK (val >= 0)",
+	))
+}
+
+func TestEqualConstraintDef_currentDoublePrecisionCastStripped(t *testing.T) {
+	// `double precision` canonicalises to `float8`; verify the float8 path.
+	assert.True(t, equalConstraintDef(
+		"CHECK (val >= '0.5'::double precision)",
+		"CHECK (val >= 0.5)",
+	))
+}
+
+func TestEqualConstraintDef_castsDifferNumericTypesStillDifferent(t *testing.T) {
+	// When both sides carry casts but the target types differ, the asymmetric
+	// rule does not fire and the difference still surfaces — even for numeric
+	// types where the Sval→numeric coercion would otherwise erase the type.
+	assert.False(t, equalConstraintDef(
+		"CHECK (val > '0'::bigint)",
+		"CHECK (val > '0'::integer)",
+	))
+}
+
 func TestEqualConstraintDef_textCastOnRegex(t *testing.T) {
 	// pg_get_constraintdef adds ::text to string literals
 	assert.True(t, equalConstraintDef(
