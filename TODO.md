@@ -197,38 +197,6 @@ be documented as such if it ever surfaces in user-facing docs.
 
 Origin: [#157](https://github.com/winebarrel/pistachio/pull/157).
 
-## Asymmetric cast strip for non-CHECK comparisons
-
-[#201](https://github.com/winebarrel/pistachio/pull/201) introduced
-`alignCurrentCasts`: a pairwise AST walk that strips current-side
-`TypeCast` wrappers at positions where desired has no corresponding cast,
-collapsing the asymmetry that `pg_get_constraintdef` introduces by adding
-explicit casts to user-bare literals. The same pattern applies to other
-places where pistachio compares user-written SQL against catalog-derived
-output, but those paths still use stricter equality and produce spurious
-diffs on every run:
-
-- **GENERATED column expression** — the existing TODO above
-  ("GENERATED column expression changes") names exactly this cast
-  asymmetry (`price * (quantity)::numeric` vs `price * quantity`) as the
-  blocker for emitting diff/error on expression changes. The prerequisite
-  is now met: rewire the GENERATED-column comparison through
-  `alignCurrentCasts` and the toggle / error logic from #125 can move
-  forward.
-
-Lower-priority follow-ups, comparison paths not yet audited:
-
-- **Partition bound** (`pg_get_expr(c.relpartbound, c.oid)`) —
-  `FOR VALUES FROM (...) TO (...)` literals on date / time / timestamp
-  partition keys may carry casts.
-- **View body** (`diff/views.go:equalViewDef`) — `pg_get_viewdef` adds
-  many casts to SELECT-list constants; the existing `normalizeForComparison`
-  fallback handles schema qualification but not cast asymmetry, so a
-  structural pairwise walk over the parsed `SelectStmt` may close
-  remaining gaps.
-
-Origin: post-[#201](https://github.com/winebarrel/pistachio/pull/201) audit.
-
 ## Plan-time error promotion: forgotten dependent reference
 
 When desired SQL references the new column name in a dependent
