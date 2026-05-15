@@ -19,7 +19,7 @@ FROM postgres:18-alpine
 RUN apk add --no-cache bash sudo vim less source-highlight && \
     echo 'postgres ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/postgres-nopasswd && \
     chmod 0440 /etc/sudoers.d/postgres-nopasswd && \
-    printf "alias ll='ls -lF'\nexport LESSOPEN='| /usr/bin/src-hilite-lesspipe.sh %%s'\nexport LESS='-R'\n" > /var/lib/postgresql/.bashrc && \
+    printf "alias ll='ls -lF'\nalias vi='vim'\nexport LESSOPEN='| /usr/bin/src-hilite-lesspipe.sh %%s'\nexport LESS='-R'\n" > /var/lib/postgresql/.bashrc && \
     printf "syntax on\n" > /var/lib/postgresql/.vimrc && \
     chown postgres:postgres /var/lib/postgresql/.bashrc /var/lib/postgresql/.vimrc
 
