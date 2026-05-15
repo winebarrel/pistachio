@@ -1,0 +1,21 @@
+init: |
+  CREATE TABLE public.samples (
+      start_at time without time zone NOT NULL,
+      end_at time without time zone NOT NULL,
+      CONSTRAINT samples_check CHECK (start_at >= '00:00:00'::time without time zone AND end_at <= '06:00:00'::time without time zone)
+  );
+desired: |
+  CREATE TABLE public.samples (
+      start_at time NOT NULL,
+      end_at time NOT NULL,
+      CHECK (start_at >= '00:00:00' AND end_at <= '06:00:00')
+  );
+applied: |
+  -- public.samples
+  CREATE TABLE public.samples (
+      start_at time without time zone NOT NULL,
+      end_at time without time zone NOT NULL,
+      CONSTRAINT samples_check CHECK (start_at >= '00:00:00'::time without time zone AND end_at <= '06:00:00'::time without time zone)
+  );
+applied_sql: ""
+verify_no_drift: true
