@@ -393,7 +393,7 @@ func TestWriteDumpFiles_WriteFileError(t *testing.T) {
 	}
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0o555))
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
 
 	count, err := command.WriteDumpFiles(dir, map[string]string{"safe.sql": "x"})
 	require.Error(t, err)

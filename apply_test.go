@@ -215,7 +215,7 @@ func TestApply_UnqualifiedDomainInPublicFromOtherSchema(t *testing.T) {
 	_, err = conn.Exec(ctx, "CREATE SCHEMA myschema")
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, _ = conn.Exec(ctx, "DROP SCHEMA IF EXISTS myschema CASCADE")
+		conn.Exec(ctx, "DROP SCHEMA IF EXISTS myschema CASCADE")
 	})
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
