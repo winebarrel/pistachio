@@ -58,7 +58,9 @@ func StartPager(w io.Writer, noPager bool) (io.Writer, func(), error) {
 
 // isTerminalFn is a package-level indirection so tests can simulate a TTY
 // without an actual controlling terminal.
-var isTerminalFn = func(f *os.File) bool {
+var isTerminalFn = isTerminalDefault
+
+func isTerminalDefault(f *os.File) bool {
 	if f == nil {
 		return false
 	}

@@ -161,6 +161,41 @@ func TestStartPager_CloserIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestIsTerminalDefault(t *testing.T) {
+	if command.IsTerminalDefault(nil) {
+		t.Errorf("nil *os.File should not look like a terminal")
+	}
+
+	f, err := os.CreateTemp(t.TempDir(), "regular")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+	if command.IsTerminalDefault(f) {
+		t.Errorf("a regular file should not look like a terminal")
+	}
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { r.Close(); w.Close() })
+	if command.IsTerminalDefault(r) || command.IsTerminalDefault(w) {
+		t.Errorf("a pipe should not look like a terminal")
+	}
+
+	// A closed file's Stat() returns an error; we should report
+	// "not a terminal" rather than propagate the failure.
+	closed, err := os.CreateTemp(t.TempDir(), "closed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed.Close()
+	if command.IsTerminalDefault(closed) {
+		t.Errorf("a closed file should not look like a terminal")
+	}
+}
+
 func TestStartPager_FailsOnBadCommand(t *testing.T) {
 	// `sh -c` itself starts fine, so to force a Start failure we point
 	// at a non-existent executable path that exec.Command can resolve
