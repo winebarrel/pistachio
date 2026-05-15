@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 )
 
 // StartPager wraps w with a pager subprocess when all of the following hold:
@@ -40,9 +41,17 @@ func StartPager(w io.Writer, noPager bool) (io.Writer, func(), error) {
 		stdin.Close() //nolint:errcheck
 		return w, noop, fmt.Errorf("starting pager %q: %w", cmdline, err)
 	}
+	// Idempotent so callers can pair an explicit close (to drain the pager
+	// before a process-terminating call like kong.Context.FatalIfErrorf,
+	// which bypasses defers via os.Exit) with `defer closer()` for panic
+	// safety, without double-closing the pipe or double-waiting on the
+	// subprocess.
+	var once sync.Once
 	closer := func() {
-		stdin.Close() //nolint:errcheck
-		cmd.Wait()    //nolint:errcheck
+		once.Do(func() {
+			stdin.Close() //nolint:errcheck
+			cmd.Wait()    //nolint:errcheck
+		})
 	}
 	return stdin, closer, nil
 }

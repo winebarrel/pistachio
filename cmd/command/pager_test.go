@@ -125,6 +125,42 @@ func TestStartPager_SpawnsAndPipesThrough(t *testing.T) {
 	}
 }
 
+func TestStartPager_CloserIsIdempotent(t *testing.T) {
+	// Caller-side pattern: defer + explicit close. Calling closer twice
+	// must not panic, double-close the pipe, or double-wait on the child.
+	t.Setenv("PISTA_PAGER", "cat")
+	restore := command.SetIsTerminalForTest(func(*os.File) bool { return true })
+	defer restore()
+
+	f, err := os.CreateTemp(t.TempDir(), "out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+
+	w, closer, err := command.StartPager(f, false)
+	if err != nil {
+		t.Fatalf("StartPager: %v", err)
+	}
+	if _, err := io.WriteString(w, "payload"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	closer()
+	closer() // second call is a no-op
+
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "payload") {
+		t.Errorf("expected pager output to contain %q, got %q", "payload", got)
+	}
+}
+
 func TestStartPager_FailsOnBadCommand(t *testing.T) {
 	// `sh -c` itself starts fine, so to force a Start failure we point
 	// at a non-existent executable path that exec.Command can resolve

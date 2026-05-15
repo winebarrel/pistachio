@@ -32,6 +32,9 @@ func main() {
 
 	w, closePager, err := command.StartPager(os.Stdout, cli.NoPager)
 	kctx.FatalIfErrorf(err)
+	// Defer covers panics; the explicit closePager() below covers the
+	// os.Exit path inside FatalIfErrorf so the pager always finishes
+	// flushing before the parent exits.
 	defer closePager()
 	if w != io.Writer(os.Stdout) {
 		kctx.BindTo(w, (*io.Writer)(nil))
@@ -39,5 +42,6 @@ func main() {
 
 	client := pistachio.NewClient(&cli.Options)
 	err = kctx.Run(client)
+	closePager()
 	kctx.FatalIfErrorf(err)
 }
