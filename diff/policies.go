@@ -240,13 +240,17 @@ func exprChanged(a, b *string) bool {
 //
 // Unlike equalDefault, this does NOT apply a symmetric top-level
 // TypeCast strip and does NOT treat `'0'::bigint` ≡ `'0'::integer` as
-// equal — a user adding or removing a top-level cast, or changing the
-// target type of a cast, surfaces as a real difference. Used for RLS
-// policy USING / WITH CHECK comparison and stored-generated column
-// expression comparison, where in-place rewrites of the expression are
-// either expensive (ALTER POLICY) or impossible (PG has no
-// ALTER COLUMN ... SET GENERATED AS) and a false-equal would silently
-// hide the change.
+// equal — a non-text top-level cast (e.g. `(...)::numeric`,
+// `(...)::time without time zone`), or a change to a cast's target
+// type, surfaces as a real difference. Text-like casts (`::text`,
+// `::varchar`) remain stripped symmetrically by normalizeCheckExpr
+// because pg_get_expr adds them indiscriminately to anything
+// string-typed and the user-written form practically never includes
+// them. Used for RLS policy USING / WITH CHECK comparison and
+// stored-generated column expression comparison, where in-place
+// rewrites of the expression are either expensive (ALTER POLICY) or
+// impossible (PG has no ALTER COLUMN ... SET GENERATED AS) and a
+// false-equal would silently hide the change.
 func equalSelectExpr(current, desired string) bool {
 	if current == desired {
 		return true

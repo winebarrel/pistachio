@@ -196,7 +196,7 @@ func TestExprChanged(t *testing.T) {
 	assert.True(t, exprChanged(&a, &c), "different expression")
 }
 
-func TestEqualPolicyExpr_NormalizesParens(t *testing.T) {
+func TestEqualSelectExpr_NormalizesParens(t *testing.T) {
 	// pg_get_expr wraps the top-level boolean in parentheses; the parser
 	// deparses without them. Normalization through parse/deparse should
 	// treat both forms as equal.
@@ -205,12 +205,12 @@ func TestEqualPolicyExpr_NormalizesParens(t *testing.T) {
 
 // equalSelectExpr falls back to raw string comparison when either side
 // fails to parse, to avoid losing diffs on malformed input.
-func TestEqualPolicyExpr_ParseErrorFallback(t *testing.T) {
+func TestEqualSelectExpr_ParseErrorFallback(t *testing.T) {
 	assert.False(t, equalSelectExpr("not a valid expr )", "valid"))
 	assert.True(t, equalSelectExpr("not a valid expr )", "not a valid expr )"))
 }
 
-func TestEqualPolicyExpr_currentTimeCastStripped(t *testing.T) {
+func TestEqualSelectExpr_currentTimeCastStripped(t *testing.T) {
 	// pg_get_expr adds `'00:00:00'::time without time zone` on a time-column
 	// USING / WITH CHECK comparison; users write the bare literal.
 	assert.True(t, equalSelectExpr(
@@ -219,14 +219,14 @@ func TestEqualPolicyExpr_currentTimeCastStripped(t *testing.T) {
 	))
 }
 
-func TestEqualPolicyExpr_currentDateCastStripped(t *testing.T) {
+func TestEqualSelectExpr_currentDateCastStripped(t *testing.T) {
 	assert.True(t, equalSelectExpr(
 		"created_at >= '2020-01-01'::date",
 		"created_at >= '2020-01-01'",
 	))
 }
 
-func TestEqualPolicyExpr_currentNegativeIntCastStripped(t *testing.T) {
+func TestEqualSelectExpr_currentNegativeIntCastStripped(t *testing.T) {
 	// Negative integer literal: DB emits `'-40'::integer`, user writes `-40`.
 	assert.True(t, equalSelectExpr(
 		"vacation_hours >= '-40'::integer",
@@ -234,21 +234,21 @@ func TestEqualPolicyExpr_currentNegativeIntCastStripped(t *testing.T) {
 	))
 }
 
-func TestEqualPolicyExpr_currentCastInsideBoolExpr(t *testing.T) {
+func TestEqualSelectExpr_currentCastInsideBoolExpr(t *testing.T) {
 	assert.True(t, equalSelectExpr(
 		"(a > 0) AND (b >= '00:00:00'::time without time zone)",
 		"a > 0 AND b >= '00:00:00'",
 	))
 }
 
-func TestEqualPolicyExpr_bothExplicitCastsMatch(t *testing.T) {
+func TestEqualSelectExpr_bothExplicitCastsMatch(t *testing.T) {
 	assert.True(t, equalSelectExpr(
 		"val > '0'::integer",
 		"val > '0'::integer",
 	))
 }
 
-func TestEqualPolicyExpr_castsDifferTypes(t *testing.T) {
+func TestEqualSelectExpr_castsDifferTypes(t *testing.T) {
 	// Both sides cast, different target types — not equal (asymmetric rule
 	// only fires when desired has no cast at the same position).
 	assert.False(t, equalSelectExpr(
@@ -257,7 +257,7 @@ func TestEqualPolicyExpr_castsDifferTypes(t *testing.T) {
 	))
 }
 
-func TestEqualPolicyExpr_desiredCastCurrentBare(t *testing.T) {
+func TestEqualSelectExpr_desiredCastCurrentBare(t *testing.T) {
 	// Reverse direction: desired has a cast, current doesn't. The asymmetric
 	// rule does not strip desired's cast, so they remain unequal.
 	assert.False(t, equalSelectExpr(
@@ -266,7 +266,7 @@ func TestEqualPolicyExpr_desiredCastCurrentBare(t *testing.T) {
 	))
 }
 
-func TestEqualPolicyExpr_customNumericNamedTypeNotCoerced(t *testing.T) {
+func TestEqualSelectExpr_customNumericNamedTypeNotCoerced(t *testing.T) {
 	// A user-defined type that happens to share a built-in numeric name
 	// (e.g. `myapp.int4`) does NOT gate the Sval→numeric coercion.
 	// alignCurrentCasts still strips the wrapper (unconditional under the
