@@ -1,0 +1,28 @@
+init: |
+  CREATE TABLE public.bookings (
+      id bigint NOT NULL,
+      starts_at time without time zone NOT NULL,
+      CONSTRAINT bookings_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY bookings_insert ON public.bookings FOR INSERT WITH CHECK ((starts_at >= '00:00:00'::time without time zone));
+desired: |
+  CREATE TABLE public.bookings (
+      id bigint NOT NULL,
+      starts_at time NOT NULL,
+      CONSTRAINT bookings_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY bookings_insert ON public.bookings FOR INSERT WITH CHECK (starts_at >= '00:00:00');
+applied: |
+  -- public.bookings
+  CREATE TABLE public.bookings (
+      id bigint NOT NULL,
+      starts_at time without time zone NOT NULL,
+      CONSTRAINT bookings_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY bookings_insert ON public.bookings FOR INSERT WITH CHECK ((starts_at >= '00:00:00'::time without time zone));
+applied_sql: ""
+verify_no_drift: true

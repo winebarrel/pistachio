@@ -266,6 +266,19 @@ func TestEqualPolicyExpr_desiredCastCurrentBare(t *testing.T) {
 	))
 }
 
+func TestEqualPolicyExpr_customNumericNamedTypeNotCoerced(t *testing.T) {
+	// A user-defined type that happens to share a built-in numeric name
+	// (e.g. `myapp.int4`) does NOT gate the Sval→numeric coercion.
+	// alignCurrentCasts still strips the wrapper (unconditional under the
+	// asymmetric rule), but the surviving A_Const{Sval "0"} is left as-is
+	// and compares unequal to the desired bare integer `0`. Same guard as
+	// the CHECK / DEFAULT versions.
+	assert.False(t, equalPolicyExpr(
+		"val > '0'::myapp.int4",
+		"val > 0",
+	))
+}
+
 func TestNormalizeRoles(t *testing.T) {
 	assert.Equal(t, []string{"public"}, normalizeRoles(nil), "empty → [public]")
 	assert.Equal(t, []string{"a", "b"}, normalizeRoles([]string{"b", "a"}), "sorted")
