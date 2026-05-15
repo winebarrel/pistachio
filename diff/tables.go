@@ -3,6 +3,7 @@ package diff
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -490,8 +491,11 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 // float4 respectively, so both forms are accepted, but only the unqualified
 // keyword (`integer`) and the `pg_catalog`-qualified canonical form
 // (`pg_catalog.int4`) match — a user-defined type that happens to be named
-// e.g. `myapp.int4` is not considered numeric, so a cast onto it can't be
-// silently stripped or coerced.
+// e.g. `myapp.int4` does not gate the Sval→numeric coercion below, so a
+// stripped cast on a custom-type Sval is left as-is rather than rewritten
+// to a built-in numeric A_Const. (The strip itself is unconditional — that
+// is the asymmetric rule from #201 — but coercion is narrowed to the
+// genuinely numeric built-ins.)
 func isNumericTypeName(tn *pg_query.TypeName) bool {
 	if tn == nil || len(tn.Names) == 0 {
 		return false
@@ -547,7 +551,7 @@ func desiredIsNumericAConst(n *pg_query.Node) bool {
 // Returns nil for non-numeric strings; callers leave the original node alone
 // in that case.
 func numericAConstFromString(s string) *pg_query.Node {
-	if n, err := strconv.ParseInt(s, 10, 64); err == nil && n >= -2147483648 && n <= 2147483647 {
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil && n >= math.MinInt32 && n <= math.MaxInt32 {
 		return &pg_query.Node{
 			Node: &pg_query.Node_AConst{
 				AConst: &pg_query.A_Const{

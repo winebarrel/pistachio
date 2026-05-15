@@ -1771,7 +1771,7 @@ func TestEqualConstraintDef_currentDoublePrecisionCastStripped(t *testing.T) {
 func TestEqualConstraintDef_castsDifferNumericTypesStillDifferent(t *testing.T) {
 	// When both sides carry casts but the target types differ, the asymmetric
 	// rule does not fire and the difference still surfaces — even for numeric
-	// types where the Sval-→numeric coercion would otherwise erase the type.
+	// types where the Sval→numeric coercion would otherwise erase the type.
 	assert.False(t, equalConstraintDef(
 		"CHECK (val > '0'::bigint)",
 		"CHECK (val > '0'::integer)",
