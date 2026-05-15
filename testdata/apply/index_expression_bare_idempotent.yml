@@ -1,0 +1,24 @@
+init: |
+  CREATE TABLE public.people (
+      id bigint NOT NULL,
+      name character varying(64) NOT NULL,
+      CONSTRAINT people_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX people_lower_name_idx ON public.people USING btree (lower((name)::text));
+desired: |
+  CREATE TABLE public.people (
+      id bigint NOT NULL,
+      name varchar(64) NOT NULL,
+      CONSTRAINT people_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX people_lower_name_idx ON public.people USING btree (lower(name));
+applied: |
+  -- public.people
+  CREATE TABLE public.people (
+      id bigint NOT NULL,
+      name character varying(64) NOT NULL,
+      CONSTRAINT people_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX people_lower_name_idx ON public.people USING btree (lower((name)::text));
+applied_sql: ""
+verify_no_drift: true
