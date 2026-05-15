@@ -8,57 +8,32 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// normalizeViewDef normalizes a view definition by parsing and deparsing it
-// through pg_query, so that formatting differences are eliminated.
-func normalizeViewDef(def string) (string, error) {
-	sql := "CREATE VIEW _v AS " + def
-	result, err := pg_query.Parse(sql)
-	if err != nil {
-		return "", err
-	}
-	return pg_query.Deparse(result)
-}
-
-// equalViewDef compares two view definitions by normalizing them through
-// pg_query parse/deparse to ignore formatting differences.
-// proto.Equal cannot be used here because parse trees include source
-// location information that differs when the same query has different formatting.
-// Schema qualification differences (e.g., "users" vs "public.users") are also
-// ignored because pg_get_viewdef may omit the schema for the current search_path.
+// equalViewDef compares two view definitions by parsing each side once,
+// applying every available view normalization in place, then deparsing and
+// comparing the resulting strings. proto.Equal cannot be used here because
+// parse trees include source location information that differs when the
+// same query has different formatting.
+//
+// Normalizations applied:
+//   - schema/column qualification stripping (pg_get_viewdef adds
+//     table-qualified columns and omits the default schema, parsed SQL is
+//     the opposite),
+//   - symmetric expression normalization via normalizeSelectExprs:
+//     paren / text-like cast stripping and `= ANY(ARRAY[...])` → `IN (...)`,
+//   - asymmetric current-only cast alignment via alignSelectCasts: strips
+//     TypeCasts (notably 'lit'::enum_type) the catalog added but the user
+//     didn't write. Top-level casts at the target list are preserved on
+//     both sides since they affect the resulting view's column type.
 //
 // The caller convention is equalViewDef(current, desired): current is the
-// pg_get_viewdef form (read from the catalog), desired is the user SQL.
-// Asymmetric normalizations (e.g. stripping current-only TypeCasts that PG
-// adds when storing the view) rely on that ordering.
+// pg_get_viewdef form (from the catalog), desired is the user SQL. The
+// asymmetric normalizations rely on that ordering.
 func equalViewDef(current, desired string) bool {
 	if current == desired {
 		return true
 	}
-	normCur, errCur := normalizeViewDef(current)
-	normDes, errDes := normalizeViewDef(desired)
-	if errCur != nil || errDes != nil {
-		return current == desired
-	}
-	if normCur == normDes {
-		return true
-	}
-	// Compare with schema/column qualifications stripped and SELECT-body
-	// expressions normalized (IN ↔ ANY(ARRAY[...]), text-like casts, and
-	// asymmetric current-only TypeCasts). pg_get_viewdef adds the latter
-	// kind for any literal compared against a typed column (notably enums),
-	// so without this step every enum-filtering view would show false drift.
-	return equalNormalizedViewSelect(normCur, normDes)
-}
-
-// equalNormalizedViewSelect compares two view bodies after applying every
-// available view-specific normalization: schema/column qualification
-// stripping, symmetric expression normalization (IN ↔ ANY(ARRAY[...]),
-// text-like cast stripping), and asymmetric stripping of TypeCasts that
-// appear only on the current side (the typical case is pg_get_viewdef
-// adding 'lit'::enum_type on literals compared to enum-typed columns).
-func equalNormalizedViewSelect(current, desired string) bool {
-	curResult, errCur := pg_query.Parse(current)
-	desResult, errDes := pg_query.Parse(desired)
+	curResult, errCur := pg_query.Parse("CREATE VIEW _v AS " + current)
+	desResult, errDes := pg_query.Parse("CREATE VIEW _v AS " + desired)
 	if errCur != nil || errDes != nil {
 		return current == desired
 	}
@@ -84,9 +59,9 @@ func equalNormalizedViewSelect(current, desired string) bool {
 // normalizeSelectExprs walks a SELECT statement (and any nested
 // SELECT/JOIN/CTE) and applies normalizeCheckExpr at every position that
 // holds an expression. Converts `= ANY(ARRAY[...])` back to `IN (...)` and
-// strips text-like TypeCasts. Called both for view body comparison
-// (equalNormalizedViewSelect) and from normalizeCheckExpr's SubLink case
-// for sub-queries inside CHECK / RLS expressions.
+// strips text-like TypeCasts. Called both from equalViewDef and from
+// normalizeCheckExpr's SubLink case for sub-queries inside CHECK / RLS
+// expressions.
 func normalizeSelectExprs(node *pg_query.Node) {
 	if node == nil {
 		return

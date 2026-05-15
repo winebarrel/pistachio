@@ -182,12 +182,6 @@ func TestDiffViews_rename_sourceNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "rename source")
 }
 
-func TestNormalizeViewDef(t *testing.T) {
-	got, err := normalizeViewDef("SELECT   1")
-	assert.NoError(t, err)
-	assert.Contains(t, got, "SELECT 1")
-}
-
 func TestEqualViewDef_same(t *testing.T) {
 	assert.True(t, equalViewDef("SELECT 1", "SELECT 1"))
 }
