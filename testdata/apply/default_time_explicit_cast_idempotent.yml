@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.shifts (
+      id integer NOT NULL,
+      start_at time without time zone DEFAULT '00:00:00'::time without time zone NOT NULL
+  );
+desired: |
+  CREATE TABLE public.shifts (
+      id integer NOT NULL,
+      start_at time DEFAULT '00:00:00'::time without time zone NOT NULL
+  );
+applied: |
+  -- public.shifts
+  CREATE TABLE public.shifts (
+      id integer NOT NULL,
+      start_at time without time zone DEFAULT '00:00:00'::time without time zone NOT NULL
+  );
+applied_sql: ""
+verify_no_drift: true
