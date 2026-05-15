@@ -215,9 +215,11 @@ func formatRoles(roles []string) []string {
 	return out
 }
 
-// exprChanged compares two optional expression strings by parsing them as
-// SELECT expressions so that pg_get_expr-added casts and formatting noise do
-// not cause false diffs.
+// exprChanged compares two optional expression strings via equalSelectExpr.
+// Used for RLS policy USING / WITH CHECK and stored-generated column
+// expression comparisons — both want pg_get_expr-added casts and formatting
+// noise normalised away without picking up equalDefault's DEFAULT-specific
+// symmetric top-level cast strip.
 func exprChanged(a, b *string) bool {
 	if a == nil && b == nil {
 		return false
@@ -225,20 +227,31 @@ func exprChanged(a, b *string) bool {
 	if a == nil || b == nil {
 		return true
 	}
-	return !equalPolicyExpr(*a, *b)
+	return !equalSelectExpr(*a, *b)
 }
 
-// equalPolicyExpr returns true if a policy expression (USING / WITH CHECK)
-// is semantically equal between current and desired sides, using the same
-// normalization as CHECK constraint expressions.
+// equalSelectExpr returns true if two bare expressions (parsed by wrapping
+// in `SELECT <expr>`) are semantically equal under the strict asymmetric
+// cast normalization: parses both via parseSelectExpr, runs
+// normalizeCheckExpr symmetrically (text-like cast strip, paren cleanup,
+// `IN`↔`= ANY(ARRAY[...])`), strips any current-only TypeCast via
+// alignCurrentCasts, and coerces stripped numeric Sval back to Ival/Fval
+// when the desired side is a bare numeric A_Const.
 //
-// pg_get_expr adds explicit casts (e.g. `'00:00:00'::time without time zone`,
-// `'-40'::integer`) that users typically omit. The comparison strips text-like
-// casts symmetrically (normalizeCheckExpr), strips any remaining current-only
-// TypeCast asymmetrically (alignCurrentCasts), and coerces stripped numeric
-// Sval back to Ival/Fval when the desired side is a numeric A_Const — same
-// pipeline that equalConstraintDef uses on CHECK definitions.
-func equalPolicyExpr(current, desired string) bool {
+// Unlike equalDefault, this does NOT apply a symmetric top-level
+// TypeCast strip and does NOT treat `'0'::bigint` ≡ `'0'::integer` as
+// equal — a non-text top-level cast (e.g. `(...)::numeric`,
+// `(...)::time without time zone`), or a change to a cast's target
+// type, surfaces as a real difference. Text-like casts (`::text`,
+// `::varchar`) remain stripped symmetrically by normalizeCheckExpr
+// because pg_get_expr adds them indiscriminately to anything
+// string-typed and the user-written form practically never includes
+// them. Used for RLS policy USING / WITH CHECK comparison and
+// stored-generated column expression comparison, where in-place
+// rewrites of the expression are either expensive (ALTER POLICY) or
+// impossible (PG has no ALTER COLUMN ... SET GENERATED AS) and a
+// false-equal would silently hide the change.
+func equalSelectExpr(current, desired string) bool {
 	if current == desired {
 		return true
 	}

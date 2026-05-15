@@ -216,6 +216,74 @@ func TestDiffTables_noChange(t *testing.T) {
 	assert.Empty(t, result.Stmts)
 }
 
+func TestDiffColumns_generatedExpressionChange(t *testing.T) {
+	// Both sides STORED GENERATED but the expression text differs → error,
+	// because PostgreSQL has no in-place `ALTER COLUMN ... SET GENERATED`.
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("total", &model.Column{
+		Name:      "total",
+		TypeName:  "numeric(10,2)",
+		Generated: 's',
+		Default:   new("price * quantity"),
+	})
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("total", &model.Column{
+		Name:      "total",
+		TypeName:  "numeric(10,2)",
+		Generated: 's',
+		Default:   new("price * quantity * 2"),
+	})
+	_, _, err := diffColumns("public.products", current, desired, allowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot change GENERATED expression")
+}
+
+func TestDiffColumns_generatedExpressionTopLevelCastAdded(t *testing.T) {
+	// Adding a top-level cast on the desired side must NOT slip through —
+	// the strict equalSelectExpr (no DEFAULT-style symmetric top-level
+	// strip) reports the change and diffColumns errors. Regression for
+	// the Copilot review on PR #207.
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("total", &model.Column{
+		Name:      "total",
+		TypeName:  "numeric(10,2)",
+		Generated: 's',
+		Default:   new("price * quantity"),
+	})
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("total", &model.Column{
+		Name:      "total",
+		TypeName:  "numeric(10,2)",
+		Generated: 's',
+		Default:   new("(price * quantity)::numeric(10,2)"),
+	})
+	_, _, err := diffColumns("public.products", current, desired, allowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot change GENERATED expression")
+}
+
+func TestDiffColumns_generatedExpressionEqualCastAsymmetric(t *testing.T) {
+	// Asymmetric cast (current has `::numeric` cast on a column that the
+	// desired side leaves bare) must NOT trigger the error — equalSelectExpr
+	// strips current-only TypeCasts.
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("total", &model.Column{
+		Name:      "total",
+		TypeName:  "numeric(10,2)",
+		Generated: 's',
+		Default:   new("price * (quantity)::numeric"),
+	})
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("total", &model.Column{
+		Name:      "total",
+		TypeName:  "numeric(10,2)",
+		Generated: 's',
+		Default:   new("price * quantity"),
+	})
+	_, _, err := diffColumns("public.products", current, desired, allowAllDrops{})
+	require.NoError(t, err)
+}
+
 func TestDiffColumns_addColumn(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
 	current.Set("id", &model.Column{Name: "id", TypeName: "integer"})
