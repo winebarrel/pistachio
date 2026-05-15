@@ -1740,11 +1740,15 @@ func TestEqualConstraintDef_currentLargeNumericCastStripped(t *testing.T) {
 	))
 }
 
-func TestEqualConstraintDef_customNumericNamedTypeNotStripped(t *testing.T) {
+func TestEqualConstraintDef_customNumericNamedTypeNotCoerced(t *testing.T) {
 	// A user-defined type that happens to share a built-in numeric name
-	// (e.g. `myapp.int4`) should NOT be treated as the built-in: stripping
-	// the cast could hide a real difference. isNumericTypeName only matches
-	// unqualified or pg_catalog-qualified names.
+	// (e.g. `myapp.int4`) should NOT trigger the Sval→numeric coercion.
+	// alignCurrentCasts still strips the `::myapp.int4` wrapper (the strip
+	// itself is unconditional, per the asymmetric rule from #201), but the
+	// surviving A_Const{Sval "0"} is left as-is — so it deparses to `'0'`
+	// and compares unequal to the desired bare integer `0` (A_Const{Ival}).
+	// This is what keeps custom-type casts from silently matching unrelated
+	// built-in numeric desired forms.
 	assert.False(t, equalConstraintDef(
 		"CHECK (val > '0'::myapp.int4)",
 		"CHECK (val > 0)",
