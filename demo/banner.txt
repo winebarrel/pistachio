@@ -13,6 +13,14 @@ Try the following:
   pista dump                  # dump the current schema
   psql                        # poke around the DB
 
+Destructive changes (DROP COLUMN / DROP TABLE / etc.) are skipped
+by default and shown as '-- skipped:' comments. To allow them,
+pass --allow-drop with the object types you want to permit:
+
+  pista plan  --allow-drop=column        desired.sql
+  pista apply --allow-drop=column,table  desired.sql
+  pista apply --allow-drop=all           desired.sql
+
 Files in this directory (/demo):
   current.sql   - already loaded into 'demo'
   desired.sql   - edit me, then re-run 'pista plan'
