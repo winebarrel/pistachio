@@ -2777,6 +2777,34 @@ func TestStripDefaultTopLevelCast_stripsWhenPeerHasNoCast(t *testing.T) {
 	assert.Nil(t, result.GetTypeCast())
 }
 
+func TestPeerIsNumericAtTopLevel_nil(t *testing.T) {
+	assert.False(t, peerIsNumericAtTopLevel(nil))
+}
+
+func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericType(t *testing.T) {
+	// `'hello'::text` is a TypeCast but the type isn't numeric, so the
+	// gate must reject it.
+	_, target, err := parseDefaultExpr("'hello'::text")
+	require.NoError(t, err)
+	assert.False(t, peerIsNumericAtTopLevel(target.Val))
+}
+
+func TestPeerIsNumericAtTopLevel_typeCastOnColumnRef(t *testing.T) {
+	// `(col)::integer` — TypeCast on a non-AConst arg should not count as
+	// "would be numeric after strip"; the strip leaves a ColumnRef.
+	_, target, err := parseDefaultExpr("(col)::integer")
+	require.NoError(t, err)
+	assert.False(t, peerIsNumericAtTopLevel(target.Val))
+}
+
+func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericSval(t *testing.T) {
+	// `'abc'::integer` — TypeCast on a Sval that doesn't parse as a
+	// number. Not coercible, so the gate must reject it.
+	_, target, err := parseDefaultExpr("'abc'::integer")
+	require.NoError(t, err)
+	assert.False(t, peerIsNumericAtTopLevel(target.Val))
+}
+
 func TestIsTextLikeTypeName_nil(t *testing.T) {
 	assert.False(t, isTextLikeTypeName(nil))
 }
