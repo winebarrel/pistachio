@@ -6,9 +6,8 @@ Set Width 800
 Set Height 600
 Set Padding 20
 
-Hide
-Type "export PISTA_PAGER='bat -l sql -p --paging=never' && clear"
-Show
+Type@3ms "export PISTA_PAGER='bat -l sql -p --paging=never'" Enter
+Sleep 2s
 
 # Create schema file
 Enter
@@ -24,9 +23,6 @@ Type@3ms ");" Enter
 Type@3ms "" Enter
 Type@3ms "CREATE INDEX idx_posts_user_id ON public.posts USING btree (user_id);" Enter
 Type@3ms "EOF" Enter
-Sleep 0.5s
-Enter
-Type "bat -l sql -p --paging=never schema.sql" Enter
 Sleep 4s
 
 # Plan
@@ -61,9 +57,7 @@ Sleep 4s
 Enter
 Type "# Modify the schema file: add an body column to posts" Enter
 Sleep 2s
-Type "cp schema.sql schema.sql.bak" Enter
-Sleep 0.5s
-Type "sed -i '' 's/title text NOT NULL,/title text NOT NULL,\n    body text NOT NULL,/' schema.sql" Enter
+Type "sed -i.bak 's/title text NOT NULL,/title text NOT NULL,\n    body text NOT NULL,/' schema.sql" Enter
 Sleep 0.5s
 
 # Show diff
