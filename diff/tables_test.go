@@ -21,10 +21,6 @@ func newTable(schema, name string) *model.Table {
 	}
 }
 
-func ptr[T any](v T) *T {
-	return &v
-}
-
 func TestDiffTables_newTable(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()
@@ -47,7 +43,7 @@ func TestDiffTables_newTable_withExtras(t *testing.T) {
 	tbl := newTable("public", "users")
 	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
 	tbl.Indexes.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Table: "users", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
-	tbl.Comment = ptr("Users table")
+	tbl.Comment = new("Users table")
 	desired.Set("public.users", tbl)
 
 	result, err := DiffTables(current, desired, allowAllDrops{})
@@ -265,7 +261,7 @@ func TestDiffColumns_alterType_withCollation(t *testing.T) {
 	current.Set("name", &model.Column{Name: "name", TypeName: "varchar(100)"})
 
 	desired := orderedmap.New[string, *model.Column]()
-	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
 
 	stmts, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -275,10 +271,10 @@ func TestDiffColumns_alterType_withCollation(t *testing.T) {
 
 func TestDiffColumns_alterCollation_change(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
-	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
 
 	desired := orderedmap.New[string, *model.Column]()
-	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("fr_FR")})
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("fr_FR")})
 
 	stmts, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -290,7 +286,7 @@ func TestDiffColumns_alterCollation_add(t *testing.T) {
 	current.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
 	desired := orderedmap.New[string, *model.Column]()
-	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
 
 	stmts, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -299,7 +295,7 @@ func TestDiffColumns_alterCollation_add(t *testing.T) {
 
 func TestDiffColumns_alterCollation_drop(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
-	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
 
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
@@ -311,10 +307,10 @@ func TestDiffColumns_alterCollation_drop(t *testing.T) {
 
 func TestDiffColumns_alterCollation_unchanged(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
-	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
 
 	desired := orderedmap.New[string, *model.Column]()
-	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")})
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
 
 	stmts, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -326,7 +322,7 @@ func TestDiffColumns_alterDefault_set(t *testing.T) {
 	current.Set("age", &model.Column{Name: "age", TypeName: "integer"})
 
 	desired := orderedmap.New[string, *model.Column]()
-	desired.Set("age", &model.Column{Name: "age", TypeName: "integer", Default: ptr("0")})
+	desired.Set("age", &model.Column{Name: "age", TypeName: "integer", Default: new("0")})
 
 	stmts, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -336,7 +332,7 @@ func TestDiffColumns_alterDefault_set(t *testing.T) {
 
 func TestDiffColumns_alterDefault_drop(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
-	current.Set("age", &model.Column{Name: "age", TypeName: "integer", Default: ptr("0")})
+	current.Set("age", &model.Column{Name: "age", TypeName: "integer", Default: new("0")})
 
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("age", &model.Column{Name: "age", TypeName: "integer"})
@@ -516,12 +512,12 @@ func TestAddColumnSQL_basic(t *testing.T) {
 }
 
 func TestAddColumnSQL_withDefault(t *testing.T) {
-	col := &model.Column{Name: "active", TypeName: "boolean", Default: ptr("true")}
+	col := &model.Column{Name: "active", TypeName: "boolean", Default: new("true")}
 	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN active boolean DEFAULT true;", addColumnSQL("public.users", col))
 }
 
 func TestAddColumnSQL_withCollation(t *testing.T) {
-	col := &model.Column{Name: "name", TypeName: "text", Collation: ptr("en_US")}
+	col := &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")}
 	assert.Contains(t, addColumnSQL("public.users", col), `COLLATE "en_US"`)
 }
 
@@ -538,7 +534,7 @@ func TestAddColumnSQL_identityByDefault(t *testing.T) {
 }
 
 func TestAddColumnSQL_generatedStored(t *testing.T) {
-	col := &model.Column{Name: "full", TypeName: "text", Generated: model.ColumnGenerated('s'), Default: ptr("first || last")}
+	col := &model.Column{Name: "full", TypeName: "text", Generated: model.ColumnGenerated('s'), Default: new("first || last")}
 	assert.Contains(t, addColumnSQL("public.users", col), "GENERATED ALWAYS AS (first || last) STORED")
 }
 
@@ -667,7 +663,7 @@ func TestDiffConstraints_renameAndNotValid(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
 	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: true})
 	desired := orderedmap.New[string, *model.Constraint]()
-	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: false, RenameFrom: ptr("chk_old")})
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: false, RenameFrom: new("chk_old")})
 
 	stmts, _, err := diffConstraints("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -680,7 +676,7 @@ func TestDiffConstraints_renameAndChangeDefinition(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
 	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: true})
 	desired := orderedmap.New[string, *model.Constraint]()
-	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age >= 18)", Validated: true, RenameFrom: ptr("chk_old")})
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age >= 18)", Validated: true, RenameFrom: new("chk_old")})
 
 	stmts, _, err := diffConstraints("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -693,7 +689,7 @@ func TestDiffConstraints_renameAndValidate(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
 	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: false})
 	desired := orderedmap.New[string, *model.Constraint]()
-	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true, RenameFrom: ptr("chk_old")})
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true, RenameFrom: new("chk_old")})
 
 	stmts, _, err := diffConstraints("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -706,7 +702,7 @@ func TestDiffConstraints_renameOnly(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
 	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: true})
 	desired := orderedmap.New[string, *model.Constraint]()
-	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true, RenameFrom: ptr("chk_old")})
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true, RenameFrom: new("chk_old")})
 
 	stmts, _, err := diffConstraints("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -718,7 +714,7 @@ func TestDiffConstraints_renameAlreadyAppliedAndNotValid(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
 	current.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: true})
 	desired := orderedmap.New[string, *model.Constraint]()
-	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: false, RenameFrom: ptr("chk_old")})
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age > 0)", Validated: false, RenameFrom: new("chk_old")})
 
 	stmts, _, err := diffConstraints("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -1020,7 +1016,7 @@ func TestDiffForeignKeys_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true, RenameFrom: ptr("fk_old")},
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true, RenameFrom: new("fk_old")},
 		Schema:     "public",
 		Table:      "orders",
 	})
@@ -1041,7 +1037,7 @@ func TestDiffConstraints_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
 	current.Set("chk_old", &model.Constraint{Name: "chk_old", Definition: "CHECK (age > 0)", Validated: true})
 	desired := orderedmap.New[string, *model.Constraint]()
-	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age >= 18)", Validated: true, RenameFrom: ptr("chk_old")})
+	desired.Set("chk_new", &model.Constraint{Name: "chk_new", Definition: "CHECK (age >= 18)", Validated: true, RenameFrom: new("chk_old")})
 
 	stmts, disallowed, err := diffConstraints("public.users", current, desired, denyAllDrops{})
 	require.NoError(t, err)
@@ -1056,7 +1052,7 @@ func TestDiffComments_tableComment_add(t *testing.T) {
 	desired := newTable("public", "users")
 	desired.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
-	desired.Comment = ptr("Users table")
+	desired.Comment = new("Users table")
 
 	stmts := diffComments(current, desired)
 	assert.Equal(t, []string{"COMMENT ON TABLE public.users IS 'Users table';"}, stmts)
@@ -1064,7 +1060,7 @@ func TestDiffComments_tableComment_add(t *testing.T) {
 
 func TestDiffComments_tableComment_drop(t *testing.T) {
 	current := newTable("public", "users")
-	current.Comment = ptr("Users table")
+	current.Comment = new("Users table")
 	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	desired := newTable("public", "users")
 	desired.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
@@ -1077,7 +1073,7 @@ func TestDiffComments_columnComment_add(t *testing.T) {
 	current := newTable("public", "users")
 	current.Columns.Set("name", &model.Column{Name: "name", TypeName: "text"})
 	desired := newTable("public", "users")
-	desired.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: ptr("User name")})
+	desired.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: new("User name")})
 
 	stmts := diffComments(current, desired)
 	assert.Equal(t, []string{"COMMENT ON COLUMN public.users.name IS 'User name';"}, stmts)
@@ -1085,7 +1081,7 @@ func TestDiffComments_columnComment_add(t *testing.T) {
 
 func TestDiffComments_columnComment_drop(t *testing.T) {
 	current := newTable("public", "users")
-	current.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: ptr("User name")})
+	current.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: new("User name")})
 	desired := newTable("public", "users")
 	desired.Columns.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
@@ -1096,7 +1092,7 @@ func TestDiffComments_columnComment_drop(t *testing.T) {
 func TestDiffComments_newColumn(t *testing.T) {
 	current := newTable("public", "users")
 	desired := newTable("public", "users")
-	desired.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: ptr("new col comment")})
+	desired.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: new("new col comment")})
 
 	stmts := diffComments(current, desired)
 	assert.Len(t, stmts, 1)
@@ -1105,10 +1101,10 @@ func TestDiffComments_newColumn(t *testing.T) {
 
 func TestEqualPtr(t *testing.T) {
 	assert.True(t, equalPtr[string](nil, nil))
-	assert.False(t, equalPtr(ptr("a"), nil))
-	assert.False(t, equalPtr(nil, ptr("a")))
-	assert.True(t, equalPtr(ptr("a"), ptr("a")))
-	assert.False(t, equalPtr(ptr("a"), ptr("b")))
+	assert.False(t, equalPtr(new("a"), nil))
+	assert.False(t, equalPtr(nil, new("a")))
+	assert.True(t, equalPtr(new("a"), new("a")))
+	assert.False(t, equalPtr(new("a"), new("b")))
 }
 
 func TestEqualTypeName(t *testing.T) {
@@ -1122,11 +1118,11 @@ func TestEqualTypeName(t *testing.T) {
 
 func TestEqualDefault(t *testing.T) {
 	assert.True(t, equalDefault(nil, nil))
-	assert.False(t, equalDefault(ptr("0"), nil))
-	assert.False(t, equalDefault(nil, ptr("0")))
-	assert.True(t, equalDefault(ptr("0"), ptr("0")))
-	assert.True(t, equalDefault(ptr("'hello'::text"), ptr("'hello'")))
-	assert.False(t, equalDefault(ptr("0"), ptr("1")))
+	assert.False(t, equalDefault(new("0"), nil))
+	assert.False(t, equalDefault(nil, new("0")))
+	assert.True(t, equalDefault(new("0"), new("0")))
+	assert.True(t, equalDefault(new("'hello'::text"), new("'hello'")))
+	assert.False(t, equalDefault(new("0"), new("1")))
 }
 
 func TestEqualFKDef(t *testing.T) {
@@ -1188,8 +1184,8 @@ func TestEqualFKDef_parseError(t *testing.T) {
 
 func TestEqualDefault_parseError(t *testing.T) {
 	// When both fail to parse, falls back to string comparison
-	assert.True(t, equalDefault(ptr(")))invalid"), ptr(")))invalid")))
-	assert.False(t, equalDefault(ptr(")))invalid"), ptr(")))other")))
+	assert.True(t, equalDefault(new(")))invalid"), new(")))invalid")))
+	assert.False(t, equalDefault(new(")))invalid"), new(")))other")))
 }
 
 func TestEqualViewDef_parseError(t *testing.T) {
@@ -1314,7 +1310,7 @@ func TestDiffForeignKeys_renameAndValidate(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true, RenameFrom: ptr("fk_old")},
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true, RenameFrom: new("fk_old")},
 		Schema:     "public",
 		Table:      "orders",
 	})
@@ -1336,7 +1332,7 @@ func TestDiffForeignKeys_renameOnly(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true, RenameFrom: ptr("fk_old")},
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true, RenameFrom: new("fk_old")},
 		Schema:     "public",
 		Table:      "orders",
 	})
@@ -1357,7 +1353,7 @@ func TestDiffForeignKeys_renameAndNotValid(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: ptr("fk_old")},
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: new("fk_old")},
 		Schema:     "public",
 		Table:      "orders",
 	})
@@ -1382,7 +1378,7 @@ func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: ptr("fk_old")},
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: new("fk_old")},
 		Schema:     "public",
 		Table:      "orders",
 	})
@@ -1405,7 +1401,7 @@ func TestDiffForeignKeys_renameAndChangeDefinition(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true, RenameFrom: ptr("fk_old")},
+		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true, RenameFrom: new("fk_old")},
 		Schema:     "public",
 		Table:      "orders",
 	})
@@ -1529,7 +1525,7 @@ func TestDiffTable_fkRenameError(t *testing.T) {
 func TestDiffTable_columnRenameRewritesDependents(t *testing.T) {
 	current := newTable("public", "users")
 	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
-	current.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, Comment: ptr("legacy")})
+	current.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", NotNull: true, Comment: new("legacy")})
 	current.Indexes.Set("idx_users_name", &model.Index{
 		Schema:     "public",
 		Name:       "idx_users_name",
@@ -1545,7 +1541,7 @@ func TestDiffTable_columnRenameRewritesDependents(t *testing.T) {
 		TypeName:   "text",
 		NotNull:    true,
 		RenameFrom: &oldName,
-		Comment:    ptr("legacy"),
+		Comment:    new("legacy"),
 	})
 	desired.Indexes.Set("idx_users_name", &model.Index{
 		Schema:     "public",
@@ -2719,7 +2715,7 @@ func TestDiffColumns_addIdentity_fromSerial(t *testing.T) {
 
 func TestDiffColumns_addIdentity_fromColumnWithDefault(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
-	current.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Default: ptr("1")})
+	current.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Default: new("1")})
 
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('a')})

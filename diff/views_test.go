@@ -82,7 +82,7 @@ func TestDiffViews_commentAdd(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 	desired := orderedmap.New[string, *model.View]()
-	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Comment: ptr("my view")})
+	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Comment: new("my view")})
 
 	result, err := DiffViews(current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestDiffViews_commentAdd(t *testing.T) {
 
 func TestDiffViews_commentDrop(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
-	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Comment: ptr("my view")})
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Comment: new("my view")})
 	desired := orderedmap.New[string, *model.View]()
 	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
 
