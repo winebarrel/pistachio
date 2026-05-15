@@ -110,7 +110,7 @@ func normalizeSelectExprs(node *pg_query.Node) {
 		}
 		for _, target := range ss.TargetList {
 			if rt := target.GetResTarget(); rt != nil {
-				rt.Val = normalizeCheckExpr(rt.Val)
+				rt.Val = normalizeTargetExpr(rt.Val)
 			}
 		}
 		if ss.WhereClause != nil {
@@ -157,6 +157,35 @@ func normalizeSelectExprs(node *pg_query.Node) {
 	}
 }
 
+// normalizeTargetExpr is normalizeCheckExpr with a top-level TypeCast
+// preserved. In a SELECT target list the cast type determines the output
+// column type, so symmetric text-cast stripping at that position would
+// hide an intentional `SELECT col` → `SELECT col::text` change.
+func normalizeTargetExpr(node *pg_query.Node) *pg_query.Node {
+	if tc := node.GetTypeCast(); tc != nil {
+		tc.Arg = normalizeCheckExpr(tc.Arg)
+		return node
+	}
+	return normalizeCheckExpr(node)
+}
+
+// alignTargetCasts is alignCurrentCasts with a top-level TypeCast
+// asymmetry preserved (a cast on one side but not the other surfaces
+// as a diff). Below a matched top-level cast on both sides, normal
+// alignment applies. Rationale matches normalizeTargetExpr.
+func alignTargetCasts(desired, current *pg_query.Node) *pg_query.Node {
+	dt := desired.GetTypeCast()
+	ct := current.GetTypeCast()
+	if dt != nil && ct != nil {
+		ct.Arg = alignCurrentCasts(dt.Arg, ct.Arg)
+		return current
+	}
+	if dt != nil || ct != nil {
+		return current
+	}
+	return alignCurrentCasts(desired, current)
+}
+
 // alignSelectCasts performs the same parallel walk as normalizeSelectExprs but
 // across two trees, applying alignCurrentCasts at each expression position
 // to strip TypeCasts present only on the current side. Used for the
@@ -197,7 +226,7 @@ func alignSelectCasts(desired, current *pg_query.Node) {
 				dt := ds.TargetList[i].GetResTarget()
 				ct := cs.TargetList[i].GetResTarget()
 				if dt != nil && ct != nil {
-					ct.Val = alignCurrentCasts(dt.Val, ct.Val)
+					ct.Val = alignTargetCasts(dt.Val, ct.Val)
 				}
 			}
 		}

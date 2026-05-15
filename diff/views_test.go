@@ -468,6 +468,35 @@ func TestEqualViewDef_currentOnlyTypeCast_offset(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_targetListTopLevelTextCast_added(t *testing.T) {
+	// A user-added top-level cast on a target column changes the resulting
+	// view column type. It must surface as a diff, even though
+	// normalizeCheckExpr strips ::text/::varchar symmetrically elsewhere.
+	assert.False(t, equalViewDef(
+		"SELECT id FROM t",
+		"SELECT id::text FROM t",
+	))
+}
+
+func TestEqualViewDef_targetListTopLevelTextCast_removed(t *testing.T) {
+	// A user-removed top-level cast (current has cast, desired doesn't)
+	// also changes the view column type. alignCurrentCasts would normally
+	// strip the current-only cast — at the top of a target list we must
+	// not, so the diff still surfaces.
+	assert.False(t, equalViewDef(
+		"SELECT id::text FROM t",
+		"SELECT id FROM t",
+	))
+}
+
+func TestEqualViewDef_targetListTopLevelTextCast_bothPresent(t *testing.T) {
+	// Both sides have the same top-level cast — no diff.
+	assert.True(t, equalViewDef(
+		"SELECT id::text FROM t",
+		"SELECT id::text FROM t",
+	))
+}
+
 func TestEqualViewDef_inSubquery_testexprQualified(t *testing.T) {
 	// `users.id IN (SELECT ...)` parses to SubLink{Testexpr: users.id, ...}.
 	// stripQualifications must recurse into Testexpr or the table-qualified
