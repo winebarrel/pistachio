@@ -15,6 +15,7 @@ var version string
 var cli struct {
 	pistachio.Options
 	Version kong.VersionFlag
+	NoPager bool `name:"no-pager" help:"Disable paging of long output via $PISTA_PAGER."`
 
 	Apply command.Apply `cmd:"" help:"Apply schema changes to the database."`
 	Plan  command.Plan  `cmd:"" help:"Print the schema diff SQL without applying it."`
@@ -28,7 +29,15 @@ func main() {
 		kong.BindTo(ctx, (*context.Context)(nil)),
 		kong.BindTo(os.Stdout, (*io.Writer)(nil)),
 	)
+
+	w, closePager, err := command.StartPager(os.Stdout, cli.NoPager)
+	kctx.FatalIfErrorf(err)
+	defer closePager()
+	if w != io.Writer(os.Stdout) {
+		kctx.BindTo(w, (*io.Writer)(nil))
+	}
+
 	client := pistachio.NewClient(&cli.Options)
-	err := kctx.Run(client)
+	err = kctx.Run(client)
 	kctx.FatalIfErrorf(err)
 }
