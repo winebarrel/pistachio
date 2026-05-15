@@ -25,7 +25,7 @@ RUN apk add --no-cache bash sudo vim less source-highlight && \
 
 COPY --from=build /out/pista /usr/local/bin/pista
 COPY demo/entrypoint.sh /entrypoint.sh
-COPY demo/banner.txt demo/current.sql demo/desired.sql /demo/
+COPY demo/manual.txt demo/current.sql demo/desired.sql /demo/
 RUN chmod +x /entrypoint.sh && chown -R postgres:postgres /demo
 
 ENV PGHOST=/var/run/postgresql \
