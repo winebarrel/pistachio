@@ -16,7 +16,7 @@ ARG PISTA_VERSION
 RUN CGO_ENABLED=1 go build -o /out/pista -ldflags "-X main.version=${PISTA_VERSION#v}" ./cmd/pista
 
 FROM postgres:18-alpine
-RUN apk add --no-cache bash sudo vim less source-highlight && \
+RUN apk add --no-cache bash sudo vim less source-highlight bat && \
     echo 'postgres ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/postgres-nopasswd && \
     chmod 0440 /etc/sudoers.d/postgres-nopasswd && \
     printf "alias ll='ls -lF'\nalias vi='vim'\nexport LESSOPEN='| /usr/bin/src-hilite-lesspipe.sh %%s'\nexport LESS='-R'\n" > /var/lib/postgresql/.bashrc && \
@@ -31,7 +31,8 @@ RUN chmod +x /entrypoint.sh && chown -R postgres:postgres /demo
 ENV PGHOST=/var/run/postgresql \
     PGUSER=postgres \
     PGDATABASE=demo \
-    PISTA_CONN_STR=postgres://postgres@/demo
+    PISTA_CONN_STR=postgres://postgres@/demo \
+    PISTA_PAGER="bat -l sql -p --paging=never"
 
 WORKDIR /demo
 USER postgres

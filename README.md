@@ -64,6 +64,7 @@ Flags:
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
       --version
+      --no-pager              Disable paging of long output via $PISTA_PAGER.
 
 Commands:
   apply <files> ... [flags]
@@ -214,6 +215,21 @@ Dump the current database schema as SQL. Output can be used directly as a schema
 
 ```bash
 pista dump
+```
+
+### Paging long output
+
+Set `$PISTA_PAGER` to forward `plan` / `apply` / `dump` output through an external command when stdout is a TTY. The command is interpreted by `sh -c`, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected — the pager only kicks in for interactive use. Use `--no-pager` to disable it for a single invocation.
+
+```bash
+# Page with less, keeping ANSI colors
+PISTA_PAGER='less -R' pista dump
+
+# Pipe through a syntax highlighter that supports SQL
+PISTA_PAGER='source-highlight -s sql -f esc | less -R' pista plan schema.sql
+
+# One-off override
+pista --no-pager plan schema.sql
 ```
 
 ### Schema name mapping

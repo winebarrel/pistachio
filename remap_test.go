@@ -28,7 +28,7 @@ func setupSchemaDB(t *testing.T, ctx context.Context, schema string, initSQL str
 	}
 
 	t.Cleanup(func() {
-		_, _ = conn.Exec(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+		conn.Exec(ctx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
 		conn.Close(ctx)
 	})
 
