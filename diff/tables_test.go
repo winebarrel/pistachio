@@ -1125,6 +1125,85 @@ func TestEqualDefault(t *testing.T) {
 	assert.False(t, equalDefault(new("0"), new("1")))
 }
 
+func TestEqualDefault_currentTimeCastStripped(t *testing.T) {
+	// pg_get_expr emits `'00:00:00'::time without time zone` on a time column
+	// DEFAULT; user typically writes the bare literal.
+	assert.True(t, equalDefault(
+		new("'00:00:00'::time without time zone"),
+		new("'00:00:00'"),
+	))
+}
+
+func TestEqualDefault_currentDateCastStripped(t *testing.T) {
+	assert.True(t, equalDefault(
+		new("'2020-01-01'::date"),
+		new("'2020-01-01'"),
+	))
+}
+
+func TestEqualDefault_currentTimestampCastStripped(t *testing.T) {
+	assert.True(t, equalDefault(
+		new("'2020-01-01 00:00:00'::timestamp without time zone"),
+		new("'2020-01-01 00:00:00'"),
+	))
+}
+
+func TestEqualDefault_currentNegativeIntCastStripped(t *testing.T) {
+	// Negative integer DEFAULT: DB emits `'-40'::integer`, user writes `-40`.
+	// Requires the numeric Sval→Ival coercion alongside the cast strip.
+	assert.True(t, equalDefault(
+		new("'-40'::integer"),
+		new("-40"),
+	))
+}
+
+func TestEqualDefault_currentNumericFloatCastStripped(t *testing.T) {
+	assert.True(t, equalDefault(
+		new("'12.34'::numeric"),
+		new("12.34"),
+	))
+}
+
+func TestEqualDefault_currentNestedCastStripped(t *testing.T) {
+	// Cast nested inside an expression (e.g. `(now() - '18 years'::interval)`):
+	// top-level is AExpr, not TypeCast, so the old parseDefault top-level strip
+	// didn't reach this position.
+	assert.True(t, equalDefault(
+		new("now() - '18 years'::interval"),
+		new("now() - '18 years'"),
+	))
+}
+
+func TestEqualDefault_bothExplicitCastsMatch(t *testing.T) {
+	assert.True(t, equalDefault(
+		new("'0'::integer"),
+		new("'0'::integer"),
+	))
+}
+
+func TestEqualDefault_castsDifferTypesStillEqual(t *testing.T) {
+	// Unlike equalConstraintDef, equalDefault treats `'0'::bigint` and
+	// `'0'::integer` as equal: the symmetric top-level cast strip applies
+	// to both sides (pg_get_expr always wraps DEFAULTs in a cast, and the
+	// column type — not the literal's cast — drives the eventual storage),
+	// so the two collapse to the same `'0'` and compare equal.
+	assert.True(t, equalDefault(
+		new("'0'::bigint"),
+		new("'0'::integer"),
+	))
+}
+
+func TestEqualDefault_desiredCastCurrentBareStillEqual(t *testing.T) {
+	// Symmetric top-level cast strip also covers the reverse direction:
+	// user wrote `0::integer` but DB stored the value natively without a
+	// cast (pg_get_expr returns just `0`). They compare equal so this case
+	// does not produce a perpetual SET DEFAULT diff loop on every apply.
+	assert.True(t, equalDefault(
+		new("0"),
+		new("0::integer"),
+	))
+}
+
 func TestEqualFKDef(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES users (id)"
@@ -2632,23 +2711,27 @@ func TestParseFKDef_success(t *testing.T) {
 	require.NotNil(t, con)
 }
 
-func TestParseDefault_parseError(t *testing.T) {
-	_, err := parseDefault(")))INVALID(((")
+func TestParseDefaultExpr_parseError(t *testing.T) {
+	_, _, err := parseDefaultExpr(")))INVALID(((")
 	require.Error(t, err)
 }
 
-func TestParseDefault_success(t *testing.T) {
-	node, err := parseDefault("42")
+func TestParseDefaultExpr_success(t *testing.T) {
+	_, target, err := parseDefaultExpr("42")
 	require.NoError(t, err)
-	require.NotNil(t, node)
+	require.NotNil(t, target)
+	require.NotNil(t, target.Val)
 }
 
-func TestParseDefault_stripTypeCast(t *testing.T) {
-	node, err := parseDefault("'hello'::text")
+func TestStripDefaultTopLevelCast_stripsWhenPeerHasNoCast(t *testing.T) {
+	// Top-level TypeCast is removed regardless of peer's shape, as long as
+	// the cast is at the root. equalDefault relies on this to collapse
+	// `'hello'::text` ≡ `'hello'`.
+	_, target, err := parseDefaultExpr("'hello'::text")
 	require.NoError(t, err)
-	require.NotNil(t, node)
-	// The type cast should be stripped, leaving just the string constant
-	assert.Nil(t, node.GetTypeCast())
+	result := stripDefaultTopLevelCast(target.Val, nil)
+	require.NotNil(t, result)
+	assert.Nil(t, result.GetTypeCast())
 }
 
 func TestIsTextLikeTypeName_nil(t *testing.T) {

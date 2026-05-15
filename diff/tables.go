@@ -1146,27 +1146,26 @@ func equalFKDef(a, b, schema string) bool {
 	return proto.Equal(nodeA, nodeB)
 }
 
-// parseDefault parses a default expression string into a pg_query Node,
-// stripping a top-level type cast added by pg_get_expr (e.g. 'hello'::text → 'hello').
-func parseDefault(expr string) (*pg_query.Node, error) {
+// parseDefaultExpr parses a default expression string and returns the parse
+// result plus the embedded ResTarget. Callers may mutate target.Val before
+// re-deparsing the result.
+func parseDefaultExpr(expr string) (*pg_query.ParseResult, *pg_query.ResTarget, error) {
 	result, err := pg_query.Parse("SELECT " + expr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if len(result.Stmts) == 0 {
+		return nil, nil, fmt.Errorf("unexpected parse result for default: %s", expr)
 	}
 	stmt := result.Stmts[0].Stmt.GetSelectStmt()
 	if stmt == nil || len(stmt.TargetList) == 0 {
-		return nil, fmt.Errorf("unexpected parse result for default: %s", expr)
+		return nil, nil, fmt.Errorf("unexpected parse result for default: %s", expr)
 	}
 	target := stmt.TargetList[0].GetResTarget()
 	if target == nil {
-		return nil, fmt.Errorf("unexpected parse result for default: %s", expr)
+		return nil, nil, fmt.Errorf("unexpected parse result for default: %s", expr)
 	}
-	node := target.Val
-	// Strip top-level type cast added by pg_get_expr
-	if node.GetTypeCast() != nil {
-		node = node.GetTypeCast().Arg
-	}
-	return node, nil
+	return result, target, nil
 }
 
 // serialBaseTypes maps serial type names to their base types.
@@ -1190,18 +1189,75 @@ func equalTypeName(a, b string) bool {
 	return normalize(a) == normalize(b)
 }
 
-// equalDefault compares two default expressions by their parse trees.
-func equalDefault(a, b *string) bool {
-	if a == nil && b == nil {
+// equalDefault compares two default expressions (current, desired) by
+// parsing both, normalising AST-level differences introduced by
+// pg_get_expr, and comparing the canonical deparsed forms.
+//
+// The handling has three layers:
+//  1. Top-level cast strip is symmetric — pg_get_expr always wraps DEFAULT
+//     values in a cast, while users routinely omit it; users who *do* write
+//     an explicit cast (`DEFAULT 0::integer`) also need to match a DB form
+//     that PG happened to store natively (`0`), so neither side keeps the
+//     wrapper. When the stripped Sval parses as a number and the peer side
+//     is a numeric A_Const, the Sval is coerced to Ival / Fval so the two
+//     deparse identically.
+//  2. normalizeCheckExpr handles symmetric text-like cast strip, paren
+//     cleanup, and `= ANY(ARRAY[...])` ↔ `IN (...)` on both sides.
+//  3. alignCurrentCasts handles the inner asymmetric strip (current has
+//     `TypeCast` at a position desired doesn't) for expressions like
+//     `now() - '18 years'::interval` where the cast is nested under an
+//     A_Expr rather than at the top.
+func equalDefault(current, desired *string) bool {
+	if current == nil && desired == nil {
 		return true
 	}
-	if a == nil || b == nil {
+	if current == nil || desired == nil {
 		return false
 	}
-	nodeA, errA := parseDefault(*a)
-	nodeB, errB := parseDefault(*b)
-	if errA != nil || errB != nil {
-		return *a == *b
+	if *current == *desired {
+		return true
 	}
-	return proto.Equal(nodeA, nodeB)
+	curResult, curTarget, errC := parseDefaultExpr(*current)
+	desResult, desTarget, errD := parseDefaultExpr(*desired)
+	if errC != nil || errD != nil {
+		return *current == *desired
+	}
+	curTarget.Val = stripDefaultTopLevelCast(curTarget.Val, desTarget.Val)
+	desTarget.Val = stripDefaultTopLevelCast(desTarget.Val, curTarget.Val)
+	curTarget.Val = normalizeCheckExpr(curTarget.Val)
+	desTarget.Val = normalizeCheckExpr(desTarget.Val)
+	curTarget.Val = alignCurrentCasts(desTarget.Val, curTarget.Val)
+	curStr, errC := pg_query.Deparse(curResult)
+	desStr, errD := pg_query.Deparse(desResult)
+	if errC != nil || errD != nil {
+		return *current == *desired
+	}
+	return curStr == desStr
+}
+
+// stripDefaultTopLevelCast removes a top-level TypeCast wrapper from node,
+// optionally coercing the resulting Sval back to a numeric A_Const when
+// the cast is on a numeric type and peer is itself a numeric (non-string)
+// A_Const. Used by equalDefault to keep `DEFAULT 0::integer` ≡ `DEFAULT 0`
+// even when the value form on each side parses to a different A_Const
+// kind (Sval vs Ival).
+func stripDefaultTopLevelCast(node, peer *pg_query.Node) *pg_query.Node {
+	if node == nil {
+		return node
+	}
+	tc := node.GetTypeCast()
+	if tc == nil || tc.Arg == nil {
+		return node
+	}
+	arg := tc.Arg
+	if isNumericTypeName(tc.TypeName) && desiredIsNumericAConst(peer) {
+		if ac := arg.GetAConst(); ac != nil {
+			if sv := ac.GetSval(); sv != nil {
+				if numeric := numericAConstFromString(sv.Sval); numeric != nil {
+					arg = numeric
+				}
+			}
+		}
+	}
+	return arg
 }

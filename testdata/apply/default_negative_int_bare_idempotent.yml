@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.balances (
+      id integer NOT NULL,
+      amount integer DEFAULT '-100'::integer NOT NULL
+  );
+desired: |
+  CREATE TABLE public.balances (
+      id integer NOT NULL,
+      amount integer DEFAULT -100 NOT NULL
+  );
+applied: |
+  -- public.balances
+  CREATE TABLE public.balances (
+      id integer NOT NULL,
+      amount integer DEFAULT '-100'::integer NOT NULL
+  );
+applied_sql: ""
+verify_no_drift: true
