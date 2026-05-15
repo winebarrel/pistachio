@@ -1,0 +1,9 @@
+init: |
+  CREATE DOMAIN public.short_code AS character varying(8) DEFAULT 'AAAA'::character varying NOT NULL;
+desired: |
+  CREATE DOMAIN public.short_code AS varchar(8) DEFAULT 'AAAA' NOT NULL;
+applied: |
+  -- public.short_code
+  CREATE DOMAIN public.short_code AS character varying(8) DEFAULT 'AAAA'::character varying NOT NULL;
+applied_sql: ""
+verify_no_drift: true

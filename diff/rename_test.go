@@ -15,9 +15,9 @@ func one(old, n string) map[string]string {
 
 func TestCollectColumnRenames(t *testing.T) {
 	cols := orderedmap.New[string, *model.Column]()
-	cols.Set("display_name", &model.Column{Name: "display_name", RenameFrom: ptr("name")})
+	cols.Set("display_name", &model.Column{Name: "display_name", RenameFrom: new("name")})
 	cols.Set("id", &model.Column{Name: "id"})
-	cols.Set("self", &model.Column{Name: "self", RenameFrom: ptr("self")}) // no-op same-name rename
+	cols.Set("self", &model.Column{Name: "self", RenameFrom: new("self")}) // no-op same-name rename
 
 	renames := collectColumnRenames(cols)
 	assert.Equal(t, map[string]string{"name": "display_name"}, renames)
