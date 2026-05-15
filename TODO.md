@@ -208,11 +208,6 @@ places where pistachio compares user-written SQL against catalog-derived
 output, but those paths still use stricter equality and produce spurious
 diffs on every run:
 
-- **RLS USING / WITH CHECK** (`diff/policies.go:equalPolicyExpr`) —
-  already reuses `normalizeCheckExpr` for symmetric paren / text-cast /
-  `IN`↔`ANY` cleanup. Bare literals on non-text-column comparisons inside
-  policies still diff. Drop-in: call `alignCurrentCasts` after the
-  existing `normalizeCheckExpr` pass on each side.
 - **Index definition** (`diff/tables.go:equalIndexDef`) — partial-index
   `WHERE` clauses and expression-index expressions receive casts from
   `pg_get_indexdef`. `normalizeIndexDef` only canonicalises sort / nulls

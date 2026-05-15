@@ -1,7 +1,6 @@
 package diff
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 
@@ -229,41 +228,32 @@ func exprChanged(a, b *string) bool {
 	return !equalPolicyExpr(*a, *b)
 }
 
-// equalPolicyExpr returns true if two expressions are semantically equal,
-// using the same normalization as constraint expressions (strips text-like
-// casts, canonicalises = ANY(ARRAY[...]) → IN (...)).
+// equalPolicyExpr returns true if a policy expression (USING / WITH CHECK)
+// is semantically equal between current and desired sides, using the same
+// normalization as CHECK constraint expressions.
 //
-// Comparison goes through parse → normalize → deparse → string compare so that
-// pg_get_expr-added casts, parentheses, and AST `location` field differences
-// don't cause false diffs.
-func equalPolicyExpr(a, b string) bool {
-	if a == b {
+// pg_get_expr adds explicit casts (e.g. `'00:00:00'::time without time zone`,
+// `'-40'::integer`) that users typically omit. The comparison strips text-like
+// casts symmetrically (normalizeCheckExpr), strips any remaining current-only
+// TypeCast asymmetrically (alignCurrentCasts), and coerces stripped numeric
+// Sval back to Ival/Fval when the desired side is a numeric A_Const — same
+// pipeline that equalConstraintDef uses on CHECK definitions.
+func equalPolicyExpr(current, desired string) bool {
+	if current == desired {
 		return true
 	}
-	normA, errA := normalizePolicyExpr(a)
-	normB, errB := normalizePolicyExpr(b)
-	if errA != nil || errB != nil {
-		return a == b
+	curResult, curTarget, parseErrCur := parseSelectExpr(current)
+	desResult, desTarget, parseErrDes := parseSelectExpr(desired)
+	if parseErrCur != nil || parseErrDes != nil {
+		return current == desired
 	}
-	return normA == normB
-}
-
-func normalizePolicyExpr(expr string) (string, error) {
-	result, err := pg_query.Parse("SELECT " + expr)
-	if err != nil {
-		return "", err
+	curTarget.Val = normalizeCheckExpr(curTarget.Val)
+	desTarget.Val = normalizeCheckExpr(desTarget.Val)
+	curTarget.Val = alignCurrentCasts(desTarget.Val, curTarget.Val)
+	curStr, deparseErrCur := pg_query.Deparse(curResult)
+	desStr, deparseErrDes := pg_query.Deparse(desResult)
+	if deparseErrCur != nil || deparseErrDes != nil {
+		return current == desired
 	}
-	if len(result.Stmts) == 0 {
-		return "", fmt.Errorf("unexpected parse result for expression: %s", expr)
-	}
-	stmt := result.Stmts[0].Stmt.GetSelectStmt()
-	if stmt == nil || len(stmt.TargetList) == 0 {
-		return "", fmt.Errorf("unexpected parse result for expression: %s", expr)
-	}
-	target := stmt.TargetList[0].GetResTarget()
-	if target == nil {
-		return "", fmt.Errorf("unexpected parse result for expression: %s", expr)
-	}
-	target.Val = normalizeCheckExpr(target.Val)
-	return pg_query.Deparse(result)
+	return curStr == desStr
 }

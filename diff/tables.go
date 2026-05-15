@@ -1177,24 +1177,26 @@ func equalFKDef(a, b, schema string) bool {
 	return proto.Equal(nodeA, nodeB)
 }
 
-// parseDefaultExpr parses a default expression string and returns the parse
-// result plus the embedded ResTarget. Callers may mutate target.Val before
-// re-deparsing the result.
-func parseDefaultExpr(expr string) (*pg_query.ParseResult, *pg_query.ResTarget, error) {
+// parseSelectExpr parses a bare expression by wrapping it in `SELECT <expr>`
+// and returns the parse result plus the embedded ResTarget. Callers may
+// mutate target.Val before re-deparsing the result. Shared by equalDefault
+// (column / domain DEFAULT) and equalPolicyExpr (RLS USING / WITH CHECK)
+// — both wrap the expression the same way, so the helper lives here.
+func parseSelectExpr(expr string) (*pg_query.ParseResult, *pg_query.ResTarget, error) {
 	result, err := pg_query.Parse("SELECT " + expr)
 	if err != nil {
 		return nil, nil, err
 	}
 	if len(result.Stmts) == 0 {
-		return nil, nil, fmt.Errorf("unexpected parse result for default: %s", expr)
+		return nil, nil, fmt.Errorf("unexpected parse result for expression: %s", expr)
 	}
 	stmt := result.Stmts[0].Stmt.GetSelectStmt()
 	if stmt == nil || len(stmt.TargetList) == 0 {
-		return nil, nil, fmt.Errorf("unexpected parse result for default: %s", expr)
+		return nil, nil, fmt.Errorf("unexpected parse result for expression: %s", expr)
 	}
 	target := stmt.TargetList[0].GetResTarget()
 	if target == nil {
-		return nil, nil, fmt.Errorf("unexpected parse result for default: %s", expr)
+		return nil, nil, fmt.Errorf("unexpected parse result for expression: %s", expr)
 	}
 	return result, target, nil
 }
@@ -1248,8 +1250,8 @@ func equalDefault(current, desired *string) bool {
 	if *current == *desired {
 		return true
 	}
-	curResult, curTarget, parseErrCur := parseDefaultExpr(*current)
-	desResult, desTarget, parseErrDes := parseDefaultExpr(*desired)
+	curResult, curTarget, parseErrCur := parseSelectExpr(*current)
+	desResult, desTarget, parseErrDes := parseSelectExpr(*desired)
 	if parseErrCur != nil || parseErrDes != nil {
 		return *current == *desired
 	}
