@@ -24,6 +24,28 @@ brew install winebarrel/pistachio/pistachio
 
 Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
 
+## Try it out
+
+A self-contained demo image bundles a local PostgreSQL with a sample
+schema pre-loaded, so you can experiment with `pista` without
+installing anything:
+
+```bash
+docker run --rm -it ghcr.io/winebarrel/pistachio-demo
+```
+
+The container drops you into a shell in `/demo` with `pista` and
+`psql` preconfigured. Edit `desired.sql`, then try:
+
+```bash
+pista plan  desired.sql     # show the DDL diff
+pista apply desired.sql     # apply the changes
+pista plan  desired.sql     # ...should now print "No changes"
+pista dump                  # dump the current schema
+```
+
+The source for the image is under [`demo/`](demo/).
+
 ## Usage
 
 ```

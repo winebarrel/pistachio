@@ -1,0 +1,29 @@
+================================================================
+                       pistachio demo
+================================================================
+
+A local PostgreSQL is running and the schema from current.sql
+is already loaded into the 'demo' database.
+
+Try the following:
+
+  pista plan  desired.sql     # show the DDL diff
+  pista apply desired.sql     # apply the changes
+  pista plan  desired.sql     # ...should now print "No changes"
+  pista dump                  # dump the current schema
+  psql                        # poke around the DB
+
+Destructive changes (DROP COLUMN / DROP TABLE / etc.) are skipped
+by default and shown as '-- skipped:' comments. To allow them,
+pass --allow-drop with the object types you want to permit:
+
+  pista plan  --allow-drop=column        desired.sql
+  pista apply --allow-drop=column,table  desired.sql
+  pista apply --allow-drop=all           desired.sql
+
+Files in this directory (/demo):
+  current.sql   - already loaded into 'demo'
+  desired.sql   - edit me, then re-run 'pista plan'
+
+Exit with Ctrl-D.
+================================================================
