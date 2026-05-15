@@ -45,23 +45,6 @@ shape end-to-end.
 
 Origin: [#125](https://github.com/winebarrel/pistachio/pull/125). Plan / apply fixtures were intentionally not added.
 
-## GENERATED column expression changes
-
-Toggling a column between generated and non-generated now errors at
-plan time (`cannot toggle GENERATED — DROP COLUMN + ADD COLUMN is
-required`). However, a change to the *expression* of a column that is
-generated on both sides is still silently skipped: catalog renders
-the expression with pg_get_expr-added type casts (e.g. `price *
-(quantity)::numeric`) which do not reliably compare with the
-desired-side raw expression (`price * quantity`). A robust comparison
-would require recursively stripping casts during normalization.
-
-Once expression comparison works, the diff could either error out (as
-the toggle case does) or emit `DROP COLUMN` + `ADD COLUMN` gated by a
-drop policy.
-
-Origin: [#125](https://github.com/winebarrel/pistachio/pull/125).
-
 ## Silent drift on `Table.TableSpace` / `Index.TableSpace` changes
 
 The catalog and parser populate `Table.TableSpace` and `Index.TableSpace`,
