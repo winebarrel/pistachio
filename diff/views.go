@@ -84,7 +84,7 @@ func normalizeSelectExprs(node *pg_query.Node) {
 			normalizeSelectExprs(from)
 		}
 		for _, target := range ss.TargetList {
-			if rt := target.GetResTarget(); rt != nil {
+			if rt := target.GetResTarget(); rt != nil && rt.Val != nil {
 				rt.Val = normalizeTargetExpr(rt.Val)
 			}
 		}
@@ -163,8 +163,9 @@ func alignTargetCasts(desired, current *pg_query.Node) *pg_query.Node {
 
 // alignSelectCasts performs the same parallel walk as normalizeSelectExprs but
 // across two trees, applying alignCurrentCasts at each expression position
-// to strip TypeCasts present only on the current side. Used for the
-// asymmetric current↔desired comparison in equalNormalizedViewSelect.
+// to strip TypeCasts present only on the current side. Used by equalViewDef
+// for the asymmetric current↔desired comparison, and from alignCurrentCasts'
+// SubLink case for sub-queries inside CHECK / RLS expressions.
 func alignSelectCasts(desired, current *pg_query.Node) {
 	if desired == nil || current == nil {
 		return
@@ -200,7 +201,7 @@ func alignSelectCasts(desired, current *pg_query.Node) {
 			for i := range ds.TargetList {
 				dt := ds.TargetList[i].GetResTarget()
 				ct := cs.TargetList[i].GetResTarget()
-				if dt != nil && ct != nil {
+				if dt != nil && ct != nil && dt.Val != nil && ct.Val != nil {
 					ct.Val = alignTargetCasts(dt.Val, ct.Val)
 				}
 			}
