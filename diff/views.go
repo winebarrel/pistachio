@@ -43,20 +43,20 @@ func equalViewDef(current, desired string) bool {
 		return true
 	}
 	// Compare with schema/column qualifications stripped and SELECT-body
-	// expressions normalised (IN ↔ ANY(ARRAY[...]), text-like casts, and
+	// expressions normalized (IN ↔ ANY(ARRAY[...]), text-like casts, and
 	// asymmetric current-only TypeCasts). pg_get_viewdef adds the latter
 	// kind for any literal compared against a typed column (notably enums),
 	// so without this step every enum-filtering view would show false drift.
-	return equalNormalisedViewSelect(normCur, normDes)
+	return equalNormalizedViewSelect(normCur, normDes)
 }
 
-// equalNormalisedViewSelect compares two view bodies after applying every
-// available view-specific normalisation: schema/column qualification
-// stripping, symmetric expression normalisation (IN ↔ ANY(ARRAY[...]),
+// equalNormalizedViewSelect compares two view bodies after applying every
+// available view-specific normalization: schema/column qualification
+// stripping, symmetric expression normalization (IN ↔ ANY(ARRAY[...]),
 // text-like cast stripping), and asymmetric stripping of TypeCasts that
 // appear only on the current side (the typical case is pg_get_viewdef
 // adding 'lit'::enum_type on literals compared to enum-typed columns).
-func equalNormalisedViewSelect(current, desired string) bool {
+func equalNormalizedViewSelect(current, desired string) bool {
 	curResult, errCur := pg_query.Parse(current)
 	desResult, errDes := pg_query.Parse(desired)
 	if errCur != nil || errDes != nil {
@@ -158,7 +158,7 @@ func normalizeViewExprs(node *pg_query.Node) {
 // alignViewCasts performs the same parallel walk as normalizeViewExprs but
 // across two trees, applying alignCurrentCasts at each expression position
 // to strip TypeCasts present only on the current side. Used for the
-// asymmetric current↔desired comparison in equalNormalisedViewSelect.
+// asymmetric current↔desired comparison in equalNormalizedViewSelect.
 func alignViewCasts(desired, current *pg_query.Node) {
 	if desired == nil || current == nil {
 		return
@@ -346,6 +346,9 @@ func stripQualifications(node *pg_query.Node) {
 	}
 
 	if sl := node.GetSubLink(); sl != nil {
+		// Testexpr holds the LHS of `x IN (SELECT ...)` / `x = ANY (SELECT ...)`
+		// forms; stripping qualifications here matches the bare-IN A_Expr path.
+		stripQualifications(sl.Testexpr)
 		stripQualifications(sl.Subselect)
 		return
 	}

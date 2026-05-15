@@ -369,7 +369,7 @@ func TestEqualViewDef_inVsAnyArray_cte(t *testing.T) {
 }
 
 func TestEqualViewDef_inVsAnyArray_union(t *testing.T) {
-	// Both UNION arms (Larg / Rarg) must be normalised.
+	// Both UNION arms (Larg / Rarg) must be normalized.
 	assert.True(t, equalViewDef(
 		"SELECT id FROM t WHERE x = ANY (ARRAY[1, 2]) UNION SELECT id FROM t WHERE y = ANY (ARRAY[3, 4])",
 		"SELECT id FROM t WHERE x IN (1, 2) UNION SELECT id FROM t WHERE y IN (3, 4)",
@@ -468,8 +468,18 @@ func TestEqualViewDef_currentOnlyTypeCast_offset(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_inSubquery_testexprQualified(t *testing.T) {
+	// `users.id IN (SELECT ...)` parses to SubLink{Testexpr: users.id, ...}.
+	// stripQualifications must recurse into Testexpr or the table-qualified
+	// LHS won't match the unqualified desired form.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM users WHERE users.id IN (SELECT user_id FROM orders)",
+		"SELECT id FROM public.users WHERE id IN (SELECT user_id FROM public.orders)",
+	))
+}
+
 func TestEqualViewDef_realChangeStillDetected(t *testing.T) {
-	// Regression guard: after all the normalisations, a genuinely different
+	// Regression guard: after all the normalizations, a genuinely different
 	// view body must still surface as a difference.
 	assert.False(t, equalViewDef(
 		"SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])",
