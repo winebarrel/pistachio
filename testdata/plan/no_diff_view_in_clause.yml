@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.visible_posts AS
+      SELECT id FROM public.posts WHERE status IN ('published', 'pinned');
+desired: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.visible_posts AS
+      SELECT id FROM public.posts WHERE status IN ('published', 'pinned');
+plan: ""

@@ -182,12 +182,6 @@ func TestDiffViews_rename_sourceNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "rename source")
 }
 
-func TestNormalizeViewDef(t *testing.T) {
-	got, err := normalizeViewDef("SELECT   1")
-	assert.NoError(t, err)
-	assert.Contains(t, got, "SELECT 1")
-}
-
 func TestEqualViewDef_same(t *testing.T) {
 	assert.True(t, equalViewDef("SELECT 1", "SELECT 1"))
 }
@@ -269,6 +263,262 @@ func TestEqualViewDef_cte(t *testing.T) {
 	assert.True(t, equalViewDef(
 		"WITH active AS (SELECT users.id FROM users) SELECT active.id FROM active",
 		"WITH active AS (SELECT id FROM public.users) SELECT active.id FROM active",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray(t *testing.T) {
+	// pg_get_viewdef rewrites `IN ('a','b')` as `= ANY (ARRAY['a','b'])`.
+	// Equality must hold across that rewrite for the WHERE clause.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])",
+		"SELECT id FROM t WHERE status IN ('a', 'b')",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_join(t *testing.T) {
+	// Same rewrite, but on a JOIN ... ON expression.
+	assert.True(t, equalViewDef(
+		"SELECT u.id FROM users u JOIN orders o ON o.status = ANY (ARRAY['paid', 'shipped'])",
+		"SELECT u.id FROM public.users u JOIN public.orders o ON o.status IN ('paid', 'shipped')",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast(t *testing.T) {
+	// pg_get_viewdef adds a cast to the column's type on bare literals
+	// (e.g. enum columns get `'x'::my_enum`). The desired SQL written
+	// without the cast should still compare equal to the current form.
+	// First arg is current (with cast), second is desired (without).
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE status = 'published'::post_status",
+		"SELECT id FROM t WHERE status = 'published'",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_inList(t *testing.T) {
+	// Casts inside an IN list, after the ANY→IN rewrite.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE status = ANY (ARRAY['published'::post_status, 'pinned'::post_status])",
+		"SELECT id FROM t WHERE status IN ('published', 'pinned')",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_notStrippedFromDesired(t *testing.T) {
+	// alignCurrentCasts is asymmetric: a cast in desired that is missing
+	// from current must surface as a difference (otherwise a user-requested
+	// cast change would be silently hidden).
+	assert.False(t, equalViewDef(
+		"SELECT id FROM t WHERE x = 1",
+		"SELECT id FROM t WHERE x = 1::bigint",
+	))
+}
+
+// The tests below exercise each walker position in normalizeSelectExprs
+// / alignSelectCasts beyond the already-covered WHERE and JOIN ON.
+
+func TestEqualViewDef_inVsAnyArray_targetList(t *testing.T) {
+	// Target-list expression: CASE inside SELECT.
+	assert.True(t, equalViewDef(
+		"SELECT CASE WHEN status = ANY (ARRAY['a', 'b']) THEN 1 ELSE 0 END AS hit FROM t",
+		"SELECT CASE WHEN status IN ('a', 'b') THEN 1 ELSE 0 END AS hit FROM t",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_having(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT x, count(*) FROM t GROUP BY x HAVING x = ANY (ARRAY['a', 'b'])",
+		"SELECT x, count(*) FROM t GROUP BY x HAVING x IN ('a', 'b')",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_groupBy(t *testing.T) {
+	// GROUP BY can contain expressions (here a boolean test on status).
+	// Covers the GroupClause walker position.
+	assert.True(t, equalViewDef(
+		"SELECT count(*) FROM t GROUP BY status = ANY (ARRAY['a', 'b'])",
+		"SELECT count(*) FROM t GROUP BY status IN ('a', 'b')",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_groupBy(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT count(*) FROM t GROUP BY status = 'a'::e",
+		"SELECT count(*) FROM t GROUP BY status = 'a'",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_join(t *testing.T) {
+	// Covers the JoinExpr.Quals position in alignSelectCasts (the IN↔ANY
+	// variant is already tested in inVsAnyArray_join).
+	assert.True(t, equalViewDef(
+		"SELECT u.id FROM users u JOIN orders o ON o.status = 'paid'::e",
+		"SELECT u.id FROM public.users u JOIN public.orders o ON o.status = 'paid'",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_cte(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"WITH active AS (SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])) SELECT id FROM active",
+		"WITH active AS (SELECT id FROM t WHERE status IN ('a', 'b')) SELECT id FROM active",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_union(t *testing.T) {
+	// Both UNION arms (Larg / Rarg) must be normalized.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE x = ANY (ARRAY[1, 2]) UNION SELECT id FROM t WHERE y = ANY (ARRAY[3, 4])",
+		"SELECT id FROM t WHERE x IN (1, 2) UNION SELECT id FROM t WHERE y IN (3, 4)",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_rangeSubselect(t *testing.T) {
+	// Sub-SELECT in FROM (RangeSubselect path).
+	assert.True(t, equalViewDef(
+		"SELECT s.id FROM (SELECT id FROM t WHERE x = ANY (ARRAY[1, 2])) s",
+		"SELECT s.id FROM (SELECT id FROM t WHERE x IN (1, 2)) s",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_sublink(t *testing.T) {
+	// Sub-SELECT inside an EXISTS predicate (SubLink path).
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = ANY (ARRAY[1, 2]))",
+		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x IN (1, 2))",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_targetList(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT CASE WHEN status = 'a'::e THEN 1 ELSE 0 END AS hit FROM t",
+		"SELECT CASE WHEN status = 'a' THEN 1 ELSE 0 END AS hit FROM t",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_having(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT x, count(*) FROM t GROUP BY x HAVING x = 'a'::e",
+		"SELECT x, count(*) FROM t GROUP BY x HAVING x = 'a'",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_cte(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"WITH active AS (SELECT id FROM t WHERE status = 'a'::e) SELECT id FROM active",
+		"WITH active AS (SELECT id FROM t WHERE status = 'a') SELECT id FROM active",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_union(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE x = 'a'::e UNION SELECT id FROM t WHERE y = 'b'::e",
+		"SELECT id FROM t WHERE x = 'a' UNION SELECT id FROM t WHERE y = 'b'",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_sublink(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = 'a'::e)",
+		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = 'a')",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_rangeSubselect(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT s.id FROM (SELECT id FROM t WHERE status = 'a'::e) s",
+		"SELECT s.id FROM (SELECT id FROM t WHERE status = 'a') s",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_orderBy(t *testing.T) {
+	// ORDER BY can contain a comparison expression (sorts by the boolean
+	// result). Covers the SortClause walker position.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t ORDER BY CASE WHEN status = ANY (ARRAY['a', 'b']) THEN 0 ELSE 1 END",
+		"SELECT id FROM t ORDER BY CASE WHEN status IN ('a', 'b') THEN 0 ELSE 1 END",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_orderBy(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t ORDER BY CASE WHEN status = 'a'::e THEN 0 ELSE 1 END",
+		"SELECT id FROM t ORDER BY CASE WHEN status = 'a' THEN 0 ELSE 1 END",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_limit(t *testing.T) {
+	// pg_get_viewdef can emit a LIMIT/OFFSET with a TypeCast attached to the
+	// numeric literal. The desired SQL written as a bare integer must still
+	// compare equal. Covers the LimitCount walker position.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t LIMIT 5::bigint",
+		"SELECT id FROM t LIMIT 5",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_offset(t *testing.T) {
+	// Covers the LimitOffset walker position.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t OFFSET 0::bigint",
+		"SELECT id FROM t OFFSET 0",
+	))
+}
+
+func TestEqualViewDef_targetListTopLevelTextCast_added(t *testing.T) {
+	// A user-added top-level cast on a target column changes the resulting
+	// view column type. It must surface as a diff, even though
+	// normalizeCheckExpr strips ::text/::varchar symmetrically elsewhere.
+	assert.False(t, equalViewDef(
+		"SELECT id FROM t",
+		"SELECT id::text FROM t",
+	))
+}
+
+func TestEqualViewDef_targetListTopLevelTextCast_removed(t *testing.T) {
+	// A user-removed top-level cast (current has cast, desired doesn't)
+	// also changes the view column type. alignCurrentCasts would normally
+	// strip the current-only cast — at the top of a target list we must
+	// not, so the diff still surfaces.
+	assert.False(t, equalViewDef(
+		"SELECT id::text FROM t",
+		"SELECT id FROM t",
+	))
+}
+
+func TestEqualViewDef_targetListTopLevelTextCast_bothPresent(t *testing.T) {
+	// Both sides have the same top-level cast — no diff.
+	assert.True(t, equalViewDef(
+		"SELECT id::text FROM t",
+		"SELECT id::text FROM t",
+	))
+}
+
+func TestEqualViewDef_qualifiedColumnInsideTextCast(t *testing.T) {
+	// A qualified ColumnRef nested under a text-like TypeCast (e.g.
+	// `lower(users.name::text)`) must still be stripped to match the
+	// unqualified bare form. stripQualifications must recurse into
+	// TypeCast.Arg so the inner ColumnRef is reached before
+	// normalizeSelectExprs collapses the surrounding cast.
+	assert.True(t, equalViewDef(
+		"SELECT lower(users.name::text) FROM users",
+		"SELECT lower(name) FROM users",
+	))
+}
+
+func TestEqualViewDef_inSubquery_testexprQualified(t *testing.T) {
+	// `users.id IN (SELECT ...)` parses to SubLink{Testexpr: users.id, ...}.
+	// stripQualifications must recurse into Testexpr or the table-qualified
+	// LHS won't match the unqualified desired form.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM users WHERE users.id IN (SELECT user_id FROM orders)",
+		"SELECT id FROM public.users WHERE id IN (SELECT user_id FROM public.orders)",
+	))
+}
+
+func TestEqualViewDef_realChangeStillDetected(t *testing.T) {
+	// Regression guard: after all the normalizations, a genuinely different
+	// view body must still surface as a difference.
+	assert.False(t, equalViewDef(
+		"SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])",
+		"SELECT id FROM t WHERE status IN ('a', 'b', 'c')",
 	))
 }
 

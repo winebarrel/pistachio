@@ -8,59 +8,262 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// normalizeViewDef normalizes a view definition by parsing and deparsing it
-// through pg_query, so that formatting differences are eliminated.
-func normalizeViewDef(def string) (string, error) {
-	sql := "CREATE VIEW _v AS " + def
-	result, err := pg_query.Parse(sql)
-	if err != nil {
-		return "", err
-	}
-	return pg_query.Deparse(result)
-}
-
-// equalViewDef compares two view definitions by normalizing them through
-// pg_query parse/deparse to ignore formatting differences.
-// proto.Equal cannot be used here because parse trees include source
-// location information that differs when the same query has different formatting.
-// Schema qualification differences (e.g., "users" vs "public.users") are also
-// ignored because pg_get_viewdef may omit the schema for the current search_path.
-func equalViewDef(a, b string) bool {
-	if a == b {
+// equalViewDef compares two view definitions by parsing each side once,
+// applying every available view normalization in place, then deparsing and
+// comparing the resulting strings. proto.Equal cannot be used here because
+// parse trees include source location information that differs when the
+// same query has different formatting.
+//
+// Normalizations applied:
+//   - schema/column qualification stripping (pg_get_viewdef adds
+//     table-qualified columns and omits the default schema, parsed SQL is
+//     the opposite),
+//   - symmetric expression normalization via normalizeSelectExprs:
+//     paren / text-like cast stripping and `= ANY(ARRAY[...])` → `IN (...)`,
+//   - asymmetric current-only cast alignment via alignSelectCasts: strips
+//     TypeCasts (notably 'lit'::enum_type) the catalog added but the user
+//     didn't write. Top-level casts at the target list are preserved on
+//     both sides since they affect the resulting view's column type.
+//
+// The caller convention is equalViewDef(current, desired): current is the
+// pg_get_viewdef form (from the catalog), desired is the user SQL. The
+// asymmetric normalizations rely on that ordering.
+func equalViewDef(current, desired string) bool {
+	if current == desired {
 		return true
 	}
-	normA, errA := normalizeViewDef(a)
-	normB, errB := normalizeViewDef(b)
-	if errA != nil || errB != nil {
-		return a == b
+	curResult, errCur := pg_query.Parse("CREATE VIEW _v AS " + current)
+	desResult, errDes := pg_query.Parse("CREATE VIEW _v AS " + desired)
+	if errCur != nil || errDes != nil {
+		return current == desired
 	}
-	if normA == normB {
-		return true
-	}
-	// Also compare with schema/column qualifications stripped, since
-	// pg_get_viewdef adds table-qualified columns and omits the default schema
-	// but parsed SQL preserves the schema and doesn't qualify columns.
-	return normalizeForComparison(normA) == normalizeForComparison(normB)
-}
-
-// normalizeForComparison applies aggressive normalization to a view definition
-// for comparison purposes. pg_get_viewdef adds table-qualified column names
-// (e.g., "users.id") and omits schema prefixes, while the parser's deparse
-// preserves schema prefixes and does not qualify columns.
-func normalizeForComparison(sql string) string {
-	result, err := pg_query.Parse(sql)
-	if err != nil {
-		return sql
-	}
-	// Walk AST and strip schema from RangeVars and table prefix from ColumnRefs
-	for _, stmt := range result.Stmts {
+	for _, stmt := range curResult.Stmts {
 		stripQualifications(stmt.Stmt)
+		normalizeSelectExprs(stmt.Stmt)
 	}
-	deparsed, err := pg_query.Deparse(result)
-	if err != nil {
-		return sql
+	for _, stmt := range desResult.Stmts {
+		stripQualifications(stmt.Stmt)
+		normalizeSelectExprs(stmt.Stmt)
 	}
-	return deparsed
+	if len(curResult.Stmts) == 1 && len(desResult.Stmts) == 1 {
+		alignSelectCasts(desResult.Stmts[0].Stmt, curResult.Stmts[0].Stmt)
+	}
+	curStr, errCur := pg_query.Deparse(curResult)
+	desStr, errDes := pg_query.Deparse(desResult)
+	if errCur != nil || errDes != nil {
+		return current == desired
+	}
+	return curStr == desStr
+}
+
+// normalizeSelectExprs walks a SELECT statement (and any nested
+// SELECT/JOIN/CTE) and applies normalizeCheckExpr at every position that
+// holds an expression. Converts `= ANY(ARRAY[...])` back to `IN (...)` and
+// strips text-like TypeCasts. Called both from equalViewDef and from
+// normalizeCheckExpr's SubLink case for sub-queries inside CHECK / RLS
+// expressions.
+func normalizeSelectExprs(node *pg_query.Node) {
+	if node == nil {
+		return
+	}
+
+	if vs := node.GetViewStmt(); vs != nil {
+		normalizeSelectExprs(vs.Query)
+		return
+	}
+
+	if ss := node.GetSelectStmt(); ss != nil {
+		if ss.WithClause != nil {
+			for _, cte := range ss.WithClause.Ctes {
+				if c := cte.GetCommonTableExpr(); c != nil {
+					normalizeSelectExprs(c.Ctequery)
+				}
+			}
+		}
+		for _, from := range ss.FromClause {
+			normalizeSelectExprs(from)
+		}
+		for _, target := range ss.TargetList {
+			if rt := target.GetResTarget(); rt != nil && rt.Val != nil {
+				rt.Val = normalizeTargetExpr(rt.Val)
+			}
+		}
+		if ss.WhereClause != nil {
+			ss.WhereClause = normalizeCheckExpr(ss.WhereClause)
+		}
+		if ss.HavingClause != nil {
+			ss.HavingClause = normalizeCheckExpr(ss.HavingClause)
+		}
+		for i, gb := range ss.GroupClause {
+			ss.GroupClause[i] = normalizeCheckExpr(gb)
+		}
+		for _, sb := range ss.SortClause {
+			if s := sb.GetSortBy(); s != nil {
+				s.Node = normalizeCheckExpr(s.Node)
+			}
+		}
+		if ss.LimitCount != nil {
+			ss.LimitCount = normalizeCheckExpr(ss.LimitCount)
+		}
+		if ss.LimitOffset != nil {
+			ss.LimitOffset = normalizeCheckExpr(ss.LimitOffset)
+		}
+		if ss.Larg != nil {
+			normalizeSelectExprs(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}})
+		}
+		if ss.Rarg != nil {
+			normalizeSelectExprs(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}})
+		}
+		return
+	}
+
+	if join := node.GetJoinExpr(); join != nil {
+		normalizeSelectExprs(join.Larg)
+		normalizeSelectExprs(join.Rarg)
+		if join.Quals != nil {
+			join.Quals = normalizeCheckExpr(join.Quals)
+		}
+		return
+	}
+
+	if sub := node.GetRangeSubselect(); sub != nil {
+		normalizeSelectExprs(sub.Subquery)
+		return
+	}
+}
+
+// normalizeTargetExpr is normalizeCheckExpr with a top-level TypeCast
+// preserved. In a SELECT target list the cast type determines the output
+// column type, so symmetric text-cast stripping at that position would
+// hide an intentional `SELECT col` → `SELECT col::text` change.
+func normalizeTargetExpr(node *pg_query.Node) *pg_query.Node {
+	if tc := node.GetTypeCast(); tc != nil {
+		tc.Arg = normalizeCheckExpr(tc.Arg)
+		return node
+	}
+	return normalizeCheckExpr(node)
+}
+
+// alignTargetCasts is alignCurrentCasts with a top-level TypeCast
+// asymmetry preserved (a cast on one side but not the other surfaces
+// as a diff). Below a matched top-level cast on both sides, normal
+// alignment applies. Rationale matches normalizeTargetExpr.
+func alignTargetCasts(desired, current *pg_query.Node) *pg_query.Node {
+	dt := desired.GetTypeCast()
+	ct := current.GetTypeCast()
+	if dt != nil && ct != nil {
+		ct.Arg = alignCurrentCasts(dt.Arg, ct.Arg)
+		return current
+	}
+	if dt != nil || ct != nil {
+		return current
+	}
+	return alignCurrentCasts(desired, current)
+}
+
+// alignSelectCasts performs the same parallel walk as normalizeSelectExprs but
+// across two trees, applying alignCurrentCasts at each expression position
+// to strip TypeCasts present only on the current side. Used by equalViewDef
+// for the asymmetric current↔desired comparison, and from alignCurrentCasts'
+// SubLink case for sub-queries inside CHECK / RLS expressions.
+func alignSelectCasts(desired, current *pg_query.Node) {
+	if desired == nil || current == nil {
+		return
+	}
+
+	if dv := desired.GetViewStmt(); dv != nil {
+		if cv := current.GetViewStmt(); cv != nil {
+			alignSelectCasts(dv.Query, cv.Query)
+		}
+		return
+	}
+
+	if ds := desired.GetSelectStmt(); ds != nil {
+		cs := current.GetSelectStmt()
+		if cs == nil {
+			return
+		}
+		if ds.WithClause != nil && cs.WithClause != nil && len(ds.WithClause.Ctes) == len(cs.WithClause.Ctes) {
+			for i := range ds.WithClause.Ctes {
+				dc := ds.WithClause.Ctes[i].GetCommonTableExpr()
+				cc := cs.WithClause.Ctes[i].GetCommonTableExpr()
+				if dc != nil && cc != nil {
+					alignSelectCasts(dc.Ctequery, cc.Ctequery)
+				}
+			}
+		}
+		if len(ds.FromClause) == len(cs.FromClause) {
+			for i := range ds.FromClause {
+				alignSelectCasts(ds.FromClause[i], cs.FromClause[i])
+			}
+		}
+		if len(ds.TargetList) == len(cs.TargetList) {
+			for i := range ds.TargetList {
+				dt := ds.TargetList[i].GetResTarget()
+				ct := cs.TargetList[i].GetResTarget()
+				if dt != nil && ct != nil && dt.Val != nil && ct.Val != nil {
+					ct.Val = alignTargetCasts(dt.Val, ct.Val)
+				}
+			}
+		}
+		if ds.WhereClause != nil && cs.WhereClause != nil {
+			cs.WhereClause = alignCurrentCasts(ds.WhereClause, cs.WhereClause)
+		}
+		if ds.HavingClause != nil && cs.HavingClause != nil {
+			cs.HavingClause = alignCurrentCasts(ds.HavingClause, cs.HavingClause)
+		}
+		if len(ds.GroupClause) == len(cs.GroupClause) {
+			for i := range ds.GroupClause {
+				cs.GroupClause[i] = alignCurrentCasts(ds.GroupClause[i], cs.GroupClause[i])
+			}
+		}
+		if len(ds.SortClause) == len(cs.SortClause) {
+			for i := range ds.SortClause {
+				dsb := ds.SortClause[i].GetSortBy()
+				csb := cs.SortClause[i].GetSortBy()
+				if dsb != nil && csb != nil {
+					csb.Node = alignCurrentCasts(dsb.Node, csb.Node)
+				}
+			}
+		}
+		if ds.LimitCount != nil && cs.LimitCount != nil {
+			cs.LimitCount = alignCurrentCasts(ds.LimitCount, cs.LimitCount)
+		}
+		if ds.LimitOffset != nil && cs.LimitOffset != nil {
+			cs.LimitOffset = alignCurrentCasts(ds.LimitOffset, cs.LimitOffset)
+		}
+		if ds.Larg != nil && cs.Larg != nil {
+			alignSelectCasts(
+				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ds.Larg}},
+				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: cs.Larg}},
+			)
+		}
+		if ds.Rarg != nil && cs.Rarg != nil {
+			alignSelectCasts(
+				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ds.Rarg}},
+				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: cs.Rarg}},
+			)
+		}
+		return
+	}
+
+	if dj := desired.GetJoinExpr(); dj != nil {
+		if cj := current.GetJoinExpr(); cj != nil {
+			alignSelectCasts(dj.Larg, cj.Larg)
+			alignSelectCasts(dj.Rarg, cj.Rarg)
+			if dj.Quals != nil && cj.Quals != nil {
+				cj.Quals = alignCurrentCasts(dj.Quals, cj.Quals)
+			}
+		}
+		return
+	}
+
+	if drs := desired.GetRangeSubselect(); drs != nil {
+		if crs := current.GetRangeSubselect(); crs != nil {
+			alignSelectCasts(drs.Subquery, crs.Subquery)
+		}
+		return
+	}
 }
 
 // stripQualifications recursively strips schema from RangeVars and
@@ -150,6 +353,9 @@ func stripQualifications(node *pg_query.Node) {
 	}
 
 	if sl := node.GetSubLink(); sl != nil {
+		// Testexpr holds the LHS of `x IN (SELECT ...)` / `x = ANY (SELECT ...)`
+		// forms; stripping qualifications here matches the bare-IN A_Expr path.
+		stripQualifications(sl.Testexpr)
 		stripQualifications(sl.Subselect)
 		return
 	}
@@ -176,6 +382,16 @@ func stripQualifications(node *pg_query.Node) {
 
 	if sb := node.GetSortBy(); sb != nil {
 		stripQualifications(sb.Node)
+		return
+	}
+
+	if tc := node.GetTypeCast(); tc != nil {
+		// Recurse into the cast argument so qualified ColumnRefs nested under
+		// a TypeCast still get stripped. Matters because normalizeSelectExprs
+		// can later strip the text-like cast wrapper, exposing the inner
+		// reference; if its qualification stayed it would diff against the
+		// unqualified desired form.
+		stripQualifications(tc.Arg)
 		return
 	}
 }
