@@ -6,6 +6,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 	"google.golang.org/protobuf/proto"
 )
@@ -398,23 +399,6 @@ func isSerialType(typeName string) bool {
 	return ok
 }
 
-// parseConstraintDef parses a constraint definition (the body after
-// "ADD CONSTRAINT <name>") and returns the parse result plus the embedded
-// Constraint node, which callers may mutate before re-deparsing.
-func parseConstraintDef(def string) (*pg_query.ParseResult, *pg_query.Constraint, error) {
-	result, err := pg_query.Parse("ALTER TABLE _t ADD CONSTRAINT _c " + def)
-	if err != nil {
-		return nil, nil, err
-	}
-	var con *pg_query.Constraint
-	if as := result.Stmts[0].Stmt.GetAlterTableStmt(); as != nil {
-		if cmd := as.Cmds[0].GetAlterTableCmd(); cmd != nil {
-			con = cmd.Def.GetConstraint()
-		}
-	}
-	return result, con, nil
-}
-
 // normalizeCheckExpr recursively normalizes a CHECK constraint expression
 // so that semantically equivalent definitions compare as equal:
 //   - Strips casts to text-like types (text, varchar), which pg_get_constraintdef adds.
@@ -506,22 +490,24 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 // often adds explicit casts (e.g. '00:00:00'::time, '0'::integer) that the
 // user did not write in the desired schema. When current has a TypeCast at
 // a position where desired has none, the cast is stripped from current so
-// the two compare equal. Casts present in desired are preserved, so an
-// explicit user-written cast that disagrees with the DB still surfaces.
+// the two compare equal. Non-text-like casts present in desired are
+// preserved, so an explicit user-written `'0'::integer` that disagrees
+// with the DB still surfaces. Text-like casts (`text`, `varchar`) are
+// stripped on both sides by normalizeCheckExpr regardless of who wrote
+// them, since pg_get_constraintdef adds them to anything string-typed
+// and the user-written form practically never includes them.
 func equalConstraintDef(current, desired string) bool {
 	if current == desired {
 		return true
 	}
-	curResult, curCon, errC := parseConstraintDef(current)
-	desResult, desCon, errD := parseConstraintDef(desired)
+	curResult, curCon, errC := pgast.ParseConstraintDefStrict(current)
+	desResult, desCon, errD := pgast.ParseConstraintDefStrict(desired)
 	if errC != nil || errD != nil {
 		return current == desired
 	}
-	if curCon != nil && desCon != nil {
-		curCon.RawExpr = normalizeCheckExpr(curCon.RawExpr)
-		desCon.RawExpr = normalizeCheckExpr(desCon.RawExpr)
-		curCon.RawExpr = alignCurrentCasts(desCon.RawExpr, curCon.RawExpr)
-	}
+	curCon.RawExpr = normalizeCheckExpr(curCon.RawExpr)
+	desCon.RawExpr = normalizeCheckExpr(desCon.RawExpr)
+	curCon.RawExpr = alignCurrentCasts(desCon.RawExpr, curCon.RawExpr)
 	curStr, errC := pg_query.Deparse(curResult)
 	desStr, errD := pg_query.Deparse(desResult)
 	if errC != nil || errD != nil {
