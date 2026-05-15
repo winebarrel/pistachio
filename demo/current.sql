@@ -70,10 +70,8 @@ CREATE TABLE post_tags (
 );
 
 -- ---------- view ----------
---  Cast to post_status matches the form PostgreSQL stores back,
---  so re-running 'pista plan' after apply reports no drift.
 CREATE VIEW published_posts AS
     SELECT p.id, p.title, p.body, p.published_at, u.display_name AS author
     FROM posts p
     JOIN users u ON u.id = p.author_id
-    WHERE p.status = 'published'::post_status;
+    WHERE p.status = 'published';
