@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -482,6 +483,77 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 	return false
 }
 
+// isNumericTypeName returns true if the TypeName refers to a Postgres numeric
+// scalar. pg_query canonicalises integer / bigint / smallint to int4 / int8 /
+// int2 and double precision / real to float8 / float4 respectively, so both
+// the catalog form (`pg_catalog.int4`) and the user-written keyword
+// (`integer`) are accepted.
+func isNumericTypeName(tn *pg_query.TypeName) bool {
+	if tn == nil {
+		return false
+	}
+	for _, n := range tn.Names {
+		if s := n.GetString_(); s != nil {
+			switch s.Sval {
+			case "int2", "int4", "int8", "smallint", "integer", "bigint",
+				"numeric", "decimal", "float4", "float8", "real":
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// desiredIsNumericAConst reports whether a desired-side node is a bare
+// numeric A_Const (Ival or Fval). Used to gate the Sval→numeric coercion
+// in the asymmetric cast-strip path so that desired-side quoted literals
+// (`'0'`, `'1'`) keep matching the cast-stripped Sval as before.
+func desiredIsNumericAConst(n *pg_query.Node) bool {
+	if n == nil {
+		return false
+	}
+	ac := n.GetAConst()
+	if ac == nil {
+		return false
+	}
+	return ac.GetIval() != nil || ac.GetFval() != nil
+}
+
+// numericAConstFromString converts a numeric-valued string into an A_Const
+// node. pg_get_constraintdef emits negative numeric literals as
+// `'-40'::integer` (to dodge the unary-minus precedence trap that `-40::int`
+// would hit), while user-written `-40` parses to A_Const{Ival -40}. After
+// alignCurrentCasts strips the TypeCast wrapper, the bare A_Const{Sval "-40"}
+// that survives would still deparse to `'-40'` and diff against `-40`. This
+// helper produces the canonical Ival / Fval form so the two compare equal.
+// Returns nil for non-numeric strings; callers leave the original node alone
+// in that case.
+func numericAConstFromString(s string) *pg_query.Node {
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil && n >= -2147483648 && n <= 2147483647 {
+		return &pg_query.Node{
+			Node: &pg_query.Node_AConst{
+				AConst: &pg_query.A_Const{
+					Val: &pg_query.A_Const_Ival{
+						Ival: &pg_query.Integer{Ival: int32(n)},
+					},
+				},
+			},
+		}
+	}
+	if _, err := strconv.ParseFloat(s, 64); err == nil {
+		return &pg_query.Node{
+			Node: &pg_query.Node_AConst{
+				AConst: &pg_query.A_Const{
+					Val: &pg_query.A_Const_Fval{
+						Fval: &pg_query.Float{Fval: s},
+					},
+				},
+			},
+		}
+	}
+	return nil
+}
+
 // equalConstraintDef compares two constraint definitions by normalizing
 // them through pg_query parse/deparse, so that formatting differences
 // (e.g. extra parentheses, spacing) do not cause false diffs.
@@ -533,7 +605,23 @@ func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
 		if ct.Arg == nil {
 			return current
 		}
-		current = ct.Arg
+		arg := ct.Arg
+		// When stripping a cast on a string literal of a numeric type, coerce
+		// the surviving A_Const{Sval "<n>"} back to A_Const{Ival/Fval} so it
+		// matches a user-written bare numeric literal — but only when desired
+		// at this position is itself a numeric (non-string) A_Const. If the
+		// user wrote a quoted form (`'0'`), leave the stripped Sval intact so
+		// it still compares equal to the quoted desired.
+		if isNumericTypeName(ct.TypeName) && desiredIsNumericAConst(desired) {
+			if ac := arg.GetAConst(); ac != nil {
+				if sv := ac.GetSval(); sv != nil {
+					if numeric := numericAConstFromString(sv.Sval); numeric != nil {
+						arg = numeric
+					}
+				}
+			}
+		}
+		current = arg
 	}
 	switch dn := desired.Node.(type) {
 	case *pg_query.Node_TypeCast:
