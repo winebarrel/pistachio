@@ -16,10 +16,10 @@ ARG PISTA_VERSION
 RUN CGO_ENABLED=1 go build -o /out/pista -ldflags "-X main.version=${PISTA_VERSION#v}" ./cmd/pista
 
 FROM postgres:18-alpine
-RUN apk add --no-cache bash sudo vim && \
+RUN apk add --no-cache bash sudo vim less source-highlight && \
     echo 'postgres ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/postgres-nopasswd && \
     chmod 0440 /etc/sudoers.d/postgres-nopasswd && \
-    printf "alias ll='ls -lF'\n" > /var/lib/postgresql/.bashrc && \
+    printf "alias ll='ls -lF'\nexport LESSOPEN='| /usr/bin/src-hilite-lesspipe.sh %%s'\nexport LESS='-R'\n" > /var/lib/postgresql/.bashrc && \
     printf "syntax on\n" > /var/lib/postgresql/.vimrc && \
     chown postgres:postgres /var/lib/postgresql/.bashrc /var/lib/postgresql/.vimrc
 
