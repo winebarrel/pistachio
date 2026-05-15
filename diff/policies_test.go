@@ -210,6 +210,75 @@ func TestEqualPolicyExpr_ParseErrorFallback(t *testing.T) {
 	assert.True(t, equalPolicyExpr("not a valid expr )", "not a valid expr )"))
 }
 
+func TestEqualPolicyExpr_currentTimeCastStripped(t *testing.T) {
+	// pg_get_expr adds `'00:00:00'::time without time zone` on a time-column
+	// USING / WITH CHECK comparison; users write the bare literal.
+	assert.True(t, equalPolicyExpr(
+		"start_at >= '00:00:00'::time without time zone",
+		"start_at >= '00:00:00'",
+	))
+}
+
+func TestEqualPolicyExpr_currentDateCastStripped(t *testing.T) {
+	assert.True(t, equalPolicyExpr(
+		"created_at >= '2020-01-01'::date",
+		"created_at >= '2020-01-01'",
+	))
+}
+
+func TestEqualPolicyExpr_currentNegativeIntCastStripped(t *testing.T) {
+	// Negative integer literal: DB emits `'-40'::integer`, user writes `-40`.
+	assert.True(t, equalPolicyExpr(
+		"vacation_hours >= '-40'::integer",
+		"vacation_hours >= -40",
+	))
+}
+
+func TestEqualPolicyExpr_currentCastInsideBoolExpr(t *testing.T) {
+	assert.True(t, equalPolicyExpr(
+		"(a > 0) AND (b >= '00:00:00'::time without time zone)",
+		"a > 0 AND b >= '00:00:00'",
+	))
+}
+
+func TestEqualPolicyExpr_bothExplicitCastsMatch(t *testing.T) {
+	assert.True(t, equalPolicyExpr(
+		"val > '0'::integer",
+		"val > '0'::integer",
+	))
+}
+
+func TestEqualPolicyExpr_castsDifferTypes(t *testing.T) {
+	// Both sides cast, different target types — not equal (asymmetric rule
+	// only fires when desired has no cast at the same position).
+	assert.False(t, equalPolicyExpr(
+		"val > '0'::bigint",
+		"val > '0'::integer",
+	))
+}
+
+func TestEqualPolicyExpr_desiredCastCurrentBare(t *testing.T) {
+	// Reverse direction: desired has a cast, current doesn't. The asymmetric
+	// rule does not strip desired's cast, so they remain unequal.
+	assert.False(t, equalPolicyExpr(
+		"val > 0",
+		"val > '0'::integer",
+	))
+}
+
+func TestEqualPolicyExpr_customNumericNamedTypeNotCoerced(t *testing.T) {
+	// A user-defined type that happens to share a built-in numeric name
+	// (e.g. `myapp.int4`) does NOT gate the Sval→numeric coercion.
+	// alignCurrentCasts still strips the wrapper (unconditional under the
+	// asymmetric rule), but the surviving A_Const{Sval "0"} is left as-is
+	// and compares unequal to the desired bare integer `0`. Same guard as
+	// the CHECK / DEFAULT versions.
+	assert.False(t, equalPolicyExpr(
+		"val > '0'::myapp.int4",
+		"val > 0",
+	))
+}
+
 func TestNormalizeRoles(t *testing.T) {
 	assert.Equal(t, []string{"public"}, normalizeRoles(nil), "empty → [public]")
 	assert.Equal(t, []string{"a", "b"}, normalizeRoles([]string{"b", "a"}), "sorted")

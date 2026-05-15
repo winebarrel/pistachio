@@ -1,0 +1,28 @@
+init: |
+  CREATE TABLE public.events (
+      id bigint NOT NULL,
+      starts_at time without time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY events_visible ON public.events FOR SELECT USING (starts_at >= '00:00:00'::time without time zone);
+desired: |
+  CREATE TABLE public.events (
+      id bigint NOT NULL,
+      starts_at time NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY events_visible ON public.events FOR SELECT USING (starts_at >= '00:00:00'::time without time zone);
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id bigint NOT NULL,
+      starts_at time without time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY events_visible ON public.events FOR SELECT USING ((starts_at >= '00:00:00'::time without time zone));
+applied_sql: ""
+verify_no_drift: true
