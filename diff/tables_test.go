@@ -1680,6 +1680,15 @@ func TestEqualConstraintDef_currentCastInCaseResultStripped(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_currentCastInArrayLiteralStripped(t *testing.T) {
+	// ARRAY[...] outside of = ANY stays as AArrayExpr after normalization;
+	// per-element casts on an array-column comparison get stripped too.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((tags = ARRAY['1'::integer, '2'::integer]))",
+		"CHECK (tags = ARRAY['1', '2'])",
+	))
+}
+
 func TestEqualConstraintDef_textCastOnRegex(t *testing.T) {
 	// pg_get_constraintdef adds ::text to string literals
 	assert.True(t, equalConstraintDef(
