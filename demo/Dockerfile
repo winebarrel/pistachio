@@ -12,7 +12,8 @@ WORKDIR /src
 COPY go.* /src/
 RUN go mod download
 COPY . /src/
-RUN CGO_ENABLED=1 go build -o /out/pista ./cmd/pista
+ARG PISTA_VERSION
+RUN CGO_ENABLED=1 go build -o /out/pista -ldflags "-X main.version=${PISTA_VERSION#v}" ./cmd/pista
 
 FROM postgres:17-alpine
 RUN apk add --no-cache bash
