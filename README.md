@@ -10,7 +10,7 @@ See also: [Getting Started Guide](getting-started.md)
 > [!NOTE]
 > **v1.7.0 breaking change:** the CLI binary was renamed from `pist` to `pista`, environment variables from `PIST_*` to `PISTA_*`, and SQL comment directives from `-- pist:` to `-- pista:`. Existing SQL files and shell / CI configurations must be updated before upgrading. See the [1.7.0 changelog entry](CHANGELOG.md#170---2026-05-12) for the full list of renamed names.
 
-<img width="800" src="https://github.com/user-attachments/assets/06eee10a-1b1c-41e1-9230-19752eebf1b4" />
+<img width="800" src="https://github.com/user-attachments/assets/eb961262-5c8e-459b-8461-ae089f87ae31" />
 
 ## Installation
 
