@@ -541,6 +541,37 @@ func desiredIsNumericAConst(n *pg_query.Node) bool {
 	return ac.GetIval() != nil || ac.GetFval() != nil
 }
 
+// peerIsNumericAtTopLevel reports whether peer is (or would become after a
+// symmetric top-level TypeCast strip) a numeric A_Const. Used by
+// equalDefault's two-step symmetric strip: the first call passes the
+// not-yet-stripped peer, so we have to look through a numeric-typed
+// top-level TypeCast to decide whether the peer will end up numeric.
+// Otherwise `'0'::integer` vs `0::integer` would fail to coerce the
+// current Sval and diff `'0'` against `0`.
+func peerIsNumericAtTopLevel(n *pg_query.Node) bool {
+	if desiredIsNumericAConst(n) {
+		return true
+	}
+	if n == nil {
+		return false
+	}
+	tc := n.GetTypeCast()
+	if tc == nil || tc.Arg == nil || !isNumericTypeName(tc.TypeName) {
+		return false
+	}
+	ac := tc.Arg.GetAConst()
+	if ac == nil {
+		return false
+	}
+	if ac.GetIval() != nil || ac.GetFval() != nil {
+		return true
+	}
+	if sv := ac.GetSval(); sv != nil {
+		return numericAConstFromString(sv.Sval) != nil
+	}
+	return false
+}
+
 // numericAConstFromString converts a numeric-valued string into an A_Const
 // node. pg_get_constraintdef emits negative numeric literals as
 // `'-40'::integer` (to dodge the unary-minus precedence trap that `-40::int`
@@ -1250,7 +1281,7 @@ func stripDefaultTopLevelCast(node, peer *pg_query.Node) *pg_query.Node {
 		return node
 	}
 	arg := tc.Arg
-	if isNumericTypeName(tc.TypeName) && desiredIsNumericAConst(peer) {
+	if isNumericTypeName(tc.TypeName) && peerIsNumericAtTopLevel(peer) {
 		if ac := arg.GetAConst(); ac != nil {
 			if sv := ac.GetSval(); sv != nil {
 				if numeric := numericAConstFromString(sv.Sval); numeric != nil {

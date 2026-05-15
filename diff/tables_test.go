@@ -1181,6 +1181,19 @@ func TestEqualDefault_bothExplicitCastsMatch(t *testing.T) {
 	))
 }
 
+func TestEqualDefault_currentStringCastVsDesiredNumericCast(t *testing.T) {
+	// Asymmetric A_Const kind under matching top-level casts: current's
+	// cast wraps an Sval ("0"), desired's cast wraps an Ival (0). Both
+	// casts get stripped symmetrically; the Sval→numeric coercion must
+	// look through the peer's still-present TypeCast to decide that the
+	// peer "will be" numeric after its own strip — otherwise the surviving
+	// Sval `'0'` diffs against the desired bare `0`.
+	assert.True(t, equalDefault(
+		new("'0'::integer"),
+		new("0::integer"),
+	))
+}
+
 func TestEqualDefault_castsDifferTypesStillEqual(t *testing.T) {
 	// Unlike equalConstraintDef, equalDefault treats `'0'::bigint` and
 	// `'0'::integer` as equal: the symmetric top-level cast strip applies
