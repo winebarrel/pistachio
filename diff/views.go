@@ -64,14 +64,14 @@ func equalNormalizedViewSelect(current, desired string) bool {
 	}
 	for _, stmt := range curResult.Stmts {
 		stripQualifications(stmt.Stmt)
-		normalizeViewExprs(stmt.Stmt)
+		normalizeSelectExprs(stmt.Stmt)
 	}
 	for _, stmt := range desResult.Stmts {
 		stripQualifications(stmt.Stmt)
-		normalizeViewExprs(stmt.Stmt)
+		normalizeSelectExprs(stmt.Stmt)
 	}
 	if len(curResult.Stmts) == 1 && len(desResult.Stmts) == 1 {
-		alignViewCasts(desResult.Stmts[0].Stmt, curResult.Stmts[0].Stmt)
+		alignSelectCasts(desResult.Stmts[0].Stmt, curResult.Stmts[0].Stmt)
 	}
 	curStr, errCur := pg_query.Deparse(curResult)
 	desStr, errDes := pg_query.Deparse(desResult)
@@ -81,17 +81,19 @@ func equalNormalizedViewSelect(current, desired string) bool {
 	return curStr == desStr
 }
 
-// normalizeViewExprs walks a view's SELECT (and any nested SELECT/JOIN/CTE)
-// and applies normalizeCheckExpr at every position that holds an expression.
-// This converts `= ANY(ARRAY[...])` back to `IN (...)` and strips text-like
-// TypeCasts symmetrically on both sides of equalViewDef.
-func normalizeViewExprs(node *pg_query.Node) {
+// normalizeSelectExprs walks a SELECT statement (and any nested
+// SELECT/JOIN/CTE) and applies normalizeCheckExpr at every position that
+// holds an expression. Converts `= ANY(ARRAY[...])` back to `IN (...)` and
+// strips text-like TypeCasts. Called both for view body comparison
+// (equalNormalizedViewSelect) and from normalizeCheckExpr's SubLink case
+// for sub-queries inside CHECK / RLS expressions.
+func normalizeSelectExprs(node *pg_query.Node) {
 	if node == nil {
 		return
 	}
 
 	if vs := node.GetViewStmt(); vs != nil {
-		normalizeViewExprs(vs.Query)
+		normalizeSelectExprs(vs.Query)
 		return
 	}
 
@@ -99,12 +101,12 @@ func normalizeViewExprs(node *pg_query.Node) {
 		if ss.WithClause != nil {
 			for _, cte := range ss.WithClause.Ctes {
 				if c := cte.GetCommonTableExpr(); c != nil {
-					normalizeViewExprs(c.Ctequery)
+					normalizeSelectExprs(c.Ctequery)
 				}
 			}
 		}
 		for _, from := range ss.FromClause {
-			normalizeViewExprs(from)
+			normalizeSelectExprs(from)
 		}
 		for _, target := range ss.TargetList {
 			if rt := target.GetResTarget(); rt != nil {
@@ -132,17 +134,17 @@ func normalizeViewExprs(node *pg_query.Node) {
 			ss.LimitOffset = normalizeCheckExpr(ss.LimitOffset)
 		}
 		if ss.Larg != nil {
-			normalizeViewExprs(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}})
+			normalizeSelectExprs(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}})
 		}
 		if ss.Rarg != nil {
-			normalizeViewExprs(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}})
+			normalizeSelectExprs(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}})
 		}
 		return
 	}
 
 	if join := node.GetJoinExpr(); join != nil {
-		normalizeViewExprs(join.Larg)
-		normalizeViewExprs(join.Rarg)
+		normalizeSelectExprs(join.Larg)
+		normalizeSelectExprs(join.Rarg)
 		if join.Quals != nil {
 			join.Quals = normalizeCheckExpr(join.Quals)
 		}
@@ -150,23 +152,23 @@ func normalizeViewExprs(node *pg_query.Node) {
 	}
 
 	if sub := node.GetRangeSubselect(); sub != nil {
-		normalizeViewExprs(sub.Subquery)
+		normalizeSelectExprs(sub.Subquery)
 		return
 	}
 }
 
-// alignViewCasts performs the same parallel walk as normalizeViewExprs but
+// alignSelectCasts performs the same parallel walk as normalizeSelectExprs but
 // across two trees, applying alignCurrentCasts at each expression position
 // to strip TypeCasts present only on the current side. Used for the
 // asymmetric current↔desired comparison in equalNormalizedViewSelect.
-func alignViewCasts(desired, current *pg_query.Node) {
+func alignSelectCasts(desired, current *pg_query.Node) {
 	if desired == nil || current == nil {
 		return
 	}
 
 	if dv := desired.GetViewStmt(); dv != nil {
 		if cv := current.GetViewStmt(); cv != nil {
-			alignViewCasts(dv.Query, cv.Query)
+			alignSelectCasts(dv.Query, cv.Query)
 		}
 		return
 	}
@@ -181,13 +183,13 @@ func alignViewCasts(desired, current *pg_query.Node) {
 				dc := ds.WithClause.Ctes[i].GetCommonTableExpr()
 				cc := cs.WithClause.Ctes[i].GetCommonTableExpr()
 				if dc != nil && cc != nil {
-					alignViewCasts(dc.Ctequery, cc.Ctequery)
+					alignSelectCasts(dc.Ctequery, cc.Ctequery)
 				}
 			}
 		}
 		if len(ds.FromClause) == len(cs.FromClause) {
 			for i := range ds.FromClause {
-				alignViewCasts(ds.FromClause[i], cs.FromClause[i])
+				alignSelectCasts(ds.FromClause[i], cs.FromClause[i])
 			}
 		}
 		if len(ds.TargetList) == len(cs.TargetList) {
@@ -226,13 +228,13 @@ func alignViewCasts(desired, current *pg_query.Node) {
 			cs.LimitOffset = alignCurrentCasts(ds.LimitOffset, cs.LimitOffset)
 		}
 		if ds.Larg != nil && cs.Larg != nil {
-			alignViewCasts(
+			alignSelectCasts(
 				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ds.Larg}},
 				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: cs.Larg}},
 			)
 		}
 		if ds.Rarg != nil && cs.Rarg != nil {
-			alignViewCasts(
+			alignSelectCasts(
 				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ds.Rarg}},
 				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: cs.Rarg}},
 			)
@@ -242,8 +244,8 @@ func alignViewCasts(desired, current *pg_query.Node) {
 
 	if dj := desired.GetJoinExpr(); dj != nil {
 		if cj := current.GetJoinExpr(); cj != nil {
-			alignViewCasts(dj.Larg, cj.Larg)
-			alignViewCasts(dj.Rarg, cj.Rarg)
+			alignSelectCasts(dj.Larg, cj.Larg)
+			alignSelectCasts(dj.Rarg, cj.Rarg)
 			if dj.Quals != nil && cj.Quals != nil {
 				cj.Quals = alignCurrentCasts(dj.Quals, cj.Quals)
 			}
@@ -253,7 +255,7 @@ func alignViewCasts(desired, current *pg_query.Node) {
 
 	if drs := desired.GetRangeSubselect(); drs != nil {
 		if crs := current.GetRangeSubselect(); crs != nil {
-			alignViewCasts(drs.Subquery, crs.Subquery)
+			alignSelectCasts(drs.Subquery, crs.Subquery)
 		}
 		return
 	}

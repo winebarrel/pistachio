@@ -318,8 +318,8 @@ func TestEqualViewDef_currentOnlyTypeCast_notStrippedFromDesired(t *testing.T) {
 	))
 }
 
-// The tests below exercise each walker position in normalizeViewExprs
-// / alignViewCasts beyond the already-covered WHERE and JOIN ON.
+// The tests below exercise each walker position in normalizeSelectExprs
+// / alignSelectCasts beyond the already-covered WHERE and JOIN ON.
 
 func TestEqualViewDef_inVsAnyArray_targetList(t *testing.T) {
 	// Target-list expression: CASE inside SELECT.
@@ -353,7 +353,7 @@ func TestEqualViewDef_currentOnlyTypeCast_groupBy(t *testing.T) {
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_join(t *testing.T) {
-	// Covers the JoinExpr.Quals position in alignViewCasts (the IN↔ANY
+	// Covers the JoinExpr.Quals position in alignSelectCasts (the IN↔ANY
 	// variant is already tested in inVsAnyArray_join).
 	assert.True(t, equalViewDef(
 		"SELECT u.id FROM users u JOIN orders o ON o.status = 'paid'::e",

@@ -485,7 +485,7 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 		// SubLinks, so this only matters for RLS policy USING/WITH CHECK
 		// and for view bodies — both legitimate cases.
 		if n.SubLink.Subselect != nil {
-			normalizeViewExprs(n.SubLink.Subselect)
+			normalizeSelectExprs(n.SubLink.Subselect)
 		}
 		n.SubLink.Testexpr = normalizeCheckExpr(n.SubLink.Testexpr)
 	}
@@ -771,7 +771,7 @@ func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
 		// EXISTS / IN-subquery / ANY-subquery predicate are stripped too.
 		if cn := current.GetSubLink(); cn != nil {
 			if dn.SubLink.Subselect != nil && cn.Subselect != nil {
-				alignViewCasts(dn.SubLink.Subselect, cn.Subselect)
+				alignSelectCasts(dn.SubLink.Subselect, cn.Subselect)
 			}
 			cn.Testexpr = alignCurrentCasts(dn.SubLink.Testexpr, cn.Testexpr)
 		}
