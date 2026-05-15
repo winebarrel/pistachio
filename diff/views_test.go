@@ -272,6 +272,52 @@ func TestEqualViewDef_cte(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_inVsAnyArray(t *testing.T) {
+	// pg_get_viewdef rewrites `IN ('a','b')` as `= ANY (ARRAY['a','b'])`.
+	// Equality must hold across that rewrite for the WHERE clause.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])",
+		"SELECT id FROM t WHERE status IN ('a', 'b')",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_join(t *testing.T) {
+	// Same rewrite, but on a JOIN ... ON expression.
+	assert.True(t, equalViewDef(
+		"SELECT u.id FROM users u JOIN orders o ON o.status = ANY (ARRAY['paid', 'shipped'])",
+		"SELECT u.id FROM public.users u JOIN public.orders o ON o.status IN ('paid', 'shipped')",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast(t *testing.T) {
+	// pg_get_viewdef adds a cast to the column's type on bare literals
+	// (e.g. enum columns get `'x'::my_enum`). The desired SQL written
+	// without the cast should still compare equal to the current form.
+	// First arg is current (with cast), second is desired (without).
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE status = 'published'::post_status",
+		"SELECT id FROM t WHERE status = 'published'",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_inList(t *testing.T) {
+	// Casts inside an IN list, after the ANY→IN rewrite.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE status = ANY (ARRAY['published'::post_status, 'pinned'::post_status])",
+		"SELECT id FROM t WHERE status IN ('published', 'pinned')",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_notStrippedFromDesired(t *testing.T) {
+	// alignCurrentCasts is asymmetric: a cast in desired that is missing
+	// from current must surface as a difference (otherwise a user-requested
+	// cast change would be silently hidden).
+	assert.False(t, equalViewDef(
+		"SELECT id FROM t WHERE x = 1",
+		"SELECT id FROM t WHERE x = 1::bigint",
+	))
+}
+
 func TestDiffViews_newMatview(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	desired := orderedmap.New[string, *model.View]()
