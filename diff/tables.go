@@ -398,27 +398,21 @@ func isSerialType(typeName string) bool {
 	return ok
 }
 
-// normalizeConstraintDef normalizes a constraint definition by parsing
-// and deparsing it through pg_query to eliminate formatting differences.
-// It also normalizes AST-level differences introduced by pg_get_constraintdef
-// (e.g. explicit ::text casts on string literals, = ANY(ARRAY[...]) vs IN (...)).
-func normalizeConstraintDef(def string) (string, error) {
-	sql := "ALTER TABLE _t ADD CONSTRAINT _c " + def
-	result, err := pg_query.Parse(sql)
+// parseConstraintDef parses a constraint definition (the body after
+// "ADD CONSTRAINT <name>") and returns the parse result plus the embedded
+// Constraint node, which callers may mutate before re-deparsing.
+func parseConstraintDef(def string) (*pg_query.ParseResult, *pg_query.Constraint, error) {
+	result, err := pg_query.Parse("ALTER TABLE _t ADD CONSTRAINT _c " + def)
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
-	as := result.Stmts[0].Stmt.GetAlterTableStmt()
-	if as != nil {
-		cmd := as.Cmds[0].GetAlterTableCmd()
-		if cmd != nil {
-			con := cmd.Def.GetConstraint()
-			if con != nil {
-				con.RawExpr = normalizeCheckExpr(con.RawExpr)
-			}
+	var con *pg_query.Constraint
+	if as := result.Stmts[0].Stmt.GetAlterTableStmt(); as != nil {
+		if cmd := as.Cmds[0].GetAlterTableCmd(); cmd != nil {
+			con = cmd.Def.GetConstraint()
 		}
 	}
-	return pg_query.Deparse(result)
+	return result, con, nil
 }
 
 // normalizeCheckExpr recursively normalizes a CHECK constraint expression
@@ -507,16 +501,115 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 // equalConstraintDef compares two constraint definitions by normalizing
 // them through pg_query parse/deparse, so that formatting differences
 // (e.g. extra parentheses, spacing) do not cause false diffs.
-func equalConstraintDef(a, b string) bool {
-	if a == b {
+//
+// The comparison is asymmetric with respect to type casts: pg_get_constraintdef
+// often adds explicit casts (e.g. '00:00:00'::time, '0'::integer) that the
+// user did not write in the desired schema. When current has a TypeCast at
+// a position where desired has none, the cast is stripped from current so
+// the two compare equal. Casts present in desired are preserved, so an
+// explicit user-written cast that disagrees with the DB still surfaces.
+func equalConstraintDef(current, desired string) bool {
+	if current == desired {
 		return true
 	}
-	normA, errA := normalizeConstraintDef(a)
-	normB, errB := normalizeConstraintDef(b)
-	if errA != nil || errB != nil {
-		return a == b
+	curResult, curCon, errC := parseConstraintDef(current)
+	desResult, desCon, errD := parseConstraintDef(desired)
+	if errC != nil || errD != nil {
+		return current == desired
 	}
-	return normA == normB
+	if curCon != nil && desCon != nil {
+		curCon.RawExpr = normalizeCheckExpr(curCon.RawExpr)
+		desCon.RawExpr = normalizeCheckExpr(desCon.RawExpr)
+		curCon.RawExpr = alignCurrentCasts(desCon.RawExpr, curCon.RawExpr)
+	}
+	curStr, errC := pg_query.Deparse(curResult)
+	desStr, errD := pg_query.Deparse(desResult)
+	if errC != nil || errD != nil {
+		return current == desired
+	}
+	return curStr == desStr
+}
+
+// alignCurrentCasts walks desired and current in parallel, stripping
+// TypeCast wrappers from current at positions where desired has no
+// matching TypeCast. The function mutates the current tree in place
+// and returns the (possibly unwrapped) current node so callers can
+// reassign at parent boundaries.
+func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
+	if desired == nil || current == nil {
+		return current
+	}
+	for {
+		ct := current.GetTypeCast()
+		if ct == nil || desired.GetTypeCast() != nil {
+			break
+		}
+		if ct.Arg == nil {
+			return current
+		}
+		current = ct.Arg
+	}
+	switch dn := desired.Node.(type) {
+	case *pg_query.Node_TypeCast:
+		if cn := current.GetTypeCast(); cn != nil {
+			cn.Arg = alignCurrentCasts(dn.TypeCast.Arg, cn.Arg)
+		}
+	case *pg_query.Node_AExpr:
+		if cn := current.GetAExpr(); cn != nil {
+			cn.Lexpr = alignCurrentCasts(dn.AExpr.Lexpr, cn.Lexpr)
+			cn.Rexpr = alignCurrentCasts(dn.AExpr.Rexpr, cn.Rexpr)
+		}
+	case *pg_query.Node_BoolExpr:
+		if cn := current.GetBoolExpr(); cn != nil && len(cn.Args) == len(dn.BoolExpr.Args) {
+			for i := range dn.BoolExpr.Args {
+				cn.Args[i] = alignCurrentCasts(dn.BoolExpr.Args[i], cn.Args[i])
+			}
+		}
+	case *pg_query.Node_AArrayExpr:
+		if cn := current.GetAArrayExpr(); cn != nil && len(cn.Elements) == len(dn.AArrayExpr.Elements) {
+			for i := range dn.AArrayExpr.Elements {
+				cn.Elements[i] = alignCurrentCasts(dn.AArrayExpr.Elements[i], cn.Elements[i])
+			}
+		}
+	case *pg_query.Node_List:
+		if cn := current.GetList(); cn != nil && len(cn.Items) == len(dn.List.Items) {
+			for i := range dn.List.Items {
+				cn.Items[i] = alignCurrentCasts(dn.List.Items[i], cn.Items[i])
+			}
+		}
+	case *pg_query.Node_FuncCall:
+		if cn := current.GetFuncCall(); cn != nil && len(cn.Args) == len(dn.FuncCall.Args) {
+			for i := range dn.FuncCall.Args {
+				cn.Args[i] = alignCurrentCasts(dn.FuncCall.Args[i], cn.Args[i])
+			}
+		}
+	case *pg_query.Node_NullTest:
+		if cn := current.GetNullTest(); cn != nil {
+			cn.Arg = alignCurrentCasts(dn.NullTest.Arg, cn.Arg)
+		}
+	case *pg_query.Node_CoalesceExpr:
+		if cn := current.GetCoalesceExpr(); cn != nil && len(cn.Args) == len(dn.CoalesceExpr.Args) {
+			for i := range dn.CoalesceExpr.Args {
+				cn.Args[i] = alignCurrentCasts(dn.CoalesceExpr.Args[i], cn.Args[i])
+			}
+		}
+	case *pg_query.Node_CaseExpr:
+		if cn := current.GetCaseExpr(); cn != nil {
+			cn.Arg = alignCurrentCasts(dn.CaseExpr.Arg, cn.Arg)
+			cn.Defresult = alignCurrentCasts(dn.CaseExpr.Defresult, cn.Defresult)
+			if len(cn.Args) == len(dn.CaseExpr.Args) {
+				for i := range dn.CaseExpr.Args {
+					dw := dn.CaseExpr.Args[i].GetCaseWhen()
+					cw := cn.Args[i].GetCaseWhen()
+					if dw != nil && cw != nil {
+						cw.Expr = alignCurrentCasts(dw.Expr, cw.Expr)
+						cw.Result = alignCurrentCasts(dw.Result, cw.Result)
+					}
+				}
+			}
+		}
+	}
+	return current
 }
 
 func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, disallowed []string, err error) {

@@ -1593,11 +1593,90 @@ func TestEqualConstraintDef_different(t *testing.T) {
 	))
 }
 
-func TestEqualConstraintDef_nonTextCastPreserved(t *testing.T) {
-	// ::integer cast is semantically meaningful and must not be stripped
-	assert.False(t, equalConstraintDef(
+func TestEqualConstraintDef_currentIntegerCastStripped(t *testing.T) {
+	// pg_get_constraintdef adds ::integer to bare numeric literals on int
+	// columns. When desired has no cast, treat them as equal.
+	assert.True(t, equalConstraintDef(
 		"CHECK (val > '0'::integer)",
 		"CHECK (val > '0')",
+	))
+}
+
+func TestEqualConstraintDef_currentTimeCastStripped(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK (t >= '00:00:00'::time without time zone)",
+		"CHECK (t >= '00:00:00')",
+	))
+}
+
+func TestEqualConstraintDef_currentDateCastStripped(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK (d >= '2020-01-01'::date)",
+		"CHECK (d >= '2020-01-01')",
+	))
+}
+
+func TestEqualConstraintDef_currentTimestampCastStripped(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK (ts >= '2020-01-01 00:00:00'::timestamp without time zone)",
+		"CHECK (ts >= '2020-01-01 00:00:00')",
+	))
+}
+
+func TestEqualConstraintDef_bothExplicitCastsMatch(t *testing.T) {
+	// When desired explicitly has the same cast as current, normal pairwise
+	// comparison succeeds.
+	assert.True(t, equalConstraintDef(
+		"CHECK (val > '0'::integer)",
+		"CHECK (val > '0'::integer)",
+	))
+}
+
+func TestEqualConstraintDef_castsDifferTypes(t *testing.T) {
+	// Both sides have a cast but the target types differ → not equal.
+	assert.False(t, equalConstraintDef(
+		"CHECK (val > '0'::bigint)",
+		"CHECK (val > '0'::integer)",
+	))
+}
+
+func TestEqualConstraintDef_desiredCastCurrentBare(t *testing.T) {
+	// Asymmetric rule fires only when current has the extra cast.
+	// If desired has a cast and current doesn't, they remain unequal.
+	assert.False(t, equalConstraintDef(
+		"CHECK (val > '0')",
+		"CHECK (val > '0'::integer)",
+	))
+}
+
+func TestEqualConstraintDef_currentCastInsideBoolExpr(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((a > 0) AND (b >= '00:00:00'::time without time zone))",
+		"CHECK (a > 0 AND b >= '00:00:00')",
+	))
+}
+
+func TestEqualConstraintDef_currentCastOnColumnRefStripped(t *testing.T) {
+	// Cast on a column expression is also stripped when desired has none.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((col)::integer > 0)",
+		"CHECK (col > 0)",
+	))
+}
+
+func TestEqualConstraintDef_currentCastInArrayElementStripped(t *testing.T) {
+	// pg_get_constraintdef converts IN to = ANY(ARRAY[...]) and may add
+	// per-element casts on non-text types.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((val = ANY (ARRAY['0'::integer, '1'::integer])))",
+		"CHECK (val IN ('0', '1'))",
+	))
+}
+
+func TestEqualConstraintDef_currentCastInCaseResultStripped(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((CASE WHEN (val > 0) THEN '1'::integer ELSE '0'::integer END) = '1')",
+		"CHECK ((CASE WHEN val > 0 THEN '1' ELSE '0' END) = '1')",
 	))
 }
 
