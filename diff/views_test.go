@@ -318,6 +318,106 @@ func TestEqualViewDef_currentOnlyTypeCast_notStrippedFromDesired(t *testing.T) {
 	))
 }
 
+// The tests below exercise each walker position in normalizeViewExprs
+// / alignViewCasts beyond the already-covered WHERE and JOIN ON.
+
+func TestEqualViewDef_inVsAnyArray_targetList(t *testing.T) {
+	// Target-list expression: CASE inside SELECT.
+	assert.True(t, equalViewDef(
+		"SELECT CASE WHEN status = ANY (ARRAY['a', 'b']) THEN 1 ELSE 0 END AS hit FROM t",
+		"SELECT CASE WHEN status IN ('a', 'b') THEN 1 ELSE 0 END AS hit FROM t",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_having(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT x, count(*) FROM t GROUP BY x HAVING x = ANY (ARRAY['a', 'b'])",
+		"SELECT x, count(*) FROM t GROUP BY x HAVING x IN ('a', 'b')",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_cte(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"WITH active AS (SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])) SELECT id FROM active",
+		"WITH active AS (SELECT id FROM t WHERE status IN ('a', 'b')) SELECT id FROM active",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_union(t *testing.T) {
+	// Both UNION arms (Larg / Rarg) must be normalised.
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE x = ANY (ARRAY[1, 2]) UNION SELECT id FROM t WHERE y = ANY (ARRAY[3, 4])",
+		"SELECT id FROM t WHERE x IN (1, 2) UNION SELECT id FROM t WHERE y IN (3, 4)",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_rangeSubselect(t *testing.T) {
+	// Sub-SELECT in FROM (RangeSubselect path).
+	assert.True(t, equalViewDef(
+		"SELECT s.id FROM (SELECT id FROM t WHERE x = ANY (ARRAY[1, 2])) s",
+		"SELECT s.id FROM (SELECT id FROM t WHERE x IN (1, 2)) s",
+	))
+}
+
+func TestEqualViewDef_inVsAnyArray_sublink(t *testing.T) {
+	// Sub-SELECT inside an EXISTS predicate (SubLink path).
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = ANY (ARRAY[1, 2]))",
+		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x IN (1, 2))",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_targetList(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT CASE WHEN status = 'a'::e THEN 1 ELSE 0 END AS hit FROM t",
+		"SELECT CASE WHEN status = 'a' THEN 1 ELSE 0 END AS hit FROM t",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_having(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT x, count(*) FROM t GROUP BY x HAVING x = 'a'::e",
+		"SELECT x, count(*) FROM t GROUP BY x HAVING x = 'a'",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_cte(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"WITH active AS (SELECT id FROM t WHERE status = 'a'::e) SELECT id FROM active",
+		"WITH active AS (SELECT id FROM t WHERE status = 'a') SELECT id FROM active",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_union(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE x = 'a'::e UNION SELECT id FROM t WHERE y = 'b'::e",
+		"SELECT id FROM t WHERE x = 'a' UNION SELECT id FROM t WHERE y = 'b'",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_sublink(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = 'a'::e)",
+		"SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = 'a')",
+	))
+}
+
+func TestEqualViewDef_currentOnlyTypeCast_rangeSubselect(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT s.id FROM (SELECT id FROM t WHERE status = 'a'::e) s",
+		"SELECT s.id FROM (SELECT id FROM t WHERE status = 'a') s",
+	))
+}
+
+func TestEqualViewDef_realChangeStillDetected(t *testing.T) {
+	// Regression guard: after all the normalisations, a genuinely different
+	// view body must still surface as a difference.
+	assert.False(t, equalViewDef(
+		"SELECT id FROM t WHERE status = ANY (ARRAY['a', 'b'])",
+		"SELECT id FROM t WHERE status IN ('a', 'b', 'c')",
+	))
+}
+
 func TestDiffViews_newMatview(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	desired := orderedmap.New[string, *model.View]()
