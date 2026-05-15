@@ -15,7 +15,7 @@ COPY . /src/
 ARG PISTA_VERSION
 RUN CGO_ENABLED=1 go build -o /out/pista -ldflags "-X main.version=${PISTA_VERSION#v}" ./cmd/pista
 
-FROM postgres:17-alpine
+FROM postgres:18-alpine
 RUN apk add --no-cache bash
 
 COPY --from=build /out/pista /usr/local/bin/pista
