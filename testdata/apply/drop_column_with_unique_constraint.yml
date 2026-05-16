@@ -1,0 +1,20 @@
+init: |
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      slug text,
+      CONSTRAINT tags_pkey PRIMARY KEY (id),
+      CONSTRAINT tags_slug_key UNIQUE (slug)
+  );
+desired: |
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      CONSTRAINT tags_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.tags
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      CONSTRAINT tags_pkey PRIMARY KEY (id)
+  );
+drop_policy:
+  allow_drop: [all]

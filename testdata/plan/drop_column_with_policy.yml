@@ -1,0 +1,19 @@
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      owner_id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY posts_owner ON public.posts USING (owner_id = current_setting('app.user_id', true)::integer);
+desired: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+plan: |
+  DROP POLICY posts_owner ON public.posts;
+  ALTER TABLE public.posts DROP COLUMN owner_id;

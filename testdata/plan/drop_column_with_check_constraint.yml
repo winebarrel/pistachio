@@ -1,0 +1,17 @@
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty integer,
+      CONSTRAINT items_pkey PRIMARY KEY (id),
+      CONSTRAINT items_qty_check CHECK (qty > 0)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.items DROP CONSTRAINT items_qty_check;
+  ALTER TABLE public.items DROP COLUMN qty;

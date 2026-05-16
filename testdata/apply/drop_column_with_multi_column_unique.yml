@@ -1,0 +1,23 @@
+init: |
+  CREATE TABLE public.assignments (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      role text NOT NULL,
+      CONSTRAINT assignments_pkey PRIMARY KEY (id),
+      CONSTRAINT assignments_user_role_key UNIQUE (user_id, role)
+  );
+desired: |
+  CREATE TABLE public.assignments (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT assignments_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.assignments
+  CREATE TABLE public.assignments (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT assignments_pkey PRIMARY KEY (id)
+  );
+drop_policy:
+  allow_drop: [all]

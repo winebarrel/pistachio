@@ -1,0 +1,19 @@
+bulk_alter: true
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      slug text,
+      CONSTRAINT tags_pkey PRIMARY KEY (id),
+      CONSTRAINT tags_slug_key UNIQUE (slug)
+  );
+desired: |
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      CONSTRAINT tags_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.tags
+    DROP CONSTRAINT tags_slug_key,
+    DROP COLUMN slug;

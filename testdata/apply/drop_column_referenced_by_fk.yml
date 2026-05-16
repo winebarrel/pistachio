@@ -1,0 +1,36 @@
+init: |
+  CREATE TABLE public.parents (
+      id integer NOT NULL,
+      slug text NOT NULL,
+      CONSTRAINT parents_pkey PRIMARY KEY (id),
+      CONSTRAINT parents_slug_key UNIQUE (slug)
+  );
+  CREATE TABLE public.children (
+      id integer NOT NULL,
+      parent_slug text NOT NULL,
+      CONSTRAINT children_pkey PRIMARY KEY (id),
+      CONSTRAINT children_parent_slug_fkey FOREIGN KEY (parent_slug) REFERENCES public.parents (slug)
+  );
+desired: |
+  CREATE TABLE public.parents (
+      id integer NOT NULL,
+      CONSTRAINT parents_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.children (
+      id integer NOT NULL,
+      CONSTRAINT children_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.children
+  CREATE TABLE public.children (
+      id integer NOT NULL,
+      CONSTRAINT children_pkey PRIMARY KEY (id)
+  );
+
+  -- public.parents
+  CREATE TABLE public.parents (
+      id integer NOT NULL,
+      CONSTRAINT parents_pkey PRIMARY KEY (id)
+  );
+drop_policy:
+  allow_drop: [all]

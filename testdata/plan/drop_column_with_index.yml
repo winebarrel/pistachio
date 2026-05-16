@@ -1,0 +1,17 @@
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      occurred_at timestamp,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX events_occurred_idx ON public.events (occurred_at);
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+plan: |
+  DROP INDEX public.events_occurred_idx;
+  ALTER TABLE public.events DROP COLUMN occurred_at;

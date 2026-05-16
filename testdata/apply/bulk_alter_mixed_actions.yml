@@ -29,5 +29,5 @@ applied_sql: |
   ALTER TABLE public.users
     ADD COLUMN email text,
     ALTER COLUMN name SET NOT NULL,
-    DROP COLUMN legacy,
-    ADD CONSTRAINT users_id_pos CHECK (id > 0);
+    ADD CONSTRAINT users_id_pos CHECK (id > 0),
+    DROP COLUMN legacy;
