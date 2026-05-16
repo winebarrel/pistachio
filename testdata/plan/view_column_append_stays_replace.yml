@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.users_view AS SELECT id, name FROM public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.users_view AS SELECT id, name, email FROM public.users;
+plan: |
+  CREATE OR REPLACE VIEW public.users_view AS
+  SELECT id, name, email FROM public.users;

@@ -1,0 +1,24 @@
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text NOT NULL,
+      updated_at timestamp NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.posts_summary AS
+      SELECT id, title, updated_at FROM public.posts;
+desired: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.posts_summary AS
+      SELECT id, title FROM public.posts;
+plan: |
+  DROP VIEW public.posts_summary;
+  ALTER TABLE public.posts DROP COLUMN updated_at;
+  CREATE OR REPLACE VIEW public.posts_summary AS
+  SELECT id, title FROM public.posts;
