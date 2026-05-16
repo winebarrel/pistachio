@@ -218,10 +218,10 @@ pista apply schema.sql --with-tx
 
 ### Running pre-migration SQL
 
-Execute SQL before applying schema changes (e.g. installing extensions). Use `--pre-sql` for inline SQL or `--pre-sql-file` for a file (mutually exclusive):
+Execute SQL before applying schema changes (e.g. setting a statement timeout). Use `--pre-sql` for inline SQL or `--pre-sql-file` for a file (mutually exclusive):
 
 ```bash
-pista apply schema.sql --pre-sql "CREATE EXTENSION IF NOT EXISTS pgcrypto;" --with-tx
+pista apply schema.sql --pre-sql "SET statement_timeout = '5s';" --with-tx
 pista apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
 
