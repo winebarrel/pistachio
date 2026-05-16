@@ -29,11 +29,11 @@ if ! echo "$plan_output" | grep -qE '^ALTER TABLE public\.users$'; then
 elif ! echo "$plan_output" | grep -qE '^  ADD COLUMN name text NOT NULL,$'; then
   fail "expected indented action lines with trailing comma"
   echo "    $plan_output" >&2
-elif ! echo "$plan_output" | grep -qE '^  DROP COLUMN legacy,$'; then
-  fail "expected DROP COLUMN to be merged"
+elif ! echo "$plan_output" | grep -qE '^  ADD CONSTRAINT users_id_pos CHECK \(id > 0\),$'; then
+  fail "expected ADD CONSTRAINT to be merged before DROP COLUMN"
   echo "    $plan_output" >&2
-elif ! echo "$plan_output" | grep -qE '^  ADD CONSTRAINT users_id_pos CHECK \(id > 0\);$'; then
-  fail "expected ADD CONSTRAINT as final merged action"
+elif ! echo "$plan_output" | grep -qE '^  DROP COLUMN legacy;$'; then
+  fail "expected DROP COLUMN as final merged action (after dependent-object drops)"
   echo "    $plan_output" >&2
 else
   apply_output=$(pista_apply_bulk "$DATA/steps/01_multi_action.sql") || { fail "apply failed: $apply_output"; true; }
