@@ -90,7 +90,7 @@ pista plan schema.sql
 pista plan tables.sql views.sql
 
 # Include pre-SQL in the output
-pista plan schema.sql --pre-sql "SET search_path TO myschema;"
+pista plan schema.sql --pre-sql "SET statement_timeout = '5s';"
 pista plan schema.sql --pre-sql-file pre.sql
 ```
 
@@ -111,7 +111,7 @@ Use `--pre-sql` or `--pre-sql-file` to run SQL before applying changes (mutually
 
 ```bash
 # Inline SQL
-pista apply schema.sql --pre-sql "SET search_path TO myschema;" --with-tx
+pista apply schema.sql --pre-sql "SET statement_timeout = '5s';" --with-tx
 
 # From file
 pista apply schema.sql --pre-sql-file pre.sql --with-tx
