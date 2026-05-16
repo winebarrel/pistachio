@@ -515,11 +515,10 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	result := &ViewDiffResult{}
 
 	// Detect renames
-	renameStmts, current, err := detectViewRenames(current, desired)
+	renameStmts, current, renamedFrom, err := detectViewRenames(current, desired)
 	if err != nil {
 		return nil, err
 	}
-	result.CreateStmts = append(result.CreateStmts, renameStmts...)
 
 	// Track views that are recreated (DROP+CREATE) so comments can be re-applied.
 	recreated := make(map[string]bool)
@@ -527,6 +526,44 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	// skip the executable comment diff too, so the output reflects "nothing
 	// executable" rather than emitting half of the intended change.
 	recreateDenied := make(map[string]bool)
+	// A renamed view that ALSO needs DROP+CREATE (e.g. its column list is
+	// changing) must not go through the ALTER ... RENAME path: that
+	// statement is sequenced with CreateStmts, after DropStmts, so by
+	// the time it runs the executable DROP has already failed against
+	// the old name. Track these so the rename statement is dropped
+	// and the DROP statement uses the old name instead.
+	needsRecreateRenamed := map[string]bool{}
+	for newKey := range renamedFrom {
+		desiredView, dok := desired.GetOk(newKey)
+		currentView, cok := current.GetOk(newKey)
+		if !dok || !cok {
+			continue
+		}
+		if currentView.Materialized != desiredView.Materialized {
+			needsRecreateRenamed[newKey] = true
+			continue
+		}
+		if !equalViewDef(currentView.Definition, desiredView.Definition) {
+			if desiredView.Materialized || !canCreateOrReplaceView(currentView.Definition, desiredView.Definition) {
+				needsRecreateRenamed[newKey] = true
+			}
+		}
+	}
+	for _, stmt := range renameStmts {
+		skip := false
+		for newKey := range needsRecreateRenamed {
+			oldKey := renamedFrom[newKey]
+			desiredView, _ := desired.GetOk(newKey)
+			needle := oldKey + " RENAME TO " + model.Ident(desiredView.Name) + ";"
+			if strings.Contains(stmt, needle) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			result.CreateStmts = append(result.CreateStmts, stmt)
+		}
+	}
 
 	// New or modified views (CREATE OR REPLACE / recreate for materialized)
 	for k, desiredView := range desired.All() {
@@ -563,10 +600,17 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				// otherwise emit a commented DROP for visibility (no CREATE,
 				// since recreation requires the drop).
 				if dc.IsDropAllowed("view") {
+					// When the view was also renamed, drop the old name —
+					// the database still has it because the ALTER RENAME
+					// was suppressed above.
+					dropName := k
+					if oldKey, renamed := renamedFrom[k]; renamed {
+						dropName = oldKey
+					}
 					if currentView.Materialized {
-						result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+k+";")
+						result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+dropName+";")
 					} else {
-						result.DropStmts = append(result.DropStmts, "DROP VIEW "+k+";")
+						result.DropStmts = append(result.DropStmts, "DROP VIEW "+dropName+";")
 					}
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 					if desiredView.Materialized && desiredView.Indexes != nil {

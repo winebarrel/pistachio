@@ -1215,6 +1215,82 @@ func TestViewOutputColumns_NegativePaths(t *testing.T) {
 	}
 }
 
+func TestDiffViews_renamePlusRecreateDropsOldNameAndSkipsRename(t *testing.T) {
+	// A view that is both renamed AND has a column-shape change needs
+	// DROP+CREATE. The DROP has to target the old name (the DB hasn't
+	// renamed yet) and the ALTER RENAME must be suppressed — otherwise
+	// the apply runs `DROP VIEW <new name>` first (no such view) and
+	// fails before the rename can move the row.
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v_old", &model.View{
+		Schema: "public", Name: "v_old",
+		Definition: "SELECT id, slug FROM t",
+	})
+	oldKey := "public.v_old"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v_new", &model.View{
+		Schema: "public", Name: "v_new", RenameFrom: &oldKey,
+		Definition: "SELECT id FROM t",
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.DropStmts, 1)
+	assert.Equal(t, "DROP VIEW public.v_old;", result.DropStmts[0])
+	require.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW public.v_new")
+	// Sanity: no stray ALTER VIEW ... RENAME in the plan.
+	for _, s := range result.CreateStmts {
+		assert.NotContains(t, s, "RENAME TO")
+	}
+}
+
+func TestDiffViews_renameWithoutDefinitionChangeKeepsRename(t *testing.T) {
+	// Pure rename (definition unchanged) must still emit ALTER RENAME —
+	// the new behavior only suppresses the rename when DROP+CREATE is
+	// also required.
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v_old", &model.View{
+		Schema: "public", Name: "v_old",
+		Definition: "SELECT id FROM t",
+	})
+	oldKey := "public.v_old"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v_new", &model.View{
+		Schema: "public", Name: "v_new", RenameFrom: &oldKey,
+		Definition: "SELECT id FROM t",
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	require.Len(t, result.CreateStmts, 1)
+	assert.Equal(t, "ALTER VIEW public.v_old RENAME TO v_new;", result.CreateStmts[0])
+}
+
+func TestDiffViews_renameWithAppendOnlyChangeKeepsRename(t *testing.T) {
+	// Rename + append-only change uses CREATE OR REPLACE (not DROP+CREATE).
+	// The rename has to survive, then the in-place replace updates the body.
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v_old", &model.View{
+		Schema: "public", Name: "v_old",
+		Definition: "SELECT id FROM t",
+	})
+	oldKey := "public.v_old"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v_new", &model.View{
+		Schema: "public", Name: "v_new", RenameFrom: &oldKey,
+		Definition: "SELECT id, name FROM t",
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	require.Len(t, result.CreateStmts, 2)
+	assert.Equal(t, "ALTER VIEW public.v_old RENAME TO v_new;", result.CreateStmts[0])
+	assert.Contains(t, result.CreateStmts[1], "CREATE OR REPLACE VIEW public.v_new")
+}
+
 func TestDiffViews_columnRemovedTriggersDropCreate(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.v", &model.View{
