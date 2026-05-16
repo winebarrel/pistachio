@@ -595,18 +595,20 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				needsDropCreate = true
 			}
 			if needsDropCreate {
+				// When the view was also renamed, drop the old name —
+				// the database still has it because the ALTER RENAME
+				// was suppressed above. Computed before the drop-policy
+				// branch so the skipped-DROP comment matches the
+				// relation that actually exists.
+				dropName := k
+				if oldKey, renamed := renamedFrom[k]; renamed {
+					dropName = oldKey
+				}
 				// Materialized views or type changes (VIEW ↔ MATERIALIZED VIEW)
 				// require DROP and recreate. Only proceed if drops are allowed;
 				// otherwise emit a commented DROP for visibility (no CREATE,
 				// since recreation requires the drop).
 				if dc.IsDropAllowed("view") {
-					// When the view was also renamed, drop the old name —
-					// the database still has it because the ALTER RENAME
-					// was suppressed above.
-					dropName := k
-					if oldKey, renamed := renamedFrom[k]; renamed {
-						dropName = oldKey
-					}
 					if currentView.Materialized {
 						result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+dropName+";")
 					} else {
@@ -628,9 +630,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					recreated[k] = true
 				} else {
 					if currentView.Materialized {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP MATERIALIZED VIEW "+k+";")
+						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP MATERIALIZED VIEW "+dropName+";")
 					} else {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP VIEW "+k+";")
+						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP VIEW "+dropName+";")
 					}
 					recreateDenied[k] = true
 				}

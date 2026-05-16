@@ -1268,6 +1268,31 @@ func TestDiffViews_renameWithoutDefinitionChangeKeepsRename(t *testing.T) {
 	assert.Equal(t, "ALTER VIEW public.v_old RENAME TO v_new;", result.CreateStmts[0])
 }
 
+func TestDiffViews_renamePlusRecreateDropDeniedSkipsOldName(t *testing.T) {
+	// Mirror of the executable-drop fix for the denied-drop branch:
+	// when --allow-drop forbids the view drop, the `-- skipped:` comment
+	// has to point at the relation that actually exists (the old name),
+	// not the renamed-but-not-yet-applied new name.
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v_old", &model.View{
+		Schema: "public", Name: "v_old",
+		Definition: "SELECT id, slug FROM t",
+	})
+	oldKey := "public.v_old"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v_new", &model.View{
+		Schema: "public", Name: "v_new", RenameFrom: &oldKey,
+		Definition: "SELECT id FROM t",
+	})
+
+	result, err := DiffViews(current, desired, denyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.CreateStmts)
+	require.Len(t, result.DisallowedDropStmts, 1)
+	assert.Equal(t, "-- skipped: DROP VIEW public.v_old;", result.DisallowedDropStmts[0])
+}
+
 func TestDiffViews_renameWithAppendOnlyChangeKeepsRename(t *testing.T) {
 	// Rename + append-only change uses CREATE OR REPLACE (not DROP+CREATE).
 	// The rename has to survive, then the in-place replace updates the body.
