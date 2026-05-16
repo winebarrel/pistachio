@@ -1185,6 +1185,36 @@ func TestCanCreateOrReplaceView(t *testing.T) {
 	}
 }
 
+func TestViewOutputColumns_NegativePaths(t *testing.T) {
+	// Direct table-driven coverage for viewOutputColumns /
+	// selectOutputColumns input forms that canCreateOrReplaceView only
+	// hits incidentally — locking the ok=false branches against future
+	// refactors and trimming the patch's uncovered-line count.
+	tests := []struct {
+		name string
+		body string
+	}{
+		// pg_query accepts a bare `SELECT` (no target list) without
+		// reporting a syntax error, producing a SelectStmt with an
+		// empty TargetList. The function must reject it so callers
+		// fall back to DROP+CREATE.
+		{"empty TargetList", "SELECT"},
+		// SELECT * is unanalyzable: until the catalog expands the star
+		// to real column names there's no list to compare against.
+		{"SELECT *", "SELECT * FROM t"},
+		// Computed expression with no alias has no stable output name.
+		{"bare expression target", "SELECT a + b FROM t"},
+		// Parse failures short-circuit early.
+		{"parse error", "this is not SQL"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ok := viewOutputColumns(tc.body)
+			assert.False(t, ok)
+		})
+	}
+}
+
 func TestDiffViews_columnRemovedTriggersDropCreate(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.v", &model.View{
