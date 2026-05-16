@@ -1,0 +1,25 @@
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      legacy text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, name, legacy FROM public.users;
+  COMMENT ON VIEW public.active_users IS 'Active users only';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, name FROM public.users;
+  COMMENT ON VIEW public.active_users IS 'Active users only';
+plan: |
+  DROP VIEW public.active_users;
+  ALTER TABLE public.users DROP COLUMN legacy;
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT id, name FROM public.users;
+  COMMENT ON VIEW public.active_users IS 'Active users only';

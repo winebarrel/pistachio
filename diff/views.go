@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
@@ -54,6 +55,110 @@ func equalViewDef(current, desired string) bool {
 		return current == desired
 	}
 	return curStr == desStr
+}
+
+// canCreateOrReplaceView reports whether a view definition change can be
+// expressed as CREATE OR REPLACE VIEW. PostgreSQL requires the new query to
+// produce columns with the same names in the same order as the existing
+// view; only appending new columns at the end is allowed. Removing,
+// renaming, reordering, or replacing a column makes CREATE OR REPLACE fail
+// with `cannot drop columns from view` (or a similar error), so the caller
+// must use DROP + CREATE in that case.
+//
+// Returns false when either side's output columns can't be determined
+// statically (SELECT *, target-list expressions without an alias, parse
+// error). That conservatively routes uncertain cases through DROP +
+// CREATE, which always works at the cost of briefly dropping privileges /
+// dependent views — strictly better than leaving the bug in place.
+//
+// Known limitation: type-only changes on a same-named column (e.g.
+// `SELECT n FROM t` → `SELECT n::bigint AS n FROM t`) are reported as
+// CREATE-OR-REPLACE-able because the names line up, but PostgreSQL still
+// rejects them with `cannot change data type of view column`. pg_query
+// doesn't perform type inference, so we can't detect this statically;
+// users who hit it can resolve manually by adjusting the source DDL or
+// dropping the view in a pre-step.
+func canCreateOrReplaceView(current, desired string) bool {
+	curCols, curOK := viewOutputColumns(current)
+	desCols, desOK := viewOutputColumns(desired)
+	if !curOK || !desOK {
+		return false
+	}
+	if len(desCols) < len(curCols) {
+		return false
+	}
+	for i, name := range curCols {
+		if desCols[i] != name {
+			return false
+		}
+	}
+	return true
+}
+
+// viewOutputColumns parses a view definition's SELECT body and returns the
+// ordered list of output column names. Returns ok=false when any column
+// can't be named statically (SELECT *, t.*, or an expression target
+// without an alias) or when parsing fails.
+func viewOutputColumns(definition string) (cols []string, ok bool) {
+	def := strings.TrimSpace(definition)
+	def = strings.TrimSuffix(def, ";")
+	result, err := pg_query.Parse("CREATE VIEW _v AS " + def)
+	if err != nil || len(result.Stmts) != 1 {
+		return nil, false
+	}
+	vs := result.Stmts[0].Stmt.GetViewStmt()
+	if vs == nil || vs.Query == nil {
+		return nil, false
+	}
+	return selectOutputColumns(vs.Query)
+}
+
+// selectOutputColumns walks a SelectStmt and returns the ordered names of
+// its top-level target list. For UNION / INTERSECT / EXCEPT it recurses
+// into the left arm, since PostgreSQL inherits set-operation result names
+// from the first SELECT.
+func selectOutputColumns(node *pg_query.Node) ([]string, bool) {
+	ss := node.GetSelectStmt()
+	if ss == nil {
+		return nil, false
+	}
+	if ss.Op != pg_query.SetOperation_SETOP_NONE {
+		if ss.Larg == nil {
+			return nil, false
+		}
+		return selectOutputColumns(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}})
+	}
+	if len(ss.TargetList) == 0 {
+		return nil, false
+	}
+	names := make([]string, 0, len(ss.TargetList))
+	for _, t := range ss.TargetList {
+		rt := t.GetResTarget()
+		if rt == nil {
+			return nil, false
+		}
+		if rt.Name != "" {
+			names = append(names, rt.Name)
+			continue
+		}
+		if rt.Val == nil {
+			return nil, false
+		}
+		cr := rt.Val.GetColumnRef()
+		if cr == nil || len(cr.Fields) == 0 {
+			return nil, false
+		}
+		last := cr.Fields[len(cr.Fields)-1]
+		if last.GetAStar() != nil {
+			return nil, false
+		}
+		s := last.GetString_()
+		if s == nil {
+			return nil, false
+		}
+		names = append(names, s.Sval)
+	}
+	return names, true
 }
 
 // normalizeSelectExprs walks a SELECT statement (and any nested
@@ -410,11 +515,10 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	result := &ViewDiffResult{}
 
 	// Detect renames
-	renameStmts, current, err := detectViewRenames(current, desired)
+	renameStmts, current, renamedFrom, err := detectViewRenames(current, desired)
 	if err != nil {
 		return nil, err
 	}
-	result.CreateStmts = append(result.CreateStmts, renameStmts...)
 
 	// Track views that are recreated (DROP+CREATE) so comments can be re-applied.
 	recreated := make(map[string]bool)
@@ -422,6 +526,44 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	// skip the executable comment diff too, so the output reflects "nothing
 	// executable" rather than emitting half of the intended change.
 	recreateDenied := make(map[string]bool)
+	// A renamed view that ALSO needs DROP+CREATE (e.g. its column list is
+	// changing) must not go through the ALTER ... RENAME path: that
+	// statement is sequenced with CreateStmts, after DropStmts, so by
+	// the time it runs the executable DROP has already failed against
+	// the old name. Track these so the rename statement is dropped
+	// and the DROP statement uses the old name instead.
+	needsRecreateRenamed := map[string]bool{}
+	for newKey := range renamedFrom {
+		desiredView, dok := desired.GetOk(newKey)
+		currentView, cok := current.GetOk(newKey)
+		if !dok || !cok {
+			continue
+		}
+		if currentView.Materialized != desiredView.Materialized {
+			needsRecreateRenamed[newKey] = true
+			continue
+		}
+		if !equalViewDef(currentView.Definition, desiredView.Definition) {
+			if desiredView.Materialized || !canCreateOrReplaceView(currentView.Definition, desiredView.Definition) {
+				needsRecreateRenamed[newKey] = true
+			}
+		}
+	}
+	for _, stmt := range renameStmts {
+		skip := false
+		for newKey := range needsRecreateRenamed {
+			oldKey := renamedFrom[newKey]
+			desiredView, _ := desired.GetOk(newKey)
+			needle := oldKey + " RENAME TO " + model.Ident(desiredView.Name) + ";"
+			if strings.Contains(stmt, needle) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			result.CreateStmts = append(result.CreateStmts, stmt)
+		}
+	}
 
 	// New or modified views (CREATE OR REPLACE / recreate for materialized)
 	for k, desiredView := range desired.All() {
@@ -443,17 +585,34 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				}
 			}
 		} else if !equalViewDef(currentView.Definition, desiredView.Definition) || currentView.Materialized != desiredView.Materialized {
+			// Materialized views always need DROP+CREATE; VIEW↔MATVIEW
+			// switches do too. Regular view definition changes prefer
+			// CREATE OR REPLACE — but PostgreSQL rejects it when the new
+			// query removes, renames, or reorders an existing output
+			// column, so detect that case and fall back to DROP+CREATE.
 			needsDropCreate := desiredView.Materialized || currentView.Materialized != desiredView.Materialized
+			if !needsDropCreate && !canCreateOrReplaceView(currentView.Definition, desiredView.Definition) {
+				needsDropCreate = true
+			}
 			if needsDropCreate {
+				// When the view was also renamed, drop the old name —
+				// the database still has it because the ALTER RENAME
+				// was suppressed above. Computed before the drop-policy
+				// branch so the skipped-DROP comment matches the
+				// relation that actually exists.
+				dropName := k
+				if oldKey, renamed := renamedFrom[k]; renamed {
+					dropName = oldKey
+				}
 				// Materialized views or type changes (VIEW ↔ MATERIALIZED VIEW)
 				// require DROP and recreate. Only proceed if drops are allowed;
 				// otherwise emit a commented DROP for visibility (no CREATE,
 				// since recreation requires the drop).
 				if dc.IsDropAllowed("view") {
 					if currentView.Materialized {
-						result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+k+";")
+						result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+dropName+";")
 					} else {
-						result.DropStmts = append(result.DropStmts, "DROP VIEW "+k+";")
+						result.DropStmts = append(result.DropStmts, "DROP VIEW "+dropName+";")
 					}
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 					if desiredView.Materialized && desiredView.Indexes != nil {
@@ -471,9 +630,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					recreated[k] = true
 				} else {
 					if currentView.Materialized {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP MATERIALIZED VIEW "+k+";")
+						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP MATERIALIZED VIEW "+dropName+";")
 					} else {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP VIEW "+k+";")
+						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP VIEW "+dropName+";")
 					}
 					recreateDenied[k] = true
 				}

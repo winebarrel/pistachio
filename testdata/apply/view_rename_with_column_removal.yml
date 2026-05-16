@@ -1,0 +1,41 @@
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      slug text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v_old AS SELECT id, slug FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      slug text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+  -- pista:renamed-from public.v_old
+  CREATE VIEW public.v_new AS SELECT id FROM public.t;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      slug text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+
+  -- public.v_new
+  CREATE OR REPLACE VIEW public.v_new AS
+  SELECT t.id
+     FROM t;
+applied_pg16: &applied_pg16plus |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      slug text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+
+  -- public.v_new
+  CREATE OR REPLACE VIEW public.v_new AS
+  SELECT id
+     FROM t;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

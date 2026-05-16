@@ -1078,3 +1078,298 @@ func TestDiffViews_modifyMatviewWithIndex_perIndexDirective(t *testing.T) {
 	assert.Contains(t, result.CreateStmts[0], "CREATE MATERIALIZED VIEW")
 	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_mv_n ON public.mv USING btree (n);", result.CreateStmts[1])
 }
+
+func TestCanCreateOrReplaceView(t *testing.T) {
+	tests := []struct {
+		name    string
+		current string
+		desired string
+		want    bool
+	}{
+		{
+			name:    "identical column list",
+			current: "SELECT id, name FROM t",
+			desired: "SELECT id, name FROM t WHERE active",
+			want:    true,
+		},
+		{
+			name:    "append column at end (allowed by PG)",
+			current: "SELECT id, name FROM t",
+			desired: "SELECT id, name, email FROM t",
+			want:    true,
+		},
+		{
+			name:    "remove column",
+			current: "SELECT id, name FROM t",
+			desired: "SELECT id FROM t",
+			want:    false,
+		},
+		{
+			name:    "rename column via alias",
+			current: "SELECT id, name FROM t",
+			desired: "SELECT id, name AS display FROM t",
+			want:    false,
+		},
+		{
+			name:    "reorder columns",
+			current: "SELECT id, name FROM t",
+			desired: "SELECT name, id FROM t",
+			want:    false,
+		},
+		{
+			name:    "desired uses SELECT * (cannot analyze → safer DROP+CREATE)",
+			current: "SELECT id FROM t",
+			desired: "SELECT * FROM t",
+			want:    false,
+		},
+		{
+			name:    "current is a UNION (first SELECT decides column names)",
+			current: "SELECT id, name FROM t1 UNION SELECT id, name FROM t2",
+			desired: "SELECT id, name FROM t1 UNION SELECT id, name FROM t2 WHERE active",
+			want:    true,
+		},
+		{
+			name:    "expression without alias (unanalyzable)",
+			current: "SELECT id, length(name) FROM t",
+			desired: "SELECT id, upper(name) FROM t",
+			want:    false,
+		},
+		{
+			name:    "parse error on one side",
+			current: "SELECT id FROM t",
+			desired: "NOT A VIEW",
+			want:    false,
+		},
+		{
+			name:    "CTE in view body (outer SELECT decides)",
+			current: "WITH c AS (SELECT id FROM t) SELECT id FROM c",
+			desired: "WITH c AS (SELECT id, name FROM t) SELECT id FROM c",
+			want:    true,
+		},
+		{
+			name:    "INTERSECT (first SELECT decides)",
+			current: "SELECT id FROM t INTERSECT SELECT id FROM u",
+			desired: "SELECT id FROM t WHERE active INTERSECT SELECT id FROM u",
+			want:    true,
+		},
+		{
+			name:    "EXCEPT (first SELECT decides)",
+			current: "SELECT id FROM t EXCEPT SELECT id FROM u",
+			desired: "SELECT id, name FROM t EXCEPT SELECT id, name FROM u",
+			want:    true,
+		},
+		{
+			name:    "aliased expression keeps the alias as the column name",
+			current: "SELECT a + b AS sum FROM t",
+			desired: "SELECT a + b + 1 AS sum FROM t",
+			want:    true,
+		},
+		{
+			name:    "table-qualified column resolves to bare name",
+			current: "SELECT t.id, name FROM t",
+			desired: "SELECT id, name FROM t",
+			want:    true,
+		},
+		{
+			name:    "t.* (unanalyzable)",
+			current: "SELECT id FROM t",
+			desired: "SELECT t.* FROM t",
+			want:    false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := canCreateOrReplaceView(tc.current, tc.desired)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestViewOutputColumns_NegativePaths(t *testing.T) {
+	// Direct table-driven coverage for viewOutputColumns /
+	// selectOutputColumns input forms that canCreateOrReplaceView only
+	// hits incidentally — locking the ok=false branches against future
+	// refactors and trimming the patch's uncovered-line count.
+	tests := []struct {
+		name string
+		body string
+	}{
+		// pg_query accepts a bare `SELECT` (no target list) without
+		// reporting a syntax error, producing a SelectStmt with an
+		// empty TargetList. The function must reject it so callers
+		// fall back to DROP+CREATE.
+		{"empty TargetList", "SELECT"},
+		// SELECT * is unanalyzable: until the catalog expands the star
+		// to real column names there's no list to compare against.
+		{"SELECT *", "SELECT * FROM t"},
+		// Computed expression with no alias has no stable output name.
+		{"bare expression target", "SELECT a + b FROM t"},
+		// Parse failures short-circuit early.
+		{"parse error", "this is not SQL"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ok := viewOutputColumns(tc.body)
+			assert.False(t, ok)
+		})
+	}
+}
+
+func TestDiffViews_renamePlusRecreateDropsOldNameAndSkipsRename(t *testing.T) {
+	// A view that is both renamed AND has a column-shape change needs
+	// DROP+CREATE. The DROP has to target the old name (the DB hasn't
+	// renamed yet) and the ALTER RENAME must be suppressed — otherwise
+	// the apply runs `DROP VIEW <new name>` first (no such view) and
+	// fails before the rename can move the row.
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v_old", &model.View{
+		Schema: "public", Name: "v_old",
+		Definition: "SELECT id, slug FROM t",
+	})
+	oldKey := "public.v_old"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v_new", &model.View{
+		Schema: "public", Name: "v_new", RenameFrom: &oldKey,
+		Definition: "SELECT id FROM t",
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.DropStmts, 1)
+	assert.Equal(t, "DROP VIEW public.v_old;", result.DropStmts[0])
+	require.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW public.v_new")
+	// Sanity: no stray ALTER VIEW ... RENAME in the plan.
+	for _, s := range result.CreateStmts {
+		assert.NotContains(t, s, "RENAME TO")
+	}
+}
+
+func TestDiffViews_renameWithoutDefinitionChangeKeepsRename(t *testing.T) {
+	// Pure rename (definition unchanged) must still emit ALTER RENAME —
+	// the new behavior only suppresses the rename when DROP+CREATE is
+	// also required.
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v_old", &model.View{
+		Schema: "public", Name: "v_old",
+		Definition: "SELECT id FROM t",
+	})
+	oldKey := "public.v_old"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v_new", &model.View{
+		Schema: "public", Name: "v_new", RenameFrom: &oldKey,
+		Definition: "SELECT id FROM t",
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	require.Len(t, result.CreateStmts, 1)
+	assert.Equal(t, "ALTER VIEW public.v_old RENAME TO v_new;", result.CreateStmts[0])
+}
+
+func TestDiffViews_renamePlusRecreateDropDeniedSkipsOldName(t *testing.T) {
+	// Mirror of the executable-drop fix for the denied-drop branch:
+	// when --allow-drop forbids the view drop, the `-- skipped:` comment
+	// has to point at the relation that actually exists (the old name),
+	// not the renamed-but-not-yet-applied new name.
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v_old", &model.View{
+		Schema: "public", Name: "v_old",
+		Definition: "SELECT id, slug FROM t",
+	})
+	oldKey := "public.v_old"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v_new", &model.View{
+		Schema: "public", Name: "v_new", RenameFrom: &oldKey,
+		Definition: "SELECT id FROM t",
+	})
+
+	result, err := DiffViews(current, desired, denyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.CreateStmts)
+	require.Len(t, result.DisallowedDropStmts, 1)
+	assert.Equal(t, "-- skipped: DROP VIEW public.v_old;", result.DisallowedDropStmts[0])
+}
+
+func TestDiffViews_renameWithAppendOnlyChangeKeepsRename(t *testing.T) {
+	// Rename + append-only change uses CREATE OR REPLACE (not DROP+CREATE).
+	// The rename has to survive, then the in-place replace updates the body.
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v_old", &model.View{
+		Schema: "public", Name: "v_old",
+		Definition: "SELECT id FROM t",
+	})
+	oldKey := "public.v_old"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v_new", &model.View{
+		Schema: "public", Name: "v_new", RenameFrom: &oldKey,
+		Definition: "SELECT id, name FROM t",
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	require.Len(t, result.CreateStmts, 2)
+	assert.Equal(t, "ALTER VIEW public.v_old RENAME TO v_new;", result.CreateStmts[0])
+	assert.Contains(t, result.CreateStmts[1], "CREATE OR REPLACE VIEW public.v_new")
+}
+
+func TestDiffViews_columnRemovedTriggersDropCreate(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v", &model.View{
+		Schema: "public", Name: "v",
+		Definition: "SELECT id, slug FROM t",
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v", &model.View{
+		Schema: "public", Name: "v",
+		Definition: "SELECT id FROM t",
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.DropStmts, 1)
+	assert.Equal(t, "DROP VIEW public.v;", result.DropStmts[0])
+	require.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "SELECT id FROM t")
+}
+
+func TestDiffViews_columnAppendedKeepsCreateOrReplace(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v", &model.View{
+		Schema: "public", Name: "v",
+		Definition: "SELECT id FROM t",
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v", &model.View{
+		Schema: "public", Name: "v",
+		Definition: "SELECT id, name FROM t",
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	require.Len(t, result.CreateStmts, 1)
+	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW")
+}
+
+func TestDiffViews_columnRemovedDropDeniedFallsBackToCommented(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v", &model.View{
+		Schema: "public", Name: "v",
+		Definition: "SELECT id, slug FROM t",
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v", &model.View{
+		Schema: "public", Name: "v",
+		Definition: "SELECT id FROM t",
+	})
+
+	result, err := DiffViews(current, desired, denyAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.CreateStmts)
+	assert.Equal(t, []string{"-- skipped: DROP VIEW public.v;"}, result.DisallowedDropStmts)
+}

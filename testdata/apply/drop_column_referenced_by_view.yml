@@ -1,0 +1,47 @@
+init: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text NOT NULL,
+      updated_at timestamp NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.posts_summary AS
+      SELECT id, title, updated_at FROM public.posts;
+desired: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.posts_summary AS
+      SELECT id, title FROM public.posts;
+applied: |
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  -- public.posts_summary
+  CREATE OR REPLACE VIEW public.posts_summary AS
+  SELECT posts.id,
+      posts.title
+     FROM posts;
+applied_pg16: &applied_pg16plus |
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  -- public.posts_summary
+  CREATE OR REPLACE VIEW public.posts_summary AS
+  SELECT id,
+      title
+     FROM posts;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus
+drop_policy:
+  allow_drop: [all]

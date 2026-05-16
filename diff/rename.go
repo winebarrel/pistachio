@@ -151,9 +151,10 @@ func updateIndexTableName(def string, newTableName string) (string, error) {
 }
 
 // detectViewRenames finds desired views with RenameFrom that match a current view.
-func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([]string, *orderedmap.Map[string, *model.View], error) {
+func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([]string, *orderedmap.Map[string, *model.View], map[string]string, error) {
 	var stmts []string
 	adjusted := cloneMap(current)
+	renamedFrom := map[string]string{}
 
 	for newKey, desiredView := range desired.All() {
 		if desiredView.RenameFrom == nil {
@@ -170,21 +171,21 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 			if _, exists := adjusted.GetOk(newKey); exists {
 				continue
 			}
-			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
+			return nil, nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
 		if oldKey != newKey {
 			if _, exists := adjusted.GetOk(newKey); exists {
-				return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
+				return nil, nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 			}
 		}
 
 		if oldView.Schema != desiredView.Schema {
-			return nil, nil, fmt.Errorf("cannot rename %s to %s: cross-schema rename is not supported", oldKey, newKey)
+			return nil, nil, nil, fmt.Errorf("cannot rename %s to %s: cross-schema rename is not supported", oldKey, newKey)
 		}
 
 		if oldView.Materialized != desiredView.Materialized {
-			return nil, nil, fmt.Errorf("cannot rename %s to %s: view type mismatch (cannot rename between VIEW and MATERIALIZED VIEW)", oldKey, newKey)
+			return nil, nil, nil, fmt.Errorf("cannot rename %s to %s: view type mismatch (cannot rename between VIEW and MATERIALIZED VIEW)", oldKey, newKey)
 		}
 
 		objType := "VIEW"
@@ -197,9 +198,10 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 		renamed := *oldView
 		renamed.Name = desiredView.Name
 		adjusted.Set(newKey, &renamed)
+		renamedFrom[newKey] = oldKey
 	}
 
-	return stmts, adjusted, nil
+	return stmts, adjusted, renamedFrom, nil
 }
 
 // detectColumnRenames finds desired columns with RenameFrom that match a current column.

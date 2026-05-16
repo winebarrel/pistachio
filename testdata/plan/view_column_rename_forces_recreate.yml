@@ -1,0 +1,20 @@
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.users_view AS SELECT id, name FROM public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.users_view AS SELECT id, name AS display_name FROM public.users;
+plan: |
+  DROP VIEW public.users_view;
+  CREATE OR REPLACE VIEW public.users_view AS
+  SELECT id, name AS display_name FROM public.users;

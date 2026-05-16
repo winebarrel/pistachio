@@ -1,0 +1,26 @@
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      name text,
+      legacy text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v_shrink AS SELECT id, name, legacy FROM public.t;
+  CREATE VIEW public.v_extend AS SELECT id FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      name text,
+      legacy text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v_shrink AS SELECT id, name FROM public.t;
+  CREATE VIEW public.v_extend AS SELECT id, name FROM public.t;
+plan: |
+  DROP VIEW public.v_shrink;
+  CREATE OR REPLACE VIEW public.v_extend AS
+  SELECT id, name FROM public.t;
+  CREATE OR REPLACE VIEW public.v_shrink AS
+  SELECT id, name FROM public.t;
