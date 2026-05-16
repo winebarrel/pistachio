@@ -1,0 +1,20 @@
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      occurred_at timestamp,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX events_occurred_idx ON public.events (occurred_at);
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+drop_policy:
+  allow_drop: [all]

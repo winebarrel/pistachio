@@ -162,7 +162,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		return result, nil
 	}
 
-	colStmts, colDisallowed, err := diffColumns(fqtn, current.Columns, desired.Columns, dc)
+	colStmts, colDropStmts, colDisallowed, err := diffColumns(fqtn, current.Columns, desired.Columns, dc)
 	if err != nil {
 		return nil, err
 	}
@@ -222,16 +222,33 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 
 	result.Stmts = append(result.Stmts, diffComments(current, desired)...)
 
+	// Column drops go last so dependent objects (UNIQUE/CHECK constraints,
+	// indexes, policies) are dropped first. PostgreSQL silently cascades
+	// single-column UNIQUE/CHECK constraints and dependent indexes when a
+	// column is dropped, which would make a later explicit DROP
+	// CONSTRAINT/INDEX fail with "does not exist". Policies referencing a
+	// dropped column block the DROP COLUMN entirely.
+	result.Stmts = append(result.Stmts, colDropStmts...)
+
 	return result, nil
 }
 
-func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) (stmts []string, disallowed []string, err error) {
+// diffColumns returns (stmts, dropStmts, disallowed, err). Adds, alters, and
+// renames go into stmts; pure drops (columns absent from desired) go into
+// dropStmts so the caller can sequence them after constraint/index/policy
+// drops on the same table — PostgreSQL auto-cascades single-column
+// UNIQUE/CHECK constraints and dependent indexes during DROP COLUMN, which
+// makes a later explicit DROP CONSTRAINT/INDEX fail with "does not exist".
+// Within dropStmts, generated columns are emitted before their potential
+// source columns so a paired drop (e.g. dropping both `body` and a stored
+// `word_count GENERATED ALWAYS AS (length(body))`) succeeds without CASCADE.
+func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) (stmts []string, dropStmts []string, disallowed []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames
 	renameStmts, current, err := detectColumnRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	stmts = append(stmts, renameStmts...)
 
@@ -248,7 +265,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 			cur := currentCol.Generated.IsStoredGeneratedColumn()
 			des := desiredCol.Generated.IsStoredGeneratedColumn()
 			if cur != des {
-				return nil, nil, fmt.Errorf("column %s.%s: cannot toggle GENERATED — DROP COLUMN + ADD COLUMN is required",
+				return nil, nil, nil, fmt.Errorf("column %s.%s: cannot toggle GENERATED — DROP COLUMN + ADD COLUMN is required",
 					fqtn, model.Ident(name))
 			}
 			if cur && des && exprChanged(currentCol.Default, desiredCol.Default) {
@@ -264,7 +281,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 				// cast change or a cast-target-type change on a GENERATED
 				// expression. equalSelectExpr keeps the asymmetric strip
 				// from #201 / #203 but no DEFAULT-style softening.
-				return nil, nil, fmt.Errorf("column %s.%s: cannot change GENERATED expression — DROP COLUMN + ADD COLUMN is required",
+				return nil, nil, nil, fmt.Errorf("column %s.%s: cannot change GENERATED expression — DROP COLUMN + ADD COLUMN is required",
 					fqtn, model.Ident(name))
 			}
 			stmts = append(stmts, alterColumnSQL(fqtn, currentCol, desiredCol)...)
@@ -272,19 +289,27 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 	}
 
 	// Drop removed columns. When the column-drop policy disallows it, emit
-	// the same DROP as a comment for visibility.
+	// the same DROP as a comment for visibility. Two passes: generated
+	// columns first so dropping them doesn't fail when their source column
+	// is also being dropped in the same batch.
 	colAllowed := dc.IsDropAllowed("column")
-	for name := range current.Keys() {
-		if _, ok := desired.GetOk(name); !ok {
+	for _, pass := range []bool{true, false} {
+		for name, col := range current.All() {
+			if _, ok := desired.GetOk(name); ok {
+				continue
+			}
+			if col.Generated.IsStoredGeneratedColumn() != pass {
+				continue
+			}
 			if colAllowed {
-				stmts = append(stmts, "ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
+				dropStmts = append(dropStmts, "ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
 			} else {
 				disallowed = append(disallowed, "-- skipped: ALTER TABLE "+fqtn+" DROP COLUMN "+model.Ident(name)+";")
 			}
 		}
 	}
 
-	return stmts, disallowed, nil
+	return stmts, dropStmts, disallowed, nil
 }
 
 func addColumnSQL(fqtn string, col *model.Column) string {

@@ -1,0 +1,23 @@
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      ts timestamp NOT NULL,
+      level text NOT NULL,
+      CONSTRAINT logs_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX logs_ts_level_idx ON public.logs (ts, level);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      ts timestamp NOT NULL,
+      CONSTRAINT logs_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      ts timestamp without time zone NOT NULL,
+      CONSTRAINT logs_pkey PRIMARY KEY (id)
+  );
+drop_policy:
+  allow_drop: [all]
