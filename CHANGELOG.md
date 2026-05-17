@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.10.3] - 2026-05-17
+
+* Bind `apply --with-tx` to the `$PISTA_WITH_TX` environment variable so it can be enabled from CI / shell config without passing the flag on every invocation. Aligns with the existing `$PISTA_BULK_ALTER` / `$PISTA_DISABLE_INDEX_CONCURRENTLY` env-tag pattern on the other apply bool flags.
+
 ## [1.10.2] - 2026-05-17
 
 * Emit `-- Transaction started` / `-- Transaction committed` / `-- Transaction rolled back` comments in `apply --with-tx` output so the transaction boundary is visible in the SQL stream. The CLI now also flushes buffered apply output when `client.Apply` returns an error, so partial DDL that ran before the failure plus the `-- Transaction rolled back` marker are surfaced to the user instead of being discarded with the error. Plain SQL keywords (`BEGIN` / `COMMIT` / `ROLLBACK`) were considered but rejected because they look like skipped statements; the comments are prose to disambiguate from emitted DDL. ([#229](https://github.com/winebarrel/pistachio/pull/229))
