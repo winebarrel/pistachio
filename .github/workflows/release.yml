@@ -15,7 +15,8 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - &checkout
+        name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
@@ -27,13 +28,13 @@ jobs:
             -e GITHUB_TOKEN \
             -v "$GITHUB_WORKSPACE:/src" \
             -w /src \
-            ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
+            "ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION}" \
             release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
 
   docker-build:
-    strategy:
+    strategy: &platform-strategy
       fail-fast: false
       matrix:
         include:
@@ -43,20 +44,20 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Prepare
+      - &prepare-platform
+        name: Prepare
         run: |
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - *checkout
+      - &setup-buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
       - id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ghcr.io/${{ github.repository }}
-      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+      - &login-ghcr
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -69,7 +70,8 @@ jobs:
           outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             PISTA_VERSION=${{ github.ref_name }}
-      - name: Export digest
+      - &export-digest
+        name: Export digest
         run: |
           mkdir -p "${{ runner.temp }}/digests"
           digest="${{ steps.build.outputs.digest }}"
@@ -93,19 +95,16 @@ jobs:
           path: ${{ runner.temp }}/digests
           pattern: digests-*
           merge-multiple: true
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - *setup-buildx
       - id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ghcr.io/${{ github.repository }}
-      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - *login-ghcr
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
+          # shellcheck disable=SC2046  # intentional word splitting to pass each -t flag and digest as separate args
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
@@ -114,34 +113,17 @@ jobs:
           docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
 
   docker-demo-build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-latest
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
+    strategy: *platform-strategy
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Prepare
-        run: |
-          platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - *prepare-platform
+      - *checkout
+      - *setup-buildx
       - id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ghcr.io/${{ github.repository }}-demo
-      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - *login-ghcr
       - id: build
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
@@ -151,11 +133,7 @@ jobs:
           outputs: type=image,name=ghcr.io/${{ github.repository }}-demo,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             PISTA_VERSION=${{ github.ref_name }}
-      - name: Export digest
-        run: |
-          mkdir -p "${{ runner.temp }}/digests"
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+      - *export-digest
       - name: Upload digest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -175,19 +153,16 @@ jobs:
           path: ${{ runner.temp }}/digests
           pattern: demo-digests-*
           merge-multiple: true
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - *setup-buildx
       - id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ghcr.io/${{ github.repository }}-demo
-      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - *login-ghcr
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
+          # shellcheck disable=SC2046  # intentional word splitting to pass each -t flag and digest as separate args
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf 'ghcr.io/${{ github.repository }}-demo@sha256:%s ' *)
