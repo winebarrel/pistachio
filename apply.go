@@ -18,7 +18,7 @@ type ApplyOptions struct {
 	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PISTA_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
 	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL" help:"SQL to execute before CONCURRENTLY index operations (e.g. SET lock_timeout). Only run when the diff includes CONCURRENTLY index DDL; runs outside any transaction."`
 	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to execute before CONCURRENTLY index operations."`
-	WithTx                   bool     `help:"Execute the pre-SQL and schema changes in a transaction."`
+	WithTx                   bool     `env:"PISTA_WITH_TX" help:"Execute the pre-SQL and schema changes in a transaction."`
 	DisableIndexConcurrently bool     `env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore all CONCURRENTLY opt-ins (both -- pista:concurrently directives and inline CREATE/DROP INDEX CONCURRENTLY) and emit plain CREATE/DROP INDEX."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs are kept separate."`
 }
