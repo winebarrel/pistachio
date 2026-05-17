@@ -76,10 +76,24 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		if err != nil {
 			return nil, fmt.Errorf("failed to begin transaction: %w", err)
 		}
-		defer tx.Rollback(ctx) //nolint:errcheck
+		fmt.Fprintln(w, "-- Transaction started") //nolint:errcheck
+		committed := false
+		defer func() {
+			tx.Rollback(ctx) //nolint:errcheck
+			if !committed {
+				fmt.Fprintln(w, "-- Transaction rolled back") //nolint:errcheck
+			}
+		}()
 		exec = tx.Exec
 		queryRow = tx.QueryRow
-		commit = tx.Commit
+		commit = func(ctx context.Context) error {
+			if err := tx.Commit(ctx); err != nil {
+				return err
+			}
+			committed = true
+			fmt.Fprintln(w, "-- Transaction committed") //nolint:errcheck
+			return nil
+		}
 	}
 
 	if result.PreSQL != "" {

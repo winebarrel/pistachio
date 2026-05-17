@@ -57,6 +57,42 @@ func TestApply_Run_Error(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestApply_Run_WithTx_FlushesBufferOnError(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	tmpDir := t.TempDir()
+	desiredFile := filepath.Join(tmpDir, "desired.sql")
+	preSQLFile := filepath.Join(tmpDir, "pre.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+	require.NoError(t, os.WriteFile(preSQLFile, []byte(`SELECT * FROM public.missing_table;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{
+		Files:      []string{desiredFile},
+		PreSQLFile: preSQLFile,
+		WithTx:     true,
+	}}
+	err := cmd.Run(ctx, client, &buf)
+	require.Error(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "-- Transaction started")
+	assert.Contains(t, out, "-- Transaction rolled back")
+	assert.NotContains(t, out, "-- Transaction committed")
+}
+
 func TestApply_Run_NoChanges(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
