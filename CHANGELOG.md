@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.10.2] - 2026-05-17
+
+* Emit `-- Transaction started` / `-- Transaction committed` / `-- Transaction rolled back` comments in `apply --with-tx` output so the transaction boundary is visible in the SQL stream. The CLI now also flushes buffered apply output when `client.Apply` returns an error, so partial DDL that ran before the failure plus the `-- Transaction rolled back` marker are surfaced to the user instead of being discarded with the error. Plain SQL keywords (`BEGIN` / `COMMIT` / `ROLLBACK`) were considered but rejected because they look like skipped statements; the comments are prose to disambiguate from emitted DDL. ([#229](https://github.com/winebarrel/pistachio/pull/229))
+
 ## [1.10.1] - 2026-05-17
 
 * Make `--no-pager` negatable: the flag is now `--[no-]pager`, and `--pager` forces paging on even when stdout is not a TTY. Useful when stdout is piped into a tool that itself expects pager-style output (syntax highlighter, etc.) where the auto TTY check would otherwise short-circuit. `PISTA_PAGER` is still the source of truth for *which* command to run, so `--pager` with an unset `PISTA_PAGER` remains a no-op. Internally `command.StartPager` now takes `*bool` (`nil` = auto / TTY check, `true` = force, `false` = disable) instead of a plain `bool`.
