@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.10.3] - 2026-05-17
+## [1.10.4] - 2026-05-17
 
 * Bind `apply --with-tx` to the `$PISTA_WITH_TX` environment variable so it can be enabled from CI / shell config without passing the flag on every invocation. Aligns with the existing `$PISTA_BULK_ALTER` / `$PISTA_DISABLE_INDEX_CONCURRENTLY` env-tag pattern on the other apply bool flags.
 
