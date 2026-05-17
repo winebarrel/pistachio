@@ -17,6 +17,9 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 	var buf bytes.Buffer
 	result, err := client.Apply(ctx, &cmd.ApplyOptions, &buf)
 	if err != nil {
+		// Flush any partial output (e.g. transaction-state comments and SQL
+		// that ran before the error) so the user can see what happened.
+		w.Write(buf.Bytes()) //nolint:errcheck
 		return err
 	}
 

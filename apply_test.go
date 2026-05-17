@@ -262,12 +262,18 @@ SELECT * FROM public.missing_table;`), 0o644))
 		Schemas:    []string{"public"},
 	})
 
+	var buf bytes.Buffer
 	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 		WithTx:     true,
-	}, io.Discard)
+	}, &buf)
 	require.Error(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "-- Transaction started")
+	assert.Contains(t, out, "-- Transaction rolled back")
+	assert.NotContains(t, out, "-- Transaction committed")
 
 	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, dumpErr)
@@ -297,16 +303,79 @@ func TestApply_WithTx_Success(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
+	var buf bytes.Buffer
 	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 		WithTx:     true,
-	}, io.Discard)
+	}, &buf)
 	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "-- Transaction started")
+	assert.Contains(t, out, "-- Transaction committed")
+	assert.NotContains(t, out, "-- Transaction rolled back")
 
 	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, dumpErr)
 	assert.Contains(t, got.String(), "CREATE TABLE public.users")
+}
+
+func TestApply_WithTx_NoChanges_OmitsTransactionComments(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}, WithTx: true}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.NotContains(t, out, "-- Transaction started")
+	assert.NotContains(t, out, "-- Transaction committed")
+	assert.NotContains(t, out, "-- Transaction rolled back")
+}
+
+func TestApply_NoWithTx_OmitsTransactionComments(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.NotContains(t, out, "-- Transaction started")
+	assert.NotContains(t, out, "-- Transaction committed")
+	assert.NotContains(t, out, "-- Transaction rolled back")
 }
 
 func TestApply_ExecuteWithCheck_Executes(t *testing.T) {
