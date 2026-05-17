@@ -21,13 +21,14 @@ func TestStartPager_NoPagerFlag(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := command.StartPager(f, true)
+	disabled := false
+	w, closer, err := command.StartPager(f, &disabled)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
 	defer closer()
 	if w != io.Writer(f) {
-		t.Fatalf("noPager=true should return writer unchanged, got %T", w)
+		t.Fatalf("pager=false should return writer unchanged, got %T", w)
 	}
 }
 
@@ -37,7 +38,7 @@ func TestStartPager_NonFileWriter(t *testing.T) {
 	defer restore()
 
 	var buf bytes.Buffer
-	w, closer, err := command.StartPager(&buf, false)
+	w, closer, err := command.StartPager(&buf, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -58,13 +59,59 @@ func TestStartPager_NotATerminal(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := command.StartPager(f, false)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
 	defer closer()
 	if w != io.Writer(f) {
 		t.Fatalf("non-TTY writer should be returned unchanged")
+	}
+}
+
+func TestStartPager_ForcedSkipsTTYCheck(t *testing.T) {
+	// --pager forces paging even when stdout is not a TTY.
+	t.Setenv("PISTA_PAGER", "cat")
+	restore := command.SetIsTerminalForTest(func(*os.File) bool { return false })
+	defer restore()
+
+	f, err := os.CreateTemp(t.TempDir(), "out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+
+	forced := true
+	w, closer, err := command.StartPager(f, &forced)
+	if err != nil {
+		t.Fatalf("StartPager: %v", err)
+	}
+	defer closer()
+	if w == io.Writer(f) {
+		t.Fatalf("forced pager should wrap writer even when not a TTY")
+	}
+}
+
+func TestStartPager_ForcedButEnvUnset(t *testing.T) {
+	// --pager with PISTA_PAGER unset still does nothing — env gates everything.
+	t.Setenv("PISTA_PAGER", "")
+	restore := command.SetIsTerminalForTest(func(*os.File) bool { return false })
+	defer restore()
+
+	f, err := os.CreateTemp(t.TempDir(), "out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+
+	forced := true
+	w, closer, err := command.StartPager(f, &forced)
+	if err != nil {
+		t.Fatalf("StartPager: %v", err)
+	}
+	defer closer()
+	if w != io.Writer(f) {
+		t.Fatalf("empty PISTA_PAGER should disable paging even when forced, got %T", w)
 	}
 }
 
@@ -79,7 +126,7 @@ func TestStartPager_EnvUnset(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := command.StartPager(f, false)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -100,7 +147,7 @@ func TestStartPager_SpawnsAndPipesThrough(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := command.StartPager(f, false)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -138,7 +185,7 @@ func TestStartPager_CloserIsIdempotent(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := command.StartPager(f, false)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -213,7 +260,7 @@ func TestStartPager_FailsOnBadCommand(t *testing.T) {
 	// `sh -c` will start successfully and the missing binary surfaces as
 	// a non-zero exit on Wait, not an error from Start. Verify StartPager
 	// still returns a usable writer and tolerates the pager exiting early.
-	w, closer, err := command.StartPager(f, false)
+	w, closer, err := command.StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager unexpectedly errored: %v", err)
 	}

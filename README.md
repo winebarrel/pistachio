@@ -65,7 +65,9 @@ Flags:
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
       --version
-      --no-pager              Disable paging of long output via $PISTA_PAGER.
+      --[no-]pager            Force paging of long output via $PISTA_PAGER,
+                              bypassing the TTY check. Use --no-pager to
+                              disable. PISTA_PAGER must still be set.
 
 Commands:
   apply <files> ... [flags]
@@ -220,7 +222,7 @@ pista dump
 
 ### Paging long output
 
-Set `$PISTA_PAGER` to forward `plan` / `apply` / `dump` output through an external command when stdout is a TTY. The command is interpreted by `sh -c`, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected — the pager only kicks in for interactive use. Use `--no-pager` to disable it for a single invocation.
+Set `$PISTA_PAGER` to forward `plan` / `apply` / `dump` output through an external command when stdout is a TTY. The command is interpreted by `sh -c`, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected — the pager only kicks in for interactive use. Use `--no-pager` to disable it for a single invocation, or `--pager` to force it on when stdout is not a TTY (e.g. when piping into another pager-aware tool); `PISTA_PAGER` must still be set for `--pager` to do anything.
 
 ```bash
 # Page with less, keeping ANSI colors
@@ -231,6 +233,9 @@ PISTA_PAGER='source-highlight -s sql -f esc | less -R' pista plan schema.sql
 
 # One-off override
 pista --no-pager plan schema.sql
+
+# Force the pager even when stdout is not a TTY
+PISTA_PAGER='source-highlight -s sql -f esc' pista --pager dump
 ```
 
 ### Schema name mapping
