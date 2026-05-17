@@ -32,7 +32,7 @@ ENV PGHOST=/var/run/postgresql \
     PGUSER=postgres \
     PGDATABASE=demo \
     PISTA_CONN_STR=postgres://postgres@/demo \
-    PISTA_PAGER="bat -l sql -p --paging=never"
+    PISTA_PAGER="bat -l sql -p --paging=never --color=always"
 
 WORKDIR /demo
 USER postgres
