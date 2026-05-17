@@ -9,24 +9,34 @@ import (
 )
 
 // StartPager wraps w with a pager subprocess when all of the following hold:
-//   - paging hasn't been disabled by --no-pager,
-//   - w is a TTY (so the user is actually viewing the output interactively),
+//   - paging hasn't been disabled by --no-pager (pager != nil && *pager == false),
+//   - either pager was explicitly forced via --pager (*pager == true) or w is a
+//     TTY (so the user is actually viewing the output interactively),
 //   - PISTA_PAGER is set to a non-empty command line.
+//
+// pager == nil means the user passed neither --pager nor --no-pager, so the
+// TTY check decides. Otherwise *pager explicitly turns paging on or off, but
+// an unset PISTA_PAGER still gates everything (matching the convention that
+// the env var is the source of truth for *which* pager to run).
 //
 // Otherwise it returns w unchanged with a no-op close. The returned close
 // function tears down the pager and waits for it to exit, so callers should
 // always invoke it (typically via defer).
-func StartPager(w io.Writer, noPager bool) (io.Writer, func(), error) {
+func StartPager(w io.Writer, pager *bool) (io.Writer, func(), error) {
 	noop := func() {}
-	if noPager {
-		return w, noop, nil
-	}
-	f, ok := w.(*os.File)
-	if !ok || !isTerminalFn(f) {
+	if pager != nil && !*pager {
 		return w, noop, nil
 	}
 	cmdline := os.Getenv("PISTA_PAGER")
 	if cmdline == "" {
+		return w, noop, nil
+	}
+	f, ok := w.(*os.File)
+	if !ok {
+		return w, noop, nil
+	}
+	forced := pager != nil && *pager
+	if !forced && !isTerminalFn(f) {
 		return w, noop, nil
 	}
 

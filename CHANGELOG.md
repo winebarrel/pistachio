@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.10.1] - 2026-05-17
+
+* Make `--no-pager` negatable: the flag is now `--[no-]pager`, and `--pager` forces paging on even when stdout is not a TTY. Useful when stdout is piped into a tool that itself expects pager-style output (syntax highlighter, etc.) where the auto TTY check would otherwise short-circuit. `PISTA_PAGER` is still the source of truth for *which* command to run, so `--pager` with an unset `PISTA_PAGER` remains a no-op. Internally `command.StartPager` now takes `*bool` (`nil` = auto / TTY check, `true` = force, `false` = disable) instead of a plain `bool`.
+
 ## [1.10.0] - 2026-05-17
 
 * Fix `DROP COLUMN` ordering when dependent objects (UNIQUE / CHECK constraints, dependent indexes, RLS policies, stored-generated columns) are dropped in the same plan. PostgreSQL silently cascades single-column UNIQUE/CHECK constraints and dependent indexes during `DROP COLUMN`, so a subsequent explicit `DROP CONSTRAINT` / `DROP INDEX` fails with `... does not exist`; RLS policies and same-table stored-generated columns block `DROP COLUMN` outright. `diff.diffColumns` now returns column drops in a separate slice (emitting stored-generated columns before non-generated ones so a paired `generated_col → source_col` drop succeeds without `CASCADE`) and `diff.diffTable` appends `colDropStmts` at the tail of `result.Stmts`, after policy / index / constraint / comment / RLS handling. FK drops continue to emit first via `FKDropStmts`, so dependents are gone before the column itself goes. The bulk-alter merge naturally inherits the new order, so a single `ALTER TABLE` lists `DROP CONSTRAINT` before `DROP COLUMN`. ([#223](https://github.com/winebarrel/pistachio/pull/223))
