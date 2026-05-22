@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.10.5] - 2026-05-22
+
+* Trim leading / trailing whitespace from each `--include` / `--exclude` pattern in `FilterOptions.AfterApply`. Multi-value env vars like `PISTA_INCLUDE="user*, posts"` were parsed by kong into `["user*", " posts"]`, and the leading space made `path.Match` treat the second pattern as ` posts` — silently matching nothing. The trim runs before `ValidatePatterns`, so the post-trim values are also what gets validated and what `MatchName` compares against.
+
 ## [1.10.4] - 2026-05-17
 
 * Bind `apply --with-tx` to the `$PISTA_WITH_TX` environment variable so it can be enabled from CI / shell config without passing the flag on every invocation. Aligns with the existing `$PISTA_BULK_ALTER` / `$PISTA_DISABLE_INDEX_CONCURRENTLY` env-tag pattern on the other apply bool flags.
