@@ -3,6 +3,7 @@ package pistachio
 import (
 	"fmt"
 	"path"
+	"strings"
 )
 
 type Options struct {
@@ -63,6 +64,12 @@ func (f *FilterOptions) MatchName(name string) bool {
 }
 
 func (f *FilterOptions) AfterApply() error {
+	for i, pattern := range f.Include {
+		f.Include[i] = strings.TrimSpace(pattern)
+	}
+	for i, pattern := range f.Exclude {
+		f.Exclude[i] = strings.TrimSpace(pattern)
+	}
 	return f.ValidatePatterns()
 }
 

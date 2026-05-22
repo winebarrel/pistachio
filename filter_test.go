@@ -46,6 +46,16 @@ func TestFilterOptions_AfterApply_Invalid(t *testing.T) {
 	assert.Contains(t, err.Error(), "--include")
 }
 
+func TestFilterOptions_AfterApply_TrimsWhitespace(t *testing.T) {
+	o := &pistachio.FilterOptions{
+		Include: []string{" user* ", "\tposts\n"},
+		Exclude: []string{"  tmp_* "},
+	}
+	require.NoError(t, o.AfterApply())
+	assert.Equal(t, []string{"user*", "posts"}, o.Include)
+	assert.Equal(t, []string{"tmp_*"}, o.Exclude)
+}
+
 func TestMatchName(t *testing.T) {
 	t.Run("no filters", func(t *testing.T) {
 		o := &pistachio.FilterOptions{}
