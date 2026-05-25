@@ -1,21 +1,22 @@
-package model
+package model_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/pistachio/model"
 )
 
-func newTable(schema, name string) *Table {
-	return &Table{
+func newTable(schema, name string) *model.Table {
+	return &model.Table{
 		Schema:      schema,
 		Name:        name,
-		Columns:     orderedmap.New[string, *Column](),
-		Constraints: orderedmap.New[string, *Constraint](),
-		ForeignKeys: orderedmap.New[string, *ForeignKey](),
-		Indexes:     orderedmap.New[string, *Index](),
-		Policies:    orderedmap.New[string, *Policy](),
+		Columns:     orderedmap.New[string, *model.Column](),
+		Constraints: orderedmap.New[string, *model.Constraint](),
+		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
+		Indexes:     orderedmap.New[string, *model.Index](),
+		Policies:    orderedmap.New[string, *model.Policy](),
 	}
 }
 
@@ -44,7 +45,7 @@ func TestTable_RLSSQL_WithPolicies(t *testing.T) {
 	tbl := newTable("public", "users")
 	tbl.RowSecurity = true
 	using := "owner = current_user"
-	tbl.Policies.Set("p", &Policy{
+	tbl.Policies.Set("p", &model.Policy{
 		Name: "p", Schema: "public", Table: "users",
 		Permissive: true, Command: 'r', Using: &using,
 	})
@@ -56,15 +57,15 @@ func TestTable_RLSSQL_WithPolicies(t *testing.T) {
 // nil-Policies guard: an older Table built without orderedmap-init must not
 // panic on RLSSQL even though the parser/catalog now always initialize it.
 func TestTable_RLSSQL_NilPolicies(t *testing.T) {
-	tbl := &Table{Schema: "public", Name: "users"}
+	tbl := &model.Table{Schema: "public", Name: "users"}
 	assert.Empty(t, tbl.RLSSQL())
 }
 
 func TestTableToSQL_IncludesRLS(t *testing.T) {
 	tbl := newTable("public", "users")
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
 	tbl.RowSecurity = true
-	out := TableToSQL(tbl)
+	out := model.TableToSQL(tbl)
 	assert.Contains(t, out, "CREATE TABLE public.users")
 	assert.Contains(t, out, "ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;")
 }
@@ -76,8 +77,8 @@ func TestTable_FQTN(t *testing.T) {
 
 func TestTable_SQL_simple(t *testing.T) {
 	tbl := newTable("public", "users")
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true})
-	tbl.Constraints.Set("users_pkey", &Constraint{Name: "users_pkey", Definition: "PRIMARY KEY (id)"})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	tbl.Constraints.Set("users_pkey", &model.Constraint{Name: "users_pkey", Definition: "PRIMARY KEY (id)"})
 
 	expected := `CREATE TABLE public.users (
     id integer NOT NULL,
@@ -89,7 +90,7 @@ func TestTable_SQL_simple(t *testing.T) {
 func TestTable_SQL_namedNotNull(t *testing.T) {
 	name := "users_email_nn"
 	tbl := newTable("public", "users")
-	tbl.Columns.Set("email", &Column{Name: "email", TypeName: "text", NotNull: true, NotNullName: &name})
+	tbl.Columns.Set("email", &model.Column{Name: "email", TypeName: "text", NotNull: true, NotNullName: &name})
 
 	assert.Contains(t, tbl.SQL(), "email text CONSTRAINT users_email_nn NOT NULL")
 }
@@ -99,7 +100,7 @@ func TestTable_SQL_namedNotNull_identityColumnSuppresses(t *testing.T) {
 	// either the "NOT NULL" tail or the CONSTRAINT name on identity columns.
 	name := "users_id_nn"
 	tbl := newTable("public", "users")
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true, NotNullName: &name, Identity: ColumnIdentity('a')})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, NotNullName: &name, Identity: model.ColumnIdentity('a')})
 
 	out := tbl.SQL()
 	assert.Contains(t, out, "GENERATED ALWAYS AS IDENTITY")
@@ -110,7 +111,7 @@ func TestTable_SQL_namedNotNull_identityColumnSuppresses(t *testing.T) {
 func TestTable_SQL_unlogged(t *testing.T) {
 	tbl := newTable("public", "temp_data")
 	tbl.Unlogged = true
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer"})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 
 	assert.Contains(t, tbl.SQL(), "CREATE UNLOGGED TABLE")
 }
@@ -118,7 +119,7 @@ func TestTable_SQL_unlogged(t *testing.T) {
 func TestTable_SQL_withDefault(t *testing.T) {
 	tbl := newTable("public", "users")
 	def := "0"
-	tbl.Columns.Set("age", &Column{Name: "age", TypeName: "integer", Default: &def})
+	tbl.Columns.Set("age", &model.Column{Name: "age", TypeName: "integer", Default: &def})
 
 	assert.Contains(t, tbl.SQL(), "DEFAULT 0")
 }
@@ -126,21 +127,21 @@ func TestTable_SQL_withDefault(t *testing.T) {
 func TestTable_SQL_withCollation(t *testing.T) {
 	tbl := newTable("public", "users")
 	coll := "en_US"
-	tbl.Columns.Set("name", &Column{Name: "name", TypeName: "text", Collation: &coll})
+	tbl.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: &coll})
 
 	assert.Contains(t, tbl.SQL(), `COLLATE "en_US"`)
 }
 
 func TestTable_SQL_identityAlways(t *testing.T) {
 	tbl := newTable("public", "users")
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", Identity: ColumnIdentity('a')})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", Identity: model.ColumnIdentity('a')})
 
 	assert.Contains(t, tbl.SQL(), "GENERATED ALWAYS AS IDENTITY")
 }
 
 func TestTable_SQL_identityByDefault(t *testing.T) {
 	tbl := newTable("public", "users")
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", Identity: ColumnIdentity('d')})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", Identity: model.ColumnIdentity('d')})
 
 	assert.Contains(t, tbl.SQL(), "GENERATED BY DEFAULT AS IDENTITY")
 }
@@ -148,10 +149,10 @@ func TestTable_SQL_identityByDefault(t *testing.T) {
 func TestTable_SQL_generatedStored(t *testing.T) {
 	tbl := newTable("public", "users")
 	def := "first_name || ' ' || last_name"
-	tbl.Columns.Set("full_name", &Column{
+	tbl.Columns.Set("full_name", &model.Column{
 		Name:      "full_name",
 		TypeName:  "text",
-		Generated: ColumnGenerated('s'),
+		Generated: model.ColumnGenerated('s'),
 		Default:   &def,
 	})
 
@@ -161,7 +162,7 @@ func TestTable_SQL_generatedStored(t *testing.T) {
 
 func TestTable_SQL_identityNotNull(t *testing.T) {
 	tbl := newTable("public", "users")
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true, Identity: ColumnIdentity('a')})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true, Identity: model.ColumnIdentity('a')})
 	// Identity columns should NOT emit NOT NULL
 	assert.NotContains(t, tbl.SQL(), "NOT NULL")
 }
@@ -171,7 +172,7 @@ func TestTable_SQL_partitioned(t *testing.T) {
 	tbl.Partitioned = true
 	partDef := "RANGE (created_at)"
 	tbl.PartitionDef = &partDef
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer"})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 
 	sql := tbl.SQL()
 	assert.Contains(t, sql, "PARTITION BY RANGE (created_at)")
@@ -206,7 +207,7 @@ func TestTable_SQL_partitionOf_inherits(t *testing.T) {
 	tbl := newTable("public", "child")
 	parent := "public.parent"
 	tbl.PartitionOf = &parent
-	tbl.Constraints.Set("child_pkey", &Constraint{Name: "child_pkey", Definition: "PRIMARY KEY (id)"})
+	tbl.Constraints.Set("child_pkey", &model.Constraint{Name: "child_pkey", Definition: "PRIMARY KEY (id)"})
 
 	sql := tbl.SQL()
 	assert.Contains(t, sql, "INHERITS (public.parent)")
@@ -217,14 +218,14 @@ func TestTable_SQL_tablespace(t *testing.T) {
 	tbl := newTable("public", "users")
 	ts := "my_ts"
 	tbl.TableSpace = &ts
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer"})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 
 	assert.Contains(t, tbl.SQL(), "TABLESPACE my_ts")
 }
 
 func TestTable_IdxSQL(t *testing.T) {
 	tbl := newTable("public", "users")
-	tbl.Indexes.Set("idx_name", &Index{Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
+	tbl.Indexes.Set("idx_name", &model.Index{Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	assert.Equal(t, "CREATE INDEX idx_name ON public.users USING btree (name);", tbl.IdxSQL())
 }
 
@@ -235,8 +236,8 @@ func TestTable_IdxSQL_empty(t *testing.T) {
 
 func TestTable_FkSQL(t *testing.T) {
 	tbl := newTable("public", "orders")
-	tbl.ForeignKeys.Set("fk_user", &ForeignKey{
-		Constraint: Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", Validated: true},
+	tbl.ForeignKeys.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", Validated: true},
 		Schema:     "public",
 		Table:      "orders",
 	})
@@ -248,7 +249,7 @@ func TestTable_CommentSQL(t *testing.T) {
 	comment := "Main users table"
 	tbl.Comment = &comment
 	colComment := "User name"
-	tbl.Columns.Set("name", &Column{Name: "name", TypeName: "text", Comment: &colComment})
+	tbl.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: &colComment})
 
 	sql := tbl.CommentSQL()
 	assert.Contains(t, sql, "COMMENT ON TABLE public.users IS 'Main users table';")
@@ -257,29 +258,29 @@ func TestTable_CommentSQL(t *testing.T) {
 
 func TestTable_CommentSQL_noComments(t *testing.T) {
 	tbl := newTable("public", "users")
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer"})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	assert.Equal(t, "", tbl.CommentSQL())
 }
 
 func TestTablesToSQL(t *testing.T) {
-	tables := orderedmap.New[string, *Table]()
+	tables := orderedmap.New[string, *model.Table]()
 	tbl := newTable("public", "users")
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true})
-	tbl.Constraints.Set("users_pkey", &Constraint{Name: "users_pkey", Definition: "PRIMARY KEY (id)"})
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	tbl.Constraints.Set("users_pkey", &model.Constraint{Name: "users_pkey", Definition: "PRIMARY KEY (id)"})
 	tables.Set("public.users", tbl)
 
-	got := TablesToSQL(tables)
+	got := model.TablesToSQL(tables)
 	assert.Contains(t, got, "-- public.users")
 	assert.Contains(t, got, "CREATE TABLE public.users")
 }
 
 func TestTablesToSQL_withIndexAndFK(t *testing.T) {
-	tables := orderedmap.New[string, *Table]()
+	tables := orderedmap.New[string, *model.Table]()
 	tbl := newTable("public", "orders")
-	tbl.Columns.Set("id", &Column{Name: "id", TypeName: "integer", NotNull: true})
-	tbl.Indexes.Set("idx_user", &Index{Definition: "CREATE INDEX idx_user ON public.orders USING btree (user_id)"})
-	tbl.ForeignKeys.Set("fk_user", &ForeignKey{
-		Constraint: Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", Validated: true},
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	tbl.Indexes.Set("idx_user", &model.Index{Definition: "CREATE INDEX idx_user ON public.orders USING btree (user_id)"})
+	tbl.ForeignKeys.Set("fk_user", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", Validated: true},
 		Schema:     "public",
 		Table:      "orders",
 	})
@@ -287,7 +288,7 @@ func TestTablesToSQL_withIndexAndFK(t *testing.T) {
 	tbl.Comment = &comment
 	tables.Set("public.orders", tbl)
 
-	got := TablesToSQL(tables)
+	got := model.TablesToSQL(tables)
 	assert.Contains(t, got, "-- public.orders")
 	assert.Contains(t, got, "CREATE TABLE public.orders")
 	assert.Contains(t, got, "CREATE INDEX idx_user")
@@ -296,15 +297,15 @@ func TestTablesToSQL_withIndexAndFK(t *testing.T) {
 }
 
 func TestTablesToSQL_multipleTables(t *testing.T) {
-	tables := orderedmap.New[string, *Table]()
+	tables := orderedmap.New[string, *model.Table]()
 	t1 := newTable("public", "a")
-	t1.Columns.Set("id", &Column{Name: "id", TypeName: "integer"})
+	t1.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	tables.Set("public.a", t1)
 	t2 := newTable("public", "b")
-	t2.Columns.Set("id", &Column{Name: "id", TypeName: "integer"})
+	t2.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	tables.Set("public.b", t2)
 
-	got := TablesToSQL(tables)
+	got := model.TablesToSQL(tables)
 	assert.Contains(t, got, "-- public.a")
 	assert.Contains(t, got, "-- public.b")
 }
