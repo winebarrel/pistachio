@@ -1,46 +1,47 @@
-package model
+package model_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/pistachio/model"
 )
 
 func TestView_FQVN(t *testing.T) {
-	v := View{Schema: "public", Name: "active_users"}
+	v := model.View{Schema: "public", Name: "active_users"}
 	assert.Equal(t, "public.active_users", v.FQVN())
 }
 
 func TestView_SQL(t *testing.T) {
-	v := View{Schema: "public", Name: "active_users", Definition: "SELECT id, name FROM users WHERE active = true"}
+	v := model.View{Schema: "public", Name: "active_users", Definition: "SELECT id, name FROM users WHERE active = true"}
 	expected := "CREATE OR REPLACE VIEW public.active_users AS\nSELECT id, name FROM users WHERE active = true;"
 	assert.Equal(t, expected, v.SQL())
 }
 
 func TestView_SQL_trims(t *testing.T) {
-	v := View{Schema: "public", Name: "v1", Definition: "  SELECT 1;  "}
+	v := model.View{Schema: "public", Name: "v1", Definition: "  SELECT 1;  "}
 	assert.Equal(t, "CREATE OR REPLACE VIEW public.v1 AS\nSELECT 1;", v.SQL())
 }
 
 func TestView_CommentSQL(t *testing.T) {
 	comment := "Active users view"
-	v := View{Schema: "public", Name: "active_users", Comment: &comment}
+	v := model.View{Schema: "public", Name: "active_users", Comment: &comment}
 	assert.Equal(t, "COMMENT ON VIEW public.active_users IS 'Active users view';", v.CommentSQL())
 }
 
 func TestView_CommentSQL_nil(t *testing.T) {
-	v := View{Schema: "public", Name: "active_users"}
+	v := model.View{Schema: "public", Name: "active_users"}
 	assert.Equal(t, "", v.CommentSQL())
 }
 
 func TestViewsToSQL(t *testing.T) {
 	comment := "my view"
-	views := orderedmap.New[string, *View]()
-	views.Set("public.v1", &View{Schema: "public", Name: "v1", Definition: "SELECT 1", Comment: &comment})
-	views.Set("public.v2", &View{Schema: "public", Name: "v2", Definition: "SELECT 2"})
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Comment: &comment})
+	views.Set("public.v2", &model.View{Schema: "public", Name: "v2", Definition: "SELECT 2"})
 
-	got := ViewsToSQL(views)
+	got := model.ViewsToSQL(views)
 	expected := `-- public.v1
 CREATE OR REPLACE VIEW public.v1 AS
 SELECT 1;
@@ -53,25 +54,25 @@ SELECT 2;`
 }
 
 func TestView_SQL_materialized(t *testing.T) {
-	v := View{Schema: "public", Name: "mv", Materialized: true, Definition: "SELECT count(*) AS cnt FROM users"}
+	v := model.View{Schema: "public", Name: "mv", Materialized: true, Definition: "SELECT count(*) AS cnt FROM users"}
 	expected := "CREATE MATERIALIZED VIEW public.mv AS\nSELECT count(*) AS cnt FROM users;"
 	assert.Equal(t, expected, v.SQL())
 }
 
 func TestView_CommentSQL_materialized(t *testing.T) {
 	comment := "stats"
-	v := View{Schema: "public", Name: "mv", Materialized: true, Comment: &comment}
+	v := model.View{Schema: "public", Name: "mv", Materialized: true, Comment: &comment}
 	assert.Equal(t, "COMMENT ON MATERIALIZED VIEW public.mv IS 'stats';", v.CommentSQL())
 }
 
 func TestViewToSQL_materializedWithIndex(t *testing.T) {
-	indexes := orderedmap.New[string, *Index]()
-	indexes.Set("idx_mv_n", &Index{
+	indexes := orderedmap.New[string, *model.Index]()
+	indexes.Set("idx_mv_n", &model.Index{
 		Schema: "public", Name: "idx_mv_n", Table: "mv",
 		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
 	})
-	v := &View{Schema: "public", Name: "mv", Materialized: true, Definition: "SELECT 1 AS n", Indexes: indexes}
-	got := ViewToSQL(v)
+	v := &model.View{Schema: "public", Name: "mv", Materialized: true, Definition: "SELECT 1 AS n", Indexes: indexes}
+	got := model.ViewToSQL(v)
 	assert.Contains(t, got, "CREATE MATERIALIZED VIEW")
 	assert.Contains(t, got, "CREATE INDEX idx_mv_n")
 }
