@@ -133,7 +133,7 @@ CREATE INDEX CONCURRENTLY idx_users_email ON public.users USING btree (email);
 CREATE INDEX idx_users_id ON public.users USING btree (id);
 ```
 
-Use `--concurrently-pre-sql` (or `--concurrently-pre-sql-file`) to run SQL — typically `SET lock_timeout = '...'` — before any `CONCURRENTLY` index DDL. The SQL is only emitted/executed when the plan actually contains `CREATE/DROP INDEX CONCURRENTLY`, so it's safe to set unconditionally. Because `SET` is session-scoped and `CONCURRENTLY` runs outside a transaction, the value carries over to every subsequent `CONCURRENTLY` statement in the same `apply`. Also available as `$PISTA_CONCURRENTLY_PRE_SQL` / `$PISTA_CONCURRENTLY_PRE_SQL_FILE`.
+Use `--concurrently-pre-sql` (or `--concurrently-pre-sql-file`) to run SQL (typically `SET lock_timeout = '...'`) before any `CONCURRENTLY` index DDL. The SQL is only emitted/executed when the plan actually contains `CREATE/DROP INDEX CONCURRENTLY`, so it's safe to set unconditionally. Because `SET` is session-scoped and `CONCURRENTLY` runs outside a transaction, the value carries over to every subsequent `CONCURRENTLY` statement in the same `apply`. Also available as `$PISTA_CONCURRENTLY_PRE_SQL` / `$PISTA_CONCURRENTLY_PRE_SQL_FILE`.
 
 ```bash
 pista apply schema.sql --concurrently-pre-sql "SET lock_timeout = '5s';"
@@ -189,7 +189,7 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so
 
 ### Executing arbitrary SQL
 
-Use `-- pista:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated during `apply` — when it returns `true` the statement is executed, otherwise it is skipped. The simplest form skips when an object already exists:
+Use `-- pista:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated during `apply`. When it returns `true` the statement is executed, otherwise it is skipped. The simplest form skips when an object already exists:
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
@@ -222,7 +222,7 @@ pista dump
 
 ### Paging long output
 
-Set `$PISTA_PAGER` to forward `plan` / `apply` / `dump` output through an external command when stdout is a TTY. The command is interpreted by `sh -c`, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected — the pager only kicks in for interactive use. Use `--no-pager` to disable it for a single invocation, or `--pager` to force it on when stdout is not a TTY (e.g. when piping into another pager-aware tool); `PISTA_PAGER` must still be set for `--pager` to do anything.
+Set `$PISTA_PAGER` to forward `plan` / `apply` / `dump` output through an external command when stdout is a TTY. The command is interpreted by `sh -c`, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected. The pager only kicks in for interactive use. Use `--no-pager` to disable it for a single invocation, or `--pager` to force it on when stdout is not a TTY (e.g. when piping into another pager-aware tool); `PISTA_PAGER` must still be set for `--pager` to do anything.
 
 ```bash
 # Page with less, keeping ANSI colors
@@ -473,7 +473,7 @@ make test
 
 ## Related projects
 
-- [myschema](https://github.com/winebarrel/myschema) — declarative
+- [myschema](https://github.com/winebarrel/myschema): declarative
   schema management for MySQL.
-- [ridgepole](https://github.com/ridgepole/ridgepole) — DB schema
+- [ridgepole](https://github.com/ridgepole/ridgepole): DB schema
   management using a Rails DSL.
