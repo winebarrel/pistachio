@@ -57,3 +57,10 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - New plan/apply/dump tests should be added as YAML fixtures whenever the test is purely SQL-input -> SQL/dump-output. Reach for a Go test only when the scenario can't be expressed that way: connection or auth errors, transaction/Writer plumbing, file-IO failures, the `--execute*` features, multi-schema setups that need helpers like `setupSchemaDB`, or assertions that examine internal Go data structures (`Files()` map, `ObjectCount` methods, schema-map helpers, etc.). When the harness lacks a field for a behavior you want to assert in a fixture, prefer extending the `*TestCase` struct with one optional field (defaulting to nil/zero so existing fixtures are unaffected) over keeping the test in Go.
 - `orderedmap.Map` is used throughout for deterministic iteration order of schema objects.
 - CLI scenario tests live in `test/scenario/`. Each `*.test.sh` script loads an initial schema, then applies incremental changes step by step, verifying plan output and drift-free state at each step. Shared helpers are in `helper.sh`; test SQL data is in `test/scenario/testdata/<schema>/`.
+
+## Writing style
+
+- Use ASCII characters only (no non-ASCII characters).
+- Avoid exaggerated or roundabout expressions.
+- Write simply and concisely.
+- Write in prose.
