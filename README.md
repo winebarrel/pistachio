@@ -179,7 +179,7 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. T
 ```
 
 > [!NOTE]
-> Only **pure removals** of constraints, foreign keys, and indexes (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index`. **Definition changes** still execute regardless of `--allow-drop`: constraints and foreign keys as DROP + ADD, and indexes as DROP + CREATE, because PostgreSQL has no `ALTER CONSTRAINT` and no general `ALTER INDEX` form for definition changes.
+> Only pure removals of constraints, foreign keys, and indexes (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index`. Definition changes still execute regardless of `--allow-drop`: constraints and foreign keys as DROP + ADD, and indexes as DROP + CREATE, because PostgreSQL has no `ALTER CONSTRAINT` and no general `ALTER INDEX` form for definition changes.
 >
 > Foreign-key drops emitted because the owning table is being dropped follow the table-drop policy (not `foreign_key`): if the table drop is suppressed, the FK drop is suppressed too and surfaces as `-- skipped:` alongside the table.
 
@@ -360,9 +360,9 @@ ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFER
 
 #### Column rename caveats
 
-When a column is renamed, pistachio rewrites column references in **same-table** indexes, constraints, and foreign keys (including `EXCLUDE`, partial / expression / `INCLUDE` indexes) on the current side, so a single `ALTER TABLE ... RENAME COLUMN` is emitted without redundant `DROP/CREATE` on the dependents.
+When a column is renamed, pistachio rewrites column references in same-table indexes, constraints, and foreign keys (including `EXCLUDE`, partial / expression / `INCLUDE` indexes) on the current side, so a single `ALTER TABLE ... RENAME COLUMN` is emitted without redundant `DROP/CREATE` on the dependents.
 
-The desired-side SQL must use the **new** column name in those dependent definitions:
+The desired-side SQL must use the new column name in those dependent definitions:
 
 ```sql
 CREATE TABLE public.users (
@@ -377,10 +377,10 @@ CREATE INDEX idx_users_name ON public.users (display_name);
 
 If the desired side still references the old name, `pista plan` errors out at parse time with a message like `column name referenced in index idx_users_name does not exist on table public.users` (identifiers are quoted only when they aren't safe unquoted). All such unresolved references are reported in a single error.
 
-The following references are **not** auto-rewritten and may produce a redundant `DROP/CREATE` on the first plan (the second run after applying the rename is clean):
+The following references are not auto-rewritten and may produce a redundant `DROP/CREATE` on the first plan (the second run after applying the rename is clean):
 
 - View / materialized view definitions that `SELECT` the renamed column
-- Foreign keys in *other* tables whose `REFERENCES this_table(renamed_col)` points at the renamed column
+- Foreign keys in other tables whose `REFERENCES this_table(renamed_col)` points at the renamed column
 
 ### Split dump
 
