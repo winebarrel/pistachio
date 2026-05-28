@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Scenario test: row-level security (RLS) and policies
-# Walks the desired schema through enable → policies → modify → recreate
-# (command change) → drop → force → disable, verifying drift-free state at
+# Walks the desired schema through enable -> policies -> modify -> recreate
+# (command change) -> drop -> force -> disable, verifying drift-free state at
 # every step.
 set -euo pipefail
 

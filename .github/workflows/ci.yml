@@ -17,6 +17,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ascii:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Check for non-ASCII characters
+        run: |
+          if matches=$(LC_ALL=C git grep -nIP '[^\x00-\x7F]' -- .); then
+            echo "Error: non-ASCII characters found:"
+            echo "$matches"
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
     strategy:

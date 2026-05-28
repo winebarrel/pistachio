@@ -18,7 +18,7 @@ run_step "01 add column (city.timezone)" \
   "ADD COLUMN timezone text" \
   "$DATA/steps/01_add_column.sql" || true
 
-# --- Step 2: ALTER COLUMN TYPE (city.population int→bigint) ---
+# --- Step 2: ALTER COLUMN TYPE (city.population int->bigint) ---
 run_step "02 alter column type (city.population)" \
   "SET DATA TYPE bigint" \
   "$DATA/steps/02_alter_column_type.sql" || true
@@ -53,13 +53,13 @@ run_step "08 add view (large_cities)" \
   "CREATE OR REPLACE VIEW public.large_cities" \
   "$DATA/steps/08_add_view.sql" || true
 
-# --- Step 9: ADD FK (city.countrycode → country.code) ---
-run_step "09 add fk (city → country)" \
+# --- Step 9: ADD FK (city.countrycode -> country.code) ---
+run_step "09 add fk (city -> country)" \
   "ADD CONSTRAINT city_countrycode_fkey" \
   "$DATA/steps/09_add_fk.sql" || true
 
-# --- Step 10: RENAME COLUMN (countrylanguage.language → lang) ---
-run_step "10 rename column (language → lang)" \
+# --- Step 10: RENAME COLUMN (countrylanguage.language -> lang) ---
+run_step "10 rename column (language -> lang)" \
   "RENAME COLUMN language TO lang" \
   "$DATA/steps/10_rename_column.sql" || true
 

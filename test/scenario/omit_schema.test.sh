@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Scenario test: --omit-schema dump → plan round-trip
+# Scenario test: --omit-schema dump -> plan round-trip
 # Verifies that dump --omit-schema output can be fed back to plan
 # with no diff, covering all object types including materialized views.
 set -euo pipefail
@@ -39,8 +39,8 @@ else
   echo "    $dump_output" >&2
 fi
 
-# --- Step 3: dump --omit-schema → plan has no diff ---
-step "03 dump --omit-schema → plan no diff"
+# --- Step 3: dump --omit-schema -> plan has no diff ---
+step "03 dump --omit-schema -> plan no diff"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 echo "$dump_output" > "$tmp_dir/schema.sql"
@@ -61,8 +61,8 @@ else
   fail "matview index not found in dump"
 fi
 
-# --- Step 5: dump --omit-schema → apply to empty DB → no drift ---
-step "05 dump --omit-schema → apply → no drift"
+# --- Step 5: dump --omit-schema -> apply to empty DB -> no drift ---
+step "05 dump --omit-schema -> apply -> no drift"
 setup_db ""
 if ! apply_output=$("$PISTA" apply "$tmp_dir/schema.sql" 2>&1); then
   fail "apply failed: $apply_output"
