@@ -10,7 +10,7 @@ DATA="$SCRIPT_DIR/testdata/inline_concurrently"
 # --- Setup: load initial schema ---
 setup_db "$DATA/init.sql"
 
-# --- Step 1: ADD inline CONCURRENTLY index → no drift after apply ---
+# --- Step 1: ADD inline CONCURRENTLY index -> no drift after apply ---
 step "01 add index (inline CONCURRENTLY)"
 plan_output=$(pista_plan "$DATA/steps/01_add_index.sql") || { fail "plan failed: $plan_output"; true; }
 if ! echo "$plan_output" | grep -qF 'CREATE INDEX CONCURRENTLY'; then
@@ -27,7 +27,7 @@ else
   fi
 fi
 
-# --- Step 2: CHANGE inline CONCURRENTLY index → DROP + CREATE both CONCURRENTLY ---
+# --- Step 2: CHANGE inline CONCURRENTLY index -> DROP + CREATE both CONCURRENTLY ---
 step "02 change index (inline CONCURRENTLY)"
 plan_output=$(pista_plan "$DATA/steps/02_change_index.sql") || { fail "plan failed: $plan_output"; true; }
 if ! echo "$plan_output" | grep -qF 'DROP INDEX CONCURRENTLY'; then
