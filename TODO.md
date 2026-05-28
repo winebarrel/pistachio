@@ -58,7 +58,7 @@ Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit.
 ## Silent drift on `Table.Unlogged` toggle
 
 `model.Table.Unlogged` is set on parse and used to emit `CREATE UNLOGGED TABLE`,
-but transitions on existing tables (logged ⇄ unlogged) are not diffed.
+but transitions on existing tables (logged <-> unlogged) are not diffed.
 PostgreSQL has `ALTER TABLE ... SET LOGGED` / `SET UNLOGGED`. The current
 `no_diff_unlogged_table.yml` fixture only covers the unchanged case.
 
@@ -122,7 +122,7 @@ are involved.
 `equalSelectExpr` (formerly `equalPolicyExpr`, renamed in #207 for shared
 use across policy / generated-column expressions) reuses `normalizeCheckExpr`
 from constraint diffs, which strips text-like casts and canonicalises
-`= ANY(ARRAY[...])` → `IN (...)`, but does not walk into subqueries and
+`= ANY(ARRAY[...])` -> `IN (...)`, but does not walk into subqueries and
 rewrite ColumnRef qualifications.
 
 Fix would be to walk `SubLink` / `RangeSubselect` nodes and strip column
@@ -154,9 +154,9 @@ behavior that affects the catalog round-trip, not a pistachio bug.
 named NOT NULL constraints is emitted as `RENAME CONSTRAINT`. The
 following transitions are no-ops in v1:
 
-- nullable → NOT NULL with an explicit desired name: emits `SET NOT NULL`
+- nullable -> NOT NULL with an explicit desired name: emits `SET NOT NULL`
   (PG auto-generates a name) but does not apply the desired name.
-- NOT NULL with explicit current name → still NOT NULL but unnamed: keeps
+- NOT NULL with explicit current name -> still NOT NULL but unnamed: keeps
   the current name in place.
 
 Both require PG18's standalone `ALTER TABLE ... ADD CONSTRAINT name NOT NULL col`

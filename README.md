@@ -204,7 +204,7 @@ DO $do$ BEGIN
 END $do$;
 ```
 
-When the body changes, update the tag in both places (e.g. `'v1'` → `'v2'`); the next `apply` will re-run.
+When the body changes, update the tag in both places (e.g. `'v1'` -> `'v2'`); the next `apply` will re-run.
 
 See [Getting Started](getting-started.md) for details.
 
