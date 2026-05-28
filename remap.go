@@ -10,8 +10,8 @@ import (
 // buildDefReplacer builds a strings.Replacer that replaces schema-qualified
 // prefixes in raw SQL definitions (e.g. "staging." → "public.").
 //
-// All inputs to this replacer come from canonical SQL — pg_get_*def output
-// from the catalog or pg_query deparse output from the parser — so any
+// All inputs to this replacer come from canonical SQL; pg_get_*def output
+// from the catalog or pg_query deparse output from the parser; so any
 // identifier that requires quoting is already wrapped in double quotes.
 // Only the model.Ident form is added to the pair list. Adding an unquoted
 // fallback (e.g. raw `a.b.` for a schema literally named `a.b`) would

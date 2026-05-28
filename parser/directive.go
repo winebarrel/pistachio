@@ -90,7 +90,7 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 		checkSQL := ""
 		if len(lastMatch) > 1 {
 			checkSQL = strings.TrimSpace(lastMatch[1])
-			// Remove trailing semicolons — pgx extended protocol doesn't allow them
+			// Remove trailing semicolons; pgx extended protocol doesn't allow them
 			checkSQL = strings.TrimRight(checkSQL, ";")
 			checkSQL = strings.TrimSpace(checkSQL)
 		}

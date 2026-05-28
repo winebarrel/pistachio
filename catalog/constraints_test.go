@@ -120,7 +120,7 @@ func TestListConstraintsByTable(t *testing.T) {
 		assert.Equal(t, []string{"user_id"}, fk.Columns)
 
 		// PK on the same table must report only its own column. This is the
-		// regression scenario for the column_t CTE bug — the previous CTE
+		// regression scenario for the column_t CTE bug; the previous CTE
 		// grouped by attrelid, so posts_pkey would have inherited {id, user_id}
 		// from the FK-row's conkey.
 		pk, ok := tbl.Constraints.GetOk("posts_pkey")
@@ -222,7 +222,7 @@ func TestListConstraintsByTable(t *testing.T) {
 
 	// Regression: with a composite PK on (b, a), the CTE must aggregate in
 	// conkey order (b then a). A sibling UNIQUE on (c) is included so a
-	// broken attrelid-grouped CTE — which would mix c into the PK's array —
+	// broken attrelid-grouped CTE; which would mix c into the PK's array;
 	// is caught here too, not just by the cross-contamination test above.
 	t.Run("composite primary key preserves conkey order", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `

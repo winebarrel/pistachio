@@ -93,7 +93,7 @@ func TestStartPager_ForcedSkipsTTYCheck(t *testing.T) {
 }
 
 func TestStartPager_ForcedButEnvUnset(t *testing.T) {
-	// --pager with PISTA_PAGER unset still does nothing — env gates everything.
+	// --pager with PISTA_PAGER unset still does nothing; env gates everything.
 	t.Setenv("PISTA_PAGER", "")
 	restore := command.SetIsTerminalForTest(func(*os.File) bool { return false })
 	defer restore()

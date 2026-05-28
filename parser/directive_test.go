@@ -422,7 +422,7 @@ func TestFormatExecuteStmt_WithCheck(t *testing.T) {
 }
 
 func TestFormatExecuteStmt_WithoutSemicolon(t *testing.T) {
-	// Deparse output has no trailing semicolon — FormatExecuteStmt should add one
+	// Deparse output has no trailing semicolon; FormatExecuteStmt should add one
 	es := &ExecuteStmt{SQL: "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql", CheckSQL: ""}
 	assert.Equal(t, "-- pista:execute\nCREATE FUNCTION f() RETURNS void LANGUAGE plpgsql;", FormatExecuteStmt(es))
 }

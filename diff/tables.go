@@ -236,7 +236,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 // diffColumns returns (stmts, dropStmts, disallowed, err). Adds, alters, and
 // renames go into stmts; pure drops (columns absent from desired) go into
 // dropStmts so the caller can sequence them after constraint/index/policy
-// drops on the same table — PostgreSQL auto-cascades single-column
+// drops on the same table; PostgreSQL auto-cascades single-column
 // UNIQUE/CHECK constraints and dependent indexes during DROP COLUMN, which
 // makes a later explicit DROP CONSTRAINT/INDEX fail with "does not exist".
 // Within dropStmts, generated columns are emitted before their potential
@@ -265,13 +265,13 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 			cur := currentCol.Generated.IsStoredGeneratedColumn()
 			des := desiredCol.Generated.IsStoredGeneratedColumn()
 			if cur != des {
-				return nil, nil, nil, fmt.Errorf("column %s.%s: cannot toggle GENERATED — DROP COLUMN + ADD COLUMN is required",
+				return nil, nil, nil, fmt.Errorf("column %s.%s: cannot toggle GENERATED; DROP COLUMN + ADD COLUMN is required",
 					fqtn, model.Ident(name))
 			}
 			if cur && des && exprChanged(currentCol.Default, desiredCol.Default) {
 				// Both sides are STORED GENERATED but the expression differs.
-				// PostgreSQL has no `ALTER COLUMN ... SET GENERATED AS (expr)`
-				// — the only way to change the expression is DROP COLUMN +
+				// PostgreSQL has no `ALTER COLUMN ... SET GENERATED AS (expr)`;
+				// the only way to change the expression is DROP COLUMN +
 				// ADD COLUMN, which loses the column's data. Surface the
 				// change as an error so the user explicitly drops/re-adds.
 				// Use exprChanged (strict equalSelectExpr) rather than
@@ -281,7 +281,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 				// cast change or a cast-target-type change on a GENERATED
 				// expression. equalSelectExpr keeps the asymmetric strip
 				// from #201 / #203 but no DEFAULT-style softening.
-				return nil, nil, nil, fmt.Errorf("column %s.%s: cannot change GENERATED expression — DROP COLUMN + ADD COLUMN is required",
+				return nil, nil, nil, fmt.Errorf("column %s.%s: cannot change GENERATED expression; DROP COLUMN + ADD COLUMN is required",
 					fqtn, model.Ident(name))
 			}
 			stmts = append(stmts, alterColumnSQL(fqtn, currentCol, desiredCol)...)
@@ -346,7 +346,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	colIdent := model.Ident(desired.Name)
 
 	// Type or collation change. Collation is altered via SET DATA TYPE
-	// because PostgreSQL has no separate "set collation" syntax — re-issuing
+	// because PostgreSQL has no separate "set collation" syntax; re-issuing
 	// SET DATA TYPE without COLLATE reverts to the type's default collation.
 	if !equalTypeName(current.TypeName, desired.TypeName) || !equalPtr(current.Collation, desired.Collation) {
 		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + desired.TypeName
@@ -385,7 +385,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 
 	// Default change. For non-generated columns, emit SET DEFAULT / DROP
 	// DEFAULT as usual. For generated columns the "default" stores the
-	// generated expression and cannot be altered via SET DEFAULT — caller
+	// generated expression and cannot be altered via SET DEFAULT; caller
 	// (diffColumns) already errors on a Generated-state toggle and on an
 	// expression-only change within a generated column, so this branch is
 	// skipped when either side is generated. Skip also when desired is
@@ -412,12 +412,12 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	} else if current.NotNull && desired.NotNull && !desIsIdent &&
 		current.NotNullName != nil && desired.NotNullName != nil &&
 		*current.NotNullName != *desired.NotNullName {
-		// Both sides NOT NULL with explicit but different names — rename in place.
+		// Both sides NOT NULL with explicit but different names; rename in place.
 		// Adding/removing a name on an existing NOT NULL needs PG18's standalone
 		// ALTER ... ADD CONSTRAINT NOT NULL syntax (not yet supported by
 		// pg_query_go); left out of v1. Identity columns are skipped to match
 		// Table.SQL / addColumnSQL, which intentionally do not render
-		// "CONSTRAINT <name> NOT NULL" on identity columns — emitting a rename
+		// "CONSTRAINT <name> NOT NULL" on identity columns; emitting a rename
 		// here would surface a name the dumper hides.
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME CONSTRAINT "+model.Ident(*current.NotNullName)+" TO "+model.Ident(*desired.NotNullName)+";")
 	}
@@ -508,7 +508,7 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 		// IN-subquery / ANY-subquery predicates. CHECK / DEFAULT /
 		// generated-column / index-predicate callers can't actually emit
 		// SubLinks, so this only matters for RLS policy USING/WITH CHECK
-		// and for view bodies — both legitimate cases.
+		// and for view bodies; both legitimate cases.
 		if n.SubLink.Subselect != nil {
 			normalizeSelectExprs(n.SubLink.Subselect)
 		}
@@ -541,11 +541,11 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 // smallint to int4 / int8 / int2 and double precision / real to float8 /
 // float4 respectively, so both forms are accepted, but only the unqualified
 // keyword (`integer`) and the `pg_catalog`-qualified canonical form
-// (`pg_catalog.int4`) match — a user-defined type that happens to be named
+// (`pg_catalog.int4`) match; a user-defined type that happens to be named
 // e.g. `myapp.int4` does not gate the Sval→numeric coercion below, so a
 // stripped cast on a custom-type Sval is left as-is rather than rewritten
-// to a built-in numeric A_Const. (The strip itself is unconditional — that
-// is the asymmetric rule from #201 — but coercion is narrowed to the
+// to a built-in numeric A_Const. (The strip itself is unconditional; that
+// is the asymmetric rule from #201; but coercion is narrowed to the
 // genuinely numeric built-ins.)
 func isNumericTypeName(tn *pg_query.TypeName) bool {
 	if tn == nil || len(tn.Names) == 0 {
@@ -645,7 +645,7 @@ func numericAConstFromString(s string) *pg_query.Node {
 		}
 	}
 	// ParseFloat returns ErrRange (with ±Inf as value) for syntactically
-	// valid numerics that exceed float64 — but PG's `numeric` carries those
+	// valid numerics that exceed float64; but PG's `numeric` carries those
 	// just fine and pg_query's Fval is just a string, so accept ErrRange as
 	// "lexically a number, store the original string verbatim".
 	if _, err := strconv.ParseFloat(s, 64); err == nil || errors.Is(err, strconv.ErrRange) {
@@ -716,7 +716,7 @@ func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
 		arg := ct.Arg
 		// When stripping a cast on a string literal of a numeric type, coerce
 		// the surviving A_Const{Sval "<n>"} back to A_Const{Ival/Fval} so it
-		// matches a user-written bare numeric literal — but only when desired
+		// matches a user-written bare numeric literal; but only when desired
 		// at this position is itself a numeric (non-string) A_Const. If the
 		// user wrote a quoted form (`'0'`), leave the stripped Sval intact so
 		// it still compares equal to the quoted desired.
@@ -1230,7 +1230,7 @@ func alignIndexCasts(desired, current *pg_query.IndexStmt) {
 // formatting (parens, text-like casts, `IN`↔`= ANY(ARRAY[...])`), and
 // stripping any current-only TypeCast in the partial-index WhereClause
 // and expression-index IndexElem.Expr (with Sval→numeric coercion when
-// the desired side is a bare numeric A_Const) — same pipeline as
+// the desired side is a bare numeric A_Const); same pipeline as
 // equalConstraintDef.
 func equalIndexDef(current, desired string) bool {
 	if current == desired {
@@ -1301,8 +1301,8 @@ func equalFKDef(a, b, schema string) bool {
 // parseSelectExpr parses a bare expression by wrapping it in `SELECT <expr>`
 // and returns the parse result plus the embedded ResTarget. Callers may
 // mutate target.Val before re-deparsing the result. Shared by equalDefault
-// (column / domain DEFAULT) and equalSelectExpr (RLS USING / WITH CHECK)
-// — both wrap the expression the same way, so the helper lives here.
+// (column / domain DEFAULT) and equalSelectExpr (RLS USING / WITH CHECK);
+// both wrap the expression the same way, so the helper lives here.
 func parseSelectExpr(expr string) (*pg_query.ParseResult, *pg_query.ResTarget, error) {
 	result, err := pg_query.Parse("SELECT " + expr)
 	if err != nil {
@@ -1348,7 +1348,7 @@ func equalTypeName(a, b string) bool {
 // pg_get_expr, and comparing the canonical deparsed forms.
 //
 // The handling has three layers:
-//  1. Top-level cast strip is symmetric — pg_get_expr always wraps DEFAULT
+//  1. Top-level cast strip is symmetric; pg_get_expr always wraps DEFAULT
 //     values in a cast, while users routinely omit it; users who *do* write
 //     an explicit cast (`DEFAULT 0::integer`) also need to match a DB form
 //     that PG happened to store natively (`0`), so neither side keeps the

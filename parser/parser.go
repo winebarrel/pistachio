@@ -1212,7 +1212,7 @@ func formatTimeTypeName(tn *pg_query.TypeName) (string, bool) {
 	for _, b := range tn.ArrayBounds {
 		// pg_query encodes "[]" as Ival=-1; positive values are explicit
 		// array bounds like "[3]". Anything else (e.g. a non-Integer node)
-		// means we don't know how to format it — fall back to deparse.
+		// means we don't know how to format it; fall back to deparse.
 		i := b.GetInteger()
 		if i == nil {
 			return "", false

@@ -249,7 +249,7 @@ func TestEqualSelectExpr_bothExplicitCastsMatch(t *testing.T) {
 }
 
 func TestEqualSelectExpr_castsDifferTypes(t *testing.T) {
-	// Both sides cast, different target types — not equal (asymmetric rule
+	// Both sides cast, different target types; not equal (asymmetric rule
 	// only fires when desired has no cast at the same position).
 	assert.False(t, equalSelectExpr(
 		"val > '0'::bigint",

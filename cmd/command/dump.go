@@ -58,7 +58,7 @@ func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 //   - filepath.IsLocal must accept the name, which forbids "..", absolute
 //     paths, empty strings, and (on Windows) reserved names.
 //   - The name must already be in Clean form so the on-disk filename matches
-//     the map key returned by DumpResult.Files() — otherwise a non-canonical
+//     the map key returned by DumpResult.Files(); otherwise a non-canonical
 //     entry could silently alias a sibling whose dedup check ran on the
 //     unreduced key.
 func writeDumpFiles(dir string, files map[string]string) (int, error) {

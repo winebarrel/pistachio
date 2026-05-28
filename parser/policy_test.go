@@ -141,7 +141,7 @@ CREATE POLICY q ON public.t AS PERMISSIVE FOR ALL USING (true);`
 }
 
 // PostgreSQL allows ENABLE ROW LEVEL SECURITY and ADD CONSTRAINT in the
-// same ALTER TABLE statement. Both must take effect — earlier versions of
+// same ALTER TABLE statement. Both must take effect; earlier versions of
 // the parser short-circuited after applying the RLS toggle and silently
 // dropped the constraint.
 func TestParseSQL_Policy_MixedRLSAndConstraint(t *testing.T) {

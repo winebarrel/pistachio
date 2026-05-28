@@ -69,7 +69,7 @@ func equalViewDef(current, desired string) bool {
 // statically (SELECT *, target-list expressions without an alias, parse
 // error). That conservatively routes uncertain cases through DROP +
 // CREATE, which always works at the cost of briefly dropping privileges /
-// dependent views — strictly better than leaving the bug in place.
+// dependent views; strictly better than leaving the bug in place.
 //
 // Known limitation: type-only changes on a same-named column (e.g.
 // `SELECT n FROM t` → `SELECT n::bigint AS n FROM t`) are reported as
@@ -587,7 +587,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		} else if !equalViewDef(currentView.Definition, desiredView.Definition) || currentView.Materialized != desiredView.Materialized {
 			// Materialized views always need DROP+CREATE; VIEW↔MATVIEW
 			// switches do too. Regular view definition changes prefer
-			// CREATE OR REPLACE — but PostgreSQL rejects it when the new
+			// CREATE OR REPLACE; but PostgreSQL rejects it when the new
 			// query removes, renames, or reorders an existing output
 			// column, so detect that case and fall back to DROP+CREATE.
 			needsDropCreate := desiredView.Materialized || currentView.Materialized != desiredView.Materialized
@@ -595,7 +595,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				needsDropCreate = true
 			}
 			if needsDropCreate {
-				// When the view was also renamed, drop the old name —
+				// When the view was also renamed, drop the old name;
 				// the database still has it because the ALTER RENAME
 				// was suppressed above. Computed before the drop-policy
 				// branch so the skipped-DROP comment matches the
@@ -683,7 +683,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		}
 
 		// If the type changed (VIEW ↔ MATERIALIZED VIEW) but drop was denied,
-		// the object type hasn't changed yet — skip comment diff.
+		// the object type hasn't changed yet; skip comment diff.
 		if ok && currentView.Materialized != desiredView.Materialized && !dc.IsDropAllowed("view") {
 			continue
 		}

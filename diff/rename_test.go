@@ -71,7 +71,7 @@ func TestRewriteColumnsInIndexDef_IncludeClause(t *testing.T) {
 
 func TestRewriteColumnsInIndexDef_NoCascadeOnChain(t *testing.T) {
 	// Renames a→b alongside b→c must rewrite the index's reference to a (the
-	// original) into b — NOT cascade through b→c into c.
+	// original) into b; NOT cascade through b→c into c.
 	got, err := rewriteColumnsInIndexDef(
 		"CREATE INDEX idx ON public.t USING btree (a, b)",
 		map[string]string{"a": "b", "b": "c"},

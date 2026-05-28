@@ -13,6 +13,6 @@ desired: |
       CONSTRAINT documents_pkey PRIMARY KEY (id)
   );
   ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
-  -- TO PUBLIC and omitted TO are equivalent in PostgreSQL — no diff expected.
+  -- TO PUBLIC and omitted TO are equivalent in PostgreSQL; no diff expected.
   CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = current_user);
 plan: ""

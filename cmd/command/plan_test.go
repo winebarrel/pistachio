@@ -203,7 +203,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 }
 
 func TestPlan_Run_ExecuteCheckFalse_StillPrintsExecute(t *testing.T) {
-	// Plan does not evaluate check SQL — it shows every -- pista:execute
+	// Plan does not evaluate check SQL; it shows every -- pista:execute
 	// statement regardless. So even when the check would return false at
 	// apply time, plan output must contain the execute SQL and must NOT
 	// say "-- No changes".
