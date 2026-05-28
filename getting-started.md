@@ -1,6 +1,6 @@
 # Getting Started with pistachio
 
-This guide walks you through setting up pistachio and managing your PostgreSQL schema declaratively.
+This guide covers setup and basic schema management with pistachio.
 
 ## Prerequisites
 
@@ -23,7 +23,7 @@ export PISTA_CONN_STR='postgres://user:pass@host:5432/mydb'
 pista dump
 ```
 
-If you'd rather not embed credentials in the connection string, supply the password separately via `--password` or `$PISTA_PASSWORD`:
+To keep credentials out of the connection string, pass the password separately via `--password` or `$PISTA_PASSWORD`:
 
 ```bash
 export PISTA_CONN_STR='postgres://user@host:5432/mydb'
@@ -39,7 +39,7 @@ Export your existing database schema to a SQL file:
 pista dump > schema.sql
 ```
 
-This produces a canonical SQL file with your tables, views, enums, indexes, constraints, and comments.
+This produces a SQL file containing tables, views, enums, indexes, constraints, and comments.
 
 You can also split into one file per object:
 
@@ -62,7 +62,7 @@ CREATE TABLE public.users (
 
 ## Step 4: Preview the diff
 
-Use `plan` to see what SQL pistachio would execute without actually changing anything:
+Use `plan` to see the SQL pistachio would execute without applying it:
 
 ```bash
 pista plan schema.sql
@@ -77,7 +77,7 @@ ALTER TABLE public.users ADD COLUMN email text;
 
 ## Step 5: Apply the changes
 
-When you're happy with the plan, apply it:
+Apply the changes:
 
 ```bash
 pista apply schema.sql
@@ -93,7 +93,7 @@ pista plan schema.sql
 
 ## Step 6: Iterate
 
-Repeat steps 3-5 as your schema evolves. Your schema file is always the source of truth.
+Repeat steps 3-5 as the schema changes. The schema file holds the authoritative definition.
 
 ## Common workflows
 
@@ -115,7 +115,7 @@ pista plan schema.sql
 # => ALTER TABLE public.users RENAME COLUMN name TO display_name;
 ```
 
-After applying, you can leave the directive in place (it will be silently skipped) or remove it.
+After applying, leave the directive in place (it is silently skipped) or remove it.
 
 ### Working with specific schemas
 
@@ -142,7 +142,7 @@ pista -n public,myschema dump
 
 ### Schema name mapping
 
-Use `-m` / `--schema-map` when your SQL files use a different schema name than the actual database. This is common when you write SQL against `public` but deploy to a staging-specific schema:
+Use `-m` / `--schema-map` when SQL files use a different schema name than the database. This is common when SQL is written against `public` but deployed to a staging-specific schema:
 
 ```bash
 # Dump "staging" schema but output as "public"
@@ -172,7 +172,7 @@ pista dump --omit-schema > schema.sql
 
 ### Filtering objects
 
-Focus on specific objects with `-I` (include) and `-E` (exclude):
+Filter by object name with `-I` (include) and `-E` (exclude):
 
 ```bash
 pista dump -I 'user*'           # dump only user-related objects
@@ -210,7 +210,7 @@ Valid types: `all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `
 
 ### Using transactions
 
-Wrap apply in a transaction so all changes succeed or fail together:
+Wrap apply in a transaction; all changes succeed or fail as a unit:
 
 ```bash
 pista apply schema.sql --with-tx
@@ -264,6 +264,6 @@ pista plan schema.sql | grep -q "No changes"
 
 ## Tips
 
-- Unnamed constraints are auto-named following PostgreSQL's convention, but pistachio does not currently emulate PostgreSQL's identifier truncation (63 bytes) or collision suffixing, so generated names may differ. **Use explicit `CONSTRAINT <name>` clauses** to avoid ambiguity.
+- Unnamed constraints are auto-named following PostgreSQL's convention, but pistachio does not emulate PostgreSQL's identifier truncation (63 bytes) or collision suffixing, so generated names may differ. Use explicit `CONSTRAINT <name>` clauses to avoid ambiguity.
 - Run `pista plan` before `pista apply` to review changes.
-- Keep your schema file(s) in version control alongside your application code.
+- Keep schema files in version control alongside application code.

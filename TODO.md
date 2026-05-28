@@ -9,7 +9,7 @@ When a column is renamed via `-- pista:renamed-from`, the rewriter only
 updates same-table dependents (indexes, constraints, FKs on the same
 table). The following references are **not** rewritten and may produce a
 redundant `DROP/CREATE` on the first plan (the second run after applying
-the rename comes out clean):
+the rename is clean):
 
 - View / materialized view definitions that `SELECT` the renamed column.
 - Foreign keys in *other* tables whose `REFERENCES this_table(renamed_col)`

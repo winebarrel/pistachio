@@ -4,7 +4,7 @@
 [![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
 
-Declarative schema management tool for PostgreSQL. Define your desired schema in SQL and let `pistachio` figure out the diff.
+Declarative schema management tool for PostgreSQL. Define the desired schema in SQL; pistachio generates the DDL diff.
 
 See also: [Getting Started Guide](getting-started.md)
 
@@ -25,18 +25,15 @@ brew install winebarrel/pistachio/pistachio
 
 Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
 
-## Try it out
+## Demo
 
-A self-contained demo image bundles a local PostgreSQL with a sample
-schema pre-loaded, so you can experiment with `pista` without
-installing anything:
+A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
 
 ```bash
 docker run --rm -it ghcr.io/winebarrel/pistachio-demo
 ```
 
-The container drops you into a shell in `/demo` with `pista` and
-`psql` preconfigured. Edit `desired.sql`, then try:
+The container starts a shell in `/demo` with `pista` and `psql` preconfigured. Edit `desired.sql`, then run:
 
 ```bash
 pista plan  desired.sql     # show the DDL diff
@@ -110,7 +107,7 @@ pista apply schema.sql
 pista apply tables.sql views.sql
 ```
 
-Use `--pre-sql` or `--pre-sql-file` to run SQL before applying changes (mutually exclusive). Also available as `$PISTA_PRE_SQL` / `$PISTA_PRE_SQL_FILE`. Use `--with-tx` to wrap everything in a transaction (also available as `$PISTA_WITH_TX`).
+Use `--pre-sql` or `--pre-sql-file` to run SQL before applying changes (mutually exclusive). Also available as `$PISTA_PRE_SQL` / `$PISTA_PRE_SQL_FILE`. Use `--with-tx` to wrap the apply in a transaction (also available as `$PISTA_WITH_TX`).
 
 ```bash
 # Inline SQL
@@ -133,13 +130,13 @@ CREATE INDEX CONCURRENTLY idx_users_email ON public.users USING btree (email);
 CREATE INDEX idx_users_id ON public.users USING btree (id);
 ```
 
-Use `--concurrently-pre-sql` (or `--concurrently-pre-sql-file`) to run SQL (typically `SET lock_timeout = '...'`) before any `CONCURRENTLY` index DDL. The SQL is only emitted/executed when the plan actually contains `CREATE/DROP INDEX CONCURRENTLY`, so it's safe to set unconditionally. Because `SET` is session-scoped and `CONCURRENTLY` runs outside a transaction, the value carries over to every subsequent `CONCURRENTLY` statement in the same `apply`. Also available as `$PISTA_CONCURRENTLY_PRE_SQL` / `$PISTA_CONCURRENTLY_PRE_SQL_FILE`.
+Use `--concurrently-pre-sql` (or `--concurrently-pre-sql-file`) to run SQL (typically `SET lock_timeout = '...'`) before any `CONCURRENTLY` index DDL. The SQL is emitted only when the plan contains `CREATE/DROP INDEX CONCURRENTLY`. Because `SET` is session-scoped and `CONCURRENTLY` runs outside a transaction, the value carries over to every subsequent `CONCURRENTLY` statement in the same `apply`. Also available as `$PISTA_CONCURRENTLY_PRE_SQL` / `$PISTA_CONCURRENTLY_PRE_SQL_FILE`.
 
 ```bash
 pista apply schema.sql --concurrently-pre-sql "SET lock_timeout = '5s';"
 ```
 
-Use `--disable-index-concurrently` to ignore all `CONCURRENTLY` opt-ins (both inline and directive) and emit plain `CREATE INDEX` / `DROP INDEX` instead. Useful when you want to keep the directives / inline `CONCURRENTLY` in your schema files but run a one-off plan/apply inside a transaction. Also available as `$PISTA_DISABLE_INDEX_CONCURRENTLY`.
+Use `--disable-index-concurrently` to ignore all `CONCURRENTLY` opt-ins (both inline and directive) and emit plain `CREATE INDEX` / `DROP INDEX` instead. This lets you keep the directives in your schema files while running a one-off plan/apply inside a transaction. Also available as `$PISTA_DISABLE_INDEX_CONCURRENTLY`.
 
 ```bash
 pista plan --disable-index-concurrently schema.sql
@@ -149,7 +146,7 @@ pista apply --disable-index-concurrently --with-tx schema.sql
 > [!NOTE]
 > When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`.
 
-Use `--bulk-alter` to combine consecutive `ALTER TABLE` actions on the same table into a single statement with comma-separated actions. This reduces the number of metadata locks acquired and lets PostgreSQL plan the changes together. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs are kept as separate statements. Also available as `$PISTA_BULK_ALTER`.
+Use `--bulk-alter` to combine consecutive `ALTER TABLE` actions on the same table into a single statement with comma-separated actions. This reduces metadata-lock churn and lets PostgreSQL plan the changes together. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs are kept as separate statements. Also available as `$PISTA_BULK_ALTER`.
 
 ```bash
 pista plan --bulk-alter schema.sql
@@ -174,7 +171,7 @@ pista plan --allow-drop all schema.sql
 pista apply --allow-drop column,table schema.sql
 ```
 
-Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so you can see what would be dropped without executing it. The plan still reports `-- No changes` when the only diff would be a suppressed drop, since no executable DDL is generated:
+Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. The plan still reports `-- No changes` when the only diff would be a suppressed drop, since no executable DDL is generated:
 
 ```sql
 -- Plan for schema public (1 table, 0 views, 0 enums, 0 domains)
@@ -189,14 +186,14 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:` so
 
 ### Executing arbitrary SQL
 
-Use `-- pista:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated during `apply`. When it returns `true` the statement is executed, otherwise it is skipped. The simplest form skips when an object already exists:
+Use `-- pista:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated during `apply`. When it returns `true` the statement is executed, otherwise skipped. A common pattern skips when an object already exists:
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ ... $$ LANGUAGE plpgsql;
 ```
 
-For idempotent management of a function whose body changes over time, embed a version tag in `COMMENT ON FUNCTION` and execute only when the installed comment differs. Wrap the `CREATE` and `COMMENT` in a `DO` block so they are a single statement:
+To manage a function whose body changes over time, embed a version tag in `COMMENT ON FUNCTION` and execute only when the installed comment differs. Wrap the `CREATE` and `COMMENT` in a `DO` block so they are a single statement:
 
 ```sql
 -- pista:execute SELECT obj_description(to_regprocedure('public.get_user_count()'), 'pg_proc') IS DISTINCT FROM 'v1'
@@ -208,7 +205,7 @@ DO $do$ BEGIN
 END $do$;
 ```
 
-When you change the body, bump the tag in both places (e.g. `'v1'` → `'v2'`); the next `apply` will re-run.
+When the body changes, update the tag in both places (e.g. `'v1'` → `'v2'`); the next `apply` will re-run.
 
 See [Getting Started](getting-started.md) for details.
 
@@ -222,7 +219,7 @@ pista dump
 
 ### Paging long output
 
-Set `$PISTA_PAGER` to forward `plan` / `apply` / `dump` output through an external command when stdout is a TTY. The command is interpreted by `sh -c`, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected. The pager only kicks in for interactive use. Use `--no-pager` to disable it for a single invocation, or `--pager` to force it on when stdout is not a TTY (e.g. when piping into another pager-aware tool); `PISTA_PAGER` must still be set for `--pager` to do anything.
+Set `$PISTA_PAGER` to forward `plan` / `apply` / `dump` output through an external command when stdout is a TTY. The command is interpreted by `sh -c`, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected; the pager runs only for interactive output. Use `--no-pager` to disable it for a single invocation, or `--pager` to force it on when stdout is not a TTY (e.g. when piping into another pager-aware tool). `PISTA_PAGER` must still be set for `--pager` to do anything.
 
 ```bash
 # Page with less, keeping ANSI colors
@@ -240,7 +237,7 @@ PISTA_PAGER='source-highlight -s sql -f esc' pista --pager dump
 
 ### Schema name mapping
 
-Use `-m` / `--schema-map` to remap schema names. This is useful when you want to manage a database whose schema name differs from the one used in your SQL files.
+Use `-m` / `--schema-map` to remap schema names when the database schema name differs from the one used in your SQL files.
 
 For example, to dump a `staging` schema as if it were `public`:
 
@@ -294,7 +291,7 @@ PISTA_EXCLUDE='tmp_*' pista plan schema.sql
 ```
 
 > [!NOTE]
-> `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference), so use them primarily for inspection (`dump`, `plan`) rather than `apply`.
+> `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference); use them for inspection (`dump`, `plan`), not `apply`.
 
 > [!NOTE]
 > When both a CLI flag and its corresponding environment variable are set, the CLI flag overrides the environment variable (values are not merged). For example, running `PISTA_EXCLUDE='tmp_*' pista plan -E 'foo_*' schema.sql` excludes only `foo_*`; `tmp_*` is ignored.
@@ -360,7 +357,7 @@ ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFER
 ```
 
 > [!TIP]
-> Rename directives that have already been applied are silently skipped, so you can safely leave them in your schema files until cleanup.
+> Rename directives that have already been applied are silently skipped. Leave them in place until cleanup.
 
 #### Column rename caveats
 
@@ -381,7 +378,7 @@ CREATE INDEX idx_users_name ON public.users (display_name);
 
 If the desired side still references the old name, `pista plan` errors out at parse time with a message like `column name referenced in index idx_users_name does not exist on table public.users` (identifiers are quoted only when they aren't safe unquoted). All such unresolved references are reported in a single error.
 
-The following references are **not** auto-rewritten and may produce a redundant `DROP/CREATE` on the first plan (the second run after applying the rename comes out clean):
+The following references are **not** auto-rewritten and may produce a redundant `DROP/CREATE` on the first plan (the second run after applying the rename is clean):
 
 - View / materialized view definitions that `SELECT` the renamed column
 - Foreign keys in *other* tables whose `REFERENCES this_table(renamed_col)` points at the renamed column
@@ -433,7 +430,7 @@ pista plan --allow-drop all schema.sql # review the diff (with drops)
 pista apply schema.sql                 # apply it
 ```
 
-Or split schema into multiple files and use them together:
+Or split the schema across multiple files:
 
 ```bash
 pista dump --split ./schema/       # dump per table/view/enum/domain
@@ -442,11 +439,11 @@ pista apply ./schema/*.sql         # apply it
 ```
 
 > [!NOTE]
-> Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are auto-named by pistachio following PostgreSQL's naming convention (`{table}_pkey`, `{table}_{col}_key`, `{table}_{col}_check`, `{table}_{col}_fkey`, `{table}_{col}_excl`). However, pistachio's auto-naming has the following limitations:
+> Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are auto-named by pistachio following PostgreSQL's convention (`{table}_pkey`, `{table}_{col}_key`, `{table}_{col}_check`, `{table}_{col}_fkey`, `{table}_{col}_excl`). The auto-naming has two limitations:
 > - When multiple constraints would generate the same name, PostgreSQL appends a numeric suffix (e.g. `_1`) that pistachio cannot predict.
 > - PostgreSQL truncates identifier names to 63 bytes (NAMEDATALEN - 1). pistachio does not apply this truncation, so very long table/column names may produce mismatched constraint names.
 >
-> **It is strongly recommended to use explicit `CONSTRAINT <name>` clauses** to avoid these issues.
+> Use explicit `CONSTRAINT <name>` clauses to avoid these issues.
 
 ## Supported Objects
 
