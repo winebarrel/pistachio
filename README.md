@@ -8,25 +8,6 @@ Declarative schema management tool for PostgreSQL. Define your desired schema in
 
 See also: [Getting Started Guide](getting-started.md)
 
-## Why pistachio?
-
-Traditional migration tools make you hand-write and order an ever-growing
-chain of `ALTER` scripts. With pistachio you keep a single source of truth —
-your desired schema as plain SQL — and let the tool compute the DDL to get
-there:
-
-- **Declarative.** Edit your `CREATE TABLE` / `CREATE VIEW` definitions; no
-  migration files to author or sequence.
-- **Just SQL.** Schema files are ordinary PostgreSQL DDL (parsed via
-  pg_query), and `pista dump` round-trips an existing database back into a
-  schema file.
-- **Safe by default.** Destructive changes (dropping tables, columns,
-  constraints, …) are suppressed unless you opt in with `--allow-drop`, and
-  surface as `-- skipped:` comments so nothing is dropped silently.
-- **Production-aware.** `CONCURRENTLY` index builds, `--with-tx`, and
-  `--pre-sql` / `lock_timeout` controls let you apply changes online without
-  long-held locks.
-
 > [!NOTE]
 > **v1.7.0 breaking change:** the CLI binary was renamed from `pist` to `pista`, environment variables from `PIST_*` to `PISTA_*`, and SQL comment directives from `-- pist:` to `-- pista:`. Existing SQL files and shell / CI configurations must be updated before upgrading. See the [1.7.0 changelog entry](CHANGELOG.md#170---2026-05-12) for the full list of renamed names.
 
