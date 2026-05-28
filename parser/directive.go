@@ -133,7 +133,7 @@ func qualifyRenameFrom(value, defaultSchema string) string {
 }
 
 // unquoteIdent strips surrounding double quotes from a SQL identifier and
-// unescapes doubled double-quotes ("" → "). For unquoted identifiers,
+// unescapes doubled double-quotes ("" -> "). For unquoted identifiers,
 // folds to lowercase to match PostgreSQL's behavior.
 func unquoteIdent(s string) string {
 	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
@@ -156,7 +156,7 @@ func normalizeUnqualifiedDirective(s string) string {
 }
 
 // splitQualifiedName splits a potentially schema-qualified name into parts,
-// respecting quoted identifiers. e.g. `"My Schema"."Old Name"` → [`"My Schema"`, `"Old Name"`]
+// respecting quoted identifiers. e.g. `"My Schema"."Old Name"` -> [`"My Schema"`, `"Old Name"`]
 func splitQualifiedName(s string) []string {
 	var parts []string
 	var current strings.Builder
@@ -268,8 +268,8 @@ func findLeadingCommentEnd(s string) int {
 
 // inlineDirectives holds rename directives for columns and constraints within a CREATE TABLE.
 type inlineDirectives struct {
-	Columns     map[string]string // new column name → old column name
-	Constraints map[string]string // new constraint name → old constraint name
+	Columns     map[string]string // new column name -> old column name
+	Constraints map[string]string // new constraint name -> old constraint name
 }
 
 // extractInlineDirectives scans the raw text of a CREATE TABLE statement for
@@ -347,7 +347,7 @@ func scanQuotedIdent(s string) (string, bool) {
 }
 
 // extractConstraintName extracts the constraint name from a CONSTRAINT line.
-// e.g. "CONSTRAINT users_pkey PRIMARY KEY (id)" → "users_pkey"
+// e.g. "CONSTRAINT users_pkey PRIMARY KEY (id)" -> "users_pkey"
 func extractConstraintName(line string) string {
 	line = strings.TrimSpace(line)
 	upper := strings.ToUpper(line)

@@ -295,7 +295,7 @@ func TestEqualViewDef_currentOnlyTypeCast(t *testing.T) {
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_inList(t *testing.T) {
-	// Casts inside an IN list, after the ANY→IN rewrite.
+	// Casts inside an IN list, after the ANY->IN rewrite.
 	assert.True(t, equalViewDef(
 		"SELECT id FROM t WHERE status = ANY (ARRAY['published'::post_status, 'pinned'::post_status])",
 		"SELECT id FROM t WHERE status IN ('published', 'pinned')",
@@ -347,7 +347,7 @@ func TestEqualViewDef_currentOnlyTypeCast_groupBy(t *testing.T) {
 }
 
 func TestEqualViewDef_currentOnlyTypeCast_join(t *testing.T) {
-	// Covers the JoinExpr.Quals position in alignSelectCasts (the IN↔ANY
+	// Covers the JoinExpr.Quals position in alignSelectCasts (the IN<->ANY
 	// variant is already tested in inVsAnyArray_join).
 	assert.True(t, equalViewDef(
 		"SELECT u.id FROM users u JOIN orders o ON o.status = 'paid'::e",
@@ -1117,7 +1117,7 @@ func TestCanCreateOrReplaceView(t *testing.T) {
 			want:    false,
 		},
 		{
-			name:    "desired uses SELECT * (cannot analyze → safer DROP+CREATE)",
+			name:    "desired uses SELECT * (cannot analyze -> safer DROP+CREATE)",
 			current: "SELECT id FROM t",
 			desired: "SELECT * FROM t",
 			want:    false,

@@ -20,7 +20,7 @@ import (
 //     table-qualified columns and omits the default schema, parsed SQL is
 //     the opposite),
 //   - symmetric expression normalization via normalizeSelectExprs:
-//     paren / text-like cast stripping and `= ANY(ARRAY[...])` → `IN (...)`,
+//     paren / text-like cast stripping and `= ANY(ARRAY[...])` -> `IN (...)`,
 //   - asymmetric current-only cast alignment via alignSelectCasts: strips
 //     TypeCasts (notably 'lit'::enum_type) the catalog added but the user
 //     didn't write. Top-level casts at the target list are preserved on
@@ -72,7 +72,7 @@ func equalViewDef(current, desired string) bool {
 // dependent views; strictly better than leaving the bug in place.
 //
 // Known limitation: type-only changes on a same-named column (e.g.
-// `SELECT n FROM t` → `SELECT n::bigint AS n FROM t`) are reported as
+// `SELECT n FROM t` -> `SELECT n::bigint AS n FROM t`) are reported as
 // CREATE-OR-REPLACE-able because the names line up, but PostgreSQL still
 // rejects them with `cannot change data type of view column`. pg_query
 // doesn't perform type inference, so we can't detect this statically;
@@ -240,7 +240,7 @@ func normalizeSelectExprs(node *pg_query.Node) {
 // normalizeTargetExpr is normalizeCheckExpr with a top-level TypeCast
 // preserved. In a SELECT target list the cast type determines the output
 // column type, so symmetric text-cast stripping at that position would
-// hide an intentional `SELECT col` → `SELECT col::text` change.
+// hide an intentional `SELECT col` -> `SELECT col::text` change.
 func normalizeTargetExpr(node *pg_query.Node) *pg_query.Node {
 	if tc := node.GetTypeCast(); tc != nil {
 		tc.Arg = normalizeCheckExpr(tc.Arg)
@@ -269,7 +269,7 @@ func alignTargetCasts(desired, current *pg_query.Node) *pg_query.Node {
 // alignSelectCasts performs the same parallel walk as normalizeSelectExprs but
 // across two trees, applying alignCurrentCasts at each expression position
 // to strip TypeCasts present only on the current side. Used by equalViewDef
-// for the asymmetric current↔desired comparison, and from alignCurrentCasts'
+// for the asymmetric current<->desired comparison, and from alignCurrentCasts'
 // SubLink case for sub-queries inside CHECK / RLS expressions.
 func alignSelectCasts(desired, current *pg_query.Node) {
 	if desired == nil || current == nil {
@@ -389,7 +389,7 @@ func stripQualifications(node *pg_query.Node) {
 	}
 
 	if cr := node.GetColumnRef(); cr != nil {
-		// "table.column" → "column" (remove table prefix)
+		// "table.column" -> "column" (remove table prefix)
 		// Only strip when both parts are plain identifiers (not table.*)
 		if len(cr.Fields) == 2 && cr.Fields[1].GetString_() != nil {
 			cr.Fields = cr.Fields[1:]
@@ -585,7 +585,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				}
 			}
 		} else if !equalViewDef(currentView.Definition, desiredView.Definition) || currentView.Materialized != desiredView.Materialized {
-			// Materialized views always need DROP+CREATE; VIEW↔MATVIEW
+			// Materialized views always need DROP+CREATE; VIEW<->MATVIEW
 			// switches do too. Regular view definition changes prefer
 			// CREATE OR REPLACE; but PostgreSQL rejects it when the new
 			// query removes, renames, or reorders an existing output
@@ -604,7 +604,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				if oldKey, renamed := renamedFrom[k]; renamed {
 					dropName = oldKey
 				}
-				// Materialized views or type changes (VIEW ↔ MATERIALIZED VIEW)
+				// Materialized views or type changes (VIEW <-> MATERIALIZED VIEW)
 				// require DROP and recreate. Only proceed if drops are allowed;
 				// otherwise emit a commented DROP for visibility (no CREATE,
 				// since recreation requires the drop).
@@ -682,7 +682,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			continue
 		}
 
-		// If the type changed (VIEW ↔ MATERIALIZED VIEW) but drop was denied,
+		// If the type changed (VIEW <-> MATERIALIZED VIEW) but drop was denied,
 		// the object type hasn't changed yet; skip comment diff.
 		if ok && currentView.Materialized != desiredView.Materialized && !dc.IsDropAllowed("view") {
 			continue

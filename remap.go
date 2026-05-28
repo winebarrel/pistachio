@@ -8,7 +8,7 @@ import (
 )
 
 // buildDefReplacer builds a strings.Replacer that replaces schema-qualified
-// prefixes in raw SQL definitions (e.g. "staging." → "public.").
+// prefixes in raw SQL definitions (e.g. "staging." -> "public.").
 //
 // All inputs to this replacer come from canonical SQL; pg_get_*def output
 // from the catalog or pg_query deparse output from the parser; so any

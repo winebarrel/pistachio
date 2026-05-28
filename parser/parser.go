@@ -450,11 +450,11 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 // constraints, following the naming convention from PostgreSQL's
 // ChooseConstraintName (src/backend/catalog/pg_constraint.c):
 //
-//	PRIMARY KEY → {table}_pkey
-//	UNIQUE      → {table}_{col}_key  (or {table}_key if colName is empty)
-//	CHECK       → {table}_{col}_check (or {table}_check if colName is empty)
-//	EXCLUSION   → {table}_{col}_excl  (or {table}_excl if colName is empty)
-//	FOREIGN KEY → {table}_{col}_fkey  (or {table}_fkey if colName is empty)
+//	PRIMARY KEY -> {table}_pkey
+//	UNIQUE      -> {table}_{col}_key  (or {table}_key if colName is empty)
+//	CHECK       -> {table}_{col}_check (or {table}_check if colName is empty)
+//	EXCLUSION   -> {table}_{col}_excl  (or {table}_excl if colName is empty)
+//	FOREIGN KEY -> {table}_{col}_fkey  (or {table}_fkey if colName is empty)
 //
 // colName is the first column involved when one is derivable; it may be empty
 // for table-level constraints where no single column name is available.
@@ -1163,7 +1163,7 @@ func deparseTypeName(tn *pg_query.TypeName) (string, error) {
 		return "", fmt.Errorf("unexpected deparse output for type: %s", sql)
 	}
 	typeName := strings.TrimSpace(rest[:lastParen])
-	// pg_query may qualify built-in types with "pg_catalog." (e.g. json → pg_catalog.json).
+	// pg_query may qualify built-in types with "pg_catalog." (e.g. json -> pg_catalog.json).
 	// Strip the prefix so the result matches format_type() output.
 	typeName = strings.TrimPrefix(typeName, "pg_catalog.")
 	return normalizeTypeName(typeName), nil
@@ -1246,7 +1246,7 @@ var typeAliases = map[string]string{
 }
 
 func normalizeTypeName(name string) string {
-	// Handle types with modifiers like "varchar(255)" → "character varying(255)"
+	// Handle types with modifiers like "varchar(255)" -> "character varying(255)"
 	base := name
 	suffix := ""
 	if idx := strings.Index(name, "("); idx != -1 {
@@ -1257,7 +1257,7 @@ func normalizeTypeName(name string) string {
 		suffix = name[idx:]
 	}
 
-	// Normalize spacing in type modifiers: "numeric(10, 2)" → "numeric(10,2)"
+	// Normalize spacing in type modifiers: "numeric(10, 2)" -> "numeric(10,2)"
 	suffix = strings.ReplaceAll(suffix, ", ", ",")
 
 	if canonical, ok := typeAliases[base]; ok {

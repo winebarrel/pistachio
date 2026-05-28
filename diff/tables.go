@@ -276,7 +276,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 				// change as an error so the user explicitly drops/re-adds.
 				// Use exprChanged (strict equalSelectExpr) rather than
 				// equalDefault: equalDefault has DEFAULT-specific semantics
-				// (symmetric top-level cast strip, `'0'::bigint` ≡
+				// (symmetric top-level cast strip, `'0'::bigint` ==
 				// `'0'::integer`) that would silently hide a real top-level
 				// cast change or a cast-target-type change on a GENERATED
 				// expression. equalSelectExpr keeps the asymmetric strip
@@ -363,7 +363,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// IDENTITY requires the column to have no default and NOT NULL set.
 	switch {
 	case !curIsIdent && desIsIdent:
-		// none → identity: clear default and ensure NOT NULL, then ADD IDENTITY.
+		// none -> identity: clear default and ensure NOT NULL, then ADD IDENTITY.
 		// Catalog reports Default=nil for serial/bigserial/smallserial columns
 		// even though they carry a hidden nextval() default that would block
 		// ADD IDENTITY, so detect those by TypeName as well.
@@ -375,11 +375,11 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		}
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" ADD GENERATED "+identityKind(desired.Identity)+" AS IDENTITY;")
 	case curIsIdent && !desIsIdent:
-		// identity → none: DROP IDENTITY. The column stays NOT NULL afterwards;
+		// identity -> none: DROP IDENTITY. The column stays NOT NULL afterwards;
 		// the NOT NULL diff below will emit DROP NOT NULL if desired is nullable.
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP IDENTITY IF EXISTS;")
 	case curIsIdent && desIsIdent && current.Identity != desired.Identity:
-		// always ↔ by default
+		// always <-> by default
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET GENERATED "+identityKind(desired.Identity)+";")
 	}
 
@@ -503,7 +503,7 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 			}
 		}
 	case *pg_query.Node_SubLink:
-		// Recurse into the contained SELECT so that IN ↔ ANY(ARRAY[...])
+		// Recurse into the contained SELECT so that IN <-> ANY(ARRAY[...])
 		// rewrites and text-cast strips reach sub-queries inside EXISTS /
 		// IN-subquery / ANY-subquery predicates. CHECK / DEFAULT /
 		// generated-column / index-predicate callers can't actually emit
@@ -542,7 +542,7 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 // float4 respectively, so both forms are accepted, but only the unqualified
 // keyword (`integer`) and the `pg_catalog`-qualified canonical form
 // (`pg_catalog.int4`) match; a user-defined type that happens to be named
-// e.g. `myapp.int4` does not gate the Sval→numeric coercion below, so a
+// e.g. `myapp.int4` does not gate the Sval->numeric coercion below, so a
 // stripped cast on a custom-type Sval is left as-is rather than rewritten
 // to a built-in numeric A_Const. (The strip itself is unconditional; that
 // is the asymmetric rule from #201; but coercion is narrowed to the
@@ -578,7 +578,7 @@ func isNumericTypeName(tn *pg_query.TypeName) bool {
 }
 
 // desiredIsNumericAConst reports whether a desired-side node is a bare
-// numeric A_Const (Ival or Fval). Used to gate the Sval→numeric coercion
+// numeric A_Const (Ival or Fval). Used to gate the Sval->numeric coercion
 // in the asymmetric cast-strip path so that desired-side quoted literals
 // (`'0'`, `'1'`) keep matching the cast-stripped Sval as before.
 func desiredIsNumericAConst(n *pg_query.Node) bool {
@@ -644,7 +644,7 @@ func numericAConstFromString(s string) *pg_query.Node {
 			},
 		}
 	}
-	// ParseFloat returns ErrRange (with ±Inf as value) for syntactically
+	// ParseFloat returns ErrRange (with +/-Inf as value) for syntactically
 	// valid numerics that exceed float64; but PG's `numeric` carries those
 	// just fine and pg_query's Fval is just a string, so accept ErrRange as
 	// "lexically a number, store the original string verbatim".
@@ -852,7 +852,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	for name, currentCon := range current.All() {
 		desiredCon, ok := desired.GetOk(name)
 		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
-			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT
 			if ok && equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
 				continue
 			}
@@ -873,7 +873,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	for name, desiredCon := range desired.All() {
 		currentCon, ok := current.GetOk(name)
 		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
-			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT
 			if ok && equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
 				stmts = append(stmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
 				continue
@@ -1032,7 +1032,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 		}
 		currentFk := current.Get(name)
 		if !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
-			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT (no recreation needed)
+			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT (no recreation needed)
 			if equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
 				continue
 			}
@@ -1063,7 +1063,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 		desiredFk, ok := desired.GetOk(name)
 		currentFk := current.Get(name)
 		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
-			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT
 			if ok && equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
 				continue
 			}
@@ -1084,7 +1084,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	for name, desiredFk := range desired.All() {
 		currentFk, ok := current.GetOk(name)
 		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
-			// NOT VALID → validated with same definition can use VALIDATE CONSTRAINT
+			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT
 			if ok && equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
 				addStmts = append(addStmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
 				continue
@@ -1162,7 +1162,7 @@ func parseIndexDef(def string) (*pg_query.ParseResult, *pg_query.IndexStmt, erro
 // table refs compare equal), canonicalises explicit ASC / NULLS LAST /
 // NULLS FIRST defaults, and runs normalizeCheckExpr over each
 // IndexElem.Expr (expression-index body) and the partial-index
-// WhereClause so symmetric paren / text-cast / `IN`↔`ANY` differences
+// WhereClause so symmetric paren / text-cast / `IN`<->`ANY` differences
 // don't surface as false diffs.
 func normalizeIndexStmt(is *pg_query.IndexStmt) {
 	if is == nil {
@@ -1227,9 +1227,9 @@ func alignIndexCasts(desired, current *pg_query.IndexStmt) {
 
 // equalIndexDef compares two CREATE INDEX definitions by parsing both
 // sides, canonicalising sort / nulls / schema, normalising sub-expression
-// formatting (parens, text-like casts, `IN`↔`= ANY(ARRAY[...])`), and
+// formatting (parens, text-like casts, `IN`<->`= ANY(ARRAY[...])`), and
 // stripping any current-only TypeCast in the partial-index WhereClause
-// and expression-index IndexElem.Expr (with Sval→numeric coercion when
+// and expression-index IndexElem.Expr (with Sval->numeric coercion when
 // the desired side is a bare numeric A_Const); same pipeline as
 // equalConstraintDef.
 func equalIndexDef(current, desired string) bool {
@@ -1356,7 +1356,7 @@ func equalTypeName(a, b string) bool {
 //     is a numeric A_Const, the Sval is coerced to Ival / Fval so the two
 //     deparse identically.
 //  2. normalizeCheckExpr handles symmetric text-like cast strip, paren
-//     cleanup, and `= ANY(ARRAY[...])` ↔ `IN (...)` on both sides.
+//     cleanup, and `= ANY(ARRAY[...])` <-> `IN (...)` on both sides.
 //  3. alignCurrentCasts handles the inner asymmetric strip (current has
 //     `TypeCast` at a position desired doesn't) for expressions like
 //     `now() - '18 years'::interval` where the cast is nested under an
@@ -1392,7 +1392,7 @@ func equalDefault(current, desired *string) bool {
 // stripDefaultTopLevelCast removes a top-level TypeCast wrapper from node,
 // optionally coercing the resulting Sval back to a numeric A_Const when
 // the cast is on a numeric type and peer is itself a numeric (non-string)
-// A_Const. Used by equalDefault to keep `DEFAULT 0::integer` ≡ `DEFAULT 0`
+// A_Const. Used by equalDefault to keep `DEFAULT 0::integer` == `DEFAULT 0`
 // even when the value form on each side parses to a different A_Const
 // kind (Sval vs Ival).
 func stripDefaultTopLevelCast(node, peer *pg_query.Node) *pg_query.Node {

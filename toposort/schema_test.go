@@ -714,7 +714,7 @@ func TestOrderFromSchema_FKWithDefaultSchema(t *testing.T) {
 	posts.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	posts.ForeignKeys.Set("posts_user_fk", &model.ForeignKey{
 		Constraint: model.Constraint{Name: "posts_user_fk"},
-		RefSchema:  nil, // nil schema → defaults to "public"
+		RefSchema:  nil, // nil schema -> defaults to "public"
 		RefTable:   &refTable,
 	})
 	tables.Set("public.posts", posts)

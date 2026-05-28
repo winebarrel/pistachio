@@ -257,7 +257,7 @@ func orderStatements(
 	})
 
 	// Assemble:
-	// FK drops → view drops → creates/alters → table/domain/enum drops → FK adds → view creates
+	// FK drops -> view drops -> creates/alters -> table/domain/enum drops -> FK adds -> view creates
 	var stmts []string
 	for _, ts := range tagStatements(tableDiff.FKDropStmts, dropPosMap) {
 		stmts = append(stmts, ts.sql)
@@ -391,7 +391,7 @@ func extractObjectName(sql string) string {
 		{"COMMENT ON VIEW "},
 		{"COMMENT ON TYPE "},
 		{"COMMENT ON DOMAIN "},
-		{"COMMENT ON COLUMN "}, // schema.table.column → take schema.table
+		{"COMMENT ON COLUMN "}, // schema.table.column -> take schema.table
 	}
 
 	upper := strings.ToUpper(sql)
@@ -407,12 +407,12 @@ func extractObjectName(sql string) string {
 			strings.HasPrefix(upper, "DROP INDEX CONCURRENTLY ") ||
 			strings.HasPrefix(upper, "DROP INDEX ") {
 			// CREATE INDEX ... ON [ONLY] schema.table ...
-			// DROP INDEX returns "" (no ON clause) → pos=-1
+			// DROP INDEX returns "" (no ON clause) -> pos=-1
 			return extractIndexTable(sql)
 		}
 
 		if strings.HasPrefix(upper, "ALTER INDEX ") {
-			// ALTER INDEX schema.idx RENAME TO ... → extract table from idx name context
+			// ALTER INDEX schema.idx RENAME TO ... -> extract table from idx name context
 			// Index statements belong to the table they're on, but ALTER INDEX
 			// doesn't contain the table name directly. Return "" to use pos=-1.
 			return ""
@@ -429,7 +429,7 @@ func extractObjectName(sql string) string {
 		name := extractFirstIdentifier(rest)
 
 		if strings.HasPrefix(upper, "COMMENT ON COLUMN ") {
-			// schema.table.column → schema.table
+			// schema.table.column -> schema.table
 			parts := splitIdentifier(name, 3)
 			if len(parts) >= 2 {
 				return joinIdentifierParts(parts[:2])
@@ -478,7 +478,7 @@ func extractFirstIdentifier(s string) string {
 }
 
 // splitIdentifier splits a possibly-quoted schema-qualified identifier into parts.
-// e.g., `"MySchema"."MyTable".col` → ["\"MySchema\"", "\"MyTable\"", "col"]
+// e.g., `"MySchema"."MyTable".col` -> ["\"MySchema\"", "\"MyTable\"", "col"]
 func splitIdentifier(ident string, maxParts int) []string {
 	var parts []string
 	var part strings.Builder
