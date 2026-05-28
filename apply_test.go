@@ -407,7 +407,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	var buf bytes.Buffer
 	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
-	// Function should be executed (check returns true — function doesn't exist yet)
+	// Function should be executed (check returns true; function doesn't exist yet)
 	assert.Contains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
 
 	// Verify function exists
@@ -447,7 +447,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	var buf bytes.Buffer
 	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
-	// Function should be SKIPPED (check returns false — function already exists)
+	// Function should be SKIPPED (check returns false; function already exists)
 	assert.NotContains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
 }
 
@@ -571,7 +571,7 @@ CREATE TABLE public.users (
 );`)
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
-	// Schemaless function — should resolve to public via search_path
+	// Schemaless function; should resolve to public via search_path
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`
 CREATE TABLE users (
     id integer NOT NULL,
@@ -767,7 +767,7 @@ func TestApply_ConcurrentlyDirective_WithTx_NoIndexChanges_OK(t *testing.T) {
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
 
-	// Schema already has the index — no changes will be generated
+	// Schema already has the index; no changes will be generated
 	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
     id integer NOT NULL,
     CONSTRAINT users_pkey PRIMARY KEY (id)

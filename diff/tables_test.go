@@ -217,6 +217,27 @@ func TestDiffTables_noChange(t *testing.T) {
 	assert.Empty(t, result.Stmts)
 }
 
+func TestDiffColumns_generatedToggle(t *testing.T) {
+	// One side STORED GENERATED, the other not, must error; PostgreSQL
+	// has no in-place toggle for GENERATED.
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("total", &model.Column{
+		Name:      "total",
+		TypeName:  "numeric(10,2)",
+		Generated: 's',
+		Default:   new("price * quantity"),
+	})
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("total", &model.Column{
+		Name:     "total",
+		TypeName: "numeric(10,2)",
+		NotNull:  true,
+	})
+	_, _, _, err := diffColumns("public.products", current, desired, allowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot toggle GENERATED")
+}
+
 func TestDiffColumns_generatedExpressionChange(t *testing.T) {
 	// Both sides STORED GENERATED but the expression text differs → error,
 	// because PostgreSQL has no in-place `ALTER COLUMN ... SET GENERATED`.
@@ -240,7 +261,7 @@ func TestDiffColumns_generatedExpressionChange(t *testing.T) {
 }
 
 func TestDiffColumns_generatedExpressionTopLevelCastAdded(t *testing.T) {
-	// Adding a top-level cast on the desired side must NOT slip through —
+	// Adding a top-level cast on the desired side must NOT slip through;
 	// the strict equalSelectExpr (no DEFAULT-style symmetric top-level
 	// strip) reports the change and diffColumns errors. Regression for
 	// the Copilot review on PR #207.
@@ -265,7 +286,7 @@ func TestDiffColumns_generatedExpressionTopLevelCastAdded(t *testing.T) {
 
 func TestDiffColumns_generatedExpressionEqualCastAsymmetric(t *testing.T) {
 	// Asymmetric cast (current has `::numeric` cast on a column that the
-	// desired side leaves bare) must NOT trigger the error — equalSelectExpr
+	// desired side leaves bare) must NOT trigger the error; equalSelectExpr
 	// strips current-only TypeCasts.
 	current := orderedmap.New[string, *model.Column]()
 	current.Set("total", &model.Column{
@@ -497,7 +518,7 @@ func TestDiffColumns_notNullName_addOrDrop_isNoOp(t *testing.T) {
 func TestDiffColumns_renameNotNullConstraint_skipsIdentityColumn(t *testing.T) {
 	// Identity columns are implicitly NOT NULL, and Table.SQL / addColumnSQL
 	// intentionally do not render "CONSTRAINT <name> NOT NULL" on identity
-	// columns. The rename branch must therefore also skip them — emitting a
+	// columns. The rename branch must therefore also skip them; emitting a
 	// RENAME CONSTRAINT here would surface a name the dumper hides.
 	oldName := "users_id_nn_old"
 	newName := "users_id_nn_new"
@@ -1076,7 +1097,7 @@ func TestDiffForeignKeys_change_denied_alwaysExecutes(t *testing.T) {
 
 func TestDiffForeignKeys_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
 	// Renamed FK with definition change → DROP (old name) + ADD (new name).
-	// The new name is in desired so it's not a "pure removal" — deny does not
+	// The new name is in desired so it's not a "pure removal"; deny does not
 	// suppress it.
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_old", &model.ForeignKey{
@@ -1256,7 +1277,7 @@ func TestEqualDefault_currentStringCastVsDesiredNumericCast(t *testing.T) {
 	// cast wraps an Sval ("0"), desired's cast wraps an Ival (0). Both
 	// casts get stripped symmetrically; the Sval→numeric coercion must
 	// look through the peer's still-present TypeCast to decide that the
-	// peer "will be" numeric after its own strip — otherwise the surviving
+	// peer "will be" numeric after its own strip; otherwise the surviving
 	// Sval `'0'` diffs against the desired bare `0`.
 	assert.True(t, equalDefault(
 		new("'0'::integer"),
@@ -1268,7 +1289,7 @@ func TestEqualDefault_castsDifferTypesStillEqual(t *testing.T) {
 	// Unlike equalConstraintDef, equalDefault treats `'0'::bigint` and
 	// `'0'::integer` as equal: the symmetric top-level cast strip applies
 	// to both sides (pg_get_expr always wraps DEFAULTs in a cast, and the
-	// column type — not the literal's cast — drives the eventual storage),
+	// column type; not the literal's cast; drives the eventual storage),
 	// so the two collapse to the same `'0'` and compare equal.
 	assert.True(t, equalDefault(
 		new("'0'::bigint"),
@@ -1289,7 +1310,7 @@ func TestEqualDefault_desiredCastCurrentBareStillEqual(t *testing.T) {
 
 func TestEqualDefault_currentBigintCastStripped(t *testing.T) {
 	// Bigint values that don't fit in int32 take the Fval fallback path
-	// inside numericAConstFromString — verify the coerce still matches
+	// inside numericAConstFromString; verify the coerce still matches
 	// the user's bare numeric.
 	assert.True(t, equalDefault(
 		new("'9000000000'::bigint"),
@@ -1933,7 +1954,7 @@ func TestEqualConstraintDef_customNumericNamedTypeNotCoerced(t *testing.T) {
 	// (e.g. `myapp.int4`) should NOT trigger the Sval→numeric coercion.
 	// alignCurrentCasts still strips the `::myapp.int4` wrapper (the strip
 	// itself is unconditional, per the asymmetric rule from #201), but the
-	// surviving A_Const{Sval "0"} is left as-is — so it deparses to `'0'`
+	// surviving A_Const{Sval "0"} is left as-is; so it deparses to `'0'`
 	// and compares unequal to the desired bare integer `0` (A_Const{Ival}).
 	// This is what keeps custom-type casts from silently matching unrelated
 	// built-in numeric desired forms.
@@ -1962,7 +1983,7 @@ func TestEqualConstraintDef_currentDoublePrecisionCastStripped(t *testing.T) {
 
 func TestEqualConstraintDef_castsDifferNumericTypesStillDifferent(t *testing.T) {
 	// When both sides carry casts but the target types differ, the asymmetric
-	// rule does not fire and the difference still surfaces — even for numeric
+	// rule does not fire and the difference still surfaces; even for numeric
 	// types where the Sval→numeric coercion would otherwise erase the type.
 	assert.False(t, equalConstraintDef(
 		"CHECK (val > '0'::bigint)",
@@ -2130,7 +2151,7 @@ func TestEqualIndexDef_customSchemaVsNoSchema(t *testing.T) {
 }
 
 func TestEqualIndexDef_differentSchemas(t *testing.T) {
-	// Different schemas should still be equal — schema is ignored in comparison
+	// Different schemas should still be equal; schema is ignored in comparison
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id)",
@@ -2210,7 +2231,7 @@ func TestEqualIndexDef_whereCurrentCastInsideBoolExpr(t *testing.T) {
 func TestEqualIndexDef_whereCustomNumericNamedTypeNotCoerced(t *testing.T) {
 	// Guard: a user-defined type matching a built-in numeric name does NOT
 	// gate the Sval→numeric coercion. The cast is still stripped (asymmetric
-	// rule from #201), but the surviving Sval is not rewritten — so the
+	// rule from #201), but the surviving Sval is not rewritten; so the
 	// desired bare integer stays unequal.
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::myapp.int4)",
@@ -2229,7 +2250,7 @@ func TestEqualIndexDef_expressionCurrentCastStripped(t *testing.T) {
 
 func TestEqualIndexDef_whereBothExplicitCastsMatch(t *testing.T) {
 	// When desired explicitly carries the same cast as current, normal
-	// comparison succeeds — the asymmetric strip does not over-fire.
+	// comparison succeeds; the asymmetric strip does not over-fire.
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON events USING btree (id) WHERE (occurred_at >= '2020-01-01'::date)",
 		"CREATE INDEX idx ON events USING btree (id) WHERE occurred_at >= '2020-01-01'::date",
@@ -2237,7 +2258,7 @@ func TestEqualIndexDef_whereBothExplicitCastsMatch(t *testing.T) {
 }
 
 func TestEqualIndexDef_whereCastsDifferTypes(t *testing.T) {
-	// Both sides cast but on different numeric types — they remain unequal.
+	// Both sides cast but on different numeric types; they remain unequal.
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::bigint)",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > '0'::integer",
@@ -2343,7 +2364,7 @@ func TestEqualIndexDef_parseError(t *testing.T) {
 }
 
 func TestEqualIndexDef_notIndexStmt(t *testing.T) {
-	// Valid SQL but not an INDEX statement — falls back to string comparison
+	// Valid SQL but not an INDEX statement; falls back to string comparison
 	assert.False(t, equalIndexDef("SELECT 1", "CREATE INDEX idx ON users (id)"))
 	assert.True(t, equalIndexDef("SELECT 1", "SELECT 1"))
 }
@@ -2941,7 +2962,7 @@ func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericType(t *testing.T) {
 }
 
 func TestPeerIsNumericAtTopLevel_typeCastOnColumnRef(t *testing.T) {
-	// `(col)::integer` — TypeCast on a non-AConst arg should not count as
+	// `(col)::integer`; TypeCast on a non-AConst arg should not count as
 	// "would be numeric after strip"; the strip leaves a ColumnRef.
 	_, target, err := parseSelectExpr("(col)::integer")
 	require.NoError(t, err)
@@ -2949,7 +2970,7 @@ func TestPeerIsNumericAtTopLevel_typeCastOnColumnRef(t *testing.T) {
 }
 
 func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericSval(t *testing.T) {
-	// `'abc'::integer` — TypeCast on a Sval that doesn't parse as a
+	// `'abc'::integer`; TypeCast on a Sval that doesn't parse as a
 	// number. Not coercible, so the gate must reject it.
 	_, target, err := parseSelectExpr("'abc'::integer")
 	require.NoError(t, err)
@@ -2986,7 +3007,7 @@ func TestAlignIndexCasts_nilInputs(t *testing.T) {
 func TestAlignIndexCasts_paramCountMismatch(t *testing.T) {
 	// When the two IndexStmts have different IndexParams counts (e.g. the
 	// user removed a column), the per-column alignment can't pair items
-	// meaningfully — alignIndexCasts returns early instead of indexing
+	// meaningfully; alignIndexCasts returns early instead of indexing
 	// out-of-range. The deparse-string comparison upstream still surfaces
 	// the difference.
 	desired := &pg_query.IndexStmt{IndexParams: []*pg_query.Node{}}

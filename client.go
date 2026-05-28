@@ -28,7 +28,7 @@ func NewClient(options *Options) *Client {
 // but library callers can construct Options directly and forget it.
 // catalog.NewCatalog already errors on empty Schemas, but Schemas[0] is
 // also indexed in diff_all.go before that catalog call would short-circuit
-// in some refactor paths — so guard explicitly with a clear message.
+// in some refactor paths; so guard explicitly with a clear message.
 //
 // Empty/whitespace entries are also rejected: model.Ident drops empty
 // components silently, which would otherwise produce malformed DDL or
@@ -69,11 +69,11 @@ func (client *Client) buildConnConfig() (*pgx.ConnConfig, error) {
 // TCP connections render as a libpq URI (postgres://user@host:port/dbname).
 // IPv6 hosts are bracketed via net.JoinHostPort; user and dbname are
 // URL-escaped via net/url so identifiers with URI-meaningful characters
-// (including '/' in the dbname) round-trip safely — Path holds the decoded
+// (including '/' in the dbname) round-trip safely; Path holds the decoded
 // form and RawPath the encoded form, so url.URL.String() uses RawPath when
 // the default encoding would differ. libpq unix-socket connections (host
 // starts with "/") render as a keyword/value string ("host=/path dbname=db
-// user=u") instead — percent-encoding the socket path into the URI host
+// user=u") instead; percent-encoding the socket path into the URI host
 // component would be unreadable in a comment.
 func (client *Client) ConnInfoComment() (string, error) {
 	cfg, err := client.buildConnConfig()

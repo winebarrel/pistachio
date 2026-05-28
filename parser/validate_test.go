@@ -347,7 +347,7 @@ func TestValidateColumnRefs_MultiTableScoping(t *testing.T) {
 
 func TestValidateColumnRefs_CompositeKeyPartialMiss(t *testing.T) {
 	// In INDEX (a, b) with only b in the desired column set, only "a" must
-	// be reported — not "b".
+	// be reported; not "b".
 	tbl := newValidatableTable("t", "id", "b")
 	tbl.Indexes.Set("idx", &model.Index{
 		Name:       "idx",

@@ -346,7 +346,7 @@ CREATE TABLE public.users (
 // helpers used by String()/Files() build their map with unqualified keys when
 // OmitSchema is true, matching the schema-stripped values they store.
 // Previously the helpers stripped Schema from the value but kept the
-// schema-qualified name as the map key — invisible through String()/Files()
+// schema-qualified name as the map key; invisible through String()/Files()
 // (both iterate values) but a self-inconsistent intermediate that would
 // leak to any future caller iterating by key.
 func TestDumpResult_OmitSchema_HelperKeyConsistency(t *testing.T) {

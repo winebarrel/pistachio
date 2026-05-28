@@ -475,7 +475,7 @@ func TestEqualViewDef_targetListTopLevelTextCast_added(t *testing.T) {
 func TestEqualViewDef_targetListTopLevelTextCast_removed(t *testing.T) {
 	// A user-removed top-level cast (current has cast, desired doesn't)
 	// also changes the view column type. alignCurrentCasts would normally
-	// strip the current-only cast — at the top of a target list we must
+	// strip the current-only cast; at the top of a target list we must
 	// not, so the diff still surfaces.
 	assert.False(t, equalViewDef(
 		"SELECT id::text FROM t",
@@ -484,7 +484,7 @@ func TestEqualViewDef_targetListTopLevelTextCast_removed(t *testing.T) {
 }
 
 func TestEqualViewDef_targetListTopLevelTextCast_bothPresent(t *testing.T) {
-	// Both sides have the same top-level cast — no diff.
+	// Both sides have the same top-level cast; no diff.
 	assert.True(t, equalViewDef(
 		"SELECT id::text FROM t",
 		"SELECT id::text FROM t",
@@ -1188,7 +1188,7 @@ func TestCanCreateOrReplaceView(t *testing.T) {
 func TestViewOutputColumns_NegativePaths(t *testing.T) {
 	// Direct table-driven coverage for viewOutputColumns /
 	// selectOutputColumns input forms that canCreateOrReplaceView only
-	// hits incidentally — locking the ok=false branches against future
+	// hits incidentally; locking the ok=false branches against future
 	// refactors and trimming the patch's uncovered-line count.
 	tests := []struct {
 		name string
@@ -1218,7 +1218,7 @@ func TestViewOutputColumns_NegativePaths(t *testing.T) {
 func TestDiffViews_renamePlusRecreateDropsOldNameAndSkipsRename(t *testing.T) {
 	// A view that is both renamed AND has a column-shape change needs
 	// DROP+CREATE. The DROP has to target the old name (the DB hasn't
-	// renamed yet) and the ALTER RENAME must be suppressed — otherwise
+	// renamed yet) and the ALTER RENAME must be suppressed; otherwise
 	// the apply runs `DROP VIEW <new name>` first (no such view) and
 	// fails before the rename can move the row.
 	current := orderedmap.New[string, *model.View]()
@@ -1246,7 +1246,7 @@ func TestDiffViews_renamePlusRecreateDropsOldNameAndSkipsRename(t *testing.T) {
 }
 
 func TestDiffViews_renameWithoutDefinitionChangeKeepsRename(t *testing.T) {
-	// Pure rename (definition unchanged) must still emit ALTER RENAME —
+	// Pure rename (definition unchanged) must still emit ALTER RENAME;
 	// the new behavior only suppresses the rename when DROP+CREATE is
 	// also required.
 	current := orderedmap.New[string, *model.View]()

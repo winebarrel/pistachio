@@ -56,7 +56,7 @@ func diffPolicies(
 
 	// Renamed policies whose definition also requires DROP+CREATE: skip the
 	// RENAME and let the recreate-with-new-name cover the change. Keyed by
-	// newName because renamedFrom is keyed by newName (unique in desired) —
+	// newName because renamedFrom is keyed by newName (unique in desired);
 	// concatenated keys could collide on quoted identifiers containing the
 	// separator.
 	needsRecreateRenamed := map[string]bool{}
@@ -217,7 +217,7 @@ func formatRoles(roles []string) []string {
 
 // exprChanged compares two optional expression strings via equalSelectExpr.
 // Used for RLS policy USING / WITH CHECK and stored-generated column
-// expression comparisons — both want pg_get_expr-added casts and formatting
+// expression comparisons; both want pg_get_expr-added casts and formatting
 // noise normalised away without picking up equalDefault's DEFAULT-specific
 // symmetric top-level cast strip.
 func exprChanged(a, b *string) bool {
@@ -240,7 +240,7 @@ func exprChanged(a, b *string) bool {
 //
 // Unlike equalDefault, this does NOT apply a symmetric top-level
 // TypeCast strip and does NOT treat `'0'::bigint` ≡ `'0'::integer` as
-// equal — a non-text top-level cast (e.g. `(...)::numeric`,
+// equal; a non-text top-level cast (e.g. `(...)::numeric`,
 // `(...)::time without time zone`), or a change to a cast's target
 // type, surfaces as a real difference. Text-like casts (`::text`,
 // `::varchar`) remain stripped symmetrically by normalizeCheckExpr

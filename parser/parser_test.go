@@ -1805,7 +1805,7 @@ CREATE INDEX CONCURRENTLY idx_name ON public.users (name);`
 	idx, ok := tbl.Indexes.GetOk("idx_name")
 	require.True(t, ok)
 	assert.True(t, idx.Concurrently)
-	// Definition must be canonical (without CONCURRENTLY) — Concurrently
+	// Definition must be canonical (without CONCURRENTLY); Concurrently
 	// is the single source of truth and gets re-applied at diff time.
 	assert.NotContains(t, idx.Definition, "CONCURRENTLY")
 }

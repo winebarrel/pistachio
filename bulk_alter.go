@@ -77,7 +77,7 @@ func parseMergeableAlterTable(stmt string) (fqtn, action string, ok bool) {
 		return "", "", false
 	}
 	rest := stmt[len(prefix):]
-	// Reject ALTER TABLE ONLY ... and ALTER TABLE IF EXISTS ... — both reserve
+	// Reject ALTER TABLE ONLY ... and ALTER TABLE IF EXISTS ...; both reserve
 	// non-action semantics that we don't want to silently combine.
 	if strings.HasPrefix(rest, "ONLY ") || strings.HasPrefix(rest, "IF EXISTS ") {
 		return "", "", false
@@ -108,7 +108,7 @@ func parseMergeableAlterTable(stmt string) (fqtn, action string, ok bool) {
 //   - ADD COLUMN / DROP COLUMN
 //   - ALTER COLUMN ... (all subforms: SET DATA TYPE, SET/DROP DEFAULT,
 //     SET/DROP NOT NULL, IDENTITY transitions)
-//   - ADD CONSTRAINT (CHECK / UNIQUE — FK lives in TableDiffResult.FKAddStmts
+//   - ADD CONSTRAINT (CHECK / UNIQUE; FK lives in TableDiffResult.FKAddStmts
 //     and never reaches mergeAlterTable's input)
 //   - DROP CONSTRAINT (same FK note)
 //

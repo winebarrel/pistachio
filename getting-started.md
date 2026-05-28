@@ -239,7 +239,7 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-Add a check SQL after `-- pista:execute` to conditionally execute — the SQL runs only when the check returns `true`:
+Add a check SQL after `-- pista:execute` to conditionally execute. The SQL runs only when the check returns `true`:
 
 ```sql
 -- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_timestamp')

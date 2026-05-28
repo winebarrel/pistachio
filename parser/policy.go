@@ -12,7 +12,7 @@ import (
 // toggle subcommands (ENABLE / DISABLE / FORCE / NO FORCE) and applies them
 // to the table's flags. Non-RLS subcommands are ignored, so the caller can
 // invoke parseAlterTableConstraint on the same statement to pick up any
-// AT_AddConstraint subcommands — PostgreSQL allows mixing the two in one
+// AT_AddConstraint subcommands; PostgreSQL allows mixing the two in one
 // ALTER TABLE.
 func applyAlterTableRLS(as *pg_query.AlterTableStmt, t *model.Table) {
 	for _, cmdNode := range as.Cmds {

@@ -150,7 +150,7 @@ func TestConnInfoComment_URLEscapesSpecialChars(t *testing.T) {
 }
 
 func TestConnInfoComment_DBNameWithSlashEscaped(t *testing.T) {
-	// url.URL.Path does NOT escape '/' by default — without setting RawPath a
+	// url.URL.Path does NOT escape '/' by default; without setting RawPath a
 	// dbname like "team/db" would render as multiple path segments
 	// ("postgres://...:5432/team/db") and break URI round-trip. RawPath plus
 	// url.PathEscape forces the '/' to be encoded as %2F.

@@ -321,7 +321,7 @@ func TestWriteDumpFiles_RejectsUnsafeNames(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			// Build the split dir under a controlled parent so we can
 			// verify both that the split dir stays empty AND that the
-			// parent contains only the split dir — i.e. no file slipped
+			// parent contains only the split dir; i.e. no file slipped
 			// out via traversal.
 			parent := t.TempDir()
 			dir := filepath.Join(parent, "split")

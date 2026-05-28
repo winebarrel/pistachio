@@ -150,7 +150,7 @@ func resolveTypeDep(typeName, defaultSchema string, defined map[string]bool) str
 // first, then fall back to public. Returns "" if no defined object matches.
 //
 // `defined` keys are model.Ident-formed (schema quoted when needed), so the
-// schema component must go through model.Ident too — raw concatenation would
+// schema component must go through model.Ident too; raw concatenation would
 // miss schemas like "MySchema". `name` is taken as-is because callers already
 // normalize it to the form that appears in `defined` (typically the deparsed
 // identifier for type names, or model.Ident-quoted for raw RangeVar names).

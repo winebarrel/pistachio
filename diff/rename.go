@@ -210,7 +210,7 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 // `rewriteColumnRefsInConstraints`, and `rewriteColumnRefsInForeignKeys`
 // (called from diffTable), so a plain rename does not produce redundant
 // drop/recreate operations on those dependents. View definitions and
-// foreign-key references in *other* tables are still not rewritten — see
+// foreign-key references in *other* tables are still not rewritten; see
 // TODO.md "Auto-rewrite of column references in views and cross-table FKs".
 func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Column]) ([]string, *orderedmap.Map[string, *model.Column], error) {
 	var stmts []string
@@ -484,7 +484,7 @@ func rewriteColumnRefsInExpr(node *pg_query.Node, renames map[string]string) {
 // back to the original definition.
 //
 // All renames are applied in a single AST walk, so chained renames (a→b and
-// b→c) do not cascade — each original column name is matched once against
+// b→c) do not cascade; each original column name is matched once against
 // the renames map.
 func rewriteColumnsInIndexDef(def string, renames map[string]string) (string, error) {
 	result, err := pg_query.Parse(def)

@@ -421,7 +421,7 @@ func TestOrderFromSchema_FKWithNilRefTable(t *testing.T) {
 
 // A view body referencing an explicitly schema-qualified table that is not in
 // `defined` (e.g. a system table or a table outside the configured schemas)
-// must produce no dependency edge — qualifyRangeVar returns "".
+// must produce no dependency edge; qualifyRangeVar returns "".
 func TestOrderFromSchema_ViewBodyExplicitRefToUndefinedTable(t *testing.T) {
 	views := orderedmap.New[string, *model.View]()
 	views.Set("app.from_pg_catalog", &model.View{
@@ -569,7 +569,7 @@ func TestOrderFromSchema_FKWithQuotedRefTable(t *testing.T) {
 
 	// Both names require quoting (mixed case). Source ("Comments") sorts
 	// before target ("Users") alphabetically, so without the FK edge being
-	// registered, the toposort fallback would emit source first — which is
+	// registered, the toposort fallback would emit source first; which is
 	// wrong. The edge can only be registered when the FK lookup uses the
 	// same quoted form as the map keys.
 	refTable := "Users"

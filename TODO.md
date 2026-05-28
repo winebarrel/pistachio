@@ -83,7 +83,7 @@ of the constraint. PostgreSQL supports
 `ALTER TABLE ... ALTER CONSTRAINT ... [NOT] DEFERRABLE [INITIALLY ...]`
 for in-place changes; using it would avoid the round-trip.
 
-Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit. Optimisation rather than a bug — current
+Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit. Optimisation rather than a bug; current
 behaviour is correct, just heavier than necessary.
 
 ## Standalone Sequences are not first-class
@@ -128,7 +128,7 @@ rewrite ColumnRef qualifications.
 Fix would be to walk `SubLink` / `RangeSubselect` nodes and strip column
 qualifiers that match the FROM-clause table alias. The same approach
 would also benefit constraint CHECK expressions if they ever contain
-subqueries (uncommon — PostgreSQL discourages them).
+subqueries (uncommon; PostgreSQL discourages them).
 
 Origin: post-RLS-support audit. Workaround: avoid subqueries in policy
 expressions, or use a function that wraps the subquery.
@@ -145,7 +145,7 @@ Recommendation is to use literal role names in desired SQL. The parser
 accepts the reserved specs for convenience but the limitation should be
 documented prominently.
 
-Origin: post-RLS-support audit. No fix planned — this is a PostgreSQL
+Origin: post-RLS-support audit. No fix planned. This is a PostgreSQL
 behavior that affects the catalog round-trip, not a pistachio bug.
 
 ## Named NOT NULL constraints: name add/remove on existing columns
@@ -176,7 +176,7 @@ A third limitation: on PG<18 the parser still captures the inline name,
 but PostgreSQL silently drops it at apply time. The diff layer treats
 the resulting "current has no name, desired has a name" mismatch as a
 no-op (the same v1 behavior used for adding a name to an existing
-NOT NULL on PG18), so no drift loop occurs — the explicit name is
+NOT NULL on PG18), so no drift loop occurs; the explicit name is
 simply not honored on PG<18. This is a PG18-only feature and should
 be documented as such if it ever surfaces in user-facing docs.
 
