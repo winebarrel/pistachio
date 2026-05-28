@@ -217,6 +217,27 @@ func TestDiffTables_noChange(t *testing.T) {
 	assert.Empty(t, result.Stmts)
 }
 
+func TestDiffColumns_generatedToggle(t *testing.T) {
+	// One side STORED GENERATED, the other not, must error; PostgreSQL
+	// has no in-place toggle for GENERATED.
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("total", &model.Column{
+		Name:      "total",
+		TypeName:  "numeric(10,2)",
+		Generated: 's',
+		Default:   new("price * quantity"),
+	})
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("total", &model.Column{
+		Name:     "total",
+		TypeName: "numeric(10,2)",
+		NotNull:  true,
+	})
+	_, _, _, err := diffColumns("public.products", current, desired, allowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot toggle GENERATED")
+}
+
 func TestDiffColumns_generatedExpressionChange(t *testing.T) {
 	// Both sides STORED GENERATED but the expression text differs → error,
 	// because PostgreSQL has no in-place `ALTER COLUMN ... SET GENERATED`.
