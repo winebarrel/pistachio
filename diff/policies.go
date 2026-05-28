@@ -234,12 +234,12 @@ func exprChanged(a, b *string) bool {
 // in `SELECT <expr>`) are semantically equal under the strict asymmetric
 // cast normalization: parses both via parseSelectExpr, runs
 // normalizeCheckExpr symmetrically (text-like cast strip, paren cleanup,
-// `IN`↔`= ANY(ARRAY[...])`), strips any current-only TypeCast via
+// `IN`<->`= ANY(ARRAY[...])`), strips any current-only TypeCast via
 // alignCurrentCasts, and coerces stripped numeric Sval back to Ival/Fval
 // when the desired side is a bare numeric A_Const.
 //
 // Unlike equalDefault, this does NOT apply a symmetric top-level
-// TypeCast strip and does NOT treat `'0'::bigint` ≡ `'0'::integer` as
+// TypeCast strip and does NOT treat `'0'::bigint` == `'0'::integer` as
 // equal; a non-text top-level cast (e.g. `(...)::numeric`,
 // `(...)::time without time zone`), or a change to a cast's target
 // type, surfaces as a real difference. Text-like casts (`::text`,

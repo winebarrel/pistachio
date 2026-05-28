@@ -77,7 +77,7 @@ func TestOrderStatements_Fallback(t *testing.T) {
 	desiredDomains := orderedmap.New[string, *model.Domain]()
 	desiredViews := orderedmap.New[string, *model.View]()
 
-	// Create two tables with mutual FK references → cycle
+	// Create two tables with mutual FK references -> cycle
 	refA := "a"
 	refB := "b"
 	schemaPublic := "public"
@@ -175,13 +175,13 @@ func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
 	)
 
 	require.Len(t, result, 2)
-	// view_b depends on view_a → view_b must be dropped first (reverse topo order)
+	// view_b depends on view_a -> view_b must be dropped first (reverse topo order)
 	assert.Contains(t, result[0], "view_b", "dependent view dropped first")
 	assert.Contains(t, result[1], "view_a", "dependency dropped second")
 }
 
 func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
-	// Current schema has cyclic FK → drop ordering should fall back
+	// Current schema has cyclic FK -> drop ordering should fall back
 	refA := "a"
 	refB := "b"
 	schemaPublic := "public"
@@ -257,9 +257,9 @@ func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {
 	domainDiff := &diff.DomainDiffResult{}
 	tableDiff := &diff.TableDiffResult{
 		Stmts: []string{
-			// RENAME uses old name → not in desired posMap → pos=-1
+			// RENAME uses old name -> not in desired posMap -> pos=-1
 			"ALTER TABLE public.users RENAME TO accounts;",
-			// Column change uses new name → in desired posMap
+			// Column change uses new name -> in desired posMap
 			"ALTER TABLE public.accounts ADD COLUMN name text;",
 		},
 	}

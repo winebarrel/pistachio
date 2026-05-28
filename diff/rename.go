@@ -453,7 +453,7 @@ func cloneMap[K comparable, V any](m *orderedmap.Map[K, V]) *orderedmap.Map[K, V
 	return clone
 }
 
-// collectColumnRenames returns a map of old column name → new column name
+// collectColumnRenames returns a map of old column name -> new column name
 // for desired columns annotated with -- pista:renamed-from.
 func collectColumnRenames(desired *orderedmap.Map[string, *model.Column]) map[string]string {
 	renames := make(map[string]string)
@@ -468,8 +468,8 @@ func collectColumnRenames(desired *orderedmap.Map[string, *model.Column]) map[st
 // rewriteColumnRefsInExpr walks an expression tree and rewrites each
 // unqualified ColumnRef whose name appears in renames to the mapped new
 // name, mutating the tree in place. Each ColumnRef is matched against the
-// original-name set in a single pass, so chained renames (a→b alongside
-// b→c) cannot cascade.
+// original-name set in a single pass, so chained renames (a->b alongside
+// b->c) cannot cascade.
 func rewriteColumnRefsInExpr(node *pg_query.Node, renames map[string]string) {
 	pgast.WalkExprColumnRefs(node, func(s *pg_query.String) {
 		if newName, ok := renames[s.Sval]; ok {
@@ -479,12 +479,12 @@ func rewriteColumnRefsInExpr(node *pg_query.Node, renames map[string]string) {
 }
 
 // rewriteColumnsInIndexDef returns a new index definition with column
-// references rewritten according to the renames map (old → new). Returns an
+// references rewritten according to the renames map (old -> new). Returns an
 // error (and an empty string) if pg_query parse/deparse fails; callers fall
 // back to the original definition.
 //
-// All renames are applied in a single AST walk, so chained renames (a→b and
-// b→c) do not cascade; each original column name is matched once against
+// All renames are applied in a single AST walk, so chained renames (a->b and
+// b->c) do not cascade; each original column name is matched once against
 // the renames map.
 func rewriteColumnsInIndexDef(def string, renames map[string]string) (string, error) {
 	result, err := pg_query.Parse(def)
@@ -518,7 +518,7 @@ func rewriteColumnsInIndexDef(def string, renames map[string]string) (string, er
 
 // rewriteColumnsInConstraintDef returns a new constraint definition fragment
 // (e.g. "PRIMARY KEY (id)", "CHECK ((x > 0))", "FOREIGN KEY (a) REFERENCES t(b)")
-// with column references rewritten according to the renames map (old → new).
+// with column references rewritten according to the renames map (old -> new).
 // PkAttrs (referenced columns on the foreign side) are intentionally NOT
 // rewritten because they refer to a different table.
 //
@@ -598,7 +598,7 @@ func rewriteColumnRefsInConstraints(cons *orderedmap.Map[string, *model.Constrai
 // renameColumnKeys returns a clone of the columns map where each key in
 // renames is replaced by its mapped new name. Iteration is single-pass
 // (each existing key is matched once against the renames map) so chained
-// renames such as a→b alongside b→c do not cascade. Order is preserved.
+// renames such as a->b alongside b->c do not cascade. Order is preserved.
 func renameColumnKeys(cols *orderedmap.Map[string, *model.Column], renames map[string]string) *orderedmap.Map[string, *model.Column] {
 	out := orderedmap.New[string, *model.Column]()
 	for name, col := range cols.All() {

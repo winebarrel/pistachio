@@ -239,7 +239,7 @@ func TestDiffColumns_generatedToggle(t *testing.T) {
 }
 
 func TestDiffColumns_generatedExpressionChange(t *testing.T) {
-	// Both sides STORED GENERATED but the expression text differs → error,
+	// Both sides STORED GENERATED but the expression text differs -> error,
 	// because PostgreSQL has no in-place `ALTER COLUMN ... SET GENERATED`.
 	current := orderedmap.New[string, *model.Column]()
 	current.Set("total", &model.Column{
@@ -541,7 +541,7 @@ func TestDiffColumns_renameNotNullConstraint_skipsIdentityColumn(t *testing.T) {
 }
 
 func TestDiffColumns_setNotNull_withDesiredName_ignoresName(t *testing.T) {
-	// Nullable → NOT NULL with explicit desired name. v1 emits SET NOT NULL only;
+	// Nullable -> NOT NULL with explicit desired name. v1 emits SET NOT NULL only;
 	// the name is not applied (it would require PG18's standalone ADD CONSTRAINT
 	// NOT NULL syntax).
 	name := "users_name_nn"
@@ -558,7 +558,7 @@ func TestDiffColumns_setNotNull_withDesiredName_ignoresName(t *testing.T) {
 }
 
 func TestDiffColumns_dropNotNull_loseCurrentName(t *testing.T) {
-	// NOT NULL with explicit current name → nullable. DROP NOT NULL implicitly
+	// NOT NULL with explicit current name -> nullable. DROP NOT NULL implicitly
 	// drops the constraint (and the name with it).
 	name := "users_name_nn"
 
@@ -1096,7 +1096,7 @@ func TestDiffForeignKeys_change_denied_alwaysExecutes(t *testing.T) {
 }
 
 func TestDiffForeignKeys_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
-	// Renamed FK with definition change → DROP (old name) + ADD (new name).
+	// Renamed FK with definition change -> DROP (old name) + ADD (new name).
 	// The new name is in desired so it's not a "pure removal"; deny does not
 	// suppress it.
 	current := orderedmap.New[string, *model.ForeignKey]()
@@ -1241,7 +1241,7 @@ func TestEqualDefault_currentTimestampCastStripped(t *testing.T) {
 
 func TestEqualDefault_currentNegativeIntCastStripped(t *testing.T) {
 	// Negative integer DEFAULT: DB emits `'-40'::integer`, user writes `-40`.
-	// Requires the numeric Sval→Ival coercion alongside the cast strip.
+	// Requires the numeric Sval->Ival coercion alongside the cast strip.
 	assert.True(t, equalDefault(
 		new("'-40'::integer"),
 		new("-40"),
@@ -1275,7 +1275,7 @@ func TestEqualDefault_bothExplicitCastsMatch(t *testing.T) {
 func TestEqualDefault_currentStringCastVsDesiredNumericCast(t *testing.T) {
 	// Asymmetric A_Const kind under matching top-level casts: current's
 	// cast wraps an Sval ("0"), desired's cast wraps an Ival (0). Both
-	// casts get stripped symmetrically; the Sval→numeric coercion must
+	// casts get stripped symmetrically; the Sval->numeric coercion must
 	// look through the peer's still-present TypeCast to decide that the
 	// peer "will be" numeric after its own strip; otherwise the surviving
 	// Sval `'0'` diffs against the desired bare `0`.
@@ -1329,7 +1329,7 @@ func TestEqualDefault_currentLargeNumericCastStripped(t *testing.T) {
 
 func TestEqualDefault_customNumericNamedTypeNotCoerced(t *testing.T) {
 	// Same guard as the CHECK-constraint version: a user-defined type
-	// matching a built-in numeric name does not gate the Sval→numeric
+	// matching a built-in numeric name does not gate the Sval->numeric
 	// coercion, so the surviving Sval still compares unequal to a
 	// desired bare integer.
 	assert.False(t, equalDefault(
@@ -1581,7 +1581,7 @@ func TestDiffForeignKeys_renameAndNotValid(t *testing.T) {
 }
 
 func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
-	// Rename fk_old→fk_new was already applied in DB (current has fk_new).
+	// Rename fk_old->fk_new was already applied in DB (current has fk_new).
 	// Desired still has RenameFrom but also changes Validated.
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_new", &model.ForeignKey{
@@ -1842,7 +1842,7 @@ func TestEqualConstraintDef_bothExplicitCastsMatch(t *testing.T) {
 }
 
 func TestEqualConstraintDef_castsDifferTypes(t *testing.T) {
-	// Both sides have a cast but the target types differ → not equal.
+	// Both sides have a cast but the target types differ -> not equal.
 	assert.False(t, equalConstraintDef(
 		"CHECK (val > '0'::bigint)",
 		"CHECK (val > '0'::integer)",
@@ -1901,7 +1901,7 @@ func TestEqualConstraintDef_currentCastInArrayLiteralStripped(t *testing.T) {
 func TestEqualConstraintDef_currentNegativeIntCastStripped(t *testing.T) {
 	// pg_get_constraintdef emits negative integer literals as `'-40'::integer`
 	// to dodge the unary-minus precedence trap; user writes bare `-40`.
-	// The cast strip plus Sval→Ival coercion makes them compare equal.
+	// The cast strip plus Sval->Ival coercion makes them compare equal.
 	assert.True(t, equalConstraintDef(
 		"CHECK (vacationhours >= '-40'::integer AND vacationhours <= 240)",
 		"CHECK (vacationhours >= -40 AND vacationhours <= 240)",
@@ -1941,7 +1941,7 @@ func TestEqualConstraintDef_currentNegativeFloatCastStripped(t *testing.T) {
 
 func TestEqualConstraintDef_currentLargeNumericCastStripped(t *testing.T) {
 	// Numeric literals beyond float64 range (PG `numeric` carries arbitrary
-	// precision). The Sval→Fval coercion must accept these so the strip is
+	// precision). The Sval->Fval coercion must accept these so the strip is
 	// not silently undone for very large values.
 	assert.True(t, equalConstraintDef(
 		"CHECK (price <= '1e400'::numeric)",
@@ -1951,7 +1951,7 @@ func TestEqualConstraintDef_currentLargeNumericCastStripped(t *testing.T) {
 
 func TestEqualConstraintDef_customNumericNamedTypeNotCoerced(t *testing.T) {
 	// A user-defined type that happens to share a built-in numeric name
-	// (e.g. `myapp.int4`) should NOT trigger the Sval→numeric coercion.
+	// (e.g. `myapp.int4`) should NOT trigger the Sval->numeric coercion.
 	// alignCurrentCasts still strips the `::myapp.int4` wrapper (the strip
 	// itself is unconditional, per the asymmetric rule from #201), but the
 	// surviving A_Const{Sval "0"} is left as-is; so it deparses to `'0'`
@@ -1984,7 +1984,7 @@ func TestEqualConstraintDef_currentDoublePrecisionCastStripped(t *testing.T) {
 func TestEqualConstraintDef_castsDifferNumericTypesStillDifferent(t *testing.T) {
 	// When both sides carry casts but the target types differ, the asymmetric
 	// rule does not fire and the difference still surfaces; even for numeric
-	// types where the Sval→numeric coercion would otherwise erase the type.
+	// types where the Sval->numeric coercion would otherwise erase the type.
 	assert.False(t, equalConstraintDef(
 		"CHECK (val > '0'::bigint)",
 		"CHECK (val > '0'::integer)",
@@ -2212,7 +2212,7 @@ func TestEqualIndexDef_whereCurrentTimeCastStripped(t *testing.T) {
 
 func TestEqualIndexDef_whereCurrentNegativeIntCastStripped(t *testing.T) {
 	// Negative integer literal: pg_get_indexdef emits `'-40'::integer`,
-	// user writes `-40`. Requires the Sval→Ival coercion alongside the
+	// user writes `-40`. Requires the Sval->Ival coercion alongside the
 	// asymmetric strip.
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON balances USING btree (id) WHERE (amount >= '-40'::integer)",
@@ -2230,7 +2230,7 @@ func TestEqualIndexDef_whereCurrentCastInsideBoolExpr(t *testing.T) {
 
 func TestEqualIndexDef_whereCustomNumericNamedTypeNotCoerced(t *testing.T) {
 	// Guard: a user-defined type matching a built-in numeric name does NOT
-	// gate the Sval→numeric coercion. The cast is still stripped (asymmetric
+	// gate the Sval->numeric coercion. The cast is still stripped (asymmetric
 	// rule from #201), but the surviving Sval is not rewritten; so the
 	// desired bare integer stays unequal.
 	assert.False(t, equalIndexDef(
@@ -2941,7 +2941,7 @@ func TestParseDefaultExpr_success(t *testing.T) {
 func TestStripDefaultTopLevelCast_stripsWhenPeerHasNoCast(t *testing.T) {
 	// Top-level TypeCast is removed regardless of peer's shape, as long as
 	// the cast is at the root. equalDefault relies on this to collapse
-	// `'hello'::text` ≡ `'hello'`.
+	// `'hello'::text` == `'hello'`.
 	_, target, err := parseSelectExpr("'hello'::text")
 	require.NoError(t, err)
 	result := stripDefaultTopLevelCast(target.Val, nil)

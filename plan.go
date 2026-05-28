@@ -14,10 +14,10 @@ type PlanOptions struct {
 	Files                    []string `arg:"" help:"Path to the desired schema SQL file(s)."`
 	PreSQL                   string   `xor:"pre-sql" env:"PISTA_PRE_SQL" help:"SQL to prepend to the plan output."`
 	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PISTA_PRE_SQL_FILE" help:"Path to a SQL file to prepend to the plan output."`
-	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL" help:"SQL to run before CONCURRENTLY index operations (e.g. SET lock_timeout). Only emitted when the diff includes CONCURRENTLY index DDL."`
-	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to run before CONCURRENTLY index operations."`
-	DisableIndexConcurrently bool     `env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore all CONCURRENTLY opt-ins (both -- pista:concurrently directives and inline CREATE/DROP INDEX CONCURRENTLY) and emit plain CREATE/DROP INDEX."`
-	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs are kept separate."`
+	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL" help:"SQL to run before CONCURRENTLY index DDL (e.g. SET lock_timeout). Emitted only when the diff contains CONCURRENTLY index DDL."`
+	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to run before CONCURRENTLY index DDL."`
+	DisableIndexConcurrently bool     `env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
+	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 }
 
 // ObjectCount holds the number of objects inspected by type.
@@ -91,7 +91,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		stmts = append(stmts, parser.FormatExecuteStmt(es))
 	}
 
-	// Prefix order matches apply: PreSQL → concurrently-pre-SQL → DDL.
+	// Prefix order matches apply: PreSQL -> concurrently-pre-SQL -> DDL.
 	// Skipped entirely when there is nothing to execute, so an empty plan
 	// stays empty instead of leaking a bare SET / pre-SQL line.
 	if len(stmts) > 0 {

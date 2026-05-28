@@ -268,7 +268,7 @@ func TestEqualSelectExpr_desiredCastCurrentBare(t *testing.T) {
 
 func TestEqualSelectExpr_customNumericNamedTypeNotCoerced(t *testing.T) {
 	// A user-defined type that happens to share a built-in numeric name
-	// (e.g. `myapp.int4`) does NOT gate the Sval→numeric coercion.
+	// (e.g. `myapp.int4`) does NOT gate the Sval->numeric coercion.
 	// alignCurrentCasts still strips the wrapper (unconditional under the
 	// asymmetric rule), but the surviving A_Const{Sval "0"} is left as-is
 	// and compares unequal to the desired bare integer `0`. Same guard as
@@ -280,7 +280,7 @@ func TestEqualSelectExpr_customNumericNamedTypeNotCoerced(t *testing.T) {
 }
 
 func TestNormalizeRoles(t *testing.T) {
-	assert.Equal(t, []string{"public"}, normalizeRoles(nil), "empty → [public]")
+	assert.Equal(t, []string{"public"}, normalizeRoles(nil), "empty -> [public]")
 	assert.Equal(t, []string{"a", "b"}, normalizeRoles([]string{"b", "a"}), "sorted")
 }
 
@@ -336,7 +336,7 @@ func TestDiffPolicies_RenameAndRecreate(t *testing.T) {
 	cur := orderedmap.New[string, *model.Policy]()
 	des := orderedmap.New[string, *model.Policy]()
 	cur.Set("old", newPolicy("old", 'r', withUsing("true")))
-	// Rename old → new AND change command from SELECT to ALL.
+	// Rename old -> new AND change command from SELECT to ALL.
 	des.Set("new", newPolicy("new", '*', withUsing("true"), renameFrom("old")))
 
 	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})

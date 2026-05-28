@@ -15,7 +15,7 @@ var version string
 var cli struct {
 	pistachio.Options
 	Version kong.VersionFlag
-	Pager   *bool `name:"pager" negatable:"" help:"Force paging of long output via $PISTA_PAGER, bypassing the TTY check. Use --no-pager to disable. PISTA_PAGER must still be set."`
+	Pager   *bool `name:"pager" negatable:"" help:"Force paging via $PISTA_PAGER even when stdout is not a TTY. PISTA_PAGER must be set."`
 
 	Apply command.Apply `cmd:"" help:"Apply schema changes to the database."`
 	Plan  command.Plan  `cmd:"" help:"Print the schema diff SQL without applying it."`

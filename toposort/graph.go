@@ -8,7 +8,7 @@ import (
 // graph is a directed acyclic graph for topological sorting.
 type graph struct {
 	nodes map[string]bool
-	edges map[string][]string // from → [to ...] meaning "from depends on to"
+	edges map[string][]string // from -> [to ...] meaning "from depends on to"
 }
 
 // newGraph creates a new empty graph.
@@ -39,7 +39,7 @@ func (g *graph) AddEdge(from, to string) {
 func (g *graph) Sort() ([]string, error) {
 	// Build in-degree map and reverse adjacency list
 	inDegree := make(map[string]int)
-	dependents := make(map[string][]string) // to → [from ...] (who depends on to)
+	dependents := make(map[string][]string) // to -> [from ...] (who depends on to)
 
 	for n := range g.nodes {
 		inDegree[n] = 0
@@ -47,7 +47,7 @@ func (g *graph) Sort() ([]string, error) {
 
 	for from, tos := range g.edges {
 		for _, to := range tos {
-			// "from depends on to" means edge to → from in execution order
+			// "from depends on to" means edge to -> from in execution order
 			inDegree[from]++
 			dependents[to] = append(dependents[to], from)
 		}

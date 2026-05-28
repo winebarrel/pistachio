@@ -70,8 +70,8 @@ func TestRewriteColumnsInIndexDef_IncludeClause(t *testing.T) {
 }
 
 func TestRewriteColumnsInIndexDef_NoCascadeOnChain(t *testing.T) {
-	// Renames a→b alongside b→c must rewrite the index's reference to a (the
-	// original) into b; NOT cascade through b→c into c.
+	// Renames a->b alongside b->c must rewrite the index's reference to a (the
+	// original) into b; NOT cascade through b->c into c.
 	got, err := rewriteColumnsInIndexDef(
 		"CREATE INDEX idx ON public.t USING btree (a, b)",
 		map[string]string{"a": "b", "b": "c"},
@@ -220,7 +220,7 @@ func TestRewriteColumnsInConstraintDef_CheckInList(t *testing.T) {
 }
 
 func TestRewriteColumnsInConstraintDef_NoCascadeOnChain(t *testing.T) {
-	// Renames a→b and b→c must not cascade.
+	// Renames a->b and b->c must not cascade.
 	got, err := rewriteColumnsInConstraintDef(
 		"UNIQUE (a, b)",
 		map[string]string{"a": "b", "b": "c"},
@@ -291,7 +291,7 @@ func TestRenameColumnKeys_RemapsAndPreservesOrder(t *testing.T) {
 }
 
 func TestRenameColumnKeys_NoCascadeOnChain(t *testing.T) {
-	// a→b alongside b→c must not cascade through a single column to c.
+	// a->b alongside b->c must not cascade through a single column to c.
 	in := orderedmap.New[string, *model.Column]()
 	in.Set("a", &model.Column{Name: "a"})
 	in.Set("b", &model.Column{Name: "b"})

@@ -481,7 +481,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	var buf bytes.Buffer
 	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
-	// No check SQL → always execute
+	// No check SQL -> always execute
 	assert.Contains(t, buf.String(), "CREATE OR REPLACE FUNCTION")
 }
 
@@ -672,7 +672,7 @@ func TestApply_ExecError(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`)
 
-	// Desired has a column with a type that references a nonexistent type → exec error on ALTER TABLE
+	// Desired has a column with a type that references a nonexistent type -> exec error on ALTER TABLE
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
     id integer NOT NULL,

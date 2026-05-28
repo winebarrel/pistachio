@@ -12,7 +12,7 @@ import (
 // directly (integration tests in pistachio_test do not contribute here).
 
 func TestParseSQL_Policy_DefaultSchemaFallback(t *testing.T) {
-	// Unqualified table reference in CREATE POLICY → schema falls back to
+	// Unqualified table reference in CREATE POLICY -> schema falls back to
 	// defaultSchema (public).
 	sql := `CREATE TABLE public.t (id int);
 ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
