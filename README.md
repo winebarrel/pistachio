@@ -62,9 +62,8 @@ Flags:
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
       --version
-      --[no-]pager            Force paging of long output via $PISTA_PAGER,
-                              bypassing the TTY check. Use --no-pager to
-                              disable. PISTA_PAGER must still be set.
+      --[no-]pager            Force paging via $PISTA_PAGER even when stdout is
+                              not a TTY. PISTA_PAGER must be set.
 
 Commands:
   apply <files> ... [flags]
