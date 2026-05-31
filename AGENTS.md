@@ -50,7 +50,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - Root-level integration tests use `package pistachio_test`.
 - Test fixtures are YAML files in `testdata/`. Required fields vary by test suite: `apply` uses `init`/`desired`/`applied`, `plan` uses `init`/`desired`/`plan`/`error`, `dump` uses `init`/`dump`, and `parser` uses `input`/`expected`. The plan/apply/dump harnesses also accept optional fields, but **the set differs per suite** (the lists below are not interchangeable):
   - `dump`: `omit_schema`, `include`/`exclude`/`enable`/`disable`.
-  - `plan`: `count`, `drop_policy`, `disallowed_drops`, `disable_index_concurrently`, `include`/`exclude`/`enable`/`disable`, `pre_sql`/`pre_sql_file`/`concurrently_pre_sql`/`concurrently_pre_sql_file`.
+  - `plan`: `count`, `drop_policy`, `disallowed_drops`, `disable_index_concurrently`, `force_index_concurrently`, `include`/`exclude`/`enable`/`disable`, `pre_sql`/`pre_sql_file`/`concurrently_pre_sql`/`concurrently_pre_sql_file`.
   - `apply`: everything `plan` accepts (without the `plan`/`error` fields), plus `applied_sql` and `verify_no_drift`.
 
   The authoritative list is the `planTestCase` / `applyTestCase` / `dumpTestCase` structs at the top of `plan_test.go` / `apply_test.go` / `dump_test.go`. Check the suite-specific struct when writing a new fixture.
