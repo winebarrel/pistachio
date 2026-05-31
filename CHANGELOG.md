@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.11.0] - 2026-05-31
+
+* Add `--force-index-concurrently` (env `$PISTA_FORCE_INDEX_CONCURRENTLY`) to `plan` and `apply`. Forces CONCURRENTLY on every `CREATE INDEX` / `DROP INDEX` the diff emits, including pure drops (indexes removed from desired) that the `-- pista:concurrently` directive cannot reach because catalog-derived indexes do not carry the flag. Conflicts with `--disable-index-concurrently` on both subcommands and with `--with-tx` on apply; both are enforced as kong xor groups. ([#254](https://github.com/winebarrel/pistachio/pull/254))
+
 ## [1.10.6] - 2026-05-28
 
 * Replace the em dash in two GENERATED column error messages with a semicolon: `cannot toggle GENERATED; DROP COLUMN + ADD COLUMN is required` and `cannot change GENERATED expression; DROP COLUMN + ADD COLUMN is required`. ([#242](https://github.com/winebarrel/pistachio/pull/242))
