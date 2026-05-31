@@ -25,6 +25,7 @@ type diffAllOptions struct {
 	ConcurrentlyPreSQL       string
 	ConcurrentlyPreSQLFile   string
 	DisableIndexConcurrently bool
+	ForceIndexConcurrently   bool
 	BulkAlter                bool
 }
 
@@ -92,8 +93,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	desiredTables := options.filterTables(client.reverseRemapTableSchemas(desired.Tables))
 	desiredViews := options.filterViews(client.reverseRemapViewSchemas(desired.Views))
 
-	if options.DisableIndexConcurrently {
+	switch {
+	case options.DisableIndexConcurrently:
 		clearConcurrentlyDirectives(desiredTables, desiredViews)
+	case options.ForceIndexConcurrently:
+		forceConcurrentlyDirectives(filteredTables, filteredViews, desiredTables, desiredViews)
 	}
 
 	enumDiff, err := diff.DiffEnums(filteredEnums, desiredEnums, &options.DropPolicy)
@@ -168,6 +172,39 @@ func clearConcurrentlyDirectives(
 	for _, v := range views.CollectValues() {
 		for _, idx := range v.Indexes.CollectValues() {
 			idx.Concurrently = false
+		}
+	}
+}
+
+// forceConcurrentlyDirectives sets the per-index Concurrently flag on every
+// table and materialized view index in both the current and desired schemas,
+// used to implement --force-index-concurrently. The current side is also
+// flipped so that pure DROP INDEX paths (index absent from desired) can pick
+// up the flag, since catalog-derived indexes don't carry the directive.
+func forceConcurrentlyDirectives(
+	currentTables *orderedmap.Map[string, *model.Table],
+	currentViews *orderedmap.Map[string, *model.View],
+	desiredTables *orderedmap.Map[string, *model.Table],
+	desiredViews *orderedmap.Map[string, *model.View],
+) {
+	for _, t := range currentTables.CollectValues() {
+		for _, idx := range t.Indexes.CollectValues() {
+			idx.Concurrently = true
+		}
+	}
+	for _, v := range currentViews.CollectValues() {
+		for _, idx := range v.Indexes.CollectValues() {
+			idx.Concurrently = true
+		}
+	}
+	for _, t := range desiredTables.CollectValues() {
+		for _, idx := range t.Indexes.CollectValues() {
+			idx.Concurrently = true
+		}
+	}
+	for _, v := range desiredViews.CollectValues() {
+		for _, idx := range v.Indexes.CollectValues() {
+			idx.Concurrently = true
 		}
 	}
 }

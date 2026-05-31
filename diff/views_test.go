@@ -1053,6 +1053,35 @@ func TestDiffViews_matviewIndexAdd_perIndexDirective(t *testing.T) {
 	assert.Equal(t, "CREATE INDEX idx_mv_n2 ON public.mv USING btree (n);", result.CreateStmts[1])
 }
 
+func TestDiffViews_matviewIndexPureDrop_currentConcurrentlyForced(t *testing.T) {
+	// When forceConcurrentlyDirectives sets Concurrently on the current
+	// matview index, the pure-drop branch falls back to that flag and
+	// emits DROP INDEX CONCURRENTLY.
+	current := orderedmap.New[string, *model.View]()
+	mvCurrent := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	mvCurrent.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition:   "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+		Concurrently: true,
+	})
+	current.Set("public.mv", mvCurrent)
+
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.CreateStmts, 1)
+	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_mv_n;", result.CreateStmts[0])
+	assert.True(t, result.HasConcurrently)
+}
+
 func TestDiffViews_modifyMatviewWithIndex_perIndexDirective(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.mv", &model.View{

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/kong"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio"
@@ -27,6 +28,7 @@ type applyTestCase struct {
 	DisallowedDrops          string           `yaml:"disallowed_drops,omitempty"`
 	DropPolicy               *applyDropPolicy `yaml:"drop_policy,omitempty"`
 	DisableIndexConcurrently bool             `yaml:"disable_index_concurrently,omitempty"`
+	ForceIndexConcurrently   bool             `yaml:"force_index_concurrently,omitempty"`
 	BulkAlter                bool             `yaml:"bulk_alter,omitempty"`
 	Include                  []string         `yaml:"include,omitempty"`
 	Exclude                  []string         `yaml:"exclude,omitempty"`
@@ -117,6 +119,7 @@ func TestApply(t *testing.T) {
 				},
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
+				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 				BulkAlter:                tc.BulkAlter,
 				PreSQL:                   tc.PreSQL,
 				PreSQLFile:               preSQLFile,
@@ -146,6 +149,7 @@ func TestApply(t *testing.T) {
 					},
 					Files:                    []string{desiredFile},
 					DisableIndexConcurrently: tc.DisableIndexConcurrently,
+					ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 					PreSQL:                   tc.PreSQL,
 					PreSQLFile:               preSQLFile,
 					ConcurrentlyPreSQL:       tc.ConcurrentlyPreSQL,
@@ -978,4 +982,33 @@ CREATE INDEX idx_mv_n ON public.mv USING btree (n);`), 0o644))
 	}, io.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CONCURRENTLY")
+}
+
+func TestApplyOptions_ForceIndexConcurrently_XorEnforcement(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"force_and_disable", []string{"--force-index-concurrently", "--disable-index-concurrently", "schema.sql"}},
+		{"force_and_with_tx", []string{"--force-index-concurrently", "--with-tx", "schema.sql"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var opts pistachio.ApplyOptions
+			parser, err := kong.New(&opts)
+			require.NoError(t, err)
+			_, err = parser.Parse(tc.args)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "--force-index-concurrently")
+		})
+	}
+}
+
+func TestPlanOptions_ForceIndexConcurrently_XorEnforcement(t *testing.T) {
+	var opts pistachio.PlanOptions
+	parser, err := kong.New(&opts)
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"--force-index-concurrently", "--disable-index-concurrently", "schema.sql"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--force-index-concurrently")
 }

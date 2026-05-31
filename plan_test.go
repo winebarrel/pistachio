@@ -23,6 +23,7 @@ type planTestCase struct {
 	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
 	DisableIndexConcurrently bool            `yaml:"disable_index_concurrently,omitempty"`
+	ForceIndexConcurrently   bool            `yaml:"force_index_concurrently,omitempty"`
 	BulkAlter                bool            `yaml:"bulk_alter,omitempty"`
 	Include                  []string        `yaml:"include,omitempty"`
 	Exclude                  []string        `yaml:"exclude,omitempty"`
@@ -292,6 +293,7 @@ func TestPlan(t *testing.T) {
 				},
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
+				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 				BulkAlter:                tc.BulkAlter,
 				PreSQL:                   tc.PreSQL,
 				PreSQLFile:               preSQLFile,

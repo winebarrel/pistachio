@@ -16,7 +16,8 @@ type PlanOptions struct {
 	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PISTA_PRE_SQL_FILE" help:"Path to a SQL file to prepend to the plan output."`
 	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL" help:"SQL to run before CONCURRENTLY index DDL (e.g. SET lock_timeout). Emitted only when the diff contains CONCURRENTLY index DDL."`
 	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to run before CONCURRENTLY index DDL."`
-	DisableIndexConcurrently bool     `env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
+	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
+	ForceIndexConcurrently   bool     `xor:"index-concurrently" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 }
 
@@ -78,6 +79,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		ConcurrentlyPreSQL:       options.ConcurrentlyPreSQL,
 		ConcurrentlyPreSQLFile:   options.ConcurrentlyPreSQLFile,
 		DisableIndexConcurrently: options.DisableIndexConcurrently,
+		ForceIndexConcurrently:   options.ForceIndexConcurrently,
 		BulkAlter:                options.BulkAlter,
 	})
 	if err != nil {

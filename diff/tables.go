@@ -913,13 +913,16 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc Drop
 	for name, currentIdx := range current.All() {
 		desiredIdx, ok := desired.GetOk(name)
 		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			// Use CONCURRENTLY only when the desired index (when it exists and
-			// is being changed) has the per-index directive. Pure drops (index
-			// removed from desired) never use CONCURRENTLY because catalog-derived
-			// indexes don't carry the directive.
+			// Use CONCURRENTLY when the desired index (when it exists and is
+			// being changed) has the per-index directive. For pure drops the
+			// desired entry is absent, so fall back to the current entry; that
+			// field is normally false because the catalog doesn't carry it,
+			// but --force-index-concurrently sets it via forceConcurrentlyDirectives.
 			useConcurrently := false
 			if ok {
 				useConcurrently = desiredIdx.Concurrently
+			} else {
+				useConcurrently = currentIdx.Concurrently
 			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
