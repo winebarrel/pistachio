@@ -142,6 +142,13 @@ pista plan --disable-index-concurrently schema.sql
 pista apply --disable-index-concurrently --with-tx schema.sql
 ```
 
+Use `--force-index-concurrently` to apply `CONCURRENTLY` to every `CREATE INDEX` and `DROP INDEX` the diff emits, regardless of per-index directives. This also covers pure drops (indexes removed from the desired schema), which the directive cannot reach. Conflicts with `--disable-index-concurrently` and `--with-tx`. Also available as `$PISTA_FORCE_INDEX_CONCURRENTLY`.
+
+```bash
+pista plan --force-index-concurrently schema.sql
+pista apply --force-index-concurrently schema.sql
+```
+
 > [!NOTE]
 > When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`.
 

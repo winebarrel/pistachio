@@ -18,8 +18,9 @@ type ApplyOptions struct {
 	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PISTA_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
 	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL" help:"SQL to execute before CONCURRENTLY index DDL (e.g. SET lock_timeout). Runs outside any transaction, only when the diff contains CONCURRENTLY index DDL."`
 	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to execute before CONCURRENTLY index DDL."`
-	WithTx                   bool     `env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
-	DisableIndexConcurrently bool     `env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
+	WithTx                   bool     `xor:"tx-mode" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
+	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
+	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops. Cannot be combined with --with-tx."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 }
 
@@ -48,6 +49,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		ConcurrentlyPreSQL:       options.ConcurrentlyPreSQL,
 		ConcurrentlyPreSQLFile:   options.ConcurrentlyPreSQLFile,
 		DisableIndexConcurrently: options.DisableIndexConcurrently,
+		ForceIndexConcurrently:   options.ForceIndexConcurrently,
 		BulkAlter:                options.BulkAlter,
 	})
 	if err != nil {

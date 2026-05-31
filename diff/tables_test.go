@@ -905,6 +905,20 @@ func TestDiffIndexes_drop_pureDrop_neverConcurrently(t *testing.T) {
 	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
 }
 
+func TestDiffIndexes_drop_pureDrop_currentConcurrentlyForced(t *testing.T) {
+	// When forceConcurrentlyDirectives sets Concurrently on the current
+	// index, the pure-drop branch falls back to that flag and emits
+	// DROP INDEX CONCURRENTLY.
+	current := orderedmap.New[string, *model.Index]()
+	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
+	desired := orderedmap.New[string, *model.Index]()
+
+	idxResult, err := diffIndexes(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"DROP INDEX CONCURRENTLY public.idx_name;"}, idxResult.Stmts)
+	assert.True(t, idxResult.HasConcurrently)
+}
+
 func TestDiffIndexes_change_perIndexConcurrently(t *testing.T) {
 	current := orderedmap.New[string, *model.Index]()
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
