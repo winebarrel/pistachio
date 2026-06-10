@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/alecthomas/kong v1.15.0
-	github.com/jackc/pgx/v5 v5.9.2
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pganalyze/pg_query_go/v6 v6.2.2
 	github.com/stretchr/testify v1.11.1
 	github.com/winebarrel/orderedmap v1.7.0
