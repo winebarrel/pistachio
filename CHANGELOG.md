@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.12.0] - 2026-06-24
+
+* Print the DDL execution time at the end of `pista apply` as a `-- Apply finished in <duration>` comment. It measures statement execution against the database only, and shows `0s` when there are no changes. ([#260](https://github.com/winebarrel/pistachio/pull/260))
+
 ## [1.11.0] - 2026-05-31
 
 * Add `--force-index-concurrently` (env `$PISTA_FORCE_INDEX_CONCURRENTLY`) to `plan` and `apply`. Forces CONCURRENTLY on every `CREATE INDEX` / `DROP INDEX` the diff emits, including pure drops (indexes removed from desired) that the `-- pista:concurrently` directive cannot reach because catalog-derived indexes do not carry the flag. Conflicts with `--disable-index-concurrently` on both subcommands and with `--with-tx` on apply; both are enforced as kong xor groups. ([#254](https://github.com/winebarrel/pistachio/pull/254))

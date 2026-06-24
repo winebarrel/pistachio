@@ -83,6 +83,17 @@ Apply the changes:
 pista apply schema.sql
 ```
 
+Output:
+
+```sql
+-- Apply to schema public (1 table, 0 views, 0 enums, 0 domains)
+ALTER TABLE public.users ADD COLUMN email text;
+-- Apply finished in 12ms
+```
+
+The `-- Apply finished in ...` comment shows the DDL execution time. It is
+printed on every apply, and shows `0s` when there are no changes.
+
 Verify by running plan again:
 
 ```bash
