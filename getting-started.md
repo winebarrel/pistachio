@@ -92,7 +92,8 @@ ALTER TABLE public.users ADD COLUMN email text;
 ```
 
 The `-- Apply finished in ...` comment shows the SQL statement execution
-time. It is printed on every apply, and shows `0s` when there are no changes.
+time. It is printed only when changes are applied, not when there are no
+changes.
 
 Verify by running plan again:
 

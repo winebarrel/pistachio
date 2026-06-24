@@ -119,8 +119,8 @@ func TestApply_Run_NoChanges(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- Apply to schema public (")
 	assert.Contains(t, buf.String(), "-- No changes")
-	// The timing line is always emitted, even when nothing was executed.
-	assert.Contains(t, buf.String(), "-- Apply finished in ")
+	// No timing line when nothing was applied.
+	assert.NotContains(t, buf.String(), "-- Apply finished in ")
 }
 
 func TestApply_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
@@ -198,6 +198,8 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	got := buf.String()
 	assert.NotContains(t, got, "CREATE OR REPLACE FUNCTION", "skipped execute must not be printed")
 	assert.Contains(t, got, "-- No changes", "buffer is empty so CLI prints No changes")
+	// The check SQL ran but nothing was applied, so no timing line is printed.
+	assert.NotContains(t, got, "-- Apply finished in ")
 }
 
 func TestApply_Run_DropDeniedShowsNoChanges(t *testing.T) {

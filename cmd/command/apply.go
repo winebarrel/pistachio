@@ -43,9 +43,10 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 		if result.DisallowedDrops != "" {
 			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
 		}
+		// Only report the execution time when statements were applied. With no
+		// changes there is nothing to time.
+		fmt.Fprintf(w, "-- Apply finished in %s\n", result.Duration.Round(time.Millisecond)) //nolint:errcheck
 	}
-
-	fmt.Fprintf(w, "-- Apply finished in %s\n", result.Duration.Round(time.Millisecond)) //nolint:errcheck
 
 	return nil
 }
