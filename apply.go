@@ -29,7 +29,8 @@ type ApplyOptions struct {
 type ApplyResult struct {
 	Count           ObjectCount
 	DisallowedDrops string
-	// Duration is the time spent executing DDL against the database. It
+	// Duration is the time spent executing SQL statements against the
+	// database (pre-SQL, schema DDL, and -- pista:execute statements). It
 	// excludes connection setup and diff computation, and is zero when no
 	// statements were executed.
 	Duration time.Duration
