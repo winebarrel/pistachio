@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/winebarrel/pistachio"
 )
@@ -30,9 +31,13 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 	fmt.Fprintf(w, "-- Apply to %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
 
 	// Same ordering as Plan: executed SQL (incl. pre-SQL) first, then skipped
-	// DROPs as comments. When nothing was executed, skipped DROPs precede
-	// "-- No changes".
-	if buf.Len() == 0 {
+	// DROPs as comments. When nothing was applied, skipped DROPs precede
+	// "-- No changes". The buffer may still hold output (e.g. --with-tx
+	// transaction comments) even when no schema change was applied, so the
+	// "-- No changes" and timing decisions are driven by result.Applied rather
+	// than the buffer length.
+	if !result.Applied {
+		w.Write(buf.Bytes()) //nolint:errcheck
 		if result.DisallowedDrops != "" {
 			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
 		}
@@ -42,6 +47,9 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 		if result.DisallowedDrops != "" {
 			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
 		}
+		// Only report the apply phase duration when statements were applied.
+		// With no changes there is nothing to time.
+		fmt.Fprintf(w, "-- Apply finished in %s\n", result.Duration.Round(time.Millisecond)) //nolint:errcheck
 	}
 
 	return nil
