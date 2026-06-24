@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
@@ -28,6 +29,10 @@ type ApplyOptions struct {
 type ApplyResult struct {
 	Count           ObjectCount
 	DisallowedDrops string
+	// Duration is the time spent executing DDL against the database. It
+	// excludes connection setup and diff computation, and is zero when no
+	// statements were executed.
+	Duration time.Duration
 }
 
 func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ApplyResult, error) {
@@ -68,6 +73,8 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if len(result.Stmts) == 0 && len(result.ExecuteStmts) == 0 {
 		return applyResult, nil
 	}
+
+	start := time.Now()
 
 	exec := conn.Exec
 	queryRow := conn.QueryRow
@@ -155,6 +162,8 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if err := commit(ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
+
+	applyResult.Duration = time.Since(start)
 
 	return applyResult, nil
 }

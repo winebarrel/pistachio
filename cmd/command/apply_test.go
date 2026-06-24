@@ -38,6 +38,7 @@ func TestApply_Run(t *testing.T) {
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
+	assert.Contains(t, buf.String(), "-- Apply finished in ")
 	assertConnectedCommentFirst(t, buf.String(), conn.Config())
 }
 
@@ -118,6 +119,8 @@ func TestApply_Run_NoChanges(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- Apply to schema public (")
 	assert.Contains(t, buf.String(), "-- No changes")
+	// The timing line is always emitted, even when nothing was executed.
+	assert.Contains(t, buf.String(), "-- Apply finished in ")
 }
 
 func TestApply_Run_ExecuteOnly_NotNoChanges(t *testing.T) {

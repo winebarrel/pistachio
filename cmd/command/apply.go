@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/winebarrel/pistachio"
 )
@@ -43,6 +44,8 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
 		}
 	}
+
+	fmt.Fprintf(w, "-- Apply finished in %s\n", result.Duration.Round(time.Millisecond)) //nolint:errcheck
 
 	return nil
 }
