@@ -202,6 +202,90 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	assert.NotContains(t, got, "-- Apply finished in ")
 }
 
+func TestApply_Run_WithTxExecuteCheckFalse_ShowsNoChanges(t *testing.T) {
+	// --with-tx variant of the case above. The transaction comments fill the
+	// output buffer, but no schema change is applied (the only -- pista:execute
+	// is skipped by its check SQL). The CLI must still print "-- No changes"
+	// and omit the timing line, driven by result.Applied rather than the
+	// buffer length.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}, WithTx: true}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "-- Transaction started")
+	assert.Contains(t, got, "-- Transaction committed")
+	assert.NotContains(t, got, "CREATE OR REPLACE FUNCTION", "skipped execute must not be printed")
+	assert.Contains(t, got, "-- No changes", "nothing was applied, so No changes is printed even with --with-tx")
+	assert.NotContains(t, got, "-- Apply finished in ")
+}
+
+func TestApply_Run_PreSQLOnly_ShowsNoChanges(t *testing.T) {
+	// pre-SQL is a setup step, not a schema change. With no schema diff and the
+	// only -- pista:execute skipped by its check SQL, the pre-SQL still runs and
+	// is printed, but the apply reports "-- No changes" and omits the timing
+	// line (pre-SQL does not count as applied).
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'test_func')
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}, PreSQL: "SET statement_timeout = '5s'"}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "SET statement_timeout", "pre-SQL still runs and is printed")
+	assert.NotContains(t, got, "CREATE OR REPLACE FUNCTION", "skipped execute must not be printed")
+	assert.Contains(t, got, "-- No changes", "pre-SQL is not a schema change, so No changes is printed")
+	assert.NotContains(t, got, "-- Apply finished in ")
+}
+
 func TestApply_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	// Apply CLI counterpart of TestPlan_Run_DropDeniedShowsNoChanges.
 	// When the only diff is a suppressed DROP, the apply prints the skipped

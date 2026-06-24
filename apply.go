@@ -29,11 +29,17 @@ type ApplyOptions struct {
 type ApplyResult struct {
 	Count           ObjectCount
 	DisallowedDrops string
-	// Duration is the elapsed time of the apply phase: executing SQL
-	// statements (pre-SQL, schema DDL, and -- pista:execute statements) and
-	// writing them to the output writer. It excludes connection setup and
-	// diff computation, and is zero when no statements were executed. With a
-	// fast writer this is dominated by database execution time.
+	// Applied reports whether any schema change was actually applied: schema
+	// DDL or an executed -- pista:execute statement. Pre-SQL,
+	// concurrently-pre-SQL, transaction control, search_path setup, and
+	// -- pista:execute directives skipped by their check SQL do not count.
+	Applied bool
+	// Duration is the elapsed time of the apply phase: every statement sent to
+	// the database (transaction BEGIN/COMMIT, pre-SQL, schema DDL, search_path
+	// setup, -- pista:execute check SQL, and execute statements) plus the time
+	// writing them to the output writer. It excludes connection setup and diff
+	// computation, and is zero unless Applied is true. With a fast writer it is
+	// dominated by database execution time.
 	Duration time.Duration
 }
 
@@ -77,6 +83,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	}
 
 	start := time.Now()
+	applied := false
 
 	exec := conn.Exec
 	queryRow := conn.QueryRow
@@ -107,6 +114,10 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		}
 	}
 
+	// Pre-SQL and concurrently-pre-SQL are setup steps (e.g. SET lock_timeout),
+	// not schema changes, so they do not mark the apply as applied. Whether
+	// "-- No changes" is reported depends only on actual schema DDL and
+	// executed -- pista:execute statements.
 	if result.PreSQL != "" {
 		fmt.Fprintln(w, result.PreSQL) //nolint:errcheck
 		if _, err := exec(ctx, result.PreSQL); err != nil {
@@ -129,6 +140,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		if _, err := exec(ctx, stmt); err != nil {
 			return nil, fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
 		}
+		applied = true
 	}
 
 	// Execute -- pista:execute statements after schema changes.
@@ -158,6 +170,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 			if _, err := exec(ctx, es.SQL); err != nil {
 				return nil, fmt.Errorf("failed to execute SQL: %s: %w", es.SQL, err)
 			}
+			applied = true
 		}
 	}
 
@@ -165,7 +178,10 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	applyResult.Duration = time.Since(start)
+	applyResult.Applied = applied
+	if applied {
+		applyResult.Duration = time.Since(start)
+	}
 
 	return applyResult, nil
 }
