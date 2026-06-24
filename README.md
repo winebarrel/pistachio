@@ -8,10 +8,7 @@ Declarative schema management tool for PostgreSQL. Define the desired schema in 
 
 See also: [Getting Started Guide](getting-started.md)
 
-> [!NOTE]
-> **v1.7.0 breaking change:** the CLI binary was renamed from `pist` to `pista`, environment variables from `PIST_*` to `PISTA_*`, and SQL comment directives from `-- pist:` to `-- pista:`. Existing SQL files and shell / CI configurations must be updated before upgrading. See the [1.7.0 changelog entry](CHANGELOG.md#170---2026-05-12) for the full list of renamed names.
-
-<img width="800" src="https://github.com/user-attachments/assets/eb961262-5c8e-459b-8461-ae089f87ae31" />
+<img width="800" alt="demo" src="https://github.com/user-attachments/assets/e8471dca-3451-422c-b935-90f0c9819618" />
 
 ## Installation
 
