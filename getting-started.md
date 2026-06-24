@@ -91,9 +91,9 @@ ALTER TABLE public.users ADD COLUMN email text;
 -- Apply finished in 12ms
 ```
 
-The `-- Apply finished in ...` comment shows the SQL statement execution
-time. It is printed only when changes are applied, not when there are no
-changes.
+The `-- Apply finished in ...` comment shows the apply phase duration (SQL
+execution plus output writing). It is printed only when changes are applied,
+not when there are no changes.
 
 Verify by running plan again:
 

@@ -2,7 +2,7 @@
 
 ## [1.12.0] - 2026-06-24
 
-* Print the SQL statement execution time at the end of `pista apply` as a `-- Apply finished in <duration>` comment. It covers the apply phase (statement execution and output), excludes connection setup and diff computation, and is omitted when there are no changes. ([#260](https://github.com/winebarrel/pistachio/pull/260))
+* Print the apply phase duration at the end of `pista apply` as a `-- Apply finished in <duration>` comment. It covers SQL execution and output, excludes connection setup and diff computation, and is omitted when there are no changes. ([#260](https://github.com/winebarrel/pistachio/pull/260))
 
 ## [1.11.0] - 2026-05-31
 
