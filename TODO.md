@@ -182,6 +182,26 @@ be documented as such if it ever surfaces in user-facing docs.
 
 Origin: [#157](https://github.com/winebarrel/pistachio/pull/157).
 
+## CREATE OR REPLACE VIEW: type-only change on a same-named column
+
+`canCreateOrReplaceView` (`diff/views.go`) decides between
+`CREATE OR REPLACE VIEW` and `DROP`+`CREATE` by comparing the output
+column *names* in order. When only a column's *type* changes but the name
+stays (e.g. `SELECT n FROM t` -> `SELECT n::bigint AS n FROM t`), the names
+still line up, so the plan emits `CREATE OR REPLACE VIEW`. PostgreSQL then
+rejects it at apply time with `cannot change data type of view column`,
+so a clean-looking plan fails on execution.
+
+`pg_query` does not perform type inference, so the type change can't be
+detected statically from the SELECT alone. Resolving it would require
+either type resolution against the desired schema or always routing view
+definition changes through `DROP`+`CREATE` (which costs dependent objects
+and privileges). Workaround: adjust the source DDL or drop the view in a
+pre-step.
+
+Origin: known limitation documented inline at `diff/views.go`
+(`canCreateOrReplaceView`).
+
 ## Plan-time error promotion: forgotten dependent reference
 
 When desired SQL references the new column name in a dependent
