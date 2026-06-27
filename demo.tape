@@ -6,7 +6,7 @@ Set Width 800
 Set Height 600
 Set Padding 20
 
-Type@3ms "export PISTA_PAGER='bat -l sql -p --paging=never --color=always'" Enter
+Type@3ms "export PISTA_PAGER='bat -l sql -pp --color=always'" Enter
 Sleep 2s
 
 # Create schema file
