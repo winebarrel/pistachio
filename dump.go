@@ -25,6 +25,18 @@ type DumpResult struct {
 	Count      ObjectCount
 }
 
+// stripIndexSchemaPrefix removes the schema qualification from the relation an
+// index targets, for --omit-schema. pg_get_indexdef emits
+// "... ON <schema>.<rel> ..." for ordinary indexes and
+// "... ON ONLY <schema>.<rel> ..." for indexes on partitioned-table parents,
+// so both forms are rewritten. The two patterns are mutually exclusive per
+// occurrence (the ONLY form has "ONLY " between "ON " and the relation), so
+// applying both replacers never double-processes a match.
+func stripIndexSchemaPrefix(definition, fqrn, relName string) string {
+	definition = strings.ReplaceAll(definition, " ON ONLY "+fqrn+" ", " ON ONLY "+relName+" ")
+	return strings.ReplaceAll(definition, " ON "+fqrn+" ", " ON "+relName+" ")
+}
+
 func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 	if !r.OmitSchema {
 		return r.Tables
@@ -49,7 +61,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			for _, idx := range copied.Indexes.CollectValues() {
 				idxCopied := *idx
 				idxCopied.Schema = ""
-				idxCopied.Definition = strings.ReplaceAll(idx.Definition, " ON "+fqtn+" ", " ON "+tableName+" ")
+				idxCopied.Definition = stripIndexSchemaPrefix(idx.Definition, fqtn, tableName)
 				idxs.Set(idx.Name, &idxCopied)
 			}
 			copied.Indexes = idxs
@@ -83,7 +95,7 @@ func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
 			for _, idx := range copied.Indexes.CollectValues() {
 				idxCopied := *idx
 				idxCopied.Schema = ""
-				idxCopied.Definition = strings.ReplaceAll(idx.Definition, " ON "+fqvn+" ", " ON "+viewName+" ")
+				idxCopied.Definition = stripIndexSchemaPrefix(idx.Definition, fqvn, viewName)
 				idxs.Set(idx.Name, &idxCopied)
 			}
 			copied.Indexes = idxs
