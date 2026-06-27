@@ -8,7 +8,7 @@ Declarative schema management tool for PostgreSQL. Define the desired schema in 
 
 See also: [Getting Started Guide](getting-started.md)
 
-<img width="800" alt="demo" src="https://github.com/user-attachments/assets/e8471dca-3451-422c-b935-90f0c9819618" />
+![](https://github.com/user-attachments/assets/f280336b-52c2-409e-a8ba-f9a2ec71f950)
 
 ## Installation
 
