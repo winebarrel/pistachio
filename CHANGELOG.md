@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.12.1] - 2026-06-27
 
 * Fix `dump --omit-schema` leaving the schema name in indexes on partitioned tables. `pg_get_indexdef` emits `ON ONLY <schema>.<table>` for such indexes, which the schema-stripping replacement did not match, so `public.` stayed in the output.
 
