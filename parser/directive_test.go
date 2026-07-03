@@ -372,12 +372,54 @@ func TestExtractConcurrentlyDirectives_noDirective(t *testing.T) {
 	assert.Empty(t, directives)
 }
 
+func TestExtractBulkAlterDirectives(t *testing.T) {
+	sql := `-- pista:bulk-alter
+CREATE TABLE public.users (id integer NOT NULL);
+CREATE TABLE public.posts (id integer NOT NULL);`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	directives := extractBulkAlterDirectives(sql, result.Stmts)
+	assert.True(t, directives[result.Stmts[0].StmtLocation])
+	assert.False(t, directives[result.Stmts[1].StmtLocation])
+}
+
+func TestExtractBulkAlterDirectives_withRenamedFrom(t *testing.T) {
+	sql := `-- pista:renamed-from public.old_users
+-- pista:bulk-alter
+CREATE TABLE public.users (id integer NOT NULL);`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	directives := extractBulkAlterDirectives(sql, result.Stmts)
+	assert.True(t, directives[result.Stmts[0].StmtLocation])
+}
+
+func TestExtractBulkAlterDirectives_noDirective(t *testing.T) {
+	sql := `CREATE TABLE public.users (id integer NOT NULL);`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	directives := extractBulkAlterDirectives(sql, result.Stmts)
+	assert.Empty(t, directives)
+}
+
 func TestValidateDirectives_Valid(t *testing.T) {
 	assert.NoError(t, validateDirectives("-- pista:renamed-from old"))
 	assert.NoError(t, validateDirectives("-- pista:execute SELECT true"))
 	assert.NoError(t, validateDirectives("-- pista:execute"))
 	assert.NoError(t, validateDirectives("-- pista:concurrently"))
+	assert.NoError(t, validateDirectives("-- pista:bulk-alter"))
 	assert.NoError(t, validateDirectives("SELECT 1; -- no directives"))
+}
+
+func TestValidateDirectives_BulkAlterWithArgs(t *testing.T) {
+	err := validateDirectives("-- pista:bulk-alter extra")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "-- pista:bulk-alter does not accept arguments")
 }
 
 func TestValidateDirectives_ConcurrentlyWithArgs(t *testing.T) {

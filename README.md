@@ -164,6 +164,16 @@ ALTER TABLE public.users
   ADD CONSTRAINT users_id_pos CHECK (id > 0);
 ```
 
+To merge `ALTER TABLE` actions for individual tables only, put the `-- pista:bulk-alter` directive before the `CREATE TABLE` statement. Other tables keep one statement per action. `--bulk-alter` merges every table regardless of the directive.
+
+```sql
+-- pista:bulk-alter
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+```
+
 By default, `plan` and `apply` do not drop tables, views, enums, domains, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `foreign_key`, `index`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately.
 
 ```bash

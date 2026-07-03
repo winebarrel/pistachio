@@ -1850,6 +1850,74 @@ CREATE INDEX CONCURRENTLY idx_name ON public.users (name);`
 	assert.True(t, idx.Concurrently)
 }
 
+func TestParseSQL_BulkAlterDirective_Table(t *testing.T) {
+	sql := `-- pista:bulk-alter
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.posts (
+    id integer NOT NULL,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	users, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	assert.True(t, users.BulkAlter)
+
+	posts, ok := result.Tables.GetOk("public.posts")
+	require.True(t, ok)
+	assert.False(t, posts.BulkAlter)
+}
+
+func TestParseSQL_BulkAlterDirective_WithRenamed(t *testing.T) {
+	sql := `-- pista:renamed-from public.old_users
+-- pista:bulk-alter
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	assert.True(t, tbl.BulkAlter)
+	require.NotNil(t, tbl.RenameFrom)
+	assert.Equal(t, "public.old_users", *tbl.RenameFrom)
+}
+
+func TestParseSQL_BulkAlterDirective_IgnoredOnNonTable(t *testing.T) {
+	// -- pista:bulk-alter before a CREATE INDEX should be silently ignored
+	// and should NOT leak to the following CREATE TABLE
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pista:bulk-alter
+CREATE INDEX idx_name ON public.users (name);
+CREATE TABLE public.posts (
+    id integer NOT NULL,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	users, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	assert.False(t, users.BulkAlter)
+
+	posts, ok := result.Tables.GetOk("public.posts")
+	require.True(t, ok)
+	assert.False(t, posts.BulkAlter)
+}
+
 func TestParseSQL_ConcurrentlyDirective_IgnoredOnNonIndex(t *testing.T) {
 	// -- pista:concurrently before a CREATE TABLE should be silently ignored
 	// and should NOT leak to the following CREATE INDEX

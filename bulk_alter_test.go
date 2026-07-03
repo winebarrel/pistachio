@@ -259,7 +259,7 @@ func TestMergeAlterTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mergeAlterTable(tt.in)
+			got := mergeAlterTable(tt.in, func(string) bool { return true })
 			if tt.want == nil {
 				assert.Empty(t, got)
 				return
@@ -267,6 +267,24 @@ func TestMergeAlterTable(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestMergeAlterTable_ShouldMergePerTable(t *testing.T) {
+	in := []string{
+		"ALTER TABLE public.users ADD COLUMN email text;",
+		"ALTER TABLE public.users ADD COLUMN age integer;",
+		"ALTER TABLE public.posts ADD COLUMN title text;",
+		"ALTER TABLE public.posts ADD COLUMN body text;",
+	}
+
+	got := mergeAlterTable(in, func(fqtn string) bool { return fqtn == "public.users" })
+
+	want := []string{
+		"ALTER TABLE public.users\n  ADD COLUMN email text,\n  ADD COLUMN age integer;",
+		"ALTER TABLE public.posts ADD COLUMN title text;",
+		"ALTER TABLE public.posts ADD COLUMN body text;",
+	}
+	assert.Equal(t, want, got)
 }
 
 func TestParseMergeableAlterTable_Negatives(t *testing.T) {

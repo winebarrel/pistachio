@@ -4,6 +4,8 @@ import "strings"
 
 // mergeAlterTable collapses consecutive `ALTER TABLE <fqtn> <action>;` statements
 // that target the same table into a single statement with comma-separated actions.
+// shouldMerge decides per table (by fqtn) whether its statements are merged;
+// tables it rejects pass through unchanged.
 //
 // Only a small whitelist of action prefixes is mergeable; everything else
 // (renames, VALIDATE CONSTRAINT, RLS toggles, "-- skipped:" comments, non-ALTER
@@ -14,7 +16,7 @@ import "strings"
 // Caller must only invoke this on statements that are sequenced per-table
 // (i.e. diff.TableDiffResult.Stmts), since merging relies on the natural
 // per-table contiguity that DiffTables produces.
-func mergeAlterTable(stmts []string) []string {
+func mergeAlterTable(stmts []string, shouldMerge func(fqtn string) bool) []string {
 	result := make([]string, 0, len(stmts))
 
 	var groupFQTN string
@@ -50,7 +52,7 @@ func mergeAlterTable(stmts []string) []string {
 
 	for _, stmt := range stmts {
 		fqtn, action, ok := parseMergeableAlterTable(stmt)
-		if !ok {
+		if !ok || !shouldMerge(fqtn) {
 			flush()
 			result = append(result, stmt)
 			continue

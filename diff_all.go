@@ -115,8 +115,18 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
 
-	if options.BulkAlter {
-		tableDiff.Stmts = mergeAlterTable(tableDiff.Stmts)
+	// --bulk-alter merges every table; the -- pista:bulk-alter directive
+	// opts in individual tables.
+	bulkAlterTables := make(map[string]bool)
+	for _, t := range desiredTables.CollectValues() {
+		if t.BulkAlter {
+			bulkAlterTables[t.FQTN()] = true
+		}
+	}
+	if options.BulkAlter || len(bulkAlterTables) > 0 {
+		tableDiff.Stmts = mergeAlterTable(tableDiff.Stmts, func(fqtn string) bool {
+			return options.BulkAlter || bulkAlterTables[fqtn]
+		})
 	}
 
 	viewDiff, err := diff.DiffViews(filteredViews, desiredViews, &options.DropPolicy)

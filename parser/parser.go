@@ -77,6 +77,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 
 	stmtDirectives := extractStmtDirectives(sql, result.Stmts)
 	concurrentlyDirectives := extractConcurrentlyDirectives(sql, result.Stmts)
+	bulkAlterDirectives := extractBulkAlterDirectives(sql, result.Stmts)
 	executeStmts, executeSkipLocations, err := extractExecuteDirectives(sql, result.Stmts)
 	if err != nil {
 		return nil, err
@@ -126,6 +127,9 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if renameFrom != "" {
 				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				table.RenameFrom = &qualified
+			}
+			if bulkAlterDirectives[rawStmt.StmtLocation] {
+				table.BulkAlter = true
 			}
 
 			// Extract column/constraint-level directives from raw SQL

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Add the `-- pista:bulk-alter` directive. Put it before a `CREATE TABLE` statement to combine that table's consecutive `ALTER TABLE` actions into a single statement. Other tables keep one statement per action. The `--bulk-alter` flag (env `$PISTA_BULK_ALTER`) is unchanged and merges every table. Like `-- pista:concurrently`, the directive takes no arguments and is ignored on statements other than `CREATE TABLE`.
+
 ## [1.12.1] - 2026-06-27
 
 * Fix `dump --omit-schema` leaving the schema name in indexes on partitioned tables. `pg_get_indexdef` emits `ON ONLY <schema>.<table>` for such indexes, which the schema-stripping replacement did not match, so `public.` stayed in the output.
