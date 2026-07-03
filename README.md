@@ -41,6 +41,50 @@ pista dump                  # dump the current schema
 
 The source for the image is under [`demo/`](demo/).
 
+## Example
+
+Create a schema file:
+
+```sql
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    status status NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+
+CREATE TABLE public.posts (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    title text NOT NULL,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);
+
+CREATE INDEX idx_posts_user_id ON public.posts USING btree (user_id);
+
+ALTER TABLE ONLY public.posts
+    ADD CONSTRAINT posts_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES users(id);
+```
+
+Preview and apply:
+
+```bash
+pista plan schema.sql                  # review the diff (drops suppressed by default)
+pista plan --allow-drop all schema.sql # review the diff (with drops)
+pista apply schema.sql                 # apply it
+```
+
+Or split the schema across multiple files:
+
+```bash
+pista dump --split ./schema/       # dump per table/view/enum/domain
+pista plan ./schema/*.sql          # review the diff
+pista apply ./schema/*.sql         # apply it
+```
+
 ## Usage
 
 ```
@@ -407,49 +451,7 @@ pista dump --split ./schema/
 # (writes ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...)
 ```
 
-## Example
-
-Create a schema file:
-
-```sql
-CREATE TYPE public.status AS ENUM ('active', 'inactive');
-
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    status status NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.posts (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    title text NOT NULL,
-    CONSTRAINT posts_pkey PRIMARY KEY (id)
-);
-
-CREATE INDEX idx_posts_user_id ON public.posts USING btree (user_id);
-
-ALTER TABLE ONLY public.posts
-    ADD CONSTRAINT posts_user_id_fkey
-    FOREIGN KEY (user_id) REFERENCES users(id);
-```
-
-Preview and apply:
-
-```bash
-pista plan schema.sql                  # review the diff (drops suppressed by default)
-pista plan --allow-drop all schema.sql # review the diff (with drops)
-pista apply schema.sql                 # apply it
-```
-
-Or split the schema across multiple files:
-
-```bash
-pista dump --split ./schema/       # dump per table/view/enum/domain
-pista plan ./schema/*.sql          # review the diff
-pista apply ./schema/*.sql         # apply it
-```
+## Constraint naming
 
 > [!NOTE]
 > Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are auto-named by pistachio following PostgreSQL's convention (`{table}_pkey`, `{table}_{col}_key`, `{table}_{col}_check`, `{table}_{col}_fkey`, `{table}_{col}_excl`). The auto-naming has two limitations:
