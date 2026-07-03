@@ -1,0 +1,43 @@
+verify_no_drift: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:bulk-alter
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      age integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      title text,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      age integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER TABLE public.posts ADD COLUMN title text;
+  ALTER TABLE public.users
+    ADD COLUMN email text,
+    ADD COLUMN age integer;

@@ -15,6 +15,9 @@ var (
 	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]*$`)
 	// Matches -- pista:concurrently with trailing content (invalid usage).
 	concurrentlyWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]+\S`)
+	bulkAlterDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]*$`)
+	// Matches -- pista:bulk-alter with trailing content (invalid usage).
+	bulkAlterWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]+\S`)
 	// Matches any -- pista: directive, capturing the name (if any) after the colon.
 	anyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:[ \t]*(\S*)`)
 )
@@ -24,6 +27,7 @@ var knownDirectives = map[string]bool{
 	"renamed-from": true,
 	"execute":      true,
 	"concurrently": true,
+	"bulk-alter":   true,
 }
 
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
@@ -42,6 +46,10 @@ func validateDirectives(rawSQL string) error {
 
 	if concurrentlyWithArgsPattern.MatchString(rawSQL) {
 		return fmt.Errorf("-- pista:concurrently does not accept arguments")
+	}
+
+	if bulkAlterWithArgsPattern.MatchString(rawSQL) {
+		return fmt.Errorf("-- pista:bulk-alter does not accept arguments")
 	}
 
 	return nil
@@ -226,6 +234,20 @@ func extractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]s
 // that appear in each statement's leading comment region.
 // Returns a set of StmtLocations that have the directive.
 func extractConcurrentlyDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]bool {
+	return extractFlagDirectives(concurrentlyDirectivePattern, rawSQL, stmts)
+}
+
+// extractBulkAlterDirectives scans raw SQL for `-- pista:bulk-alter` comments
+// that appear in each statement's leading comment region.
+// Returns a set of StmtLocations that have the directive.
+func extractBulkAlterDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]bool {
+	return extractFlagDirectives(bulkAlterDirectivePattern, rawSQL, stmts)
+}
+
+// extractFlagDirectives scans raw SQL for argument-less directive comments
+// matching pattern in each statement's leading comment region.
+// Returns a set of StmtLocations that have the directive.
+func extractFlagDirectives(pattern *regexp.Regexp, rawSQL string, stmts []*pg_query.RawStmt) map[int32]bool {
 	directives := make(map[int32]bool)
 
 	for _, stmt := range stmts {
@@ -239,7 +261,7 @@ func extractConcurrentlyDirectives(rawSQL string, stmts []*pg_query.RawStmt) map
 		leadingEnd := findLeadingCommentEnd(region)
 		leading := region[:leadingEnd]
 
-		if concurrentlyDirectivePattern.MatchString(leading) {
+		if pattern.MatchString(leading) {
 			directives[loc] = true
 		}
 	}

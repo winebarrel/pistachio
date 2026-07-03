@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.old_users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:renamed-from public.old_users
+  -- pista:bulk-alter
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      age integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.old_users RENAME TO users;
+  ALTER TABLE public.users
+    ADD COLUMN email text,
+    ADD COLUMN age integer;

@@ -12,6 +12,7 @@ type Table struct {
 	Schema           string
 	Name             string
 	RenameFrom       *string
+	BulkAlter        bool
 	TableSpace       *string
 	Unlogged         bool
 	Partitioned      bool
