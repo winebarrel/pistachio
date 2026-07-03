@@ -6,7 +6,7 @@
 
 Declarative schema management tool for PostgreSQL. Define the desired schema in SQL; pistachio generates the DDL diff.
 
-See also: [Getting Started Guide](getting-started.md)
+See also: [Getting Started Guide](getting-started.md) / [Directives](directives.md)
 
 ![](https://github.com/user-attachments/assets/f280336b-52c2-409e-a8ba-f9a2ec71f950)
 
