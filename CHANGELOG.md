@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.13.0] - 2026-07-03
 
 * Add the `-- pista:bulk-alter` directive. Put it before a `CREATE TABLE` statement to combine that table's consecutive `ALTER TABLE` actions into a single statement. Other tables keep one statement per action. The `--bulk-alter` flag (env `$PISTA_BULK_ALTER`) is unchanged and merges every table. Like `-- pista:concurrently`, the directive takes no arguments and is ignored on statements other than `CREATE TABLE`.
 
