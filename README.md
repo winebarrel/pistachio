@@ -489,3 +489,4 @@ make test
   schema management for MySQL.
 - [ridgepole](https://github.com/ridgepole/ridgepole): DB schema
   management using a Rails DSL.
+- [qrev](https://github.com/winebarrel/qrev): SQL execution history management tool.
