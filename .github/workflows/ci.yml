@@ -33,6 +33,26 @@ jobs:
             exit "$status"
           fi
 
+  windows:
+    runs-on: windows-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      # Keep LF line endings; test fixtures are compared byte for byte.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build -o pista.exe ./cmd/pista
+      - name: Smoke test
+        run: ./pista.exe --help
+      # Packages that do not require a PostgreSQL connection. The parser
+      # tests exercise libpg_query (cgo) on Windows.
+      - name: Test
+        run: go test ./parser/ ./diff/ ./model/ ./toposort/ ./internal/pgast/
+
   test:
     runs-on: ubuntu-latest
     strategy:
