@@ -2,14 +2,21 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/winebarrel/pistachio"
 )
 
+// ErrPlanDiff is returned by Plan.Run when --check is set and the plan
+// contains executable DDL. main maps it to exit code 2. Suppressed drops
+// alone do not trigger it.
+var ErrPlanDiff = errors.New("plan contains changes")
+
 type Plan struct {
 	pistachio.PlanOptions
+	Check bool `env:"PISTA_CHECK" help:"Exit with code 2 when the plan contains executable changes."`
 }
 
 func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {
@@ -28,7 +35,7 @@ func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 	// as a runnable script; skipped DROPs follow as informational comments.
 	// In the no-SQL case, skipped DROPs come before "-- No changes" so the
 	// summary line reads naturally at the end.
-	if result.SQL == "" {
+	if !result.HasChanges {
 		if result.DisallowedDrops != "" {
 			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
 		}
@@ -38,6 +45,10 @@ func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 		if result.DisallowedDrops != "" {
 			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
 		}
+	}
+
+	if cmd.Check && result.HasChanges {
+		return ErrPlanDiff
 	}
 
 	return nil

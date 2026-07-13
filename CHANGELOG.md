@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Add `--check` (env `$PISTA_CHECK`) to `plan` for drift detection in CI. The exit code is 2 if the plan contains executable changes, 0 if not, and 1 on error. The output does not change. Suppressed drops alone exit 0 because they generate no executable DDL. `PlanResult` gains a `HasChanges` field, and the CLI uses it instead of checking `SQL` for emptiness.
+
 ## [1.13.0] - 2026-07-03
 
 * Add the `-- pista:bulk-alter` directive. Put it before a `CREATE TABLE` statement to combine that table's consecutive `ALTER TABLE` actions into a single statement. Other tables keep one statement per action. The `--bulk-alter` flag (env `$PISTA_BULK_ALTER`) is unchanged and merges every table. Like `-- pista:concurrently`, the directive takes no arguments and is ignored on statements other than `CREATE TABLE`.

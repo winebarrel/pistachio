@@ -169,6 +169,170 @@ func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
 	assert.Less(t, addColPos, skippedPos, "skipped comments must follow executable SQL")
 }
 
+func TestPlan_Run_CheckWithDiff(t *testing.T) {
+	// --check returns ErrPlanDiff when the plan contains executable DDL.
+	// The normal plan output is still written before the error is returned.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.ErrorIs(t, err, command.ErrPlanDiff)
+	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
+}
+
+func TestPlan_Run_CheckNoChanges(t *testing.T) {
+	// --check returns nil when the schema is already in the desired state.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "-- No changes")
+}
+
+func TestPlan_Run_CheckSkippedDropOnly(t *testing.T) {
+	// Suppressed drops produce no executable DDL, so --check treats them as
+	// no changes (consistent with the "-- No changes" output).
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(""), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "-- skipped: DROP TABLE public.users;")
+	assert.Contains(t, got, "-- No changes")
+}
+
+func TestPlan_Run_CheckExecuteOnly(t *testing.T) {
+	// A -- pista:execute statement is executable SQL, so --check returns
+	// ErrPlanDiff even without a schema diff.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL+`
+-- pista:execute
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.ErrorIs(t, err, command.ErrPlanDiff)
+}
+
+func TestPlan_Run_CheckPreSQLNoChanges(t *testing.T) {
+	// Pre-SQL is prepended only when the plan has statements, so it does
+	// not turn an empty plan into a diff.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{
+		Files:  []string{desiredFile},
+		PreSQL: "SELECT 1;",
+	}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "-- No changes")
+	assert.NotContains(t, got, "SELECT 1;")
+}
+
+func TestPlan_Run_CheckError(t *testing.T) {
+	// Connection failures must surface as ordinary errors, not ErrPlanDiff.
+	ctx := context.Background()
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: "invalid://connection",
+		Schemas:    []string{"public"},
+	})
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, command.ErrPlanDiff)
+}
+
 func TestPlan_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
 	// When the only diff is a -- pista:execute statement (no schema diff),
 	// the plan must surface the execute SQL and must NOT print "-- No changes".

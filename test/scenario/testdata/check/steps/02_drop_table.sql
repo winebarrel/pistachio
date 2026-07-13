@@ -1,0 +1,2 @@
+-- Empty desired schema. Without --allow-drop the DROP of public.users is
+-- suppressed and --check exits 0.

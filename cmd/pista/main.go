@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 
@@ -43,5 +44,10 @@ func main() {
 	client := pistachio.NewClient(&cli.Options)
 	err = kctx.Run(client)
 	closePager()
+	// plan --check reports diffs as exit code 2 instead of a fatal error.
+	// The plan output has already been written.
+	if errors.Is(err, command.ErrPlanDiff) {
+		kctx.Exit(2)
+	}
 	kctx.FatalIfErrorf(err)
 }
