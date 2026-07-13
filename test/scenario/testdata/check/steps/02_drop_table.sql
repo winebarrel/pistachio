@@ -1,0 +1,2 @@
+-- Desired schema removes public.users entirely. Without --allow-drop the
+-- DROP is suppressed, so --check must exit 0 (no executable DDL).
