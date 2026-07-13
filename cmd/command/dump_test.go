@@ -199,8 +199,13 @@ CREATE TABLE public.users (
 		Schemas:    []string{"public"},
 	})
 
+	// Use a regular file as the parent so MkdirAll fails on every
+	// platform, unlike /dev/null which is a plain path on Windows.
+	notADir := filepath.Join(t.TempDir(), "not_a_dir")
+	require.NoError(t, os.WriteFile(notADir, []byte("x"), 0o644))
+
 	var buf bytes.Buffer
-	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: "/dev/null/invalid"}}
+	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: filepath.Join(notADir, "invalid")}}
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create directory")
@@ -209,14 +214,6 @@ CREATE TABLE public.users (
 }
 
 func TestDump_Run_Split_WriteError(t *testing.T) {
-	// This test forces os.WriteFile to fail by making the split dir read-only.
-	// Root bypasses the permission check, so the WriteFile call would succeed
-	// and our error-path assertions would spuriously fail. CI containers
-	// commonly run as root, so skip there rather than fake-fail.
-	if os.Geteuid() == 0 {
-		t.Skip("read-only-dir trick does not block root")
-	}
-
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -232,8 +229,12 @@ CREATE TABLE public.users (
 		Schemas:    []string{"public"},
 	})
 
+	// Force os.WriteFile to fail by pre-creating a directory where the
+	// dump file would go. Writing to a directory path fails on every
+	// platform (EISDIR / access denied), including as root, unlike a
+	// read-only parent whose permission bits root and Windows ignore.
 	splitDir := filepath.Join(t.TempDir(), "split_output")
-	require.NoError(t, os.MkdirAll(splitDir, 0o555))
+	require.NoError(t, os.MkdirAll(filepath.Join(splitDir, "public.users.sql"), 0o755))
 
 	var buf bytes.Buffer
 	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: splitDir}}
@@ -384,16 +385,11 @@ func TestWriteDumpFiles_PreservesLiteralLeadingDots(t *testing.T) {
 }
 
 func TestWriteDumpFiles_WriteFileError(t *testing.T) {
-	// Skip when running as root: a read-only directory still permits writes
-	// for uid 0 on Linux, so the failure path we're trying to hit cannot
-	// be triggered. The other CI hosts run as a regular user and exercise
-	// this branch.
-	if os.Geteuid() == 0 {
-		t.Skip("read-only dir trick does not block root")
-	}
 	dir := t.TempDir()
-	require.NoError(t, os.Chmod(dir, 0o555))
-	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	// Pre-create a directory at the target path so os.WriteFile fails on
+	// every platform (EISDIR / access denied), including as root, unlike a
+	// read-only parent whose permission bits root and Windows ignore.
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "safe.sql"), 0o755))
 
 	count, err := command.WriteDumpFiles(dir, map[string]string{"safe.sql": "x"})
 	require.Error(t, err)

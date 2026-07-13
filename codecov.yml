@@ -1,3 +1,16 @@
+# Wait for all coverage uploads before evaluating status or commenting.
+# There are five: the four PG-version test jobs plus the windows job.
+# The pager's sh -c / cmd /c split is platform-exclusive, so patch
+# coverage is only complete once both OSes have reported; evaluating
+# after the Linux uploads alone would report a spurious low patch %.
+codecov:
+  notify:
+    after_n_builds: 5
+    wait_for_ci: true
+
+comment:
+  after_n_builds: 5
+
 coverage:
   status:
     project:

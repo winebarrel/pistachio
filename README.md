@@ -283,7 +283,7 @@ pista dump
 
 ### Paging long output
 
-Set `$PISTA_PAGER` to forward `plan` / `apply` / `dump` output through an external command when stdout is a TTY. The command is interpreted by `sh -c`, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected; the pager runs only for interactive output. Use `--no-pager` to disable it for a single invocation, or `--pager` to force it on when stdout is not a TTY (e.g. when piping into another pager-aware tool). `PISTA_PAGER` must still be set for `--pager` to do anything.
+Set `$PISTA_PAGER` to forward `plan` / `apply` / `dump` output through an external command when stdout is a TTY. The command is interpreted by `sh -c` (`cmd /c` on Windows), so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected; the pager runs only for interactive output. Use `--no-pager` to disable it for a single invocation, or `--pager` to force it on when stdout is not a TTY (e.g. when piping into another pager-aware tool). `PISTA_PAGER` must still be set for `--pager` to do anything.
 
 ```bash
 # Page with less, keeping ANSI colors

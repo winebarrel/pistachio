@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"sync"
 )
 
@@ -40,7 +41,14 @@ func StartPager(w io.Writer, pager *bool) (io.Writer, func(), error) {
 		return w, noop, nil
 	}
 
-	cmd := exec.Command("sh", "-c", cmdline)
+	// PISTA_PAGER is interpreted by the platform shell: sh on Unix,
+	// cmd on Windows.
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/c", cmdline)
+	} else {
+		cmd = exec.Command("sh", "-c", cmdline)
+	}
 	cmd.Stdout = f
 	cmd.Stderr = os.Stderr
 	stdin, err := cmd.StdinPipe()

@@ -33,6 +33,48 @@ jobs:
             exit "$status"
           fi
 
+  windows:
+    runs-on: windows-latest
+    # cgo (libpg_query) builds with the mingw-w64 gcc bundled in the
+    # windows-latest image, found on PATH as gcc. This deliberately
+    # exercises the native Windows toolchain; the release binary is
+    # cross-built with mingw-w64 via goreleaser-cross (.goreleaser.yml).
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      # Keep LF line endings; test fixtures are compared byte for byte.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Install GNU Make
+        run: choco install -y --no-progress make
+      # PostgreSQL is preinstalled on the runner image but the service is
+      # stopped and disabled by default. PGDATA / PGBIN are set by the image
+      # and point at that install. Switch it to trust auth to match the Linux
+      # jobs (POSTGRES_HOST_AUTH_METHOD=trust), then start it. Fail loudly if
+      # the image ever stops providing these paths.
+      - name: Start PostgreSQL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:PGDATA -or -not $env:PGBIN) {
+            throw "PGDATA/PGBIN not set by the runner image; update this step"
+          }
+          Set-Content -Path "$env:PGDATA\pg_hba.conf" -Value "host all all 127.0.0.1/32 trust`nhost all all ::1/128 trust"
+          Get-Service -Name postgresql* | Set-Service -StartupType Manual -PassThru | Start-Service
+          & "$env:PGBIN\pg_isready" -h localhost -t 30
+      - name: Build
+        run: go build -o pista.exe ./cmd/pista
+      - name: Smoke test
+        run: ./pista.exe --help
+      - run: make TEST_OPTS='-coverprofile=coverage.txt'
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: windows
+
   test:
     runs-on: ubuntu-latest
     strategy:
