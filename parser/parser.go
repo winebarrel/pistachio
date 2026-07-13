@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -110,12 +109,16 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				stmtEnd = int32(len(sql))
 			}
 			rawStmtSQL := sql[rawStmt.StmtLocation:stmtEnd]
-			for newVal, oldVal := range extractEnumValueDirectives(rawStmtSQL) {
-				if slices.Contains(enum.Values, newVal) {
+			valueDirectives, err := extractEnumValueDirectives(rawStmtSQL)
+			if err != nil {
+				return nil, err
+			}
+			for idx, oldVal := range valueDirectives {
+				if idx < len(enum.Values) {
 					if enum.ValueRenameFrom == nil {
 						enum.ValueRenameFrom = make(map[string]string)
 					}
-					enum.ValueRenameFrom[newVal] = oldVal
+					enum.ValueRenameFrom[enum.Values[idx]] = oldVal
 				}
 			}
 

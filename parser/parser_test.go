@@ -1490,6 +1490,39 @@ func TestParseSQL_RenameDirective_EnumValue_KeepsPendingAcrossComments(t *testin
 	assert.Equal(t, map[string]string{"disabled": "inactive"}, e.ValueRenameFrom)
 }
 
+func TestParseSQL_RenameDirective_EnumValue_MultiLineValue(t *testing.T) {
+	// String literals may span lines; the lexer-based extraction still pairs
+	// the directive with the following value.
+	sql := `CREATE TYPE public.status AS ENUM (
+    -- pista:renamed-from 'old'
+    'multi
+line'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{"multi\nline": "old"}, e.ValueRenameFrom)
+}
+
+func TestParseSQL_RenameDirective_EnumValue_TrailingCommentIgnored(t *testing.T) {
+	// A directive must be on its own line; a trailing comment after a value
+	// is not a directive for the next value.
+	sql := `CREATE TYPE public.status AS ENUM (
+    'active', -- pista:renamed-from 'x'
+    'disabled'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Empty(t, e.ValueRenameFrom)
+}
+
 func TestParseSQL_RenameDirective_EnumValue_DanglingIgnored(t *testing.T) {
 	// A directive not followed by a value literal is ignored.
 	sql := `CREATE TYPE public.status AS ENUM (
