@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.16.0] - 2026-07-13
 
 * Open the `plan` and `dump` connections in read-only mode, so those commands cannot write to the database even by accident. `apply` still applies DDL. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) for a read-write connection.
 
