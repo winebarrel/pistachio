@@ -95,10 +95,19 @@ func (client *Client) ConnInfoComment() (string, error) {
 	return "-- Connected to " + u.String(), nil
 }
 
-func (client *Client) connect(ctx context.Context) (*pgx.Conn, error) {
+// connect opens a database connection. When readOnly is true, the session
+// rejects writes, so read-only operations (plan, dump) cannot modify the
+// database even by accident. apply passes false because it applies DDL.
+// The read-only flag is set as a startup parameter, so it is in effect for the
+// whole connection with no extra round-trip.
+func (client *Client) connect(ctx context.Context, readOnly bool) (*pgx.Conn, error) {
 	cfg, err := client.buildConnConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	if readOnly {
+		cfg.RuntimeParams["default_transaction_read_only"] = "on"
 	}
 
 	conn, err := pgx.ConnectConfig(ctx, cfg)
@@ -106,5 +115,5 @@ func (client *Client) connect(ctx context.Context) (*pgx.Conn, error) {
 		return nil, fmt.Errorf("pistachio: failed to connect database: %w", err)
 	}
 
-	return conn, err
+	return conn, nil
 }

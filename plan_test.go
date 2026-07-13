@@ -111,6 +111,31 @@ func TestPlan_WithPassword(t *testing.T) {
 	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
 }
 
+func TestPlan_NoReadOnly(t *testing.T) {
+	// With NoReadOnly the connection is opened read-write. Plan never writes,
+	// so the output is the same; this just exercises the plumbing.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{NoReadOnly: true, Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
+}
+
 func TestPlan_InvalidDesiredFile(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

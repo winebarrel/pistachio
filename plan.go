@@ -19,6 +19,7 @@ type PlanOptions struct {
 	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
 	ForceIndexConcurrently   bool     `xor:"index-concurrently" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
+	NoReadOnly               bool     `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default plan uses a read-only connection."`
 }
 
 // ObjectCount holds the number of objects inspected by type.
@@ -68,7 +69,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	if err := client.validateSchemas(); err != nil {
 		return nil, err
 	}
-	conn, err := client.connect(ctx)
+	conn, err := client.connect(ctx, !options.NoReadOnly)
 	if err != nil {
 		return nil, err
 	}

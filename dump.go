@@ -14,6 +14,7 @@ type DumpOptions struct {
 	FilterOptions
 	Split      string `help:"Output each table/view/enum/domain as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
+	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
 }
 
 type DumpResult struct {
@@ -227,7 +228,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		return nil, fmt.Errorf("--omit-schema cannot be used with multiple schemas")
 	}
 
-	conn, err := client.connect(ctx)
+	conn, err := client.connect(ctx, !options.NoReadOnly)
 	if err != nil {
 		return nil, err
 	}

@@ -48,7 +48,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	if err := client.validateSchemas(); err != nil {
 		return nil, err
 	}
-	conn, err := client.connect(ctx)
+	conn, err := client.connect(ctx, false)
 	if err != nil {
 		return nil, err
 	}

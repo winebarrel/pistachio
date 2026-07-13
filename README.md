@@ -149,6 +149,8 @@ pista plan --check schema.sql
 echo $?  # 0: no changes, 2: changes, 1: error
 ```
 
+`plan` and `dump` open a read-only connection, so they cannot write to the database. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) to use a read-write connection.
+
 ### apply
 
 Apply the diff to the database.
