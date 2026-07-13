@@ -42,7 +42,7 @@ func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChe
 			continue
 		}
 
-		stmts, err := diffEnumValues(k, currentEnum.Values, desiredEnum.Values)
+		stmts, err := diffEnumValues(k, currentEnum.Values, desiredEnum.Values, desiredEnum.ValueRenameFrom)
 		if err != nil {
 			return nil, err
 		}
@@ -73,7 +73,35 @@ func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChe
 	return result, nil
 }
 
-func diffEnumValues(fqen string, current, desired []string) ([]string, error) {
+func diffEnumValues(fqen string, current, desired []string, renameFrom map[string]string) ([]string, error) {
+	var stmts []string
+
+	// Apply value renames first so renamed values are not seen as removals.
+	// RENAME VALUE keeps the value's position, so the rename is reflected
+	// in-place on the current side.
+	if len(renameFrom) > 0 {
+		current = slices.Clone(current)
+		for _, val := range desired {
+			old, ok := renameFrom[val]
+			if !ok || old == val {
+				continue
+			}
+			oldIdx := slices.Index(current, old)
+			if oldIdx < 0 {
+				if slices.Contains(current, val) {
+					// Already applied
+					continue
+				}
+				return nil, fmt.Errorf("rename source %s not found for enum value %s in %s", model.QuoteLiteral(old), model.QuoteLiteral(val), fqen)
+			}
+			if slices.Contains(current, val) {
+				return nil, fmt.Errorf("cannot rename enum value %s to %s in %s: destination already exists", model.QuoteLiteral(old), model.QuoteLiteral(val), fqen)
+			}
+			stmts = append(stmts, "ALTER TYPE "+fqen+" RENAME VALUE "+model.QuoteLiteral(old)+" TO "+model.QuoteLiteral(val)+";")
+			current[oldIdx] = val
+		}
+	}
+
 	// Detect removed values (not supported by PostgreSQL)
 	for _, val := range current {
 		if !slices.Contains(desired, val) {
@@ -89,7 +117,6 @@ func diffEnumValues(fqen string, current, desired []string) ([]string, error) {
 	// Add new enum values with correct positioning.
 	// Maintain a working slice that tracks values added so far,
 	// so later insertions can reference previously added values.
-	var stmts []string
 	working := slices.Clone(current)
 
 	for i, val := range desired {

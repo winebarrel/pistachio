@@ -1,0 +1,9 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active');
+desired: |
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      -- pista:renamed-from 'nonexistent'
+      'disabled'
+  );
+error: "rename source 'nonexistent' not found"

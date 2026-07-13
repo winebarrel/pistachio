@@ -344,6 +344,101 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	return result
 }
 
+// extractEnumValueDirectives scans a CREATE TYPE ... AS ENUM statement for
+// `-- pista:renamed-from <old_value>` directives on the line before a value
+// literal. The statement is tokenized with the pg_query lexer, so any literal
+// form (escapes, dollar quoting, multi-line) is recognized. The old value may
+// be written as a quoted literal or bare. Returns a map from value index to
+// old value.
+func extractEnumValueDirectives(rawCreateEnumSQL string) (map[int]string, error) {
+	result := make(map[int]string)
+
+	scan, err := pg_query.Scan(rawCreateEnumSQL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan CREATE TYPE statement: %w", err)
+	}
+
+	inValueList := false
+	pending := ""
+	hasPending := false
+	valueIdx := 0
+
+	for _, tok := range scan.Tokens {
+		switch tok.Token {
+		case pg_query.Token_ASCII_40: // "("
+			// Directives before the value list rename the type, not a value.
+			inValueList = true
+		case pg_query.Token_SQL_COMMENT:
+			if !inValueList || !atLineStart(rawCreateEnumSQL, int(tok.Start)) {
+				continue
+			}
+			text := rawCreateEnumSQL[tok.Start:tok.End]
+			if m := renameDirectivePattern.FindStringSubmatch(text); m != nil {
+				pending = unquoteEnumLiteral(strings.TrimSpace(m[1]))
+				hasPending = true
+			}
+		case pg_query.Token_SCONST, pg_query.Token_USCONST:
+			if hasPending {
+				result[valueIdx] = pending
+				hasPending = false
+			}
+			valueIdx++
+		}
+	}
+
+	return result, nil
+}
+
+// atLineStart reports whether only whitespace precedes pos on its line.
+func atLineStart(s string, pos int) bool {
+	for i := pos - 1; i >= 0; i-- {
+		switch s[i] {
+		case '\n':
+			return true
+		case ' ', '\t', '\r':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// unquoteEnumLiteral strips surrounding single quotes from an enum value and
+// unescapes doubled quotes (two quotes become one). Bare values are returned
+// as-is; enum values are literals, so no case folding is applied.
+func unquoteEnumLiteral(s string) string {
+	if val, ok := scanEnumLiteral(s); ok {
+		return val
+	}
+	return s
+}
+
+// scanEnumLiteral scans a single-quoted literal from the start of s, handling
+// doubled-quote escape sequences. Returns the unquoted value and true if
+// successful.
+func scanEnumLiteral(s string) (string, bool) {
+	if len(s) == 0 || s[0] != '\'' {
+		return "", false
+	}
+	var val strings.Builder
+	for i := 1; i < len(s); i++ {
+		if s[i] == '\'' {
+			if i+1 < len(s) && s[i+1] == '\'' {
+				// Escaped single quote
+				val.WriteByte('\'')
+				i++
+			} else {
+				// End of literal
+				return val.String(), true
+			}
+		} else {
+			val.WriteByte(s[i])
+		}
+	}
+	return "", false
+}
+
 // scanQuotedIdent scans a quoted identifier from the start of s, handling ""
 // escape sequences. Returns the unquoted name and true if successful.
 func scanQuotedIdent(s string) (string, bool) {

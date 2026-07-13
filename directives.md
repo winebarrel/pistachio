@@ -4,7 +4,7 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 
 | Directive | Arguments | Applies to | Purpose |
 |---|---|---|---|
-| `renamed-from` | old name (required) | tables, views, enums, domains, columns, constraints, foreign keys, indexes, policies | Rename instead of drop and create |
+| `renamed-from` | old name (required) | tables, views, enums, enum values, domains, columns, constraints, foreign keys, indexes, policies | Rename instead of drop and create |
 | `execute` | check SQL (optional) | any statement | Run non-managed SQL during apply |
 | `concurrently` | none | `CREATE INDEX` | Create and drop the index with `CONCURRENTLY` |
 | `bulk-alter` | none | `CREATE TABLE` | Merge the table's `ALTER TABLE` actions into one statement |
@@ -32,6 +32,16 @@ ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFER
 ```
 
 For columns and constraints, write the directive inside `CREATE TABLE` on the line before the definition. Directives that have already been applied are silently skipped, so leave them in place until cleanup.
+
+For enum values, write the directive inside `CREATE TYPE ... AS ENUM` on the line before the value. The old value may be quoted or bare and is case-sensitive. The rename emits `ALTER TYPE ... RENAME VALUE`, which keeps stored data and the value's position.
+
+```sql
+CREATE TYPE public.status AS ENUM (
+    'active',
+    -- pista:renamed-from 'inactive'
+    'disabled'
+);
+```
 
 See [Renaming objects](README.md#renaming-objects) in the README for column rename caveats.
 

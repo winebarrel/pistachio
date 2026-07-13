@@ -401,6 +401,16 @@ CREATE TABLE public.users (
 CREATE VIEW public.new_view AS SELECT 1;
 ```
 
+**Enum values** (inside `CREATE TYPE ... AS ENUM`, before the value). The rename emits `ALTER TYPE ... RENAME VALUE`, which keeps stored data and the value's position:
+
+```sql
+CREATE TYPE public.status AS ENUM (
+    'active',
+    -- pista:renamed-from 'inactive'
+    'disabled'
+);
+```
+
 **Columns, constraints, indexes** (inside `CREATE TABLE` or before `CREATE INDEX` / `ALTER TABLE ADD CONSTRAINT`):
 
 ```sql
@@ -479,7 +489,7 @@ pista dump --split ./schema/
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types, domains)
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
-- Renaming (tables, views, enums, domains, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
+- Renaming (tables, views, enums, enum values, domains, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 

@@ -102,6 +102,26 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				enum.RenameFrom = &qualified
 			}
+
+			// Extract value-level rename directives from raw SQL
+			stmtEnd := rawStmt.StmtLocation + rawStmt.StmtLen
+			if stmtEnd > int32(len(sql)) {
+				stmtEnd = int32(len(sql))
+			}
+			rawStmtSQL := sql[rawStmt.StmtLocation:stmtEnd]
+			valueDirectives, err := extractEnumValueDirectives(rawStmtSQL)
+			if err != nil {
+				return nil, err
+			}
+			for idx, oldVal := range valueDirectives {
+				if idx < len(enum.Values) {
+					if enum.ValueRenameFrom == nil {
+						enum.ValueRenameFrom = make(map[string]string)
+					}
+					enum.ValueRenameFrom[enum.Values[idx]] = oldVal
+				}
+			}
+
 			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
 				return nil, err
 			}
