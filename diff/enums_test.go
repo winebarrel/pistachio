@@ -520,6 +520,44 @@ func TestDiffEnums_RenameValueQuoted(t *testing.T) {
 	assert.Equal(t, []string{"ALTER TYPE public.status RENAME VALUE 'don''t' TO 'won''t';"}, result.Stmts)
 }
 
+func TestDiffEnums_NewEnumIgnoresValueRenameDirective(t *testing.T) {
+	// A value rename directive on an enum that does not exist yet is
+	// meaningless: the enum is created with the desired values as-is.
+	current := newEnumMap()
+	desired := newEnumMap(&model.Enum{
+		Schema:          "public",
+		Name:            "status",
+		Values:          []string{"active", "disabled"},
+		ValueRenameFrom: map[string]string{"disabled": "inactive"},
+	})
+	result, err := diff.DiffEnums(current, desired, diff.AllowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.Stmts, 1)
+	assert.Contains(t, result.Stmts[0], "CREATE TYPE public.status AS ENUM")
+}
+
+func TestDiffEnums_RenameValueAndReAddOldName(t *testing.T) {
+	// The old name may be reintroduced as a new value in the same plan:
+	// the rename runs first, then the old name is added as a fresh value.
+	current := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"old", "keep"},
+	})
+	desired := newEnumMap(&model.Enum{
+		Schema:          "public",
+		Name:            "status",
+		Values:          []string{"new", "old", "keep"},
+		ValueRenameFrom: map[string]string{"new": "old"},
+	})
+	result, err := diff.DiffEnums(current, desired, diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"ALTER TYPE public.status RENAME VALUE 'old' TO 'new';",
+		"ALTER TYPE public.status ADD VALUE 'old' AFTER 'new';",
+	}, result.Stmts)
+}
+
 func TestDiffEnums_RenameTypeAndValue(t *testing.T) {
 	oldName := "public.status"
 	current := newEnumMap(&model.Enum{
