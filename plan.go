@@ -68,7 +68,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	if err := client.validateSchemas(); err != nil {
 		return nil, err
 	}
-	conn, err := client.connect(ctx)
+	conn, err := client.connect(ctx, true)
 	if err != nil {
 		return nil, err
 	}

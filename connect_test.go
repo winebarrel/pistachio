@@ -20,9 +20,47 @@ func TestConnect_PropagatesCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := client.connect(ctx)
+	_, err := client.connect(ctx, false)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestConnect_ReadOnly(t *testing.T) {
+	connStr := os.Getenv("TEST_PISTA_CONN_STR")
+	if connStr == "" {
+		connStr = "postgres://postgres@localhost/postgres"
+	}
+	client := NewClient(&Options{ConnString: connStr})
+
+	ctx := context.Background()
+	conn, err := client.connect(ctx, true)
+	require.NoError(t, err)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	var ro string
+	require.NoError(t, conn.QueryRow(ctx, "SHOW default_transaction_read_only").Scan(&ro))
+	assert.Equal(t, "on", ro)
+
+	// A write must be rejected by the read-only transaction.
+	_, err = conn.Exec(ctx, "CREATE TABLE pista_ro_probe (id integer)")
+	require.Error(t, err)
+}
+
+func TestConnect_Writable(t *testing.T) {
+	connStr := os.Getenv("TEST_PISTA_CONN_STR")
+	if connStr == "" {
+		connStr = "postgres://postgres@localhost/postgres"
+	}
+	client := NewClient(&Options{ConnString: connStr})
+
+	ctx := context.Background()
+	conn, err := client.connect(ctx, false)
+	require.NoError(t, err)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	var ro string
+	require.NoError(t, conn.QueryRow(ctx, "SHOW default_transaction_read_only").Scan(&ro))
+	assert.Equal(t, "off", ro)
 }
 
 func TestBuildConnConfig_DbnameOverridesConnString(t *testing.T) {
@@ -174,7 +212,7 @@ func TestConnInfoComment_InvalidConnString(t *testing.T) {
 func TestConnect_InvalidConnStringPropagatesBuildError(t *testing.T) {
 	client := NewClient(&Options{ConnString: "::not-a-valid-conn-string::"})
 
-	_, err := client.connect(context.Background())
+	_, err := client.connect(context.Background(), false)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "failed to parse connection string"))
 }

@@ -227,7 +227,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		return nil, fmt.Errorf("--omit-schema cannot be used with multiple schemas")
 	}
 
-	conn, err := client.connect(ctx)
+	conn, err := client.connect(ctx, true)
 	if err != nil {
 		return nil, err
 	}
