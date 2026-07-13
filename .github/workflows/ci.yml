@@ -37,8 +37,6 @@ jobs:
     runs-on: windows-latest
     env:
       CGO_ENABLED: "1"
-      # The preinstalled PostgreSQL uses password auth (postgres/root).
-      TEST_PISTA_CONN_STR: postgres://postgres:root@localhost/postgres
     steps:
       # Keep LF line endings; test fixtures are compared byte for byte.
       - run: git config --global core.autocrlf false
@@ -49,17 +47,23 @@ jobs:
       - name: Install GNU Make
         run: choco install -y --no-progress make
       # PostgreSQL is preinstalled on the runner image but the service is
-      # stopped and disabled by default.
+      # stopped and disabled by default. Switch it to trust auth to match
+      # the Linux jobs (POSTGRES_HOST_AUTH_METHOD=trust) before starting.
       - name: Start PostgreSQL
         shell: pwsh
         run: |
+          Set-Content -Path "$env:PGDATA\pg_hba.conf" -Value "host all all 127.0.0.1/32 trust`nhost all all ::1/128 trust"
           Get-Service -Name postgresql* | Set-Service -StartupType Manual -PassThru | Start-Service
           & "$env:PGBIN\pg_isready" -h localhost -t 30
       - name: Build
         run: go build -o pista.exe ./cmd/pista
       - name: Smoke test
         run: ./pista.exe --help
-      - run: make test
+      - run: make TEST_OPTS='-coverprofile=coverage.txt'
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: windows
 
   test:
     runs-on: ubuntu-latest
