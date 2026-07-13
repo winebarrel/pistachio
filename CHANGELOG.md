@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Open the `plan` and `dump` connections in read-only mode (`SET default_transaction_read_only = on`), so those commands cannot write to the database even by accident. `apply` is unchanged and still applies DDL. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) to open a read-write connection instead.
+* Open the `plan` and `dump` connections in read-only mode, so those commands cannot write to the database even by accident. `apply` still applies DDL. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) for a read-write connection.
 
 ## [1.15.0] - 2026-07-13
 
