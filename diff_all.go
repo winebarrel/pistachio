@@ -33,6 +33,7 @@ type diffAllOptions struct {
 type diffAllResult struct {
 	Stmts                []string
 	DisallowedDrops      []string
+	Ignored              []string
 	PreSQL               string
 	ConcurrentlyPreSQL   string
 	Count                ObjectCount
@@ -80,6 +81,25 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	filteredEnums := options.filterEnums(currentEnums)
 	filteredDomains := options.filterDomains(currentDomains)
 
+	desiredEnums := options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums))
+	desiredDomains := options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains))
+	desiredTables := options.filterTables(client.reverseRemapTableSchemas(desired.Tables))
+	desiredViews := options.filterViews(client.reverseRemapViewSchemas(desired.Views))
+
+	// Objects marked -- pista:ignore are unmanaged: drop them from both the
+	// desired and current sides so no create, alter, or drop is generated.
+	// Their FQNs are surfaced as -- ignored: comments.
+	var ignored []string
+	ignored = append(ignored, removeIgnored(desiredTables, filteredTables, func(t *model.Table) bool { return t.Ignore })...)
+	ignored = append(ignored, removeIgnored(desiredViews, filteredViews, func(v *model.View) bool { return v.Ignore })...)
+	ignored = append(ignored, removeIgnored(desiredEnums, filteredEnums, func(e *model.Enum) bool { return e.Ignore })...)
+	ignored = append(ignored, removeIgnored(desiredDomains, filteredDomains, func(d *model.Domain) bool { return d.Ignore })...)
+	sort.Strings(ignored)
+	ignoredComments := make([]string, len(ignored))
+	for i, fqn := range ignored {
+		ignoredComments[i] = "-- ignored: " + fqn
+	}
+
 	count := ObjectCount{
 		Schemas: client.Schemas,
 		Tables:  filteredTables.Len(),
@@ -87,11 +107,6 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		Enums:   filteredEnums.Len(),
 		Domains: filteredDomains.Len(),
 	}
-
-	desiredEnums := options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums))
-	desiredDomains := options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains))
-	desiredTables := options.filterTables(client.reverseRemapTableSchemas(desired.Tables))
-	desiredViews := options.filterViews(client.reverseRemapViewSchemas(desired.Views))
 
 	switch {
 	case options.DisableIndexConcurrently:
@@ -159,12 +174,31 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	return &diffAllResult{
 		Stmts:                stmts,
 		DisallowedDrops:      disallowed,
+		Ignored:              ignoredComments,
 		PreSQL:               preSQL,
 		ConcurrentlyPreSQL:   concurrentlyPreSQL,
 		Count:                count,
 		ExecuteStmts:         desired.ExecuteStmts,
 		HasConcurrentlyIndex: tableDiff.HasConcurrently || viewDiff.HasConcurrently,
 	}, nil
+}
+
+// removeIgnored deletes every entry the ignored predicate matches from the
+// desired map and the same key from the current map, so ignored objects
+// produce no create, alter, or drop. It returns the removed keys (the object
+// FQNs). Keys are collected first to avoid mutating the map while ranging.
+func removeIgnored[V any](desired, current *orderedmap.Map[string, V], ignored func(V) bool) []string {
+	var keys []string
+	for k, v := range desired.All() {
+		if ignored(v) {
+			keys = append(keys, k)
+		}
+	}
+	for _, k := range keys {
+		desired.Delete(k)
+		current.Delete(k)
+	}
+	return keys
 }
 
 // clearConcurrentlyDirectives wipes the per-index Concurrently flag on every

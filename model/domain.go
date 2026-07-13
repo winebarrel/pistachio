@@ -22,6 +22,10 @@ type Domain struct {
 	Collation   *string
 	Constraints []*DomainConstraint
 	Comment     *string
+	// Ignore marks the domain as unmanaged (set by -- pista:ignore). Ignored
+	// objects are not created, altered, or dropped; always false on the
+	// catalog side.
+	Ignore bool
 }
 
 func (d Domain) FQDN() string {

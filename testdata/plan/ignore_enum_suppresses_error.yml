@@ -1,0 +1,8 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+desired: |
+  -- pista:ignore
+  CREATE TYPE public.status AS ENUM ('active');
+plan: ""
+ignored: |
+  -- ignored: public.status

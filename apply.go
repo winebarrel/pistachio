@@ -29,6 +29,7 @@ type ApplyOptions struct {
 type ApplyResult struct {
 	Count           ObjectCount
 	DisallowedDrops string
+	Ignored         string
 	// Applied reports whether any schema change was actually applied: schema
 	// DDL or an executed -- pista:execute statement. Pre-SQL,
 	// concurrently-pre-SQL, transaction control, search_path setup, and
@@ -76,6 +77,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	applyResult := &ApplyResult{
 		Count:           result.Count,
 		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
+		Ignored:         strings.Join(result.Ignored, "\n"),
 	}
 
 	if len(result.Stmts) == 0 && len(result.ExecuteStmts) == 0 {

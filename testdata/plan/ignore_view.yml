@@ -1,0 +1,8 @@
+init: |
+  CREATE VIEW public.v AS SELECT 1 AS a;
+desired: |
+  -- pista:ignore
+  CREATE VIEW public.v AS SELECT 2 AS b;
+plan: ""
+ignored: |
+  -- ignored: public.v

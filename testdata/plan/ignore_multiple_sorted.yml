@@ -1,0 +1,19 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.legacy (
+      id integer NOT NULL,
+      CONSTRAINT legacy_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:ignore
+  CREATE TABLE public.legacy (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT legacy_pkey PRIMARY KEY (id)
+  );
+  -- pista:ignore
+  CREATE TYPE public.status AS ENUM ('active');
+plan: ""
+ignored: |
+  -- ignored: public.legacy
+  -- ignored: public.status

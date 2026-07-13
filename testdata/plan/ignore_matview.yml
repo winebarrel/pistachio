@@ -1,0 +1,8 @@
+init: |
+  CREATE MATERIALIZED VIEW public.mv AS SELECT 1 AS a;
+desired: |
+  -- pista:ignore
+  CREATE MATERIALIZED VIEW public.mv AS SELECT 2 AS b;
+plan: ""
+ignored: |
+  -- ignored: public.mv

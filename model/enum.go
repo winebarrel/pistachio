@@ -17,6 +17,10 @@ type Enum struct {
 	// value list; always empty on the catalog side.
 	ValueRenameFrom map[string]string
 	Comment         *string
+	// Ignore marks the enum as unmanaged (set by -- pista:ignore). Ignored
+	// objects are not created, altered, or dropped; always false on the
+	// catalog side.
+	Ignore bool
 }
 
 func (e Enum) FQEN() string {

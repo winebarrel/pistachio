@@ -57,6 +57,7 @@ func pluralize(n int, singular string) string {
 type PlanResult struct {
 	SQL             string
 	DisallowedDrops string
+	Ignored         string
 	Count           ObjectCount
 	// HasChanges is true when the plan contains executable statements
 	// (DDL or execute directives). Suppressed drops do not count.
@@ -115,6 +116,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	return &PlanResult{
 		SQL:             strings.Join(stmts, "\n"),
 		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
+		Ignored:         strings.Join(result.Ignored, "\n"),
 		Count:           result.Count,
 		HasChanges:      hasChanges,
 	}, nil

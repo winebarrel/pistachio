@@ -8,6 +8,7 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 | `execute` | check SQL (optional) | any statement | Run non-managed SQL during apply |
 | `concurrently` | none | `CREATE INDEX` | Create and drop the index with `CONCURRENTLY` |
 | `bulk-alter` | none | `CREATE TABLE` | Merge the table's `ALTER TABLE` actions into one statement |
+| `ignore` | none | tables, views, enums, domains | Leave the object unmanaged |
 
 ## -- pista:renamed-from
 
@@ -86,3 +87,19 @@ ALTER TABLE public.users
 ```
 
 Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs stay separate statements. The `--bulk-alter` flag merges every table regardless of directives.
+
+## -- pista:ignore
+
+Marks a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE DOMAIN` / `CREATE VIEW` (including materialized views) as unmanaged. pistachio does not create, alter, or drop the object: it is dropped from both the desired and current state before diffing. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
+
+```sql
+-- pista:ignore
+CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);
+```
+
+Each ignored object is reported as an `-- ignored: <name>` comment in `plan` and `apply` output.
+
+The directive attaches to a statement written in the schema file, so it can only ignore an object you have declared. To keep an existing object that would otherwise be dropped, write its `CREATE` statement with the directive. Because the object is unmanaged, its column references are not validated at parse time.

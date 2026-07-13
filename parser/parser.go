@@ -78,6 +78,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	stmtDirectives := extractStmtDirectives(sql, result.Stmts)
 	concurrentlyDirectives := extractConcurrentlyDirectives(sql, result.Stmts)
 	bulkAlterDirectives := extractBulkAlterDirectives(sql, result.Stmts)
+	ignoreDirectives := extractIgnoreDirectives(sql, result.Stmts)
 	executeStmts, executeSkipLocations, err := extractExecuteDirectives(sql, result.Stmts)
 	if err != nil {
 		return nil, err
@@ -91,6 +92,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 
 		node := rawStmt.Stmt
 		renameFrom := stmtDirectives[rawStmt.StmtLocation]
+		ignore := ignoreDirectives[rawStmt.StmtLocation]
 
 		switch {
 		case node.GetCreateEnumStmt() != nil:
@@ -122,6 +124,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				}
 			}
 
+			enum.Ignore = ignore
 			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
 				return nil, err
 			}
@@ -135,6 +138,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				domain.RenameFrom = &qualified
 			}
+			domain.Ignore = ignore
 			if err := setUnique(domains, domain.FQDN(), "domain", domain); err != nil {
 				return nil, err
 			}
@@ -175,6 +179,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				}
 			}
 
+			table.Ignore = ignore
 			if err := setUnique(tables, table.FQTN(), "table", table); err != nil {
 				return nil, err
 			}
@@ -188,6 +193,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				view.RenameFrom = &qualified
 			}
+			view.Ignore = ignore
 			if err := setUnique(views, view.FQVN(), "view", view); err != nil {
 				return nil, err
 			}
@@ -203,6 +209,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 					qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 					view.RenameFrom = &qualified
 				}
+				view.Ignore = ignore
 				if err := setUnique(views, view.FQVN(), "materialized view", view); err != nil {
 					return nil, err
 				}

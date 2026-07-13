@@ -84,6 +84,83 @@ func TestPlan_Run_NoChanges(t *testing.T) {
 	assert.Contains(t, buf.String(), "-- No changes")
 }
 
+func TestPlan_Run_IgnoredWithChange(t *testing.T) {
+	// An ignored object is reported as an -- ignored: comment alongside the
+	// executable diff for the managed objects.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:ignore
+CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "ADD COLUMN email")
+	assert.Contains(t, got, "-- ignored: public.legacy")
+}
+
+func TestPlan_Run_IgnoredOnlyShowsNoChanges(t *testing.T) {
+	// When the only object is ignored, the plan prints the -- ignored:
+	// comment and still reports no changes.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:ignore
+CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "-- ignored: public.legacy")
+	assert.Contains(t, got, "-- No changes")
+}
+
 func TestPlan_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	// When the only diff would be a DROP and --allow-drop is not set,
 	// the DROP is emitted as a comment for visibility while the "No changes"
