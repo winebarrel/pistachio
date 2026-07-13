@@ -22,6 +22,12 @@ brew install winebarrel/pistachio/pistachio
 
 Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
 
+| OS      | Arch         |
+|---------|--------------|
+| macOS   | amd64, arm64 |
+| Linux   | amd64, arm64 |
+| Windows | amd64        |
+
 ## Demo
 
 A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
