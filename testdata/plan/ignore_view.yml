@@ -4,3 +4,5 @@ desired: |
   -- pista:ignore
   CREATE VIEW public.v AS SELECT 2 AS b;
 plan: ""
+ignored: |
+  -- ignored: public.v

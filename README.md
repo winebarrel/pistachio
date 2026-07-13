@@ -475,7 +475,7 @@ CREATE TABLE public.legacy (
 );
 ```
 
-The directive attaches to a statement in the schema file, so it can only ignore an object you have declared. To keep an existing object that would otherwise be dropped, write its `CREATE` statement with the directive.
+Each ignored object is reported as an `-- ignored: <name>` comment in `plan` and `apply` output. The directive attaches to a statement in the schema file, so it can only ignore an object you have declared. To keep an existing object that would otherwise be dropped, write its `CREATE` statement with the directive.
 
 ### Split dump
 

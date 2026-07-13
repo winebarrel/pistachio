@@ -12,11 +12,14 @@ setup_db "$DATA/init.sql"
 # --- Step 1: ignored table produces no DDL for itself ---
 step "01 ignored table is not altered or dropped"
 plan_output=$(pista_plan "$DATA/steps/01_ignore_legacy.sql") || { fail "plan failed: $plan_output"; true; }
-if echo "$plan_output" | grep -q 'legacy'; then
-  fail "plan must not mention the ignored table"
+if echo "$plan_output" | grep -qE '(ALTER|DROP|CREATE) TABLE .*legacy'; then
+  fail "plan must not emit DDL for the ignored table"
   echo "    $plan_output" >&2
 elif ! echo "$plan_output" | grep -qF 'ADD COLUMN email'; then
   fail "expected the managed table to still diff"
+  echo "    $plan_output" >&2
+elif ! echo "$plan_output" | grep -qF -e '-- ignored: public.legacy'; then
+  fail "expected an -- ignored: comment for the ignored table"
   echo "    $plan_output" >&2
 else
   pass

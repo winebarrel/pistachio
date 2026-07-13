@@ -22,3 +22,5 @@ plan: |
   ALTER TABLE public.users ADD COLUMN name text;
 count:
   tables: 1
+ignored: |
+  -- ignored: public.legacy

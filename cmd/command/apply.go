@@ -38,12 +38,18 @@ func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer
 	// than the buffer length.
 	if !result.Applied {
 		w.Write(buf.Bytes()) //nolint:errcheck
+		if result.Ignored != "" {
+			fmt.Fprintln(w, result.Ignored) //nolint:errcheck
+		}
 		if result.DisallowedDrops != "" {
 			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
 		}
 		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
 	} else {
 		w.Write(buf.Bytes()) //nolint:errcheck
+		if result.Ignored != "" {
+			fmt.Fprintln(w, result.Ignored) //nolint:errcheck
+		}
 		if result.DisallowedDrops != "" {
 			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
 		}

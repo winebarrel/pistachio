@@ -6,3 +6,5 @@ desired: |
       CONSTRAINT legacy_pkey PRIMARY KEY (id)
   );
 plan: ""
+ignored: |
+  -- ignored: public.legacy

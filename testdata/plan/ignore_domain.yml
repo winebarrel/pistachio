@@ -4,3 +4,5 @@ desired: |
   -- pista:ignore
   CREATE DOMAIN public.age AS integer;
 plan: ""
+ignored: |
+  -- ignored: public.age

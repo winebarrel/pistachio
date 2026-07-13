@@ -22,6 +22,7 @@ type planTestCase struct {
 	Count                    *expectedCount  `yaml:"count,omitempty"`
 	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
+	Ignored                  string          `yaml:"ignored,omitempty"`
 	DisableIndexConcurrently bool            `yaml:"disable_index_concurrently,omitempty"`
 	ForceIndexConcurrently   bool            `yaml:"force_index_concurrently,omitempty"`
 	BulkAlter                bool            `yaml:"bulk_alter,omitempty"`
@@ -308,6 +309,7 @@ func TestPlan(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got.SQL))
 			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(got.DisallowedDrops))
+			assert.Equal(t, strings.TrimSpace(tc.Ignored), strings.TrimSpace(got.Ignored))
 			assert.Equal(t, got.SQL != "", got.HasChanges, "HasChanges must match presence of executable SQL")
 			assertExpectedCount(t, tc.Count, got.Count)
 		})
