@@ -58,6 +58,9 @@ type PlanResult struct {
 	SQL             string
 	DisallowedDrops string
 	Count           ObjectCount
+	// HasChanges is true when the plan contains executable statements
+	// (DDL or execute directives). Suppressed drops do not count.
+	HasChanges bool
 }
 
 func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResult, error) {
@@ -93,10 +96,12 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		stmts = append(stmts, parser.FormatExecuteStmt(es))
 	}
 
+	hasChanges := len(stmts) > 0
+
 	// Prefix order matches apply: PreSQL -> concurrently-pre-SQL -> DDL.
 	// Skipped entirely when there is nothing to execute, so an empty plan
 	// stays empty instead of leaking a bare SET / pre-SQL line.
-	if len(stmts) > 0 {
+	if hasChanges {
 		var prefix []string
 		if result.PreSQL != "" {
 			prefix = append(prefix, result.PreSQL)
@@ -111,5 +116,6 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		SQL:             strings.Join(stmts, "\n"),
 		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
 		Count:           result.Count,
+		HasChanges:      hasChanges,
 	}, nil
 }

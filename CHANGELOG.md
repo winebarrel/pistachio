@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Add `--check` (env `$PISTA_CHECK`) to `plan` for drift detection in CI. The exit code is 2 if the plan contains executable changes, 0 if not, and 1 on error. The output does not change. Suppressed drops alone exit 0 because they generate no executable DDL.
+* Add `--check` (env `$PISTA_CHECK`) to `plan` for drift detection in CI. The exit code is 2 if the plan contains executable changes, 0 if not, and 1 on error. The output does not change. Suppressed drops alone exit 0 because they generate no executable DDL. `PlanResult` gains a `HasChanges` field, and the CLI uses it instead of checking `SQL` for emptiness.
 
 ## [1.13.0] - 2026-07-03
 

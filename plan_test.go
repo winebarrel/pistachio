@@ -308,6 +308,7 @@ func TestPlan(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got.SQL))
 			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(got.DisallowedDrops))
+			assert.Equal(t, got.SQL != "", got.HasChanges, "HasChanges must match presence of executable SQL")
 			assertExpectedCount(t, tc.Count, got.Count)
 		})
 	}
