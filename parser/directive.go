@@ -387,8 +387,8 @@ func extractEnumValueDirectives(rawCreateEnumSQL string) map[string]string {
 }
 
 // unquoteEnumLiteral strips surrounding single quotes from an enum value and
-// unescapes doubled quotes (” -> '). Bare values are returned as-is; enum
-// values are literals, so no case folding is applied.
+// unescapes doubled quotes (two quotes become one). Bare values are returned
+// as-is; enum values are literals, so no case folding is applied.
 func unquoteEnumLiteral(s string) string {
 	if val, ok := scanEnumLiteral(s); ok {
 		return val
@@ -397,7 +397,8 @@ func unquoteEnumLiteral(s string) string {
 }
 
 // scanEnumLiteral scans a single-quoted literal from the start of s, handling
-// ” escape sequences. Returns the unquoted value and true if successful.
+// doubled-quote escape sequences. Returns the unquoted value and true if
+// successful.
 func scanEnumLiteral(s string) (string, bool) {
 	if len(s) == 0 || s[0] != '\'' {
 		return "", false
