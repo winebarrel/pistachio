@@ -134,6 +134,28 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 	assert.Equal(t, "1 table, 1 view, 1 enum, 1 domain", got.Count.Summary())
 }
 
+func TestDump_NoReadOnly(t *testing.T) {
+	// With NoReadOnly the connection is opened read-write. Dump never writes,
+	// so the output is the same; this just exercises the plumbing.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{NoReadOnly: true})
+	require.NoError(t, err)
+	assert.Equal(t, 1, got.Count.Tables)
+}
+
 func TestDump_Count_Empty(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
