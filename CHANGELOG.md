@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.15.0] - 2026-07-13
 
 * Add the `-- pista:ignore` directive. Put it before a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE DOMAIN` / `CREATE VIEW` statement to leave that object unmanaged: pistachio does not create, alter, or drop it. The object is dropped from both the desired and current state before diffing, so it is the in-file equivalent of `--exclude` for a single object. Each ignored object is reported as an `-- ignored: <name>` comment in `plan` / `apply` output. The directive takes no arguments.
 
