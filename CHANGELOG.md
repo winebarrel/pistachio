@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.14.0] - 2026-07-13
 
 * Support enum value renames. Put `-- pista:renamed-from <old_value>` on the line before a value inside `CREATE TYPE ... AS ENUM` to emit `ALTER TYPE ... RENAME VALUE` instead of failing with a value-removal error. The old value may be quoted or bare. Already-applied renames are skipped. Renaming to an existing value or from a missing value is an error.
 
