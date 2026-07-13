@@ -18,6 +18,9 @@ var (
 	bulkAlterDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]*$`)
 	// Matches -- pista:bulk-alter with trailing content (invalid usage).
 	bulkAlterWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]+\S`)
+	ignoreDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]*$`)
+	// Matches -- pista:ignore with trailing content (invalid usage).
+	ignoreWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]+\S`)
 	// Matches any -- pista: directive, capturing the name (if any) after the colon.
 	anyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:[ \t]*(\S*)`)
 )
@@ -28,6 +31,7 @@ var knownDirectives = map[string]bool{
 	"execute":      true,
 	"concurrently": true,
 	"bulk-alter":   true,
+	"ignore":       true,
 }
 
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
@@ -50,6 +54,10 @@ func validateDirectives(rawSQL string) error {
 
 	if bulkAlterWithArgsPattern.MatchString(rawSQL) {
 		return fmt.Errorf("-- pista:bulk-alter does not accept arguments")
+	}
+
+	if ignoreWithArgsPattern.MatchString(rawSQL) {
+		return fmt.Errorf("-- pista:ignore does not accept arguments")
 	}
 
 	return nil
@@ -242,6 +250,13 @@ func extractConcurrentlyDirectives(rawSQL string, stmts []*pg_query.RawStmt) map
 // Returns a set of StmtLocations that have the directive.
 func extractBulkAlterDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]bool {
 	return extractFlagDirectives(bulkAlterDirectivePattern, rawSQL, stmts)
+}
+
+// extractIgnoreDirectives scans raw SQL for `-- pista:ignore` comments that
+// appear in each statement's leading comment region.
+// Returns a set of StmtLocations that have the directive.
+func extractIgnoreDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]bool {
+	return extractFlagDirectives(ignoreDirectivePattern, rawSQL, stmts)
 }
 
 // extractFlagDirectives scans raw SQL for argument-less directive comments

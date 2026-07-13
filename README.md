@@ -463,6 +463,20 @@ The following references are not auto-rewritten and may produce a redundant `DRO
 - View / materialized view definitions that `SELECT` the renamed column
 - Foreign keys in other tables whose `REFERENCES this_table(renamed_col)` points at the renamed column
 
+### Ignoring objects
+
+Use the `-- pista:ignore` directive to leave an object unmanaged. pistachio does not create, alter, or drop a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE DOMAIN` / `CREATE VIEW` marked with it. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
+
+```sql
+-- pista:ignore
+CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);
+```
+
+The directive attaches to a statement in the schema file, so it can only ignore an object you have declared. To keep an existing object that would otherwise be dropped, write its `CREATE` statement with the directive.
+
 ### Split dump
 
 Use `--split` to output each table/view/enum/domain as a separate file in the specified directory.

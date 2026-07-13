@@ -1,0 +1,8 @@
+init: ""
+desired: |
+  -- pista:ignore
+  CREATE TABLE public.legacy (
+      id integer NOT NULL,
+      CONSTRAINT legacy_pkey PRIMARY KEY (id)
+  );
+plan: ""

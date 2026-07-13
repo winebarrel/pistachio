@@ -25,6 +25,11 @@ import (
 func validateColumnRefs(tables *orderedmap.Map[string, *model.Table]) error {
 	var errs []error
 	for fqtn, t := range tables.All() {
+		// Ignored tables are unmanaged, so their internal consistency is not
+		// checked.
+		if t.Ignore {
+			continue
+		}
 		// Skip both partition children (PartitionOf + PartitionBound set) and
 		// INHERITS-style children (PartitionOf set, PartitionBound nil); both
 		// inherit their columns from the parent rather than declaring their

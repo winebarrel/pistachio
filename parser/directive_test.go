@@ -413,7 +413,14 @@ func TestValidateDirectives_Valid(t *testing.T) {
 	assert.NoError(t, validateDirectives("-- pista:execute"))
 	assert.NoError(t, validateDirectives("-- pista:concurrently"))
 	assert.NoError(t, validateDirectives("-- pista:bulk-alter"))
+	assert.NoError(t, validateDirectives("-- pista:ignore"))
 	assert.NoError(t, validateDirectives("SELECT 1; -- no directives"))
+}
+
+func TestValidateDirectives_IgnoreWithArgs(t *testing.T) {
+	err := validateDirectives("-- pista:ignore extra")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "-- pista:ignore does not accept arguments")
 }
 
 func TestValidateDirectives_BulkAlterWithArgs(t *testing.T) {

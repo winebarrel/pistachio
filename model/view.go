@@ -15,6 +15,10 @@ type View struct {
 	Materialized bool
 	Indexes      *orderedmap.Map[string, *Index]
 	Comment      *string
+	// Ignore marks the view as unmanaged (set by -- pista:ignore). Ignored
+	// objects are not created, altered, or dropped; always false on the
+	// catalog side.
+	Ignore bool
 }
 
 func (v View) FQVN() string {

@@ -1,0 +1,30 @@
+init: |
+  CREATE TABLE public.legacy (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT legacy_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:ignore
+  CREATE TABLE public.legacy (
+      id integer NOT NULL,
+      CONSTRAINT legacy_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.legacy
+  CREATE TABLE public.legacy (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT legacy_pkey PRIMARY KEY (id)
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+verify_no_drift: true

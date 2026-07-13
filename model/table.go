@@ -8,11 +8,15 @@ import (
 )
 
 type Table struct {
-	OID              uint32
-	Schema           string
-	Name             string
-	RenameFrom       *string
-	BulkAlter        bool
+	OID        uint32
+	Schema     string
+	Name       string
+	RenameFrom *string
+	BulkAlter  bool
+	// Ignore marks the table as unmanaged (set by -- pista:ignore). Ignored
+	// objects are not created, altered, or dropped; always false on the
+	// catalog side.
+	Ignore           bool
 	TableSpace       *string
 	Unlogged         bool
 	Partitioned      bool

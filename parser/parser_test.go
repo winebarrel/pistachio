@@ -1538,6 +1538,82 @@ func TestParseSQL_RenameDirective_EnumValue_DanglingIgnored(t *testing.T) {
 	assert.Empty(t, e.ValueRenameFrom)
 }
 
+func TestParseSQL_IgnoreDirective_Table(t *testing.T) {
+	sql := `-- pista:ignore
+CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	legacy, ok := result.Tables.GetOk("public.legacy")
+	require.True(t, ok)
+	assert.True(t, legacy.Ignore)
+
+	users, ok := result.Tables.GetOk("public.users")
+	require.True(t, ok)
+	assert.False(t, users.Ignore)
+}
+
+func TestParseSQL_IgnoreDirective_View(t *testing.T) {
+	sql := `-- pista:ignore
+CREATE VIEW public.v AS SELECT 1;`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	v, ok := result.Views.GetOk("public.v")
+	require.True(t, ok)
+	assert.True(t, v.Ignore)
+}
+
+func TestParseSQL_IgnoreDirective_Enum(t *testing.T) {
+	sql := `-- pista:ignore
+CREATE TYPE public.status AS ENUM ('active');`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.True(t, e.Ignore)
+}
+
+func TestParseSQL_IgnoreDirective_Domain(t *testing.T) {
+	sql := `-- pista:ignore
+CREATE DOMAIN public.email AS text;`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	d, ok := result.Domains.GetOk("public.email")
+	require.True(t, ok)
+	assert.True(t, d.Ignore)
+}
+
+func TestParseSQL_IgnoreDirective_SkipsColumnRefValidation(t *testing.T) {
+	// An ignored table is unmanaged, so a stale column reference in its own
+	// index must not fail parse-time validation.
+	sql := `-- pista:ignore
+CREATE TABLE public.legacy (
+    id integer NOT NULL
+);
+CREATE INDEX legacy_idx ON public.legacy (nonexistent);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	legacy, ok := result.Tables.GetOk("public.legacy")
+	require.True(t, ok)
+	assert.True(t, legacy.Ignore)
+}
+
 func TestParseSQL_RenameDirective_EnumTypeAndValue(t *testing.T) {
 	// A directive above CREATE TYPE renames the type; directives inside the
 	// value list rename values. Both can be combined.
