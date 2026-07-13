@@ -68,8 +68,18 @@ else
   fail "expected exit code 2, got $rc"
 fi
 
-# --- Step 6: error -> exit 1 ---
-step "06 check exits 1 on error"
+# --- Step 6: PISTA_CHECK env -> exit 2 ---
+step "06 PISTA_CHECK env exits 2 on diff"
+rc=0
+PISTA_CHECK=true "$PISTA" plan --allow-drop all "$DATA/steps/02_drop_table.sql" >/dev/null 2>&1 || rc=$?
+if [ "$rc" = "2" ]; then
+  pass
+else
+  fail "expected exit code 2, got $rc"
+fi
+
+# --- Step 7: error -> exit 1 ---
+step "07 check exits 1 on error"
 rc=0
 "$PISTA" -c postgres://invalid@localhost:1/none plan --check "$DATA/steps/01_add_column.sql" >/dev/null 2>&1 || rc=$?
 if [ "$rc" = "1" ]; then

@@ -11,7 +11,7 @@ import (
 
 // ErrPlanDiff is returned by Plan.Run when --check is set and the plan
 // contains executable DDL. main maps it to exit code 2. Suppressed drops
-// alone do not trigger it, consistent with the "-- No changes" output.
+// alone do not trigger it.
 var ErrPlanDiff = errors.New("plan contains changes")
 
 type Plan struct {

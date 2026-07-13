@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Add `--check` (env `$PISTA_CHECK`) to `plan`. Exits with code 2 when the plan contains executable changes, 0 when there are none, and 1 on error, so schema drift can be detected from the exit code in CI. The plan output is printed as usual. Drops suppressed by the drop policy exit 0, consistent with the `-- No changes` output.
+* Add `--check` (env `$PISTA_CHECK`) to `plan` for drift detection in CI. The exit code is 2 if the plan contains executable changes, 0 if not, and 1 on error. The output does not change. Suppressed drops alone exit 0 because they generate no executable DDL.
 
 ## [1.13.0] - 2026-07-03
 

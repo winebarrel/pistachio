@@ -136,7 +136,7 @@ pista plan schema.sql --pre-sql-file pre.sql
 
 `--pre-sql` / `--pre-sql-file` are also available as `$PISTA_PRE_SQL` / `$PISTA_PRE_SQL_FILE`.
 
-Use `--check` to detect schema drift from the exit code (e.g. in CI). The plan output is printed as usual, and the exit code is 2 when the plan contains executable changes, 0 when there are none, and 1 on error. Drops suppressed by the drop policy (`-- skipped:` comments) produce no executable DDL and exit 0, consistent with the `-- No changes` output. Also available as `$PISTA_CHECK`.
+Use `--check` to detect schema drift from the exit code. The exit code is 2 if the plan contains executable changes, 0 if not, and 1 on error. The output does not change. Suppressed drops alone exit 0 because they generate no executable DDL. Also available as `$PISTA_CHECK`.
 
 ```bash
 pista plan --check schema.sql
