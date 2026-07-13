@@ -42,6 +42,83 @@ func TestApply_Run(t *testing.T) {
 	assertConnectedCommentFirst(t, buf.String(), conn.Config())
 }
 
+func TestApply_Run_IgnoredComment(t *testing.T) {
+	// apply reports an ignored object as an -- ignored: comment and leaves it
+	// untouched while applying the managed change.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:ignore
+CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "CREATE TABLE public.users")
+	assert.Contains(t, got, "-- ignored: public.legacy")
+
+	// The ignored table keeps its extra column.
+	var hasName bool
+	require.NoError(t, conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='legacy' AND column_name='name')`).Scan(&hasName))
+	assert.True(t, hasName, "ignored table's column must survive")
+}
+
+func TestApply_Run_IgnoredOnlyShowsNoChanges(t *testing.T) {
+	// When the only object is ignored, apply prints the -- ignored: comment
+	// and reports no changes.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:ignore
+CREATE TABLE public.legacy (
+    id integer NOT NULL,
+    CONSTRAINT legacy_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}}}
+	err := cmd.Run(ctx, client, &buf)
+	require.NoError(t, err)
+	got := buf.String()
+	assert.Contains(t, got, "-- ignored: public.legacy")
+	assert.Contains(t, got, "-- No changes")
+}
+
 func TestApply_Run_Error(t *testing.T) {
 	ctx := context.Background()
 	client := pistachio.NewClient(&pistachio.Options{
