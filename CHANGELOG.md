@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Add a Windows (amd64) release binary, cross-built with mingw-w64. `$PISTA_PAGER` is interpreted by `cmd /c` on Windows. CI builds the binary and runs the DB-less test packages on windows-latest.
+* Add a Windows (amd64) release binary, cross-built with mingw-w64. `$PISTA_PAGER` is interpreted by `cmd /c` on Windows. CI builds the binary on windows-latest and runs `make test` against the runner's preinstalled PostgreSQL.
 
 ## [1.14.0] - 2026-07-13
 
