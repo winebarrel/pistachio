@@ -1,10 +1,8 @@
 # Changelog
 
-## Unreleased
+## [1.14.0] - 2026-07-13
 
 * Add a Windows (amd64) release binary, cross-built with mingw-w64. `$PISTA_PAGER` is interpreted by `cmd /c` on Windows. CI builds the binary on windows-latest and runs `make test` against the runner's preinstalled PostgreSQL.
-
-## [1.14.0] - 2026-07-13
 
 * Support enum value renames. Put `-- pista:renamed-from <old_value>` on the line before a value inside `CREATE TYPE ... AS ENUM` to emit `ALTER TYPE ... RENAME VALUE` instead of failing with a value-removal error. The old value may be quoted or bare. Already-applied renames are skipped. Renaming to an existing value or from a missing value is an error.
 
