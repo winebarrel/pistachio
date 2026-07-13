@@ -12,7 +12,11 @@ type Enum struct {
 	Name       string
 	RenameFrom *string
 	Values     []string
-	Comment    *string
+	// ValueRenameFrom maps a desired value to the current value it renames.
+	// Set by the parser from -- pista:renamed-from directives inside the
+	// value list; always empty on the catalog side.
+	ValueRenameFrom map[string]string
+	Comment         *string
 }
 
 func (e Enum) FQEN() string {

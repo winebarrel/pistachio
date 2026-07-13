@@ -1,0 +1,12 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+desired: |
+  -- pista:renamed-from public.status
+  CREATE TYPE public.user_status AS ENUM (
+      'active',
+      -- pista:renamed-from 'inactive'
+      'disabled'
+  );
+plan: |
+  ALTER TYPE public.status RENAME TO user_status;
+  ALTER TYPE public.user_status RENAME VALUE 'inactive' TO 'disabled';

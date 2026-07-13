@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -102,6 +103,22 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				enum.RenameFrom = &qualified
 			}
+
+			// Extract value-level rename directives from raw SQL
+			stmtEnd := rawStmt.StmtLocation + rawStmt.StmtLen
+			if stmtEnd > int32(len(sql)) {
+				stmtEnd = int32(len(sql))
+			}
+			rawStmtSQL := sql[rawStmt.StmtLocation:stmtEnd]
+			for newVal, oldVal := range extractEnumValueDirectives(rawStmtSQL) {
+				if slices.Contains(enum.Values, newVal) {
+					if enum.ValueRenameFrom == nil {
+						enum.ValueRenameFrom = make(map[string]string)
+					}
+					enum.ValueRenameFrom[newVal] = oldVal
+				}
+			}
+
 			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
 				return nil, err
 			}

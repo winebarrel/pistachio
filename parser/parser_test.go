@@ -1397,6 +1397,134 @@ CREATE TYPE public.new_status AS ENUM ('active', 'inactive');`
 	assert.Equal(t, "public.old_status", *e.RenameFrom)
 }
 
+func TestParseSQL_RenameDirective_EnumValue(t *testing.T) {
+	sql := `CREATE TYPE public.status AS ENUM (
+    'active',
+    -- pista:renamed-from 'inactive'
+    'disabled'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Nil(t, e.RenameFrom)
+	assert.Equal(t, map[string]string{"disabled": "inactive"}, e.ValueRenameFrom)
+}
+
+func TestParseSQL_RenameDirective_EnumValue_BareArg(t *testing.T) {
+	// The old value may be written without quotes.
+	sql := `CREATE TYPE public.status AS ENUM (
+    -- pista:renamed-from inactive
+    'disabled'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{"disabled": "inactive"}, e.ValueRenameFrom)
+}
+
+func TestParseSQL_RenameDirective_EnumValue_QuotedEscape(t *testing.T) {
+	// Values containing single quotes use '' escapes on both sides.
+	sql := `CREATE TYPE public.status AS ENUM (
+    -- pista:renamed-from 'don''t'
+    'won''t'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{"won't": "don't"}, e.ValueRenameFrom)
+}
+
+func TestParseSQL_RenameDirective_EnumValue_UnterminatedQuoteArg(t *testing.T) {
+	// An argument with an unterminated quote is not a valid literal and is
+	// kept as-is (bare), including the leading quote.
+	sql := `CREATE TYPE public.status AS ENUM (
+    -- pista:renamed-from 'oops
+    'disabled'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{"disabled": "'oops"}, e.ValueRenameFrom)
+}
+
+func TestParseSQL_RenameDirective_EnumValue_CaseSensitive(t *testing.T) {
+	// Enum values are literals, not identifiers: case must be preserved.
+	sql := `CREATE TYPE public.status AS ENUM (
+    -- pista:renamed-from Inactive
+    'Disabled'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{"Disabled": "Inactive"}, e.ValueRenameFrom)
+}
+
+func TestParseSQL_RenameDirective_EnumValue_KeepsPendingAcrossComments(t *testing.T) {
+	sql := `CREATE TYPE public.status AS ENUM (
+    'active',
+    -- pista:renamed-from 'inactive'
+    -- a plain comment
+    'disabled'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{"disabled": "inactive"}, e.ValueRenameFrom)
+}
+
+func TestParseSQL_RenameDirective_EnumValue_DanglingIgnored(t *testing.T) {
+	// A directive not followed by a value literal is ignored.
+	sql := `CREATE TYPE public.status AS ENUM (
+    'active'
+    -- pista:renamed-from 'inactive'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	assert.Empty(t, e.ValueRenameFrom)
+}
+
+func TestParseSQL_RenameDirective_EnumTypeAndValue(t *testing.T) {
+	// A directive above CREATE TYPE renames the type; directives inside the
+	// value list rename values. Both can be combined.
+	sql := `-- pista:renamed-from public.old_status
+CREATE TYPE public.status AS ENUM (
+    'active',
+    -- pista:renamed-from 'inactive'
+    'disabled'
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	e, ok := result.Enums.GetOk("public.status")
+	require.True(t, ok)
+	require.NotNil(t, e.RenameFrom)
+	assert.Equal(t, "public.old_status", *e.RenameFrom)
+	assert.Equal(t, map[string]string{"disabled": "inactive"}, e.ValueRenameFrom)
+}
+
 func TestParseSQL_RenameDirective_Table(t *testing.T) {
 	sql := `-- pista:renamed-from public.old_users
 CREATE TABLE public.users (

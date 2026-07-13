@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Support enum value renames. Put `-- pista:renamed-from <old_value>` on the line before a value inside `CREATE TYPE ... AS ENUM` to emit `ALTER TYPE ... RENAME VALUE` instead of failing with a value-removal error. The old value may be quoted or bare. Already-applied renames are skipped. Renaming to an existing value or from a missing value is an error.
+
 * Add `--check` (env `$PISTA_CHECK`) to `plan` for drift detection in CI. The exit code is 2 if the plan contains executable changes, 0 if not, and 1 on error. The output does not change. Suppressed drops alone exit 0 because they generate no executable DDL. `PlanResult` gains a `HasChanges` field, and the CLI uses it instead of checking `SQL` for emptiness.
 
 ## [1.13.0] - 2026-07-03

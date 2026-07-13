@@ -344,6 +344,82 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	return result
 }
 
+// extractEnumValueDirectives scans the raw text of a CREATE TYPE ... AS ENUM
+// statement for `-- pista:renamed-from <old_value>` directives on lines
+// immediately before enum value literals. The old value may be written as a
+// quoted literal ('old') or bare (old). Returns a map from new value to old
+// value.
+func extractEnumValueDirectives(rawCreateEnumSQL string) map[string]string {
+	result := make(map[string]string)
+
+	// Only scan lines inside the value list (after the opening parenthesis).
+	parenIdx := strings.Index(rawCreateEnumSQL, "(")
+	if parenIdx < 0 {
+		return result
+	}
+	body := rawCreateEnumSQL[parenIdx:]
+
+	var pending string
+	hasPending := false
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+
+		if m := renameDirectivePattern.FindStringSubmatch(line); m != nil {
+			pending = unquoteEnumLiteral(strings.TrimSpace(m[1]))
+			hasPending = true
+			continue
+		}
+
+		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+			// Skip blank lines and other comments, keep pending
+			continue
+		}
+
+		if hasPending {
+			if val, ok := scanEnumLiteral(trimmed); ok {
+				result[val] = pending
+			}
+			hasPending = false
+		}
+	}
+
+	return result
+}
+
+// unquoteEnumLiteral strips surrounding single quotes from an enum value and
+// unescapes doubled quotes (” -> '). Bare values are returned as-is; enum
+// values are literals, so no case folding is applied.
+func unquoteEnumLiteral(s string) string {
+	if val, ok := scanEnumLiteral(s); ok {
+		return val
+	}
+	return s
+}
+
+// scanEnumLiteral scans a single-quoted literal from the start of s, handling
+// ” escape sequences. Returns the unquoted value and true if successful.
+func scanEnumLiteral(s string) (string, bool) {
+	if len(s) == 0 || s[0] != '\'' {
+		return "", false
+	}
+	var val strings.Builder
+	for i := 1; i < len(s); i++ {
+		if s[i] == '\'' {
+			if i+1 < len(s) && s[i+1] == '\'' {
+				// Escaped single quote
+				val.WriteByte('\'')
+				i++
+			} else {
+				// End of literal
+				return val.String(), true
+			}
+		} else {
+			val.WriteByte(s[i])
+		}
+	}
+	return "", false
+}
+
 // scanQuotedIdent scans a quoted identifier from the start of s, handling ""
 // escape sequences. Returns the unquoted name and true if successful.
 func scanQuotedIdent(s string) (string, bool) {
