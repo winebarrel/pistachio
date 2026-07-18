@@ -267,12 +267,14 @@ Execute statements appear in `plan` output. During `apply`, the check SQL is eva
 
 ## CI integration
 
-A typical CI pipeline:
+Use `--check` to detect drift. It exits with code 2 when the plan contains executable changes, and 0 when there are none:
 
 ```bash
-# Verify no drift from database
-pista plan schema.sql | grep -q "No changes"
+# Fail the build when the database drifts from schema.sql
+pista plan --check schema.sql
 ```
+
+The exit code makes this reliable in CI. Connection and other errors still return a non-zero code, so real failures are not hidden.
 
 ## Tips
 
