@@ -1,5 +1,4 @@
-![](https://github.com/user-attachments/assets/6d48635e-1d93-4b4b-a7fc-e8f888780575#gh-light-mode-only)
-![](https://github.com/user-attachments/assets/42250c31-d8cd-40a6-954d-77574e959a09#gh-dark-mode-only)
+# pistachio
 
 [![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
