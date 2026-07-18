@@ -446,6 +446,63 @@ func TestParseSQL_ColumnLevelNamedPrimaryKey(t *testing.T) {
 	assert.Contains(t, con.Definition, "PRIMARY KEY")
 }
 
+func TestParseSQL_UniqueConstraintOnValueColumn(t *testing.T) {
+	// A single-column UNIQUE/PRIMARY KEY on a column named "value" trips a
+	// libpg_query deparse bug that drops the column list. The parse tree keeps
+	// the key, so the constraint Definition must still carry "(value)".
+	sql := `CREATE TABLE public.api_keys (
+    id bigint NOT NULL,
+    value text NOT NULL,
+    CONSTRAINT api_keys_pkey PRIMARY KEY (id),
+    CONSTRAINT api_keys_value_key UNIQUE (value)
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.api_keys")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("api_keys_value_key")
+	require.True(t, ok)
+	assert.Equal(t, "UNIQUE (value)", con.Definition)
+}
+
+func TestParseSQL_PrimaryKeyOnValueColumn(t *testing.T) {
+	sql := `CREATE TABLE public.settings (
+    value text NOT NULL,
+    CONSTRAINT settings_pkey PRIMARY KEY (value)
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.settings")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("settings_pkey")
+	require.True(t, ok)
+	assert.Equal(t, "PRIMARY KEY (value)", con.Definition)
+}
+
+func TestParseSQL_UniqueConstraintManyKeysWithValue(t *testing.T) {
+	// A composite key with ten or more columns exercises the placeholder
+	// substitution: "..._1_e" must not corrupt "..._10_e". "value" is included
+	// so the deparse workaround is engaged.
+	sql := `CREATE TABLE public.wide (
+    c0 int, c1 int, c2 int, c3 int, c4 int, c5 int,
+    c6 int, c7 int, c8 int, c9 int, value int,
+    CONSTRAINT wide_key UNIQUE (c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, value)
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.wide")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("wide_key")
+	require.True(t, ok)
+	assert.Equal(t, "UNIQUE (c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, value)", con.Definition)
+}
+
 func TestParseSQL_ColumnLevelMixedConstraints(t *testing.T) {
 	// Multiple named column-level constraints on different columns
 	sql := `CREATE TABLE public.groups (

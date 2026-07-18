@@ -1329,6 +1329,35 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 	con.SkipValidation = false
 	defer func() { con.SkipValidation = origSkipValidation }()
 
+	// Work around a libpg_query deparse bug: a single key column named "value"
+	// is dropped from the deparsed column list, even though the parse tree
+	// keeps it. Swap each key column name for a collision-free placeholder that
+	// deparses reliably, then substitute the real identifiers back into the
+	// output. Only UNIQUE/PRIMARY KEY constraints populate Keys, so other
+	// constraint types are unaffected.
+	swapped := make([]*pg_query.String, 0, len(con.Keys))
+	origKeys := make([]string, 0, len(con.Keys))
+	repl := make(map[string]string, len(con.Keys))
+	for i, k := range con.Keys {
+		s := k.GetString_()
+		if s == nil {
+			continue
+		}
+		// The trailing "_e" delimits the index so one placeholder is never a
+		// substring of another (e.g. "..._1_e" vs "..._10_e"), which would
+		// corrupt replacement for constraints with ten or more key columns.
+		placeholder := fmt.Sprintf("pistachio_key_placeholder_%d_e", i)
+		swapped = append(swapped, s)
+		origKeys = append(origKeys, s.Sval)
+		repl[placeholder] = model.Ident(s.Sval)
+		s.Sval = placeholder
+	}
+	defer func() {
+		for i, s := range swapped {
+			s.Sval = origKeys[i]
+		}
+	}()
+
 	alterCmd := &pg_query.AlterTableCmd{
 		Subtype: pg_query.AlterTableType_AT_AddConstraint,
 		Def:     &pg_query.Node{Node: &pg_query.Node_Constraint{Constraint: con}},
@@ -1353,18 +1382,25 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 		return "", fmt.Errorf("failed to deparse constraint: %w", err)
 	}
 
+	restorePlaceholders := func(def string) string {
+		for placeholder, ident := range repl {
+			def = strings.ReplaceAll(def, placeholder, ident)
+		}
+		return def
+	}
+
 	if con.Conname != "" {
 		marker := "CONSTRAINT " + model.Ident(con.Conname) + " "
 		idx := strings.Index(sql, marker)
 		if idx != -1 {
-			return strings.TrimSpace(sql[idx+len(marker):]), nil
+			return restorePlaceholders(strings.TrimSpace(sql[idx+len(marker):])), nil
 		}
 	}
 
 	const fallbackMarker = " ADD "
 	idx := strings.LastIndex(sql, fallbackMarker)
 	if idx != -1 {
-		return strings.TrimSpace(sql[idx+len(fallbackMarker):]), nil
+		return restorePlaceholders(strings.TrimSpace(sql[idx+len(fallbackMarker):])), nil
 	}
 
 	return "", fmt.Errorf("could not extract constraint definition from: %s", sql)

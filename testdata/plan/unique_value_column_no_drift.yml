@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.api_keys (
+      id bigint NOT NULL,
+      value text NOT NULL,
+      CONSTRAINT api_keys_pkey PRIMARY KEY (id),
+      CONSTRAINT api_keys_value_key UNIQUE (value)
+  );
+desired: |
+  CREATE TABLE public.api_keys (
+      id bigint NOT NULL,
+      value text NOT NULL,
+      CONSTRAINT api_keys_pkey PRIMARY KEY (id),
+      CONSTRAINT api_keys_value_key UNIQUE (value)
+  );
+plan: ""
