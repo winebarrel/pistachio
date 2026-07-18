@@ -1335,6 +1335,9 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 	// deparses reliably, then substitute the real identifiers back into the
 	// output. Only UNIQUE/PRIMARY KEY constraints populate Keys, so other
 	// constraint types are unaffected.
+	//
+	// Upstream: https://github.com/pganalyze/pg_query_go/issues/148
+	// Revert this workaround once that bug is fixed.
 	swapped := make([]*pg_query.String, 0, len(con.Keys))
 	origKeys := make([]string, 0, len(con.Keys))
 	repl := make(map[string]string, len(con.Keys))
