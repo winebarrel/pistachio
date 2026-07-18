@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.16.1] - 2026-07-18
+
+* Fix invalid DDL for a single-column `UNIQUE` / `PRIMARY KEY` constraint on a column named `value`. libpg_query dropped the column from the deparsed definition, so `plan` / `apply` produced a broken `ADD CONSTRAINT ... UNIQUE` and reported false drift. The key columns are now restored from the parse tree. ([#291](https://github.com/winebarrel/pistachio/pull/291))
+
 ## [1.16.0] - 2026-07-13
 
 * Open the `plan` and `dump` connections in read-only mode, so those commands cannot write to the database even by accident. `apply` still applies DDL. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) for a read-write connection.
