@@ -483,6 +483,39 @@ func TestParseSQL_PrimaryKeyOnValueColumn(t *testing.T) {
 	assert.Equal(t, "PRIMARY KEY (value)", con.Definition)
 }
 
+func TestParseSQL_ColumnLevelUniqueOnValueColumn(t *testing.T) {
+	// Column-level UNIQUE fills con.Keys from the column name (parser.go:539),
+	// so it hits the same deparse workaround as a table-level constraint.
+	sql := `CREATE TABLE public.api_keys (
+    id bigint PRIMARY KEY,
+    value text UNIQUE
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.api_keys")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("api_keys_value_key")
+	require.True(t, ok)
+	assert.Equal(t, "UNIQUE (value)", con.Definition)
+}
+
+func TestParseSQL_ColumnLevelPrimaryKeyOnValueColumn(t *testing.T) {
+	sql := `CREATE TABLE public.settings (
+    value text PRIMARY KEY
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.settings")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("settings_pkey")
+	require.True(t, ok)
+	assert.Equal(t, "PRIMARY KEY (value)", con.Definition)
+}
+
 func TestParseSQL_UniqueConstraintManyKeysWithValue(t *testing.T) {
 	// A composite key with ten or more columns exercises the placeholder
 	// substitution: "..._1_e" must not corrupt "..._10_e". "value" is included
