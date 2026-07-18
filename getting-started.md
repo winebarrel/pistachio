@@ -265,17 +265,6 @@ $$ LANGUAGE plpgsql;
 
 Execute statements appear in `plan` output. During `apply`, the check SQL is evaluated and the statement is skipped if it returns `false`.
 
-## CI integration
-
-Use `--check` to detect drift. It exits with code 2 when the plan contains executable changes, and 0 when there are none:
-
-```bash
-# Fail the build when the database drifts from schema.sql
-pista plan --check schema.sql
-```
-
-The exit code makes this reliable in CI. Connection and other errors still return a non-zero code, so real failures are not hidden.
-
 ## Tips
 
 - Unnamed constraints are auto-named following PostgreSQL's convention, but pistachio does not emulate PostgreSQL's identifier truncation (63 bytes) or collision suffixing, so generated names may differ. Use explicit `CONSTRAINT <name>` clauses to avoid ambiguity.
