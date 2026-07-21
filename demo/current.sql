@@ -10,6 +10,9 @@ CREATE TYPE post_status AS ENUM ('draft', 'published', 'archived');
 CREATE DOMAIN email_address AS text
     CHECK (VALUE ~ '^[^@]+@[^@]+\.[^@]+$');
 
+-- Sequence: public-facing post reference numbers
+CREATE SEQUENCE post_ref_seq START 1000;
+
 -- ---------- users ----------
 CREATE TABLE users (
     id           bigserial PRIMARY KEY,
