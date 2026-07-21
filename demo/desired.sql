@@ -9,6 +9,9 @@ CREATE TYPE post_status AS ENUM ('draft', 'published', 'archived', 'pinned');
 CREATE DOMAIN email_address AS text
     CHECK (VALUE ~ '^[^@]+@[^@]+\.[^@]+$');
 
+-- Sequence: post_ref_seq, increment bumped to 10
+CREATE SEQUENCE post_ref_seq START 1000 INCREMENT BY 10;
+
 -- ---------- users ----------
 --  +avatar_url
 CREATE TABLE users (
