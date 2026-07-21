@@ -59,6 +59,14 @@ func TestParseCreateSeqStmt_NoMinvalueUsesDefault(t *testing.T) {
 	assert.Equal(t, int64(9223372036854775807), seq.Max)
 }
 
+func TestParseCreateSeqStmt_ExplicitBigValues(t *testing.T) {
+	// Values beyond int32 arrive from pg_query as Float nodes carrying the
+	// decimal string, exercising defElemInt64's Float branch.
+	seq := parseOneSequence(t, "CREATE SEQUENCE public.s MINVALUE -9223372036854775808 MAXVALUE 9223372036854775807;")
+	assert.Equal(t, int64(-9223372036854775808), seq.Min)
+	assert.Equal(t, int64(9223372036854775807), seq.Max)
+}
+
 func TestParseCreateSeqStmt_AllOptions(t *testing.T) {
 	seq := parseOneSequence(t, `CREATE SEQUENCE public.s
 		AS integer INCREMENT BY 5 MINVALUE 10 MAXVALUE 10000 START WITH 20 CACHE 3 CYCLE;`)

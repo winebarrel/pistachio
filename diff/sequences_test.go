@@ -130,6 +130,22 @@ func TestDiffSequences_Rename(t *testing.T) {
 	assert.Empty(t, result.DropStmts)
 }
 
+func TestDiffSequences_RenameAlreadyApplied(t *testing.T) {
+	// After a rename is applied, re-planning still carries the renamed-from
+	// directive: the source is gone but the destination exists, so the rename
+	// is skipped and no diff is produced (idempotent).
+	current := baseSeq()
+	current.Name = "new"
+	desired := baseSeq()
+	desired.Name = "new"
+	renameFrom := "public.old"
+	desired.RenameFrom = &renameFrom
+	result, err := diff.DiffSequences(newSeqMap(current), newSeqMap(desired), diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.DropStmts)
+}
+
 func TestDiffSequences_RenameCrossSchemaError(t *testing.T) {
 	current := &model.Sequence{Schema: "other", Name: "old", DataType: "bigint", Max: 1, Cache: 1, Increment: 1}
 	desired := &model.Sequence{Schema: "public", Name: "new", DataType: "bigint", Max: 1, Cache: 1, Increment: 1}

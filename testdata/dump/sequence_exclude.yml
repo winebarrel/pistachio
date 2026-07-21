@@ -1,0 +1,14 @@
+# --exclude filters sequences by name (exercises filterSequences' match loop).
+exclude: [skip_*]
+init: |
+  CREATE SEQUENCE public.keep_seq;
+  CREATE SEQUENCE public.skip_seq;
+dump: |
+  -- public.keep_seq
+  CREATE SEQUENCE public.keep_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
