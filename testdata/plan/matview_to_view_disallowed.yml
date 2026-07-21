@@ -1,0 +1,17 @@
+drop_policy:
+  allow_drop: []
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.report AS SELECT id FROM public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.report AS SELECT id FROM public.users;
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP MATERIALIZED VIEW public.report;
