@@ -198,6 +198,52 @@ CREATE VIEW myschema.active_users AS SELECT id, name FROM myschema.users;
 	assert.Contains(t, output, "FROM public.users")
 }
 
+func TestDump_WithSchemaMap_Sequence(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE SEQUENCE myschema.order_seq;
+`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	// The sequence schema is remapped to "public" (exercises remapSequenceSchemas).
+	assert.Contains(t, got.String(), "CREATE SEQUENCE public.order_seq")
+	assert.NotContains(t, got.String(), "myschema.order_seq")
+}
+
+func TestPlan_WithSchemaMap_Sequence(t *testing.T) {
+	ctx := context.Background()
+
+	// DB sequence increments by 1; desired (written against public) increments by 2.
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE SEQUENCE myschema.order_seq INCREMENT BY 1;
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE SEQUENCE public.order_seq INCREMENT BY 2;"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	// The desired public.order_seq is reverse-remapped to myschema.order_seq
+	// (exercises reverseRemapSequenceSchemas) and diffed against the real DB.
+	assert.Contains(t, got.SQL, "ALTER SEQUENCE myschema.order_seq INCREMENT BY 2;")
+}
+
 func TestDump_WithSchemaMap_Files(t *testing.T) {
 	ctx := context.Background()
 

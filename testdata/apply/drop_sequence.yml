@@ -1,0 +1,7 @@
+init: |
+  CREATE SEQUENCE public.order_seq;
+desired: ""
+applied_sql: |
+  DROP SEQUENCE public.order_seq;
+applied: ""
+verify_no_drift: true

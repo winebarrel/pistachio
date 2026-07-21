@@ -1,0 +1,13 @@
+# The sequence behind a serial column is owned by that column, so dump must
+# not emit it as a standalone CREATE SEQUENCE; only the table appears.
+init: |
+  CREATE TABLE public.users (
+      id serial NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id serial NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

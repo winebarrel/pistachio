@@ -1,0 +1,15 @@
+# --disable sequence turns off sequence dumping entirely (exercises the
+# IsTypeEnabled("sequence") false branch in filterSequences).
+disable: [sequence]
+init: |
+  CREATE SEQUENCE public.order_seq;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

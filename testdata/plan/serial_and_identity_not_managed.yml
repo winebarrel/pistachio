@@ -1,0 +1,19 @@
+# serial and identity columns own their sequences; those are managed as
+# column attributes, not as standalone sequences. The plan must be empty
+# and the sequence count zero.
+init: |
+  CREATE TABLE public.users (
+      id serial NOT NULL,
+      code integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id serial NOT NULL,
+      code integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: ""
+count:
+  sequences: 0
+  tables: 1

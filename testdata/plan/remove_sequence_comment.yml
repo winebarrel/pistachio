@@ -1,0 +1,7 @@
+init: |
+  CREATE SEQUENCE public.order_seq;
+  COMMENT ON SEQUENCE public.order_seq IS 'old comment';
+desired: |
+  CREATE SEQUENCE public.order_seq;
+plan: |
+  COMMENT ON SEQUENCE public.order_seq IS NULL;

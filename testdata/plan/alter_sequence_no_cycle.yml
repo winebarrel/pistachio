@@ -1,0 +1,6 @@
+init: |
+  CREATE SEQUENCE public.order_seq CYCLE;
+desired: |
+  CREATE SEQUENCE public.order_seq;
+plan: |
+  ALTER SEQUENCE public.order_seq NO CYCLE;

@@ -56,6 +56,23 @@ func (f *FilterOptions) filterEnums(enums *orderedmap.Map[string, *model.Enum]) 
 	return filtered
 }
 
+func (f *FilterOptions) filterSequences(sequences *orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence] {
+	if !f.IsTypeEnabled("sequence") {
+		return orderedmap.New[string, *model.Sequence]()
+	}
+	if len(f.Include) == 0 && len(f.Exclude) == 0 {
+		return sequences
+	}
+
+	filtered := orderedmap.New[string, *model.Sequence]()
+	for k, s := range sequences.All() {
+		if f.MatchName(s.Name) {
+			filtered.Set(k, s)
+		}
+	}
+	return filtered
+}
+
 func (f *FilterOptions) filterDomains(domains *orderedmap.Map[string, *model.Domain]) *orderedmap.Map[string, *model.Domain] {
 	if !f.IsTypeEnabled("domain") {
 		return orderedmap.New[string, *model.Domain]()

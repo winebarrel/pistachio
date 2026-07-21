@@ -186,6 +186,36 @@ func (client *Client) reverseRemapEnumSchemas(enums *orderedmap.Map[string, *mod
 	return remapped
 }
 
+func (client *Client) remapSequenceSchemas(sequences *orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence] {
+	if len(client.SchemaMap) == 0 {
+		return sequences
+	}
+
+	remapped := orderedmap.New[string, *model.Sequence]()
+
+	for _, s := range sequences.CollectValues() {
+		s.Schema = client.RemapSchema(s.Schema)
+		remapped.Set(s.FQN(), s)
+	}
+
+	return remapped
+}
+
+func (client *Client) reverseRemapSequenceSchemas(sequences *orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence] {
+	if len(client.SchemaMap) == 0 {
+		return sequences
+	}
+
+	remapped := orderedmap.New[string, *model.Sequence]()
+
+	for _, s := range sequences.CollectValues() {
+		s.Schema = client.ReverseRemapSchema(s.Schema)
+		remapped.Set(s.FQN(), s)
+	}
+
+	return remapped
+}
+
 func (client *Client) remapDomainSchemas(domains *orderedmap.Map[string, *model.Domain]) *orderedmap.Map[string, *model.Domain] {
 	if len(client.SchemaMap) == 0 {
 		return domains

@@ -1,0 +1,10 @@
+init: |
+  CREATE SEQUENCE public.order_seq INCREMENT BY 1 MAXVALUE 1000 CACHE 1;
+desired: |
+  CREATE SEQUENCE public.order_seq
+      INCREMENT BY 2
+      MAXVALUE 5000
+      CACHE 10
+      CYCLE;
+plan: |
+  ALTER SEQUENCE public.order_seq INCREMENT BY 2 MAXVALUE 5000 CACHE 10 CYCLE;

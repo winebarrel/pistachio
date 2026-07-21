@@ -16,11 +16,11 @@ func TestObjectCount_SchemaLabel(t *testing.T) {
 }
 
 func TestObjectCount_Summary(t *testing.T) {
-	c := pistachio.ObjectCount{Tables: 3, Views: 1, Enums: 2, Domains: 0}
-	assert.Equal(t, "3 tables, 1 view, 2 enums, 0 domains", c.Summary())
+	c := pistachio.ObjectCount{Tables: 3, Views: 1, Enums: 2, Domains: 0, Sequences: 4}
+	assert.Equal(t, "3 tables, 1 view, 2 enums, 0 domains, 4 sequences", c.Summary())
 }
 
 func TestObjectCount_Summary_Singular(t *testing.T) {
-	c := pistachio.ObjectCount{Tables: 1, Views: 1, Enums: 1, Domains: 1}
-	assert.Equal(t, "1 table, 1 view, 1 enum, 1 domain", c.Summary())
+	c := pistachio.ObjectCount{Tables: 1, Views: 1, Enums: 1, Domains: 1, Sequences: 1}
+	assert.Equal(t, "1 table, 1 view, 1 enum, 1 domain, 1 sequence", c.Summary())
 }

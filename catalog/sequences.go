@@ -5,18 +5,34 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 )
 
-// Sequences returns all sequences in the filtered schemas.
-//
-// Currently this method has no production callers; sequences are not yet
-// consumed by the diff/apply pipeline. It is intentionally kept as the
-// foundation for future sequence-aware schema management; do not delete
-// it as dead code.
-//
-//deadcode:keep
-func (c *Catalog) Sequences(ctx context.Context) ([]model.Sequence, error) {
+// Sequences returns the standalone sequences in the filtered schemas, keyed by
+// FQN. Sequences owned by a table column (serial or identity) are excluded:
+// they are managed as column attributes, not as standalone objects.
+func (c *Catalog) Sequences(ctx context.Context) (*orderedmap.Map[string, *model.Sequence], error) {
+	seqs, err := c.ListSequences(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	seqByKey := orderedmap.New[string, *model.Sequence]()
+	for _, s := range seqs {
+		if s.Owned() {
+			continue
+		}
+		seqByKey.Set(s.FQN(), s)
+	}
+
+	return seqByKey, nil
+}
+
+// ListSequences returns all sequences in the filtered schemas, including those
+// owned by serial/identity columns. OwnerTable/OwnerColumn identify the owning
+// column (nil for standalone sequences).
+func (c *Catalog) ListSequences(ctx context.Context) ([]*model.Sequence, error) {
 	q := `
 		WITH
 			dependency_extension AS (
@@ -38,8 +54,13 @@ func (c *Catalog) Sequences(ctx context.Context) ([]model.Sequence, error) {
 			s.seqincrement,
 			s.seqcache,
 			s.seqcycle,
+			-- deptype 'a' covers serial columns, 'i' covers identity
+			-- columns. Both mark auto-created sequences owned by a table
+			-- column, so owner_table is non-null only for those; standalone
+			-- CREATE SEQUENCE objects leave it null.
 			d.refobjid::regclass::text AS owner_table,
-			a.attname AS owner_column
+			a.attname AS owner_column,
+			descr.description AS comment
 		FROM
 			pg_catalog.pg_class c
 			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -47,9 +68,12 @@ func (c *Catalog) Sequences(ctx context.Context) ([]model.Sequence, error) {
 			LEFT JOIN pg_catalog.pg_depend d ON d.objid = c.oid
 			AND d.classid = 'pg_class'::regclass
 			AND d.refclassid = 'pg_class'::regclass
-			AND d.deptype = 'a'
+			AND d.deptype IN ('a', 'i')
 			LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid = d.refobjid
 			AND a.attnum = d.refobjsubid
+			LEFT JOIN pg_catalog.pg_description descr ON descr.objoid = c.oid
+			AND descr.classoid = 'pg_class'::regclass
+			AND descr.objsubid = 0
 			LEFT JOIN dependency_extension de ON de.objid = c.oid
 		WHERE
 			c.relkind = 'S'
@@ -70,7 +94,7 @@ func (c *Catalog) Sequences(ctx context.Context) ([]model.Sequence, error) {
 	}
 	defer rows.Close()
 
-	var seqs []model.Sequence
+	var seqs []*model.Sequence
 	for rows.Next() {
 		var s model.Sequence
 		err := rows.Scan(
@@ -86,11 +110,12 @@ func (c *Catalog) Sequences(ctx context.Context) ([]model.Sequence, error) {
 			&s.Cycle,
 			&s.OwnerTable,
 			&s.OwnerColumn,
+			&s.Comment,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan sequence info: %w", err)
 		}
-		seqs = append(seqs, s)
+		seqs = append(seqs, &s)
 	}
 
 	if err := rows.Err(); err != nil {

@@ -48,10 +48,11 @@ type planDropPolicy struct {
 // is checked only when set, so a fixture can pin individual counts without
 // having to specify every field.
 type expectedCount struct {
-	Tables  *int `yaml:"tables,omitempty"`
-	Views   *int `yaml:"views,omitempty"`
-	Enums   *int `yaml:"enums,omitempty"`
-	Domains *int `yaml:"domains,omitempty"`
+	Tables    *int `yaml:"tables,omitempty"`
+	Views     *int `yaml:"views,omitempty"`
+	Enums     *int `yaml:"enums,omitempty"`
+	Domains   *int `yaml:"domains,omitempty"`
+	Sequences *int `yaml:"sequences,omitempty"`
 }
 
 func assertExpectedCount(t *testing.T, want *expectedCount, got pistachio.ObjectCount) {
@@ -70,6 +71,9 @@ func assertExpectedCount(t *testing.T, want *expectedCount, got pistachio.Object
 	}
 	if want.Domains != nil {
 		assert.Equal(t, *want.Domains, got.Domains, "Count.Domains")
+	}
+	if want.Sequences != nil {
+		assert.Equal(t, *want.Sequences, got.Sequences, "Count.Sequences")
 	}
 }
 

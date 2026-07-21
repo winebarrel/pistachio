@@ -1,0 +1,12 @@
+omit_schema: true
+init: |
+  CREATE SEQUENCE public.order_seq;
+dump: |
+  -- order_seq
+  CREATE SEQUENCE order_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;

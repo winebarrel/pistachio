@@ -1,0 +1,31 @@
+# A standalone sequence (code_seq, referenced by a column default) alongside a
+# serial column and an identity column. Only the standalone sequence is
+# managed; the serial/identity-owned sequences are handled as column
+# attributes. The standalone sequence is created before the table that
+# references it via nextval.
+init: ""
+desired: |
+  CREATE SEQUENCE public.code_seq;
+  CREATE TABLE public.items (
+      id serial NOT NULL,
+      ver integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+      code integer DEFAULT nextval('code_seq'::regclass) NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+plan: |
+  CREATE SEQUENCE public.code_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+  CREATE TABLE public.items (
+      id serial NOT NULL,
+      ver integer GENERATED ALWAYS AS IDENTITY,
+      code integer DEFAULT nextval('code_seq'::regclass) NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+count:
+  sequences: 0
+  tables: 0

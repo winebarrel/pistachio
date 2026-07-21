@@ -1,0 +1,14 @@
+# AS smallint: MAXVALUE defaults to the smallint maximum (32767).
+init: ""
+desired: |
+  CREATE SEQUENCE public.small_seq AS smallint;
+applied: |
+  -- public.small_seq
+  CREATE SEQUENCE public.small_seq
+      AS smallint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 32767
+      CACHE 1;
+verify_no_drift: true

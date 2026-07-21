@@ -1,0 +1,21 @@
+# A quote-requiring sequence name ("Zzz_seq") referenced by a quoted table
+# name ("Aaa") that sorts before it alphabetically. Only the nextval
+# dependency edge can order the sequence first; the edge must resolve the
+# already-quoted literal without re-quoting it.
+init: ""
+desired: |
+  CREATE SEQUENCE public."Zzz_seq";
+  CREATE TABLE public."Aaa" (
+      id bigint DEFAULT nextval('"Zzz_seq"'::regclass) NOT NULL
+  );
+plan: |
+  CREATE SEQUENCE public."Zzz_seq"
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+  CREATE TABLE public."Aaa" (
+      id bigint DEFAULT nextval('"Zzz_seq"'::regclass) NOT NULL
+  );

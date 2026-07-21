@@ -130,8 +130,9 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 	assert.Equal(t, 1, got.Count.Views)
 	assert.Equal(t, 1, got.Count.Enums)
 	assert.Equal(t, 1, got.Count.Domains)
+	assert.Equal(t, 0, got.Count.Sequences)
 	assert.Equal(t, "schema public", got.Count.SchemaLabel())
-	assert.Equal(t, "1 table, 1 view, 1 enum, 1 domain", got.Count.Summary())
+	assert.Equal(t, "1 table, 1 view, 1 enum, 1 domain, 0 sequences", got.Count.Summary())
 }
 
 func TestDump_NoReadOnly(t *testing.T) {
@@ -174,7 +175,7 @@ func TestDump_Count_Empty(t *testing.T) {
 	assert.Equal(t, 0, got.Count.Views)
 	assert.Equal(t, 0, got.Count.Enums)
 	assert.Equal(t, 0, got.Count.Domains)
-	assert.Equal(t, "0 tables, 0 views, 0 enums, 0 domains", got.Count.Summary())
+	assert.Equal(t, "0 tables, 0 views, 0 enums, 0 domains, 0 sequences", got.Count.Summary())
 }
 
 func TestDump_Count_Filtered(t *testing.T) {
@@ -202,7 +203,7 @@ CREATE TABLE public.posts (
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, got.Count.Tables)
-	assert.Equal(t, "1 table, 0 views, 0 enums, 0 domains", got.Count.Summary())
+	assert.Equal(t, "1 table, 0 views, 0 enums, 0 domains, 0 sequences", got.Count.Summary())
 }
 
 func TestDumpResult_Files_Tables(t *testing.T) {

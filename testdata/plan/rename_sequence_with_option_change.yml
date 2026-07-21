@@ -1,0 +1,11 @@
+# A rename combined with option changes in the same plan: the rename is
+# emitted first (on the old name), then the ALTER applies the new options
+# against the renamed sequence.
+init: |
+  CREATE SEQUENCE public.old_seq INCREMENT BY 1 MAXVALUE 1000;
+desired: |
+  -- pista:renamed-from public.old_seq
+  CREATE SEQUENCE public.new_seq INCREMENT BY 2 MAXVALUE 5000;
+plan: |
+  ALTER SEQUENCE public.old_seq RENAME TO new_seq;
+  ALTER SEQUENCE public.new_seq INCREMENT BY 2 MAXVALUE 5000;

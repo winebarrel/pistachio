@@ -117,9 +117,9 @@ func TestOrderStatements_Fallback(t *testing.T) {
 	currentViews := orderedmap.New[string, *model.View]()
 
 	result := pistachio.OrderStatements(
-		currentEnums, currentDomains, currentTables, currentViews,
-		desiredEnums, desiredDomains, desiredTables, desiredViews,
-		enumDiff, domainDiff, tableDiff, viewDiff,
+		currentEnums, currentDomains, currentTables, currentViews, orderedmap.New[string, *model.Sequence](),
+		desiredEnums, desiredDomains, desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](),
+		enumDiff, domainDiff, tableDiff, viewDiff, &diff.SequenceDiffResult{},
 	)
 
 	// Should still produce output (via fallback)
@@ -169,9 +169,9 @@ func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
 	}
 
 	result := pistachio.OrderStatements(
-		currentEnums, currentDomains, currentTables, currentViews,
-		desiredEnums, desiredDomains, desiredTables, desiredViews,
-		enumDiff, domainDiff, tableDiff, viewDiff,
+		currentEnums, currentDomains, currentTables, currentViews, orderedmap.New[string, *model.Sequence](),
+		desiredEnums, desiredDomains, desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](),
+		enumDiff, domainDiff, tableDiff, viewDiff, &diff.SequenceDiffResult{},
 	)
 
 	require.Len(t, result, 2)
@@ -217,9 +217,9 @@ func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
 	viewDiff := &diff.ViewDiffResult{}
 
 	result := pistachio.OrderStatements(
-		currentEnums, currentDomains, currentTables, currentViews,
-		desiredEnums, desiredDomains, desiredTables, desiredViews,
-		enumDiff, domainDiff, tableDiff, viewDiff,
+		currentEnums, currentDomains, currentTables, currentViews, orderedmap.New[string, *model.Sequence](),
+		desiredEnums, desiredDomains, desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](),
+		enumDiff, domainDiff, tableDiff, viewDiff, &diff.SequenceDiffResult{},
 	)
 
 	// Should still produce output via fallback (not panic or error)
@@ -266,9 +266,9 @@ func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {
 	viewDiff := &diff.ViewDiffResult{}
 
 	result := pistachio.OrderStatements(
-		currentEnums, currentDomains, currentTables, currentViews,
-		desiredEnums, desiredDomains, desiredTables, desiredViews,
-		enumDiff, domainDiff, tableDiff, viewDiff,
+		currentEnums, currentDomains, currentTables, currentViews, orderedmap.New[string, *model.Sequence](),
+		desiredEnums, desiredDomains, desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](),
+		enumDiff, domainDiff, tableDiff, viewDiff, &diff.SequenceDiffResult{},
 	)
 
 	require.Len(t, result, 2)
@@ -310,9 +310,9 @@ func TestOrderStatements_CreateUniqueIndexAfterTable(t *testing.T) {
 	viewDiff := &diff.ViewDiffResult{}
 
 	result := pistachio.OrderStatements(
-		currentEnums, currentDomains, currentTables, currentViews,
-		desiredEnums, desiredDomains, desiredTables, desiredViews,
-		enumDiff, domainDiff, tableDiff, viewDiff,
+		currentEnums, currentDomains, currentTables, currentViews, orderedmap.New[string, *model.Sequence](),
+		desiredEnums, desiredDomains, desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](),
+		enumDiff, domainDiff, tableDiff, viewDiff, &diff.SequenceDiffResult{},
 	)
 
 	require.Len(t, result, 2)

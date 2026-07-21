@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -16,6 +17,7 @@ type ParseResult struct {
 	Views        *orderedmap.Map[string, *model.View]
 	Enums        *orderedmap.Map[string, *model.Enum]
 	Domains      *orderedmap.Map[string, *model.Domain]
+	Sequences    *orderedmap.Map[string, *model.Sequence]
 	ExecuteStmts []*ExecuteStmt
 }
 
@@ -74,6 +76,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	views := orderedmap.New[string, *model.View]()
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()
+	sequences := orderedmap.New[string, *model.Sequence]()
 
 	stmtDirectives := extractStmtDirectives(sql, result.Stmts)
 	concurrentlyDirectives := extractConcurrentlyDirectives(sql, result.Stmts)
@@ -288,9 +291,23 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				policy.RenameFrom = &unquoted
 			}
 
+		case node.GetCreateSeqStmt() != nil:
+			seq, err := parseCreateSeqStmt(node.GetCreateSeqStmt(), defaultSchema)
+			if err != nil {
+				return nil, err
+			}
+			if renameFrom != "" {
+				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
+				seq.RenameFrom = &qualified
+			}
+			seq.Ignore = ignore
+			if err := setUnique(sequences, seq.FQN(), "sequence", seq); err != nil {
+				return nil, err
+			}
+
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
-			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains)
+			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, sequences)
 		}
 	}
 
@@ -298,7 +315,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		return nil, err
 	}
 
-	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, ExecuteStmts: executeStmts}, nil
+	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, Sequences: sequences, ExecuteStmts: executeStmts}, nil
 }
 
 func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Table, error) {
@@ -917,7 +934,193 @@ func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*mo
 	}, nil
 }
 
-func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum], domains *orderedmap.Map[string, *model.Domain]) {
+// parseCreateSeqStmt parses a CREATE SEQUENCE statement, filling in the same
+// implicit defaults PostgreSQL applies (so a bare "CREATE SEQUENCE s" matches
+// the catalog values 1/1/2^63-1/1/1/false). NO MINVALUE and NO MAXVALUE (arg
+// nil) are treated as "use the default", matching PostgreSQL.
+func parseCreateSeqStmt(cs *pg_query.CreateSeqStmt, defaultSchema string) (*model.Sequence, error) {
+	schema := cs.Sequence.Schemaname
+	if schema == "" {
+		schema = defaultSchema
+	}
+
+	dataType := "bigint"
+	var (
+		increment                int64 = 1
+		hasMin, hasMax, hasStart bool
+		minVal, maxVal, startVal int64
+		cacheVal                 int64 = 1
+		cycle                    bool
+		ownerTable, ownerColumn  *string
+	)
+
+	for _, o := range cs.Options {
+		de := o.GetDefElem()
+		if de == nil {
+			continue
+		}
+		switch de.Defname {
+		case "as":
+			if tn := de.Arg.GetTypeName(); tn != nil {
+				dt, err := deparseTypeName(tn)
+				if err != nil {
+					return nil, fmt.Errorf("failed to deparse sequence data type: %w", err)
+				}
+				dataType = dt
+			}
+		case "increment":
+			v, ok, err := defElemInt64(de)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				increment = v
+			}
+		case "minvalue":
+			v, ok, err := defElemInt64(de)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				minVal = v
+				hasMin = true
+			}
+		case "maxvalue":
+			v, ok, err := defElemInt64(de)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				maxVal = v
+				hasMax = true
+			}
+		case "start":
+			v, ok, err := defElemInt64(de)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				startVal = v
+				hasStart = true
+			}
+		case "cache":
+			v, ok, err := defElemInt64(de)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				cacheVal = v
+			}
+		case "cycle":
+			if b := de.Arg.GetBoolean(); b != nil {
+				cycle = b.Boolval
+			}
+		case "owned_by":
+			ownerTable, ownerColumn = parseSeqOwnedBy(de.Arg)
+		}
+	}
+
+	// Apply PostgreSQL's defaults for any options left unspecified.
+	typeMin, typeMax := seqTypeBounds(dataType)
+	ascending := increment > 0
+	if !hasMin {
+		if ascending {
+			minVal = 1
+		} else {
+			minVal = typeMin
+		}
+	}
+	if !hasMax {
+		if ascending {
+			maxVal = typeMax
+		} else {
+			maxVal = -1
+		}
+	}
+	if !hasStart {
+		if ascending {
+			startVal = minVal
+		} else {
+			startVal = maxVal
+		}
+	}
+
+	return &model.Sequence{
+		Schema:      schema,
+		Name:        cs.Sequence.Relname,
+		DataType:    dataType,
+		Start:       startVal,
+		Min:         minVal,
+		Max:         maxVal,
+		Increment:   increment,
+		Cache:       cacheVal,
+		Cycle:       cycle,
+		OwnerTable:  ownerTable,
+		OwnerColumn: ownerColumn,
+	}, nil
+}
+
+// seqTypeBounds returns the min and max values of a sequence data type.
+// Unknown types fall back to bigint bounds.
+func seqTypeBounds(dataType string) (int64, int64) {
+	switch dataType {
+	case "smallint":
+		return -32768, 32767
+	case "integer":
+		return -2147483648, 2147483647
+	default: // bigint
+		return -9223372036854775808, 9223372036854775807
+	}
+}
+
+// defElemInt64 reads an integer sequence option. pg_query encodes values that
+// fit in int32 as Integer nodes and larger values (e.g. bigint bounds) as
+// Float nodes carrying the decimal string. Returns ok=false when the arg is
+// nil (NO MINVALUE / NO MAXVALUE).
+func defElemInt64(de *pg_query.DefElem) (int64, bool, error) {
+	if de.Arg == nil {
+		return 0, false, nil
+	}
+	if i := de.Arg.GetInteger(); i != nil {
+		return int64(i.Ival), true, nil
+	}
+	if f := de.Arg.GetFloat(); f != nil {
+		v, err := strconv.ParseInt(f.Fval, 10, 64)
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid value %q for sequence option %s: %w", f.Fval, de.Defname, err)
+		}
+		return v, true, nil
+	}
+	return 0, false, fmt.Errorf("unexpected value for sequence option %s", de.Defname)
+}
+
+// parseSeqOwnedBy extracts the owner table and column from an OWNED BY clause.
+// OWNED BY NONE (list ["none"]) yields nil owner. The pipeline only manages
+// standalone sequences, so an owned sequence is filtered out downstream; the
+// values here just mark it as owned.
+func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
+	list := arg.GetList()
+	if list == nil {
+		return nil, nil
+	}
+	var names []string
+	for _, item := range list.Items {
+		if s := item.GetString_(); s != nil {
+			names = append(names, s.Sval)
+		}
+	}
+	if len(names) == 1 && strings.EqualFold(names[0], "none") {
+		return nil, nil
+	}
+	if len(names) < 2 {
+		return nil, nil
+	}
+	table := names[len(names)-2]
+	column := names[len(names)-1]
+	return &table, &column
+}
+
+func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum], domains *orderedmap.Map[string, *model.Domain], sequences *orderedmap.Map[string, *model.Sequence]) {
 	// COMMENT ON TYPE/DOMAIN uses TypeName, not a list
 	if cs.Objtype == pg_query.ObjectType_OBJECT_TYPE {
 		parseCommentOnType(cs, defaultSchema, enums)
@@ -994,6 +1197,22 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 				} else {
 					col.Comment = nil
 				}
+			}
+		}
+	case pg_query.ObjectType_OBJECT_SEQUENCE:
+		schema := defaultSchema
+		seqName := names[0]
+		if len(names) >= 2 {
+			schema = names[0]
+			seqName = names[1]
+		}
+		fqn := model.Ident(schema, seqName)
+		if seq, ok := sequences.GetOk(fqn); ok {
+			if cs.Comment != "" {
+				c := cs.Comment
+				seq.Comment = &c
+			} else {
+				seq.Comment = nil
 			}
 		}
 	}

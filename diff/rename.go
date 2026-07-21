@@ -53,6 +53,50 @@ func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([
 	return stmts, adjusted, nil
 }
 
+// detectSequenceRenames finds desired sequences with RenameFrom that match a current sequence.
+func detectSequenceRenames(current, desired *orderedmap.Map[string, *model.Sequence]) ([]string, *orderedmap.Map[string, *model.Sequence], error) {
+	var stmts []string
+	adjusted := cloneMap(current)
+
+	for newKey, desiredSeq := range desired.All() {
+		if desiredSeq.RenameFrom == nil {
+			continue
+		}
+		oldKey := *desiredSeq.RenameFrom
+
+		if oldKey == newKey {
+			continue
+		}
+
+		oldSeq, ok := adjusted.GetOk(oldKey)
+		if !ok {
+			if _, exists := adjusted.GetOk(newKey); exists {
+				continue
+			}
+			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
+		}
+
+		if oldKey != newKey {
+			if _, exists := adjusted.GetOk(newKey); exists {
+				return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
+			}
+		}
+
+		if oldSeq.Schema != desiredSeq.Schema {
+			return nil, nil, fmt.Errorf("cannot rename %s to %s: cross-schema rename is not supported", oldKey, newKey)
+		}
+
+		stmts = append(stmts, "ALTER SEQUENCE "+oldKey+" RENAME TO "+model.Ident(desiredSeq.Name)+";")
+
+		adjusted.Delete(oldKey)
+		renamed := *oldSeq
+		renamed.Name = desiredSeq.Name
+		adjusted.Set(newKey, &renamed)
+	}
+
+	return stmts, adjusted, nil
+}
+
 // detectTableRenames finds desired tables with RenameFrom that match a current table.
 //
 // NOTE: After a table rename, other objects that reference the old table name

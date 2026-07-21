@@ -34,7 +34,7 @@ func TestDump_Run(t *testing.T) {
 	cmd := &command.Dump{}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "-- Dump of schema public (1 table, 0 views, 0 enums, 0 domains)")
+	assert.Contains(t, buf.String(), "-- Dump of schema public (1 table, 0 views, 0 enums, 0 domains, 0 sequences)")
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
 	assertConnectedCommentFirst(t, buf.String(), conn.Config())
 }
@@ -74,7 +74,7 @@ CREATE TABLE public.posts (
 	assert.Contains(t, string(postsData), "CREATE TABLE public.posts")
 
 	out := buf.String()
-	assert.Contains(t, out, "-- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains)")
+	assert.Contains(t, out, "-- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains, 0 sequences)")
 	assert.Contains(t, out, fmt.Sprintf("-- Wrote 2 file(s) to %s", splitDir))
 	assert.NotContains(t, out, "public.users.sql")
 	assert.NotContains(t, out, "public.posts.sql")
@@ -96,7 +96,7 @@ func TestDump_Run_Empty(t *testing.T) {
 	cmd := &command.Dump{}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "-- Dump of schema public (0 tables, 0 views, 0 enums, 0 domains)")
+	assert.Contains(t, buf.String(), "-- Dump of schema public (0 tables, 0 views, 0 enums, 0 domains, 0 sequences)")
 }
 
 func TestDump_Run_Split_WithView(t *testing.T) {
@@ -153,7 +153,7 @@ func TestDump_Run_Split_Empty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 	out := buf.String()
-	assert.Contains(t, out, "-- Dump of schema public (0 tables, 0 views, 0 enums, 0 domains)")
+	assert.Contains(t, out, "-- Dump of schema public (0 tables, 0 views, 0 enums, 0 domains, 0 sequences)")
 	assert.Contains(t, out, fmt.Sprintf("-- Wrote 0 file(s) to %s", splitDir))
 }
 
