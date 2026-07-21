@@ -1,39 +1,18 @@
-name: release
+name: demo
 on:
+  workflow_call:
   push:
-    tags:
-      - v[0-9]+.[0-9]+.[0-9]+
+    branches:
+      - main
+    paths:
+      - demo/**
 
 permissions:
-  contents: write
+  contents: read
   packages: write
 
-env:
-  GOLANG_CROSS_VERSION: v1.26.0
-
 jobs:
-  goreleaser:
-    runs-on: ubuntu-latest
-    steps:
-      - &checkout
-        name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-      - name: Run GoReleaser
-        run: |
-          docker run -q \
-            --rm \
-            -e CGO_ENABLED=1 \
-            -e GITHUB_TOKEN \
-            -v "$GITHUB_WORKSPACE:/src" \
-            -w /src \
-            "ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION}" \
-            release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
-
-  docker-build:
+  docker-demo-build:
     strategy:
       fail-fast: false
       matrix:
@@ -48,13 +27,16 @@ jobs:
         run: |
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
-      - *checkout
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - &setup-buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository }}-demo
       - &login-ghcr
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
@@ -64,9 +46,10 @@ jobs:
       - id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
+          file: demo/Dockerfile
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/${{ github.repository }}-demo,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             PISTA_VERSION=${{ github.ref_name }}
       - name: Export digest
@@ -77,27 +60,27 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: digests-${{ env.PLATFORM_PAIR }}
+          name: demo-digests-${{ env.PLATFORM_PAIR }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
 
-  docker:
+  docker-demo:
     runs-on: ubuntu-latest
     needs:
-      - docker-build
+      - docker-demo-build
     steps:
       - name: Download digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-*
+          pattern: demo-digests-*
           merge-multiple: true
       - *setup-buildx
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository }}-demo
       - *login-ghcr
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
@@ -105,10 +88,7 @@ jobs:
           # shellcheck disable=SC2046  # intentional word splitting to pass each -t flag and digest as separate args
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+            $(printf 'ghcr.io/${{ github.repository }}-demo@sha256:%s ' *)
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
-
-  demo:
-    uses: ./.github/workflows/demo.yml
+          docker buildx imagetools inspect ghcr.io/${{ github.repository }}-demo:${{ steps.meta.outputs.version }}
