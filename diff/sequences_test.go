@@ -74,6 +74,19 @@ func TestDiffSequences_AlterOptions(t *testing.T) {
 	assert.Equal(t, "ALTER SEQUENCE public.s INCREMENT BY 2 MAXVALUE 5000 CACHE 10 CYCLE;", result.Stmts[0])
 }
 
+func TestDiffSequences_AlterType(t *testing.T) {
+	current := baseSeq()
+	current.DataType = "smallint"
+	current.Max = 100
+	desired := baseSeq()
+	desired.DataType = "integer"
+	desired.Max = 100
+	result, err := diff.DiffSequences(newSeqMap(current), newSeqMap(desired), diff.AllowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.Stmts, 1)
+	assert.Equal(t, "ALTER SEQUENCE public.s AS integer;", result.Stmts[0])
+}
+
 func TestDiffSequences_NoCycle(t *testing.T) {
 	current := baseSeq()
 	current.Cycle = true

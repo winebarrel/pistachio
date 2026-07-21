@@ -1,0 +1,6 @@
+init: |
+  CREATE SEQUENCE public.s AS smallint MAXVALUE 100;
+desired: |
+  CREATE SEQUENCE public.s AS integer MAXVALUE 100;
+plan: |
+  ALTER SEQUENCE public.s AS integer;

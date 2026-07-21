@@ -1,0 +1,42 @@
+# A mixed schema (standalone sequence + serial + identity) is stable: exactly
+# one sequence is counted as managed (not three), applying the same schema
+# makes no changes, and the dump shows only the standalone sequence. The
+# serial/identity-owned sequences never leak into the diff.
+init: |
+  CREATE SEQUENCE public.code_seq;
+  CREATE TABLE public.items (
+      id serial NOT NULL,
+      ver integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+      code integer DEFAULT nextval('code_seq'::regclass) NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE SEQUENCE public.code_seq;
+  CREATE TABLE public.items (
+      id serial NOT NULL,
+      ver integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+      code integer DEFAULT nextval('code_seq'::regclass) NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+applied_sql: ""
+applied: |
+  -- public.code_seq
+  CREATE SEQUENCE public.code_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public.items
+  CREATE TABLE public.items (
+      id serial NOT NULL,
+      ver integer GENERATED ALWAYS AS IDENTITY,
+      code integer DEFAULT nextval('code_seq'::regclass) NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+count:
+  sequences: 1
+  tables: 1
+verify_no_drift: true

@@ -1,0 +1,21 @@
+# Dropping a standalone sequence referenced by a column default: the default
+# reference is removed first (ALTER COLUMN DROP DEFAULT), then the sequence is
+# dropped. The serial/identity columns stay untouched.
+init: |
+  CREATE SEQUENCE public.code_seq;
+  CREATE TABLE public.items (
+      id serial NOT NULL,
+      ver integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+      code integer DEFAULT nextval('code_seq'::regclass) NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id serial NOT NULL,
+      ver integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+      code integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.items ALTER COLUMN code DROP DEFAULT;
+  DROP SEQUENCE public.code_seq;

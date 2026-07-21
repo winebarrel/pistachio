@@ -1,0 +1,18 @@
+# A sequence marked -- pista:ignore is unmanaged: no create, alter, or drop,
+# and its FQN is surfaced as -- ignored:.
+init: |
+  CREATE SEQUENCE public.ext_seq;
+desired: |
+  -- pista:ignore
+  CREATE SEQUENCE public.ext_seq;
+  CREATE SEQUENCE public.managed_seq;
+plan: |
+  CREATE SEQUENCE public.managed_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+ignored: |
+  -- ignored: public.ext_seq
