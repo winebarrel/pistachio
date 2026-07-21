@@ -124,6 +124,11 @@ Commands:
 Run "pista <command> --help" for more information on a command.
 ```
 
+> [!note]
+> By default, pistachio targets the `public` schema.
+> 
+> See [Getting Started#working-with-specific-schemas](getting-started.md#working-with-specific-schemas) for details.
+
 ### plan
 
 Compare schema file(s) against the current database and print the SQL needed to reconcile them.
@@ -305,10 +310,6 @@ pista --no-pager plan schema.sql
 # Force the pager even when stdout is not a TTY
 PISTA_PAGER='source-highlight -s sql -f esc' pista --pager dump
 ```
-
-### Working with specific schemas
-
-see https://github.com/winebarrel/pistachio/blob/main/getting-started.md#working-with-specific-schemas
 
 ### Schema name mapping
 
