@@ -215,3 +215,16 @@ similar name exists in desired") but the heuristic has false positives
 and is not pursued.
 
 Origin: discussion during [#124](https://github.com/winebarrel/pistachio/pull/124). No current plan to implement.
+
+## UNLOGGED sequence support
+
+Standalone sequence management does not track the `UNLOGGED` attribute. An
+`UNLOGGED SEQUENCE` is read and dumped as a plain `CREATE SEQUENCE` (as if
+`LOGGED`), and a `LOGGED` <-> `UNLOGGED` change produces no diff. Closing
+this would follow the existing table pattern: add an `Unlogged` field to
+`model.Sequence`, read `pg_class.relpersistence = 'u'` in the catalog,
+emit `CREATE UNLOGGED SEQUENCE`, and emit `ALTER SEQUENCE ... SET
+LOGGED/UNLOGGED` for transitions. `TEMPORARY` sequences stay out of scope
+(session-local, never dumped).
+
+Origin: [#296](https://github.com/winebarrel/pistachio/pull/296).
