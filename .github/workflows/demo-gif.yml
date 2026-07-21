@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - demo.tape
+      - .github/workflows/demo-gif.yml
 
 permissions:
   contents: write
@@ -44,16 +45,23 @@ jobs:
         run: |
           go build -o pista ./cmd/pista
           sudo mv pista /usr/local/bin/pista
-      - name: Install bat
+      - name: Install bat and font
         run: |
           sudo apt-get update
           sudo apt-get install -y bat
           sudo ln -sf /usr/bin/batcat /usr/local/bin/bat
+          # JetBrains Mono is the tape's default font; best-effort for fidelity.
+          sudo apt-get install -y fonts-jetbrains-mono || true
+      - name: Install VHS
+        # vhs-action's ffmpeg installer is broken (it fetches a BtbN asset that
+        # no longer exists), so install VHS via Homebrew. The vhs formula pulls
+        # in ttyd and ffmpeg as dependencies.
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: brew install vhs
       - name: Render demo.gif
-        uses: charmbracelet/vhs-action@59641cdc7fadf3978db65eb8c6937ea2752f4ec3 # v2.1.0
-        with:
-          path: demo.tape
-          install-fonts: "true"
+        run: vhs demo.tape
       - name: Create pull request
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
         with:
