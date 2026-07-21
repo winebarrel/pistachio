@@ -71,7 +71,7 @@ pista plan schema.sql
 Output:
 
 ```sql
--- Plan for schema public (1 table, 0 views, 0 enums, 0 domains)
+-- Plan for schema public (1 table, 0 views, 0 enums, 0 domains, 0 sequences)
 ALTER TABLE public.users ADD COLUMN email text;
 ```
 
@@ -86,7 +86,7 @@ pista apply schema.sql
 Output:
 
 ```sql
--- Apply to schema public (1 table, 0 views, 0 enums, 0 domains)
+-- Apply to schema public (1 table, 0 views, 0 enums, 0 domains, 0 sequences)
 ALTER TABLE public.users ADD COLUMN email text;
 -- Apply finished in 12ms
 ```
@@ -99,7 +99,7 @@ Verify by running plan again:
 
 ```bash
 pista plan schema.sql
-# => -- Plan for schema public (1 table, 0 views, 0 enums, 0 domains)
+# => -- Plan for schema public (1 table, 0 views, 0 enums, 0 domains, 0 sequences)
 # => -- No changes
 ```
 

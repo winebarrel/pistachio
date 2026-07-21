@@ -250,7 +250,7 @@ pista apply --allow-drop column,table schema.sql
 Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. The plan still reports `-- No changes` when the only diff would be a suppressed drop, since no executable DDL is generated:
 
 ```sql
--- Plan for schema public (1 table, 0 views, 0 enums, 0 domains)
+-- Plan for schema public (1 table, 0 views, 0 enums, 0 domains, 0 sequences)
 -- skipped: DROP TABLE public.legacy_users;
 -- No changes
 ```
@@ -381,7 +381,7 @@ pista dump --omit-schema
 # => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
 
 pista dump --omit-schema --split ./schema/
-# -- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains)
+# -- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains, 0 sequences)
 # -- Wrote 2 file(s) to ./schema/
 # (writes ./schema/users.sql, ./schema/orders.sql, ...)
 ```
@@ -489,7 +489,7 @@ Use `--split` to output each table/view/enum/domain as a separate file in the sp
 
 ```bash
 pista dump --split ./schema/
-# -- Dump of schema public (3 tables, 0 views, 1 enum, 0 domains)
+# -- Dump of schema public (3 tables, 0 views, 1 enum, 0 domains, 0 sequences)
 # -- Wrote 4 file(s) to ./schema/
 # (writes ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...)
 ```
