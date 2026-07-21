@@ -7,7 +7,7 @@ Declarative schema management tool for PostgreSQL, built on [pg_query_go](https:
 
 See also: [Getting Started Guide](getting-started.md) / [Directives](directives.md)
 
-![](https://github.com/user-attachments/assets/f280336b-52c2-409e-a8ba-f9a2ec71f950)
+![](demo.gif)
 
 ## Installation
 
