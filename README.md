@@ -306,6 +306,10 @@ pista --no-pager plan schema.sql
 PISTA_PAGER='source-highlight -s sql -f esc' pista --pager dump
 ```
 
+### Working with specific schemas
+
+see https://github.com/winebarrel/pistachio/blob/main/getting-started.md#working-with-specific-schemas
+
 ### Schema name mapping
 
 Use `-m` / `--schema-map` to remap schema names when the database schema name differs from the one used in your SQL files.
