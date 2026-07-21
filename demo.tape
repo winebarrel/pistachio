@@ -83,14 +83,14 @@ Sleep 4s
 
 # Verify no remaining diff
 Enter
-Type "# Verify that the schema is now in sync" Enter
+Type "# Verify no changes remain" Enter
 Sleep 2s
 Type "pista plan schema.sql" Enter
 Sleep 4s
 
 # Dump
 Enter
-Type "# Dump the current database schema" Enter
+Type "# Dump the updated schema" Enter
 Sleep 2s
 Type "pista dump" Enter
 Sleep 4s
