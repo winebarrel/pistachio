@@ -88,6 +88,39 @@ func TestOrderFromSchemaWithSequences_NextvalDependency(t *testing.T) {
 	assert.Less(t, idx["public.zzz_seq"], idx["public.aaa"], "sequence before dependent table")
 }
 
+func TestOrderFromSchemaWithSequences_NextvalQuotedName(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	// A quote-requiring sequence name. The default expression carries the name
+	// already quoted (as pg_get_expr / deparse emit it); the edge must resolve
+	// it without re-quoting.
+	sequences := orderedmap.New[string, *model.Sequence]()
+	sequences.Set(`public."Zzz_seq"`, &model.Sequence{Schema: "public", Name: "Zzz_seq"})
+
+	def := `nextval('"Zzz_seq"'::regclass)`
+	tables := orderedmap.New[string, *model.Table]()
+	// Quoted table name that sorts before the sequence, so only the edge (not
+	// alphabetical order) can place the sequence first.
+	aaa := &model.Table{Schema: "public", Name: "Aaa"}
+	aaa.Columns = orderedmap.New[string, *model.Column]()
+	aaa.Columns.Set("id", &model.Column{Name: "id", TypeName: "bigint", Default: &def})
+	aaa.Indexes = orderedmap.New[string, *model.Index]()
+	aaa.Constraints = orderedmap.New[string, *model.Constraint]()
+	aaa.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set(`public."Aaa"`, aaa)
+
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views, sequences)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx[`public."Zzz_seq"`], idx[`public."Aaa"`], "quoted sequence before dependent table")
+}
+
 func TestOrderFromSchema_ForeignKey(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()

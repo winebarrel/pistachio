@@ -156,10 +156,15 @@ func extractSeqDeps(defaultExpr, defaultSchema string, defined map[string]bool) 
 		}
 		rest = remainder
 
+		// lit is the identifier as pg_get_expr / pg_query deparse emit it:
+		// already quoted when the name requires it, matching the form of both
+		// the `defined` keys and resolveUnqualified's name argument. Do not
+		// re-quote it with model.Ident, which would double-quote a name like
+		// "MySeq" and miss the lookup.
 		if defined[lit] {
 			deps = append(deps, lit)
 		} else if !strings.Contains(lit, ".") {
-			if q := resolveUnqualified(model.Ident(lit), defaultSchema, defined); q != "" {
+			if q := resolveUnqualified(lit, defaultSchema, defined); q != "" {
 				deps = append(deps, q)
 			}
 		}
