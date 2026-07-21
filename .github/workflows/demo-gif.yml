@@ -68,13 +68,24 @@ jobs:
       - name: Render demo.gif
         run: vhs demo.tape
       - name: Create pull request
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
-        with:
-          add-paths: demo.gif
-          base: main
-          branch: update-demo-gif
-          delete-branch: true
-          commit-message: Update demo.gif
-          title: Update demo.gif
-          body: |
-            Regenerated demo.gif from demo.tape.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- demo.gif; then
+            echo "demo.gif unchanged; nothing to do."
+            exit 0
+          fi
+          branch=update-demo-gif
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add demo.gif
+          git commit -m "Update demo.gif"
+          git push -f origin "$branch"
+          if [ "$(gh pr list --head "$branch" --state open --json number --jq 'length')" -eq 0 ]; then
+            gh pr create --base main --head "$branch" \
+              --title "Update demo.gif" \
+              --body "Regenerated demo.gif from demo.tape."
+          else
+            echo "PR already open; branch updated."
+          fi
