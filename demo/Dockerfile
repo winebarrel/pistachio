@@ -46,5 +46,10 @@ RUN initdb -D /var/lib/postgresql/data >/dev/null && \
     psql -d demo -v ON_ERROR_STOP=1 -f /demo/current.sql && \
     pg_ctl -D /var/lib/postgresql/data -m fast stop
 
+# Source revision this image was built from (set in CI). Placed last so it
+# does not invalidate the cache of the expensive initdb layer above.
+ARG PISTA_REVISION
+ENV PISTA_REVISION=${PISTA_REVISION}
+
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["bash"]

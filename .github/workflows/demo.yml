@@ -53,6 +53,7 @@ jobs:
           outputs: type=image,name=ghcr.io/${{ github.repository }}-demo,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             PISTA_VERSION=${{ github.ref_name }}
+            PISTA_REVISION=${{ github.sha }}
       - name: Export digest
         run: |
           mkdir -p "${{ runner.temp }}/digests"
