@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.17.0] - 2026-07-21
+
+* Manage standalone sequences. `plan`, `apply`, and `dump` handle `CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`, `COMMENT ON SEQUENCE`, and rename via `-- pista:renamed-from`. Only standalone sequences are managed. A sequence owned by a `serial` or identity column stays with that column and is excluded from the diff, classified by `pg_depend.deptype`. A sequence referenced by a column default via `nextval` is created before that table and dropped after. `--enable`, `--disable`, `--include`, `--exclude`, and `--allow-drop` accept `sequence`. The `UNLOGGED` attribute is not tracked. ([#296](https://github.com/winebarrel/pistachio/pull/296))
+
 ## [1.16.1] - 2026-07-18
 
 * Fix invalid DDL for a single-column `UNIQUE` / `PRIMARY KEY` constraint on a column named `value`. libpg_query dropped the column from the deparsed definition, so `plan` / `apply` produced a broken `ADD CONSTRAINT ... UNIQUE` and reported false drift. The key columns are now restored from the parse tree. ([#291](https://github.com/winebarrel/pistachio/pull/291))

@@ -86,17 +86,6 @@ for in-place changes; using it would avoid the round-trip.
 Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit. Optimisation rather than a bug; current
 behaviour is correct, just heavier than necessary.
 
-## Standalone Sequences are not first-class
-
-`catalog/sequences.go` reads sequences (used for SERIAL/IDENTITY
-metadata), but parser and diff don't handle `CREATE SEQUENCE` /
-`ALTER SEQUENCE` / `DROP SEQUENCE` as schema operations. Standalone
-sequences in desired SQL therefore round-trip via execute directives
-only. Decide whether sequence is in scope; if yes, add parser/diff
-support; if no, document the limitation.
-
-Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit.
-
 ## Table rename: cross-table dependents
 
 `detectTableRenames` rewrites the renamed table's own indexes and FKs
