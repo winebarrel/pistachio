@@ -12,19 +12,9 @@ import (
 
 // OrderFromSchema builds a dependency graph from parsed model objects and
 // returns the object names in topological order (dependencies first).
+// Sequences are leaf nodes; a table depends on a sequence when a column
+// default references it via nextval, so the sequence is created first.
 func OrderFromSchema(
-	enums *orderedmap.Map[string, *model.Enum],
-	domains *orderedmap.Map[string, *model.Domain],
-	tables *orderedmap.Map[string, *model.Table],
-	views *orderedmap.Map[string, *model.View],
-) ([]string, error) {
-	return OrderFromSchemaWithSequences(enums, domains, tables, views, orderedmap.New[string, *model.Sequence]())
-}
-
-// OrderFromSchemaWithSequences is OrderFromSchema extended with standalone
-// sequences. Sequences are leaf nodes; a table depends on a sequence when a
-// column default references it via nextval, so the sequence is created first.
-func OrderFromSchemaWithSequences(
 	enums *orderedmap.Map[string, *model.Enum],
 	domains *orderedmap.Map[string, *model.Domain],
 	tables *orderedmap.Map[string, *model.Table],

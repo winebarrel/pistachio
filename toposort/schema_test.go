@@ -10,6 +10,17 @@ import (
 	"github.com/winebarrel/pistachio/toposort"
 )
 
+// orderFromSchema calls OrderFromSchema with no sequences, for the many tests
+// that predate sequence support.
+func orderFromSchema(
+	enums *orderedmap.Map[string, *model.Enum],
+	domains *orderedmap.Map[string, *model.Domain],
+	tables *orderedmap.Map[string, *model.Table],
+	views *orderedmap.Map[string, *model.View],
+) ([]string, error) {
+	return toposort.OrderFromSchema(enums, domains, tables, views, orderedmap.New[string, *model.Sequence]())
+}
+
 func TestOrderFromSchema_Basic(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	enums.Set("public.status", &model.Enum{Schema: "public", Name: "status", Values: []string{"active", "inactive"}})
@@ -34,7 +45,7 @@ func TestOrderFromSchema_Basic(t *testing.T) {
 		Definition: "SELECT id, status FROM public.users WHERE status = 'active'",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -67,7 +78,7 @@ func TestOrderFromSchemaWithSequences_NextvalDependency(t *testing.T) {
 	aaa.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tables.Set("public.aaa", aaa)
 
-	order, err := toposort.OrderFromSchemaWithSequences(enums, domains, tables, views, sequences)
+	order, err := toposort.OrderFromSchema(enums, domains, tables, views, sequences)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -106,7 +117,7 @@ func TestOrderFromSchema_ForeignKey(t *testing.T) {
 	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tables.Set("public.users", users)
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -141,7 +152,7 @@ func TestOrderFromSchema_ViewToView(t *testing.T) {
 		Definition: "SELECT count(*) FROM public.active_users",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -159,7 +170,7 @@ func TestOrderFromSchema_Empty(t *testing.T) {
 	tables := orderedmap.New[string, *model.Table]()
 	views := orderedmap.New[string, *model.View]()
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 	assert.Empty(t, order)
 }
@@ -179,7 +190,7 @@ func TestOrderFromSchema_Independent(t *testing.T) {
 		tables.Set("public."+name, tbl)
 	}
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 	// Independent objects should be sorted alphabetically
 	assert.Equal(t, []string{"public.a_table", "public.b_table", "public.c_table"}, order)
@@ -201,7 +212,7 @@ func TestOrderFromSchema_ArrayColumnType(t *testing.T) {
 	tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tables.Set("public.users", tbl)
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -247,7 +258,7 @@ func TestOrderFromSchema_CyclicFK(t *testing.T) {
 	})
 	tables.Set("public.b", tblB)
 
-	_, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	_, err := orderFromSchema(enums, domains, tables, views)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cycle detected")
 }
@@ -263,7 +274,7 @@ func TestOrderFromSchema_UnqualifiedDomainBaseType(t *testing.T) {
 	tables := orderedmap.New[string, *model.Table]()
 	views := orderedmap.New[string, *model.View]()
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -296,7 +307,7 @@ func TestOrderFromSchema_UnqualifiedTypeInPublicFromOtherSchema(t *testing.T) {
 	tables.Set("humanresources.department", newTable("humanresources", "department",
 		&model.Column{Name: "name", TypeName: `"Name"`}))
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, orderedmap.New[string, *model.View]())
+	order, err := orderFromSchema(enums, domains, tables, orderedmap.New[string, *model.View]())
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -318,7 +329,7 @@ func TestOrderFromSchema_UnqualifiedEnumInPublicFromOtherSchema(t *testing.T) {
 	tables.Set("app.users", newTable("app", "users",
 		&model.Column{Name: "s", TypeName: "status"}))
 
-	order, err := toposort.OrderFromSchema(enums, orderedmap.New[string, *model.Domain](),
+	order, err := orderFromSchema(enums, orderedmap.New[string, *model.Domain](),
 		tables, orderedmap.New[string, *model.View]())
 	require.NoError(t, err)
 
@@ -335,7 +346,7 @@ func TestOrderFromSchema_UnqualifiedDomainBaseTypeFromPublic(t *testing.T) {
 	domains.Set("public.name_t", &model.Domain{Schema: "public", Name: "name_t", BaseType: "varchar(50)"})
 	domains.Set("app.short_name", &model.Domain{Schema: "app", Name: "short_name", BaseType: "name_t"})
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](), domains,
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](), domains,
 		orderedmap.New[string, *model.Table](), orderedmap.New[string, *model.View]())
 	require.NoError(t, err)
 
@@ -354,7 +365,7 @@ func TestOrderFromSchema_UnqualifiedArrayTypeInPublicFromOtherSchema(t *testing.
 	tables.Set("app.posts", newTable("app", "posts",
 		&model.Column{Name: "tags", TypeName: "tag[]"}))
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](), domains,
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](), domains,
 		tables, orderedmap.New[string, *model.View]())
 	require.NoError(t, err)
 
@@ -376,7 +387,7 @@ func TestOrderFromSchema_UnqualifiedTypeShadowedByDefaultSchema(t *testing.T) {
 	tables.Set("app.t", newTable("app", "t",
 		&model.Column{Name: "n", TypeName: "name_t"}))
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](), domains,
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](), domains,
 		tables, orderedmap.New[string, *model.View]())
 	require.NoError(t, err)
 
@@ -397,7 +408,7 @@ func TestOrderFromSchema_UnqualifiedFKInPublicFromOtherSchema(t *testing.T) {
 	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Constraint: model.Constraint{Name: "fk_user"}, RefTable: &refTable})
 	tables.Set("app.posts", posts)
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
 		orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
 	require.NoError(t, err)
 
@@ -419,7 +430,7 @@ func TestOrderFromSchema_ViewInOtherSchemaReferencesUnqualifiedPublicTable(t *te
 		Definition: "SELECT id FROM users",
 	})
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
 		orderedmap.New[string, *model.Domain](), tables, views)
 	require.NoError(t, err)
 
@@ -443,7 +454,7 @@ func TestOrderFromSchema_FKWithNilRefTable(t *testing.T) {
 	tables.Set("public.events", tbl)
 
 	require.NotPanics(t, func() {
-		_, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+		_, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
 			orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
 		require.NoError(t, err)
 	})
@@ -460,7 +471,7 @@ func TestOrderFromSchema_ViewBodyExplicitRefToUndefinedTable(t *testing.T) {
 		Definition: "SELECT relname FROM pg_catalog.pg_class",
 	})
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
 		orderedmap.New[string, *model.Domain](),
 		orderedmap.New[string, *model.Table](), views)
 	require.NoError(t, err)
@@ -481,7 +492,7 @@ func TestOrderFromSchema_UnqualifiedTypeInQuoteRequiringSchema(t *testing.T) {
 	tables := orderedmap.New[string, *model.Table]()
 	tables.Set(tbl.FQTN(), tbl)
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](), domains, tables, orderedmap.New[string, *model.View]())
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](), domains, tables, orderedmap.New[string, *model.View]())
 	require.NoError(t, err)
 	idx := make(map[string]int)
 	for i, name := range order {
@@ -500,7 +511,7 @@ func TestOrderFromSchema_UnqualifiedFKInQuoteRequiringSchema(t *testing.T) {
 	tables.Set(users.FQTN(), users)
 	tables.Set(posts.FQTN(), posts)
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
 		orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
 	require.NoError(t, err)
 	idx := make(map[string]int)
@@ -523,7 +534,7 @@ func TestOrderFromSchema_ViewBodyTableRefInQuoteRequiringSchema(t *testing.T) {
 	views := orderedmap.New[string, *model.View]()
 	views.Set(model.Ident(v.Schema, v.Name), v)
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
 		orderedmap.New[string, *model.Domain](), tables, views)
 	require.NoError(t, err)
 	idx := make(map[string]int)
@@ -548,7 +559,7 @@ func TestOrderFromSchema_ViewBodyFallbackInQuoteRequiringSchema(t *testing.T) {
 	views := orderedmap.New[string, *model.View]()
 	views.Set(model.Ident(v.Schema, v.Name), v)
 
-	order, err := toposort.OrderFromSchema(orderedmap.New[string, *model.Enum](),
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
 		orderedmap.New[string, *model.Domain](), tables, views)
 	require.NoError(t, err)
 	idx := make(map[string]int)
@@ -581,7 +592,7 @@ func TestOrderFromSchema_PartitionChild(t *testing.T) {
 	child.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tables.Set("public.events_2024", child)
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -626,7 +637,7 @@ func TestOrderFromSchema_FKWithQuotedRefTable(t *testing.T) {
 	})
 	tables.Set(model.Ident("public", "Comments"), comments)
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -668,7 +679,7 @@ func TestOrderFromSchema_FKWithReservedWordRefTable(t *testing.T) {
 	})
 	tables.Set(model.Ident("public", "Items"), items)
 
-	sorted, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	sorted, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -710,7 +721,7 @@ func TestOrderFromSchema_FKWithQuotedRefSchema(t *testing.T) {
 	})
 	tables.Set(model.Ident("AppPublic", "posts"), posts)
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -749,7 +760,7 @@ func TestOrderFromSchema_FKWithDefaultSchema(t *testing.T) {
 	})
 	tables.Set("public.posts", posts)
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -771,7 +782,7 @@ func TestOrderFromSchema_NonPublicSchema(t *testing.T) {
 	tables := orderedmap.New[string, *model.Table]()
 	views := orderedmap.New[string, *model.View]()
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -802,7 +813,7 @@ func TestOrderFromSchema_ViewWithSchemalessTableRef(t *testing.T) {
 		Definition: "SELECT users.id FROM users",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -832,7 +843,7 @@ func TestOrderFromSchema_ViewWithCTE(t *testing.T) {
 		Definition: "WITH active AS (SELECT id FROM users WHERE id > 0) SELECT id FROM active",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -864,7 +875,7 @@ func TestOrderFromSchema_ViewWithHavingSubquery(t *testing.T) {
 		Definition: "SELECT user_id, count(*) FROM orders GROUP BY user_id HAVING count(*) > (SELECT min(val) FROM thresholds)",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -897,7 +908,7 @@ func TestOrderFromSchema_ViewWithScalarSubquery(t *testing.T) {
 		Definition: "SELECT id, (SELECT val FROM settings LIMIT 1) AS setting FROM users",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -930,7 +941,7 @@ func TestOrderFromSchema_ViewWithExistsSubquery(t *testing.T) {
 		Definition: "SELECT id FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -963,7 +974,7 @@ func TestOrderFromSchema_ViewWithJoinOnSubquery(t *testing.T) {
 		Definition: "SELECT u.id FROM users u JOIN posts p ON u.id = p.user_id AND p.id > (SELECT val FROM config LIMIT 1)",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -997,7 +1008,7 @@ func TestOrderFromSchema_ViewWithCoalesce(t *testing.T) {
 		Definition: "SELECT id, COALESCE(name, (SELECT val FROM defaults LIMIT 1)) FROM users",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -1030,7 +1041,7 @@ func TestOrderFromSchema_ViewWithCaseSubquery(t *testing.T) {
 		Definition: "SELECT id, CASE WHEN active THEN (SELECT val FROM config LIMIT 1) ELSE 'none' END FROM users",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -1063,7 +1074,7 @@ func TestOrderFromSchema_ViewWithFuncCallSubquery(t *testing.T) {
 		Definition: "SELECT id, array_agg((SELECT name FROM roles WHERE roles.user_id = users.id)) FROM users",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -1096,7 +1107,7 @@ func TestOrderFromSchema_ViewWithUnparseableDefinition(t *testing.T) {
 		Definition: "NOT VALID SQL BUT MENTIONS public.users",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -1128,7 +1139,7 @@ func TestOrderFromSchema_ViewWithUnparseableDefinition_SchemalessRef(t *testing.
 		Definition: "NOT VALID SQL BUT MENTIONS users TABLE",
 	})
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views)
+	order, err := orderFromSchema(enums, domains, tables, views)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)

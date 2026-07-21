@@ -306,7 +306,7 @@ func orderStatements(
 	sequenceDiff *diff.SequenceDiffResult,
 ) []string {
 	// Build topological order from desired schema for creates
-	createOrder, err := toposort.OrderFromSchemaWithSequences(
+	createOrder, err := toposort.OrderFromSchema(
 		desiredEnums, desiredDomains, desiredTables, desiredViews, desiredSequences,
 	)
 	if err != nil {
@@ -321,7 +321,7 @@ func orderStatements(
 	// Build topological order from current schema for drops.
 	// Dropped objects are not in the desired schema, so we need the current
 	// schema's dependency graph to determine correct drop order.
-	dropOrder, err := toposort.OrderFromSchemaWithSequences(
+	dropOrder, err := toposort.OrderFromSchema(
 		currentEnums, currentDomains, currentTables, currentViews, currentSequences,
 	)
 	if err != nil {
