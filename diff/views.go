@@ -539,6 +539,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		if !dok || !cok {
 			continue
 		}
+		// TODO: dead code. detectViewRenames already rejects a rename that
+		// switches between VIEW and MATERIALIZED VIEW, so this condition is
+		// never true here. Consider removing.
 		if currentView.Materialized != desiredView.Materialized {
 			needsRecreateRenamed[newKey] = true
 			continue
@@ -684,6 +687,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 
 		// If the type changed (VIEW <-> MATERIALIZED VIEW) but drop was denied,
 		// the object type hasn't changed yet; skip comment diff.
+		// TODO: dead code. A denied type change always sets recreateDenied[k],
+		// so the check above already continues before reaching this. Consider
+		// removing.
 		if ok && currentView.Materialized != desiredView.Materialized && !dc.IsDropAllowed("view") {
 			continue
 		}
