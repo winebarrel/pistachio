@@ -1183,3 +1183,72 @@ func TestOrderFromSchema_ViewWithUnparseableDefinition_SchemalessRef(t *testing.
 	// Fallback should match "users" part of "public.users" using defaultSchema
 	assert.Less(t, idx["public.users"], idx["public.bad_view"])
 }
+
+func TestOrderFromSchema_ViewWithSetOperation(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	for _, name := range []string{"users", "admins", "guests"} {
+		tbl := &model.Table{Schema: "public", Name: name}
+		tbl.Columns = orderedmap.New[string, *model.Column]()
+		tbl.Indexes = orderedmap.New[string, *model.Index]()
+		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
+		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+		tables.Set("public."+name, tbl)
+	}
+
+	views := orderedmap.New[string, *model.View]()
+	// A set operation puts each SELECT in Larg/Rarg, and the top-level
+	// FromClause is empty. Both arms of the UNION must be walked, and Larg
+	// is itself a UNION so the walk must recurse.
+	views.Set("public.everyone", &model.View{
+		Schema:     "public",
+		Name:       "everyone",
+		Definition: "SELECT id FROM users UNION SELECT id FROM admins UNION SELECT id FROM guests",
+	})
+
+	order, err := orderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.users"], idx["public.everyone"])
+	assert.Less(t, idx["public.admins"], idx["public.everyone"])
+	assert.Less(t, idx["public.guests"], idx["public.everyone"])
+}
+
+func TestOrderFromSchema_ViewWithFromSubquery(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+
+	tables := orderedmap.New[string, *model.Table]()
+	orders := &model.Table{Schema: "public", Name: "orders"}
+	orders.Columns = orderedmap.New[string, *model.Column]()
+	orders.Indexes = orderedmap.New[string, *model.Index]()
+	orders.Constraints = orderedmap.New[string, *model.Constraint]()
+	orders.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.orders", orders)
+
+	views := orderedmap.New[string, *model.View]()
+	// A subquery in FROM is a RangeSubselect; the dependency on "orders"
+	// only shows up if the subquery body is walked.
+	views.Set("public.order_totals", &model.View{
+		Schema:     "public",
+		Name:       "order_totals",
+		Definition: "SELECT sub.total FROM (SELECT sum(amount) AS total FROM orders) sub",
+	})
+
+	order, err := orderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.orders"], idx["public.order_totals"], "orders referenced in FROM subquery")
+}
