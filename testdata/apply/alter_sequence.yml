@@ -1,0 +1,20 @@
+init: |
+  CREATE SEQUENCE public.order_seq INCREMENT BY 1 MAXVALUE 1000;
+desired: |
+  CREATE SEQUENCE public.order_seq
+      INCREMENT BY 2
+      MAXVALUE 5000
+      CYCLE;
+applied_sql: |
+  ALTER SEQUENCE public.order_seq INCREMENT BY 2 MAXVALUE 5000 CYCLE;
+applied: |
+  -- public.order_seq
+  CREATE SEQUENCE public.order_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 2
+      MINVALUE 1
+      MAXVALUE 5000
+      CACHE 1
+      CYCLE;
+verify_no_drift: true

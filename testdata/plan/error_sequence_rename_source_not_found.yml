@@ -1,0 +1,6 @@
+init: |
+  CREATE SEQUENCE public.order_seq;
+desired: |
+  -- pista:renamed-from public.nonexistent
+  CREATE SEQUENCE public.new_seq;
+error: "rename source"

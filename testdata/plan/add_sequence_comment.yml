@@ -1,0 +1,7 @@
+init: |
+  CREATE SEQUENCE public.order_seq;
+desired: |
+  CREATE SEQUENCE public.order_seq;
+  COMMENT ON SEQUENCE public.order_seq IS 'Order id generator';
+plan: |
+  COMMENT ON SEQUENCE public.order_seq IS 'Order id generator';

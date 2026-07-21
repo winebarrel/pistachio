@@ -1,0 +1,8 @@
+init: |
+  CREATE SEQUENCE public.order_seq;
+desired: ""
+drop_policy:
+  allow_drop: [table]
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP SEQUENCE public.order_seq;

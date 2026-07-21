@@ -1,0 +1,5 @@
+init: |
+  CREATE SEQUENCE public.order_seq;
+desired: ""
+plan: |
+  DROP SEQUENCE public.order_seq;

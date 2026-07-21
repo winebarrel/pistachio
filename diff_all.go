@@ -69,6 +69,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to fetch domains: %w", err)
 	}
 
+	currentSequences, err := cat.Sequences(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch sequences: %w", err)
+	}
+
 	desired, err := parser.ParseSQLFilesWithSchema(options.Files, client.Schemas[0])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL file: %w", err)
@@ -80,11 +85,16 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	filteredViews := options.filterViews(currentViews)
 	filteredEnums := options.filterEnums(currentEnums)
 	filteredDomains := options.filterDomains(currentDomains)
+	filteredSequences := options.filterSequences(currentSequences)
 
 	desiredEnums := options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums))
 	desiredDomains := options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains))
 	desiredTables := options.filterTables(client.reverseRemapTableSchemas(desired.Tables))
 	desiredViews := options.filterViews(client.reverseRemapViewSchemas(desired.Views))
+	// Only standalone sequences are managed; sequences a desired CREATE
+	// SEQUENCE ties to a column via OWNED BY are excluded, matching the
+	// catalog side (which already drops serial/identity-owned sequences).
+	desiredSequences := options.filterSequences(standaloneSequences(client.reverseRemapSequenceSchemas(desired.Sequences)))
 
 	// Objects marked -- pista:ignore are unmanaged: drop them from both the
 	// desired and current sides so no create, alter, or drop is generated.
@@ -94,6 +104,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	ignored = append(ignored, removeIgnored(desiredViews, filteredViews, func(v *model.View) bool { return v.Ignore })...)
 	ignored = append(ignored, removeIgnored(desiredEnums, filteredEnums, func(e *model.Enum) bool { return e.Ignore })...)
 	ignored = append(ignored, removeIgnored(desiredDomains, filteredDomains, func(d *model.Domain) bool { return d.Ignore })...)
+	ignored = append(ignored, removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore })...)
 	sort.Strings(ignored)
 	ignoredComments := make([]string, len(ignored))
 	for i, fqn := range ignored {
@@ -101,11 +112,12 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 
 	count := ObjectCount{
-		Schemas: client.Schemas,
-		Tables:  filteredTables.Len(),
-		Views:   filteredViews.Len(),
-		Enums:   filteredEnums.Len(),
-		Domains: filteredDomains.Len(),
+		Schemas:   client.Schemas,
+		Tables:    filteredTables.Len(),
+		Views:     filteredViews.Len(),
+		Enums:     filteredEnums.Len(),
+		Domains:   filteredDomains.Len(),
+		Sequences: filteredSequences.Len(),
 	}
 
 	switch {
@@ -118,6 +130,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	enumDiff, err := diff.DiffEnums(filteredEnums, desiredEnums, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff enums: %w", err)
+	}
+
+	sequenceDiff, err := diff.DiffSequences(filteredSequences, desiredSequences, &options.DropPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to diff sequences: %w", err)
 	}
 
 	domainDiff, err := diff.DiffDomains(filteredDomains, desiredDomains, &options.DropPolicy)
@@ -150,9 +167,9 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 
 	stmts := orderStatements(
-		filteredEnums, filteredDomains, filteredTables, filteredViews,
-		desiredEnums, desiredDomains, desiredTables, desiredViews,
-		enumDiff, domainDiff, tableDiff, viewDiff,
+		filteredEnums, filteredDomains, filteredTables, filteredViews, filteredSequences,
+		desiredEnums, desiredDomains, desiredTables, desiredViews, desiredSequences,
+		enumDiff, domainDiff, tableDiff, viewDiff, sequenceDiff,
 	)
 
 	preSQL, err := resolvePreSQL(options.PreSQL, options.PreSQLFile)
@@ -170,6 +187,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	disallowed = append(disallowed, tableDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, domainDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, enumDiff.DisallowedDropStmts...)
+	disallowed = append(disallowed, sequenceDiff.DisallowedDropStmts...)
 
 	return &diffAllResult{
 		Stmts:                stmts,
@@ -181,6 +199,20 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		ExecuteStmts:         desired.ExecuteStmts,
 		HasConcurrentlyIndex: tableDiff.HasConcurrently || viewDiff.HasConcurrently,
 	}, nil
+}
+
+// standaloneSequences returns only the sequences not owned by a table column.
+// A desired CREATE SEQUENCE with OWNED BY ties the sequence to a column, so it
+// is treated as unmanaged, keeping the desired side symmetric with the catalog
+// side (which already excludes serial/identity-owned sequences).
+func standaloneSequences(sequences *orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence] {
+	out := orderedmap.New[string, *model.Sequence]()
+	for k, s := range sequences.All() {
+		if !s.Owned() {
+			out.Set(k, s)
+		}
+	}
+	return out
 }
 
 // removeIgnored deletes every entry the ignored predicate matches from the
@@ -261,21 +293,24 @@ func orderStatements(
 	currentDomains *orderedmap.Map[string, *model.Domain],
 	currentTables *orderedmap.Map[string, *model.Table],
 	currentViews *orderedmap.Map[string, *model.View],
+	currentSequences *orderedmap.Map[string, *model.Sequence],
 	desiredEnums *orderedmap.Map[string, *model.Enum],
 	desiredDomains *orderedmap.Map[string, *model.Domain],
 	desiredTables *orderedmap.Map[string, *model.Table],
 	desiredViews *orderedmap.Map[string, *model.View],
+	desiredSequences *orderedmap.Map[string, *model.Sequence],
 	enumDiff *diff.EnumDiffResult,
 	domainDiff *diff.DomainDiffResult,
 	tableDiff *diff.TableDiffResult,
 	viewDiff *diff.ViewDiffResult,
+	sequenceDiff *diff.SequenceDiffResult,
 ) []string {
 	// Build topological order from desired schema for creates
-	createOrder, err := toposort.OrderFromSchema(
-		desiredEnums, desiredDomains, desiredTables, desiredViews,
+	createOrder, err := toposort.OrderFromSchemaWithSequences(
+		desiredEnums, desiredDomains, desiredTables, desiredViews, desiredSequences,
 	)
 	if err != nil {
-		return fallbackOrder(enumDiff, domainDiff, tableDiff, viewDiff)
+		return fallbackOrder(enumDiff, domainDiff, tableDiff, viewDiff, sequenceDiff)
 	}
 
 	createPosMap := make(map[string]int, len(createOrder))
@@ -286,11 +321,11 @@ func orderStatements(
 	// Build topological order from current schema for drops.
 	// Dropped objects are not in the desired schema, so we need the current
 	// schema's dependency graph to determine correct drop order.
-	dropOrder, err := toposort.OrderFromSchema(
-		currentEnums, currentDomains, currentTables, currentViews,
+	dropOrder, err := toposort.OrderFromSchemaWithSequences(
+		currentEnums, currentDomains, currentTables, currentViews, currentSequences,
 	)
 	if err != nil {
-		return fallbackOrder(enumDiff, domainDiff, tableDiff, viewDiff)
+		return fallbackOrder(enumDiff, domainDiff, tableDiff, viewDiff, sequenceDiff)
 	}
 
 	dropPosMap := make(map[string]int, len(dropOrder))
@@ -304,6 +339,7 @@ func orderStatements(
 	var createStmts []taggedStmt
 	createStmts = append(createStmts, tagStatements(enumDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(domainDiff.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(sequenceDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(tableDiff.Stmts, createPosMap)...)
 	sort.SliceStable(createStmts, func(i, j int) bool {
 		return compareTaggedPos(createStmts[i].pos, createStmts[j].pos, false)
@@ -324,6 +360,7 @@ func orderStatements(
 	// drops (tables must stop referencing them first).
 	var postDropStmts []taggedStmt
 	postDropStmts = append(postDropStmts, tagStatements(tableDiff.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(sequenceDiff.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(domainDiff.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(enumDiff.DropStmts, dropPosMap)...)
 	sort.SliceStable(postDropStmts, func(i, j int) bool {
@@ -368,14 +405,17 @@ func fallbackOrder(
 	domainDiff *diff.DomainDiffResult,
 	tableDiff *diff.TableDiffResult,
 	viewDiff *diff.ViewDiffResult,
+	sequenceDiff *diff.SequenceDiffResult,
 ) []string {
 	var stmts []string
 	stmts = append(stmts, enumDiff.Stmts...)
 	stmts = append(stmts, domainDiff.Stmts...)
+	stmts = append(stmts, sequenceDiff.Stmts...)
 	stmts = append(stmts, viewDiff.DropStmts...)
 	stmts = append(stmts, tableDiff.FKDropStmts...)
 	stmts = append(stmts, tableDiff.Stmts...)
 	stmts = append(stmts, tableDiff.DropStmts...)
+	stmts = append(stmts, sequenceDiff.DropStmts...)
 	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
 	stmts = append(stmts, tableDiff.FKAddStmts...)
@@ -460,6 +500,10 @@ func extractObjectName(sql string) string {
 		{"ALTER TABLE "},
 		{"ALTER TYPE "},
 		{"ALTER DOMAIN "},
+		{"ALTER SEQUENCE "},
+		{"CREATE SEQUENCE "},
+		{"DROP SEQUENCE "},
+		{"COMMENT ON SEQUENCE "},
 		{"ALTER MATERIALIZED VIEW "},
 		{"ALTER VIEW "},
 		{"DROP TABLE "},

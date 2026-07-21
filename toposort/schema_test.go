@@ -47,6 +47,36 @@ func TestOrderFromSchema_Basic(t *testing.T) {
 	assert.Less(t, idx["public.users"], idx["public.active_users"], "table before view")
 }
 
+func TestOrderFromSchemaWithSequences_NextvalDependency(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	// Sequence name sorts AFTER the table name, so only the nextval
+	// dependency edge (not alphabetical order) can place it first.
+	sequences := orderedmap.New[string, *model.Sequence]()
+	sequences.Set("public.zzz_seq", &model.Sequence{Schema: "public", Name: "zzz_seq"})
+
+	def := "nextval('zzz_seq'::regclass)"
+	tables := orderedmap.New[string, *model.Table]()
+	aaa := &model.Table{Schema: "public", Name: "aaa"}
+	aaa.Columns = orderedmap.New[string, *model.Column]()
+	aaa.Columns.Set("id", &model.Column{Name: "id", TypeName: "bigint", Default: &def})
+	aaa.Indexes = orderedmap.New[string, *model.Index]()
+	aaa.Constraints = orderedmap.New[string, *model.Constraint]()
+	aaa.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.aaa", aaa)
+
+	order, err := toposort.OrderFromSchemaWithSequences(enums, domains, tables, views, sequences)
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx["public.zzz_seq"], idx["public.aaa"], "sequence before dependent table")
+}
+
 func TestOrderFromSchema_ForeignKey(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()

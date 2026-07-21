@@ -1,0 +1,18 @@
+init: |
+  CREATE SEQUENCE public.order_seq;
+desired: |
+  CREATE SEQUENCE public.order_seq;
+  COMMENT ON SEQUENCE public.order_seq IS 'Order id generator';
+applied_sql: |
+  COMMENT ON SEQUENCE public.order_seq IS 'Order id generator';
+applied: |
+  -- public.order_seq
+  CREATE SEQUENCE public.order_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+  COMMENT ON SEQUENCE public.order_seq IS 'Order id generator';
+verify_no_drift: true

@@ -1,0 +1,14 @@
+# A desired CREATE SEQUENCE ... OWNED BY ties the sequence to a column, so it
+# is treated as unmanaged (like serial/identity): only the table is created.
+init: ""
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL
+  );
+  CREATE SEQUENCE public.s OWNED BY public.t.id;
+plan: |
+  CREATE TABLE public.t (
+      id integer NOT NULL
+  );
+count:
+  sequences: 0

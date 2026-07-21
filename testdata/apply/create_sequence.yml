@@ -1,0 +1,23 @@
+init: ""
+desired: |
+  CREATE SEQUENCE public.order_seq
+      INCREMENT BY 5
+      START WITH 100;
+applied_sql: |
+  CREATE SEQUENCE public.order_seq
+      AS bigint
+      START WITH 100
+      INCREMENT BY 5
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+applied: |
+  -- public.order_seq
+  CREATE SEQUENCE public.order_seq
+      AS bigint
+      START WITH 100
+      INCREMENT BY 5
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+verify_no_drift: true

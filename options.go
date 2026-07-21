@@ -15,10 +15,10 @@ type Options struct {
 }
 
 type FilterOptions struct {
-	Include []string `short:"I" env:"PISTA_INCLUDE" help:"Include only tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
-	Exclude []string `short:"E" env:"PISTA_EXCLUDE" help:"Exclude tables/views/enums/domains matching the pattern (wildcard: *, ?)."`
-	Enable  []string `enum:"table,view,enum,domain" env:"PISTA_ENABLE" help:"Enable only specified object types (can be repeated)."`
-	Disable []string `enum:"table,view,enum,domain" env:"PISTA_DISABLE" help:"Disable specified object types (can be repeated)."`
+	Include []string `short:"I" env:"PISTA_INCLUDE" help:"Include only tables/views/enums/domains/sequences matching the pattern (wildcard: *, ?)."`
+	Exclude []string `short:"E" env:"PISTA_EXCLUDE" help:"Exclude tables/views/enums/domains/sequences matching the pattern (wildcard: *, ?)."`
+	Enable  []string `enum:"table,view,enum,domain,sequence" env:"PISTA_ENABLE" help:"Enable only specified object types (can be repeated)."`
+	Disable []string `enum:"table,view,enum,domain,sequence" env:"PISTA_DISABLE" help:"Disable specified object types (can be repeated)."`
 }
 
 // IsTypeEnabled returns true if the given object type should be included.

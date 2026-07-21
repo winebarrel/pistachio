@@ -1,0 +1,7 @@
+init: |
+  CREATE SEQUENCE public.old_seq;
+desired: |
+  -- pista:renamed-from public.old_seq
+  CREATE SEQUENCE public.new_seq;
+plan: |
+  ALTER SEQUENCE public.old_seq RENAME TO new_seq;

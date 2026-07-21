@@ -7,7 +7,7 @@ import "slices"
 // If AllowDrop contains "all", all drops are allowed.
 // Otherwise, only the listed object types are allowed to be dropped.
 type DropPolicy struct {
-	AllowDrop []string `enum:"all,table,view,enum,domain,column,constraint,foreign_key,index,policy" env:"PISTA_ALLOW_DROP" help:"Allow dropping these object types (repeatable; 'all' allows everything)."`
+	AllowDrop []string `enum:"all,table,view,enum,domain,sequence,column,constraint,foreign_key,index,policy" env:"PISTA_ALLOW_DROP" help:"Allow dropping these object types (repeatable; 'all' allows everything)."`
 }
 
 func (p *DropPolicy) IsDropAllowed(objectType string) bool {

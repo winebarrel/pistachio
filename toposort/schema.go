@@ -18,11 +18,29 @@ func OrderFromSchema(
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 ) ([]string, error) {
+	return OrderFromSchemaWithSequences(enums, domains, tables, views, orderedmap.New[string, *model.Sequence]())
+}
+
+// OrderFromSchemaWithSequences is OrderFromSchema extended with standalone
+// sequences. Sequences are leaf nodes; a table depends on a sequence when a
+// column default references it via nextval, so the sequence is created first.
+func OrderFromSchemaWithSequences(
+	enums *orderedmap.Map[string, *model.Enum],
+	domains *orderedmap.Map[string, *model.Domain],
+	tables *orderedmap.Map[string, *model.Table],
+	views *orderedmap.Map[string, *model.View],
+	sequences *orderedmap.Map[string, *model.Sequence],
+) ([]string, error) {
 	g := newGraph()
-	defined := collectDefined(enums, domains, tables, views)
+	defined := collectDefined(enums, domains, tables, views, sequences)
 
 	// Enums: no dependencies (leaf nodes)
 	for k := range enums.Keys() {
+		g.AddNode(k)
+	}
+
+	// Sequences: no dependencies (leaf nodes)
+	for k := range sequences.Keys() {
 		g.AddNode(k)
 	}
 
@@ -34,7 +52,8 @@ func OrderFromSchema(
 		}
 	}
 
-	// Tables: may depend on enums/domains (column types) and other tables (FKs)
+	// Tables: may depend on enums/domains (column types), sequences (column
+	// defaults via nextval), and other tables (FKs)
 	for k, t := range tables.All() {
 		g.AddNode(k)
 
@@ -43,6 +62,11 @@ func OrderFromSchema(
 			for _, col := range t.Columns.CollectValues() {
 				if dep := resolveTypeDep(col.TypeName, t.Schema, defined); dep != "" {
 					g.AddEdge(k, dep)
+				}
+				if col.Default != nil {
+					for _, dep := range extractSeqDeps(*col.Default, t.Schema, defined) {
+						g.AddEdge(k, dep)
+					}
 				}
 			}
 		}
@@ -99,6 +123,7 @@ func collectDefined(
 	domains *orderedmap.Map[string, *model.Domain],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
+	sequences *orderedmap.Map[string, *model.Sequence],
 ) map[string]bool {
 	defined := make(map[string]bool)
 	for k := range enums.Keys() {
@@ -113,7 +138,43 @@ func collectDefined(
 	for k := range views.Keys() {
 		defined[k] = true
 	}
+	for k := range sequences.Keys() {
+		defined[k] = true
+	}
 	return defined
+}
+
+// extractSeqDeps finds the sequences referenced by nextval(...) in a column
+// default expression and returns their resolved (schema-qualified) names.
+// Only sequences present in defined are returned; references to unmanaged
+// (e.g. serial/identity-owned) sequences are ignored.
+func extractSeqDeps(defaultExpr, defaultSchema string, defined map[string]bool) []string {
+	var deps []string
+	rest := defaultExpr
+	for {
+		_, afterCall, found := strings.Cut(rest, "nextval(")
+		if !found {
+			break
+		}
+		_, afterOpen, found := strings.Cut(afterCall, "'")
+		if !found {
+			break
+		}
+		lit, remainder, found := strings.Cut(afterOpen, "'")
+		if !found {
+			break
+		}
+		rest = remainder
+
+		if defined[lit] {
+			deps = append(deps, lit)
+		} else if !strings.Contains(lit, ".") {
+			if q := resolveUnqualified(model.Ident(lit), defaultSchema, defined); q != "" {
+				deps = append(deps, q)
+			}
+		}
+	}
+	return deps
 }
 
 // resolveTypeDep checks if a type name refers to a defined object.

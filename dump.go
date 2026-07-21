@@ -12,7 +12,7 @@ import (
 
 type DumpOptions struct {
 	FilterOptions
-	Split      string `help:"Output each table/view/enum/domain as a separate file in the specified directory."`
+	Split      string `help:"Output each table/view/enum/domain/sequence as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
 }
@@ -22,6 +22,7 @@ type DumpResult struct {
 	Views      *orderedmap.Map[string, *model.View]
 	Enums      *orderedmap.Map[string, *model.Enum]
 	Domains    *orderedmap.Map[string, *model.Domain]
+	Sequences  *orderedmap.Map[string, *model.Sequence]
 	OmitSchema bool
 	Count      ObjectCount
 }
@@ -138,16 +139,35 @@ func (r *DumpResult) domains() *orderedmap.Map[string, *model.Domain] {
 	return domains
 }
 
-func (r *DumpResult) String() string {
-	return formatSchemaSQL(r.enums(), r.domains(), r.tables(), r.views())
+func (r *DumpResult) sequences() *orderedmap.Map[string, *model.Sequence] {
+	if r.Sequences == nil {
+		return orderedmap.New[string, *model.Sequence]()
+	}
+	if !r.OmitSchema {
+		return r.Sequences
+	}
+	sequences := orderedmap.New[string, *model.Sequence]()
+	for _, s := range r.Sequences.CollectValues() {
+		copied := *s
+		copied.Schema = ""
+		sequences.Set(model.Ident(s.Name), &copied)
+	}
+	return sequences
 }
 
-// formatSchemaSQL formats enums, domains, tables, and views into canonical SQL
-// output for dump.
-// Order: enums -> domains -> tables -> views (enums first since domains may depend on them).
+func (r *DumpResult) String() string {
+	return formatSchemaSQL(r.enums(), r.domains(), r.sequences(), r.tables(), r.views())
+}
+
+// formatSchemaSQL formats enums, domains, sequences, tables, and views into
+// canonical SQL output for dump.
+// Order: enums -> domains -> sequences -> tables -> views (enums/domains first
+// since domains may depend on enums; sequences before tables since column
+// defaults may reference them).
 func formatSchemaSQL(
 	enums *orderedmap.Map[string, *model.Enum],
 	domains *orderedmap.Map[string, *model.Domain],
+	sequences *orderedmap.Map[string, *model.Sequence],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 ) string {
@@ -157,6 +177,9 @@ func formatSchemaSQL(
 	}
 	if domains != nil && domains.Len() > 0 {
 		parts = append(parts, model.DomainsToSQL(domains))
+	}
+	if sequences != nil && sequences.Len() > 0 {
+		parts = append(parts, model.SequencesToSQL(sequences))
 	}
 	if tables != nil && tables.Len() > 0 {
 		parts = append(parts, model.TablesToSQL(tables))
@@ -178,6 +201,11 @@ func (r *DumpResult) Files() map[string]string {
 	for _, d := range r.domains().CollectValues() {
 		name := uniqueFileName(seen, toFileName(d.Schema, d.Name))
 		files[name] = model.DomainToSQL(d) + "\n"
+		seen[strings.ToLower(name)] = true
+	}
+	for _, s := range r.sequences().CollectValues() {
+		name := uniqueFileName(seen, toFileName(s.Schema, s.Name))
+		files[name] = model.SequenceToSQL(s) + "\n"
 		seen[strings.ToLower(name)] = true
 	}
 	for _, t := range r.tables().CollectValues() {
@@ -259,23 +287,31 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		return nil, fmt.Errorf("failed to fetch domains: %w", err)
 	}
 
+	sequences, err := catalog.Sequences(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch sequences: %w", err)
+	}
+
 	filteredTables := options.filterTables(client.remapTableSchemas(tables))
 	filteredViews := options.filterViews(client.remapViewSchemas(views))
 	filteredEnums := options.filterEnums(client.remapEnumSchemas(enums))
 	filteredDomains := options.filterDomains(client.remapDomainSchemas(domains))
+	filteredSequences := options.filterSequences(client.remapSequenceSchemas(sequences))
 
 	return &DumpResult{
 		Tables:     filteredTables,
 		Views:      filteredViews,
 		Enums:      filteredEnums,
 		Domains:    filteredDomains,
+		Sequences:  filteredSequences,
 		OmitSchema: options.OmitSchema,
 		Count: ObjectCount{
-			Schemas: client.Schemas,
-			Tables:  filteredTables.Len(),
-			Views:   filteredViews.Len(),
-			Enums:   filteredEnums.Len(),
-			Domains: filteredDomains.Len(),
+			Schemas:   client.Schemas,
+			Tables:    filteredTables.Len(),
+			Views:     filteredViews.Len(),
+			Enums:     filteredEnums.Len(),
+			Domains:   filteredDomains.Len(),
+			Sequences: filteredSequences.Len(),
 		},
 	}, nil
 }

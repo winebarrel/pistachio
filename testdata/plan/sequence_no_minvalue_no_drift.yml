@@ -1,0 +1,7 @@
+# NO MINVALUE / NO MAXVALUE mean "use the default", so they must parse to the
+# same values the catalog reports for a bare sequence: no drift.
+init: |
+  CREATE SEQUENCE public.order_seq;
+desired: |
+  CREATE SEQUENCE public.order_seq NO MINVALUE NO MAXVALUE;
+plan: ""

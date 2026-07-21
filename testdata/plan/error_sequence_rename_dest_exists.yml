@@ -1,0 +1,8 @@
+init: |
+  CREATE SEQUENCE public.old_seq;
+  CREATE SEQUENCE public.new_seq;
+desired: |
+  CREATE SEQUENCE public.old_seq;
+  -- pista:renamed-from public.old_seq
+  CREATE SEQUENCE public.new_seq;
+error: "destination already exists"

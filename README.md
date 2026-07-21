@@ -502,15 +502,16 @@ pista dump --split ./schema/
 
 - Domain types (`CREATE DOMAIN`, `ALTER DOMAIN SET/DROP DEFAULT`, `SET/DROP NOT NULL`, `ADD/DROP CONSTRAINT`)
 - Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
+- Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
 - Tables (including unlogged and partitioned tables)
 - Views
 - Materialized views
 - Columns (serial/bigserial/smallserial, identity, generated)
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
-- Comments (on tables, columns, views, types, domains)
+- Comments (on tables, columns, views, types, domains, sequences)
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
-- Renaming (tables, views, enums, enum values, domains, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
+- Renaming (tables, views, enums, enum values, domains, sequences, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 

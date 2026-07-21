@@ -1,0 +1,20 @@
+# The sequence must be created before the table whose column default
+# references it via nextval, even though "zzz_seq" sorts after "aaa"
+# alphabetically. The dependency edge, not the name, decides the order.
+init: ""
+desired: |
+  CREATE SEQUENCE public.zzz_seq;
+  CREATE TABLE public.aaa (
+      id bigint DEFAULT nextval('zzz_seq'::regclass) NOT NULL
+  );
+plan: |
+  CREATE SEQUENCE public.zzz_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+  CREATE TABLE public.aaa (
+      id bigint DEFAULT nextval('zzz_seq'::regclass) NOT NULL
+  );

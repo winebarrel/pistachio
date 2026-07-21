@@ -24,11 +24,12 @@ type PlanOptions struct {
 
 // ObjectCount holds the number of objects inspected by type.
 type ObjectCount struct {
-	Schemas []string
-	Tables  int
-	Views   int
-	Enums   int
-	Domains int
+	Schemas   []string
+	Tables    int
+	Views     int
+	Enums     int
+	Domains   int
+	Sequences int
 }
 
 func (c ObjectCount) SchemaLabel() string {
@@ -39,11 +40,12 @@ func (c ObjectCount) SchemaLabel() string {
 }
 
 func (c ObjectCount) Summary() string {
-	return fmt.Sprintf("%s, %s, %s, %s",
+	return fmt.Sprintf("%s, %s, %s, %s, %s",
 		pluralize(c.Tables, "table"),
 		pluralize(c.Views, "view"),
 		pluralize(c.Enums, "enum"),
 		pluralize(c.Domains, "domain"),
+		pluralize(c.Sequences, "sequence"),
 	)
 }
 
