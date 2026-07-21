@@ -55,11 +55,16 @@ jobs:
       - name: Install VHS
         # vhs-action's ffmpeg installer is broken (it fetches a BtbN asset that
         # no longer exists), so install VHS via Homebrew. The vhs formula pulls
-        # in ttyd and ffmpeg as dependencies.
+        # in ttyd and ffmpeg as dependencies. Homebrew ships with the runner but
+        # is not on PATH by default, so load its shellenv and expose its bin to
+        # later steps.
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
-        run: brew install vhs
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          echo "$HOMEBREW_PREFIX/bin" >> "$GITHUB_PATH"
+          brew install vhs
       - name: Render demo.gif
         run: vhs demo.tape
       - name: Create pull request
