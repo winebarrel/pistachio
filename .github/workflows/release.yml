@@ -112,3 +112,9 @@ jobs:
 
   demo:
     uses: ./.github/workflows/demo.yml
+
+  demo-gif:
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/demo-gif.yml
