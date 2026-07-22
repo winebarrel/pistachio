@@ -3,7 +3,7 @@ module github.com/winebarrel/pistachio
 go 1.26
 
 require (
-	github.com/alecthomas/kong v1.15.0
+	github.com/alecthomas/kong v1.16.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pganalyze/pg_query_go/v6 v6.2.2
 	github.com/stretchr/testify v1.11.1
