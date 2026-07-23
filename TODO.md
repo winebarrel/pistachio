@@ -221,45 +221,30 @@ Origin: [#296](https://github.com/winebarrel/pistachio/pull/296).
 ## Amazon Aurora DSQL support: findings from live testing
 
 Verified against a live DSQL cluster (PostgreSQL 16 wire protocol,
-ap-northeast-1). The premise "DSQL works if we only add ASYNC to
-CREATE INDEX" does not hold. Within DSQL's own supported feature set,
-pistachio does not reach a stable no-drift state today. Findings below
-are observed behavior, not inference.
+ap-northeast-1). Adding ASYNC to CREATE INDEX is not enough. Within
+DSQL's supported feature set, pistachio does not yet reach a stable
+no-drift state.
 
-Scope note: features DSQL does not support (foreign keys, triggers,
-PL/pgSQL, etc.) are out of scope. A DSQL-targeted desired schema never
-contains them, so pistachio never needs to emit them. The issues below
-are all cases where the target state IS within DSQL's supported set but
-pistachio's transition DDL or drift comparison is wrong for DSQL.
+Features DSQL does not support (foreign keys, triggers, PL/pgSQL, etc.)
+are out of scope. A DSQL-targeted schema never contains them, so pistachio
+never emits them. The findings below are cases where the target state is
+within DSQL's supported set but pistachio's transition DDL or drift
+comparison is wrong for it.
 
 Support policy (if DSQL support is added):
-- Scope is DSQL's supported feature set only. pistachio's job is to work
-  correctly within that range, not to reproduce every PostgreSQL feature
-  on DSQL.
-- Unsupported diffs stay out of spec. When a diff needs an operation DSQL
+- Work correctly within DSQL's supported feature set. Do not reproduce
+  every PostgreSQL feature on DSQL.
+- Leave unsupported diffs out of spec. When a diff needs an operation DSQL
   has no path for (`DROP COLUMN`, `SET NOT NULL`, column `TYPE` change,
   adding a NOT NULL column, adding a PK/CHECK constraint to an existing
   table), pistachio emits standard PostgreSQL DDL and DSQL rejects it at
-  apply time. That is acceptable and requires no workaround; it is the
-  same as any unsupported feature. Do not build recreation/back-fill
-  machinery to force these through.
-- The real work is only where the target state IS supported by DSQL but
-  pistachio's generated DDL or drift comparison is wrong for it. Confirmed
-  set (details in the sections below):
-  1. Indexes: emit `CREATE INDEX ASYNC`, drop the `USING <method>` clause,
-     wait on the `job_id`; normalize `btree` vs `btree_index` in the diff.
-  2. Sequences: emit an explicit `CACHE`.
-  3. Primary-key drift: normalize DSQL's auto-`INCLUDE` on PK indexes so a
-     table that already matches does not re-plan (and so the inapplicable
-     `DROP/ADD CONSTRAINT` is never generated).
-- Optional niceties, not required (without them the diff just errors out
-  of spec, which is allowed): rewrite a column DEFAULT add into
-  `ADD COLUMN` + `SET DEFAULT`, and an existing-table UNIQUE add into
-  `CREATE UNIQUE INDEX ASYNC` + job-wait + `ADD CONSTRAINT ... UNIQUE
-  USING INDEX`.
-- Connection: a DSQL mode must not send `default_transaction_read_only`.
-- Gating: these behaviors should sit behind an explicit DSQL mode/dialect
-  (there is no dialect layer today), not change default PostgreSQL output.
+  apply. That is acceptable, the same as any unsupported feature. Do not
+  add recreation or back-fill machinery to force these through.
+- Put the behavior behind an explicit DSQL mode. There is no dialect layer
+  today, and the default PostgreSQL output must not change.
+
+The concrete work is listed under "Minimum a DSQL mode would require"
+below. The rest of this section is the evidence.
 
 Connection:
 - DSQL rejects the `default_transaction_read_only` startup parameter
@@ -313,7 +298,7 @@ Tables and constraints:
   as `INCLUDE` columns on the PK index, and stores the access method as
   `btree_index`. So a table created from `PRIMARY KEY (id)` dumps back as
   `PRIMARY KEY (id) INCLUDE (name, email)`. pistachio treats this as a
-  diff and re-plans forever with
+  diff and re-plans on every run with
   `ALTER TABLE ... DROP CONSTRAINT ...; ALTER TABLE ... ADD CONSTRAINT ...`.
 - That generated fix is itself inapplicable: DSQL rejects
   `ALTER TABLE ... DROP CONSTRAINT` on a primary key
@@ -329,7 +314,7 @@ against the `ALTER TABLE` grammar (the grammar is exhaustive; an action
 absent from it has no alternative form).
 
 Reachable via alternative DSQL syntax (pistachio would need to emit
-differently, not give up):
+differently):
 - Add a column with a DEFAULT. `ADD COLUMN col type DEFAULT expr` fails
   (`ALTER TABLE ADD COLUMN with constraint not supported`), but the plain
   `ADD COLUMN col type` followed by `ALTER COLUMN col SET DEFAULT expr`
@@ -396,14 +381,12 @@ Minimum a DSQL mode would require, per the above:
   `SET NOT NULL`, column `TYPE` change, adding a NOT NULL column, and
   adding a PK/CHECK constraint to an existing table.
 
-The catalog read layer itself needs no DSQL-specific work; the remaining
-gaps are all on the DDL-generation / drift-comparison side. The async
-job-wait requirement (for both plain index creation and the UNIQUE
-USING INDEX path) is the single biggest change to the apply loop, which
-is currently a flat synchronous send of each statement.
+The catalog read layer needs no DSQL-specific work; the gaps are all on
+the DDL-generation and drift-comparison side. The async job-wait (for both
+index creation and the UNIQUE USING INDEX path) is the largest change,
+since the apply loop currently sends each statement synchronously.
 
-None of this is abstracted in the codebase today (no dialect layer), so
-it is new work. This section records the verified gaps, not a commitment
-to implement DSQL support.
+The codebase has no dialect layer today, so this is new work. This section
+records the verified gaps, not a commitment to implement DSQL support.
 
 Origin: live DSQL investigation, 2026-07-23.
