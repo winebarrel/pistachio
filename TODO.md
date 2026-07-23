@@ -240,8 +240,10 @@ Support policy (if DSQL support is added):
   table), pistachio emits standard PostgreSQL DDL and DSQL rejects it at
   apply. That is acceptable, the same as any unsupported feature. Do not
   add recreation or back-fill machinery to force these through.
-- Put the behavior behind an explicit DSQL mode. There is no dialect layer
-  today, and the default PostgreSQL output must not change.
+- Gate DSQL support behind an opt-in option (flag or env var). Without it,
+  behavior stays exactly as today. There is no dialect layer now, so the
+  DSQL paths must be additive and must not change the default PostgreSQL
+  output.
 
 The concrete work is listed under "Minimum a DSQL mode would require"
 below. The rest of this section is the evidence.
