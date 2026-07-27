@@ -110,7 +110,7 @@ Flags:
   -C, --config=FILE           Load options from a YAML file. Keys must match
                               flag names (e.g. conn-string). Precedence:
                               command-line flag > environment variable > config
-                              file.
+                              file ($PISTA_CONFIG).
       --version
       --[no-]pager            Force paging via $PISTA_PAGER even when stdout is
                               not a TTY. PISTA_PAGER must be set.
@@ -336,6 +336,10 @@ exclude:
 ```bash
 pista --config pista.yml dump
 pista --config pista.yml plan schema.sql
+
+# Or set the path with an environment variable
+export PISTA_CONFIG=pista.yml
+pista dump
 ```
 
 One file works for every command. Keys that the running command does not use are ignored.

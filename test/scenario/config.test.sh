@@ -25,6 +25,16 @@ else
   echo "    $out" >&2
 fi
 
+# --- Step 1b: the config path can come from $PISTA_CONFIG ---
+step "01b PISTA_CONFIG selects the file"
+out=$(PISTA_CONFIG="$tmp_dir/pista.yml" "$PISTA" dump 2>&1) || out="DUMP FAILED: $out"
+if echo "$out" | grep -q 'CREATE TABLE public.users' && ! echo "$out" | grep -q 'tmp_cache'; then
+  pass
+else
+  fail "PISTA_CONFIG not applied"
+  echo "    $out" >&2
+fi
+
 # --- Step 2: an unknown key is rejected ---
 step "02 unknown config key is rejected"
 printf 'bogus: 1\n' > "$tmp_dir/bad.yml"

@@ -16,7 +16,7 @@ import (
 // database. --help is added by kong automatically.
 type testCLI struct {
 	pistachio.Options
-	Config  kong.ConfigFlag `name:"config" short:"C"`
+	Config  kong.ConfigFlag `name:"config" short:"C" env:"PISTA_CONFIG"`
 	Version kong.VersionFlag
 	Pager   *bool `name:"pager" negatable:""`
 }
@@ -113,6 +113,29 @@ func TestYAMLConfig_EnvUsedWithoutConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "postgres://env@db/app", cli.ConnString)
+}
+
+// The config file path can be provided via $PISTA_CONFIG.
+func TestYAMLConfig_PathFromEnv(t *testing.T) {
+	path := writeConfig(t, "conn-string: postgres://config@db/app\n")
+	t.Setenv("PISTA_CONFIG", path)
+
+	cli, err := parseWithConfig(t)
+	require.NoError(t, err)
+
+	assert.Equal(t, "postgres://config@db/app", cli.ConnString)
+}
+
+// --config on the command line overrides the $PISTA_CONFIG path.
+func TestYAMLConfig_FlagPathOverridesEnvPath(t *testing.T) {
+	envPath := writeConfig(t, "conn-string: postgres://env-file@db/app\n")
+	flagPath := writeConfig(t, "conn-string: postgres://flag-file@db/app\n")
+	t.Setenv("PISTA_CONFIG", envPath)
+
+	cli, err := parseWithConfig(t, "--config", flagPath)
+	require.NoError(t, err)
+
+	assert.Equal(t, "postgres://flag-file@db/app", cli.ConnString)
 }
 
 func TestYAMLConfig_UnknownKeyIsRejected(t *testing.T) {
