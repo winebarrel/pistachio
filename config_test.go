@@ -11,11 +11,14 @@ import (
 	"github.com/winebarrel/pistachio"
 )
 
-// testCLI mirrors the global options plus the --config flag so the YAML
-// configuration loader can be exercised without a running database.
+// testCLI mirrors the global options plus the meta flags (--config, --version,
+// --pager) so the YAML configuration loader can be exercised without a running
+// database. --help is added by kong automatically.
 type testCLI struct {
 	pistachio.Options
-	Config kong.ConfigFlag `name:"config" short:"C"`
+	Config  kong.ConfigFlag `name:"config" short:"C"`
+	Version kong.VersionFlag
+	Pager   *bool `name:"pager" negatable:""`
 }
 
 func writeConfig(t *testing.T, content string) string {
@@ -31,6 +34,7 @@ func parseWithConfig(t *testing.T, args ...string) (*testCLI, error) {
 	var cli testCLI
 	parser, err := kong.New(&cli,
 		kong.Name("pista"),
+		kong.Vars{"version": "test"},
 		kong.Configuration(pistachio.YAMLConfig),
 		kong.Exit(func(int) {}),
 	)
@@ -179,15 +183,45 @@ func parseCommandCLI(t *testing.T, args ...string) (*commandCLI, error) {
 }
 
 // A command-specific flag is loaded, and a key that belongs to another command
-// is accepted (a single file can be shared across commands).
+// is accepted and ignored (a single file can be shared across commands).
 func TestYAMLConfig_CommandSpecificFlag(t *testing.T) {
-	path := writeConfig(t, `
+	// omit-schema belongs to dump; bulk-alter belongs to plan.
+	content := `
 omit-schema: true
 bulk-alter: true
-`)
+`
 
-	cli, err := parseCommandCLI(t, "--config", path, "dump")
-	require.NoError(t, err)
+	t.Run("dump uses omit-schema, ignores bulk-alter", func(t *testing.T) {
+		path := writeConfig(t, content)
+		cli, err := parseCommandCLI(t, "--config", path, "dump")
+		require.NoError(t, err)
+		assert.True(t, cli.Dump.OmitSchema)
+	})
 
-	assert.True(t, cli.Dump.OmitSchema)
+	t.Run("plan uses bulk-alter, ignores omit-schema", func(t *testing.T) {
+		path := writeConfig(t, content)
+		cli, err := parseCommandCLI(t, "--config", path, "plan", "schema.sql")
+		require.NoError(t, err)
+		assert.True(t, cli.Plan.BulkAlter)
+	})
+}
+
+// Built-in meta flags (help, version, and config itself) are not configurable;
+// naming one is an unknown key. The values below are valid for each flag's
+// type, so the only possible error is the unknown-key rejection.
+func TestYAMLConfig_MetaFlagsAreNotConfigurable(t *testing.T) {
+	cases := map[string]string{
+		"version": "version: true\n",
+		"help":    "help: true\n",
+		"config":  "config: other.yml\n",
+	}
+	for key, content := range cases {
+		t.Run(key, func(t *testing.T) {
+			path := writeConfig(t, content)
+			_, err := parseWithConfig(t, "--config", path)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unknown config key")
+			assert.Contains(t, err.Error(), key)
+		})
+	}
 }

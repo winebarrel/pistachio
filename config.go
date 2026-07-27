@@ -5,12 +5,21 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 
 	"github.com/alecthomas/kong"
 	"gopkg.in/yaml.v3"
 )
+
+// Built-in kong meta flags are not loadable from the config file. --help is
+// matched by pointer via Application.HelpFlag; the rest by their kong type.
+var metaFlagTypes = map[reflect.Type]bool{
+	reflect.TypeFor[kong.ConfigFlag]():    true,
+	reflect.TypeFor[kong.VersionFlag]():   true,
+	reflect.TypeFor[kong.ChangeDirFlag](): true,
+}
 
 // YAMLConfig is a kong.ConfigurationLoader that reads options from a YAML file.
 // Keys must exactly match CLI flag names (e.g. "conn-string"); snake_case or
@@ -30,6 +39,9 @@ type yamlResolver struct {
 }
 
 func (y *yamlResolver) Resolve(_ *kong.Context, _ *kong.Path, flag *kong.Flag) (any, error) {
+	if isMetaFlag(flag) {
+		return nil, nil
+	}
 	v, ok := y.values[flag.Name]
 	if !ok {
 		return nil, nil
@@ -47,7 +59,7 @@ func (y *yamlResolver) Resolve(_ *kong.Context, _ *kong.Path, flag *kong.Flag) (
 
 func (y *yamlResolver) Validate(app *kong.Application) error {
 	known := map[string]bool{}
-	collectFlagNames(app.Node, known)
+	collectFlagNames(app.Node, app.HelpFlag, known)
 
 	var unknown []string
 	for key := range y.values {
@@ -62,11 +74,18 @@ func (y *yamlResolver) Validate(app *kong.Application) error {
 	return nil
 }
 
-func collectFlagNames(node *kong.Node, out map[string]bool) {
+func collectFlagNames(node *kong.Node, help *kong.Flag, out map[string]bool) {
 	for _, flag := range node.Flags {
+		if flag == help || isMetaFlag(flag) {
+			continue
+		}
 		out[flag.Name] = true
 	}
 	for _, child := range node.Children {
-		collectFlagNames(child, out)
+		collectFlagNames(child, help, out)
 	}
+}
+
+func isMetaFlag(flag *kong.Flag) bool {
+	return metaFlagTypes[flag.Target.Type()]
 }

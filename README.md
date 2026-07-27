@@ -107,7 +107,7 @@ Flags:
   -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
-  -C, --config=CONFIG-FLAG    Load options from a YAML file. Keys must match
+  -C, --config=FILE           Load options from a YAML file. Keys must match
                               flag names (e.g. conn-string). Precedence:
                               command-line flag > environment variable > config
                               file.
