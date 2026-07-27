@@ -31,6 +31,12 @@ export PISTA_PASSWORD='s3cret'
 pista dump
 ```
 
+You can also put options in a YAML file and load it with `--config`. See [README#configuration-file](README.md#configuration-file).
+
+```bash
+pista --config pista.yml dump
+```
+
 ## Step 2: Dump the current schema
 
 Export your existing database schema to a SQL file:
