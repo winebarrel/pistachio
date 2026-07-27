@@ -107,6 +107,10 @@ Flags:
   -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
+  -C, --config=CONFIG-FLAG    Load options from a YAML file. Keys must match
+                              flag names (e.g. conn-string). Precedence:
+                              command-line flag > environment variable > config
+                              file.
       --version
       --[no-]pager            Force paging via $PISTA_PAGER even when stdout is
                               not a TTY. PISTA_PAGER must be set.
@@ -310,6 +314,33 @@ pista --no-pager plan schema.sql
 # Force the pager even when stdout is not a TTY
 PISTA_PAGER='source-highlight -s sql -f esc' pista --pager dump
 ```
+
+### Configuration file
+
+Use `-C` / `--config` to load options from a YAML file.
+
+Keys are flag names (for example `conn-string`, not `conn_string`). An unknown key is an error.
+
+```yaml
+# pista.yml
+conn-string: postgres://user@db.example.com/app
+schemas:
+  - public
+  - billing
+schema-map:
+  staging: public
+exclude:
+  - tmp_*
+```
+
+```bash
+pista --config pista.yml dump
+pista --config pista.yml plan schema.sql
+```
+
+One file works for every command. Keys that the running command does not use are ignored.
+
+Precedence: command-line flag > environment variable > config file > default.
 
 ### Schema name mapping
 

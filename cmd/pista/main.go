@@ -15,6 +15,7 @@ var version string
 
 var cli struct {
 	pistachio.Options
+	Config  kong.ConfigFlag `short:"C" name:"config" help:"Load options from a YAML file. Keys must match flag names (e.g. conn-string). Precedence: command-line flag > environment variable > config file."`
 	Version kong.VersionFlag
 	Pager   *bool `name:"pager" negatable:"" help:"Force paging via $PISTA_PAGER even when stdout is not a TTY. PISTA_PAGER must be set."`
 
@@ -27,6 +28,7 @@ func main() {
 	ctx := context.Background()
 	kctx := kong.Parse(&cli,
 		kong.Vars{"version": version},
+		kong.Configuration(pistachio.YAMLConfig),
 		kong.BindTo(ctx, (*context.Context)(nil)),
 		kong.BindTo(os.Stdout, (*io.Writer)(nil)),
 	)
