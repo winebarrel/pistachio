@@ -107,10 +107,7 @@ Flags:
   -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
-  -C, --config=FILE           Load options from a YAML file. Keys must match
-                              flag names (e.g. conn-string). Precedence:
-                              command-line flag > environment variable > config
-                              file ($PISTA_CONFIG).
+  -C, --config=FILE           Load options from a YAML file ($PISTA_CONFIG).
       --version
       --[no-]pager            Force paging via $PISTA_PAGER even when stdout is
                               not a TTY. PISTA_PAGER must be set.
