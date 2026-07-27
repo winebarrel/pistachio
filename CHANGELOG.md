@@ -2,7 +2,7 @@
 
 ## [1.18.0] - 2026-07-27
 
-* Add `--config` (`-C`) to load options from a YAML file. Keys are flag names (e.g. `conn-string`); an unknown key is an error. One file works for every command, and keys the running command does not use are ignored. Precedence is command-line flag > environment variable > config file > default.
+* Add `--config` (`-C`, env `$PISTA_CONFIG`) to load options from a YAML file. Keys are flag names (e.g. `conn-string`); an unknown key is an error. One file works for every command, and keys the running command does not use are ignored. Precedence is command-line flag > environment variable > config file > default.
 
 ## [1.17.0] - 2026-07-21
 
