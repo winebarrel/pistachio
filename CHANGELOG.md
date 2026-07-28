@@ -4,6 +4,8 @@
 
 * Add `--assume-validated` (env `$PISTA_ASSUME_VALIDATED`) to treat every constraint as validated. Pistachio ignores `NOT VALID` in the desired schema and never emits `NOT VALID` or `VALIDATE CONSTRAINT`. Constraint additions and definition changes still apply, without `NOT VALID`. Use it when `NOT VALID` is a one-off migration step you do not want in the desired state.
 
+* Track the validation state of domain CHECK constraints. A constraint that is `NOT VALID` in the database no longer produces a spurious `DROP` + `ADD` on every plan. When its definition matches the desired schema, it is validated with `ALTER DOMAIN ... VALIDATE CONSTRAINT` instead. `--assume-validated` also covers domain constraints.
+
 ## [1.18.0] - 2026-07-27
 
 * Add `--config` (`-C`, env `$PISTA_CONFIG`) to load options from a YAML file. Keys are flag names (e.g. `conn-string`); an unknown key is an error. One file works for every command, and keys the running command does not use are ignored. Precedence is command-line flag > environment variable > config file > default.

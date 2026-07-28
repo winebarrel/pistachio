@@ -238,7 +238,7 @@ CREATE TABLE public.users (
 );
 ```
 
-Use `--assume-validated` to treat every table constraint and foreign key as validated. Pistachio ignores `NOT VALID` in the desired schema and never emits `NOT VALID` or `VALIDATE CONSTRAINT`. Use it when `NOT VALID` is a one-off migration step you do not want in the desired state. Also available as `$PISTA_ASSUME_VALIDATED`.
+Use `--assume-validated` to treat every table constraint, domain constraint, and foreign key as validated. Pistachio ignores `NOT VALID` in the desired schema and never emits `NOT VALID` or `VALIDATE CONSTRAINT`. Use it when `NOT VALID` is a one-off migration step you do not want in the desired state. Also available as `$PISTA_ASSUME_VALIDATED`.
 
 ```bash
 pista plan --assume-validated schema.sql
@@ -544,7 +544,7 @@ pista dump --split ./schema/
 
 ## Supported Objects
 
-- Domain types (`CREATE DOMAIN`, `ALTER DOMAIN SET/DROP DEFAULT`, `SET/DROP NOT NULL`, `ADD/DROP CONSTRAINT`)
+- Domain types (`CREATE DOMAIN`, `ALTER DOMAIN SET/DROP DEFAULT`, `SET/DROP NOT NULL`, `ADD/DROP/VALIDATE CONSTRAINT`)
 - Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
 - Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
 - Tables (including unlogged and partitioned tables)

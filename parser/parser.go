@@ -842,6 +842,7 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 			domain.Constraints = append(domain.Constraints, &model.DomainConstraint{
 				Name:       con.Conname,
 				Definition: def,
+				Validated:  !con.SkipValidation,
 			})
 		}
 	}

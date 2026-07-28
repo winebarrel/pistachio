@@ -9,6 +9,7 @@ import (
 type DomainConstraint struct {
 	Name       string
 	Definition string
+	Validated  bool
 }
 
 type Domain struct {

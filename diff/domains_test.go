@@ -107,13 +107,34 @@ func TestDiffDomains_AddConstraint(t *testing.T) {
 		Name:     "pos_int",
 		BaseType: "integer",
 		Constraints: []*model.DomainConstraint{
-			{Name: "pos_check", Definition: "CHECK (VALUE > 0)"},
+			{Name: "pos_check", Definition: "CHECK (VALUE > 0)", Validated: true},
 		},
 	})
 	result, err := diff.DiffDomains(current, desired, diff.AllowAllDrops{})
 	require.NoError(t, err)
-	assert.Len(t, result.Stmts, 1)
-	assert.Contains(t, result.Stmts[0], "ADD CONSTRAINT pos_check")
+	assert.Equal(t, []string{"ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0);"}, result.Stmts)
+}
+
+func TestDiffDomains_ValidateConstraint(t *testing.T) {
+	current := newDomainMap(&model.Domain{
+		Schema:   "public",
+		Name:     "pos_int",
+		BaseType: "integer",
+		Constraints: []*model.DomainConstraint{
+			{Name: "pos_check", Definition: "CHECK (VALUE > 0)", Validated: false},
+		},
+	})
+	desired := newDomainMap(&model.Domain{
+		Schema:   "public",
+		Name:     "pos_int",
+		BaseType: "integer",
+		Constraints: []*model.DomainConstraint{
+			{Name: "pos_check", Definition: "CHECK (VALUE > 0)", Validated: true},
+		},
+	})
+	result, err := diff.DiffDomains(current, desired, diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER DOMAIN public.pos_int VALIDATE CONSTRAINT pos_check;"}, result.Stmts)
 }
 
 func TestDiffDomains_DropConstraint(t *testing.T) {
