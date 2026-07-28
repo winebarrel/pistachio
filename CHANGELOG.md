@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.19.0] - 2026-07-29
+## [1.19.0] - 2026-07-28
 
 * Add `--assume-validated` (env `$PISTA_ASSUME_VALIDATED`) to treat every constraint as validated. Pistachio ignores `NOT VALID` in the desired schema and never emits `NOT VALID` or `VALIDATE CONSTRAINT`. Constraint additions and definition changes still apply, without `NOT VALID`. Use it when `NOT VALID` is a one-off migration step you do not want in the desired state.
 
