@@ -27,6 +27,7 @@ type diffAllOptions struct {
 	DisableIndexConcurrently bool
 	ForceIndexConcurrently   bool
 	BulkAlter                bool
+	AssumeValidated          bool
 }
 
 // diffAllResult holds the result of diffAll.
@@ -125,6 +126,10 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		clearConcurrentlyDirectives(desiredTables, desiredViews)
 	case options.ForceIndexConcurrently:
 		forceConcurrentlyDirectives(filteredTables, filteredViews, desiredTables, desiredViews)
+	}
+
+	if options.AssumeValidated {
+		assumeValidatedConstraints(filteredTables, desiredTables)
 	}
 
 	enumDiff, err := diff.DiffEnums(filteredEnums, desiredEnums, &options.DropPolicy)
@@ -248,6 +253,27 @@ func clearConcurrentlyDirectives(
 	for _, v := range views.CollectValues() {
 		for _, idx := range v.Indexes.CollectValues() {
 			idx.Concurrently = false
+		}
+	}
+}
+
+// assumeValidatedConstraints marks every check constraint and foreign key as
+// validated on both the current and desired sides, used to implement
+// --assume-validated. Forcing the validation state to true means NOT VALID is
+// never emitted and validation-state differences produce no VALIDATE
+// CONSTRAINT, keeping the validated flag out of the diff entirely.
+func assumeValidatedConstraints(
+	currentTables *orderedmap.Map[string, *model.Table],
+	desiredTables *orderedmap.Map[string, *model.Table],
+) {
+	for _, tables := range []*orderedmap.Map[string, *model.Table]{currentTables, desiredTables} {
+		for _, t := range tables.CollectValues() {
+			for _, con := range t.Constraints.CollectValues() {
+				con.Validated = true
+			}
+			for _, fk := range t.ForeignKeys.CollectValues() {
+				fk.Validated = true
+			}
 		}
 	}
 }
