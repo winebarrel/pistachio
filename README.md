@@ -238,6 +238,13 @@ CREATE TABLE public.users (
 );
 ```
 
+Use `--assume-validated` to treat every table constraint and foreign key as validated. Pistachio ignores `NOT VALID` in the desired schema and never emits `NOT VALID` or `VALIDATE CONSTRAINT`. Use it when `NOT VALID` is a one-off migration step you do not want in the desired state. Also available as `$PISTA_ASSUME_VALIDATED`.
+
+```bash
+pista plan --assume-validated schema.sql
+pista apply --assume-validated schema.sql
+```
+
 By default, `plan` and `apply` do not drop tables, views, enums, domains, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `foreign_key`, `index`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately.
 
 ```bash
