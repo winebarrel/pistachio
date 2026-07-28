@@ -238,7 +238,7 @@ CREATE TABLE public.users (
 );
 ```
 
-Use `--assume-validated` to treat every constraint as validated. Pistachio ignores `NOT VALID` in the desired schema and never emits `NOT VALID` or `VALIDATE CONSTRAINT`. Use it when `NOT VALID` is a one-off migration step you do not want in the desired state. Also available as `$PISTA_ASSUME_VALIDATED`.
+Use `--assume-validated` to treat every table constraint and foreign key as validated. Pistachio ignores `NOT VALID` in the desired schema and never emits `NOT VALID` or `VALIDATE CONSTRAINT`. Use it when `NOT VALID` is a one-off migration step you do not want in the desired state. Also available as `$PISTA_ASSUME_VALIDATED`.
 
 ```bash
 pista plan --assume-validated schema.sql
