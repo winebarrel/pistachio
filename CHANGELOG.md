@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.20.0] - 2026-07-29
+
+* Track the validation state of domain CHECK constraints. A constraint that is `NOT VALID` in the database no longer produces a spurious `DROP` + `ADD` on every plan. When its definition matches the desired schema, it is validated with `ALTER DOMAIN ... VALIDATE CONSTRAINT` instead. `--assume-validated` also covers domain constraints.
+
 ## [1.19.0] - 2026-07-29
 
 * Add `--assume-validated` (env `$PISTA_ASSUME_VALIDATED`) to treat every constraint as validated. Pistachio ignores `NOT VALID` in the desired schema and never emits `NOT VALID` or `VALIDATE CONSTRAINT`. Constraint additions and definition changes still apply, without `NOT VALID`. Use it when `NOT VALID` is a one-off migration step you do not want in the desired state.

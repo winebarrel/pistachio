@@ -129,7 +129,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 
 	if options.AssumeValidated {
-		assumeValidatedConstraints(filteredTables, desiredTables)
+		assumeValidatedConstraints(filteredTables, desiredTables, filteredDomains, desiredDomains)
 	}
 
 	enumDiff, err := diff.DiffEnums(filteredEnums, desiredEnums, &options.DropPolicy)
@@ -257,14 +257,16 @@ func clearConcurrentlyDirectives(
 	}
 }
 
-// assumeValidatedConstraints marks every check constraint and foreign key as
-// validated on both the current and desired sides, used to implement
-// --assume-validated. Forcing the validation state to true means NOT VALID is
-// never emitted and validation-state differences produce no VALIDATE
+// assumeValidatedConstraints marks every table constraint, domain constraint,
+// and foreign key as validated on both the current and desired sides, used to
+// implement --assume-validated. Forcing the validation state to true means NOT
+// VALID is never emitted and validation-state differences produce no VALIDATE
 // CONSTRAINT, keeping the validated flag out of the diff entirely.
 func assumeValidatedConstraints(
 	currentTables *orderedmap.Map[string, *model.Table],
 	desiredTables *orderedmap.Map[string, *model.Table],
+	currentDomains *orderedmap.Map[string, *model.Domain],
+	desiredDomains *orderedmap.Map[string, *model.Domain],
 ) {
 	for _, tables := range []*orderedmap.Map[string, *model.Table]{currentTables, desiredTables} {
 		for _, t := range tables.CollectValues() {
@@ -273,6 +275,13 @@ func assumeValidatedConstraints(
 			}
 			for _, fk := range t.ForeignKeys.CollectValues() {
 				fk.Validated = true
+			}
+		}
+	}
+	for _, domains := range []*orderedmap.Map[string, *model.Domain]{currentDomains, desiredDomains} {
+		for _, d := range domains.CollectValues() {
+			for _, c := range d.Constraints {
+				c.Validated = true
 			}
 		}
 	}

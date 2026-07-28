@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/orderedmap"
@@ -108,7 +109,8 @@ func (c *Catalog) listDomainConstraints(ctx context.Context, domainOID uint32) (
 	q := `
 		SELECT
 			con.conname,
-			pg_catalog.pg_get_constraintdef(con.oid) AS definition
+			pg_catalog.pg_get_constraintdef(con.oid) AS definition,
+			con.convalidated
 		FROM
 			pg_catalog.pg_constraint con
 		WHERE
@@ -131,10 +133,14 @@ func (c *Catalog) listDomainConstraints(ctx context.Context, domainOID uint32) (
 	var constraints []*model.DomainConstraint
 	for rows.Next() {
 		var dc model.DomainConstraint
-		err := rows.Scan(&dc.Name, &dc.Definition)
+		err := rows.Scan(&dc.Name, &dc.Definition, &dc.Validated)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan domain constraint: %w", err)
 		}
+		// pg_get_constraintdef appends "NOT VALID" for unvalidated
+		// constraints. Strip it so Definition only holds the constraint body;
+		// validation state is tracked via Validated.
+		dc.Definition = strings.TrimSuffix(dc.Definition, " NOT VALID")
 		constraints = append(constraints, &dc)
 	}
 

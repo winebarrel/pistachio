@@ -1,0 +1,9 @@
+init: |
+  CREATE DOMAIN public.pos_int AS integer;
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+desired: |
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK (VALUE >= 0);
+plan: |
+  ALTER DOMAIN public.pos_int DROP CONSTRAINT pos_check;
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (value >= 0);

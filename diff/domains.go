@@ -113,30 +113,40 @@ func diffDomain(fqdn string, current, desired *model.Domain) ([]string, error) {
 func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstraint) []string {
 	var stmts []string
 
-	currentByName := make(map[string]string)
+	currentByName := make(map[string]*model.DomainConstraint)
 	for _, c := range current {
-		currentByName[c.Name] = c.Definition
+		currentByName[c.Name] = c
 	}
 
-	desiredByName := make(map[string]string)
+	desiredByName := make(map[string]*model.DomainConstraint)
 	for _, c := range desired {
-		desiredByName[c.Name] = c.Definition
+		desiredByName[c.Name] = c
 	}
 
-	// Drop removed or changed constraints
+	// Drop removed or changed constraints. A constraint with the same
+	// definition is kept: a NOT VALID -> validated transition is handled by
+	// VALIDATE CONSTRAINT below, not by recreation.
 	for _, c := range current {
-		desiredDef, ok := desiredByName[c.Name]
-		if !ok || !equalConstraintDef(c.Definition, desiredDef) {
+		d, ok := desiredByName[c.Name]
+		if !ok || !equalConstraintDef(c.Definition, d.Definition) {
 			stmts = append(stmts, "ALTER DOMAIN "+fqdn+" DROP CONSTRAINT "+model.Ident(c.Name)+";")
 		}
 	}
 
-	// Add new or changed constraints
+	// Add new or changed constraints, or validate an existing NOT VALID one.
+	// A desired domain constraint is always validated: inline CREATE DOMAIN
+	// cannot express NOT VALID, and ALTER DOMAIN is not parsed as desired
+	// input. So the only same-definition action is to validate a current
+	// NOT VALID constraint; a changed or new one is a plain ADD.
 	for _, c := range desired {
-		currentDef, ok := currentByName[c.Name]
-		if !ok || !equalConstraintDef(currentDef, c.Definition) {
-			stmts = append(stmts, "ALTER DOMAIN "+fqdn+" ADD CONSTRAINT "+model.Ident(c.Name)+" "+c.Definition+";")
+		cur, ok := currentByName[c.Name]
+		if ok && equalConstraintDef(cur.Definition, c.Definition) {
+			if !cur.Validated {
+				stmts = append(stmts, "ALTER DOMAIN "+fqdn+" VALIDATE CONSTRAINT "+model.Ident(c.Name)+";")
+			}
+			continue
 		}
+		stmts = append(stmts, "ALTER DOMAIN "+fqdn+" ADD CONSTRAINT "+model.Ident(c.Name)+" "+c.Definition+";")
 	}
 
 	return stmts
