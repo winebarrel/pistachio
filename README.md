@@ -1,4 +1,4 @@
-![](https://github.com/user-attachments/assets/d1e6ca05-778e-4329-af87-ce68d2abaebc)
+![pistachio](https://github.com/user-attachments/assets/d1e6ca05-778e-4329-af87-ce68d2abaebc)
 
 [![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
@@ -7,7 +7,7 @@ Declarative schema management tool for PostgreSQL, built on [pg_query_go](https:
 
 See also: [Getting Started Guide](getting-started.md) / [Directives](directives.md) / [Performance](performance.md)
 
-![](https://github.com/user-attachments/assets/1f05229f-3da2-49ca-af73-c3952f3e3180)
+![](https://github.com/user-attachments/assets/bb8cce02-d50b-4b5a-9aac-dcf97a0fc7dc)
 
 ## Installation
 
