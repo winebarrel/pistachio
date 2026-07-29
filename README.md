@@ -1,4 +1,4 @@
-# pistachio
+![](https://github.com/user-attachments/assets/20558b2d-90f2-4a34-a7a4-a8a10d56df28)
 
 [![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
