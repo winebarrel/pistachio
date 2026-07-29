@@ -10,7 +10,7 @@ Each run parses the desired schema from SQL, reads the current schema from the
 PostgreSQL system catalogs, and computes the DDL diff. All three costs grow with
 the number of objects, so the table count is the main driver of runtime.
 
-Three cases are measured:
+Four cases are measured:
 
 - **create plan**: `plan` of the full schema against an empty database. Every
   table is a create, so this covers parsing and diff generation with no catalog
@@ -18,6 +18,10 @@ Three cases are measured:
 - **noop plan**: `plan` of the full schema against a database that already
   matches it. This is the common case in CI. It runs the full path (parse, read
   the catalog, diff) and produces empty output.
+- **modify plan**: `plan` of a changed schema against a matching database. Each
+  table gets a new column, a column type change, and a new index, so the diff is
+  three ALTER/CREATE statements per table. This measures diff generation and SQL
+  output when there is actual work to emit.
 - **dump**: `dump` of the full schema. This reads the catalog and serializes it
   back to SQL, with no parsing or diffing.
 
@@ -42,14 +46,18 @@ tables, N primary keys, 2N secondary indexes, and N-1 foreign keys.
 
 Each value is the median of three runs, in seconds.
 
-| Tables | create plan | noop plan | dump  | DDL lines | Schema SQL |
-|-------:|------------:|----------:|------:|----------:|-----------:|
-|     10 |       0.035 |     0.044 | 0.040 |       142 |       4 KB |
-|     50 |       0.039 |     0.082 | 0.083 |       702 |      25 KB |
-|    100 |       0.052 |     0.135 | 0.121 |     1,402 |      50 KB |
-|    250 |       0.079 |     0.280 | 0.248 |     3,502 |     128 KB |
-|    500 |       0.132 |     0.533 | 0.467 |     7,002 |     257 KB |
-|  1,000 |       0.248 |     0.829 | 0.646 |    14,002 |     516 KB |
+| Tables | create plan | noop plan | modify plan | dump  |
+|-------:|------------:|----------:|------------:|------:|
+|     10 |       0.035 |     0.044 |       0.047 | 0.040 |
+|     50 |       0.039 |     0.082 |       0.081 | 0.083 |
+|    100 |       0.052 |     0.135 |       0.136 | 0.121 |
+|    250 |       0.079 |     0.280 |       0.294 | 0.248 |
+|    500 |       0.132 |     0.533 |       0.559 | 0.467 |
+|  1,000 |       0.248 |     0.829 |       1.074 | 0.646 |
+
+The modify plan emits three DDL statements per table, so its output grows from
+30 lines at 10 tables to 3,000 lines at 1,000 tables. The create plan output
+grows the same way, from 142 to 14,002 lines.
 
 ## Analysis
 
@@ -64,9 +72,12 @@ reads the catalog. Reading the current schema from `pg_catalog` is the largest
 cost, so runtime tracks the size of the existing database more than the size of
 the desired SQL file.
 
-Even at 1,000 tables the slowest command finishes in under one second, so
-pistachio is not a bottleneck for schemas of typical size. Larger schemas were
-not measured.
+The modify plan is the heaviest case. It reads the catalog like the noop plan,
+then generates and deparses the diff SQL, which adds cost proportional to the
+number of changes. At 1,000 tables it is the only case that passes one second
+(1.07s) because it emits 3,000 DDL statements. The read-only commands all stay
+under one second at that size, so pistachio is not a bottleneck for schemas of
+typical size. Larger schemas were not measured.
 
 ## Reproducing
 
@@ -96,4 +107,12 @@ time pista plan schema.sql   # create plan (empty database)
 psql -f schema.sql
 time pista dump              # dump (loaded database)
 time pista plan schema.sql   # noop plan (matching database)
+
+# modify plan: change every table (type change, new column, new index),
+# then plan against the loaded database.
+sed -e 's/qty integer/qty bigint/' \
+    -e 's/note text,/note text,\n  extra text,/' \
+    -e 's/\(CREATE INDEX idx_t_\([0-9]*\)_created_at ON t_\2 (created_at);\)/\1\nCREATE INDEX idx_t_\2_name ON t_\2 (name);/' \
+    schema.sql > modified.sql
+time pista plan modified.sql # modify plan (diff on every table)
 ```
