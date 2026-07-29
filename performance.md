@@ -21,7 +21,7 @@ Four cases are measured:
 - **modify plan**: `plan` of a changed schema against a matching database. Each
   table gets a new column, a column type change, and a new index, so the diff is
   three ALTER/CREATE statements per table. This measures diff generation and SQL
-  output when there is actual work to emit.
+  output.
 - **dump**: `dump` of the full schema. This reads the catalog and serializes it
   back to SQL, with no parsing or diffing.
 
@@ -74,7 +74,7 @@ the desired SQL file.
 
 The modify plan is the heaviest case. It reads the catalog like the noop plan,
 then generates and deparses the diff SQL, which adds cost proportional to the
-number of changes. At 1,000 tables it is the only case that passes one second
+number of changes. At 1,000 tables it is the only case that exceeds one second
 (1.07s) because it emits 3,000 DDL statements. The read-only commands all stay
 under one second at that size, so pistachio is not a bottleneck for schemas of
 typical size. Larger schemas were not measured.
