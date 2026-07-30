@@ -263,6 +263,17 @@ func TestDiffCompositeTypes_CollationEquivalentForms(t *testing.T) {
 	assert.Empty(t, result.Stmts)
 }
 
+func TestDiffCompositeTypes_QualifiedAttributeTypeNoDiff(t *testing.T) {
+	// The catalog reports the attribute type unqualified ("inner_t"); desired
+	// keeps the qualified form ("public.inner_t"). They name the same type in
+	// the composite type's own schema, so no ALTER ATTRIBUTE is emitted.
+	current := newCompositeTypeMap(ct("outer_t", attr("i", "inner_t")))
+	desired := newCompositeTypeMap(ct("outer_t", attr("i", "public.inner_t")))
+	result, err := diff.DiffCompositeTypes(current, desired, diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+}
+
 func TestDiffCompositeTypes_CollationChange(t *testing.T) {
 	cColl := "pg_catalog.C"
 	current := newCompositeTypeMap(&model.CompositeType{

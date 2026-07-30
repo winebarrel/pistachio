@@ -1,0 +1,26 @@
+init: ""
+desired: |
+  CREATE TYPE public.inner_t AS (
+      x text
+  );
+  CREATE TYPE public.outer_t AS (
+      i public.inner_t
+  );
+applied_sql: |
+  CREATE TYPE public.inner_t AS (
+      x text
+  );
+  CREATE TYPE public.outer_t AS (
+      i public.inner_t
+  );
+applied: |
+  -- public.inner_t
+  CREATE TYPE public.inner_t AS (
+      x text
+  );
+
+  -- public.outer_t
+  CREATE TYPE public.outer_t AS (
+      i inner_t
+  );
+verify_no_drift: true

@@ -169,7 +169,7 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 			stmts = append(stmts, "ALTER TYPE "+fqcn+" ADD ATTRIBUTE "+model.Ident(da.Name)+" "+da.TypeSQL()+";")
 			continue
 		}
-		if wa.TypeName != da.TypeName || !equalCollation(wa.Collation, da.Collation) {
+		if !equalTypeName(wa.TypeName, da.TypeName, schemaOf(fqcn)) || !equalCollation(wa.Collation, da.Collation) {
 			stmts = append(stmts, "ALTER TYPE "+fqcn+" ALTER ATTRIBUTE "+model.Ident(da.Name)+" TYPE "+da.TypeSQL()+";")
 		}
 	}
