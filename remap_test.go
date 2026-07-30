@@ -244,6 +244,115 @@ CREATE SEQUENCE myschema.order_seq INCREMENT BY 1;
 	assert.Contains(t, got.SQL, "ALTER SEQUENCE myschema.order_seq INCREMENT BY 2;")
 }
 
+// TestApply_UnqualifiedUserTypeInNonPublicSchema guards the apply-time
+// search_path setup: an unqualified user-type reference in a column definition
+// must resolve for a non-public target schema. The apply fixtures cannot cover
+// it because the harness always targets public.
+func TestApply_UnqualifiedUserTypeInNonPublicSchema(t *testing.T) {
+	ctx := context.Background()
+	connString := setupSchemaDB(t, ctx, "app", "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(
+		"CREATE TYPE app.addr AS (x text);\nCREATE TABLE app.people (id integer, home addr);\n"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"app"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	}, io.Discard)
+	require.NoError(t, err)
+
+	plan, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, plan.SQL, "expected no drift after apply")
+}
+
+// TestApply_PublicObjectFromNonPublicSchema guards that the apply search_path
+// keeps public searchable: a non-public target schema must still resolve an
+// unqualified reference to an object in public (extension types and functions
+// commonly live there), so the search_path extends the default rather than
+// replacing it.
+func TestApply_PublicObjectFromNonPublicSchema(t *testing.T) {
+	ctx := context.Background()
+	connString := setupSchemaDB(t, ctx, "app",
+		"DROP DOMAIN IF EXISTS public.pubdm CASCADE; CREATE DOMAIN public.pubdm AS text; "+
+			"CREATE OR REPLACE FUNCTION public.pubfn() RETURNS text AS $$ SELECT 'x'::text $$ LANGUAGE sql;")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(
+		"CREATE TABLE app.t1 (id integer, c pubdm);\n"+
+			"CREATE TABLE app.t2 (id integer, c text DEFAULT pubfn());\n"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"app"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	}, io.Discard)
+	require.NoError(t, err)
+}
+
+func TestDump_WithSchemaMap_CompositeType(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.point AS (x integer, y integer);
+CREATE TYPE myschema.shape AS (name text, origin myschema.point);
+`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	// The type schema and the schema-qualified attribute type are both remapped
+	// to "public" (exercises remapCompositeTypeSchemas).
+	assert.Contains(t, got.String(), "CREATE TYPE public.point")
+	assert.Contains(t, got.String(), "CREATE TYPE public.shape")
+	assert.Contains(t, got.String(), "origin public.point")
+	assert.NotContains(t, got.String(), "myschema.")
+}
+
+func TestPlan_WithSchemaMap_CompositeType(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.address AS (street text, city text);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(
+		"CREATE TYPE public.address AS (street text, city text, country text);"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	// The desired public.address is reverse-remapped to myschema.address
+	// (exercises reverseRemapCompositeTypeSchemas) and diffed against the DB.
+	assert.Contains(t, got.SQL, "ALTER TYPE myschema.address ADD ATTRIBUTE country text;")
+}
+
 func TestDump_WithSchemaMap_Files(t *testing.T) {
 	ctx := context.Background()
 

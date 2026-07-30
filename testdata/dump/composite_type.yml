@@ -1,0 +1,17 @@
+init: |
+  CREATE TYPE public.address AS (
+      street text,
+      city   text,
+      zip    text
+  );
+  COMMENT ON TYPE public.address IS 'postal address';
+  COMMENT ON COLUMN public.address.city IS 'city name';
+dump: |
+  -- public.address
+  CREATE TYPE public.address AS (
+      street text,
+      city text,
+      zip text
+  );
+  COMMENT ON TYPE public.address IS 'postal address';
+  COMMENT ON COLUMN public.address.city IS 'city name';

@@ -4,15 +4,15 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 
 | Directive | Arguments | Applies to | Purpose |
 |---|---|---|---|
-| `renamed-from` | old name (required) | tables, views, enums, enum values, domains, columns, constraints, foreign keys, indexes, policies | Rename instead of drop and create |
+| `renamed-from` | old name (required) | tables, views, enums, enum values, domains, composite types, composite attributes, columns, constraints, foreign keys, indexes, policies | Rename instead of drop and create |
 | `execute` | check SQL (optional) | any statement | Run non-managed SQL during apply |
 | `concurrently` | none | `CREATE INDEX` | Create and drop the index with `CONCURRENTLY` |
 | `bulk-alter` | none | `CREATE TABLE` | Merge the table's `ALTER TABLE` actions into one statement |
-| `ignore` | none | tables, views, enums, domains | Leave the object unmanaged |
+| `ignore` | none | tables, views, enums, domains, composite types | Leave the object unmanaged |
 
 ## -- pista:renamed-from
 
-Renames an object instead of dropping and recreating it. The argument is the old name. For tables, views, enums, and domains, the old name may be schema-qualified; without a schema it defaults to the default schema. For columns, constraints, foreign keys, indexes, and policies, the old name is unqualified.
+Renames an object instead of dropping and recreating it. The argument is the old name. For tables, views, enums, domains, and composite types, the old name may be schema-qualified; without a schema it defaults to the default schema. For composite attributes, columns, constraints, foreign keys, indexes, and policies, the old name is unqualified.
 
 ```sql
 -- pista:renamed-from public.old_users
@@ -41,6 +41,17 @@ CREATE TYPE public.status AS ENUM (
     'active',
     -- pista:renamed-from 'inactive'
     'disabled'
+);
+```
+
+For composite types, the statement-level directive renames the type (`ALTER TYPE ... RENAME TO`). To rename an attribute, write the directive inside `CREATE TYPE ... AS (...)` on the line before the attribute; it emits `ALTER TYPE ... RENAME ATTRIBUTE`, which keeps stored data.
+
+```sql
+-- pista:renamed-from public.address
+CREATE TYPE public.postal_address AS (
+    -- pista:renamed-from street
+    road text,
+    city text
 );
 ```
 
@@ -90,7 +101,7 @@ Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs st
 
 ## -- pista:ignore
 
-Marks a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE DOMAIN` / `CREATE VIEW` (including materialized views) as unmanaged. pistachio does not create, alter, or drop the object: it is dropped from both the desired and current state before diffing. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
+Marks a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE TYPE ... AS (...)` / `CREATE DOMAIN` / `CREATE VIEW` (including materialized views) as unmanaged. pistachio does not create, alter, or drop the object: it is dropped from both the desired and current state before diffing. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
 
 ```sql
 -- pista:ignore

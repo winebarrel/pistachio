@@ -12,19 +12,20 @@ import (
 
 type DumpOptions struct {
 	FilterOptions
-	Split      string `help:"Output each table/view/enum/domain/sequence as a separate file in the specified directory."`
+	Split      string `help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
 }
 
 type DumpResult struct {
-	Tables     *orderedmap.Map[string, *model.Table]
-	Views      *orderedmap.Map[string, *model.View]
-	Enums      *orderedmap.Map[string, *model.Enum]
-	Domains    *orderedmap.Map[string, *model.Domain]
-	Sequences  *orderedmap.Map[string, *model.Sequence]
-	OmitSchema bool
-	Count      ObjectCount
+	Tables         *orderedmap.Map[string, *model.Table]
+	Views          *orderedmap.Map[string, *model.View]
+	Enums          *orderedmap.Map[string, *model.Enum]
+	Domains        *orderedmap.Map[string, *model.Domain]
+	CompositeTypes *orderedmap.Map[string, *model.CompositeType]
+	Sequences      *orderedmap.Map[string, *model.Sequence]
+	OmitSchema     bool
+	Count          ObjectCount
 }
 
 // stripIndexSchemaPrefix removes the schema qualification from the relation an
@@ -139,6 +140,22 @@ func (r *DumpResult) domains() *orderedmap.Map[string, *model.Domain] {
 	return domains
 }
 
+func (r *DumpResult) compositeTypes() *orderedmap.Map[string, *model.CompositeType] {
+	if r.CompositeTypes == nil {
+		return orderedmap.New[string, *model.CompositeType]()
+	}
+	if !r.OmitSchema {
+		return r.CompositeTypes
+	}
+	compositeTypes := orderedmap.New[string, *model.CompositeType]()
+	for _, ct := range r.CompositeTypes.CollectValues() {
+		copied := *ct
+		copied.Schema = ""
+		compositeTypes.Set(model.Ident(ct.Name), &copied)
+	}
+	return compositeTypes
+}
+
 func (r *DumpResult) sequences() *orderedmap.Map[string, *model.Sequence] {
 	if r.Sequences == nil {
 		return orderedmap.New[string, *model.Sequence]()
@@ -156,17 +173,18 @@ func (r *DumpResult) sequences() *orderedmap.Map[string, *model.Sequence] {
 }
 
 func (r *DumpResult) String() string {
-	return formatSchemaSQL(r.enums(), r.domains(), r.sequences(), r.tables(), r.views())
+	return formatSchemaSQL(r.enums(), r.domains(), r.compositeTypes(), r.sequences(), r.tables(), r.views())
 }
 
-// formatSchemaSQL formats enums, domains, sequences, tables, and views into
-// canonical SQL output for dump.
-// Order: enums -> domains -> sequences -> tables -> views (enums/domains first
-// since domains may depend on enums; sequences before tables since column
-// defaults may reference them).
+// formatSchemaSQL formats enums, domains, composite types, sequences, tables,
+// and views into canonical SQL output for dump.
+// Order: enums -> domains -> composite types -> sequences -> tables -> views
+// (enums/domains/composite types first since later objects may depend on them;
+// sequences before tables since column defaults may reference them).
 func formatSchemaSQL(
 	enums *orderedmap.Map[string, *model.Enum],
 	domains *orderedmap.Map[string, *model.Domain],
+	compositeTypes *orderedmap.Map[string, *model.CompositeType],
 	sequences *orderedmap.Map[string, *model.Sequence],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
@@ -177,6 +195,9 @@ func formatSchemaSQL(
 	}
 	if domains != nil && domains.Len() > 0 {
 		parts = append(parts, model.DomainsToSQL(domains))
+	}
+	if compositeTypes != nil && compositeTypes.Len() > 0 {
+		parts = append(parts, model.CompositeTypesToSQL(compositeTypes))
 	}
 	if sequences != nil && sequences.Len() > 0 {
 		parts = append(parts, model.SequencesToSQL(sequences))
@@ -201,6 +222,11 @@ func (r *DumpResult) Files() map[string]string {
 	for _, d := range r.domains().CollectValues() {
 		name := uniqueFileName(seen, toFileName(d.Schema, d.Name))
 		files[name] = model.DomainToSQL(d) + "\n"
+		seen[strings.ToLower(name)] = true
+	}
+	for _, ct := range r.compositeTypes().CollectValues() {
+		name := uniqueFileName(seen, toFileName(ct.Schema, ct.Name))
+		files[name] = model.CompositeTypeToSQL(ct) + "\n"
 		seen[strings.ToLower(name)] = true
 	}
 	for _, s := range r.sequences().CollectValues() {
@@ -287,6 +313,11 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		return nil, fmt.Errorf("failed to fetch domains: %w", err)
 	}
 
+	compositeTypes, err := catalog.CompositeTypes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch composite types: %w", err)
+	}
+
 	sequences, err := catalog.Sequences(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch sequences: %w", err)
@@ -296,22 +327,25 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	filteredViews := options.filterViews(client.remapViewSchemas(views))
 	filteredEnums := options.filterEnums(client.remapEnumSchemas(enums))
 	filteredDomains := options.filterDomains(client.remapDomainSchemas(domains))
+	filteredCompositeTypes := options.filterCompositeTypes(client.remapCompositeTypeSchemas(compositeTypes))
 	filteredSequences := options.filterSequences(client.remapSequenceSchemas(sequences))
 
 	return &DumpResult{
-		Tables:     filteredTables,
-		Views:      filteredViews,
-		Enums:      filteredEnums,
-		Domains:    filteredDomains,
-		Sequences:  filteredSequences,
-		OmitSchema: options.OmitSchema,
+		Tables:         filteredTables,
+		Views:          filteredViews,
+		Enums:          filteredEnums,
+		Domains:        filteredDomains,
+		CompositeTypes: filteredCompositeTypes,
+		Sequences:      filteredSequences,
+		OmitSchema:     options.OmitSchema,
 		Count: ObjectCount{
-			Schemas:   client.Schemas,
-			Tables:    filteredTables.Len(),
-			Views:     filteredViews.Len(),
-			Enums:     filteredEnums.Len(),
-			Domains:   filteredDomains.Len(),
-			Sequences: filteredSequences.Len(),
+			Schemas:        client.Schemas,
+			Tables:         filteredTables.Len(),
+			Views:          filteredViews.Len(),
+			Enums:          filteredEnums.Len(),
+			Domains:        filteredDomains.Len(),
+			CompositeTypes: filteredCompositeTypes.Len(),
+			Sequences:      filteredSequences.Len(),
 		},
 	}, nil
 }

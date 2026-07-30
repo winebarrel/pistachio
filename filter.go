@@ -73,6 +73,23 @@ func (f *FilterOptions) filterSequences(sequences *orderedmap.Map[string, *model
 	return filtered
 }
 
+func (f *FilterOptions) filterCompositeTypes(compositeTypes *orderedmap.Map[string, *model.CompositeType]) *orderedmap.Map[string, *model.CompositeType] {
+	if !f.IsTypeEnabled("composite_type") {
+		return orderedmap.New[string, *model.CompositeType]()
+	}
+	if len(f.Include) == 0 && len(f.Exclude) == 0 {
+		return compositeTypes
+	}
+
+	filtered := orderedmap.New[string, *model.CompositeType]()
+	for k, ct := range compositeTypes.All() {
+		if f.MatchName(ct.Name) {
+			filtered.Set(k, ct)
+		}
+	}
+	return filtered
+}
+
 func (f *FilterOptions) filterDomains(domains *orderedmap.Map[string, *model.Domain]) *orderedmap.Map[string, *model.Domain] {
 	if !f.IsTypeEnabled("domain") {
 		return orderedmap.New[string, *model.Domain]()

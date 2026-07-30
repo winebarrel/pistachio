@@ -18,7 +18,7 @@ func orderFromSchema(
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 ) ([]string, error) {
-	return toposort.OrderFromSchema(enums, domains, tables, views, orderedmap.New[string, *model.Sequence]())
+	return toposort.OrderFromSchema(enums, domains, orderedmap.New[string, *model.CompositeType](), tables, views, orderedmap.New[string, *model.Sequence]())
 }
 
 func TestOrderFromSchema_Basic(t *testing.T) {
@@ -78,7 +78,7 @@ func TestOrderFromSchemaWithSequences_NextvalDependency(t *testing.T) {
 	aaa.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tables.Set("public.aaa", aaa)
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views, sequences)
+	order, err := toposort.OrderFromSchema(enums, domains, orderedmap.New[string, *model.CompositeType](), tables, views, sequences)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)
@@ -111,7 +111,7 @@ func TestOrderFromSchemaWithSequences_NextvalQuotedName(t *testing.T) {
 	aaa.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tables.Set(`public."Aaa"`, aaa)
 
-	order, err := toposort.OrderFromSchema(enums, domains, tables, views, sequences)
+	order, err := toposort.OrderFromSchema(enums, domains, orderedmap.New[string, *model.CompositeType](), tables, views, sequences)
 	require.NoError(t, err)
 
 	idx := make(map[string]int)

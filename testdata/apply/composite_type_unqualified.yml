@@ -1,0 +1,24 @@
+init: ""
+desired: |
+  CREATE TYPE address AS (
+      street text,
+      city   text
+  );
+  COMMENT ON TYPE address IS 'addr';
+  COMMENT ON COLUMN address.city IS 'c';
+applied_sql: |
+  CREATE TYPE public.address AS (
+      street text,
+      city text
+  );
+  COMMENT ON TYPE public.address IS 'addr';
+  COMMENT ON COLUMN public.address.city IS 'c';
+applied: |
+  -- public.address
+  CREATE TYPE public.address AS (
+      street text,
+      city text
+  );
+  COMMENT ON TYPE public.address IS 'addr';
+  COMMENT ON COLUMN public.address.city IS 'c';
+verify_no_drift: true

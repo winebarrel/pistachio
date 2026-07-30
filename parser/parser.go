@@ -13,12 +13,13 @@ import (
 )
 
 type ParseResult struct {
-	Tables       *orderedmap.Map[string, *model.Table]
-	Views        *orderedmap.Map[string, *model.View]
-	Enums        *orderedmap.Map[string, *model.Enum]
-	Domains      *orderedmap.Map[string, *model.Domain]
-	Sequences    *orderedmap.Map[string, *model.Sequence]
-	ExecuteStmts []*ExecuteStmt
+	Tables         *orderedmap.Map[string, *model.Table]
+	Views          *orderedmap.Map[string, *model.View]
+	Enums          *orderedmap.Map[string, *model.Enum]
+	Domains        *orderedmap.Map[string, *model.Domain]
+	CompositeTypes *orderedmap.Map[string, *model.CompositeType]
+	Sequences      *orderedmap.Map[string, *model.Sequence]
+	ExecuteStmts   []*ExecuteStmt
 }
 
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
@@ -76,6 +77,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	views := orderedmap.New[string, *model.View]()
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()
+	compositeTypes := orderedmap.New[string, *model.CompositeType]()
 	sequences := orderedmap.New[string, *model.Sequence]()
 
 	stmtDirectives := extractStmtDirectives(sql, result.Stmts)
@@ -143,6 +145,37 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			}
 			domain.Ignore = ignore
 			if err := setUnique(domains, domain.FQDN(), "domain", domain); err != nil {
+				return nil, err
+			}
+
+		case node.GetCompositeTypeStmt() != nil:
+			compositeType, err := parseCompositeTypeStmt(node.GetCompositeTypeStmt(), defaultSchema)
+			if err != nil {
+				return nil, err
+			}
+			if renameFrom != "" {
+				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
+				compositeType.RenameFrom = &qualified
+			}
+
+			// Extract attribute-level rename directives from raw SQL. The
+			// composite type body is a column-like list, so the CREATE TABLE
+			// inline-directive scanner applies unchanged.
+			stmtEnd := rawStmt.StmtLocation + rawStmt.StmtLen
+			if stmtEnd > int32(len(sql)) {
+				stmtEnd = int32(len(sql))
+			}
+			rawStmtSQL := sql[rawStmt.StmtLocation:stmtEnd]
+			attrDirectives := extractInlineDirectives(rawStmtSQL)
+			for _, attr := range compositeType.Attributes {
+				if oldName, ok := attrDirectives.Columns[attr.Name]; ok {
+					old := oldName
+					attr.RenameFrom = &old
+				}
+			}
+
+			compositeType.Ignore = ignore
+			if err := setUnique(compositeTypes, compositeType.FQCN(), "composite type", compositeType); err != nil {
 				return nil, err
 			}
 
@@ -307,7 +340,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
-			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, sequences)
+			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, compositeTypes, sequences)
 		}
 	}
 
@@ -315,7 +348,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		return nil, err
 	}
 
-	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, Sequences: sequences, ExecuteStmts: executeStmts}, nil
+	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, ExecuteStmts: executeStmts}, nil
 }
 
 func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Table, error) {
@@ -876,6 +909,60 @@ func extractCheckDefFromDeparsed(deparsed, conName string) string {
 	return def
 }
 
+func parseCompositeTypeStmt(cts *pg_query.CompositeTypeStmt, defaultSchema string) (*model.CompositeType, error) {
+	schema := defaultSchema
+	name := ""
+	if cts.Typevar != nil {
+		name = cts.Typevar.Relname
+		if cts.Typevar.Schemaname != "" {
+			schema = cts.Typevar.Schemaname
+		}
+	}
+
+	compositeType := &model.CompositeType{
+		Schema: schema,
+		Name:   name,
+	}
+
+	for _, node := range cts.Coldeflist {
+		cd := node.GetColumnDef()
+		if cd == nil {
+			continue
+		}
+
+		typeName := ""
+		if cd.TypeName != nil {
+			tn, err := deparseTypeName(cd.TypeName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deparse attribute type for composite type %s: %w", name, err)
+			}
+			typeName = tn
+		}
+
+		attr := &model.CompositeAttribute{
+			Name:     cd.Colname,
+			TypeName: typeName,
+		}
+
+		if cd.CollClause != nil && len(cd.CollClause.Collname) > 0 {
+			var parts []string
+			for _, n := range cd.CollClause.Collname {
+				if s := n.GetString_(); s != nil {
+					parts = append(parts, s.Sval)
+				}
+			}
+			if len(parts) > 0 && parts[len(parts)-1] != "default" {
+				collation := strings.Join(parts, ".")
+				attr.Collation = &collation
+			}
+		}
+
+		compositeType.Attributes = append(compositeType.Attributes, attr)
+	}
+
+	return compositeType, nil
+}
+
 func parseCommentOnDomain(cs *pg_query.CommentStmt, defaultSchema string, domains *orderedmap.Map[string, *model.Domain]) {
 	tn := cs.Object.GetTypeName()
 	if tn == nil {
@@ -1121,10 +1208,10 @@ func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
 	return &table, &column
 }
 
-func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum], domains *orderedmap.Map[string, *model.Domain], sequences *orderedmap.Map[string, *model.Sequence]) {
+func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum], domains *orderedmap.Map[string, *model.Domain], compositeTypes *orderedmap.Map[string, *model.CompositeType], sequences *orderedmap.Map[string, *model.Sequence]) {
 	// COMMENT ON TYPE/DOMAIN uses TypeName, not a list
 	if cs.Objtype == pg_query.ObjectType_OBJECT_TYPE {
-		parseCommentOnType(cs, defaultSchema, enums)
+		parseCommentOnType(cs, defaultSchema, enums, compositeTypes)
 		return
 	}
 	if cs.Objtype == pg_query.ObjectType_OBJECT_DOMAIN {
@@ -1190,13 +1277,24 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 			colName = names[2]
 		}
 		fqtn := model.Ident(schema, tableName)
+		var comment *string
+		if cs.Comment != "" {
+			c := cs.Comment
+			comment = &c
+		}
 		if t, ok := tables.GetOk(fqtn); ok {
 			if col, ok := t.Columns.GetOk(colName); ok {
-				if cs.Comment != "" {
-					c := cs.Comment
-					col.Comment = &c
-				} else {
-					col.Comment = nil
+				col.Comment = comment
+			}
+			return
+		}
+		// COMMENT ON COLUMN also targets composite type attributes
+		// (schema.type.attribute).
+		if ct, ok := compositeTypes.GetOk(fqtn); ok {
+			for _, attr := range ct.Attributes {
+				if attr.Name == colName {
+					attr.Comment = comment
+					break
 				}
 			}
 		}
@@ -1219,7 +1317,7 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 	}
 }
 
-func parseCommentOnType(cs *pg_query.CommentStmt, defaultSchema string, enums *orderedmap.Map[string, *model.Enum]) {
+func parseCommentOnType(cs *pg_query.CommentStmt, defaultSchema string, enums *orderedmap.Map[string, *model.Enum], compositeTypes *orderedmap.Map[string, *model.CompositeType]) {
 	tn := cs.Object.GetTypeName()
 	if tn == nil {
 		return
@@ -1239,14 +1337,19 @@ func parseCommentOnType(cs *pg_query.CommentStmt, defaultSchema string, enums *o
 		schema = names[0]
 		typeName = names[1]
 	}
-	fqen := model.Ident(schema, typeName)
-	if e, ok := enums.GetOk(fqen); ok {
-		if cs.Comment != "" {
-			c := cs.Comment
-			e.Comment = &c
-		} else {
-			e.Comment = nil
-		}
+	// COMMENT ON TYPE names both enums and composite types; set on whichever
+	// this file defines.
+	fqn := model.Ident(schema, typeName)
+	var comment *string
+	if cs.Comment != "" {
+		c := cs.Comment
+		comment = &c
+	}
+	if e, ok := enums.GetOk(fqn); ok {
+		e.Comment = comment
+	}
+	if ct, ok := compositeTypes.GetOk(fqn); ok {
+		ct.Comment = comment
 	}
 }
 

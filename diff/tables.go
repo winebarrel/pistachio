@@ -348,7 +348,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// Type or collation change. Collation is altered via SET DATA TYPE
 	// because PostgreSQL has no separate "set collation" syntax; re-issuing
 	// SET DATA TYPE without COLLATE reverts to the type's default collation.
-	if !equalTypeName(current.TypeName, desired.TypeName) || !equalPtr(current.Collation, desired.Collation) {
+	if !equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) || !equalPtr(current.Collation, desired.Collation) {
 		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + desired.TypeName
 		if desired.Collation != nil {
 			sql += " COLLATE " + model.Ident(*desired.Collation)
@@ -1333,7 +1333,9 @@ var serialBaseTypes = map[string]string{
 }
 
 // equalTypeName compares two type names, treating serial types as equal to their base types.
-func equalTypeName(a, b string) bool {
+func equalTypeName(a, b, schema string) bool {
+	a = stripTypeSchema(a, schema)
+	b = stripTypeSchema(b, schema)
 	if a == b {
 		return true
 	}
@@ -1344,6 +1346,40 @@ func equalTypeName(a, b string) bool {
 		return t
 	}
 	return normalize(a) == normalize(b)
+}
+
+// stripTypeSchema removes a redundant "<schema>." qualifier from a column type
+// name, preserving any trailing "[]". The catalog reports a type in the search
+// path unqualified (via format_type), while desired SQL may write it schema-
+// qualified. Stripping the table's own schema makes the two forms compare
+// equal instead of emitting a no-op SET DATA TYPE on every plan. A type in a
+// different search-path schema than its table is not covered.
+func stripTypeSchema(typeName, schema string) string {
+	if schema == "" {
+		return typeName
+	}
+	prefix := schema + "."
+	if strings.HasPrefix(typeName, prefix) {
+		return typeName[len(prefix):]
+	}
+	return typeName
+}
+
+// schemaOf returns the schema component of a canonical "schema.name"
+// identifier, preserving quoting. It returns "" when there is no top-level dot.
+func schemaOf(fqtn string) string {
+	inQuote := false
+	for i := 0; i < len(fqtn); i++ {
+		switch fqtn[i] {
+		case '"':
+			inQuote = !inQuote
+		case '.':
+			if !inQuote {
+				return fqtn[:i]
+			}
+		}
+	}
+	return ""
 }
 
 // equalDefault compares two default expressions (current, desired) by

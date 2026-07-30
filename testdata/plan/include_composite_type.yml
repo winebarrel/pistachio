@@ -1,0 +1,16 @@
+include: [address]
+init: |
+  CREATE TYPE public.address AS (street text, city text);
+  CREATE TYPE public.other AS (a integer);
+desired: |
+  CREATE TYPE public.address AS (
+      street  text,
+      city    text,
+      country text
+  );
+  CREATE TYPE public.other AS (
+      a integer,
+      b integer
+  );
+plan: |
+  ALTER TYPE public.address ADD ATTRIBUTE country text;

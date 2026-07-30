@@ -249,3 +249,41 @@ func (client *Client) reverseRemapDomainSchemas(domains *orderedmap.Map[string, 
 
 	return remapped
 }
+
+func (client *Client) remapCompositeTypeSchemas(compositeTypes *orderedmap.Map[string, *model.CompositeType]) *orderedmap.Map[string, *model.CompositeType] {
+	if len(client.SchemaMap) == 0 {
+		return compositeTypes
+	}
+
+	replacer := buildDefReplacer(client.SchemaMap)
+	remapped := orderedmap.New[string, *model.CompositeType]()
+
+	for _, ct := range compositeTypes.CollectValues() {
+		ct.Schema = client.RemapSchema(ct.Schema)
+		for _, a := range ct.Attributes {
+			a.TypeName = replacer.Replace(a.TypeName)
+		}
+		remapped.Set(ct.FQCN(), ct)
+	}
+
+	return remapped
+}
+
+func (client *Client) reverseRemapCompositeTypeSchemas(compositeTypes *orderedmap.Map[string, *model.CompositeType]) *orderedmap.Map[string, *model.CompositeType] {
+	if len(client.SchemaMap) == 0 {
+		return compositeTypes
+	}
+
+	replacer := buildReverseDefReplacer(client.SchemaMap)
+	remapped := orderedmap.New[string, *model.CompositeType]()
+
+	for _, ct := range compositeTypes.CollectValues() {
+		ct.Schema = client.ReverseRemapSchema(ct.Schema)
+		for _, a := range ct.Attributes {
+			a.TypeName = replacer.Replace(a.TypeName)
+		}
+		remapped.Set(ct.FQCN(), ct)
+	}
+
+	return remapped
+}

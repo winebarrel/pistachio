@@ -70,6 +70,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to fetch domains: %w", err)
 	}
 
+	currentCompositeTypes, err := cat.CompositeTypes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch composite types: %w", err)
+	}
+
 	currentSequences, err := cat.Sequences(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch sequences: %w", err)
@@ -86,10 +91,12 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	filteredViews := options.filterViews(currentViews)
 	filteredEnums := options.filterEnums(currentEnums)
 	filteredDomains := options.filterDomains(currentDomains)
+	filteredCompositeTypes := options.filterCompositeTypes(currentCompositeTypes)
 	filteredSequences := options.filterSequences(currentSequences)
 
 	desiredEnums := options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums))
 	desiredDomains := options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains))
+	desiredCompositeTypes := options.filterCompositeTypes(client.reverseRemapCompositeTypeSchemas(desired.CompositeTypes))
 	desiredTables := options.filterTables(client.reverseRemapTableSchemas(desired.Tables))
 	desiredViews := options.filterViews(client.reverseRemapViewSchemas(desired.Views))
 	// Only standalone sequences are managed; sequences a desired CREATE
@@ -105,6 +112,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	ignored = append(ignored, removeIgnored(desiredViews, filteredViews, func(v *model.View) bool { return v.Ignore })...)
 	ignored = append(ignored, removeIgnored(desiredEnums, filteredEnums, func(e *model.Enum) bool { return e.Ignore })...)
 	ignored = append(ignored, removeIgnored(desiredDomains, filteredDomains, func(d *model.Domain) bool { return d.Ignore })...)
+	ignored = append(ignored, removeIgnored(desiredCompositeTypes, filteredCompositeTypes, func(ct *model.CompositeType) bool { return ct.Ignore })...)
 	ignored = append(ignored, removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore })...)
 	sort.Strings(ignored)
 	ignoredComments := make([]string, len(ignored))
@@ -113,12 +121,13 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 
 	count := ObjectCount{
-		Schemas:   client.Schemas,
-		Tables:    filteredTables.Len(),
-		Views:     filteredViews.Len(),
-		Enums:     filteredEnums.Len(),
-		Domains:   filteredDomains.Len(),
-		Sequences: filteredSequences.Len(),
+		Schemas:        client.Schemas,
+		Tables:         filteredTables.Len(),
+		Views:          filteredViews.Len(),
+		Enums:          filteredEnums.Len(),
+		Domains:        filteredDomains.Len(),
+		CompositeTypes: filteredCompositeTypes.Len(),
+		Sequences:      filteredSequences.Len(),
 	}
 
 	switch {
@@ -147,6 +156,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to diff domains: %w", err)
 	}
 
+	compositeTypeDiff, err := diff.DiffCompositeTypes(filteredCompositeTypes, desiredCompositeTypes, &options.DropPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to diff composite types: %w", err)
+	}
+
 	tableDiff, err := diff.DiffTables(filteredTables, desiredTables, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
@@ -172,9 +186,9 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 
 	stmts := orderStatements(
-		filteredEnums, filteredDomains, filteredTables, filteredViews, filteredSequences,
-		desiredEnums, desiredDomains, desiredTables, desiredViews, desiredSequences,
-		enumDiff, domainDiff, tableDiff, viewDiff, sequenceDiff,
+		filteredEnums, filteredDomains, filteredCompositeTypes, filteredTables, filteredViews, filteredSequences,
+		desiredEnums, desiredDomains, desiredCompositeTypes, desiredTables, desiredViews, desiredSequences,
+		enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff,
 	)
 
 	preSQL, err := resolvePreSQL(options.PreSQL, options.PreSQLFile)
@@ -191,6 +205,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	disallowed = append(disallowed, viewDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, tableDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, domainDiff.DisallowedDropStmts...)
+	disallowed = append(disallowed, compositeTypeDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, enumDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, sequenceDiff.DisallowedDropStmts...)
 
@@ -326,26 +341,29 @@ func forceConcurrentlyDirectives(
 func orderStatements(
 	currentEnums *orderedmap.Map[string, *model.Enum],
 	currentDomains *orderedmap.Map[string, *model.Domain],
+	currentCompositeTypes *orderedmap.Map[string, *model.CompositeType],
 	currentTables *orderedmap.Map[string, *model.Table],
 	currentViews *orderedmap.Map[string, *model.View],
 	currentSequences *orderedmap.Map[string, *model.Sequence],
 	desiredEnums *orderedmap.Map[string, *model.Enum],
 	desiredDomains *orderedmap.Map[string, *model.Domain],
+	desiredCompositeTypes *orderedmap.Map[string, *model.CompositeType],
 	desiredTables *orderedmap.Map[string, *model.Table],
 	desiredViews *orderedmap.Map[string, *model.View],
 	desiredSequences *orderedmap.Map[string, *model.Sequence],
 	enumDiff *diff.EnumDiffResult,
 	domainDiff *diff.DomainDiffResult,
+	compositeTypeDiff *diff.CompositeTypeDiffResult,
 	tableDiff *diff.TableDiffResult,
 	viewDiff *diff.ViewDiffResult,
 	sequenceDiff *diff.SequenceDiffResult,
 ) []string {
 	// Build topological order from desired schema for creates
 	createOrder, err := toposort.OrderFromSchema(
-		desiredEnums, desiredDomains, desiredTables, desiredViews, desiredSequences,
+		desiredEnums, desiredDomains, desiredCompositeTypes, desiredTables, desiredViews, desiredSequences,
 	)
 	if err != nil {
-		return fallbackOrder(enumDiff, domainDiff, tableDiff, viewDiff, sequenceDiff)
+		return fallbackOrder(enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff)
 	}
 
 	createPosMap := make(map[string]int, len(createOrder))
@@ -357,10 +375,10 @@ func orderStatements(
 	// Dropped objects are not in the desired schema, so we need the current
 	// schema's dependency graph to determine correct drop order.
 	dropOrder, err := toposort.OrderFromSchema(
-		currentEnums, currentDomains, currentTables, currentViews, currentSequences,
+		currentEnums, currentDomains, currentCompositeTypes, currentTables, currentViews, currentSequences,
 	)
 	if err != nil {
-		return fallbackOrder(enumDiff, domainDiff, tableDiff, viewDiff, sequenceDiff)
+		return fallbackOrder(enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff)
 	}
 
 	dropPosMap := make(map[string]int, len(dropOrder))
@@ -374,6 +392,7 @@ func orderStatements(
 	var createStmts []taggedStmt
 	createStmts = append(createStmts, tagStatements(enumDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(domainDiff.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(compositeTypeDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(sequenceDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(tableDiff.Stmts, createPosMap)...)
 	sort.SliceStable(createStmts, func(i, j int) bool {
@@ -396,6 +415,7 @@ func orderStatements(
 	var postDropStmts []taggedStmt
 	postDropStmts = append(postDropStmts, tagStatements(tableDiff.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(sequenceDiff.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(compositeTypeDiff.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(domainDiff.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(enumDiff.DropStmts, dropPosMap)...)
 	sort.SliceStable(postDropStmts, func(i, j int) bool {
@@ -438,6 +458,7 @@ func orderStatements(
 func fallbackOrder(
 	enumDiff *diff.EnumDiffResult,
 	domainDiff *diff.DomainDiffResult,
+	compositeTypeDiff *diff.CompositeTypeDiffResult,
 	tableDiff *diff.TableDiffResult,
 	viewDiff *diff.ViewDiffResult,
 	sequenceDiff *diff.SequenceDiffResult,
@@ -445,12 +466,14 @@ func fallbackOrder(
 	var stmts []string
 	stmts = append(stmts, enumDiff.Stmts...)
 	stmts = append(stmts, domainDiff.Stmts...)
+	stmts = append(stmts, compositeTypeDiff.Stmts...)
 	stmts = append(stmts, sequenceDiff.Stmts...)
 	stmts = append(stmts, viewDiff.DropStmts...)
 	stmts = append(stmts, tableDiff.FKDropStmts...)
 	stmts = append(stmts, tableDiff.Stmts...)
 	stmts = append(stmts, tableDiff.DropStmts...)
 	stmts = append(stmts, sequenceDiff.DropStmts...)
+	stmts = append(stmts, compositeTypeDiff.DropStmts...)
 	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
 	stmts = append(stmts, tableDiff.FKAddStmts...)

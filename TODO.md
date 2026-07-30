@@ -392,3 +392,47 @@ The codebase has no dialect layer today, so this is new work. This section
 records the verified gaps, not a commitment to implement DSQL support.
 
 Origin: live DSQL investigation, 2026-07-23.
+
+## Composite type: ALTER ATTRIBUTE ... TYPE while a table column uses the type
+
+`ALTER TYPE ... ALTER ATTRIBUTE ... TYPE` fails at apply when a table column
+references the composite type (`cannot alter type "x" because column "..."
+uses it`, SQLSTATE 0A000). `CASCADE` does not lift the restriction, and
+`ADD` / `DROP` / `RENAME ATTRIBUTE` are not affected. The plan looks valid
+but apply rolls back, so nothing is destroyed. Domain base-type changes
+already error at plan time; composite attribute type changes could do the
+same, but that needs the diff to know which composite types are referenced by
+a table column (cross-object awareness the composite diff does not have
+today). For now the limitation is documented in the README.
+
+Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
+
+## Composite type: attribute reordering is not diffed
+
+Attributes are matched by name, so a desired schema that only reorders
+attributes produces no diff. This matches PostgreSQL, which has no operation
+to reorder composite type attributes (`ADD ATTRIBUTE` always appends). A
+mid-list `ADD` therefore appends the new attribute; the result is
+order-independent and stable across plans. Recorded as a deliberate choice,
+not a bug.
+
+Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
+
+## Silent drift on cross-schema user-type references
+
+A table column, or a composite type attribute, whose type is a user-defined
+type (enum, domain, or composite) written schema-qualified in desired SQL
+drifts on every plan when the type's schema differs from the container's own
+schema. The catalog reads the type via `format_type`, which returns it
+unqualified when it is in the search_path, while the desired parser keeps the
+qualified form. The diff (`equalTypeName`) strips the container's own schema
+from both sides, so `home public.addr` on a table in `public` no longer
+drifts, but a type in a different search-path schema than its table or
+composite type (e.g. a `shared` schema on the search_path) is still compared
+qualified-vs-unqualified and emits a redundant `SET DATA TYPE`.
+
+Closing it fully needs the target-schema list in the diff (to strip any
+search-path schema, not just the container's own), which the diff does not
+thread today. Workaround: write such a reference unqualified.
+
+Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).

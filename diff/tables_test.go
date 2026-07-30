@@ -1213,12 +1213,39 @@ func TestEqualPtr(t *testing.T) {
 }
 
 func TestEqualTypeName(t *testing.T) {
-	assert.True(t, equalTypeName("integer", "integer"))
-	assert.True(t, equalTypeName("serial", "integer"))
-	assert.True(t, equalTypeName("integer", "serial"))
-	assert.True(t, equalTypeName("bigserial", "bigint"))
-	assert.True(t, equalTypeName("smallserial", "smallint"))
-	assert.False(t, equalTypeName("integer", "text"))
+	assert.True(t, equalTypeName("integer", "integer", "public"))
+	assert.True(t, equalTypeName("serial", "integer", "public"))
+	assert.True(t, equalTypeName("integer", "serial", "public"))
+	assert.True(t, equalTypeName("bigserial", "bigint", "public"))
+	assert.True(t, equalTypeName("smallserial", "smallint", "public"))
+	assert.False(t, equalTypeName("integer", "text", "public"))
+	// A schema-qualified user type matches the unqualified form the catalog
+	// reports for a type in the search path.
+	assert.True(t, equalTypeName("public.addr", "addr", "public"))
+	assert.True(t, equalTypeName("addr", "public.addr", "public"))
+	assert.True(t, equalTypeName("public.addr[]", "addr[]", "public"))
+	// A different-named type still differs.
+	assert.False(t, equalTypeName("public.addr", "public.other", "public"))
+	// A quoted schema qualifier is stripped too.
+	assert.True(t, equalTypeName(`"My Schema".addr`, "addr", `"My Schema"`))
+}
+
+func TestSchemaOf(t *testing.T) {
+	assert.Equal(t, "public", schemaOf("public.people"))
+	assert.Equal(t, `"My Schema"`, schemaOf(`"My Schema".people`))
+	// A quoted schema containing a dot: the dot inside quotes is not a separator.
+	assert.Equal(t, `"a.b"`, schemaOf(`"a.b".people`))
+	// No top-level dot yields "".
+	assert.Equal(t, "", schemaOf("people"))
+}
+
+func TestStripTypeSchema(t *testing.T) {
+	assert.Equal(t, "addr", stripTypeSchema("public.addr", "public"))
+	assert.Equal(t, "addr[]", stripTypeSchema("public.addr[]", "public"))
+	// A different schema prefix is left intact.
+	assert.Equal(t, "other.addr", stripTypeSchema("other.addr", "public"))
+	// An empty schema is a no-op.
+	assert.Equal(t, "addr", stripTypeSchema("addr", ""))
 }
 
 func TestEqualDefault(t *testing.T) {

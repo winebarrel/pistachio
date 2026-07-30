@@ -1,0 +1,9 @@
+init: |
+  CREATE TYPE public.address AS (street text, city text);
+desired: |
+  CREATE TYPE public.address AS (
+      street text,
+      city   varchar(100)
+  );
+plan: |
+  ALTER TYPE public.address ALTER ATTRIBUTE city TYPE character varying(100);

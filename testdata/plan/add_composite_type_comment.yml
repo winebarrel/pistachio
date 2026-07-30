@@ -1,0 +1,12 @@
+init: |
+  CREATE TYPE public.address AS (street text, city text);
+desired: |
+  CREATE TYPE public.address AS (
+      street text,
+      city   text
+  );
+  COMMENT ON TYPE public.address IS 'an address';
+  COMMENT ON COLUMN public.address.city IS 'the city';
+plan: |
+  COMMENT ON TYPE public.address IS 'an address';
+  COMMENT ON COLUMN public.address.city IS 'the city';
