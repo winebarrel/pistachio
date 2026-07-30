@@ -1,0 +1,11 @@
+init: |
+  CREATE TYPE public.address AS (street text, city text);
+  CREATE TABLE public.users (id integer);
+include:
+  - address
+dump: |
+  -- public.address
+  CREATE TYPE public.address AS (
+      street text,
+      city text
+  );

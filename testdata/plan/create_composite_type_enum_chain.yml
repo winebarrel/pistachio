@@ -1,0 +1,16 @@
+init: ""
+desired: |
+  CREATE TYPE public.addr AS (
+      street text,
+      kind   public.kind
+  );
+  CREATE TYPE public.kind AS ENUM ('home', 'work');
+plan: |
+  CREATE TYPE public.kind AS ENUM (
+      'home',
+      'work'
+  );
+  CREATE TYPE public.addr AS (
+      street text,
+      kind public.kind
+  );

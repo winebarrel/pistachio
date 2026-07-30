@@ -1,0 +1,13 @@
+init: |
+  CREATE TYPE public.address AS (street text, city text);
+  COMMENT ON TYPE public.address IS 'an address';
+  COMMENT ON COLUMN public.address.city IS 'the city';
+omit_schema: true
+dump: |
+  -- address
+  CREATE TYPE address AS (
+      street text,
+      city text
+  );
+  COMMENT ON TYPE address IS 'an address';
+  COMMENT ON COLUMN address.city IS 'the city';

@@ -17,12 +17,13 @@ import (
 func OrderFromSchema(
 	enums *orderedmap.Map[string, *model.Enum],
 	domains *orderedmap.Map[string, *model.Domain],
+	compositeTypes *orderedmap.Map[string, *model.CompositeType],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 	sequences *orderedmap.Map[string, *model.Sequence],
 ) ([]string, error) {
 	g := newGraph()
-	defined := collectDefined(enums, domains, tables, views, sequences)
+	defined := collectDefined(enums, domains, compositeTypes, tables, views, sequences)
 
 	// Enums: no dependencies (leaf nodes)
 	for k := range enums.Keys() {
@@ -39,6 +40,17 @@ func OrderFromSchema(
 		g.AddNode(k)
 		if dep := resolveTypeDep(d.BaseType, d.Schema, defined); dep != "" {
 			g.AddEdge(k, dep)
+		}
+	}
+
+	// Composite types: may depend on enums, domains, or other composite types
+	// via attribute types.
+	for k, ct := range compositeTypes.All() {
+		g.AddNode(k)
+		for _, a := range ct.Attributes {
+			if dep := resolveTypeDep(a.TypeName, ct.Schema, defined); dep != "" && dep != k {
+				g.AddEdge(k, dep)
+			}
 		}
 	}
 
@@ -111,6 +123,7 @@ func OrderFromSchema(
 func collectDefined(
 	enums *orderedmap.Map[string, *model.Enum],
 	domains *orderedmap.Map[string, *model.Domain],
+	compositeTypes *orderedmap.Map[string, *model.CompositeType],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 	sequences *orderedmap.Map[string, *model.Sequence],
@@ -120,6 +133,9 @@ func collectDefined(
 		defined[k] = true
 	}
 	for k := range domains.Keys() {
+		defined[k] = true
+	}
+	for k := range compositeTypes.Keys() {
 		defined[k] = true
 	}
 	for k := range tables.Keys() {

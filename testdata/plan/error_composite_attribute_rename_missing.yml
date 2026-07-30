@@ -1,0 +1,8 @@
+init: |
+  CREATE TYPE public.address AS (street text);
+desired: |
+  CREATE TYPE public.address AS (
+      -- pista:renamed-from nonexist
+      road text
+  );
+error: "rename source attribute nonexist not found in composite type public.address"

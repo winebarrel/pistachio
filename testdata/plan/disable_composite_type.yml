@@ -1,0 +1,11 @@
+disable: [composite_type]
+init: ""
+desired: |
+  CREATE TYPE public.address AS (
+      street text
+  );
+  CREATE TABLE public.t (id int);
+plan: |
+  CREATE TABLE public.t (
+      id integer
+  );

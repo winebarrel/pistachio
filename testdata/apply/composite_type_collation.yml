@@ -1,0 +1,18 @@
+init: ""
+desired: |
+  CREATE TYPE public.t AS (
+      name  text COLLATE pg_catalog."C",
+      other text
+  );
+applied_sql: |
+  CREATE TYPE public.t AS (
+      name text COLLATE pg_catalog."C",
+      other text
+  );
+applied: |
+  -- public.t
+  CREATE TYPE public.t AS (
+      name text COLLATE pg_catalog."C",
+      other text
+  );
+verify_no_drift: true

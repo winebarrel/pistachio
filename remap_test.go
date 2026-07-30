@@ -244,6 +244,56 @@ CREATE SEQUENCE myschema.order_seq INCREMENT BY 1;
 	assert.Contains(t, got.SQL, "ALTER SEQUENCE myschema.order_seq INCREMENT BY 2;")
 }
 
+func TestDump_WithSchemaMap_CompositeType(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.point AS (x integer, y integer);
+CREATE TYPE myschema.shape AS (name text, origin myschema.point);
+`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	// The type schema and the schema-qualified attribute type are both remapped
+	// to "public" (exercises remapCompositeTypeSchemas).
+	assert.Contains(t, got.String(), "CREATE TYPE public.point")
+	assert.Contains(t, got.String(), "CREATE TYPE public.shape")
+	assert.Contains(t, got.String(), "origin public.point")
+	assert.NotContains(t, got.String(), "myschema.")
+}
+
+func TestPlan_WithSchemaMap_CompositeType(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.address AS (street text, city text);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(
+		"CREATE TYPE public.address AS (street text, city text, country text);"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	// The desired public.address is reverse-remapped to myschema.address
+	// (exercises reverseRemapCompositeTypeSchemas) and diffed against the DB.
+	assert.Contains(t, got.SQL, "ALTER TYPE myschema.address ADD ATTRIBUTE country text;")
+}
+
 func TestDump_WithSchemaMap_Files(t *testing.T) {
 	ctx := context.Background()
 

@@ -85,7 +85,7 @@ pista apply schema.sql                 # apply it
 Or split the schema across multiple files:
 
 ```bash
-pista dump --split ./schema/       # dump per table/view/enum/domain
+pista dump --split ./schema/       # dump per table/view/enum/domain/composite type
 pista plan ./schema/*.sql          # review the diff
 pista apply ./schema/*.sql         # apply it
 ```
@@ -245,7 +245,7 @@ pista plan --assume-validated schema.sql
 pista apply --assume-validated schema.sql
 ```
 
-By default, `plan` and `apply` do not drop tables, views, enums, domains, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `column`, `constraint`, `foreign_key`, `index`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately.
+By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `column`, `constraint`, `foreign_key`, `index`, `policy`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type.
 
 ```bash
 # Allow all drops
@@ -372,7 +372,7 @@ pista -n staging -m staging=public apply schema.sql
 
 Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names). Also available as `$PISTA_INCLUDE` / `$PISTA_EXCLUDE` environment variables.
 
-Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`, `sequence`. Can be repeated. Also available as `$PISTA_ENABLE` / `$PISTA_DISABLE` environment variables.
+Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`. Can be repeated. Also available as `$PISTA_ENABLE` / `$PISTA_DISABLE` environment variables.
 
 These flags are available on the `dump`, `plan`, and `apply` subcommands.
 
@@ -462,6 +462,17 @@ CREATE TYPE public.status AS ENUM (
 );
 ```
 
+**Composite types** (statement level) **and their attributes** (inside `CREATE TYPE ... AS (...)`, before the attribute). A type rename emits `ALTER TYPE ... RENAME TO`; an attribute rename emits `ALTER TYPE ... RENAME ATTRIBUTE`, which keeps stored data:
+
+```sql
+-- pista:renamed-from public.address
+CREATE TYPE public.postal_address AS (
+    -- pista:renamed-from street
+    road text,
+    city text
+);
+```
+
 **Columns, constraints, indexes** (inside `CREATE TABLE` or before `CREATE INDEX` / `ALTER TABLE ADD CONSTRAINT`):
 
 ```sql
@@ -510,7 +521,7 @@ The following references are not auto-rewritten and may produce a redundant `DRO
 
 ### Ignoring objects
 
-Use the `-- pista:ignore` directive to leave an object unmanaged. pistachio does not create, alter, or drop a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE DOMAIN` / `CREATE VIEW` marked with it. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
+Use the `-- pista:ignore` directive to leave an object unmanaged. pistachio does not create, alter, or drop a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE TYPE ... AS (...)` / `CREATE DOMAIN` / `CREATE VIEW` marked with it. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
 
 ```sql
 -- pista:ignore
@@ -524,7 +535,7 @@ Each ignored object is reported as an `-- ignored: <name>` comment in `plan` and
 
 ### Split dump
 
-Use `--split` to output each table/view/enum/domain as a separate file in the specified directory.
+Use `--split` to output each table/view/enum/domain/composite type as a separate file in the specified directory.
 
 ```bash
 pista dump --split ./schema/
@@ -546,6 +557,7 @@ pista dump --split ./schema/
 
 - Domain types (`CREATE DOMAIN`, `ALTER DOMAIN SET/DROP DEFAULT`, `SET/DROP NOT NULL`, `ADD/DROP/VALIDATE CONSTRAINT`)
 - Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
+- Composite types (`CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME ATTRIBUTE`)
 - Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
 - Tables (including unlogged and partitioned tables)
 - Views
@@ -553,9 +565,9 @@ pista dump --split ./schema/
 - Columns (serial/bigserial/smallserial, identity, generated)
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
-- Comments (on tables, columns, views, types, domains, sequences)
+- Comments (on tables, columns, views, types, domains, composite types, composite attributes, sequences)
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
-- Renaming (tables, views, enums, enum values, domains, sequences, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
+- Renaming (tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 

@@ -1,0 +1,19 @@
+drop_policy:
+  allow_drop:
+    - table
+init: |
+  CREATE TYPE public.address AS (street text);
+desired: |
+  CREATE TABLE public.t (id int);
+disallowed_drops: |
+  -- skipped: DROP TYPE public.address;
+applied: |
+  -- public.address
+  CREATE TYPE public.address AS (
+      street text
+  );
+
+  -- public.t
+  CREATE TABLE public.t (
+      id integer
+  );

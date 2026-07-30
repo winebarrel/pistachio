@@ -1,0 +1,14 @@
+init: |
+  CREATE TYPE public.address AS (street text);
+desired: |
+  -- pista:ignore
+  CREATE TYPE public.address AS (
+      street text,
+      city   text
+  );
+applied: |
+  -- public.address
+  CREATE TYPE public.address AS (
+      street text
+  );
+verify_no_drift: true

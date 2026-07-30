@@ -1,0 +1,15 @@
+init: |
+  CREATE TYPE public.address AS (street text);
+  CREATE TYPE public.keepme AS (a int);
+desired: |
+  CREATE TYPE public.keepme AS (
+      a int
+  );
+applied_sql: |
+  DROP TYPE public.address;
+applied: |
+  -- public.keepme
+  CREATE TYPE public.keepme AS (
+      a integer
+  );
+verify_no_drift: true

@@ -1,0 +1,18 @@
+enable:
+  - composite_type
+init: ""
+desired: |
+  CREATE TYPE public.addr AS (
+      street text
+  );
+  CREATE TABLE public.t (id int);
+applied_sql: |
+  CREATE TYPE public.addr AS (
+      street text
+  );
+applied: |
+  -- public.addr
+  CREATE TYPE public.addr AS (
+      street text
+  );
+verify_no_drift: true

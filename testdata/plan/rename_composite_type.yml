@@ -1,0 +1,10 @@
+init: |
+  CREATE TYPE public.address AS (street text, city text);
+desired: |
+  -- pista:renamed-from address
+  CREATE TYPE public.postal_address AS (
+      street text,
+      city   text
+  );
+plan: |
+  ALTER TYPE public.address RENAME TO postal_address;
