@@ -1,12 +1,19 @@
-# Image for the pista CLI, built and pushed by GoReleaser (see .goreleaser.yml).
-#
-# GoReleaser passes a build context that holds the already cross-built
-# binaries, one directory per platform (e.g. linux/amd64/pista), so this
-# Dockerfile only copies the right one in. The binary links against glibc
-# because of cgo (libpg_query), so the runtime image cannot be musl-based.
-FROM gcr.io/distroless/base-debian13
+FROM golang:1.26-alpine AS build
 
-ARG TARGETPLATFORM
-COPY $TARGETPLATFORM/pista /usr/local/bin/pista
+RUN apk add --no-cache gcc musl-dev
 
-ENTRYPOINT ["/usr/local/bin/pista"]
+WORKDIR /src
+COPY go.* /src/
+RUN go mod download
+
+COPY . /src/
+ARG PISTA_VERSION
+RUN CGO_ENABLED=1 go build -o pista -ldflags "-X main.version=${PISTA_VERSION#v}" ./cmd/pista
+
+FROM alpine:3
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=build /src/pista /usr/local/bin/
+
+ENTRYPOINT ["pista"]

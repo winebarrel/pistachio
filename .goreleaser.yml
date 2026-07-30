@@ -54,26 +54,6 @@ archives:
         formats: [zip]
 checksum:
   name_template: "checksums.txt"
-dockers_v2:
-  - ids: [linux-amd64, linux-arm64]
-    images:
-      - ghcr.io/winebarrel/pistachio
-    tags:
-      - "v{{ .Version }}"
-      - latest
-    platforms:
-      - linux/amd64
-      - linux/arm64
-    labels: &image_labels
-      org.opencontainers.image.title: "{{ .ProjectName }}"
-      org.opencontainers.image.description: pistachio is a declarative schema management tool for PostgreSQL.
-      org.opencontainers.image.url: https://github.com/winebarrel/pistachio
-      org.opencontainers.image.source: https://github.com/winebarrel/pistachio
-      org.opencontainers.image.licenses: MIT
-      org.opencontainers.image.version: "{{ .Version }}"
-      org.opencontainers.image.revision: "{{ .FullCommit }}"
-      org.opencontainers.image.created: "{{ .Date }}"
-    annotations: *image_labels
 homebrew_casks:
   - repository:
       owner: winebarrel
