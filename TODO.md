@@ -3,20 +3,6 @@
 Items intentionally deferred from prior PRs. Each entry notes the originating
 PR for context.
 
-## apply does not set search_path before managed DDL
-
-`apply` sets `search_path` only just before `-- pista:execute` statements
-(`apply.go`). The managed DDL it generates references user-defined types by
-whatever the desired SQL wrote, so an unqualified user-type reference
-(`home addr`) fails at apply for any target schema other than `public`
-(`type "addr" does not exist`, SQLSTATE 42704). Qualifying the type
-(`home app.addr`) works. The behavior is pre-existing and reproduces with an
-enum type; a composite or domain type behaves the same. A fix would set
-`search_path` to the target schemas before running the managed DDL, or qualify
-generated references.
-
-Origin: surfaced during the [#331](https://github.com/winebarrel/pistachio/pull/331) review; pre-existing.
-
 ## Auto-rewrite of column references in views and cross-table FKs
 
 When a column is renamed via `-- pista:renamed-from`, the rewriter only

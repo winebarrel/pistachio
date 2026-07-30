@@ -139,6 +139,21 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		}
 	}
 
+	// Set search_path to the target schemas before running the managed DDL and
+	// the -- pista:execute statements, so an unqualified user-type reference in
+	// a column or attribute definition (e.g. "home addr") resolves. The
+	// generated DDL always schema-qualifies object names, so this only affects
+	// name resolution inside definitions, not where objects are created. It is
+	// not written to the output writer, matching the emitted-SQL contract.
+	quoted := make([]string, len(client.Schemas))
+	for i, s := range client.Schemas {
+		quoted[i] = model.Ident(s)
+	}
+	searchPath := "SET search_path TO " + strings.Join(quoted, ", ")
+	if _, err := exec(ctx, searchPath); err != nil {
+		return nil, fmt.Errorf("failed to set search_path: %w", err)
+	}
+
 	for _, stmt := range result.Stmts {
 		fmt.Fprintln(w, stmt) //nolint:errcheck
 		if _, err := exec(ctx, stmt); err != nil {
@@ -147,19 +162,8 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		applied = true
 	}
 
-	// Execute -- pista:execute statements after schema changes.
-	// Set search_path so unqualified names resolve to the configured schemas.
-	if len(result.ExecuteStmts) > 0 && len(client.Schemas) > 0 {
-		quoted := make([]string, len(client.Schemas))
-		for i, s := range client.Schemas {
-			quoted[i] = model.Ident(s)
-		}
-		searchPath := "SET search_path TO " + strings.Join(quoted, ", ")
-		if _, err := exec(ctx, searchPath); err != nil {
-			return nil, fmt.Errorf("failed to set search_path: %w", err)
-		}
-	}
-
+	// Execute -- pista:execute statements after schema changes. search_path is
+	// already set above.
 	for _, es := range result.ExecuteStmts {
 		shouldExecute := true
 

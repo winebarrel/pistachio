@@ -244,6 +244,37 @@ CREATE SEQUENCE myschema.order_seq INCREMENT BY 1;
 	assert.Contains(t, got.SQL, "ALTER SEQUENCE myschema.order_seq INCREMENT BY 2;")
 }
 
+// TestApply_UnqualifiedUserTypeInNonPublicSchema guards the apply-time
+// search_path setup: an unqualified user-type reference in a column definition
+// must resolve for a non-public target schema. The apply fixtures cannot cover
+// it because the harness always targets public.
+func TestApply_UnqualifiedUserTypeInNonPublicSchema(t *testing.T) {
+	ctx := context.Background()
+	connString := setupSchemaDB(t, ctx, "app", "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(
+		"CREATE TYPE app.addr AS (x text);\nCREATE TABLE app.people (id integer, home addr);\n"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"app"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	}, io.Discard)
+	require.NoError(t, err)
+
+	plan, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, plan.SQL, "expected no drift after apply")
+}
+
 func TestDump_WithSchemaMap_CompositeType(t *testing.T) {
 	ctx := context.Background()
 
