@@ -245,6 +245,40 @@ func TestDiffCompositeTypes_AttributeCommentRemoved(t *testing.T) {
 	assert.Equal(t, []string{"COMMENT ON COLUMN public.address.street IS NULL;"}, result.Stmts)
 }
 
+func TestDiffCompositeTypes_CollationEquivalentForms(t *testing.T) {
+	// Catalog reports "pg_catalog.C"; the parser keeps the user's "C". They name
+	// the same collation, so no ALTER ATTRIBUTE should be emitted.
+	catalogColl := "pg_catalog.C"
+	current := newCompositeTypeMap(&model.CompositeType{
+		Schema: "public", Name: "ct",
+		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &catalogColl}},
+	})
+	desiredColl := "C"
+	desired := newCompositeTypeMap(&model.CompositeType{
+		Schema: "public", Name: "ct",
+		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &desiredColl}},
+	})
+	result, err := diff.DiffCompositeTypes(current, desired, diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+}
+
+func TestDiffCompositeTypes_CollationChange(t *testing.T) {
+	cColl := "pg_catalog.C"
+	current := newCompositeTypeMap(&model.CompositeType{
+		Schema: "public", Name: "ct",
+		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &cColl}},
+	})
+	newColl := "en_US"
+	desired := newCompositeTypeMap(&model.CompositeType{
+		Schema: "public", Name: "ct",
+		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &newColl}},
+	})
+	result, err := diff.DiffCompositeTypes(current, desired, diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{`ALTER TYPE public.ct ALTER ATTRIBUTE name TYPE text COLLATE "en_US";`}, result.Stmts)
+}
+
 func TestDiffCompositeTypes_CommentChange(t *testing.T) {
 	comment := "an address"
 	current := newCompositeTypeMap(ct("address", attr("street", "text")))

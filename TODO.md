@@ -393,24 +393,46 @@ records the verified gaps, not a commitment to implement DSQL support.
 
 Origin: live DSQL investigation, 2026-07-23.
 
-## Silent drift on schema-qualified user-type columns
+## Composite type: ALTER ATTRIBUTE ... TYPE while a table column uses the type
+
+`ALTER TYPE ... ALTER ATTRIBUTE ... TYPE` fails at apply when a table column
+references the composite type (`cannot alter type "x" because column "..."
+uses it`, SQLSTATE 0A000). `CASCADE` does not lift the restriction, and
+`ADD` / `DROP` / `RENAME ATTRIBUTE` are not affected. The plan looks valid
+but apply rolls back, so nothing is destroyed. Domain base-type changes
+already error at plan time; composite attribute type changes could do the
+same, but that needs the diff to know which composite types are referenced by
+a table column (cross-object awareness the composite diff does not have
+today). For now the limitation is documented in the README.
+
+Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
+
+## Composite type: attribute reordering is not diffed
+
+Attributes are matched by name, so a desired schema that only reorders
+attributes produces no diff. This matches PostgreSQL, which has no operation
+to reorder composite type attributes (`ADD ATTRIBUTE` always appends). A
+mid-list `ADD` therefore appends the new attribute; the result is
+order-independent and stable across plans. Recorded as a deliberate choice,
+not a bug.
+
+Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
+
+## Silent drift on cross-schema user-type columns
 
 A table column whose type is a user-defined type (enum, domain, or composite
-type) written schema-qualified in desired SQL (e.g. `home public.addr`) drifts
-on every plan. The catalog reads the column type via `format_type`, which
-returns the type unqualified (`addr`) when the type is in the search_path,
-while the desired parser keeps the qualified form (`public.addr`). The
-mismatch emits a redundant `ALTER TABLE ... ALTER COLUMN ... SET DATA TYPE`
-that never converges.
+type) written schema-qualified in desired SQL drifts on every plan when the
+type's schema differs from the table's own schema. The catalog reads the
+column type via `format_type`, which returns the type unqualified when it is
+in the search_path, while the desired parser keeps the qualified form. The
+column diff (`equalTypeName`) strips the table's own schema from both sides,
+so `home public.addr` on a table in `public` no longer drifts, but a type in
+a different search-path schema than its table (e.g. a `shared` schema on the
+search_path) is still compared qualified-vs-unqualified and emits a redundant
+`SET DATA TYPE`.
 
-The behavior is pre-existing and shared by enum, domain, and composite type
-columns, but composite types surface it more often because a composite type
-is only useful once a column references it. Workaround: write the column type
-unqualified (`home addr`) when the type is in the search_path.
-
-A fix would normalize the two sides: strip the schema prefix from a desired
-column type when its schema is in the target schemas (matching `format_type`),
-or qualify the catalog side. Both touch the shared column-type comparison, so
-it is out of scope for the composite type PR.
+Closing it fully needs the target-schema list in the column diff (to strip any
+search-path schema, not just the table's own), which the diff does not thread
+today. Workaround: write such a column type unqualified.
 
 Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).

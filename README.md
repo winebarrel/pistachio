@@ -258,7 +258,7 @@ pista apply --allow-drop column,table schema.sql
 Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. The plan still reports `-- No changes` when the only diff would be a suppressed drop, since no executable DDL is generated:
 
 ```sql
--- Plan for schema public (1 table, 0 views, 0 enums, 0 domains, 0 sequences)
+-- Plan for schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
 -- skipped: DROP TABLE public.legacy_users;
 -- No changes
 ```
@@ -420,7 +420,7 @@ pista dump --omit-schema
 # => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
 
 pista dump --omit-schema --split ./schema/
-# -- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains, 0 sequences)
+# -- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
 # -- Wrote 2 file(s) to ./schema/
 # (writes ./schema/users.sql, ./schema/orders.sql, ...)
 ```
@@ -539,7 +539,7 @@ Use `--split` to output each table/view/enum/domain/composite type as a separate
 
 ```bash
 pista dump --split ./schema/
-# -- Dump of schema public (3 tables, 0 views, 1 enum, 0 domains, 0 sequences)
+# -- Dump of schema public (3 tables, 0 views, 1 enum, 0 domains, 0 composite types, 0 sequences)
 # -- Wrote 4 file(s) to ./schema/
 # (writes ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...)
 ```
@@ -557,7 +557,7 @@ pista dump --split ./schema/
 
 - Domain types (`CREATE DOMAIN`, `ALTER DOMAIN SET/DROP DEFAULT`, `SET/DROP NOT NULL`, `ADD/DROP/VALIDATE CONSTRAINT`)
 - Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
-- Composite types (`CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME ATTRIBUTE`)
+- Composite types (`CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME ATTRIBUTE`). Attributes are matched by name, so reordering them produces no diff (PostgreSQL cannot reorder attributes). `ALTER ATTRIBUTE ... TYPE` fails at apply while a table column uses the type; PostgreSQL does not allow it and `CASCADE` does not help.
 - Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
 - Tables (including unlogged and partitioned tables)
 - Views

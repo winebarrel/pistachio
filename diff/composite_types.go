@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
@@ -77,6 +78,25 @@ func cloneCompositeAttributes(attrs []*model.CompositeAttribute) []*model.Compos
 	return out
 }
 
+// equalCollation compares two attribute collations by their trailing name
+// component. The catalog reports a collation schema-qualified (e.g.
+// "pg_catalog.C"), while the parser keeps what the user wrote ("C"). Comparing
+// only the collation name avoids a spurious ALTER ATTRIBUTE on every plan when
+// the two forms differ but name the same collation.
+func equalCollation(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return collationName(*a) == collationName(*b)
+}
+
+func collationName(s string) string {
+	if i := strings.LastIndex(s, "."); i >= 0 {
+		return s[i+1:]
+	}
+	return s
+}
+
 func indexCompositeAttribute(attrs []*model.CompositeAttribute, name string) int {
 	for i, a := range attrs {
 		if a.Name == name {
@@ -149,7 +169,7 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 			stmts = append(stmts, "ALTER TYPE "+fqcn+" ADD ATTRIBUTE "+model.Ident(da.Name)+" "+da.TypeSQL()+";")
 			continue
 		}
-		if wa.TypeName != da.TypeName || !equalPtr(wa.Collation, da.Collation) {
+		if wa.TypeName != da.TypeName || !equalCollation(wa.Collation, da.Collation) {
 			stmts = append(stmts, "ALTER TYPE "+fqcn+" ALTER ATTRIBUTE "+model.Ident(da.Name)+" TYPE "+da.TypeSQL()+";")
 		}
 	}

@@ -1,0 +1,29 @@
+init: ""
+desired: |
+  CREATE TYPE public.addr AS (
+      street text
+  );
+  CREATE TABLE public.people (
+      id   integer,
+      home public.addr
+  );
+applied_sql: |
+  CREATE TYPE public.addr AS (
+      street text
+  );
+  CREATE TABLE public.people (
+      id integer,
+      home public.addr
+  );
+applied: |
+  -- public.addr
+  CREATE TYPE public.addr AS (
+      street text
+  );
+
+  -- public.people
+  CREATE TABLE public.people (
+      id integer,
+      home addr
+  );
+verify_no_drift: true

@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.20.0] - 2026-07-30
+
+* Manage composite types. `plan`, `apply`, and `dump` handle `CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME TO`, `RENAME ATTRIBUTE`, and comments on the type and its attributes. A composite type is created after the enums, domains, and composite types its attributes reference, and before tables that use it. `--enable`, `--disable`, `--include`, `--exclude`, and `--allow-drop` accept `composite_type`; `--allow-drop=composite_type` also gates `DROP ATTRIBUTE`. Attribute reordering is not diffed (PostgreSQL cannot reorder attributes), and `ALTER ATTRIBUTE ... TYPE` fails at apply while a table column uses the type. ([#331](https://github.com/winebarrel/pistachio/pull/331))
+
 ## [1.19.0] - 2026-07-29
 
 * Add `--assume-validated` (env `$PISTA_ASSUME_VALIDATED`) to treat every constraint as validated. Pistachio ignores `NOT VALID` in the desired schema and never emits `NOT VALID` or `VALIDATE CONSTRAINT`. Constraint additions and definition changes still apply, without `NOT VALID`. Use it when `NOT VALID` is a one-off migration step you do not want in the desired state.
