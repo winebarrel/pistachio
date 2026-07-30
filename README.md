@@ -462,7 +462,7 @@ CREATE TYPE public.status AS ENUM (
 );
 ```
 
-**Composite types** (statement level) **and their attributes** (inside `CREATE TYPE ... AS (...)`, before the attribute). A type rename emits `ALTER TYPE ... RENAME TO`; an attribute rename emits `ALTER TYPE ... RENAME ATTRIBUTE`, which keeps stored data:
+**Composite types and their attributes**. The statement-level directive renames the type (`ALTER TYPE ... RENAME TO`). A directive inside `CREATE TYPE ... AS (...)`, before an attribute, renames that attribute (`ALTER TYPE ... RENAME ATTRIBUTE`) and keeps stored data:
 
 ```sql
 -- pista:renamed-from public.address

@@ -392,3 +392,25 @@ The codebase has no dialect layer today, so this is new work. This section
 records the verified gaps, not a commitment to implement DSQL support.
 
 Origin: live DSQL investigation, 2026-07-23.
+
+## Silent drift on schema-qualified user-type columns
+
+A table column whose type is a user-defined type (enum, domain, or composite
+type) written schema-qualified in desired SQL (e.g. `home public.addr`) drifts
+on every plan. The catalog reads the column type via `format_type`, which
+returns the type unqualified (`addr`) when the type is in the search_path,
+while the desired parser keeps the qualified form (`public.addr`). The
+mismatch emits a redundant `ALTER TABLE ... ALTER COLUMN ... SET DATA TYPE`
+that never converges.
+
+The behavior is pre-existing and shared by enum, domain, and composite type
+columns, but composite types surface it more often because a composite type
+is only useful once a column references it. Workaround: write the column type
+unqualified (`home addr`) when the type is in the search_path.
+
+A fix would normalize the two sides: strip the schema prefix from a desired
+column type when its schema is in the target schemas (matching `format_type`),
+or qualify the catalog side. Both touch the shared column-type comparison, so
+it is out of scope for the composite type PR.
+
+Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
