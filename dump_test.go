@@ -320,6 +320,46 @@ CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);`
 	assert.Contains(t, files["public.pos_int.sql"], "CREATE DOMAIN public.pos_int")
 }
 
+func TestDumpResult_Files_CompositeTypes(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.addr AS (street text, city text);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	files := got.Files()
+	assert.Contains(t, files, "public.addr.sql")
+	assert.Contains(t, files["public.addr.sql"], "CREATE TYPE public.addr AS (")
+}
+
+func TestDumpResult_Files_Sequences(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE SEQUENCE public.order_seq;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	files := got.Files()
+	assert.Contains(t, files, "public.order_seq.sql")
+	assert.Contains(t, files["public.order_seq.sql"], "CREATE SEQUENCE public.order_seq")
+}
+
 func TestDumpResult_Files_SpecialCharacters(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

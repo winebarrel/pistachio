@@ -1,0 +1,8 @@
+# MINVALUE and START WITH are diffed independently of the other sequence
+# options, so a change to only those two must still produce an ALTER.
+init: |
+  CREATE SEQUENCE public.order_seq MINVALUE 1 START WITH 1;
+desired: |
+  CREATE SEQUENCE public.order_seq MINVALUE 5 START WITH 10;
+plan: |
+  ALTER SEQUENCE public.order_seq MINVALUE 5 START WITH 10;

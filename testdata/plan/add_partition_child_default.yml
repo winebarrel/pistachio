@@ -1,0 +1,18 @@
+# A DEFAULT partition has no column list, so the inline-directive scan (which
+# looks for the opening parenthesis of the column/constraint list) has nothing
+# to scan and must return empty rather than misreading the statement.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
+  ) PARTITION BY RANGE (created_at);
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_default PARTITION OF public.events DEFAULT;
+plan: |
+  CREATE TABLE public.events_default PARTITION OF public.events DEFAULT;

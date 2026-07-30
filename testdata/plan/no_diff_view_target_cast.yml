@@ -1,0 +1,16 @@
+# A cast written on a select target survives into pg_get_viewdef, so both sides
+# carry it. Cast alignment must match them up instead of treating the
+# catalog-side cast as an extra to strip: no drift.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_labels AS SELECT (id)::text AS label FROM public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_labels AS SELECT (id)::text AS label FROM public.users;
+plan: ""

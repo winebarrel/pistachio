@@ -1,0 +1,15 @@
+# A sequence created and commented in the same plan emits the COMMENT right
+# after its CREATE, rather than relying on a later comment-diff pass.
+init: ""
+desired: |
+  CREATE SEQUENCE public.order_seq;
+  COMMENT ON SEQUENCE public.order_seq IS 'order ids';
+plan: |
+  CREATE SEQUENCE public.order_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+  COMMENT ON SEQUENCE public.order_seq IS 'order ids';
