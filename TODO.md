@@ -418,21 +418,21 @@ not a bug.
 
 Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
 
-## Silent drift on cross-schema user-type columns
+## Silent drift on cross-schema user-type references
 
-A table column whose type is a user-defined type (enum, domain, or composite
-type) written schema-qualified in desired SQL drifts on every plan when the
-type's schema differs from the table's own schema. The catalog reads the
-column type via `format_type`, which returns the type unqualified when it is
-in the search_path, while the desired parser keeps the qualified form. The
-column diff (`equalTypeName`) strips the table's own schema from both sides,
-so `home public.addr` on a table in `public` no longer drifts, but a type in
-a different search-path schema than its table (e.g. a `shared` schema on the
-search_path) is still compared qualified-vs-unqualified and emits a redundant
-`SET DATA TYPE`.
+A table column, or a composite type attribute, whose type is a user-defined
+type (enum, domain, or composite) written schema-qualified in desired SQL
+drifts on every plan when the type's schema differs from the container's own
+schema. The catalog reads the type via `format_type`, which returns it
+unqualified when it is in the search_path, while the desired parser keeps the
+qualified form. The diff (`equalTypeName`) strips the container's own schema
+from both sides, so `home public.addr` on a table in `public` no longer
+drifts, but a type in a different search-path schema than its table or
+composite type (e.g. a `shared` schema on the search_path) is still compared
+qualified-vs-unqualified and emits a redundant `SET DATA TYPE`.
 
-Closing it fully needs the target-schema list in the column diff (to strip any
-search-path schema, not just the table's own), which the diff does not thread
-today. Workaround: write such a column type unqualified.
+Closing it fully needs the target-schema list in the diff (to strip any
+search-path schema, not just the container's own), which the diff does not
+thread today. Workaround: write such a reference unqualified.
 
 Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
