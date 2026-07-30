@@ -156,6 +156,9 @@ echo $?  # 0: no changes, 2: changes, 1: error
 
 `plan` and `dump` open a read-only connection, so they cannot write to the database. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) to use a read-write connection.
 
+> [!NOTE]
+> `apply` sets `search_path` to the target schemas plus `public` so unqualified type and object references resolve. `plan` output does not include that `SET search_path`, so piping `pista plan -n <schema>` into `psql` for a non-public schema may fail on an unqualified reference. Qualify the reference or run `pista apply`.
+
 ### apply
 
 Apply the diff to the database.

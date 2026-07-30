@@ -4,7 +4,7 @@
 
 * Manage composite types. `plan`, `apply`, and `dump` handle `CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME TO`, `RENAME ATTRIBUTE`, and comments on the type and its attributes. A composite type is created after the enums, domains, and composite types its attributes reference, and before tables that use it. `--enable`, `--disable`, `--include`, `--exclude`, and `--allow-drop` accept `composite_type`; `--allow-drop=composite_type` also gates `DROP ATTRIBUTE`. Attribute reordering is not diffed (PostgreSQL cannot reorder attributes), and `ALTER ATTRIBUTE ... TYPE` fails at apply while a table column uses the type. ([#331](https://github.com/winebarrel/pistachio/pull/331))
 
-* Fix a schema-qualified user-defined type (enum, domain, or composite) used as a column or attribute type producing a no-op `SET DATA TYPE` on every plan. The column type is now compared with the type's own schema stripped. Also set `search_path` to the target schemas before applying managed DDL, so an unqualified user-type reference resolves for a non-public target schema instead of failing at apply. ([#331](https://github.com/winebarrel/pistachio/pull/331))
+* Fix a schema-qualified user-defined type (enum, domain, or composite) used as a column or attribute type producing a no-op `SET DATA TYPE` on every plan. The column type is now compared with the type's own schema stripped. Also set `search_path` to the target schemas plus `public` before applying managed DDL, so an unqualified reference to a user type or to a `public` object (such as an extension type) resolves for a non-public target schema instead of failing at apply. ([#331](https://github.com/winebarrel/pistachio/pull/331))
 
 ## [1.19.0] - 2026-07-29
 

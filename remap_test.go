@@ -275,6 +275,34 @@ func TestApply_UnqualifiedUserTypeInNonPublicSchema(t *testing.T) {
 	assert.Empty(t, plan.SQL, "expected no drift after apply")
 }
 
+// TestApply_PublicObjectFromNonPublicSchema guards that the apply search_path
+// keeps public searchable: a non-public target schema must still resolve an
+// unqualified reference to an object in public (extension types and functions
+// commonly live there), so the search_path extends the default rather than
+// replacing it.
+func TestApply_PublicObjectFromNonPublicSchema(t *testing.T) {
+	ctx := context.Background()
+	connString := setupSchemaDB(t, ctx, "app",
+		"DROP DOMAIN IF EXISTS public.pubdm CASCADE; CREATE DOMAIN public.pubdm AS text; "+
+			"CREATE OR REPLACE FUNCTION public.pubfn() RETURNS text AS $$ SELECT 'x'::text $$ LANGUAGE sql;")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(
+		"CREATE TABLE app.t1 (id integer, c pubdm);\n"+
+			"CREATE TABLE app.t2 (id integer, c text DEFAULT pubfn());\n"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"app"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	}, io.Discard)
+	require.NoError(t, err)
+}
+
 func TestDump_WithSchemaMap_CompositeType(t *testing.T) {
 	ctx := context.Background()
 
