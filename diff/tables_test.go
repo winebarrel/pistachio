@@ -1230,6 +1230,24 @@ func TestEqualTypeName(t *testing.T) {
 	assert.True(t, equalTypeName(`"My Schema".addr`, "addr", `"My Schema"`))
 }
 
+func TestSchemaOf(t *testing.T) {
+	assert.Equal(t, "public", schemaOf("public.people"))
+	assert.Equal(t, `"My Schema"`, schemaOf(`"My Schema".people`))
+	// A quoted schema containing a dot: the dot inside quotes is not a separator.
+	assert.Equal(t, `"a.b"`, schemaOf(`"a.b".people`))
+	// No top-level dot yields "".
+	assert.Equal(t, "", schemaOf("people"))
+}
+
+func TestStripTypeSchema(t *testing.T) {
+	assert.Equal(t, "addr", stripTypeSchema("public.addr", "public"))
+	assert.Equal(t, "addr[]", stripTypeSchema("public.addr[]", "public"))
+	// A different schema prefix is left intact.
+	assert.Equal(t, "other.addr", stripTypeSchema("other.addr", "public"))
+	// An empty schema is a no-op.
+	assert.Equal(t, "addr", stripTypeSchema("addr", ""))
+}
+
 func TestEqualDefault(t *testing.T) {
 	assert.True(t, equalDefault(nil, nil))
 	assert.False(t, equalDefault(new("0"), nil))
