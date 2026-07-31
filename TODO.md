@@ -480,6 +480,34 @@ is the same prerequisite as the INHERITS plan / apply entry above.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
+## `plan` shows execute statements that `apply` would skip
+
+`plan` renders every `-- pista:execute` / `-- pista:execute-first` statement
+without evaluating its check SQL, so a statement the check would skip still
+appears. With `-- pista:execute SELECT false`, `plan` prints the statement
+while `apply` on the same file reports `-- No changes` and runs nothing.
+
+This is deliberate, not an oversight:
+`TestPlan_Run_ExecuteCheckFalse_StillPrintsExecute`
+(`cmd/command/plan_test.go`) pins it, down to asserting that `-- No changes`
+must not appear.
+
+Evaluating the check in `plan` is a small change (`plan` already holds the
+connection) and makes the two agree, but it has two costs. `plan` would run
+user-supplied SQL, which it does not today, on a connection that is
+read-only by default. And a plain `execute` check is defined to run after
+the managed DDL, so evaluating it at plan time answers against the
+pre-change schema; a check that tests for a table or column the same run
+creates would answer differently than it will at apply. An `execute-first`
+check does not have that problem, since it runs against the pre-change
+schema in both commands.
+
+A side effect worth noting: while the check is not evaluated,
+`verify_no_drift` cannot be used on any apply fixture that carries an
+execute directive, because `plan.SQL` is never empty while one is present.
+
+Origin: found while adding `-- pista:execute-first`, 2026-07-31.
+
 ## Perpetual drift on a schema-qualified function call in a CHECK constraint
 
 A CHECK constraint that calls a function schema-qualified, written as
