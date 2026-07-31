@@ -62,7 +62,7 @@ See [Renaming objects](README.md#renaming-objects) in the README for column rena
 
 Includes non-managed SQL (functions, triggers, grants) in schema files. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression: when it returns `true` the statement is executed, otherwise skipped. Without a check, the statement always runs.
 
-`plan` evaluates the check too, and leaves out the statements `apply` would skip, so the plan shows what will run. A plain `execute` check runs after the managed DDL at apply time but against the current schema at plan time, so a check that tests for a table or column the same run creates can answer differently in the two commands.
+`plan` evaluates the check too, and leaves out the statements `apply` would skip, so the plan shows what will run. Two differences follow. `plan` uses a read-only connection by default, so a check that writes fails there; keep it read-only or pass `--no-read-only`. And a plain `execute` check runs after the managed DDL at apply time but against the current schema at plan time, so a check that tests for a table or column the same run creates can answer differently in the two commands.
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL

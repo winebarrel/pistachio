@@ -1,0 +1,10 @@
+# plan evaluates check SQL on a read-only connection, so a check that writes
+# fails there even though apply would run it. Use --no-read-only, or keep the
+# check read-only.
+init: |
+  CREATE SEQUENCE public.s;
+desired: |
+  CREATE SEQUENCE public.s;
+  -- pista:execute SELECT nextval('public.s') > 0
+  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+error: failed to evaluate check SQL

@@ -359,6 +359,36 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	require.ErrorIs(t, err, command.ErrPlanDiff)
 }
 
+func TestPlan_Run_CheckExecuteOnlyCheckFalse(t *testing.T) {
+	// A -- pista:execute statement whose check is false is not executable,
+	// so --check reports no diff rather than ErrPlanDiff.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL+`
+-- pista:execute SELECT false
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	require.NoError(t, cmd.Run(ctx, client, &buf))
+	assert.Contains(t, buf.String(), "-- No changes")
+}
+
 func TestPlan_Run_CheckPreSQLNoChanges(t *testing.T) {
 	// Pre-SQL is prepended only when the plan has statements, so it does
 	// not turn an empty plan into a diff.
