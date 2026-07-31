@@ -107,4 +107,50 @@ else
   fi
 fi
 
+# --- Step 6: --try-tx skips the transaction when CONCURRENTLY index DDL is generated ---
+setup_db "$DATA/init.sql"
+
+step "06 try-tx skips transaction (concurrently)"
+apply_output=$("$PISTA" apply --allow-drop all --try-tx "$DATA/steps/06_try_tx.sql" 2>&1) || { fail "apply failed: $apply_output"; true; }
+if ! echo "$apply_output" | grep -qF 'CREATE INDEX CONCURRENTLY idx_users_name'; then
+  fail "expected CREATE INDEX CONCURRENTLY idx_users_name in apply output"
+  echo "    $apply_output" >&2
+elif ! echo "$apply_output" | grep -qF -- '-- Transaction skipped'; then
+  fail "expected -- Transaction skipped in apply output"
+  echo "    $apply_output" >&2
+elif echo "$apply_output" | grep -qF -- '-- Transaction started'; then
+  fail "transaction should not be started with CONCURRENTLY index DDL"
+  echo "    $apply_output" >&2
+else
+  drift=$(pista_plan "$DATA/steps/06_try_tx.sql") || { fail "drift check failed: $drift"; true; }
+  if echo "$drift" | grep -q 'No changes'; then
+    pass
+  else
+    fail "drift after apply"
+    echo "    $drift" >&2
+  fi
+fi
+
+# --- Step 7: --try-tx uses a transaction when the diff has no index changes ---
+step "07 try-tx uses transaction (no index change)"
+apply_output=$("$PISTA" apply --allow-drop all --try-tx "$DATA/steps/07_try_tx_no_index_change.sql" 2>&1) || { fail "apply failed: $apply_output"; true; }
+if ! echo "$apply_output" | grep -qF -- '-- Transaction started'; then
+  fail "expected -- Transaction started in apply output"
+  echo "    $apply_output" >&2
+elif ! echo "$apply_output" | grep -qF -- '-- Transaction committed'; then
+  fail "expected -- Transaction committed in apply output"
+  echo "    $apply_output" >&2
+elif echo "$apply_output" | grep -qF -- '-- Transaction skipped'; then
+  fail "transaction should not be skipped without index changes"
+  echo "    $apply_output" >&2
+else
+  drift=$(pista_plan "$DATA/steps/07_try_tx_no_index_change.sql") || { fail "drift check failed: $drift"; true; }
+  if echo "$drift" | grep -q 'No changes'; then
+    pass
+  else
+    fail "drift after apply"
+    echo "    $drift" >&2
+  fi
+fi
+
 summary

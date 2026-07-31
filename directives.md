@@ -77,7 +77,7 @@ Opts an index into `CONCURRENTLY` for `CREATE INDEX` and `DROP INDEX`. Writing `
 CREATE INDEX idx_users_name ON public.users USING btree (name);
 ```
 
-`--disable-index-concurrently` ignores all opt-ins; `--force-index-concurrently` applies `CONCURRENTLY` to every index change. `CONCURRENTLY` operations cannot run inside a transaction, so a plan containing them conflicts with `apply --with-tx`.
+`--disable-index-concurrently` ignores all opt-ins; `--force-index-concurrently` applies `CONCURRENTLY` to every index change. `CONCURRENTLY` operations cannot run inside a transaction, so a plan containing them conflicts with `apply --with-tx`. Use `apply --try-tx` to run without a transaction on those plans instead of failing.
 
 ## -- pista:bulk-alter
 

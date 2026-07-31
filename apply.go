@@ -19,7 +19,8 @@ type ApplyOptions struct {
 	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PISTA_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
 	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL" help:"SQL to execute before CONCURRENTLY index DDL (e.g. SET lock_timeout). Runs outside any transaction, only when the diff contains CONCURRENTLY index DDL."`
 	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to execute before CONCURRENTLY index DDL."`
-	WithTx                   bool     `xor:"tx-mode" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
+	WithTx                   bool     `xor:"tx-mode,tx-choice" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
+	TryTx                    bool     `xor:"tx-choice" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. Runs without one, instead of failing, when the diff contains CONCURRENTLY index DDL."`
 	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
 	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops. Cannot be combined with --with-tx."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
@@ -72,9 +73,14 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return nil, err
 	}
 
+	// --with-tx is an explicit all-or-nothing request, so CONCURRENTLY index
+	// DDL (which PostgreSQL cannot run inside a transaction) stays an error.
+	// --try-tx asks for a transaction only when one is possible, so the same
+	// diff downgrades to running without one.
 	if options.WithTx && result.HasConcurrentlyIndex {
 		return nil, fmt.Errorf("--with-tx cannot be used with CONCURRENTLY index operations")
 	}
+	withTx := options.WithTx || (options.TryTx && !result.HasConcurrentlyIndex)
 
 	applyResult := &ApplyResult{
 		Count:           result.Count,
@@ -93,7 +99,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	queryRow := conn.QueryRow
 	commit := func(context.Context) error { return nil }
 
-	if options.WithTx {
+	if withTx {
 		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -116,6 +122,10 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 			fmt.Fprintln(w, "-- Transaction committed") //nolint:errcheck
 			return nil
 		}
+	} else if options.TryTx {
+		// Record why the transaction the caller asked for was not opened, in
+		// the same sentence form as the comments above.
+		fmt.Fprintln(w, "-- Transaction skipped: plan contains CONCURRENTLY index DDL") //nolint:errcheck
 	}
 
 	// Pre-SQL and concurrently-pre-SQL are setup steps (e.g. SET lock_timeout),
@@ -131,7 +141,8 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 	// concurrently-pre-SQL is gated on HasConcurrentlyIndex so it only runs
 	// when there is CONCURRENTLY index DDL to apply. WithTx + HasConcurrentlyIndex
-	// is rejected above, so this always runs outside a transaction.
+	// is rejected above and TryTx opens no transaction in that case, so this
+	// always runs outside a transaction.
 	if result.ConcurrentlyPreSQL != "" && result.HasConcurrentlyIndex {
 		fmt.Fprintln(w, result.ConcurrentlyPreSQL) //nolint:errcheck
 		if _, err := exec(ctx, result.ConcurrentlyPreSQL); err != nil {

@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.21.0] - 2026-07-31
+
+* Add `--try-tx` (env `$PISTA_TRY_TX`) to `apply`. It wraps the apply in a transaction like `--with-tx`, but a diff containing `CREATE/DROP INDEX CONCURRENTLY` runs without a transaction instead of failing, and the output records `-- Transaction skipped: plan contains CONCURRENTLY index DDL`. The decision follows the generated diff, so a `-- pista:concurrently` index that is not being changed still gets a transaction. `--with-tx` is unchanged and still errors on such a diff; the two flags are mutually exclusive. Unlike `--with-tx`, `--try-tx` can be combined with `--force-index-concurrently`.
+
 ## [1.20.0] - 2026-07-30
 
 * Manage composite types. `plan`, `apply`, and `dump` handle `CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME TO`, `RENAME ATTRIBUTE`, and comments on the type and its attributes. A composite type is created after the enums, domains, and composite types its attributes reference, and before tables that use it. `--enable`, `--disable`, `--include`, `--exclude`, and `--allow-drop` accept `composite_type`; `--allow-drop=composite_type` also gates `DROP ATTRIBUTE`. Attribute reordering is not diffed (PostgreSQL cannot reorder attributes), and `ALTER ATTRIBUTE ... TYPE` fails at apply while a table column uses the type. ([#331](https://github.com/winebarrel/pistachio/pull/331))

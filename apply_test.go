@@ -962,6 +962,274 @@ CREATE INDEX idx_users_id ON public.users USING btree (id);`), 0o644))
 	assert.NotContains(t, got, "CONCURRENTLY")
 }
 
+func TestApply_TryTx_Concurrently_SkipsTransaction(t *testing.T) {
+	// --try-tx runs without a transaction instead of failing when the plan
+	// contains CONCURRENTLY index DDL.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pista:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files: []string{desiredFile},
+		TryTx: true,
+	}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "CREATE INDEX CONCURRENTLY")
+	assert.Contains(t, out, "-- Transaction skipped")
+	assert.NotContains(t, out, "-- Transaction started")
+	assert.NotContains(t, out, "-- Transaction committed")
+
+	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, dumpErr)
+	assert.Contains(t, got.String(), "CREATE INDEX idx_users_name")
+}
+
+func TestApply_TryTx_NoConcurrently_UsesTransaction(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files: []string{desiredFile},
+		TryTx: true,
+	}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "-- Transaction started")
+	assert.Contains(t, out, "-- Transaction committed")
+	assert.NotContains(t, out, "-- Transaction skipped")
+
+	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, dumpErr)
+	assert.Contains(t, got.String(), "CREATE TABLE public.users")
+}
+
+func TestApply_TryTx_NoConcurrently_RollsBackOnError(t *testing.T) {
+	// The transaction --try-tx opens is a real one: a failure rolls the
+	// schema changes back.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	tmpDir := t.TempDir()
+	desiredFile := filepath.Join(tmpDir, "desired.sql")
+	preSQLFile := filepath.Join(tmpDir, "pre.sql")
+
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+	require.NoError(t, os.WriteFile(preSQLFile, []byte(`CREATE TABLE public.pre_hook (
+    id integer NOT NULL
+);
+SELECT * FROM public.missing_table;`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:      []string{desiredFile},
+		PreSQLFile: preSQLFile,
+		TryTx:      true,
+	}, &buf)
+	require.Error(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "-- Transaction started")
+	assert.Contains(t, out, "-- Transaction rolled back")
+
+	got, dumpErr := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, dumpErr)
+	assert.NotContains(t, got.String(), "CREATE TABLE public.pre_hook")
+	assert.NotContains(t, got.String(), "CREATE TABLE public.users")
+}
+
+func TestApply_TryTx_NoChanges_OmitsTransactionComments(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	// The directive is present but the index already matches, so no index DDL
+	// is generated and no transaction is opened either way.
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pista:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}, TryTx: true}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.NotContains(t, out, "-- Transaction started")
+	assert.NotContains(t, out, "-- Transaction committed")
+	assert.NotContains(t, out, "-- Transaction rolled back")
+	assert.NotContains(t, out, "-- Transaction skipped")
+}
+
+func TestApply_TryTx_ForceIndexConcurrently_SkipsTransaction(t *testing.T) {
+	// --force-index-concurrently is allowed with --try-tx: the forced
+	// CONCURRENTLY index DDL simply means no transaction is opened.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:                  []string{desiredFile},
+		ForceIndexConcurrently: true,
+		TryTx:                  true,
+	}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "CREATE INDEX CONCURRENTLY")
+	assert.Contains(t, out, "-- Transaction skipped")
+	assert.NotContains(t, out, "-- Transaction started")
+}
+
+func TestApply_TryTx_DisableIndexConcurrently_UsesTransaction(t *testing.T) {
+	// CONCURRENTLY is suppressed, so --try-tx opens a transaction even though
+	// the directive is present.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pista:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:                    []string{desiredFile},
+		DisableIndexConcurrently: true,
+		TryTx:                    true,
+	}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "-- Transaction started")
+	assert.Contains(t, out, "-- Transaction committed")
+	assert.NotContains(t, out, "-- Transaction skipped")
+	assert.NotContains(t, out, "CONCURRENTLY")
+}
+
+func TestApplyOptions_TryTx_XorEnforcement(t *testing.T) {
+	t.Run("try_tx_and_with_tx", func(t *testing.T) {
+		var opts pistachio.ApplyOptions
+		parser, err := kong.New(&opts)
+		require.NoError(t, err)
+		_, err = parser.Parse([]string{"--with-tx", "--try-tx", "schema.sql"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--try-tx")
+	})
+
+	t.Run("try_tx_and_force_index_concurrently", func(t *testing.T) {
+		var opts pistachio.ApplyOptions
+		parser, err := kong.New(&opts)
+		require.NoError(t, err)
+		_, err = parser.Parse([]string{"--force-index-concurrently", "--try-tx", "schema.sql"})
+		require.NoError(t, err)
+		assert.True(t, opts.TryTx)
+		assert.True(t, opts.ForceIndexConcurrently)
+	})
+}
+
 func TestApply_ConcurrentlyDirective_MatviewIndex_WithTx_Error(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
