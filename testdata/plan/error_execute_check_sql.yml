@@ -1,7 +1,0 @@
-# plan evaluates check SQL, so a check that itself errors surfaces at plan
-# time rather than only at apply.
-init: ""
-desired: |
-  -- pista:execute SELECT EXISTS (SELECT 1 FROM public.does_not_exist)
-  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
-error: failed to evaluate check SQL

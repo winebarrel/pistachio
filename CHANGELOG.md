@@ -5,8 +5,8 @@
 * **BREAKING**: `plan` now evaluates `-- pista:execute` check SQL and leaves out the statements `apply` would skip. Before, every marked statement was printed regardless, so a file with a false check produced a plan full of SQL while `apply` on the same file reported `-- No changes`. Three consequences:
 
   * `plan --check` exits 0 instead of 2 when the only pending statements have a false check.
-  * `plan` runs the check SQL, which it did not do before, on a connection that is read-only by default. A check that writes (`nextval`, a `VOLATILE` function that updates) now fails with SQLSTATE 25006. Keep the check read-only, or pass `--no-read-only`.
-  * A plain `execute` check runs after the managed DDL at apply time but against the current schema at plan time, so a check that tests for a table or column the same run creates can answer differently in the two commands. An `execute-first` check runs against the pre-change schema in both, so it always agrees.
+  * A check `plan` cannot evaluate is undetermined rather than fatal. `plan` runs before the managed DDL and on a read-only connection, so a check that reads a table the same run creates, or that writes, fails there while answering fine during `apply`. The statement stays in the plan with the reason recorded as a comment, and `plan --check` still reports a diff. Behavior during `apply` is unchanged: the check runs at its proper moment, and a failure there stops the run.
+  * `plan` runs the check SQL, which it did not do before. A check with side effects now runs once per `plan` as well as during `apply`.
 
 * Add `-- pista:execute-first`, which runs non-managed SQL before the managed DDL instead of after it. Use it when the managed DDL calls a function pistachio does not manage, as a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy can. `-- pista:execute` is unchanged and still runs last. The new directive's check SQL is evaluated before the change, so a check that tests for a table or column the same run creates belongs on `-- pista:execute`.
 

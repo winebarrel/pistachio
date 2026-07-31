@@ -146,12 +146,23 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 
 // FormatExecuteStmt formats an ExecuteStmt as SQL with the directive comment.
 func FormatExecuteStmt(es *ExecuteStmt) string {
+	return FormatExecuteStmtWithNote(es, "")
+}
+
+// FormatExecuteStmtWithNote formats an ExecuteStmt with an extra comment line
+// between the directive and the SQL. note is used by plan to record that the
+// check SQL could not be evaluated, so the statement is shown without a
+// verdict. Newlines in note are folded to keep the comment on one line.
+func FormatExecuteStmtWithNote(es *ExecuteStmt, note string) string {
 	directive := "-- pista:execute"
 	if es.First {
 		directive += "-first"
 	}
 	if es.CheckSQL != "" {
 		directive += " " + es.CheckSQL
+	}
+	if note != "" {
+		directive += "\n-- " + strings.Join(strings.Fields(note), " ")
 	}
 	sql := strings.TrimRight(es.SQL, " \t\r\n")
 	if !strings.HasSuffix(sql, ";") {

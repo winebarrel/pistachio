@@ -62,7 +62,17 @@ See [Renaming objects](README.md#renaming-objects) in the README for column rena
 
 Includes non-managed SQL (functions, triggers, grants) in schema files. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression: when it returns `true` the statement is executed, otherwise skipped. Without a check, the statement always runs.
 
-`plan` evaluates the check too, and leaves out the statements `apply` would skip, so the plan shows what will run. Two differences follow. `plan` uses a read-only connection by default, so a check that writes fails there; keep it read-only or pass `--no-read-only`. And a plain `execute` check runs after the managed DDL at apply time but against the current schema at plan time, so a check that tests for a table or column the same run creates can answer differently in the two commands.
+`plan` evaluates the check too, and leaves out the statements `apply` would skip, so the plan shows what will run.
+
+Some checks cannot be answered at plan time. `plan` runs before the managed DDL and on a read-only connection, so a check that reads a table the same run creates, or that writes, fails there while answering fine during `apply`. Such a statement stays in the plan with the reason recorded, and `apply` decides:
+
+```sql
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM public.audit_log)
+-- check SQL could not be evaluated at plan time: ERROR: relation "public.audit_log" does not exist (SQLSTATE 42P01); apply will decide
+INSERT INTO public.audit_log (id, note) VALUES (1, 'seed');
+```
+
+During `apply` the check runs at its proper moment, so a failure there is an error and stops the run.
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
@@ -87,7 +97,7 @@ CREATE TABLE public.users (
 );
 ```
 
-The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after. Put a check that tests for a table or column the same run creates on `execute`. An `execute-first` check answers the same in `plan` and `apply`, since both evaluate it against the pre-change schema.
+The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after. Put a check that tests for a table or column the same run creates on `execute`; `plan` cannot answer it and will show the statement as undetermined, but `apply` decides correctly. An `execute-first` check answers the same in both commands, since both evaluate it against the pre-change schema.
 
 Statements keep their file order within each group. There is no dependency resolution between them.
 

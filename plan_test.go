@@ -250,6 +250,47 @@ func TestPlan_WithPreSQLFile_InvalidFile(t *testing.T) {
 	require.Error(t, err)
 }
 
+// A check plan cannot evaluate leaves the statement in the plan with the
+// reason recorded. This is a Go test rather than a fixture because the output
+// carries the PostgreSQL error text, which is not stable enough to match
+// exactly across server versions.
+func TestPlan_ExecuteCheckUnevaluable(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM public.audit_log)
+INSERT INTO public.audit_log (id, note) VALUES (1, 'seed');
+CREATE TABLE public.audit_log (
+    id integer NOT NULL,
+    note text,
+    CONSTRAINT audit_log_pkey PRIMARY KEY (id)
+);
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	result, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.True(t, result.HasChanges)
+	assert.Contains(t, result.SQL, "CREATE TABLE public.audit_log")
+	assert.Contains(t, result.SQL, "INSERT INTO public.audit_log")
+	assert.Contains(t, result.SQL, "check SQL could not be evaluated at plan time")
+	assert.Contains(t, result.SQL, "apply will decide")
+	// The note must stay on one comment line so the plan is still valid SQL.
+	for _, line := range strings.Split(result.SQL, "\n") {
+		if strings.Contains(line, "could not be evaluated") {
+			assert.True(t, strings.HasPrefix(line, "-- "), "note must be a comment: %q", line)
+		}
+	}
+}
+
 func TestPlan_RenameColumn_NonPublicSchema(t *testing.T) {
 	ctx := context.Background()
 
