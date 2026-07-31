@@ -488,13 +488,20 @@ Origin: bug audit, 2026-07-31.
 
 ## Perpetual drift on a serial column written as an explicit default
 
-A serial column written the way `pg_dump` writes it, as
-`CREATE SEQUENCE s; CREATE TABLE t (id integer DEFAULT nextval('s'));
-ALTER SEQUENCE s OWNED BY t.id;`, plans
-`ALTER COLUMN id SET DEFAULT nextval(...)` on every run. The catalog reports
-such a column as `serial` with no default, which is what lets `id serial`
-round-trip, while the desired side keeps the explicit default. `equalTypeName`
-already treats `serial` and `integer` as equal; the defaults are what differ.
+A serial column written the way `pg_dump` writes it plans
+`ALTER COLUMN id SET DEFAULT nextval(...)` on every run. Applying it succeeds
+and changes nothing, so `plan --check` stays at exit code 2 forever. `pg_dump`
+never writes `serial`; it splits the column into a plain `integer`, a
+`CREATE SEQUENCE`, an `ALTER SEQUENCE ... OWNED BY`, and a separate
+`SET DEFAULT`. The catalog reports such a column as `serial` with no default,
+which is what lets `id serial` round-trip, while the desired side keeps the
+explicit default. `equalTypeName` already treats `serial` and `integer` as
+equal; the defaults are what differ.
+
+`dump` does not produce this shape, so a schema kept through `pista dump`
+never hits it. It shows up when a `pg_dump` output is used as the starting
+desired file, which is a normal way to adopt the tool on an existing
+database.
 
 Comparing them needs the sequence the current column draws from, which the
 model does not carry, since the catalog nulls the default for serial columns.
