@@ -1,0 +1,18 @@
+# The partition parent is quoted the same way the table names are, so a name
+# needing quotes round-trips instead of producing unparseable SQL.
+init: |
+  CREATE TABLE public."Odd Parent" (
+      id integer NOT NULL,
+      d date NOT NULL
+  ) PARTITION BY RANGE (d);
+  CREATE TABLE public."Odd Child" PARTITION OF public."Odd Parent" FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+dump: |
+  -- public."Odd Child"
+  CREATE TABLE public."Odd Child" PARTITION OF public."Odd Parent" FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+
+  -- public."Odd Parent"
+  CREATE TABLE public."Odd Parent" (
+      id integer NOT NULL,
+      d date NOT NULL
+  )
+  PARTITION BY RANGE (d);

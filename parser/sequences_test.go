@@ -93,3 +93,54 @@ func TestParseCreateSeqStmt_OwnedByNone(t *testing.T) {
 	assert.Nil(t, seq.OwnerTable)
 	assert.False(t, seq.Owned())
 }
+
+func TestApplyAlterSeqOwnedBy(t *testing.T) {
+	seq := parseOneSequence(t, `
+		CREATE SEQUENCE public.s;
+		CREATE TABLE public.t (id integer, val integer DEFAULT 42);
+		ALTER SEQUENCE public.s OWNED BY public.t.val;
+	`)
+	require.NotNil(t, seq.OwnerTable)
+	assert.Equal(t, "t", *seq.OwnerTable)
+	require.NotNil(t, seq.OwnerColumn)
+	assert.Equal(t, "val", *seq.OwnerColumn)
+	assert.True(t, seq.Owned())
+}
+
+func TestApplyAlterSeqOwnedBy_Unqualified(t *testing.T) {
+	seq := parseOneSequence(t, `
+		CREATE SEQUENCE s;
+		CREATE TABLE public.t (id integer, val integer DEFAULT 42);
+		ALTER SEQUENCE s OWNED BY public.t.val;
+	`)
+	assert.True(t, seq.Owned())
+}
+
+func TestApplyAlterSeqOwnedBy_None(t *testing.T) {
+	seq := parseOneSequence(t, `
+		CREATE SEQUENCE public.s OWNED BY public.t.val;
+		CREATE TABLE public.t (id integer, val integer DEFAULT 42);
+		ALTER SEQUENCE public.s OWNED BY NONE;
+	`)
+	assert.Nil(t, seq.OwnerTable)
+	assert.Nil(t, seq.OwnerColumn)
+	assert.False(t, seq.Owned())
+}
+
+func TestApplyAlterSeqOwnedBy_OtherOptionIgnored(t *testing.T) {
+	seq := parseOneSequence(t, `
+		CREATE SEQUENCE public.s;
+		ALTER SEQUENCE public.s RESTART WITH 10;
+	`)
+	assert.False(t, seq.Owned())
+	assert.Equal(t, int64(1), seq.Start)
+}
+
+func TestApplyAlterSeqOwnedBy_UnknownSequence(t *testing.T) {
+	seq := parseOneSequence(t, `
+		CREATE SEQUENCE public.s;
+		CREATE TABLE public.t (id integer, val integer DEFAULT 42);
+		ALTER SEQUENCE public.absent OWNED BY public.t.val;
+	`)
+	assert.False(t, seq.Owned())
+}

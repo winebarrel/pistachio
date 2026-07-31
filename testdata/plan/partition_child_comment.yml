@@ -2,19 +2,18 @@ init: |
   CREATE TABLE public.events (
       id integer NOT NULL,
       created_at timestamp with time zone NOT NULL,
-      data text,
       CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
   ) PARTITION BY RANGE (created_at);
   CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-dump: |
-  -- public.events
+desired: |
   CREATE TABLE public.events (
       id integer NOT NULL,
       created_at timestamp with time zone NOT NULL,
-      data text,
       CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
-  )
-  PARTITION BY RANGE (created_at);
-
-  -- public.events_2024
-  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01 00:00:00+00') TO ('2025-01-01 00:00:00+00');
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  COMMENT ON TABLE public.events_2024 IS 'partition for 2024';
+  COMMENT ON COLUMN public.events_2024.id IS 'event id';
+plan: |
+  COMMENT ON TABLE public.events_2024 IS 'partition for 2024';
+  COMMENT ON COLUMN public.events_2024.id IS 'event id';

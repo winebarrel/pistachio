@@ -18,7 +18,7 @@ dump: |
   PARTITION BY LIST (level);
 
   -- public.logs_error
-  CREATE TABLE public.logs_error PARTITION OF logs FOR VALUES IN ('error', 'warning');
+  CREATE TABLE public.logs_error PARTITION OF public.logs FOR VALUES IN ('error', 'warning');
 
   -- public.logs_info
-  CREATE TABLE public.logs_info PARTITION OF logs FOR VALUES IN ('info', 'debug');
+  CREATE TABLE public.logs_info PARTITION OF public.logs FOR VALUES IN ('info', 'debug');

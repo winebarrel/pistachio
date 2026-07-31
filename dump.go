@@ -50,6 +50,13 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 		fqtn := t.FQTN()
 		tableName := model.Ident(t.Name)
 		copied.Schema = ""
+		// Strip the schema only when the parent is in the one being dumped.
+		// --omit-schema allows a single schema, but the parent may sit outside
+		// it, and such a reference has to keep its schema to resolve.
+		if copied.PartitionOf != nil {
+			parent := strings.TrimPrefix(*copied.PartitionOf, model.Ident(t.Schema)+".")
+			copied.PartitionOf = &parent
+		}
 		if copied.ForeignKeys.Len() > 0 {
 			fks := orderedmap.New[string, *model.ForeignKey]()
 			for _, fk := range copied.ForeignKeys.CollectValues() {

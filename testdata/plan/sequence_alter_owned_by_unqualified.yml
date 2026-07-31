@@ -1,0 +1,17 @@
+# The sequence name in ALTER SEQUENCE may omit the schema; it resolves to the
+# target schema, so the sequence is still marked unmanaged.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
+desired: |
+  CREATE SEQUENCE my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+  ALTER SEQUENCE my_seq OWNED BY public.t.val;
+plan: ""

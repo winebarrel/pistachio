@@ -122,4 +122,51 @@ func TestTables(t *testing.T) {
 		require.NotNil(t, tbl.PartitionDef)
 		assert.Contains(t, *tbl.PartitionDef, "created_at")
 	})
+
+	t.Run("partition child records a schema-qualified parent", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.logs (
+				id integer NOT NULL,
+				created_at date NOT NULL
+			) PARTITION BY RANGE (created_at);
+			CREATE TABLE public.logs_2024 PARTITION OF public.logs
+				FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		child := tables.Get("public.logs_2024")
+		require.NotNil(t, child)
+		require.NotNil(t, child.PartitionOf)
+		// Must match Table.FQTN so the dependency graph and the emitted SQL
+		// both resolve the parent.
+		assert.Equal(t, "public.logs", *child.PartitionOf)
+		assert.Equal(t, tables.Get("public.logs").FQTN(), *child.PartitionOf)
+
+		parent := tables.Get("public.logs")
+		require.NotNil(t, parent)
+		assert.Nil(t, parent.PartitionOf)
+	})
+
+	t.Run("partition parent name is quoted when needed", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public."Odd Parent" (
+				id integer NOT NULL,
+				created_at date NOT NULL
+			) PARTITION BY RANGE (created_at);
+			CREATE TABLE public."Odd Child" PARTITION OF public."Odd Parent"
+				FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		child := tables.Get(`public."Odd Child"`)
+		require.NotNil(t, child)
+		require.NotNil(t, child.PartitionOf)
+		assert.Equal(t, `public."Odd Parent"`, *child.PartitionOf)
+	})
 }

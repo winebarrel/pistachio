@@ -1,0 +1,17 @@
+# A comment naming a column the partition does not have is passed through
+# rather than dropped, so PostgreSQL reports the mistake at apply time.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at date NOT NULL
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at date NOT NULL
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  COMMENT ON COLUMN public.events_2024.nope IS 'typo';
+plan: |
+  COMMENT ON COLUMN public.events_2024.nope IS 'typo';

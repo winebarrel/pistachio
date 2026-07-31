@@ -1,0 +1,21 @@
+# A partition of a partition must be dropped before its parent, and that
+# parent before the root.
+init: |
+  CREATE TABLE public.keep (
+      id integer NOT NULL
+  );
+  CREATE TABLE public.z_root (
+      id integer NOT NULL,
+      r text NOT NULL,
+      c text NOT NULL
+  ) PARTITION BY RANGE (r);
+  CREATE TABLE public.m_mid PARTITION OF public.z_root FOR VALUES FROM ('a') TO ('m') PARTITION BY LIST (c);
+  CREATE TABLE public.a_leaf PARTITION OF public.m_mid FOR VALUES IN ('x');
+desired: |
+  CREATE TABLE public.keep (
+      id integer NOT NULL
+  );
+plan: |
+  DROP TABLE public.a_leaf;
+  DROP TABLE public.m_mid;
+  DROP TABLE public.z_root;

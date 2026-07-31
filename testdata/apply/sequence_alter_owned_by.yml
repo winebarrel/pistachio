@@ -1,0 +1,26 @@
+# ALTER SEQUENCE ... OWNED BY marks the sequence unmanaged on the desired side,
+# matching the catalog side. Applying must be a no-op: before, pista proposed
+# CREATE SEQUENCE for an existing sequence and apply failed with
+# "relation already exists".
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
+desired: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+applied_sql: ""
+verify_no_drift: true

@@ -436,3 +436,95 @@ search-path schema, not just the container's own), which the diff does not
 thread today. Workaround: write such a reference unqualified.
 
 Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
+
+## Sequence ownership transitions: `OWNED BY NONE` plans an unusable CREATE
+
+Detaching a sequence from its column cannot be expressed. The parser reads
+`ALTER SEQUENCE ... OWNED BY NONE` and clears the owner, so the statement is
+accepted, but nothing emits the detaching DDL. A desired schema carrying it
+for a sequence the database still owns plans a `CREATE SEQUENCE` for a
+sequence that already exists, and apply fails with
+`relation "..." already exists` (SQLSTATE 42P07).
+
+`catalog.Sequences` drops every sequence with an owner, so the current side
+never sees it. After `OWNED BY NONE` the desired side holds no owner, which
+makes the sequence a managed standalone object, and the diff reads the
+missing current entry as "not created yet". The opposite direction is
+handled: `ALTER SEQUENCE ... OWNED BY <column>` marks the sequence unmanaged
+on the desired side, matching the catalog, so an owned sequence no longer
+replans forever.
+
+Closing this means letting the catalog surface sequences that are merely
+owned, kept apart from the serial and identity ones that stay column
+attributes (the distinction `catalog.ListColumnsByTable` already draws by
+checking that the column default draws from the sequence), and teaching the
+diff to emit `ALTER SEQUENCE ... OWNED BY` / `OWNED BY NONE` for the
+transitions. That widens the set of objects pistachio manages, so it is a
+feature rather than a fix. Workaround: detach the sequence by hand.
+
+Origin: bug audit, 2026-07-31.
+
+## `COMMENT ON COLUMN` on an inherited column of an INHERITS child
+
+A comment on a column an `INHERITS` child inherits from its parent is dropped
+at parse time. `parseCommentStmt` needs the column to be present on the
+table, and such a child declares only its own columns. A true partition child
+takes a different path: it declares no columns at all, so the comment creates
+the entry, and `diffTable` reaches that entry through a branch that never
+diffs columns. An INHERITS child goes through the regular column diff, where
+an entry holding only a name and a comment would be read as a new column and
+emit `ADD COLUMN`, so the same trick does not carry over.
+
+Closing this needs the inherited column set materialised on the child, which
+is the same prerequisite as the INHERITS plan / apply entry above.
+
+Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
+
+## `dump` output is not ordered by dependency
+
+Objects are emitted in catalog order, which is `nspname, relname`. Nothing
+sorts a parent before the table that needs it, so a dump reloads only when
+the names happen to sort that way. Three cases hit it: a partition whose
+parent sorts later (`Odd Child` before `Odd Parent`), an `INHERITS` child in
+the same position, and a foreign key, which is emitted as an `ALTER TABLE ...
+ADD CONSTRAINT` directly after its own table and so can precede the table it
+references. `plan` and `apply` already order statements through `toposort`;
+`dump` does not call it.
+
+Origin: bug audit, 2026-07-31.
+
+## `dump` drops `PARTITION BY` from a sub-partitioned partition
+
+`model.Table.SQL` returns right after the `PARTITION OF ... FOR VALUES`
+clause, so a partition that is itself partitioned loses its own
+`PARTITION BY`. The dump then defines it as a leaf, and reloading fails on
+the next level down, which still says `PARTITION OF` that table.
+`PartitionDef` is read from the catalog and available; it just is not
+emitted on that branch.
+
+Origin: bug audit, 2026-07-31.
+
+## Perpetual drift on a serial column written as an explicit default
+
+A serial column written the way `pg_dump` writes it plans
+`ALTER COLUMN id SET DEFAULT nextval(...)` on every run. Applying it succeeds
+and changes nothing, so `plan --check` stays at exit code 2 forever. `pg_dump`
+never writes `serial`; it splits the column into a plain `integer`, a
+`CREATE SEQUENCE`, an `ALTER SEQUENCE ... OWNED BY`, and a separate
+`SET DEFAULT`. The catalog reports such a column as `serial` with no default,
+which is what lets `id serial` round-trip, while the desired side keeps the
+explicit default. `equalTypeName` already treats `serial` and `integer` as
+equal; the defaults are what differ.
+
+`dump` does not produce this shape, so a schema kept through `pista dump`
+never hits it. It shows up when a `pg_dump` output is used as the starting
+desired file, which is a normal way to adopt the tool on an existing
+database.
+
+Comparing them needs the sequence the current column draws from, which the
+model does not carry, since the catalog nulls the default for serial columns.
+Suppressing the statement whenever the current column is serial and the
+desired default is any `nextval` would also swallow a genuine change to a
+different sequence.
+
+Origin: bug audit, 2026-07-31.

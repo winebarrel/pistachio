@@ -1688,6 +1688,73 @@ func TestDiffTable_partitionChild(t *testing.T) {
 	assert.Contains(t, tableResult.Stmts[0], "CREATE INDEX idx_new")
 }
 
+func TestWithInheritedColumns(t *testing.T) {
+	comment := "kept"
+	current := newTable("public", "events_2024")
+	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", Comment: &comment})
+	current.Columns.Set("created_at", &model.Column{Name: "created_at", TypeName: "date"})
+
+	desired := newTable("public", "events_2024")
+	desired.Columns.Set("ghost", &model.Column{Name: "ghost"})
+
+	got := withInheritedColumns(current, desired)
+
+	// The child's own column set comes from the current side, with no comment
+	// attached, so a comment that was dropped from the desired side is diffed.
+	require.Equal(t, 3, got.Columns.Len())
+	id, ok := got.Columns.GetOk("id")
+	require.True(t, ok)
+	assert.Nil(t, id.Comment)
+	_, ok = got.Columns.GetOk("created_at")
+	assert.True(t, ok)
+	// A comment naming a column the table does not have survives.
+	_, ok = got.Columns.GetOk("ghost")
+	assert.True(t, ok)
+	// The originals are untouched.
+	assert.Equal(t, 1, desired.Columns.Len())
+	cur, ok := current.Columns.GetOk("id")
+	require.True(t, ok)
+	assert.Equal(t, &comment, cur.Comment)
+}
+
+func TestWithInheritedColumns_keepsDesiredComment(t *testing.T) {
+	want := "new"
+	current := newTable("public", "events_2024")
+	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+
+	desired := newTable("public", "events_2024")
+	desired.Columns.Set("id", &model.Column{Name: "id", Comment: &want})
+
+	got := withInheritedColumns(current, desired)
+
+	require.Equal(t, 1, got.Columns.Len())
+	col, ok := got.Columns.GetOk("id")
+	require.True(t, ok)
+	assert.Equal(t, &want, col.Comment)
+}
+
+func TestDiffTable_partitionChild_comments(t *testing.T) {
+	parent := "public.events"
+	bound := "FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')"
+	oldTable, oldCol := "old table", "old column"
+
+	current := newTable("public", "events_2024")
+	current.PartitionOf = &parent
+	current.PartitionBound = &bound
+	current.Comment = &oldTable
+	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", Comment: &oldCol})
+
+	desired := newTable("public", "events_2024")
+	desired.PartitionOf = &parent
+	desired.PartitionBound = &bound
+
+	tableResult, err := diffTable(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, tableResult.Stmts, 2)
+	assert.Equal(t, "COMMENT ON TABLE public.events_2024 IS NULL;", tableResult.Stmts[0])
+	assert.Equal(t, "COMMENT ON COLUMN public.events_2024.id IS NULL;", tableResult.Stmts[1])
+}
+
 func TestDiffTable_partitionChild_indexRenameError(t *testing.T) {
 	parent := "public.events"
 	bound := "FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')"

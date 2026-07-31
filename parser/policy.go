@@ -11,7 +11,7 @@ import (
 // applyAlterTableRLS scans an ALTER TABLE statement for row-level security
 // toggle subcommands (ENABLE / DISABLE / FORCE / NO FORCE) and applies them
 // to the table's flags. Non-RLS subcommands are ignored, so the caller can
-// invoke parseAlterTableConstraint on the same statement to pick up any
+// invoke parseAlterTableConstraints on the same statement to pick up any
 // AT_AddConstraint subcommands; PostgreSQL allows mixing the two in one
 // ALTER TABLE.
 func applyAlterTableRLS(as *pg_query.AlterTableStmt, t *model.Table) {

@@ -1,0 +1,19 @@
+# A partition child created together with its comments emits both, since the
+# create path does not go through the table diff.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at date NOT NULL
+  ) PARTITION BY RANGE (created_at);
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at date NOT NULL
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  COMMENT ON TABLE public.events_2024 IS 'new child';
+  COMMENT ON COLUMN public.events_2024.id IS 'new child column';
+plan: |
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  COMMENT ON TABLE public.events_2024 IS 'new child';
+  COMMENT ON COLUMN public.events_2024.id IS 'new child column';
