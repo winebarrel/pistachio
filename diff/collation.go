@@ -5,14 +5,15 @@ import "github.com/winebarrel/pistachio/model"
 // equalCollation reports whether two COLLATE clauses name the same collation.
 // The catalog always qualifies the name and the desired schema may not, so the
 // schema is compared only when both sides carry one. The split respects
-// quoting: a collation name can contain a dot ("C.utf8").
+// quoting: a collation name can contain a dot ("C.utf8"). Parts are compared
+// unquoted, so the two sides need not agree on which names to quote.
 func equalCollation(a, b *string) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
 
-	pa := model.SplitQualifiedName(*a)
-	pb := model.SplitQualifiedName(*b)
+	pa := splitCollation(*a)
+	pb := splitCollation(*b)
 	if len(pa) == 0 || len(pb) == 0 {
 		return *a == *b
 	}
@@ -24,4 +25,12 @@ func equalCollation(a, b *string) bool {
 		return pa[len(pa)-2] == pb[len(pb)-2]
 	}
 	return true
+}
+
+func splitCollation(s string) []string {
+	parts := model.SplitQualifiedName(s)
+	for i, p := range parts {
+		parts[i] = model.UnquoteIdent(p)
+	}
+	return parts
 }

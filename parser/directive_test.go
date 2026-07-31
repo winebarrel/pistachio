@@ -184,11 +184,6 @@ func TestExtractConstraintName(t *testing.T) {
 	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT Users_Pkey PRIMARY KEY (id)"))
 }
 
-func TestSplitQualifiedName_SpacesAroundDot(t *testing.T) {
-	parts := splitQualifiedName("public . old_table")
-	assert.Equal(t, []string{"public", "old_table"}, parts)
-}
-
 func TestNormalizeUnqualifiedDirective(t *testing.T) {
 	assert.Equal(t, "old_name", normalizeUnqualifiedDirective("old_name"))
 	assert.Equal(t, "Old Name", normalizeUnqualifiedDirective(`"Old Name"`))

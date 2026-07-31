@@ -1,0 +1,15 @@
+# COLLATE "default" is what a column gets implicitly, and the catalog never
+# reports it, so writing it explicitly is not a change.
+init: |
+  CREATE TABLE public.t (
+      c text COLLATE "default"
+  );
+  CREATE DOMAIN public.d AS text COLLATE "default";
+  CREATE TYPE public.ct AS (a text COLLATE "default");
+desired: |
+  CREATE TABLE public.t (
+      c text COLLATE "default"
+  );
+  CREATE DOMAIN public.d AS text COLLATE "default";
+  CREATE TYPE public.ct AS (a text COLLATE "default");
+plan: ""

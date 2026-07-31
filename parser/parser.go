@@ -456,6 +456,29 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 	return table, nil
 }
 
+// collationFromClause builds the canonical collation form (quoted, ready to
+// follow COLLATE) from a COLLATE clause. It returns nil for the default
+// collation, which the catalog never reports, so writing it explicitly does
+// not read as a change.
+func collationFromClause(cc *pg_query.CollateClause) *string {
+	if cc == nil || len(cc.Collname) == 0 {
+		return nil
+	}
+
+	var parts []string
+	for _, n := range cc.Collname {
+		if str := n.GetString_(); str != nil {
+			parts = append(parts, str.Sval)
+		}
+	}
+	if len(parts) == 0 || parts[len(parts)-1] == "default" {
+		return nil
+	}
+
+	collation := model.Ident(parts...)
+	return &collation
+}
+
 func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 	col := &model.Column{
 		Name: cd.Colname,
@@ -469,18 +492,7 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 		col.TypeName = typeName
 	}
 
-	if cd.CollClause != nil && len(cd.CollClause.Collname) > 0 {
-		var parts []string
-		for _, n := range cd.CollClause.Collname {
-			if s := n.GetString_(); s != nil {
-				parts = append(parts, s.Sval)
-			}
-		}
-		if len(parts) > 0 {
-			collation := model.Ident(parts...)
-			col.Collation = &collation
-		}
-	}
+	col.Collation = collationFromClause(cd.CollClause)
 
 	for _, conNode := range cd.Constraints {
 		con := conNode.GetConstraint()
@@ -812,22 +824,7 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 	}
 
 	// Extract collation
-	if ds.CollClause != nil && len(ds.CollClause.Collname) > 0 {
-		var parts []string
-		for _, n := range ds.CollClause.Collname {
-			if s := n.GetString_(); s != nil {
-				parts = append(parts, s.Sval)
-			}
-		}
-		if len(parts) > 0 {
-			// Skip "default" collation (implicit for text types, excluded by catalog)
-			lastPart := parts[len(parts)-1]
-			if lastPart != "default" {
-				collation := model.Ident(parts...)
-				domain.Collation = &collation
-			}
-		}
-	}
+	domain.Collation = collationFromClause(ds.CollClause)
 
 	// Extract constraints from deparsed SQL
 	// Parse the deparsed statement to get normalized constraints
@@ -905,18 +902,7 @@ func parseCompositeTypeStmt(cts *pg_query.CompositeTypeStmt, defaultSchema strin
 			TypeName: typeName,
 		}
 
-		if cd.CollClause != nil && len(cd.CollClause.Collname) > 0 {
-			var parts []string
-			for _, n := range cd.CollClause.Collname {
-				if s := n.GetString_(); s != nil {
-					parts = append(parts, s.Sval)
-				}
-			}
-			if len(parts) > 0 && parts[len(parts)-1] != "default" {
-				collation := model.Ident(parts...)
-				attr.Collation = &collation
-			}
-		}
+		attr.Collation = collationFromClause(cd.CollClause)
 
 		compositeType.Attributes = append(compositeType.Attributes, attr)
 	}

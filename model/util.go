@@ -81,6 +81,16 @@ func SplitQualifiedName(s string) []string {
 	return parts
 }
 
+// UnquoteIdent is the inverse of quoteIdent: it strips the surrounding double
+// quotes and unescapes doubled ones. An unquoted identifier is folded to lower
+// case, the way PostgreSQL reads it.
+func UnquoteIdent(s string) string {
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return strings.ReplaceAll(s[1:len(s)-1], `""`, `"`)
+	}
+	return strings.ToLower(s)
+}
+
 func quote(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }

@@ -138,25 +138,14 @@ func FormatExecuteStmt(es *ExecuteStmt) string {
 // if it does not already contain a schema. Quoted identifiers containing
 // dots (e.g. `"a.b"`) are treated as a single identifier.
 func qualifyRenameFrom(value, defaultSchema string) string {
-	parts := splitQualifiedName(value)
+	parts := model.SplitQualifiedName(value)
 	for i, p := range parts {
-		parts[i] = unquoteIdent(p)
+		parts[i] = model.UnquoteIdent(p)
 	}
 	if len(parts) >= 2 {
 		return model.Ident(parts...)
 	}
 	return model.Ident(defaultSchema, parts[0])
-}
-
-// unquoteIdent strips surrounding double quotes from a SQL identifier and
-// unescapes doubled double-quotes ("" -> "). For unquoted identifiers,
-// folds to lowercase to match PostgreSQL's behavior.
-func unquoteIdent(s string) string {
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		inner := s[1 : len(s)-1]
-		return strings.ReplaceAll(inner, `""`, `"`)
-	}
-	return strings.ToLower(s)
 }
 
 // normalizeUnqualifiedDirective normalizes a renamed-from directive value
@@ -165,16 +154,10 @@ func unquoteIdent(s string) string {
 // (e.g. "public.old_idx"), only the last part is used.
 // The result matches the unquoted name used as orderedmap keys by the parser.
 func normalizeUnqualifiedDirective(s string) string {
-	parts := splitQualifiedName(s)
+	parts := model.SplitQualifiedName(s)
 	// Use the last part (the actual name, ignoring any schema prefix)
 	last := parts[len(parts)-1]
-	return unquoteIdent(last)
-}
-
-// splitQualifiedName splits a potentially schema-qualified name into parts,
-// respecting quoted identifiers. e.g. `"My Schema"."Old Name"` -> [`"My Schema"`, `"Old Name"`]
-func splitQualifiedName(s string) []string {
-	return model.SplitQualifiedName(s)
+	return model.UnquoteIdent(last)
 }
 
 // extractStmtDirectives scans raw SQL for `-- pista:renamed-from <name>` comments

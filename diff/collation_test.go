@@ -26,6 +26,12 @@ func TestEqualCollation(t *testing.T) {
 		// name "utf8".
 		{"dotted vs undotted", ptr(`pg_catalog."C.utf8"`), ptr(`"C"`), false},
 		{"empty", ptr(""), ptr(""), true},
+		// quote_ident quotes col_name keywords, model.Ident does not; the two
+		// forms must still compare equal.
+		{"quoted vs bare name", ptr(`public."int"`), ptr(`public.int`), true},
+		{"quoted vs bare schema", ptr(`"int"."C"`), ptr(`int."C"`), true},
+		{"case folding", ptr(`public.mycoll`), ptr(`public.MyColl`), true},
+		{"quoted case is significant", ptr(`public."MyColl"`), ptr(`public.mycoll`), false},
 	}
 
 	for _, tt := range tests {
