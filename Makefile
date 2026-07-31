@@ -39,6 +39,10 @@ fix:
 deadcode:
 	bash scripts/check-deadcode.sh
 
+.PHONY: keywords
+keywords:
+	bash scripts/gen-keywords.sh
+
 .PHONY: schema
 schema: clean-schema
 	$(MAKE) sample-db SQL_FILE=chinook.sql

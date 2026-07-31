@@ -235,7 +235,9 @@ var columnIdentPositions = []string{
 // quotes shows up as a failure instead of extra noise in the output.
 func TestIdent_allKeywords(t *testing.T) {
 	keywords := loadKeywords(t)
-	require.Greater(t, len(keywords), 400, "keyword corpus looks truncated")
+	// Pinned so that a pg_query_go upgrade adding keywords fails here instead
+	// of silently leaving them untested.
+	require.Len(t, keywords, 491, "keyword corpus is stale; run make keywords")
 
 	seen := map[pg_query.KeywordKind]int{}
 
