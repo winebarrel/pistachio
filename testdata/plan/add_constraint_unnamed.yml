@@ -1,0 +1,18 @@
+# ALTER TABLE ... ADD without a CONSTRAINT clause leaves the name empty in the
+# parsed statement, so the definition has to be recovered from the deparsed SQL
+# and the name filled in with PostgreSQL's auto-naming convention.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text
+  );
+  ALTER TABLE public.users ADD PRIMARY KEY (id);
+  ALTER TABLE public.users ADD UNIQUE (email);
+plan: |
+  ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+  ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE (email);

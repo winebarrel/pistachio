@@ -1,0 +1,8 @@
+# A CREATE SEQUENCE without a schema prefix belongs to the default schema, so
+# it must diff against the same catalog sequence a qualified name would.
+init: |
+  CREATE SEQUENCE public.order_seq INCREMENT BY 1;
+desired: |
+  CREATE SEQUENCE order_seq INCREMENT BY 2;
+plan: |
+  ALTER SEQUENCE public.order_seq INCREMENT BY 2;

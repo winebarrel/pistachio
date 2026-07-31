@@ -1,0 +1,20 @@
+# Same ordering rule as create_sequence_before_table.yml, but the nextval
+# argument is already schema-qualified, so the dependency resolves by direct
+# lookup instead of going through the search_path fallback.
+init: ""
+desired: |
+  CREATE SEQUENCE public.zzz_seq;
+  CREATE TABLE public.aaa (
+      id bigint DEFAULT nextval('public.zzz_seq'::regclass) NOT NULL
+  );
+plan: |
+  CREATE SEQUENCE public.zzz_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+  CREATE TABLE public.aaa (
+      id bigint DEFAULT nextval('public.zzz_seq'::regclass) NOT NULL
+  );

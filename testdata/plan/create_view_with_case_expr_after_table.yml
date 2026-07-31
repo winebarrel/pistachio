@@ -1,0 +1,19 @@
+# The dependency walk has to descend into a simple-form CASE (CASE <expr> WHEN
+# ...) in the select list, so the view is still created after the table it
+# reads from even though it is written first.
+init: ""
+desired: |
+  CREATE VIEW public.order_labels AS
+      SELECT CASE status WHEN 1 THEN 'new'::text ELSE 'done'::text END AS label
+        FROM public.orders;
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      status integer NOT NULL
+  );
+plan: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      status integer NOT NULL
+  );
+  CREATE OR REPLACE VIEW public.order_labels AS
+  SELECT CASE status WHEN 1 THEN 'new'::text ELSE 'done'::text END AS label FROM public.orders;

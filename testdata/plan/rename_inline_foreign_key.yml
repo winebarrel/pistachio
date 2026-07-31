@@ -1,0 +1,28 @@
+# An inline `-- pista:renamed-from` directive above a FOREIGN KEY constraint
+# inside CREATE TABLE has to resolve against the table's foreign keys, not only
+# its check/unique/primary-key constraints.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id),
+      CONSTRAINT posts_user_fk FOREIGN KEY (user_id) REFERENCES public.users(id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id),
+      -- pista:renamed-from posts_user_fk
+      CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+  );
+plan: |
+  ALTER TABLE public.posts RENAME CONSTRAINT posts_user_fk TO posts_user_id_fkey;
