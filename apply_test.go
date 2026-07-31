@@ -1127,6 +1127,93 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 	assert.NotContains(t, out, "-- Transaction skipped")
 }
 
+func TestApply_TryTx_DirectiveIndexUnchanged_UsesTransaction(t *testing.T) {
+	// The decision follows the generated diff, not the presence of the
+	// directive: an opted-in index that is not being changed leaves the diff
+	// free of CONCURRENTLY DDL, so the other changes run in a transaction.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_users_name ON public.users USING btree (name);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    age integer,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pista:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files: []string{desiredFile},
+		TryTx: true,
+	}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ADD COLUMN age")
+	assert.Contains(t, out, "-- Transaction started")
+	assert.Contains(t, out, "-- Transaction committed")
+	assert.NotContains(t, out, "-- Transaction skipped")
+}
+
+func TestApply_TryTx_ConcurrentlyPreSQL_RunsOutsideTransaction(t *testing.T) {
+	// concurrently-pre-SQL keeps running outside a transaction under --try-tx.
+	// The apply succeeding is the proof: CONCURRENTLY index DDL would fail if
+	// a transaction had been opened.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- pista:concurrently
+CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files:              []string{desiredFile},
+		ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+		TryTx:              true,
+	}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "SET lock_timeout = '5s';")
+	assert.Contains(t, out, "CREATE INDEX CONCURRENTLY")
+	assert.Contains(t, out, "-- Transaction skipped")
+	assert.NotContains(t, out, "-- Transaction started")
+}
+
 func TestApply_TryTx_ForceIndexConcurrently_SkipsTransaction(t *testing.T) {
 	// --force-index-concurrently is allowed with --try-tx: the forced
 	// CONCURRENTLY index DDL simply means no transaction is opened.
