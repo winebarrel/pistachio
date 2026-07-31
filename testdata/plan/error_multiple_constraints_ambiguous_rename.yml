@@ -15,4 +15,4 @@ desired: |
   ALTER TABLE public.orders
       ADD CONSTRAINT orders_amount_check CHECK (amount > 0),
       ADD CONSTRAINT orders_code_unique UNIQUE (code);
-error: "renameFrom is ambiguous"
+error: "pista:renamed-from is ambiguous"

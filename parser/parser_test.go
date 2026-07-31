@@ -2312,7 +2312,7 @@ func TestParseAlterTableConstraints_AmbiguousRename(t *testing.T) {
 			ADD CONSTRAINT orders_code_key UNIQUE (code);
 	`)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "renameFrom is ambiguous")
+	assert.Contains(t, err.Error(), "pista:renamed-from is ambiguous")
 }
 
 func TestParseAlterTableConstraints_SingleRenameStillApplies(t *testing.T) {

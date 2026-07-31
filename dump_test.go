@@ -516,6 +516,34 @@ func TestDump_OmitSchema_MultipleSchemas(t *testing.T) {
 	assert.Contains(t, err.Error(), "--omit-schema cannot be used with multiple schemas")
 }
 
+func TestDump_OmitSchema_PartitionParentInAnotherSchema(t *testing.T) {
+	ctx := context.Background()
+	// The dumped schema holds only the child; its parent stays in another one.
+	// Stripping the schema off the parent would point the statement at a table
+	// that does not exist, so the reference keeps it.
+	connStr := setupSchemaDB(t, ctx, "other", `
+		CREATE TABLE other.parent (
+			id integer NOT NULL,
+			d date NOT NULL
+		) PARTITION BY RANGE (d);
+	`)
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	testutil.SetupDB(t, ctx, conn, `
+		CREATE TABLE public.child PARTITION OF other.parent
+			FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+	`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connStr,
+		Schemas:    []string{"public"},
+	})
+	result, err := client.Dump(ctx, &pistachio.DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+
+	assert.Contains(t, result.String(), "CREATE TABLE child PARTITION OF other.parent")
+}
+
 func TestDumpResult_OmitSchema_ViewDefinition(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

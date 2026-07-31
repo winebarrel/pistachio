@@ -299,7 +299,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			// A rename directive names a single old object, so it cannot be
 			// applied when one statement declares several constraints.
 			if renameFrom != "" && len(cons)+len(fks) > 1 {
-				return nil, fmt.Errorf("renameFrom is ambiguous: ALTER TABLE %s adds %d constraints in one statement", fqtn, len(cons)+len(fks))
+				return nil, fmt.Errorf("pista:renamed-from is ambiguous: ALTER TABLE %s adds %d constraints in one statement", fqtn, len(cons)+len(fks))
 			}
 			for _, fk := range fks {
 				if renameFrom != "" {
