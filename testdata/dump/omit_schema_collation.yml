@@ -1,0 +1,15 @@
+# --omit-schema drops the schema of the dumped objects, not of the collation
+# they reference. The collation is a separate object pistachio does not manage.
+omit_schema: true
+init: |
+  CREATE COLLATION public."my.coll" FROM "C";
+  CREATE TABLE public.t (
+      c text COLLATE public."my.coll",
+      d text COLLATE pg_catalog."C"
+  );
+dump: |
+  -- t
+  CREATE TABLE t (
+      c text COLLATE public."my.coll",
+      d text COLLATE pg_catalog."C"
+  );

@@ -126,7 +126,7 @@ func TestTable_SQL_withDefault(t *testing.T) {
 
 func TestTable_SQL_withCollation(t *testing.T) {
 	tbl := newTable("public", "users")
-	coll := "en_US"
+	coll := `"en_US"`
 	tbl.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: &coll})
 
 	assert.Contains(t, tbl.SQL(), `COLLATE "en_US"`)

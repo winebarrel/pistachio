@@ -50,6 +50,47 @@ func quoteIdent(name string) string {
 	}
 }
 
+// SplitQualifiedName splits a qualified name into its parts, respecting
+// quoting: `public."my.coll"` -> [`public`, `"my.coll"`].
+func SplitQualifiedName(s string) []string {
+	var parts []string
+	var current strings.Builder
+	inQuote := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case ch == '"':
+			if inQuote && i+1 < len(s) && s[i+1] == '"' {
+				current.WriteString(`""`)
+				i++
+			} else {
+				inQuote = !inQuote
+				current.WriteByte(ch)
+			}
+		case ch == '.' && !inQuote:
+			parts = append(parts, strings.TrimSpace(current.String()))
+			current.Reset()
+		default:
+			current.WriteByte(ch)
+		}
+	}
+	if current.Len() > 0 {
+		parts = append(parts, strings.TrimSpace(current.String()))
+	}
+	return parts
+}
+
+// UnquoteIdent is the inverse of quoteIdent: it strips the surrounding double
+// quotes and unescapes doubled ones. An unquoted identifier is folded to lower
+// case, the way PostgreSQL reads it.
+func UnquoteIdent(s string) string {
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return strings.ReplaceAll(s[1:len(s)-1], `""`, `"`)
+	}
+	return strings.ToLower(s)
+}
+
 func quote(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }

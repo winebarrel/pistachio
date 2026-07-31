@@ -2,6 +2,14 @@
 
 ## [1.21.1] - 2026-07-31
 
+* Fix broken DDL for a collation whose name contains a dot, such as the `C.utf8` and `en_US.utf8` family. The schema-qualified name was split on every dot, so a domain or composite attribute was emitted as `COLLATE pg_catalog."C".utf8`, which PostgreSQL rejects as a cross-database reference. Collation names are now split on the quoting instead.
+
+* Fix `dump` dropping the schema from a column collation. `COLLATE mycoll` resolved only when the collation's schema was on `search_path`; the dump now emits `COLLATE public.mycoll`, matching what domains and composite types already did. A column collation written schema-qualified in the desired schema also no longer produces a no-op `SET DATA TYPE` on every plan.
+
+* Fix `plan` failing with `cannot change collation of domain ...` when the desired schema writes a domain collation unqualified, such as `COLLATE "C"` against the catalog's `pg_catalog."C"`. The two forms are now recognized as the same collation, as they already were for composite attributes.
+
+* Fix a no-op `SET DATA TYPE` on every plan for a column written with `COLLATE "default"`. The default collation is what a column gets implicitly and the catalog never reports it, so it is now ignored on columns as it already was on domains and composite attributes.
+
 * Fix a domain `CHECK` definition being truncated when the expression contains the text ` CONSTRAINT `, as in `CHECK (VALUE <> ' CONSTRAINT ')`. The definition was read out of the deparsed statement and cut at the next occurrence of that text, which also matches inside a string literal. It is now built from the parse tree, the same path a definition that did not match the marker already took.
 
 * Fix broken DDL for an identifier that is one of PostgreSQL's 23 `type_func_name` keywords (`left`, `right`, `full`, `inner`, `binary`, `natural`, and so on). They are valid as a type or function name but not as a table, column, index, constraint, sequence, type, or policy name. Only reserved keywords were quoted, so these were emitted bare: `dump` produced SQL that could not be parsed again, and `plan` / `apply` produced DDL that PostgreSQL rejected with a syntax error. Quoting now follows the grammar's `ColId` rule, which accepts a bare identifier, an unreserved keyword, or a `col_name` keyword.

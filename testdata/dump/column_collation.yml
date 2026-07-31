@@ -8,6 +8,6 @@ dump: |
   -- public.users
   CREATE TABLE public.users (
       id integer NOT NULL,
-      name text COLLATE "C" NOT NULL,
+      name text COLLATE pg_catalog."C" NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );

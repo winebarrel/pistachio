@@ -30,7 +30,7 @@ func TestDomain_SQL_WithNotNull(t *testing.T) {
 }
 
 func TestDomain_SQL_WithCollation(t *testing.T) {
-	col := "en_US"
+	col := `"en_US"`
 	d := &model.Domain{Schema: "public", Name: "name", BaseType: "text", Collation: &col}
 	assert.Contains(t, d.SQL(), `COLLATE "en_US"`)
 }

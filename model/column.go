@@ -41,6 +41,8 @@ type Column struct {
 	Default     *string
 	Identity    ColumnIdentity
 	Generated   ColumnGenerated
+	// Collation in quoted SQL form, ready to follow COLLATE
+	// (e.g. `pg_catalog."C"`). nil for the default collation.
 	Collation   *string
 	StorageType string
 	Comment     *string

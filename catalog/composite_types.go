@@ -104,7 +104,7 @@ func (c *Catalog) listCompositeAttributes(ctx context.Context, relid uint32) ([]
 		SELECT
 			a.attname,
 			pg_catalog.format_type(a.atttypid, a.atttypmod) AS type,
-			(SELECT cn.nspname || '.' || coll.collname FROM pg_catalog.pg_collation coll JOIN pg_catalog.pg_namespace cn ON cn.oid = coll.collnamespace WHERE coll.oid = a.attcollation AND a.attcollation <> 0 AND coll.collname <> 'default') AS collation,
+			(SELECT quote_ident(cn.nspname) || '.' || quote_ident(coll.collname) FROM pg_catalog.pg_collation coll JOIN pg_catalog.pg_namespace cn ON cn.oid = coll.collnamespace WHERE coll.oid = a.attcollation AND a.attcollation <> 0 AND coll.collname <> 'default') AS collation,
 			d.description
 		FROM
 			pg_catalog.pg_attribute a

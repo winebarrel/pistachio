@@ -71,7 +71,7 @@ func (t Table) SQL() string {
 				orderedmap.TransformSlice(t.Columns, func(_ string, col *Column) string {
 					q := "    " + Ident(col.Name) + " " + col.TypeName
 					if col.Collation != nil {
-						q += " COLLATE " + Ident(*col.Collation)
+						q += " COLLATE " + *col.Collation
 					}
 					if col.Identity.IsGeneratedAlways() {
 						q += " GENERATED ALWAYS AS IDENTITY"

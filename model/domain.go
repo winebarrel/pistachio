@@ -13,13 +13,15 @@ type DomainConstraint struct {
 }
 
 type Domain struct {
-	OID         uint32
-	Schema      string
-	Name        string
-	RenameFrom  *string
-	BaseType    string
-	NotNull     bool
-	Default     *string
+	OID        uint32
+	Schema     string
+	Name       string
+	RenameFrom *string
+	BaseType   string
+	NotNull    bool
+	Default    *string
+	// Collation in quoted SQL form, ready to follow COLLATE
+	// (e.g. `pg_catalog."C"`). nil for the default collation.
 	Collation   *string
 	Constraints []*DomainConstraint
 	Comment     *string
@@ -37,13 +39,7 @@ func (d Domain) SQL() string {
 	sql := "CREATE DOMAIN " + Ident(d.Schema, d.Name) + " AS " + d.BaseType
 
 	if d.Collation != nil {
-		// Collation may be schema-qualified (e.g. "pg_catalog.default")
-		parts := strings.Split(*d.Collation, ".")
-		quotedParts := make([]string, len(parts))
-		for i, p := range parts {
-			quotedParts[i] = Ident(p)
-		}
-		sql += " COLLATE " + strings.Join(quotedParts, ".")
+		sql += " COLLATE " + *d.Collation
 	}
 
 	if d.Default != nil {

@@ -1,0 +1,8 @@
+# A real collation change on a domain is still rejected. Only forms that name
+# the same collation are treated as equal.
+init: |
+  CREATE DOMAIN public.d AS text COLLATE "C";
+desired: |
+  CREATE DOMAIN public.d AS text COLLATE "POSIX";
+plan: ""
+error: cannot change collation of domain public.d

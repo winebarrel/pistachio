@@ -328,3 +328,48 @@ func loadKeywords(t *testing.T) []string {
 	require.NoError(t, scanner.Err())
 	return keywords
 }
+
+func TestSplitQualifiedName(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected []string
+	}{
+		{"users", []string{"users"}},
+		{"public.users", []string{"public", "users"}},
+		{`public."my.coll"`, []string{"public", `"my.coll"`}},
+		{`"C.utf8"`, []string{`"C.utf8"`}},
+		{`"My Schema"."Old Name"`, []string{`"My Schema"`, `"Old Name"`}},
+		{`public."a""b"`, []string{"public", `"a""b"`}},
+		{`a.b.c`, []string{"a", "b", "c"}},
+		{"public . users", []string{"public", "users"}},
+		{"", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, SplitQualifiedName(tt.name))
+		})
+	}
+}
+
+func TestUnquoteIdent(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected string
+	}{
+		{"users", "users"},
+		{"Users", "users"},
+		{`"Users"`, "Users"},
+		{`"my.coll"`, "my.coll"},
+		{`"a""b"`, `a"b`},
+		{`""`, ""},
+		{`"`, `"`},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, UnquoteIdent(tt.name))
+		})
+	}
+}

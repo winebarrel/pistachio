@@ -73,7 +73,7 @@ func diffDomain(fqdn string, current, desired *model.Domain) ([]string, error) {
 	}
 
 	// Collation change is not supported by PostgreSQL ALTER DOMAIN
-	if !equalPtr(current.Collation, desired.Collation) {
+	if !equalCollation(current.Collation, desired.Collation) {
 		return nil, fmt.Errorf("cannot change collation of domain %s: PostgreSQL does not support this", fqdn)
 	}
 

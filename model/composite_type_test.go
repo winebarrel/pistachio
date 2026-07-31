@@ -35,7 +35,7 @@ func TestCompositeType_SQL(t *testing.T) {
 }
 
 func TestCompositeType_SQL_Collation(t *testing.T) {
-	coll := "pg_catalog.C"
+	coll := `pg_catalog."C"`
 	ct := &model.CompositeType{
 		Schema: "public",
 		Name:   "t",
@@ -51,7 +51,7 @@ func TestCompositeType_SQL_Collation(t *testing.T) {
 
 func TestCompositeAttribute_TypeSQL(t *testing.T) {
 	assert.Equal(t, "text", (model.CompositeAttribute{TypeName: "text"}).TypeSQL())
-	coll := "pg_catalog.C"
+	coll := `pg_catalog."C"`
 	assert.Equal(t, `text COLLATE pg_catalog."C"`, (model.CompositeAttribute{TypeName: "text", Collation: &coll}).TypeSQL())
 }
 

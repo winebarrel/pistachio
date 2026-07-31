@@ -10,8 +10,8 @@ import (
 type CompositeAttribute struct {
 	Name     string
 	TypeName string
-	// Collation is the attribute collation, schema-qualified (e.g.
-	// "pg_catalog.C"). nil when the attribute uses the default collation.
+	// Collation in quoted SQL form, ready to follow COLLATE
+	// (e.g. `pg_catalog."C"`). nil for the default collation.
 	Collation *string
 	// RenameFrom maps the attribute to the current attribute it renames. Set by
 	// the parser from an inline -- pista:renamed-from directive; always nil on
@@ -43,18 +43,12 @@ func (a CompositeAttribute) TypeSQL() string {
 	return a.TypeName + collateClause(a.Collation)
 }
 
-// collateClause renders a COLLATE clause for a possibly schema-qualified
-// collation name, or "" when collation is nil.
+// collateClause renders a COLLATE clause. The stored name is already quoted.
 func collateClause(collation *string) string {
 	if collation == nil {
 		return ""
 	}
-	parts := strings.Split(*collation, ".")
-	quoted := make([]string, len(parts))
-	for i, p := range parts {
-		quoted[i] = Ident(p)
-	}
-	return " COLLATE " + strings.Join(quoted, ".")
+	return " COLLATE " + *collation
 }
 
 func (ct CompositeType) SQL() string {

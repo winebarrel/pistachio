@@ -246,14 +246,14 @@ func TestDiffCompositeTypes_AttributeCommentRemoved(t *testing.T) {
 }
 
 func TestDiffCompositeTypes_CollationEquivalentForms(t *testing.T) {
-	// Catalog reports "pg_catalog.C"; the parser keeps the user's "C". They name
+	// Catalog reports pg_catalog."C"; the parser keeps the user's "C". They name
 	// the same collation, so no ALTER ATTRIBUTE should be emitted.
-	catalogColl := "pg_catalog.C"
+	catalogColl := `pg_catalog."C"`
 	current := newCompositeTypeMap(&model.CompositeType{
 		Schema: "public", Name: "ct",
 		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &catalogColl}},
 	})
-	desiredColl := "C"
+	desiredColl := `"C"`
 	desired := newCompositeTypeMap(&model.CompositeType{
 		Schema: "public", Name: "ct",
 		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &desiredColl}},
@@ -275,12 +275,12 @@ func TestDiffCompositeTypes_QualifiedAttributeTypeNoDiff(t *testing.T) {
 }
 
 func TestDiffCompositeTypes_CollationChange(t *testing.T) {
-	cColl := "pg_catalog.C"
+	cColl := `pg_catalog."C"`
 	current := newCompositeTypeMap(&model.CompositeType{
 		Schema: "public", Name: "ct",
 		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &cColl}},
 	})
-	newColl := "en_US"
+	newColl := `"en_US"`
 	desired := newCompositeTypeMap(&model.CompositeType{
 		Schema: "public", Name: "ct",
 		Attributes: []*model.CompositeAttribute{{Name: "name", TypeName: "text", Collation: &newColl}},
