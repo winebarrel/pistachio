@@ -42,10 +42,12 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			partition AS (
 				SELECT
 					i.inhrelid,
-					c.relname
+					n.nspname AS parent_schema,
+					c.relname AS parent_name
 				FROM
 					pg_catalog.pg_inherits i
 					JOIN pg_catalog.pg_class c ON c.oid = i.inhparent
+					JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 				WHERE
 					i.inhseqno = 1
 			),
@@ -66,7 +68,8 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			c.relpersistence = 'u' AS unlogged,
 			c.relkind = 'p' AS partitioned,
 			pg_catalog.pg_get_partkeydef(c.oid) AS partition_def,
-			p.relname AS partition_of,
+			p.parent_schema,
+			p.parent_name,
 			pg_catalog.pg_get_expr(c.relpartbound, c.oid) AS partition_bound,
 			c.relrowsecurity,
 			c.relforcerowsecurity,
@@ -103,6 +106,7 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 	var tables []*model.Table
 	for rows.Next() {
 		var t model.Table
+		var parentSchema, parentName *string
 		err := rows.Scan(
 			&t.OID,
 			&t.Schema,
@@ -111,7 +115,8 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			&t.Unlogged,
 			&t.Partitioned,
 			&t.PartitionDef,
-			&t.PartitionOf,
+			&parentSchema,
+			&parentName,
 			&t.PartitionBound,
 			&t.RowSecurity,
 			&t.ForceRowSecurity,
@@ -119,6 +124,18 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan table info: %w", err)
+		}
+		// Qualify the parent with its schema so PartitionOf matches the keys
+		// used elsewhere (Table.FQTN, the parser). A bare relname would not
+		// resolve in the dependency graph, and would reference the wrong
+		// relation when emitted as SQL under a different search_path.
+		if parentName != nil {
+			schema := ""
+			if parentSchema != nil {
+				schema = *parentSchema
+			}
+			parent := model.Ident(schema, *parentName)
+			t.PartitionOf = &parent
 		}
 		t.Columns = orderedmap.New[string, *model.Column]()
 		t.Indexes = orderedmap.New[string, *model.Index]()

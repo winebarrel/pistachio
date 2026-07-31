@@ -1,0 +1,13 @@
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
+dump: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );

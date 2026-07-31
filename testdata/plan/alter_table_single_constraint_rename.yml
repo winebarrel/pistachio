@@ -1,0 +1,16 @@
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      code text,
+      CONSTRAINT orders_code_key UNIQUE (code)
+  );
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      code text
+  );
+  -- pista:renamed-from orders_code_key
+  ALTER TABLE public.orders
+      ADD CONSTRAINT orders_code_unique UNIQUE (code);
+plan: |
+  ALTER TABLE public.orders RENAME CONSTRAINT orders_code_key TO orders_code_unique;

@@ -15,7 +15,7 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 		SELECT
 			a.attname,
 			CASE
-				WHEN a.attidentity = '' AND pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname) IS NOT NULL
+				WHEN s.is_serial
 				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
 					WHEN 'integer' THEN 'serial'
 					WHEN 'bigint' THEN 'bigserial'
@@ -30,7 +30,7 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 			-- so the LEFT JOIN yields NULL there.
 			nn.conname AS not_null_name,
 			CASE
-				WHEN a.attidentity = '' AND pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname) IS NOT NULL
+				WHEN s.is_serial
 				THEN NULL
 				ELSE pg_catalog.pg_get_expr(ad.adbin, ad.adrelid)
 			END AS default,
@@ -43,6 +43,24 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 			JOIN pg_catalog.pg_type t ON t.oid = a.atttypid
 			LEFT JOIN pg_catalog.pg_attrdef ad ON ad.adrelid = a.attrelid
 			AND ad.adnum = a.attnum
+			-- A column is serial only when it owns a sequence *and* its default
+			-- actually draws from that sequence. A plain
+			-- "ALTER SEQUENCE ... OWNED BY" creates the same dependency without
+			-- touching the default, and treating that as serial would drop the
+			-- real default from the dumped definition.
+			CROSS JOIN LATERAL (
+				SELECT COALESCE(
+					a.attidentity = ''
+					-- Round-trip the sequence name through regclass so it is
+					-- rendered the same way pg_get_expr renders it:
+					-- pg_get_serial_sequence always schema-qualifies, while
+					-- pg_get_expr omits the schema when it is on search_path.
+					AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
+						|| quote_literal(pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass::text)
+						|| '::regclass)',
+					false
+				) AS is_serial
+			) s
 			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
 			AND co.oid != t.typcollation
 			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace

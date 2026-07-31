@@ -288,15 +288,20 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 
 			// RLS toggles and constraint subcommands can coexist in one
 			// ALTER TABLE statement. applyAlterTableRLS picks up only the RLS
-			// subtypes; parseAlterTableConstraint picks up AT_AddConstraint.
+			// subtypes; parseAlterTableConstraints picks up AT_AddConstraint.
 			// They walk the same cmd list independently, so run both.
 			applyAlterTableRLS(as, t)
 
-			con, fk, err := parseAlterTableConstraint(as, defaultSchema)
+			cons, fks, err := parseAlterTableConstraints(as, defaultSchema)
 			if err != nil {
 				return nil, err
 			}
-			if fk != nil {
+			// A rename directive names a single old object, so it cannot be
+			// applied when one statement declares several constraints.
+			if renameFrom != "" && len(cons)+len(fks) > 1 {
+				return nil, fmt.Errorf("renameFrom is ambiguous: ALTER TABLE %s adds %d constraints in one statement", fqtn, len(cons)+len(fks))
+			}
+			for _, fk := range fks {
 				if renameFrom != "" {
 					unquoted := normalizeUnqualifiedDirective(renameFrom)
 					fk.RenameFrom = &unquoted
@@ -304,7 +309,8 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
 					return nil, err
 				}
-			} else if con != nil {
+			}
+			for _, con := range cons {
 				if renameFrom != "" {
 					unquoted := normalizeUnqualifiedDirective(renameFrom)
 					con.RenameFrom = &unquoted
@@ -337,6 +343,9 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if err := setUnique(sequences, seq.FQN(), "sequence", seq); err != nil {
 				return nil, err
 			}
+
+		case node.GetAlterSeqStmt() != nil:
+			applyAlterSeqOwnedBy(node.GetAlterSeqStmt(), defaultSchema, sequences)
 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
@@ -1133,6 +1142,32 @@ func defElemInt64(de *pg_query.DefElem) (int64, bool, error) {
 // OWNED BY NONE (list ["none"]) yields nil owner. The pipeline only manages
 // standalone sequences, so an owned sequence is filtered out downstream; the
 // values here just mark it as owned.
+// applyAlterSeqOwnedBy records the OWNED BY clause of an ALTER SEQUENCE
+// statement on the already-parsed sequence. An owned sequence is unmanaged, so
+// without this the desired side would keep the sequence while the catalog side
+// drops it, and every plan would propose creating a sequence that exists.
+// Other ALTER SEQUENCE options are not tracked.
+func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, sequences *orderedmap.Map[string, *model.Sequence]) {
+	if as.Sequence == nil {
+		return
+	}
+	schema := as.Sequence.Schemaname
+	if schema == "" {
+		schema = defaultSchema
+	}
+	seq, ok := sequences.GetOk(model.Ident(schema, as.Sequence.Relname))
+	if !ok {
+		return
+	}
+	for _, opt := range as.Options {
+		de := opt.GetDefElem()
+		if de == nil || de.Defname != "owned_by" {
+			continue
+		}
+		seq.OwnerTable, seq.OwnerColumn = parseSeqOwnedBy(de.Arg)
+	}
+}
+
 func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
 	list := arg.GetList()
 	if list == nil {
@@ -1232,6 +1267,16 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 		if t, ok := tables.GetOk(fqtn); ok {
 			if col, ok := t.Columns.GetOk(colName); ok {
 				col.Comment = comment
+				return
+			}
+			// A partition child declares no columns of its own, but comments
+			// are per-relation and can be set on an inherited column. Record
+			// the comment against a column entry so the diff can see it.
+			// Restricted to true partition children: an INHERITS-style child
+			// still goes through the regular column diff, where a bodyless
+			// entry would be mistaken for a new column.
+			if t.PartitionOf != nil && t.PartitionBound != nil {
+				t.Columns.Set(colName, &model.Column{Name: colName, Comment: comment})
 			}
 			return
 		}
@@ -1300,7 +1345,13 @@ func parseCommentOnType(cs *pg_query.CommentStmt, defaultSchema string, enums *o
 	}
 }
 
-func parseAlterTableConstraint(as *pg_query.AlterTableStmt, defaultSchema string) (*model.Constraint, *model.ForeignKey, error) {
+// parseAlterTableConstraints collects every ADD CONSTRAINT subcommand of an
+// ALTER TABLE statement. PostgreSQL accepts comma-separated actions in one
+// statement, so a single statement can declare several constraints.
+func parseAlterTableConstraints(as *pg_query.AlterTableStmt, defaultSchema string) ([]*model.Constraint, []*model.ForeignKey, error) {
+	var constraints []*model.Constraint
+	var fks []*model.ForeignKey
+
 	for _, cmdNode := range as.Cmds {
 		cmd := cmdNode.GetAlterTableCmd()
 		if cmd == nil || cmd.Subtype != pg_query.AlterTableType_AT_AddConstraint {
@@ -1340,7 +1391,7 @@ func parseAlterTableConstraint(as *pg_query.AlterTableStmt, defaultSchema string
 				}
 			}
 
-			fk := &model.ForeignKey{
+			fks = append(fks, &model.ForeignKey{
 				Constraint: model.Constraint{
 					Name:       con.Conname,
 					Type:       model.ConstraintType('f'),
@@ -1354,9 +1405,9 @@ func parseAlterTableConstraint(as *pg_query.AlterTableStmt, defaultSchema string
 				Table:     as.Relation.Relname,
 				RefSchema: refSchema,
 				RefTable:  refTable,
-			}
+			})
 
-			return nil, fk, nil
+			continue
 		}
 
 		// Non-FK constraint (PRIMARY KEY, UNIQUE, CHECK, etc.)
@@ -1365,10 +1416,10 @@ func parseAlterTableConstraint(as *pg_query.AlterTableStmt, defaultSchema string
 			return nil, nil, err
 		}
 
-		return constraint, nil, nil
+		constraints = append(constraints, constraint)
 	}
 
-	return nil, nil, nil
+	return constraints, fks, nil
 }
 
 // parseInlineForeignKey builds a ForeignKey from an inline FOREIGN KEY

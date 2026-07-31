@@ -1,0 +1,14 @@
+# ALTER SEQUENCE against a sequence the desired schema never declares is
+# ignored rather than treated as a declaration.
+init: |
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+  ALTER SEQUENCE public.absent_seq OWNED BY public.t.val;
+plan: ""

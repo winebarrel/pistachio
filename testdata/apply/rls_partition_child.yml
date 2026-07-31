@@ -27,7 +27,7 @@ applied: |
   PARTITION BY RANGE (created_at);
 
   -- public.events_2024
-  CREATE TABLE public.events_2024 PARTITION OF events FOR VALUES FROM ('2024-01-01 00:00:00+00') TO ('2025-01-01 00:00:00+00');
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01 00:00:00+00') TO ('2025-01-01 00:00:00+00');
 
   ALTER TABLE public.events_2024 ENABLE ROW LEVEL SECURITY;
   CREATE POLICY owner_select ON public.events_2024 FOR SELECT USING ((owner = CURRENT_USER));

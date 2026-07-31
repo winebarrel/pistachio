@@ -1,0 +1,20 @@
+# ALTER SEQUENCE ... OWNED BY ties the sequence to a column just like
+# CREATE SEQUENCE ... OWNED BY, so the sequence is unmanaged and the plan is
+# empty. Without it the catalog side (which excludes owned sequences) and the
+# desired side disagree, and pista keeps proposing a CREATE for a sequence
+# that already exists.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
+desired: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
+plan: ""

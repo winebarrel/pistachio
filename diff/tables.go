@@ -130,9 +130,10 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	fqtn := desired.FQTN()
 
 	// Partition children inherit columns and constraints from the parent,
-	// so skip diffing them to avoid false DROP statements. RLS flags and
-	// policies are owned per-relation (children do not auto-inherit them),
-	// so they're still diffed here, mirroring how indexes and FKs work.
+	// so skip diffing them to avoid false DROP statements. RLS flags,
+	// policies and comments are owned per-relation (children do not
+	// auto-inherit them), so they're still diffed here, mirroring how
+	// indexes and FKs work.
 	if desired.PartitionOf != nil && desired.PartitionBound != nil {
 		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, dc)
 		if err != nil {
@@ -158,6 +159,8 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		}
 		result.Stmts = append(result.Stmts, polStmts...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
+
+		result.Stmts = append(result.Stmts, diffComments(current, desired)...)
 
 		return result, nil
 	}

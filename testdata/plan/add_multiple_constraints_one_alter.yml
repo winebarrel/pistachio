@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      code text
+  );
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      code text
+  );
+  ALTER TABLE public.orders
+      ADD CONSTRAINT orders_amount_check CHECK (amount > 0),
+      ADD CONSTRAINT orders_code_key UNIQUE (code);
+plan: |
+  ALTER TABLE public.orders ADD CONSTRAINT orders_amount_check CHECK (amount > 0);
+  ALTER TABLE public.orders ADD CONSTRAINT orders_code_key UNIQUE (code);

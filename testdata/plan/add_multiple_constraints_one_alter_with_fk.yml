@@ -1,0 +1,26 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer,
+      code text
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer,
+      code text
+  );
+  ALTER TABLE public.orders
+      ADD CONSTRAINT orders_code_key UNIQUE (code),
+      ADD CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id);
+plan: |
+  ALTER TABLE public.orders ADD CONSTRAINT orders_code_key UNIQUE (code);
+  ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id);
