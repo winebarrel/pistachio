@@ -1,0 +1,19 @@
+init: ""
+desired: |
+  -- pista:execute
+  GRANT SELECT ON public.users TO PUBLIC;
+  -- pista:execute-first
+  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  -- pista:execute-first
+  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:execute
+  GRANT select ON public.users TO public;

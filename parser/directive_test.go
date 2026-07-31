@@ -332,6 +332,72 @@ func TestExtractExecuteDirectives_None(t *testing.T) {
 	assert.Empty(t, skip)
 }
 
+func TestExtractExecuteDirectives_First(t *testing.T) {
+	sql := `-- pista:execute-first
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.True(t, stmts[0].First)
+	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
+	assert.Equal(t, "", stmts[0].CheckSQL)
+	assert.Len(t, skip, 1)
+}
+
+func TestExtractExecuteDirectives_FirstWithCheckSQL(t *testing.T) {
+	sql := `-- pista:execute-first SELECT to_regprocedure('public.my_func()') IS NULL
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.True(t, stmts[0].First)
+	assert.Equal(t, "SELECT to_regprocedure('public.my_func()') IS NULL", stmts[0].CheckSQL)
+}
+
+// The execute-first directive name shares a prefix with execute, so the
+// plain-execute pattern must not claim it (and vice versa).
+func TestExtractExecuteDirectives_FirstNotMatchedAsExecute(t *testing.T) {
+	sql := `-- pista:execute-first
+CREATE OR REPLACE FUNCTION public.f1() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+-- pista:execute
+CREATE OR REPLACE FUNCTION public.f2() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+	assert.True(t, stmts[0].First)
+	assert.Contains(t, stmts[0].SQL, "public.f1")
+	assert.False(t, stmts[1].First)
+	assert.Contains(t, stmts[1].SQL, "public.f2")
+}
+
+func TestFormatExecuteStmt_First(t *testing.T) {
+	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", First: true}
+	assert.Equal(t, "-- pista:execute-first\nCREATE FUNCTION f();", FormatExecuteStmt(es))
+}
+
+func TestFormatExecuteStmt_FirstWithCheck(t *testing.T) {
+	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true", First: true}
+	assert.Equal(t, "-- pista:execute-first SELECT true\nCREATE FUNCTION f();", FormatExecuteStmt(es))
+}
+
+func TestValidateDirectives_ExecuteFirstIsKnown(t *testing.T) {
+	require.NoError(t, validateDirectives("-- pista:execute-first\nSELECT 1;"))
+	require.NoError(t, validateDirectives("-- pista:execute-first SELECT true\nSELECT 1;"))
+	require.Error(t, validateDirectives("-- pista:execute-last\nSELECT 1;"))
+}
+
 func TestExtractConcurrentlyDirectives(t *testing.T) {
 	sql := `-- pista:concurrently
 CREATE INDEX idx_name ON public.users USING btree (name);

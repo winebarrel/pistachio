@@ -97,11 +97,19 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		return nil, err
 	}
 
-	stmts := result.Stmts
-
-	// Append execute statements after schema changes
+	// execute-first statements run before the schema changes, plain execute
+	// statements after them. Order within each group follows the source file.
+	var stmts []string
 	for _, es := range result.ExecuteStmts {
-		stmts = append(stmts, parser.FormatExecuteStmt(es))
+		if es.First {
+			stmts = append(stmts, parser.FormatExecuteStmt(es))
+		}
+	}
+	stmts = append(stmts, result.Stmts...)
+	for _, es := range result.ExecuteStmts {
+		if !es.First {
+			stmts = append(stmts, parser.FormatExecuteStmt(es))
+		}
 	}
 
 	hasChanges := len(stmts) > 0

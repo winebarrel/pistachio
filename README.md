@@ -513,6 +513,22 @@ END $do$;
 
 When the body changes, update the tag in both places (e.g. `'v1'` -> `'v2'`); the next `apply` will re-run.
 
+`-- pista:execute` runs after the managed DDL. Use `-- pista:execute-first` when the managed DDL depends on what the statement creates, such as a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy that calls a function:
+
+```sql
+-- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
+CREATE OR REPLACE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    v text,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x'::text)
+);
+```
+
+The check SQL is evaluated at the point the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after.
+
 See [Getting Started](getting-started.md) for details.
 
 ### dump

@@ -10,8 +10,12 @@ import (
 )
 
 var (
-	renameDirectivePattern       = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]+(.+?)[ \t]*$`)
+	renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]+(.+?)[ \t]*$`)
+	// execute-first shares a prefix with execute. The execute pattern below
+	// only accepts whitespace or end-of-line after the name, so "-- pista:
+	// execute-first" does not match it; the two never claim the same comment.
 	executeDirectivePattern      = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute(?:[ \t]+(.+?))?[ \t]*$`)
+	executeFirstDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute-first(?:[ \t]+(.+?))?[ \t]*$`)
 	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]*$`)
 	// Matches -- pista:concurrently with trailing content (invalid usage).
 	concurrentlyWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]+\S`)
@@ -27,11 +31,12 @@ var (
 
 // knownDirectives lists all recognized directive names.
 var knownDirectives = map[string]bool{
-	"renamed-from": true,
-	"execute":      true,
-	"concurrently": true,
-	"bulk-alter":   true,
-	"ignore":       true,
+	"renamed-from":  true,
+	"execute":       true,
+	"execute-first": true,
+	"concurrently":  true,
+	"bulk-alter":    true,
+	"ignore":        true,
 }
 
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
@@ -63,14 +68,20 @@ func validateDirectives(rawSQL string) error {
 	return nil
 }
 
-// ExecuteStmt represents an arbitrary SQL statement marked with -- pista:execute.
+// ExecuteStmt represents an arbitrary SQL statement marked with
+// -- pista:execute or -- pista:execute-first.
 type ExecuteStmt struct {
 	SQL      string // The SQL statement to execute
 	CheckSQL string // Optional condition check SQL (empty = always execute)
+	// First reports whether the statement came from -- pista:execute-first,
+	// which runs before the managed DDL instead of after it. Its check SQL is
+	// therefore evaluated against the pre-change schema.
+	First bool
 }
 
 // extractExecuteDirectives scans raw SQL for `-- pista:execute [<check SQL>]`
-// comments and pairs them with the following SQL statement.
+// and `-- pista:execute-first [<check SQL>]` comments and pairs them with the
+// following SQL statement.
 // Returns the execute statements and a set of statement locations to skip
 // during normal parsing.
 func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*ExecuteStmt, map[int32]bool, error) {
@@ -88,7 +99,15 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 		leadingEnd := findLeadingCommentEnd(region)
 		leading := region[:leadingEnd]
 
-		matches := executeDirectivePattern.FindAllStringSubmatch(leading, -1)
+		// A statement carrying both directives takes the one written closest
+		// to it, matching the "last match wins" rule used within each kind.
+		first := false
+		matches := executeDirectivePattern.FindAllStringSubmatchIndex(leading, -1)
+		firstMatches := executeFirstDirectivePattern.FindAllStringSubmatchIndex(leading, -1)
+		if len(firstMatches) > 0 && (len(matches) == 0 || firstMatches[len(firstMatches)-1][0] > matches[len(matches)-1][0]) {
+			first = true
+			matches = firstMatches
+		}
 		if len(matches) == 0 {
 			continue
 		}
@@ -104,8 +123,8 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 		// Use the last match (closest to the actual SQL statement)
 		lastMatch := matches[len(matches)-1]
 		checkSQL := ""
-		if len(lastMatch) > 1 {
-			checkSQL = strings.TrimSpace(lastMatch[1])
+		if lastMatch[2] >= 0 {
+			checkSQL = strings.TrimSpace(leading[lastMatch[2]:lastMatch[3]])
 			// Remove trailing semicolons; pgx extended protocol doesn't allow them
 			checkSQL = strings.TrimRight(checkSQL, ";")
 			checkSQL = strings.TrimSpace(checkSQL)
@@ -114,6 +133,7 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 		executeStmts = append(executeStmts, &ExecuteStmt{
 			SQL:      deparsed,
 			CheckSQL: checkSQL,
+			First:    first,
 		})
 		skipLocations[loc] = true
 	}
@@ -124,6 +144,9 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 // FormatExecuteStmt formats an ExecuteStmt as SQL with the directive comment.
 func FormatExecuteStmt(es *ExecuteStmt) string {
 	directive := "-- pista:execute"
+	if es.First {
+		directive += "-first"
+	}
 	if es.CheckSQL != "" {
 		directive += " " + es.CheckSQL
 	}

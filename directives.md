@@ -5,7 +5,8 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 | Directive | Arguments | Applies to | Purpose |
 |---|---|---|---|
 | `renamed-from` | old name (required) | tables, views, enums, enum values, domains, composite types, composite attributes, columns, constraints, foreign keys, indexes, policies | Rename instead of drop and create |
-| `execute` | check SQL (optional) | any statement | Run non-managed SQL during apply |
+| `execute` | check SQL (optional) | any statement | Run non-managed SQL after the managed DDL |
+| `execute-first` | check SQL (optional) | any statement | Run non-managed SQL before the managed DDL |
 | `concurrently` | none | `CREATE INDEX` | Create and drop the index with `CONCURRENTLY` |
 | `bulk-alter` | none | `CREATE TABLE` | Merge the table's `ALTER TABLE` actions into one statement |
 | `ignore` | none | tables, views, enums, domains, composite types | Leave the object unmanaged |
@@ -67,6 +68,26 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ ... $$ LANGUAGE p
 ```
 
 See [Executing arbitrary SQL](README.md#executing-arbitrary-sql) in the README for versioning patterns.
+
+## -- pista:execute-first
+
+Same as `execute`, but the statement runs before the managed DDL instead of after it. Use it when the managed DDL depends on the object the statement creates: a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy that calls a function must find that function already in place.
+
+```sql
+-- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
+CREATE OR REPLACE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    v text,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x'::text)
+);
+```
+
+The check SQL runs at the point the statement runs, so an `execute-first` check sees the schema before the change while an `execute` check sees it after. A check that tests for a table or column the same run creates therefore belongs on `execute`, not `execute-first`.
+
+Statements keep their source order within each group. Ordering between two `execute-first` statements is the file order; there is no dependency resolution.
 
 ## -- pista:concurrently
 

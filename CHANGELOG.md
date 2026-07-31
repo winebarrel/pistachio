@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Add `-- pista:execute-first`, which runs non-managed SQL before the managed DDL instead of after it. `-- pista:execute` is unchanged and still runs last. Use the new directive when the managed DDL depends on what the statement creates, such as a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy that calls a function. Its check SQL is evaluated before the change, so a check that tests for a table or column the same run creates belongs on `-- pista:execute`.
+
 ## [1.22.0] - 2026-07-31
 
 * Fix every `ADD CONSTRAINT` but the first being dropped from an `ALTER TABLE` that adds several in one statement, as `--bulk-alter` output does. The rest were discarded without an error, so `plan` offered to drop them from the database. A `-- pista:renamed-from` directive on such a statement is now an error, because it names one old object.
