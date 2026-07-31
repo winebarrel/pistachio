@@ -1,0 +1,20 @@
+# A CHECK that calls a function must not drift when the call is written
+# unqualified. pg_get_constraintdef returns it unqualified and adds a ::text
+# cast that normalizeCheckExpr strips, so both differences have to cancel out.
+# See TODO.md for the qualified form, which does drift.
+init: |
+  CREATE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x')
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x')
+  );
+plan: ""

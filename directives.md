@@ -81,13 +81,15 @@ CREATE TABLE public.users (
     id integer NOT NULL,
     v text,
     CONSTRAINT users_pkey PRIMARY KEY (id),
-    CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x'::text)
+    CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x')
 );
 ```
 
 The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after. Put a check that tests for a table or column the same run creates on `execute`.
 
 Statements keep their file order within each group. There is no dependency resolution between them.
+
+Writing both `execute` and `execute-first` on one statement is an error, because the statement cannot run on both sides of the managed DDL. Repeating the same directive takes the last one.
 
 ## -- pista:concurrently
 

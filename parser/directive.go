@@ -99,13 +99,16 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 		leadingEnd := findLeadingCommentEnd(region)
 		leading := region[:leadingEnd]
 
-		// A statement carrying both directives takes the one written closest
-		// to it, matching the "last match wins" rule used within each kind.
-		first := false
+		// The two directives put the statement on opposite sides of the
+		// managed DDL, so carrying both is a contradiction rather than a
+		// preference. Repeating one directive still takes the last match.
 		matches := executeDirectivePattern.FindAllStringSubmatchIndex(leading, -1)
 		firstMatches := executeFirstDirectivePattern.FindAllStringSubmatchIndex(leading, -1)
-		if len(firstMatches) > 0 && (len(matches) == 0 || firstMatches[len(firstMatches)-1][0] > matches[len(matches)-1][0]) {
-			first = true
+		if len(matches) > 0 && len(firstMatches) > 0 {
+			return nil, nil, fmt.Errorf("-- pista:execute and -- pista:execute-first cannot both apply to one statement")
+		}
+		first := len(firstMatches) > 0
+		if first {
 			matches = firstMatches
 		}
 		if len(matches) == 0 {

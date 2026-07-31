@@ -736,7 +736,12 @@ CREATE TABLE public.users (
 	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 
+	// strings.Index returns -1 for an absent substring, which would satisfy
+	// Less and hide the very regression this guards. Assert presence first.
 	out := buf.String()
+	require.Contains(t, out, "before_func")
+	require.Contains(t, out, "CREATE TABLE public.users")
+	require.Contains(t, out, "GRANT")
 	assert.Less(t, strings.Index(out, "before_func"), strings.Index(out, "CREATE TABLE public.users"))
 	assert.Less(t, strings.Index(out, "CREATE TABLE public.users"), strings.Index(out, "GRANT"))
 }

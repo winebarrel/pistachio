@@ -523,7 +523,7 @@ CREATE TABLE public.users (
     id integer NOT NULL,
     v text,
     CONSTRAINT users_pkey PRIMARY KEY (id),
-    CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x'::text)
+    CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x')
 );
 ```
 

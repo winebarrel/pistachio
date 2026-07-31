@@ -401,32 +401,24 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	assert.Equal(t, "SELECT true", stmts[0].CheckSQL)
 }
 
-// Both directives on one statement: the one written closest to the statement
-// wins, matching the last-match-wins rule used within a single directive kind.
-func TestExtractExecuteDirectives_BothDirectives(t *testing.T) {
-	firstLast := `-- pista:execute SELECT 1 = 1
+// Both directives on one statement is a contradiction: the statement cannot
+// run on both sides of the managed DDL, so it is rejected rather than resolved.
+func TestExtractExecuteDirectives_BothDirectivesIsError(t *testing.T) {
+	for _, sql := range []string{
+		`-- pista:execute SELECT 1 = 1
 -- pista:execute-first SELECT 2 = 2
-CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
-
-	result, err := pg_query.Parse(firstLast)
-	require.NoError(t, err)
-	stmts, _, err := extractExecuteDirectives(firstLast, result.Stmts)
-	require.NoError(t, err)
-	require.Len(t, stmts, 1)
-	assert.True(t, stmts[0].First)
-	assert.Equal(t, "SELECT 2 = 2", stmts[0].CheckSQL)
-
-	executeLast := `-- pista:execute-first SELECT 2 = 2
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`,
+		`-- pista:execute-first SELECT 2 = 2
 -- pista:execute SELECT 1 = 1
-CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`,
+	} {
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
 
-	result, err = pg_query.Parse(executeLast)
-	require.NoError(t, err)
-	stmts, _, err = extractExecuteDirectives(executeLast, result.Stmts)
-	require.NoError(t, err)
-	require.Len(t, stmts, 1)
-	assert.False(t, stmts[0].First)
-	assert.Equal(t, "SELECT 1 = 1", stmts[0].CheckSQL)
+		_, _, err = extractExecuteDirectives(sql, result.Stmts)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot both apply to one statement")
+	}
 }
 
 // Repeating execute-first keeps the last-match-wins rule within the kind.
