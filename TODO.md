@@ -439,10 +439,12 @@ Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
 
 ## Sequence ownership transitions: `OWNED BY NONE` plans an unusable CREATE
 
-Detaching a sequence from its column cannot be expressed. A desired schema
-that carries `ALTER SEQUENCE ... OWNED BY NONE` for a sequence the database
-still owns plans a `CREATE SEQUENCE` for a sequence that already exists, and
-apply fails with `relation "..." already exists` (SQLSTATE 42P07).
+Detaching a sequence from its column cannot be expressed. The parser reads
+`ALTER SEQUENCE ... OWNED BY NONE` and clears the owner, so the statement is
+accepted, but nothing emits the detaching DDL. A desired schema carrying it
+for a sequence the database still owns plans a `CREATE SEQUENCE` for a
+sequence that already exists, and apply fails with
+`relation "..." already exists` (SQLSTATE 42P07).
 
 `catalog.Sequences` drops every sequence with an owner, so the current side
 never sees it. After `OWNED BY NONE` the desired side holds no owner, which
@@ -461,6 +463,22 @@ transitions. That widens the set of objects pistachio manages, so it is a
 feature rather than a fix. Workaround: detach the sequence by hand.
 
 Origin: bug audit, 2026-07-31.
+
+## `COMMENT ON COLUMN` on an inherited column of an INHERITS child
+
+A comment on a column an `INHERITS` child inherits from its parent is dropped
+at parse time. `parseCommentStmt` needs the column to be present on the
+table, and such a child declares only its own columns. A true partition child
+takes a different path: it declares no columns at all, so the comment creates
+the entry, and `diffTable` reaches that entry through a branch that never
+diffs columns. An INHERITS child goes through the regular column diff, where
+an entry holding only a name and a comment would be read as a new column and
+emit `ADD COLUMN`, so the same trick does not carry over.
+
+Closing this needs the inherited column set materialised on the child, which
+is the same prerequisite as the INHERITS plan / apply entry above.
+
+Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
 ## `dump` output is not ordered by dependency
 

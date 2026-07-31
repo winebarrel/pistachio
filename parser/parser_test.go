@@ -2266,3 +2266,97 @@ CREATE INDEX idx_users_id ON public.users (id);`
 	require.True(t, ok)
 	assert.False(t, idx.Concurrently)
 }
+
+func TestParseAlterTableConstraints_Multiple(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.orders (id integer, amount integer, code text);
+		ALTER TABLE public.orders
+			ADD CONSTRAINT orders_amount_check CHECK (amount > 0),
+			ADD CONSTRAINT orders_code_key UNIQUE (code);
+	`)
+	require.NoError(t, err)
+	tbl, ok := result.Tables.GetOk("public.orders")
+	require.True(t, ok)
+	assert.Equal(t, 2, tbl.Constraints.Len())
+	_, ok = tbl.Constraints.GetOk("orders_amount_check")
+	assert.True(t, ok)
+	_, ok = tbl.Constraints.GetOk("orders_code_key")
+	assert.True(t, ok)
+}
+
+func TestParseAlterTableConstraints_MultipleWithForeignKey(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.users (id integer PRIMARY KEY);
+		CREATE TABLE public.orders (id integer, user_id integer, code text);
+		ALTER TABLE public.orders
+			ADD CONSTRAINT orders_code_key UNIQUE (code),
+			ADD CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id);
+	`)
+	require.NoError(t, err)
+	tbl, ok := result.Tables.GetOk("public.orders")
+	require.True(t, ok)
+	assert.Equal(t, 1, tbl.Constraints.Len())
+	assert.Equal(t, 1, tbl.ForeignKeys.Len())
+	fk, ok := tbl.ForeignKeys.GetOk("orders_user_id_fkey")
+	require.True(t, ok)
+	require.NotNil(t, fk.RefTable)
+	assert.Equal(t, "users", *fk.RefTable)
+}
+
+func TestParseAlterTableConstraints_AmbiguousRename(t *testing.T) {
+	_, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.orders (id integer, amount integer, code text);
+		-- pista:renamed-from orders_old
+		ALTER TABLE public.orders
+			ADD CONSTRAINT orders_amount_check CHECK (amount > 0),
+			ADD CONSTRAINT orders_code_key UNIQUE (code);
+	`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "renameFrom is ambiguous")
+}
+
+func TestParseAlterTableConstraints_SingleRenameStillApplies(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.orders (id integer, code text);
+		-- pista:renamed-from orders_old_key
+		ALTER TABLE public.orders ADD CONSTRAINT orders_code_key UNIQUE (code);
+	`)
+	require.NoError(t, err)
+	tbl, ok := result.Tables.GetOk("public.orders")
+	require.True(t, ok)
+	con, ok := tbl.Constraints.GetOk("orders_code_key")
+	require.True(t, ok)
+	require.NotNil(t, con.RenameFrom)
+	assert.Equal(t, "orders_old_key", *con.RenameFrom)
+}
+
+func TestParseCommentStmt_PartitionChildColumn(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.events (id integer, created_at date) PARTITION BY RANGE (created_at);
+		CREATE TABLE public.events_2024 PARTITION OF public.events
+			FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+		COMMENT ON COLUMN public.events_2024.id IS 'event id';
+	`)
+	require.NoError(t, err)
+	child, ok := result.Tables.GetOk("public.events_2024")
+	require.True(t, ok)
+	// The child declares no columns, so the comment creates the only entry.
+	col, ok := child.Columns.GetOk("id")
+	require.True(t, ok)
+	require.NotNil(t, col.Comment)
+	assert.Equal(t, "event id", *col.Comment)
+}
+
+func TestParseCommentStmt_InheritsChildColumnNotSynthesized(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.parent (id integer, name text);
+		CREATE TABLE public.child () INHERITS (public.parent);
+		COMMENT ON COLUMN public.child.id IS 'inherited';
+	`)
+	require.NoError(t, err)
+	child, ok := result.Tables.GetOk("public.child")
+	require.True(t, ok)
+	// An INHERITS child goes through the regular column diff, where a bodyless
+	// entry would look like a new column, so no entry is created.
+	assert.Equal(t, 0, child.Columns.Len())
+}
