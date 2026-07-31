@@ -436,3 +436,28 @@ search-path schema, not just the container's own), which the diff does not
 thread today. Workaround: write such a reference unqualified.
 
 Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
+
+## Sequence ownership transitions: `OWNED BY NONE` plans an unusable CREATE
+
+Detaching a sequence from its column cannot be expressed. A desired schema
+that carries `ALTER SEQUENCE ... OWNED BY NONE` for a sequence the database
+still owns plans a `CREATE SEQUENCE` for a sequence that already exists, and
+apply fails with `relation "..." already exists` (SQLSTATE 42P07).
+
+`catalog.Sequences` drops every sequence with an owner, so the current side
+never sees it. After `OWNED BY NONE` the desired side holds no owner, which
+makes the sequence a managed standalone object, and the diff reads the
+missing current entry as "not created yet". The opposite direction is
+handled: `ALTER SEQUENCE ... OWNED BY <column>` marks the sequence unmanaged
+on the desired side, matching the catalog, so an owned sequence no longer
+replans forever.
+
+Closing this means letting the catalog surface sequences that are merely
+owned, kept apart from the serial and identity ones that stay column
+attributes (the distinction `catalog.ListColumnsByTable` already draws by
+checking that the column default draws from the sequence), and teaching the
+diff to emit `ALTER SEQUENCE ... OWNED BY` / `OWNED BY NONE` for the
+transitions. That widens the set of objects pistachio manages, so it is a
+feature rather than a fix. Workaround: detach the sequence by hand.
+
+Origin: bug audit, 2026-07-31.
