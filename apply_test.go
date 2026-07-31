@@ -1214,6 +1214,38 @@ CREATE INDEX idx_users_name ON public.users USING btree (name);`), 0o644))
 	assert.NotContains(t, out, "-- Transaction started")
 }
 
+func TestApply_TryTx_MatviewIndex_SkipsTransaction(t *testing.T) {
+	// A materialized view index carries CONCURRENTLY through the view diff, so
+	// --try-tx skips the transaction for it too.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE MATERIALIZED VIEW public.mv AS SELECT 1 AS n;
+-- pista:concurrently
+CREATE INDEX idx_mv_n ON public.mv USING btree (n);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
+		Files: []string{desiredFile},
+		TryTx: true,
+	}, &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "CREATE INDEX CONCURRENTLY")
+	assert.Contains(t, out, "-- Transaction skipped")
+	assert.NotContains(t, out, "-- Transaction started")
+}
+
 func TestApply_TryTx_ForceIndexConcurrently_SkipsTransaction(t *testing.T) {
 	// --force-index-concurrently is allowed with --try-tx: the forced
 	// CONCURRENTLY index DDL simply means no transaction is opened.
