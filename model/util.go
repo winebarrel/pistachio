@@ -50,9 +50,8 @@ func quoteIdent(name string) string {
 	}
 }
 
-// SplitQualifiedName splits a possibly schema-qualified name into its parts,
-// respecting quoted identifiers, so a dot inside quotes stays put:
-// `public."my.coll"` -> [`public`, `"my.coll"`].
+// SplitQualifiedName splits a qualified name into its parts, respecting
+// quoting: `public."my.coll"` -> [`public`, `"my.coll"`].
 func SplitQualifiedName(s string) []string {
 	var parts []string
 	var current strings.Builder

@@ -1,0 +1,8 @@
+# Changing a composite attribute collation to one whose name contains a dot.
+init: |
+  CREATE COLLATION public."my.coll" FROM "C";
+  CREATE TYPE public.ct AS (a text COLLATE "C");
+desired: |
+  CREATE TYPE public.ct AS (a text COLLATE public."my.coll");
+plan: |
+  ALTER TYPE public.ct ALTER ATTRIBUTE a TYPE text COLLATE public."my.coll";

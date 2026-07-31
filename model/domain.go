@@ -20,8 +20,8 @@ type Domain struct {
 	BaseType   string
 	NotNull    bool
 	Default    *string
-	// Collation is the domain collation in quoted SQL form, ready to follow
-	// COLLATE (e.g. `pg_catalog."C"`). nil for the default collation.
+	// Collation in quoted SQL form, ready to follow COLLATE
+	// (e.g. `pg_catalog."C"`). nil for the default collation.
 	Collation   *string
 	Constraints []*DomainConstraint
 	Comment     *string

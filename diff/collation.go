@@ -3,10 +3,9 @@ package diff
 import "github.com/winebarrel/pistachio/model"
 
 // equalCollation reports whether two COLLATE clauses name the same collation.
-// The catalog always reports a collation schema-qualified, while the desired
-// schema may leave it unqualified, so the schema is compared only when both
-// sides carry one. Splitting respects quoting, because a collation name can
-// contain a dot ("C.utf8", "en_US.utf8").
+// The catalog always qualifies the name and the desired schema may not, so the
+// schema is compared only when both sides carry one. The split respects
+// quoting: a collation name can contain a dot ("C.utf8").
 func equalCollation(a, b *string) bool {
 	if a == nil || b == nil {
 		return a == b
