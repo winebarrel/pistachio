@@ -20,7 +20,7 @@ type ApplyOptions struct {
 	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL" help:"SQL to execute before CONCURRENTLY index DDL (e.g. SET lock_timeout). Runs outside any transaction, only when the diff contains CONCURRENTLY index DDL."`
 	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to execute before CONCURRENTLY index DDL."`
 	WithTx                   bool     `xor:"tx-mode,tx-choice" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
-	TryTx                    bool     `xor:"tx-choice" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. Runs without one, instead of failing, when the diff contains CONCURRENTLY index DDL."`
+	TryTx                    bool     `xor:"tx-choice" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. A diff containing CONCURRENTLY index DDL runs without a transaction instead of failing."`
 	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
 	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops. Cannot be combined with --with-tx."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
@@ -76,7 +76,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// --with-tx is an explicit all-or-nothing request, so CONCURRENTLY index
 	// DDL (which PostgreSQL cannot run inside a transaction) stays an error.
 	// --try-tx asks for a transaction only when one is possible, so the same
-	// diff downgrades to running without one.
+	// diff runs without one.
 	if options.WithTx && result.HasConcurrentlyIndex {
 		return nil, fmt.Errorf("--with-tx cannot be used with CONCURRENTLY index operations")
 	}
@@ -123,8 +123,8 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 			return nil
 		}
 	} else if options.TryTx {
-		// Record why the transaction the caller asked for was not opened, in
-		// the same sentence form as the comments above.
+		// Record why the requested transaction was not opened, in the same
+		// sentence form as the comments above.
 		fmt.Fprintln(w, "-- Transaction skipped: plan contains CONCURRENTLY index DDL") //nolint:errcheck
 	}
 

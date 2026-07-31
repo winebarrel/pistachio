@@ -172,21 +172,6 @@ pista apply tables.sql views.sql
 
 Use `--pre-sql` or `--pre-sql-file` to run SQL before applying changes (mutually exclusive). Also available as `$PISTA_PRE_SQL` / `$PISTA_PRE_SQL_FILE`. Use `--with-tx` to wrap the apply in a transaction (also available as `$PISTA_WITH_TX`).
 
-Use `--try-tx` to wrap the apply in a transaction only when one is possible. It behaves exactly like `--with-tx`, except that a diff containing `CREATE/DROP INDEX CONCURRENTLY` runs without a transaction instead of failing. The two flags are mutually exclusive. Also available as `$PISTA_TRY_TX`.
-
-```bash
-pista apply --try-tx schema.sql
-```
-
-When the transaction is skipped, the output records why:
-
-```sql
--- Transaction skipped: plan contains CONCURRENTLY index DDL
-CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);
-```
-
-Note that an apply which skips the transaction is not all-or-nothing: a failure part-way through leaves the statements that already ran in place. Re-running `pista apply` reconciles the rest, but a failed `CREATE INDEX CONCURRENTLY` leaves an invalid index that must be dropped by hand (this is PostgreSQL behavior, not specific to pistachio).
-
 ```bash
 # Inline SQL
 pista apply schema.sql --pre-sql "SET statement_timeout = '5s';" --with-tx
@@ -194,6 +179,21 @@ pista apply schema.sql --pre-sql "SET statement_timeout = '5s';" --with-tx
 # From file
 pista apply schema.sql --pre-sql-file pre.sql --with-tx
 ```
+
+Use `--try-tx` to wrap the apply in a transaction only when possible. It works like `--with-tx`, except that a diff containing `CREATE/DROP INDEX CONCURRENTLY` runs without a transaction instead of failing. The two flags are mutually exclusive. Also available as `$PISTA_TRY_TX`.
+
+```bash
+pista apply --try-tx schema.sql
+```
+
+The skipped transaction is recorded in the output:
+
+```sql
+-- Transaction skipped: plan contains CONCURRENTLY index DDL
+CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);
+```
+
+An apply that skips the transaction is not all-or-nothing. A failure leaves the statements that already ran in place, and re-running `pista apply` applies the rest. A failed `CREATE INDEX CONCURRENTLY` also leaves an invalid index that must be dropped by hand.
 
 To apply `CONCURRENTLY` to individual indexes, either write `CREATE INDEX CONCURRENTLY` directly or use the `-- pista:concurrently` directive before the `CREATE INDEX` statement. Both are treated equivalently:
 
@@ -229,7 +229,7 @@ pista apply --force-index-concurrently schema.sql
 ```
 
 > [!NOTE]
-> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`. To keep the opt-in and fall back to no transaction on those runs, use `--try-tx` instead.
+> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`. To keep the opt-in and run without a transaction instead, use `--try-tx`.
 
 Use `--bulk-alter` to combine consecutive `ALTER TABLE` actions on the same table into a single statement with comma-separated actions. This reduces metadata-lock churn and lets PostgreSQL plan the changes together. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs are kept as separate statements. Also available as `$PISTA_BULK_ALTER`.
 

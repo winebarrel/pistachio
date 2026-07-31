@@ -2,7 +2,7 @@
 
 ## [1.21.0] - 2026-07-31
 
-* Add `--try-tx` (env `$PISTA_TRY_TX`) to `apply`. It wraps the apply in a transaction like `--with-tx`, but a diff containing `CREATE/DROP INDEX CONCURRENTLY` runs without a transaction instead of failing, and the output records `-- Transaction skipped: plan contains CONCURRENTLY index DDL`. The decision follows the generated diff, so a `-- pista:concurrently` index that is not being changed still gets a transaction. `--with-tx` is unchanged and still errors on such a diff; the two flags are mutually exclusive. Unlike `--with-tx`, `--try-tx` can be combined with `--force-index-concurrently`.
+* Add `--try-tx` (env `$PISTA_TRY_TX`) to `apply`. It works like `--with-tx`, except that a diff containing `CREATE/DROP INDEX CONCURRENTLY` runs without a transaction instead of failing, and the output records `-- Transaction skipped: plan contains CONCURRENTLY index DDL`. The decision follows the generated diff, so a `-- pista:concurrently` index that is not being changed still gets a transaction. `--with-tx` is unchanged and the two flags are mutually exclusive. `--try-tx` can be combined with `--force-index-concurrently`.
 
 ## [1.20.0] - 2026-07-30
 
