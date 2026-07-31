@@ -1,0 +1,28 @@
+# --bulk-alter merges the ADD CONSTRAINT actions into one statement. Feeding
+# that statement back as the desired schema must be a no-op; before, every
+# constraint but the first was dropped on the way in.
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      code text
+  );
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      code text
+  );
+  ALTER TABLE public.orders
+      ADD CONSTRAINT orders_amount_check CHECK (amount > 0),
+      ADD CONSTRAINT orders_code_key UNIQUE (code);
+applied: |
+  -- public.orders
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      code text,
+      CONSTRAINT orders_code_key UNIQUE (code),
+      CONSTRAINT orders_amount_check CHECK (amount > 0)
+  );
+verify_no_drift: true

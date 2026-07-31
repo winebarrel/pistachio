@@ -4,9 +4,9 @@
 
 * Fix every `ADD CONSTRAINT` but the first being dropped from an `ALTER TABLE` that adds several in one statement, as `--bulk-alter` output does. The rest were discarded without an error, so `plan` offered to drop them from the database. A `-- pista:renamed-from` directive on such a statement is now an error, because it names one old object.
 
-* Fix `dump` emitting a partition's parent without its schema, as `PARTITION OF events`. The dump could not be reloaded when the parent was not on `search_path`, and attached the partition to a same-named table in another schema when one existed. The same missing schema hid the parent from the dependency graph, so dropping a partitioned table and its partitions in one run could drop the parent first and fail on the partition's own `DROP`.
+* Fix `dump` emitting a partition's parent, or an `INHERITS` parent, without its schema, as `PARTITION OF events`. The statement failed when the parent was not on `search_path`, and attached the partition to a same-named table in another schema when one existed. The same missing schema hid the parent from the dependency graph, so dropping a partitioned table and its partitions in one run could drop the parent first and fail on the partition's own `DROP`. Note that `dump` still emits objects in name order, so a parent that sorts after its child is written after it.
 
-* Fix `COMMENT ON TABLE` and `COMMENT ON COLUMN` never being applied to a partition. Comments belong to the individual relation and PostgreSQL accepts them on a partition, but they were skipped along with the inherited columns and constraints.
+* Fix `COMMENT ON TABLE` and `COMMENT ON COLUMN` never being applied to a partition. Comments belong to the individual relation and PostgreSQL accepts them on a partition, but they were skipped along with the inherited columns and constraints. Removing such a comment is diffed as well, even though the partition declares no columns of its own.
 
 * Fix a column being dumped as `serial` when a sequence is tied to it by a plain `ALTER SEQUENCE ... OWNED BY` while its default is something else. The real default was dropped from the dumped definition and no drift was reported. A column now counts as `serial` only when its default draws from the sequence it owns.
 

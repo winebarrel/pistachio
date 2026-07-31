@@ -1,0 +1,8 @@
+# ALTER SEQUENCE options other than OWNED BY are not tracked, so they neither
+# change the sequence nor stop it from being managed.
+init: |
+  CREATE SEQUENCE public.my_seq;
+desired: |
+  CREATE SEQUENCE public.my_seq;
+  ALTER SEQUENCE public.my_seq RESTART WITH 10;
+plan: ""

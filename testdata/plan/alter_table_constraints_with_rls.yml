@@ -1,0 +1,24 @@
+# RLS toggles and several ADD CONSTRAINT actions can share one ALTER TABLE.
+# Both walkers run over the same command list, so neither may swallow the other.
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      code text,
+      owner text NOT NULL
+  );
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      code text,
+      owner text NOT NULL
+  );
+  ALTER TABLE public.orders
+      ENABLE ROW LEVEL SECURITY,
+      ADD CONSTRAINT orders_amount_check CHECK (amount > 0),
+      ADD CONSTRAINT orders_code_key UNIQUE (code);
+plan: |
+  ALTER TABLE public.orders ADD CONSTRAINT orders_amount_check CHECK (amount > 0);
+  ALTER TABLE public.orders ADD CONSTRAINT orders_code_key UNIQUE (code);
+  ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;

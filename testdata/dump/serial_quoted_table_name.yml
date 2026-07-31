@@ -1,0 +1,14 @@
+# The serial check compares the column default against the sequence name
+# rendered through regclass. A table name needing quotes renders the sequence
+# quoted too, so the column must still come out as serial.
+init: |
+  CREATE TABLE public."Order" (
+      id serial NOT NULL,
+      big bigserial NOT NULL
+  );
+dump: |
+  -- public."Order"
+  CREATE TABLE public."Order" (
+      id serial NOT NULL,
+      big bigserial NOT NULL
+  );

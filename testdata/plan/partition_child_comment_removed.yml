@@ -1,0 +1,22 @@
+# A partition child declares no columns, so a column comment only reaches the
+# desired side when written explicitly. Dropping the statement must remove the
+# comment instead of leaving it in place.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  COMMENT ON TABLE public.events_2024 IS 'partition for 2024';
+  COMMENT ON COLUMN public.events_2024.id IS 'event id';
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+plan: |
+  COMMENT ON TABLE public.events_2024 IS NULL;
+  COMMENT ON COLUMN public.events_2024.id IS NULL;

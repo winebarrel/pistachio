@@ -1,0 +1,22 @@
+# Changing a partition child's comments emits the new text, not a drop.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  COMMENT ON TABLE public.events_2024 IS 'old table';
+  COMMENT ON COLUMN public.events_2024.id IS 'old column';
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  COMMENT ON TABLE public.events_2024 IS 'new table';
+  COMMENT ON COLUMN public.events_2024.id IS 'new column';
+plan: |
+  COMMENT ON TABLE public.events_2024 IS 'new table';
+  COMMENT ON COLUMN public.events_2024.id IS 'new column';

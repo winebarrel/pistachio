@@ -160,7 +160,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		result.Stmts = append(result.Stmts, polStmts...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
 
-		result.Stmts = append(result.Stmts, diffComments(current, desired)...)
+		result.Stmts = append(result.Stmts, diffComments(current, withInheritedColumns(current, desired))...)
 
 		return result, nil
 	}
@@ -1100,6 +1100,31 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	}
 
 	return dropStmts, addStmts, disallowed, nil
+}
+
+// withInheritedColumns returns a copy of a partition child whose column set
+// also holds the inherited columns the desired definition never declares. Only
+// columns carrying an explicit COMMENT ON COLUMN reach the desired side, so
+// without the rest a dropped comment would compare against nothing and stay.
+func withInheritedColumns(current, desired *model.Table) *model.Table {
+	cols := orderedmap.New[string, *model.Column]()
+	for name := range current.Columns.All() {
+		if col, ok := desired.Columns.GetOk(name); ok {
+			cols.Set(name, col)
+		} else {
+			cols.Set(name, &model.Column{Name: name})
+		}
+	}
+	// A comment on a column the table does not have is kept so it still
+	// reaches PostgreSQL and fails there rather than disappearing here.
+	for name, col := range desired.Columns.All() {
+		if _, ok := cols.GetOk(name); !ok {
+			cols.Set(name, col)
+		}
+	}
+	clone := *desired
+	clone.Columns = cols
+	return &clone
 }
 
 func diffComments(current, desired *model.Table) []string {

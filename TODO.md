@@ -461,3 +461,45 @@ transitions. That widens the set of objects pistachio manages, so it is a
 feature rather than a fix. Workaround: detach the sequence by hand.
 
 Origin: bug audit, 2026-07-31.
+
+## `dump` output is not ordered by dependency
+
+Objects are emitted in catalog order, which is `nspname, relname`. Nothing
+sorts a parent before the table that needs it, so a dump reloads only when
+the names happen to sort that way. Three cases hit it: a partition whose
+parent sorts later (`Odd Child` before `Odd Parent`), an `INHERITS` child in
+the same position, and a foreign key, which is emitted as an `ALTER TABLE ...
+ADD CONSTRAINT` directly after its own table and so can precede the table it
+references. `plan` and `apply` already order statements through `toposort`;
+`dump` does not call it.
+
+Origin: bug audit, 2026-07-31.
+
+## `dump` drops `PARTITION BY` from a sub-partitioned partition
+
+`model.Table.SQL` returns right after the `PARTITION OF ... FOR VALUES`
+clause, so a partition that is itself partitioned loses its own
+`PARTITION BY`. The dump then defines it as a leaf, and reloading fails on
+the next level down, which still says `PARTITION OF` that table.
+`PartitionDef` is read from the catalog and available; it just is not
+emitted on that branch.
+
+Origin: bug audit, 2026-07-31.
+
+## Perpetual drift on a serial column written as an explicit default
+
+A serial column written the way `pg_dump` writes it, as
+`CREATE SEQUENCE s; CREATE TABLE t (id integer DEFAULT nextval('s'));
+ALTER SEQUENCE s OWNED BY t.id;`, plans
+`ALTER COLUMN id SET DEFAULT nextval(...)` on every run. The catalog reports
+such a column as `serial` with no default, which is what lets `id serial`
+round-trip, while the desired side keeps the explicit default. `equalTypeName`
+already treats `serial` and `integer` as equal; the defaults are what differ.
+
+Comparing them needs the sequence the current column draws from, which the
+model does not carry, since the catalog nulls the default for serial columns.
+Suppressing the statement whenever the current column is serial and the
+desired default is any `nextval` would also swallow a genuine change to a
+different sequence.
+
+Origin: bug audit, 2026-07-31.
