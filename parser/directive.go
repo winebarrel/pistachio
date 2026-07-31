@@ -11,9 +11,9 @@ import (
 
 var (
 	renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]+(.+?)[ \t]*$`)
-	// execute-first shares a prefix with execute. The execute pattern below
-	// only accepts whitespace or end-of-line after the name, so "-- pista:
-	// execute-first" does not match it; the two never claim the same comment.
+	// execute-first shares a prefix with execute. The execute pattern accepts
+	// only whitespace or end-of-line after the name, so an execute-first
+	// comment never matches it.
 	executeDirectivePattern      = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute(?:[ \t]+(.+?))?[ \t]*$`)
 	executeFirstDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute-first(?:[ \t]+(.+?))?[ \t]*$`)
 	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]*$`)

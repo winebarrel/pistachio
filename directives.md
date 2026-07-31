@@ -71,7 +71,7 @@ See [Executing arbitrary SQL](README.md#executing-arbitrary-sql) in the README f
 
 ## -- pista:execute-first
 
-Same as `execute`, but the statement runs before the managed DDL instead of after it. Use it when the managed DDL depends on the object the statement creates: a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy that calls a function must find that function already in place.
+Same as `execute`, but runs before the managed DDL instead of after it. Use it when the managed DDL calls a function pistachio does not manage, as a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy can.
 
 ```sql
 -- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
@@ -85,9 +85,9 @@ CREATE TABLE public.users (
 );
 ```
 
-The check SQL runs at the point the statement runs, so an `execute-first` check sees the schema before the change while an `execute` check sees it after. A check that tests for a table or column the same run creates therefore belongs on `execute`, not `execute-first`.
+The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after. Put a check that tests for a table or column the same run creates on `execute`.
 
-Statements keep their source order within each group. Ordering between two `execute-first` statements is the file order; there is no dependency resolution.
+Statements keep their file order within each group. There is no dependency resolution between them.
 
 ## -- pista:concurrently
 

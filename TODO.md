@@ -480,6 +480,40 @@ is the same prerequisite as the INHERITS plan / apply entry above.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
+## Perpetual drift on a schema-qualified function call in a CHECK constraint
+
+A CHECK constraint that calls a function schema-qualified, written as
+`CHECK (public.lower_v(v) <> 'x')`, is re-emitted as `DROP CONSTRAINT` +
+`ADD CONSTRAINT` on every plan. Applying it succeeds and changes nothing, so
+`plan --check` stays at exit code 2 forever. `pg_get_constraintdef` returns
+the call unqualified when the function's schema is on the search_path, while
+the desired side keeps what the user wrote.
+
+`normalizeCheckExpr` (`diff/tables.go`) strips text-like casts and
+canonicalises `= ANY(ARRAY[...])` -> `IN (...)`, but never touches the
+`FuncCall` name, so the two forms deparse differently. Index expressions
+and index predicates run through `normalizeCheckExpr` as well
+(`normalizeIndexStmt`), so the same drift is expected there.
+
+The codebase already normalizes schema qualification three different ways.
+`stripQualifications` (`diff/views.go`) clears `RangeVar.Schemaname` and a
+table-qualified `ColumnRef` unconditionally on both sides, without
+consulting the search_path. `normalizeFKSchema` (`diff/tables.go`) goes the
+other way and fills an empty schema in with the owning table's. And
+`stripTypeSchema` (`diff/tables.go`) removes only the container's own
+schema prefix.
+
+The view approach is the cheapest fit here: strip the schema from a
+`FuncCall` name symmetrically in `normalizeCheckExpr`. It carries the same
+tradeoff views already accept, that two same-named functions in different
+schemas compare equal. The stricter alternative is the search_path-aware
+stripping described in the cross-schema user-type entry above, which the
+diff cannot do today because it does not thread the schema list.
+
+Workaround: write the call unqualified.
+
+Origin: found while adding `-- pista:execute-first`, 2026-07-31.
+
 ## `dump` output is not ordered by dependency
 
 Objects are emitted in catalog order, which is `nspname, relname`. Nothing
