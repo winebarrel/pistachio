@@ -1,5 +1,4 @@
-# --bulk-alter groups actions by table, and the grouping key is the quoted
-# table name.
+# --bulk-alter groups actions by table; the grouping key is the quoted name.
 bulk_alter: true
 init: |
   CREATE TABLE public."left" (

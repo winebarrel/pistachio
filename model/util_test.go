@@ -68,11 +68,9 @@ func TestQuoteLiteral_withSingleQuote(t *testing.T) {
 	assert.Equal(t, "'it''s'", QuoteLiteral("it's"))
 }
 
-// Identifier quoting follows PostgreSQL's keyword categories (kwlist.h).
-// ColId, the grammar rule behind every identifier pistachio emits, accepts a
-// bare IDENT, an unreserved keyword, or a col_name keyword. The remaining two
-// categories -- type_func_name ("reserved (can be function or type name)" in
-// the manual) and reserved -- must be quoted.
+// Quoting follows the keyword categories in PostgreSQL's kwlist.h: a ColId
+// accepts a bare identifier, an unreserved keyword, or a col_name keyword, and
+// the other two categories need quotes.
 func TestIdent_keywordKinds(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -94,8 +92,8 @@ func TestIdent_keywordKinds(t *testing.T) {
 	}
 }
 
-// The full type_func_name category. These parse as a type or function name but
-// not as a table, column, or index name, so all of them need quoting.
+// The full type_func_name category. Valid as a type or function name, not as a
+// table, column, or index name.
 func TestIdent_typeFuncNameKeywords(t *testing.T) {
 	keywords := []string{
 		"authorization", "binary", "collation", "concurrently", "cross",
@@ -112,8 +110,7 @@ func TestIdent_typeFuncNameKeywords(t *testing.T) {
 	}
 }
 
-// col_name keywords are usable as a table or column name unquoted, so quoting
-// them would only add noise.
+// col_name keywords work as a table or column name unquoted.
 func TestIdent_colNameKeywords(t *testing.T) {
 	for _, kw := range []string{"int", "char", "numeric", "position", "values"} {
 		t.Run(kw, func(t *testing.T) {
@@ -123,46 +120,119 @@ func TestIdent_colNameKeywords(t *testing.T) {
 	}
 }
 
-// identPositions covers every syntactic position in which pistachio emits an
-// identifier through Ident. Each template takes one already-quoted identifier.
+// identPositions lists every position where a bare identifier is emitted,
+// taken from the Ident call sites in model/, diff/, and apply.go.
 var identPositions = []string{
+	// model/table.go
 	"CREATE TABLE %s (id integer)",
 	"CREATE TABLE public.t (%s integer)",
 	"CREATE TABLE public.t (id integer COLLATE %s)",
+	"CREATE TABLE public.t (id integer CONSTRAINT %s NOT NULL)",
+	"CREATE TABLE public.t (id integer, CONSTRAINT %s PRIMARY KEY (id))",
 	"CREATE TABLE public.t (id integer) TABLESPACE %s",
+	// diff/tables.go
 	"ALTER TABLE public.t ADD COLUMN %s integer",
-	"ALTER TABLE public.t RENAME COLUMN a TO %s",
+	"ALTER TABLE public.t ADD COLUMN c integer CONSTRAINT %s NOT NULL",
+	"ALTER TABLE public.t ALTER COLUMN %s SET DATA TYPE text",
+	"ALTER TABLE public.t ALTER COLUMN %s SET DEFAULT 1",
+	"ALTER TABLE public.t DROP COLUMN %s",
 	"ALTER TABLE ONLY public.t ADD CONSTRAINT %s CHECK (id > 0)",
+	"ALTER TABLE public.t DROP CONSTRAINT %s",
+	"ALTER TABLE public.t VALIDATE CONSTRAINT %s",
+	"DROP INDEX public.%s",
+	// diff/rename.go
+	"ALTER TABLE public.t RENAME TO %s",
+	"ALTER TABLE public.t RENAME COLUMN a TO %s",
+	"ALTER TABLE public.t RENAME COLUMN %s TO b",
+	"ALTER TABLE public.t RENAME CONSTRAINT %s TO c",
+	"ALTER TABLE public.t RENAME CONSTRAINT c TO %s",
+	"ALTER INDEX public.i RENAME TO %s",
+	"ALTER TYPE public.e RENAME TO %s",
+	"ALTER SEQUENCE public.s RENAME TO %s",
+	"ALTER DOMAIN public.d RENAME TO %s",
+	"ALTER VIEW public.v RENAME TO %s",
+	"ALTER MATERIALIZED VIEW public.mv RENAME TO %s",
+	// model/index.go, model/enum.go, model/composite_type.go
 	"CREATE INDEX %s ON public.t (id)",
 	"CREATE TYPE %s AS ENUM ('a')",
 	"CREATE TYPE %s AS (a text)",
+	"CREATE TYPE public.ct AS (%s text)",
+	"CREATE TYPE public.ct AS (a text COLLATE %s)",
+	// diff/composite_types.go
+	"ALTER TYPE public.ct ADD ATTRIBUTE %s text",
+	"ALTER TYPE public.ct DROP ATTRIBUTE %s",
+	"ALTER TYPE public.ct ALTER ATTRIBUTE %s TYPE text",
+	"ALTER TYPE public.ct RENAME ATTRIBUTE %s TO b",
+	"ALTER TYPE public.ct RENAME ATTRIBUTE a TO %s",
+	// model/domain.go, diff/domains.go
 	"CREATE DOMAIN %s AS text",
+	"CREATE DOMAIN public.d AS integer CONSTRAINT %s CHECK (VALUE > 0)",
+	"ALTER DOMAIN public.d ADD CONSTRAINT %s CHECK (VALUE > 0)",
+	"ALTER DOMAIN public.d DROP CONSTRAINT %s",
+	"ALTER DOMAIN public.d VALIDATE CONSTRAINT %s",
+	// model/sequence.go, model/view.go
 	"CREATE SEQUENCE %s",
 	"CREATE VIEW %s AS SELECT 1",
+	"CREATE MATERIALIZED VIEW %s AS SELECT 1",
+	// model/policy.go, diff/policies.go
 	"CREATE POLICY %s ON public.t",
+	"ALTER POLICY %s ON public.t RENAME TO p2",
+	"ALTER POLICY p ON public.t RENAME TO %s",
+	"DROP POLICY %s ON public.t",
 	"COMMENT ON TABLE %s IS 'x'",
+	// apply.go
+	"SET search_path TO %s",
 }
 
-// rolePosition is kept apart from identPositions because of unusableRoleName.
+// The role position is separate because of unusableRoleName.
 const rolePosition = "CREATE POLICY p ON public.t TO %s"
 
-// PostgreSQL reserves "none" as a role name outright: CREATE ROLE none is
-// rejected quoted or not, so no policy can ever name it and quoting would not
-// help. Every other keyword works as a role name once quoted.
+// PostgreSQL rejects CREATE ROLE none quoted or not, so no policy can name it.
 const unusableRoleName = "none"
 
-// qualifiedIdentPositions takes a schema-qualified identifier.
+// qualifiedIdentPositions takes a schema-qualified identifier, the form the
+// FQTN / FQEN / FQDN / FQCN / FQVN / FQN helpers return.
 var qualifiedIdentPositions = []string{
 	"CREATE TABLE %s (id integer)",
 	"ALTER TABLE ONLY %s ADD CONSTRAINT c CHECK (id > 0)",
+	"ALTER TABLE %s RENAME TO t2",
+	"DROP TABLE %s",
+	"CREATE INDEX i ON %s (id)",
+	"DROP INDEX %s",
+	"ALTER INDEX %s RENAME TO i2",
+	"CREATE TYPE %s AS ENUM ('a')",
+	"CREATE TYPE %s AS (a text)",
+	"ALTER TYPE %s ADD ATTRIBUTE a text",
+	"DROP TYPE %s",
+	"CREATE DOMAIN %s AS text",
+	"ALTER DOMAIN %s DROP CONSTRAINT c",
+	"DROP DOMAIN %s",
+	"CREATE SEQUENCE %s",
+	"ALTER SEQUENCE %s RENAME TO s2",
+	"DROP SEQUENCE %s",
+	"CREATE VIEW %s AS SELECT 1",
+	"CREATE MATERIALIZED VIEW %s AS SELECT 1",
+	"DROP VIEW %s",
+	"DROP MATERIALIZED VIEW %s",
+	"CREATE POLICY p ON %s",
+	"DROP POLICY p ON %s",
 	"COMMENT ON TABLE %s IS 'x'",
+	"COMMENT ON TYPE %s IS 'x'",
+	"COMMENT ON DOMAIN %s IS 'x'",
+	"COMMENT ON VIEW %s IS 'x'",
+	"COMMENT ON MATERIALIZED VIEW %s IS 'x'",
+	"COMMENT ON SEQUENCE %s IS 'x'",
 }
 
-// TestIdent_allKeywords is the exhaustive form of the rule: every PostgreSQL
-// keyword, in every position pistachio emits an identifier, must survive a
-// round trip through the parser. It also pins the quoting decision itself, so
-// a category that stops needing quotes is caught as a regression rather than
-// silently producing noisier SQL.
+// columnIdentPositions takes a schema.table.column identifier, used for column
+// comments.
+var columnIdentPositions = []string{
+	"COMMENT ON COLUMN %s IS 'x'",
+}
+
+// Every PostgreSQL keyword, in every position, must parse after quoting. The
+// quoting decision itself is checked too, so a keyword that stops needing
+// quotes shows up as a failure instead of extra noise in the output.
 func TestIdent_allKeywords(t *testing.T) {
 	keywords := loadKeywords(t)
 	require.Greater(t, len(keywords), 400, "keyword corpus looks truncated")
@@ -184,7 +254,8 @@ func TestIdent_allKeywords(t *testing.T) {
 		}
 
 		assertParses(t, got, kw != unusableRoleName)
-		assertQualifiedParses(t, Ident("public", kw))
+		assertParsesIn(t, qualifiedIdentPositions, Ident("public", kw))
+		assertParsesIn(t, columnIdentPositions, Ident("public", "t", kw))
 	}
 
 	for _, kind := range []pg_query.KeywordKind{
@@ -197,38 +268,32 @@ func TestIdent_allKeywords(t *testing.T) {
 	}
 }
 
-// Non-keyword identifiers are quoted for reasons unrelated to the keyword
-// category (case, characters outside the safe set), and must still parse.
+// Identifiers quoted for other reasons (case, characters outside the safe set)
+// must parse as well.
 func TestIdent_nonKeywordsRoundTrip(t *testing.T) {
 	for _, name := range []string{"users", "Users", "my-table", `my"table`, "a b", "a.b", "1st", "_x", "0"} {
 		t.Run(name, func(t *testing.T) {
-			got := Ident(name)
-			assertParses(t, got, true)
-			assertQualifiedParses(t, Ident("public", name))
+			assertParses(t, Ident(name), true)
+			assertParsesIn(t, qualifiedIdentPositions, Ident("public", name))
+			assertParsesIn(t, columnIdentPositions, Ident("public", "t", name))
 		})
 	}
 }
 
-// assertParses checks that a single quoted identifier is accepted in every
-// position pistachio emits one.
+// assertParses checks a bare identifier in every position it is emitted.
 func assertParses(t *testing.T, ident string, withRole bool) {
 	t.Helper()
 	positions := slices.Clone(identPositions)
 	if withRole {
 		positions = append(positions, rolePosition)
 	}
-	for _, tmpl := range positions {
-		sql := fmt.Sprintf(tmpl, ident)
-		if _, err := pg_query.Parse(sql); err != nil {
-			t.Errorf("%s: %v", sql, err)
-		}
-	}
+	assertParsesIn(t, positions, ident)
 }
 
-func assertQualifiedParses(t *testing.T, qualified string) {
+func assertParsesIn(t *testing.T, positions []string, ident string) {
 	t.Helper()
-	for _, tmpl := range qualifiedIdentPositions {
-		sql := fmt.Sprintf(tmpl, qualified)
+	for _, tmpl := range positions {
+		sql := fmt.Sprintf(tmpl, ident)
 		if _, err := pg_query.Parse(sql); err != nil {
 			t.Errorf("%s: %v", sql, err)
 		}

@@ -1,9 +1,6 @@
-# PostgreSQL keywords, extracted from pg_query_go's bundled
-# src/include/parser/kwlist.h. One keyword per line.
-#
-# The list is a test corpus only: util_test.go classifies each entry
-# through pg_query.Scan at run time, so no category is recorded here
-# and the file cannot drift out of sync with the parser.
+# PostgreSQL keywords, one per line, from pg_query_go's bundled
+# src/include/parser/kwlist.h. Categories are not recorded here:
+# util_test.go derives each one through pg_query.Scan at run time.
 abort
 absent
 absolute

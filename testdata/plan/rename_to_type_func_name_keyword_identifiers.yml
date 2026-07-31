@@ -1,5 +1,4 @@
-# Renaming an object into a type_func_name keyword name. The RENAME TO target
-# is emitted through the same quoting path as a fresh CREATE.
+# Renaming objects into type_func_name keyword names.
 init: |
   CREATE TABLE public.old_table (
       old_column integer NOT NULL,

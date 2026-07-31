@@ -1,5 +1,4 @@
-# The DROP counterpart: PostgreSQL has to accept every quoted DROP, and the
-# schema has to settle afterwards.
+# The DROP counterpart, also checked for drift.
 drop_policy:
   allow_drop: [all]
 init: |

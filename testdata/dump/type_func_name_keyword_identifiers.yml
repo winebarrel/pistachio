@@ -1,7 +1,6 @@
-# type_func_name keywords ("reserved (can be function or type name)" in the
-# PostgreSQL manual) are usable as a type or function name but not as a table,
-# column, index, constraint, sequence, or policy name, so every one of them
-# must be dumped quoted.
+# type_func_name keywords are valid as a type or function name but not as a
+# table, column, index, constraint, sequence, or policy name, so the dump has
+# to quote them.
 init: |
   CREATE TYPE public."binary" AS ENUM ('a', 'b');
   CREATE DOMAIN public."similar" AS text;

@@ -1,6 +1,5 @@
-# ALTER paths on objects named with type_func_name keywords: adding a column,
-# a constraint, an index, and a policy, all of which name the table and the
-# new object with keywords that need quoting.
+# ALTER paths: adding a column, a constraint, an index, and a policy on a
+# table named with a type_func_name keyword.
 init: |
   CREATE TABLE public."left" (
       "right" integer NOT NULL,

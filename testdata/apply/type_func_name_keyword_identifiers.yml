@@ -1,5 +1,4 @@
-# End-to-end proof that the quoted DDL is accepted by PostgreSQL and settles:
-# apply the changes, then confirm a second plan is empty.
+# The quoted DDL has to be accepted by PostgreSQL and leave no drift.
 init: |
   CREATE TABLE public."left" (
       "right" integer NOT NULL,
