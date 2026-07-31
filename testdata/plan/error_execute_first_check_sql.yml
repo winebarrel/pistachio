@@ -1,0 +1,11 @@
+# The execute-first check runs from its own call site, so it needs its own
+# error fixture.
+init: ""
+desired: |
+  -- pista:execute-first SELECT EXISTS (SELECT 1 FROM public.does_not_exist)
+  CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+error: failed to evaluate check SQL

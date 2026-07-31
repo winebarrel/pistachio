@@ -99,17 +99,33 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 
 	// execute-first statements run before the schema changes, plain execute
 	// statements after them. Order within each group follows the source file.
-	var stmts []string
-	for _, es := range result.ExecuteStmts {
-		if es.First {
-			stmts = append(stmts, parser.FormatExecuteStmt(es))
+	// A statement whose check SQL is false is left out, so the plan shows what
+	// apply would run rather than everything the file holds.
+	appendExecuteStmts := func(stmts []string, first bool) ([]string, error) {
+		for _, es := range result.ExecuteStmts {
+			if es.First != first {
+				continue
+			}
+			shouldExecute := true
+			if es.CheckSQL != "" {
+				if err := conn.QueryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
+					return nil, fmt.Errorf("failed to evaluate check SQL: %s: %w", es.CheckSQL, err)
+				}
+			}
+			if shouldExecute {
+				stmts = append(stmts, parser.FormatExecuteStmt(es))
+			}
 		}
+		return stmts, nil
+	}
+
+	var stmts []string
+	if stmts, err = appendExecuteStmts(stmts, true); err != nil {
+		return nil, err
 	}
 	stmts = append(stmts, result.Stmts...)
-	for _, es := range result.ExecuteStmts {
-		if !es.First {
-			stmts = append(stmts, parser.FormatExecuteStmt(es))
-		}
+	if stmts, err = appendExecuteStmts(stmts, false); err != nil {
+		return nil, err
 	}
 
 	hasChanges := len(stmts) > 0

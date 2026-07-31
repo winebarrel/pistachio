@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* `plan` now evaluates `-- pista:execute` check SQL and leaves out the statements `apply` would skip. Before, every marked statement was printed regardless, so a file with a false check produced a plan full of SQL while `apply` on the same file reported `-- No changes`. Note that a plain `execute` check runs after the managed DDL at apply time but against the current schema at plan time, so a check that tests for a table or column the same run creates can still answer differently in the two commands.
+
 * Add `-- pista:execute-first`, which runs non-managed SQL before the managed DDL instead of after it. Use it when the managed DDL calls a function pistachio does not manage, as a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy can. `-- pista:execute` is unchanged and still runs last. The new directive's check SQL is evaluated before the change, so a check that tests for a table or column the same run creates belongs on `-- pista:execute`.
 
 ## [1.22.0] - 2026-07-31

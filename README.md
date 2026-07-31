@@ -492,7 +492,7 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. T
 
 ### Executing arbitrary SQL
 
-Use `-- pista:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated during `apply`. When it returns `true` the statement is executed, otherwise skipped. A common pattern skips when an object already exists:
+Use `-- pista:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated by both `plan` and `apply`. When it returns `true` the statement is executed, otherwise skipped, and `plan` leaves out the statements `apply` would skip. A common pattern skips when an object already exists:
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL

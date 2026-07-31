@@ -1,0 +1,15 @@
+# Same for execute-first: a false check keeps the statement out of the plan
+# while the managed DDL still shows.
+init: ""
+desired: |
+  -- pista:execute-first SELECT false
+  CREATE OR REPLACE FUNCTION public.never_runs() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

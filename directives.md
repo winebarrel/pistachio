@@ -60,7 +60,9 @@ See [Renaming objects](README.md#renaming-objects) in the README for column rena
 
 ## -- pista:execute
 
-Includes non-managed SQL (functions, triggers, grants) in schema files. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression evaluated during `apply`: when it returns `true` the statement is executed, otherwise skipped. Without a check, the statement always runs.
+Includes non-managed SQL (functions, triggers, grants) in schema files. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression: when it returns `true` the statement is executed, otherwise skipped. Without a check, the statement always runs.
+
+`plan` evaluates the check too, and leaves out the statements `apply` would skip, so the plan shows what will run. A plain `execute` check runs after the managed DDL at apply time but against the current schema at plan time, so a check that tests for a table or column the same run creates can answer differently in the two commands.
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
@@ -85,7 +87,7 @@ CREATE TABLE public.users (
 );
 ```
 
-The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after. Put a check that tests for a table or column the same run creates on `execute`.
+The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after. Put a check that tests for a table or column the same run creates on `execute`. An `execute-first` check answers the same in `plan` and `apply`, since both evaluate it against the pre-change schema.
 
 Statements keep their file order within each group. There is no dependency resolution between them.
 

@@ -443,11 +443,10 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	assert.NotContains(t, got, "-- No changes")
 }
 
-func TestPlan_Run_ExecuteCheckFalse_StillPrintsExecute(t *testing.T) {
-	// Plan does not evaluate check SQL; it shows every -- pista:execute
-	// statement regardless. So even when the check would return false at
-	// apply time, plan output must contain the execute SQL and must NOT
-	// say "-- No changes".
+func TestPlan_Run_ExecuteCheckFalse_OmitsExecute(t *testing.T) {
+	// Plan evaluates check SQL and leaves out the statements apply would
+	// skip. A check that returns false therefore produces "-- No changes"
+	// rather than SQL that would never run.
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -479,7 +478,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
-	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func", "plan should always show execute SQL")
-	assert.Contains(t, got, "-- pista:execute", "plan should annotate with the directive")
-	assert.NotContains(t, got, "-- No changes")
+	assert.NotContains(t, got, "CREATE OR REPLACE FUNCTION public.test_func", "plan should omit execute SQL apply would skip")
+	assert.NotContains(t, got, "-- pista:execute")
+	assert.Contains(t, got, "-- No changes")
 }

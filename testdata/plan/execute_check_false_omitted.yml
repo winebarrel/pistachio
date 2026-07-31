@@ -1,0 +1,14 @@
+# A false check means apply skips the statement, so plan leaves it out too.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:execute SELECT false
+  CREATE OR REPLACE FUNCTION public.never_runs() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+plan: ""

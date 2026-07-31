@@ -20,3 +20,4 @@ applied: |
       CONSTRAINT users_pkey PRIMARY KEY (id),
       CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x'::text)
   );
+verify_no_drift: true
