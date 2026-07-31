@@ -36,7 +36,7 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 			END AS default,
 			a.attidentity,
 			a.attgenerated,
-			co.collname,
+			quote_ident(con.nspname) || '.' || quote_ident(co.collname) AS collation,
 			d.description
 		FROM
 			pg_catalog.pg_attribute a
@@ -45,6 +45,7 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 			AND ad.adnum = a.attnum
 			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
 			AND co.oid != t.typcollation
+			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
 			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = a.attrelid
 			AND d.objsubid = a.attnum

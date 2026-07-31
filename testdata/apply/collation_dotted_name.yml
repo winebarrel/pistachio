@@ -1,0 +1,32 @@
+# The emitted COLLATE clause has to be accepted by PostgreSQL and leave no
+# drift on the next plan.
+init: |
+  CREATE COLLATION public."my.coll" FROM "C";
+desired: |
+  CREATE DOMAIN public.d AS text COLLATE public."my.coll";
+  CREATE TYPE public.ct AS (a text COLLATE public."my.coll");
+  CREATE TABLE public.t (
+      c text COLLATE public."my.coll"
+  );
+applied: |
+  -- public.d
+  CREATE DOMAIN public.d AS text COLLATE public."my.coll";
+
+  -- public.ct
+  CREATE TYPE public.ct AS (
+      a text COLLATE public."my.coll"
+  );
+
+  -- public.t
+  CREATE TABLE public.t (
+      c text COLLATE public."my.coll"
+  );
+applied_sql: |
+  CREATE TYPE public.ct AS (
+      a text COLLATE public."my.coll"
+  );
+  CREATE DOMAIN public.d AS text COLLATE public."my.coll";
+  CREATE TABLE public.t (
+      c text COLLATE public."my.coll"
+  );
+verify_no_drift: true

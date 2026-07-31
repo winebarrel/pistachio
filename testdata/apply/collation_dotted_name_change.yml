@@ -1,0 +1,18 @@
+# Changing a column collation to one whose name contains a dot.
+init: |
+  CREATE COLLATION public."my.coll" FROM "C";
+  CREATE TABLE public.t (
+      c text COLLATE "C"
+  );
+desired: |
+  CREATE TABLE public.t (
+      c text COLLATE public."my.coll"
+  );
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      c text COLLATE public."my.coll"
+  );
+applied_sql: |
+  ALTER TABLE public.t ALTER COLUMN c SET DATA TYPE text COLLATE public."my.coll";
+verify_no_drift: true

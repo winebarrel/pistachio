@@ -1,0 +1,22 @@
+# A collation name can contain a dot ("C.utf8", "en_US.utf8"), so the
+# schema-qualified form has to be split on the quoting, not on the dot.
+init: |
+  CREATE COLLATION public."my.coll" FROM "C";
+  CREATE DOMAIN public.d AS text COLLATE public."my.coll";
+  CREATE TYPE public.ct AS (a text COLLATE public."my.coll");
+  CREATE TABLE public.t (
+      c text COLLATE public."my.coll"
+  );
+dump: |
+  -- public.d
+  CREATE DOMAIN public.d AS text COLLATE public."my.coll";
+
+  -- public.ct
+  CREATE TYPE public.ct AS (
+      a text COLLATE public."my.coll"
+  );
+
+  -- public.t
+  CREATE TABLE public.t (
+      c text COLLATE public."my.coll"
+  );

@@ -42,7 +42,7 @@ func (c *Catalog) ListDomains(ctx context.Context) ([]*model.Domain, error) {
 			pg_catalog.format_type(t.typbasetype, t.typtypmod) AS base_type,
 			t.typnotnull,
 			pg_catalog.pg_get_expr(t.typdefaultbin, 0) AS default_value,
-			(SELECT cn.nspname || '.' || c.collname FROM pg_catalog.pg_collation c JOIN pg_catalog.pg_namespace cn ON cn.oid = c.collnamespace WHERE c.oid = t.typcollation AND t.typcollation <> 0 AND c.collname <> 'default') AS collation,
+			(SELECT quote_ident(cn.nspname) || '.' || quote_ident(c.collname) FROM pg_catalog.pg_collation c JOIN pg_catalog.pg_namespace cn ON cn.oid = c.collnamespace WHERE c.oid = t.typcollation AND t.typcollation <> 0 AND c.collname <> 'default') AS collation,
 			d.description
 		FROM
 			pg_catalog.pg_type t

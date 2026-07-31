@@ -50,6 +50,38 @@ func quoteIdent(name string) string {
 	}
 }
 
+// SplitQualifiedName splits a possibly schema-qualified name into its parts,
+// respecting quoted identifiers, so a dot inside quotes stays put:
+// `public."my.coll"` -> [`public`, `"my.coll"`].
+func SplitQualifiedName(s string) []string {
+	var parts []string
+	var current strings.Builder
+	inQuote := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case ch == '"':
+			if inQuote && i+1 < len(s) && s[i+1] == '"' {
+				current.WriteString(`""`)
+				i++
+			} else {
+				inQuote = !inQuote
+				current.WriteByte(ch)
+			}
+		case ch == '.' && !inQuote:
+			parts = append(parts, strings.TrimSpace(current.String()))
+			current.Reset()
+		default:
+			current.WriteByte(ch)
+		}
+	}
+	if current.Len() > 0 {
+		parts = append(parts, strings.TrimSpace(current.String()))
+	}
+	return parts
+}
+
 func quote(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }

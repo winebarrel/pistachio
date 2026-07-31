@@ -1,0 +1,15 @@
+# The catalog reports a collation schema-qualified; the desired schema may
+# leave it unqualified. The two name the same collation, so there is no diff.
+init: |
+  CREATE TABLE public.t (
+      c text COLLATE "C"
+  );
+  CREATE DOMAIN public.d AS text COLLATE "C";
+  CREATE TYPE public.ct AS (a text COLLATE "C");
+desired: |
+  CREATE TABLE public.t (
+      c text COLLATE "C"
+  );
+  CREATE DOMAIN public.d AS text COLLATE "C";
+  CREATE TYPE public.ct AS (a text COLLATE "C");
+plan: ""

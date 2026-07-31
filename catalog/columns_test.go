@@ -202,7 +202,7 @@ func TestListColumnsByTable(t *testing.T) {
 		name, ok := tbl.Columns.GetOk("name")
 		require.True(t, ok)
 		require.NotNil(t, name.Collation)
-		assert.Equal(t, "C", *name.Collation)
+		assert.Equal(t, `pg_catalog."C"`, *name.Collation)
 	})
 
 	t.Run("generated column", func(t *testing.T) {

@@ -154,8 +154,8 @@ func TestDiffDomains_DropConstraint(t *testing.T) {
 }
 
 func TestDiffDomains_CollationChange_Error(t *testing.T) {
-	colA := "pg_catalog.C"
-	colB := "pg_catalog.POSIX"
+	colA := `pg_catalog."C"`
+	colB := `pg_catalog."POSIX"`
 	current := newDomainMap(&model.Domain{Schema: "public", Name: "name", BaseType: "text", Collation: &colA})
 	desired := newDomainMap(&model.Domain{Schema: "public", Name: "name", BaseType: "text", Collation: &colB})
 	_, err := diff.DiffDomains(current, desired, diff.AllowAllDrops{})

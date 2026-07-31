@@ -352,7 +352,7 @@ func TestDiffColumns_alterType_withCollation(t *testing.T) {
 	current.Set("name", &model.Column{Name: "name", TypeName: "varchar(100)"})
 
 	desired := orderedmap.New[string, *model.Column]()
-	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)})
 
 	stmts, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -362,10 +362,10 @@ func TestDiffColumns_alterType_withCollation(t *testing.T) {
 
 func TestDiffColumns_alterCollation_change(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
-	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)})
 
 	desired := orderedmap.New[string, *model.Column]()
-	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("fr_FR")})
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"fr_FR"`)})
 
 	stmts, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -377,7 +377,7 @@ func TestDiffColumns_alterCollation_add(t *testing.T) {
 	current.Set("name", &model.Column{Name: "name", TypeName: "text"})
 
 	desired := orderedmap.New[string, *model.Column]()
-	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)})
 
 	stmts, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -386,7 +386,7 @@ func TestDiffColumns_alterCollation_add(t *testing.T) {
 
 func TestDiffColumns_alterCollation_drop(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
-	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)})
 
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("name", &model.Column{Name: "name", TypeName: "text"})
@@ -398,10 +398,10 @@ func TestDiffColumns_alterCollation_drop(t *testing.T) {
 
 func TestDiffColumns_alterCollation_unchanged(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
-	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
+	current.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)})
 
 	desired := orderedmap.New[string, *model.Column]()
-	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")})
+	desired.Set("name", &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)})
 
 	stmts, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
@@ -608,7 +608,7 @@ func TestAddColumnSQL_withDefault(t *testing.T) {
 }
 
 func TestAddColumnSQL_withCollation(t *testing.T) {
-	col := &model.Column{Name: "name", TypeName: "text", Collation: new("en_US")}
+	col := &model.Column{Name: "name", TypeName: "text", Collation: new(`"en_US"`)}
 	assert.Contains(t, addColumnSQL("public.users", col), `COLLATE "en_US"`)
 }
 

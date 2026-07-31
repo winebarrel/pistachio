@@ -174,33 +174,7 @@ func normalizeUnqualifiedDirective(s string) string {
 // splitQualifiedName splits a potentially schema-qualified name into parts,
 // respecting quoted identifiers. e.g. `"My Schema"."Old Name"` -> [`"My Schema"`, `"Old Name"`]
 func splitQualifiedName(s string) []string {
-	var parts []string
-	var current strings.Builder
-	inQuote := false
-
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if ch == '"' {
-			if inQuote && i+1 < len(s) && s[i+1] == '"' {
-				// Escaped double quote
-				current.WriteByte('"')
-				current.WriteByte('"')
-				i++
-			} else {
-				inQuote = !inQuote
-				current.WriteByte(ch)
-			}
-		} else if ch == '.' && !inQuote {
-			parts = append(parts, strings.TrimSpace(current.String()))
-			current.Reset()
-		} else {
-			current.WriteByte(ch)
-		}
-	}
-	if current.Len() > 0 {
-		parts = append(parts, strings.TrimSpace(current.String()))
-	}
-	return parts
+	return model.SplitQualifiedName(s)
 }
 
 // extractStmtDirectives scans raw SQL for `-- pista:renamed-from <name>` comments

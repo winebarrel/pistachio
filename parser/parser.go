@@ -477,7 +477,7 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 			}
 		}
 		if len(parts) > 0 {
-			collation := strings.Join(parts, ".")
+			collation := model.Ident(parts...)
 			col.Collation = &collation
 		}
 	}
@@ -823,7 +823,7 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 			// Skip "default" collation (implicit for text types, excluded by catalog)
 			lastPart := parts[len(parts)-1]
 			if lastPart != "default" {
-				collation := strings.Join(parts, ".")
+				collation := model.Ident(parts...)
 				domain.Collation = &collation
 			}
 		}
@@ -913,7 +913,7 @@ func parseCompositeTypeStmt(cts *pg_query.CompositeTypeStmt, defaultSchema strin
 				}
 			}
 			if len(parts) > 0 && parts[len(parts)-1] != "default" {
-				collation := strings.Join(parts, ".")
+				collation := model.Ident(parts...)
 				attr.Collation = &collation
 			}
 		}

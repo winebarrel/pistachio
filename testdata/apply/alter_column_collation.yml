@@ -14,6 +14,6 @@ applied: |
   -- public.users
   CREATE TABLE public.users (
       id integer NOT NULL,
-      name text COLLATE "POSIX" NOT NULL,
+      name text COLLATE pg_catalog."POSIX" NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );

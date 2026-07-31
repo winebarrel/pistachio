@@ -316,7 +316,7 @@ func addColumnSQL(fqtn string, col *model.Column) string {
 	sql := "ALTER TABLE " + fqtn + " ADD COLUMN " + model.Ident(col.Name) + " " + col.TypeName
 
 	if col.Collation != nil {
-		sql += " COLLATE " + model.Ident(*col.Collation)
+		sql += " COLLATE " + *col.Collation
 	}
 
 	if col.Identity.IsGeneratedAlways() {
@@ -348,10 +348,10 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// Type or collation change. Collation is altered via SET DATA TYPE
 	// because PostgreSQL has no separate "set collation" syntax; re-issuing
 	// SET DATA TYPE without COLLATE reverts to the type's default collation.
-	if !equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) || !equalPtr(current.Collation, desired.Collation) {
+	if !equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) || !equalCollation(current.Collation, desired.Collation) {
 		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + desired.TypeName
 		if desired.Collation != nil {
-			sql += " COLLATE " + model.Ident(*desired.Collation)
+			sql += " COLLATE " + *desired.Collation
 		}
 		stmts = append(stmts, sql+";")
 	}

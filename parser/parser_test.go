@@ -1968,7 +1968,7 @@ func TestParseSQL_DomainWithCollation(t *testing.T) {
 	d := result.Domains.Get("public.name")
 	require.NotNil(t, d)
 	require.NotNil(t, d.Collation)
-	assert.Equal(t, "en_US", *d.Collation)
+	assert.Equal(t, `"en_US"`, *d.Collation)
 }
 
 func TestParseSQL_DomainDefaultCollationExcluded(t *testing.T) {

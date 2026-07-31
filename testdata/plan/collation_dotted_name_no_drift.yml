@@ -1,0 +1,16 @@
+# A collation whose name contains a dot, written unqualified in the desired
+# schema. The catalog reports it qualified; both name the same collation.
+init: |
+  CREATE COLLATION public."my.coll" FROM "C";
+  CREATE TABLE public.t (
+      c text COLLATE public."my.coll"
+  );
+  CREATE DOMAIN public.d AS text COLLATE public."my.coll";
+  CREATE TYPE public.ct AS (a text COLLATE public."my.coll");
+desired: |
+  CREATE TABLE public.t (
+      c text COLLATE "my.coll"
+  );
+  CREATE DOMAIN public.d AS text COLLATE "my.coll";
+  CREATE TYPE public.ct AS (a text COLLATE "my.coll");
+plan: ""
