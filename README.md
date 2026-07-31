@@ -130,6 +130,210 @@ Run "pista <command> --help" for more information on a command.
 > 
 > See [Getting Started#working-with-specific-schemas](getting-started.md#working-with-specific-schemas) for details.
 
+<details>
+<summary><code>pista plan --help</code></summary>
+
+```
+Usage: pista plan <files> ... [flags]
+
+Print the schema diff SQL without applying it.
+
+Arguments:
+  <files> ...    Path to the desired schema SQL file(s).
+
+Flags:
+  -h, --help                   Show context-sensitive help.
+  -c, --conn-string="postgres://postgres@localhost/postgres"
+                               PostgreSQL connection string. See
+                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+                               ($PISTA_CONN_STR)
+  -d, --dbname=STRING          PostgreSQL database name. Overrides the dbname in
+                               --conn-string ($PISTA_DBNAME).
+      --password=STRING        PostgreSQL password ($PISTA_PASSWORD).
+  -n, --schemas=public,...     Schemas to inspect and modify ($PISTA_SCHEMAS).
+  -m, --schema-map=KEY=VALUE;...
+                               Schema name mapping (e.g. -m old=new).
+  -C, --config=FILE            Load options from a YAML file ($PISTA_CONFIG).
+      --version
+      --[no-]pager             Force paging via $PISTA_PAGER even when stdout is
+                               not a TTY. PISTA_PAGER must be set.
+
+  -I, --include=INCLUDE,...    Include only tables/views/enums/domains/composite
+                               types/sequences matching the pattern (wildcard:
+                               *, ?) ($PISTA_INCLUDE).
+  -E, --exclude=EXCLUDE,...    Exclude tables/views/enums/domains/composite
+                               types/sequences matching the pattern (wildcard:
+                               *, ?) ($PISTA_EXCLUDE).
+      --enable=ENABLE,...      Enable only specified object types (can be
+                               repeated) ($PISTA_ENABLE).
+      --disable=DISABLE,...    Disable specified object types (can be repeated)
+                               ($PISTA_DISABLE).
+      --allow-drop=ALLOW-DROP,...
+                               Allow dropping these object types (repeatable;
+                               'all' allows everything) ($PISTA_ALLOW_DROP).
+      --pre-sql=STRING         SQL to prepend to the plan output
+                               ($PISTA_PRE_SQL).
+      --pre-sql-file=STRING    Path to a SQL file to prepend to the plan output
+                               ($PISTA_PRE_SQL_FILE).
+      --concurrently-pre-sql=STRING
+                               SQL to run before CONCURRENTLY index DDL (e.g.
+                               SET lock_timeout). Emitted only when
+                               the diff contains CONCURRENTLY index DDL
+                               ($PISTA_CONCURRENTLY_PRE_SQL).
+      --concurrently-pre-sql-file=STRING
+                               Path to a SQL file to run before CONCURRENTLY
+                               index DDL ($PISTA_CONCURRENTLY_PRE_SQL_FILE).
+      --disable-index-concurrently
+                               Ignore CONCURRENTLY opt-ins (directive and
+                               inline) and emit plain CREATE/DROP INDEX
+                               ($PISTA_DISABLE_INDEX_CONCURRENTLY).
+      --force-index-concurrently
+                               Force CONCURRENTLY on every
+                               CREATE/DROP INDEX, including pure drops
+                               ($PISTA_FORCE_INDEX_CONCURRENTLY).
+      --bulk-alter             Combine consecutive ALTER TABLE actions on the
+                               same table into a single statement. FK changes,
+                               RENAME, VALIDATE CONSTRAINT, RLS toggles, and
+                               skipped DROPs stay separate ($PISTA_BULK_ALTER).
+      --assume-validated       Treat every table constraint, domain constraint,
+                               and foreign key as validated: ignore NOT
+                               VALID and never emit VALIDATE CONSTRAINT
+                               ($PISTA_ASSUME_VALIDATED).
+      --no-read-only           Open the database connection read-write.
+                               By default plan uses a read-only connection
+                               ($PISTA_NO_READ_ONLY).
+      --check                  Exit with code 2 when the plan contains
+                               executable changes ($PISTA_CHECK).
+```
+
+</details>
+
+<details>
+<summary><code>pista apply --help</code></summary>
+
+```
+Usage: pista apply <files> ... [flags]
+
+Apply schema changes to the database.
+
+Arguments:
+  <files> ...    Path to the desired schema SQL file(s).
+
+Flags:
+  -h, --help                   Show context-sensitive help.
+  -c, --conn-string="postgres://postgres@localhost/postgres"
+                               PostgreSQL connection string. See
+                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+                               ($PISTA_CONN_STR)
+  -d, --dbname=STRING          PostgreSQL database name. Overrides the dbname in
+                               --conn-string ($PISTA_DBNAME).
+      --password=STRING        PostgreSQL password ($PISTA_PASSWORD).
+  -n, --schemas=public,...     Schemas to inspect and modify ($PISTA_SCHEMAS).
+  -m, --schema-map=KEY=VALUE;...
+                               Schema name mapping (e.g. -m old=new).
+  -C, --config=FILE            Load options from a YAML file ($PISTA_CONFIG).
+      --version
+      --[no-]pager             Force paging via $PISTA_PAGER even when stdout is
+                               not a TTY. PISTA_PAGER must be set.
+
+  -I, --include=INCLUDE,...    Include only tables/views/enums/domains/composite
+                               types/sequences matching the pattern (wildcard:
+                               *, ?) ($PISTA_INCLUDE).
+  -E, --exclude=EXCLUDE,...    Exclude tables/views/enums/domains/composite
+                               types/sequences matching the pattern (wildcard:
+                               *, ?) ($PISTA_EXCLUDE).
+      --enable=ENABLE,...      Enable only specified object types (can be
+                               repeated) ($PISTA_ENABLE).
+      --disable=DISABLE,...    Disable specified object types (can be repeated)
+                               ($PISTA_DISABLE).
+      --allow-drop=ALLOW-DROP,...
+                               Allow dropping these object types (repeatable;
+                               'all' allows everything) ($PISTA_ALLOW_DROP).
+      --pre-sql=STRING         SQL to execute before applying changes
+                               ($PISTA_PRE_SQL).
+      --pre-sql-file=STRING    Path to a SQL file to execute before applying
+                               changes ($PISTA_PRE_SQL_FILE).
+      --concurrently-pre-sql=STRING
+                               SQL to execute before CONCURRENTLY
+                               index DDL (e.g. SET lock_timeout).
+                               Runs outside any transaction, only when
+                               the diff contains CONCURRENTLY index DDL
+                               ($PISTA_CONCURRENTLY_PRE_SQL).
+      --concurrently-pre-sql-file=STRING
+                               Path to a SQL file to execute before CONCURRENTLY
+                               index DDL ($PISTA_CONCURRENTLY_PRE_SQL_FILE).
+      --with-tx                Execute pre-SQL and schema changes in a
+                               transaction ($PISTA_WITH_TX).
+      --try-tx                 Execute pre-SQL and schema changes in a
+                               transaction when possible. A diff containing
+                               CONCURRENTLY index DDL runs without a transaction
+                               instead of failing ($PISTA_TRY_TX).
+      --disable-index-concurrently
+                               Ignore CONCURRENTLY opt-ins (directive and
+                               inline) and emit plain CREATE/DROP INDEX
+                               ($PISTA_DISABLE_INDEX_CONCURRENTLY).
+      --force-index-concurrently
+                               Force CONCURRENTLY on every CREATE/DROP INDEX,
+                               including pure drops. Cannot be combined with
+                               --with-tx ($PISTA_FORCE_INDEX_CONCURRENTLY).
+      --bulk-alter             Combine consecutive ALTER TABLE actions on the
+                               same table into a single statement. FK changes,
+                               RENAME, VALIDATE CONSTRAINT, RLS toggles, and
+                               skipped DROPs stay separate ($PISTA_BULK_ALTER).
+      --assume-validated       Treat every table constraint, domain constraint,
+                               and foreign key as validated: ignore NOT
+                               VALID and never emit VALIDATE CONSTRAINT
+                               ($PISTA_ASSUME_VALIDATED).
+```
+
+</details>
+
+<details>
+<summary><code>pista dump --help</code></summary>
+
+```
+Usage: pista dump [flags]
+
+Dump the current database schema as SQL.
+
+Flags:
+  -h, --help                   Show context-sensitive help.
+  -c, --conn-string="postgres://postgres@localhost/postgres"
+                               PostgreSQL connection string. See
+                               https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+                               ($PISTA_CONN_STR)
+  -d, --dbname=STRING          PostgreSQL database name. Overrides the dbname in
+                               --conn-string ($PISTA_DBNAME).
+      --password=STRING        PostgreSQL password ($PISTA_PASSWORD).
+  -n, --schemas=public,...     Schemas to inspect and modify ($PISTA_SCHEMAS).
+  -m, --schema-map=KEY=VALUE;...
+                               Schema name mapping (e.g. -m old=new).
+  -C, --config=FILE            Load options from a YAML file ($PISTA_CONFIG).
+      --version
+      --[no-]pager             Force paging via $PISTA_PAGER even when stdout is
+                               not a TTY. PISTA_PAGER must be set.
+
+  -I, --include=INCLUDE,...    Include only tables/views/enums/domains/composite
+                               types/sequences matching the pattern (wildcard:
+                               *, ?) ($PISTA_INCLUDE).
+  -E, --exclude=EXCLUDE,...    Exclude tables/views/enums/domains/composite
+                               types/sequences matching the pattern (wildcard:
+                               *, ?) ($PISTA_EXCLUDE).
+      --enable=ENABLE,...      Enable only specified object types (can be
+                               repeated) ($PISTA_ENABLE).
+      --disable=DISABLE,...    Disable specified object types (can be repeated)
+                               ($PISTA_DISABLE).
+      --split=STRING           Output each table/view/enum/domain/composite
+                               type/sequence as a separate file in the specified
+                               directory.
+      --omit-schema            Omit schema name from the dump output.
+      --no-read-only           Open the database connection read-write.
+                               By default dump uses a read-only connection
+                               ($PISTA_NO_READ_ONLY).
+```
+
+</details>
+
 ### plan
 
 Compare schema file(s) against the current database and print the SQL needed to reconcile them.
