@@ -176,6 +176,40 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return nil, fmt.Errorf("failed to set search_path: %w", err)
 	}
 
+	// runExecuteStmts runs the -- pista:execute statements whose First flag
+	// matches. search_path is already set above. Check SQL is evaluated at the
+	// point the statement runs, so an execute-first check sees the pre-change
+	// schema while a plain execute check sees the post-change schema.
+	runExecuteStmts := func(first bool) error {
+		for _, es := range result.ExecuteStmts {
+			if es.First != first {
+				continue
+			}
+
+			shouldExecute := true
+
+			if es.CheckSQL != "" {
+				if err := queryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
+					return fmt.Errorf("failed to evaluate check SQL: %s: %w", es.CheckSQL, err)
+				}
+			}
+
+			if shouldExecute {
+				fmt.Fprintln(w, parser.FormatExecuteStmt(es)) //nolint:errcheck
+				if _, err := exec(ctx, es.SQL); err != nil {
+					return fmt.Errorf("failed to execute SQL: %s: %w", es.SQL, err)
+				}
+				applied = true
+			}
+		}
+		return nil
+	}
+
+	// Execute -- pista:execute-first statements before schema changes.
+	if err := runExecuteStmts(true); err != nil {
+		return nil, err
+	}
+
 	for _, stmt := range result.Stmts {
 		fmt.Fprintln(w, stmt) //nolint:errcheck
 		if _, err := exec(ctx, stmt); err != nil {
@@ -184,24 +218,9 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		applied = true
 	}
 
-	// Execute -- pista:execute statements after schema changes. search_path is
-	// already set above.
-	for _, es := range result.ExecuteStmts {
-		shouldExecute := true
-
-		if es.CheckSQL != "" {
-			if err := queryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
-				return nil, fmt.Errorf("failed to evaluate check SQL: %s: %w", es.CheckSQL, err)
-			}
-		}
-
-		if shouldExecute {
-			fmt.Fprintln(w, parser.FormatExecuteStmt(es)) //nolint:errcheck
-			if _, err := exec(ctx, es.SQL); err != nil {
-				return nil, fmt.Errorf("failed to execute SQL: %s: %w", es.SQL, err)
-			}
-			applied = true
-		}
+	// Execute -- pista:execute statements after schema changes.
+	if err := runExecuteStmts(false); err != nil {
+		return nil, err
 	}
 
 	if err := commit(ctx); err != nil {

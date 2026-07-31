@@ -1,0 +1,23 @@
+# The CHECK constraint calls a function that pista does not manage. Without
+# execute-first the CREATE TABLE would run before the function exists and fail.
+# The check SQL is evaluated against the pre-change schema, so the function is
+# created on the first run and skipped afterwards.
+init: ""
+desired: |
+  -- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
+  CREATE OR REPLACE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x')
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x'::text)
+  );
+verify_no_drift: true

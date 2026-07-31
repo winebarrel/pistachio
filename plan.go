@@ -97,12 +97,41 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		return nil, err
 	}
 
-	stmts := result.Stmts
-
-	// Append execute statements after schema changes
-	for _, es := range result.ExecuteStmts {
-		stmts = append(stmts, parser.FormatExecuteStmt(es))
+	// execute-first statements run before the schema changes, plain execute
+	// statements after them. Order within each group follows the source file.
+	// A statement whose check SQL is false is left out, so the plan shows what
+	// apply would run rather than everything the file holds.
+	//
+	// A check that cannot be evaluated is undetermined, not fatal. plan runs
+	// before the managed DDL and on a read-only connection, so a check may
+	// reference a table this run creates, or write. Both answer fine at apply
+	// time. Such a statement is kept in the plan, as it was before checks were
+	// evaluated at all, with the reason recorded; failing here would take the
+	// unrelated DDL down with it.
+	appendExecuteStmts := func(stmts []string, first bool) []string {
+		for _, es := range result.ExecuteStmts {
+			if es.First != first {
+				continue
+			}
+			shouldExecute := true
+			note := ""
+			if es.CheckSQL != "" {
+				if err := conn.QueryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
+					shouldExecute = true
+					note = "check SQL could not be evaluated at plan time: " + err.Error() + "; apply will decide"
+				}
+			}
+			if shouldExecute {
+				stmts = append(stmts, parser.FormatExecuteStmtWithNote(es, note))
+			}
+		}
+		return stmts
 	}
+
+	var stmts []string
+	stmts = appendExecuteStmts(stmts, true)
+	stmts = append(stmts, result.Stmts...)
+	stmts = appendExecuteStmts(stmts, false)
 
 	hasChanges := len(stmts) > 0
 

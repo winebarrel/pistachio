@@ -182,6 +182,9 @@ func TestExtractConstraintName(t *testing.T) {
 	assert.Equal(t, "", extractConstraintName(""))
 	// Unquoted names are lowercased
 	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT Users_Pkey PRIMARY KEY (id)"))
+	// An unterminated quote yields no name rather than a truncated one
+	assert.Equal(t, "", extractConstraintName(`CONSTRAINT "unterminated UNIQUE (code)`))
+	assert.Equal(t, "", extractConstraintName("CONSTRAINT "))
 }
 
 func TestNormalizeUnqualifiedDirective(t *testing.T) {
@@ -240,6 +243,8 @@ func TestExtractColumnName(t *testing.T) {
 	assert.Equal(t, "", extractColumnName(""))
 	// Unquoted names are lowercased
 	assert.Equal(t, "displayname", extractColumnName("DisplayName text NOT NULL"))
+	// An unterminated quote yields no name rather than a truncated one
+	assert.Equal(t, "", extractColumnName(`"unterminated text NOT NULL`))
 }
 
 func TestExtractExecuteDirectives_WithCheckSQL(t *testing.T) {
@@ -330,6 +335,138 @@ func TestExtractExecuteDirectives_None(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 	assert.Empty(t, skip)
+}
+
+func TestExtractExecuteDirectives_First(t *testing.T) {
+	sql := `-- pista:execute-first
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.True(t, stmts[0].First)
+	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
+	assert.Equal(t, "", stmts[0].CheckSQL)
+	assert.Len(t, skip, 1)
+}
+
+func TestExtractExecuteDirectives_FirstWithCheckSQL(t *testing.T) {
+	sql := `-- pista:execute-first SELECT to_regprocedure('public.my_func()') IS NULL
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.True(t, stmts[0].First)
+	assert.Equal(t, "SELECT to_regprocedure('public.my_func()') IS NULL", stmts[0].CheckSQL)
+}
+
+// The execute-first directive name shares a prefix with execute, so the
+// plain-execute pattern must not claim it (and vice versa).
+func TestExtractExecuteDirectives_FirstNotMatchedAsExecute(t *testing.T) {
+	sql := `-- pista:execute-first
+CREATE OR REPLACE FUNCTION public.f1() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+-- pista:execute
+CREATE OR REPLACE FUNCTION public.f2() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+	assert.True(t, stmts[0].First)
+	assert.Contains(t, stmts[0].SQL, "public.f1")
+	assert.False(t, stmts[1].First)
+	assert.Contains(t, stmts[1].SQL, "public.f2")
+}
+
+func TestExtractExecuteDirectives_FirstCheckSQLTrailingSemicolon(t *testing.T) {
+	sql := `-- pista:execute-first SELECT true;
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.True(t, stmts[0].First)
+	assert.Equal(t, "SELECT true", stmts[0].CheckSQL)
+}
+
+// Both directives on one statement is a contradiction: the statement cannot
+// run on both sides of the managed DDL, so it is rejected rather than resolved.
+func TestExtractExecuteDirectives_BothDirectivesIsError(t *testing.T) {
+	for _, sql := range []string{
+		`-- pista:execute SELECT 1 = 1
+-- pista:execute-first SELECT 2 = 2
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`,
+		`-- pista:execute-first SELECT 2 = 2
+-- pista:execute SELECT 1 = 1
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`,
+	} {
+		result, err := pg_query.Parse(sql)
+		require.NoError(t, err)
+
+		_, _, err = extractExecuteDirectives(sql, result.Stmts)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot both apply to one statement")
+	}
+}
+
+// Repeating execute-first keeps the last-match-wins rule within the kind.
+func TestExtractExecuteDirectives_FirstRepeated(t *testing.T) {
+	sql := `-- pista:execute-first SELECT 1 = 1
+-- pista:execute-first SELECT 2 = 2
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, _, err := extractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.True(t, stmts[0].First)
+	assert.Equal(t, "SELECT 2 = 2", stmts[0].CheckSQL)
+}
+
+func TestExtractExecuteDirectives_FirstMixedWithManaged(t *testing.T) {
+	sql := `CREATE TABLE public.users (id integer NOT NULL);
+-- pista:execute-first
+CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;`
+
+	result, err := pg_query.Parse(sql)
+	require.NoError(t, err)
+
+	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.True(t, stmts[0].First)
+	assert.Len(t, skip, 1)
+	assert.False(t, skip[result.Stmts[0].StmtLocation])
+}
+
+func TestFormatExecuteStmt_First(t *testing.T) {
+	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", First: true}
+	assert.Equal(t, "-- pista:execute-first\nCREATE FUNCTION f();", FormatExecuteStmt(es))
+}
+
+func TestFormatExecuteStmt_FirstWithCheck(t *testing.T) {
+	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true", First: true}
+	assert.Equal(t, "-- pista:execute-first SELECT true\nCREATE FUNCTION f();", FormatExecuteStmt(es))
+}
+
+func TestValidateDirectives_ExecuteFirstIsKnown(t *testing.T) {
+	require.NoError(t, validateDirectives("-- pista:execute-first\nSELECT 1;"))
+	require.NoError(t, validateDirectives("-- pista:execute-first SELECT true\nSELECT 1;"))
+	require.Error(t, validateDirectives("-- pista:execute-last\nSELECT 1;"))
 }
 
 func TestExtractConcurrentlyDirectives(t *testing.T) {

@@ -5,7 +5,8 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 | Directive | Arguments | Applies to | Purpose |
 |---|---|---|---|
 | `renamed-from` | old name (required) | tables, views, enums, enum values, domains, composite types, composite attributes, columns, constraints, foreign keys, indexes, policies | Rename instead of drop and create |
-| `execute` | check SQL (optional) | any statement | Run non-managed SQL during apply |
+| `execute` | check SQL (optional) | any statement | Run non-managed SQL after the managed DDL |
+| `execute-first` | check SQL (optional) | any statement | Run non-managed SQL before the managed DDL |
 | `concurrently` | none | `CREATE INDEX` | Create and drop the index with `CONCURRENTLY` |
 | `bulk-alter` | none | `CREATE TABLE` | Merge the table's `ALTER TABLE` actions into one statement |
 | `ignore` | none | tables, views, enums, domains, composite types | Leave the object unmanaged |
@@ -59,7 +60,19 @@ See [Renaming objects](README.md#renaming-objects) in the README for column rena
 
 ## -- pista:execute
 
-Includes non-managed SQL (functions, triggers, grants) in schema files. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression evaluated during `apply`: when it returns `true` the statement is executed, otherwise skipped. Without a check, the statement always runs.
+Includes non-managed SQL (functions, triggers, grants) in schema files. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression: when it returns `true` the statement is executed, otherwise skipped. Without a check, the statement always runs.
+
+`plan` evaluates the check too, and leaves out the statements `apply` would skip, so the plan shows what will run.
+
+Some checks cannot be answered at plan time. `plan` runs before the managed DDL and on a read-only connection, so a check that reads a table the same run creates, or that writes, fails there while answering fine during `apply`. Such a statement stays in the plan with the reason recorded, and `apply` decides:
+
+```sql
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM public.audit_log)
+-- check SQL could not be evaluated at plan time: ERROR: relation "public.audit_log" does not exist (SQLSTATE 42P01); apply will decide
+INSERT INTO public.audit_log (id, note) VALUES (1, 'seed');
+```
+
+During `apply` the check runs at its proper moment, so a failure there is an error and stops the run.
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
@@ -67,6 +80,28 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ ... $$ LANGUAGE p
 ```
 
 See [Executing arbitrary SQL](README.md#executing-arbitrary-sql) in the README for versioning patterns.
+
+## -- pista:execute-first
+
+Same as `execute`, but runs before the managed DDL instead of after it. Use it when the managed DDL calls a function pistachio does not manage, as a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy can.
+
+```sql
+-- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
+CREATE OR REPLACE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    v text,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x')
+);
+```
+
+The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after. Put a check that tests for a table or column the same run creates on `execute`; `plan` cannot answer it and will show the statement as undetermined, but `apply` decides correctly. An `execute-first` check answers the same in both commands, since both evaluate it against the pre-change schema.
+
+Statements keep their file order within each group. There is no dependency resolution between them.
+
+Writing both `execute` and `execute-first` on one statement is an error, because the statement cannot run on both sides of the managed DDL. Repeating the same directive takes the last one.
 
 ## -- pista:concurrently
 

@@ -638,6 +638,114 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	assert.Contains(t, err.Error(), "failed to evaluate check SQL")
 }
 
+func TestApply_ExecuteFirstCheckSQLError(t *testing.T) {
+	// An execute-first check runs before the managed DDL, on its own call
+	// site, so its error path needs its own test.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:execute-first SELECT EXISTS (SELECT 1 FROM public.does_not_exist)
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, io.Discard)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to evaluate check SQL")
+
+	// The managed DDL must not have run: execute-first failed before it.
+	var n int
+	require.NoError(t, conn.QueryRow(ctx,
+		"SELECT count(*) FROM pg_class WHERE relname = 'users'").Scan(&n))
+	assert.Equal(t, 0, n)
+}
+
+func TestApply_ExecuteFirstCheckSQLFalseSkips(t *testing.T) {
+	// A false execute-first check skips the statement while the managed DDL
+	// still runs.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:execute-first SELECT false
+CREATE OR REPLACE FUNCTION public.skipped_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
+	require.NoError(t, err)
+	assert.NotContains(t, buf.String(), "skipped_func")
+	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
+
+	var n int
+	require.NoError(t, conn.QueryRow(ctx,
+		"SELECT count(*) FROM pg_proc WHERE proname = 'skipped_func'").Scan(&n))
+	assert.Equal(t, 0, n)
+}
+
+func TestApply_ExecuteFirstRunsBeforeManagedDDL(t *testing.T) {
+	// Ordering is observable through the writer: the execute-first statement
+	// is emitted before the managed DDL, the plain execute after it.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:execute
+GRANT SELECT ON public.users TO PUBLIC;
+-- pista:execute-first
+CREATE OR REPLACE FUNCTION public.before_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
+	require.NoError(t, err)
+
+	// strings.Index returns -1 for an absent substring, which would satisfy
+	// Less and hide the very regression this guards. Assert presence first.
+	out := buf.String()
+	require.Contains(t, out, "before_func")
+	require.Contains(t, out, "CREATE TABLE public.users")
+	require.Contains(t, out, "GRANT")
+	assert.Less(t, strings.Index(out, "before_func"), strings.Index(out, "CREATE TABLE public.users"))
+	assert.Less(t, strings.Index(out, "CREATE TABLE public.users"), strings.Index(out, "GRANT"))
+}
+
 func TestApply_ExecuteSQLError(t *testing.T) {
 	// User-supplied execute SQL that fails at execution time must surface as
 	// a "failed to execute SQL" error.

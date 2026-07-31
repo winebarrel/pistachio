@@ -359,6 +359,103 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	require.ErrorIs(t, err, command.ErrPlanDiff)
 }
 
+func TestPlan_Run_CheckExecuteOnlyCheckFalse(t *testing.T) {
+	// A -- pista:execute statement whose check is false is not executable,
+	// so --check reports no diff rather than ErrPlanDiff.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	initSQL := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`
+	testutil.SetupDB(t, ctx, conn, initSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL+`
+-- pista:execute SELECT false
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	require.NoError(t, cmd.Run(ctx, client, &buf))
+	assert.Contains(t, buf.String(), "-- No changes")
+}
+
+func TestPlan_Run_ExecuteCheckUnevaluable_KeepsStatement(t *testing.T) {
+	// A check that references a table the same run creates cannot be answered
+	// before the managed DDL. plan keeps the statement, records why, and still
+	// shows the unrelated DDL rather than failing the whole command.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM public.audit_log)
+INSERT INTO public.audit_log (id, note) VALUES (1, 'seed');
+CREATE TABLE public.audit_log (
+    id integer NOT NULL,
+    note text,
+    CONSTRAINT audit_log_pkey PRIMARY KEY (id)
+);
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	// Undetermined counts as a pending change, so --check still reports a diff.
+	require.ErrorIs(t, cmd.Run(ctx, client, &buf), command.ErrPlanDiff)
+
+	got := buf.String()
+	assert.Contains(t, got, "CREATE TABLE public.audit_log", "unrelated DDL must still appear")
+	assert.Contains(t, got, "INSERT INTO public.audit_log")
+	assert.Contains(t, got, "check SQL could not be evaluated at plan time")
+	assert.Contains(t, got, "apply will decide")
+}
+
+func TestPlan_Run_ExecuteCheckWrites_KeepsStatement(t *testing.T) {
+	// plan holds a read-only connection, so a check that writes cannot be
+	// evaluated there. That is a property of plan, not of the schema file, so
+	// it degrades the same way.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "CREATE SEQUENCE public.s;")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE SEQUENCE public.s;
+-- pista:execute SELECT nextval('public.s') > 0
+CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	require.NoError(t, cmd.Run(ctx, client, &buf))
+
+	got := buf.String()
+	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func")
+	assert.Contains(t, got, "read-only transaction")
+}
+
 func TestPlan_Run_CheckPreSQLNoChanges(t *testing.T) {
 	// Pre-SQL is prepended only when the plan has statements, so it does
 	// not turn an empty plan into a diff.
@@ -443,11 +540,10 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	assert.NotContains(t, got, "-- No changes")
 }
 
-func TestPlan_Run_ExecuteCheckFalse_StillPrintsExecute(t *testing.T) {
-	// Plan does not evaluate check SQL; it shows every -- pista:execute
-	// statement regardless. So even when the check would return false at
-	// apply time, plan output must contain the execute SQL and must NOT
-	// say "-- No changes".
+func TestPlan_Run_ExecuteCheckFalse_OmitsExecute(t *testing.T) {
+	// Plan evaluates check SQL and leaves out the statements apply would
+	// skip. A check that returns false therefore produces "-- No changes"
+	// rather than SQL that would never run.
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -479,7 +575,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
-	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func", "plan should always show execute SQL")
-	assert.Contains(t, got, "-- pista:execute", "plan should annotate with the directive")
-	assert.NotContains(t, got, "-- No changes")
+	assert.NotContains(t, got, "CREATE OR REPLACE FUNCTION public.test_func", "plan should omit execute SQL apply would skip")
+	assert.NotContains(t, got, "-- pista:execute")
+	assert.Contains(t, got, "-- No changes")
 }
