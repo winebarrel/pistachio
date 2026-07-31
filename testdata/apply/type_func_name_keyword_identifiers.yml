@@ -1,0 +1,28 @@
+# The quoted DDL has to be accepted by PostgreSQL and leave no drift.
+init: |
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+desired: |
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "join" text,
+      CONSTRAINT "inner" PRIMARY KEY ("right"),
+      CONSTRAINT "cross" CHECK ("right" > 0)
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("join");
+applied: |
+  -- public."left"
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "join" text,
+      CONSTRAINT "inner" PRIMARY KEY ("right"),
+      CONSTRAINT "cross" CHECK ("right" > 0)
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("join");
+applied_sql: |
+  ALTER TABLE public."left" ADD COLUMN "join" text;
+  ALTER TABLE public."left" ADD CONSTRAINT "cross" CHECK ("right" > 0);
+  CREATE INDEX "natural" ON public."left" USING btree ("join");
+verify_no_drift: true

@@ -1,0 +1,12 @@
+# A CHECK expression containing the literal " CONSTRAINT " must survive intact.
+# The definition used to be cut at the first occurrence of that text, which
+# also matches inside a string.
+init: ""
+desired: |
+  CREATE DOMAIN public.label AS text
+      CONSTRAINT label_not_keyword CHECK (VALUE <> ' CONSTRAINT ')
+      CONSTRAINT label_not_empty CHECK (VALUE <> '');
+plan: |
+  CREATE DOMAIN public.label AS text
+      CONSTRAINT label_not_keyword CHECK (value <> ' CONSTRAINT ')
+      CONSTRAINT label_not_empty CHECK (value <> '');

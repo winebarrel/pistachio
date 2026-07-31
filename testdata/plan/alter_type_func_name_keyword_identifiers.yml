@@ -1,0 +1,21 @@
+# ALTER paths: adding a column, a constraint, an index, and a policy on a
+# table named with a type_func_name keyword.
+init: |
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+desired: |
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "join" text,
+      CONSTRAINT "inner" PRIMARY KEY ("right"),
+      CONSTRAINT "cross" CHECK ("right" > 0)
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("join");
+  CREATE POLICY "verbose" ON public."left" FOR SELECT USING (true);
+plan: |
+  ALTER TABLE public."left" ADD COLUMN "join" text;
+  ALTER TABLE public."left" ADD CONSTRAINT "cross" CHECK ("right" > 0);
+  CREATE INDEX "natural" ON public."left" USING btree ("join");
+  CREATE POLICY "verbose" ON public."left" FOR SELECT USING (true);

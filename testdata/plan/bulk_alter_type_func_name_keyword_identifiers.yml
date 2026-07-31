@@ -1,0 +1,18 @@
+# --bulk-alter groups actions by table; the grouping key is the quoted name.
+bulk_alter: true
+init: |
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+desired: |
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "join" text,
+      "cross" integer,
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+plan: |
+  ALTER TABLE public."left"
+    ADD COLUMN "join" text,
+    ADD COLUMN "cross" integer;

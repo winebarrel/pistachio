@@ -1,0 +1,25 @@
+# Creating objects named with type_func_name keywords.
+init: ""
+desired: |
+  CREATE TYPE public."binary" AS ENUM ('a', 'b');
+  CREATE DOMAIN public."similar" AS text;
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "full" public."binary" NOT NULL,
+      "outer" public."similar",
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("outer");
+plan: |
+  CREATE TYPE public."binary" AS ENUM (
+      'a',
+      'b'
+  );
+  CREATE DOMAIN public."similar" AS text;
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "full" public."binary" NOT NULL,
+      "outer" public."similar",
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("outer");

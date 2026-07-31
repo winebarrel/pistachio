@@ -1,0 +1,12 @@
+# PostgreSQL has to accept the emitted CHECK, and it has to settle.
+init: ""
+desired: |
+  CREATE DOMAIN public.label AS text
+      CONSTRAINT label_not_keyword CHECK (VALUE <> ' CONSTRAINT ')
+      CONSTRAINT label_not_empty CHECK (VALUE <> '');
+applied: |
+  -- public.label
+  CREATE DOMAIN public.label AS text
+      CONSTRAINT label_not_empty CHECK ((VALUE <> ''::text))
+      CONSTRAINT label_not_keyword CHECK ((VALUE <> ' CONSTRAINT '::text));
+verify_no_drift: true

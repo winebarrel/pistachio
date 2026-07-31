@@ -795,15 +795,6 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 		}
 	}
 
-	// Deparse the full statement and extract the domain definition
-	result := &pg_query.ParseResult{
-		Stmts: []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},
-	}
-	deparsed, err := pg_query.Deparse(result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to deparse domain %s: %w", name, err)
-	}
-
 	// Parse the base type
 	baseType := ""
 	if ds.TypeName != nil {
@@ -860,17 +851,13 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 			if con.Conname == "" {
 				con.Conname = name + "_check"
 			}
-			// Extract CHECK definition from the deparsed SQL
-			def := extractCheckDefFromDeparsed(deparsed, con.Conname)
-			if def == "" {
-				// Fallback: deparse the raw expression
-				if con.RawExpr != nil {
-					expr, err := deparseExpr(con.RawExpr)
-					if err != nil {
-						return nil, fmt.Errorf("failed to deparse constraint %s for domain %s: %w", con.Conname, name, err)
-					}
-					def = "CHECK (" + expr + ")"
+			def := ""
+			if con.RawExpr != nil {
+				expr, err := deparseExpr(con.RawExpr)
+				if err != nil {
+					return nil, fmt.Errorf("failed to deparse constraint %s for domain %s: %w", con.Conname, name, err)
 				}
+				def = "CHECK (" + expr + ")"
 			}
 			domain.Constraints = append(domain.Constraints, &model.DomainConstraint{
 				Name:       con.Conname,
@@ -881,32 +868,6 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 	}
 
 	return domain, nil
-}
-
-// extractCheckDefFromDeparsed extracts a CHECK constraint definition from a deparsed
-// CREATE DOMAIN statement by finding the CONSTRAINT name ... portion.
-func extractCheckDefFromDeparsed(deparsed, conName string) string {
-	marker := "CONSTRAINT " + model.Ident(conName) + " "
-	idx := strings.Index(deparsed, marker)
-	if idx == -1 {
-		return ""
-	}
-	rest := deparsed[idx+len(marker):]
-	// The CHECK definition is everything from "CHECK" to the end of the constraint
-	// which ends at the next CONSTRAINT keyword or end of statement
-	checkIdx := strings.Index(rest, "CHECK")
-	if checkIdx == -1 {
-		return ""
-	}
-	def := rest[checkIdx:]
-	// Find the end: next CONSTRAINT or end of statement
-	nextCon := strings.Index(def[1:], " CONSTRAINT ")
-	if nextCon >= 0 {
-		def = strings.TrimSpace(def[:nextCon+1])
-	} else {
-		def = strings.TrimSpace(def)
-	}
-	return def
 }
 
 func parseCompositeTypeStmt(cts *pg_query.CompositeTypeStmt, defaultSchema string) (*model.CompositeType, error) {

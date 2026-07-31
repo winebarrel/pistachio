@@ -36,11 +36,17 @@ func quoteIdent(name string) string {
 		return quote(name)
 	}
 
+	// Identifiers are emitted in ColId positions, which accept a bare
+	// identifier, an unreserved keyword, or a col_name keyword. Reserved and
+	// type_func_name keywords need quotes. The list is an allow list so a
+	// category added upstream is quoted until it is reviewed.
 	switch result.Tokens[0].KeywordKind {
-	case pg_query.KeywordKind_RESERVED_KEYWORD:
-		return quote(name)
-	default:
+	case pg_query.KeywordKind_NO_KEYWORD,
+		pg_query.KeywordKind_UNRESERVED_KEYWORD,
+		pg_query.KeywordKind_COL_NAME_KEYWORD:
 		return name
+	default:
+		return quote(name)
 	}
 }
 

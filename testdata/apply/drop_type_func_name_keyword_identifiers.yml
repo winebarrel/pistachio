@@ -1,0 +1,37 @@
+# The DROP counterpart, also checked for drift.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TYPE public."binary" AS ENUM ('a', 'b');
+  CREATE SEQUENCE public."freeze";
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "join" text,
+      CONSTRAINT "inner" PRIMARY KEY ("right"),
+      CONSTRAINT "cross" CHECK ("right" > 0)
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("join");
+  CREATE POLICY "verbose" ON public."left" FOR SELECT USING (true);
+  CREATE TABLE public."outer" (
+      id integer NOT NULL
+  );
+desired: |
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+applied: |
+  -- public."left"
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+applied_sql: |
+  DROP INDEX public."natural";
+  ALTER TABLE public."left" DROP CONSTRAINT "cross";
+  DROP POLICY "verbose" ON public."left";
+  ALTER TABLE public."left" DROP COLUMN "join";
+  DROP TABLE public."outer";
+  DROP SEQUENCE public."freeze";
+  DROP TYPE public."binary";
+verify_no_drift: true
