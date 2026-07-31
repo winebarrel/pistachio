@@ -36,11 +36,22 @@ func quoteIdent(name string) string {
 		return quote(name)
 	}
 
+	// Every identifier pistachio emits sits in a ColId position, which the
+	// grammar defines as a bare IDENT, an unreserved keyword, or a col_name
+	// keyword. The two remaining categories need quotes: reserved keywords,
+	// and type_func_name keywords -- listed in the manual as "reserved (can
+	// be function or type name)", so usable as a type or function name but
+	// not as a table, column, index, constraint, or policy name.
+	//
+	// The check is an allow list rather than a deny list so that a keyword
+	// category added upstream is quoted until it is reviewed.
 	switch result.Tokens[0].KeywordKind {
-	case pg_query.KeywordKind_RESERVED_KEYWORD:
-		return quote(name)
-	default:
+	case pg_query.KeywordKind_NO_KEYWORD,
+		pg_query.KeywordKind_UNRESERVED_KEYWORD,
+		pg_query.KeywordKind_COL_NAME_KEYWORD:
 		return name
+	default:
+		return quote(name)
 	}
 }
 

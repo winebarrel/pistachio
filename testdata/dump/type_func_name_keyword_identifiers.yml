@@ -1,0 +1,47 @@
+# type_func_name keywords ("reserved (can be function or type name)" in the
+# PostgreSQL manual) are usable as a type or function name but not as a table,
+# column, index, constraint, sequence, or policy name, so every one of them
+# must be dumped quoted.
+init: |
+  CREATE TYPE public."binary" AS ENUM ('a', 'b');
+  CREATE DOMAIN public."similar" AS text;
+  CREATE SEQUENCE public."freeze";
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "full" public."binary" NOT NULL,
+      "outer" public."similar",
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("outer");
+  CREATE POLICY "verbose" ON public."left" FOR SELECT USING (true);
+  COMMENT ON COLUMN public."left"."right" IS 'quoted column';
+dump: |
+  -- public."binary"
+  CREATE TYPE public."binary" AS ENUM (
+      'a',
+      'b'
+  );
+
+  -- public."similar"
+  CREATE DOMAIN public."similar" AS text;
+
+  -- public."freeze"
+  CREATE SEQUENCE public."freeze"
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public."left"
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "full" "binary" NOT NULL,
+      "outer" "similar",
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("outer");
+
+  CREATE POLICY "verbose" ON public."left" FOR SELECT USING (true);
+  COMMENT ON COLUMN public."left"."right" IS 'quoted column';

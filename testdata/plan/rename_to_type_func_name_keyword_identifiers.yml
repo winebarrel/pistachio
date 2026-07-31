@@ -1,0 +1,23 @@
+# Renaming an object into a type_func_name keyword name. The RENAME TO target
+# is emitted through the same quoting path as a fresh CREATE.
+init: |
+  CREATE TABLE public.old_table (
+      old_column integer NOT NULL,
+      CONSTRAINT old_table_pkey PRIMARY KEY (old_column)
+  );
+  CREATE INDEX old_index ON public.old_table USING btree (old_column);
+desired: |
+  -- pista:renamed-from public.old_table
+  CREATE TABLE public."left" (
+      -- pista:renamed-from old_column
+      "right" integer NOT NULL,
+      -- pista:renamed-from old_table_pkey
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+  -- pista:renamed-from old_index
+  CREATE INDEX "natural" ON public."left" USING btree ("right");
+plan: |
+  ALTER TABLE public.old_table RENAME TO "left";
+  ALTER INDEX public.old_index RENAME TO "natural";
+  ALTER TABLE public."left" RENAME COLUMN old_column TO "right";
+  ALTER TABLE public."left" RENAME CONSTRAINT old_table_pkey TO "inner";

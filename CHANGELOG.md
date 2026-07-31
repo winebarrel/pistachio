@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.21.1] - 2026-07-31
+
+* Fix broken DDL for an identifier that is a PostgreSQL `type_func_name` keyword. The 23 keywords the manual lists as "reserved (can be function or type name)" (`left`, `right`, `full`, `inner`, `outer`, `binary`, `natural`, `join`, `is`, `like`, `similar`, `verbose`, `freeze`, `collation`, `concurrently`, `authorization`, `cross`, `current_schema`, `ilike`, `isnull`, `notnull`, `overlaps`, `tablesample`) are usable as a type or function name but not as a table, column, index, constraint, sequence, type, or policy name. They were emitted unquoted, so `dump` produced SQL that could not be parsed again and `plan` / `apply` produced DDL that PostgreSQL rejected with a syntax error. Only reserved keywords were quoted before; the quoting rule now follows the grammar's `ColId` rule, which admits a bare identifier, an unreserved keyword, or a `col_name` keyword and nothing else.
+
 ## [1.21.0] - 2026-07-31
 
 * Add `--try-tx` (env `$PISTA_TRY_TX`) to `apply`. It works like `--with-tx`, except that a diff containing `CREATE/DROP INDEX CONCURRENTLY` runs without a transaction instead of failing, and the output records `-- Transaction skipped: plan contains CONCURRENTLY index DDL`. The decision follows the generated diff, so a `-- pista:concurrently` index that is not being changed still gets a transaction. `--with-tx` is unchanged and the two flags are mutually exclusive. `--try-tx` can be combined with `--force-index-concurrently`.

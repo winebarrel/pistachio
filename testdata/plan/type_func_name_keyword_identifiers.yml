@@ -1,0 +1,26 @@
+# Creating objects whose names are type_func_name keywords. Every emitted
+# identifier has to be quoted or the DDL does not parse.
+init: ""
+desired: |
+  CREATE TYPE public."binary" AS ENUM ('a', 'b');
+  CREATE DOMAIN public."similar" AS text;
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "full" public."binary" NOT NULL,
+      "outer" public."similar",
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("outer");
+plan: |
+  CREATE TYPE public."binary" AS ENUM (
+      'a',
+      'b'
+  );
+  CREATE DOMAIN public."similar" AS text;
+  CREATE TABLE public."left" (
+      "right" integer NOT NULL,
+      "full" public."binary" NOT NULL,
+      "outer" public."similar",
+      CONSTRAINT "inner" PRIMARY KEY ("right")
+  );
+  CREATE INDEX "natural" ON public."left" USING btree ("outer");
