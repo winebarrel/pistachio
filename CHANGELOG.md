@@ -2,6 +2,8 @@
 
 ## [1.21.1] - 2026-07-31
 
+* Fix a domain `CHECK` definition being truncated when the expression contains the text ` CONSTRAINT `, as in `CHECK (VALUE <> ' CONSTRAINT ')`. The definition was read out of the deparsed statement and cut at the next occurrence of that text, which also matches inside a string literal. It is now built from the parse tree, the same path a definition that did not match the marker already took.
+
 * Fix broken DDL for an identifier that is one of PostgreSQL's 23 `type_func_name` keywords (`left`, `right`, `full`, `inner`, `binary`, `natural`, and so on). They are valid as a type or function name but not as a table, column, index, constraint, sequence, type, or policy name. Only reserved keywords were quoted, so these were emitted bare: `dump` produced SQL that could not be parsed again, and `plan` / `apply` produced DDL that PostgreSQL rejected with a syntax error. Quoting now follows the grammar's `ColId` rule, which accepts a bare identifier, an unreserved keyword, or a `col_name` keyword.
 
 ## [1.21.0] - 2026-07-31
