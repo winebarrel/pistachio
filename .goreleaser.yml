@@ -2,6 +2,9 @@ version: 2
 before:
   hooks:
     - go mod tidy
+release:
+  footer: |
+    see https://github.com/winebarrel/pistachio/blob/{{ .Tag }}/CHANGELOG.md
 builds:
   - &build
     id: darwin-amd64
