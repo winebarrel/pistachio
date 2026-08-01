@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.23.0] - 2026-08-01
 
 * **BREAKING**: `plan` now evaluates `-- pista:execute` check SQL and leaves out the statements `apply` would skip. Before, every marked statement was printed regardless, so a file with a false check produced a plan full of SQL while `apply` on the same file reported `-- No changes`. Three consequences:
 
