@@ -109,3 +109,28 @@ jobs:
           # Each matrix job uploads its own coverage; Codecov merges them so
           # PG-version-specific paths (e.g. PG18-only catalog reads) are
           # counted as covered when any matrix entry exercises them.
+
+  samples:
+    runs-on: ubuntu-latest
+    # Checks pista against real-world sample schemas: downloads each from its
+    # external host, loads it into an isolated database, then verifies that
+    # `pista dump` plans back to "No changes". A diff means the catalog reader
+    # and parser disagree.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 1s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make test-samples
