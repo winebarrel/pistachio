@@ -90,6 +90,24 @@ pista plan ./schema/*.sql          # review the diff
 pista apply ./schema/*.sql         # apply it
 ```
 
+## Supported Objects
+
+- Domain types (`CREATE DOMAIN`, `ALTER DOMAIN SET/DROP DEFAULT`, `SET/DROP NOT NULL`, `ADD/DROP/VALIDATE CONSTRAINT`)
+- Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
+- Composite types (`CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME ATTRIBUTE`). Attributes are matched by name, so reordering them produces no diff (PostgreSQL cannot reorder attributes). `ALTER ATTRIBUTE ... TYPE` fails at apply while a table column uses the type; PostgreSQL does not allow it and `CASCADE` does not help.
+- Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
+- Tables (including unlogged and partitioned tables)
+- Views
+- Materialized views
+- Columns (serial/bigserial/smallserial, identity, generated)
+- Constraints (primary key, unique, check, exclusion, foreign key)
+- Indexes (unique, partial, expression, hash, multi-column)
+- Comments (on tables, columns, views, types, domains, composite types, composite attributes, sequences)
+- Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
+- Renaming (tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
+- Array, JSON, UUID, and other built-in types
+- Quoted identifiers
+
 ## Usage
 
 ```
@@ -790,24 +808,6 @@ pista dump --split ./schema/
 > - PostgreSQL truncates identifier names to 63 bytes (NAMEDATALEN - 1). pistachio does not apply this truncation, so very long table/column names may produce mismatched constraint names.
 >
 > Use explicit `CONSTRAINT <name>` clauses to avoid these issues.
-
-## Supported Objects
-
-- Domain types (`CREATE DOMAIN`, `ALTER DOMAIN SET/DROP DEFAULT`, `SET/DROP NOT NULL`, `ADD/DROP/VALIDATE CONSTRAINT`)
-- Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
-- Composite types (`CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME ATTRIBUTE`). Attributes are matched by name, so reordering them produces no diff (PostgreSQL cannot reorder attributes). `ALTER ATTRIBUTE ... TYPE` fails at apply while a table column uses the type; PostgreSQL does not allow it and `CASCADE` does not help.
-- Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
-- Tables (including unlogged and partitioned tables)
-- Views
-- Materialized views
-- Columns (serial/bigserial/smallserial, identity, generated)
-- Constraints (primary key, unique, check, exclusion, foreign key)
-- Indexes (unique, partial, expression, hash, multi-column)
-- Comments (on tables, columns, views, types, domains, composite types, composite attributes, sequences)
-- Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
-- Renaming (tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
-- Array, JSON, UUID, and other built-in types
-- Quoted identifiers
 
 ## Development
 
