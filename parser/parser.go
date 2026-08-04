@@ -59,7 +59,13 @@ func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
 		snippet = string(runes[:maxRunes]) + "..."
 	}
 
-	fmt.Fprintf(warnWriter, "pistachio: ignored unsupported statement: %s\n", snippet) //nolint:errcheck
+	hint := ""
+	if rawStmt.Stmt.GetTransactionStmt() != nil {
+		// BEGIN/COMMIT in the file do nothing; the flags wrap the apply.
+		hint = " (use --with-tx or --try-tx to run the apply in a transaction)"
+	}
+
+	fmt.Fprintf(warnWriter, "pistachio: ignored unsupported statement: %s%s\n", snippet, hint) //nolint:errcheck
 }
 
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {

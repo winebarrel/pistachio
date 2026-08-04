@@ -174,7 +174,8 @@ func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
 }
 
 // BEGIN/COMMIT are unsupported too, so they warn like any other statement
-// while the table between them is still parsed.
+// while the table between them is still parsed. The warning points at the
+// flags that run the apply in a transaction.
 func TestParseSQL_WarnsTransactionStmt(t *testing.T) {
 	var buf bytes.Buffer
 	restore := parser.SetWarnWriter(&buf)
@@ -188,8 +189,19 @@ func TestParseSQL_WarnsTransactionStmt(t *testing.T) {
 	assert.True(t, ok)
 
 	out := buf.String()
-	assert.Contains(t, out, "ignored unsupported statement: BEGIN")
-	assert.Contains(t, out, "ignored unsupported statement: COMMIT")
+	assert.Contains(t, out, "ignored unsupported statement: BEGIN (use --with-tx or --try-tx to run the apply in a transaction)")
+	assert.Contains(t, out, "ignored unsupported statement: COMMIT (use --with-tx or --try-tx to run the apply in a transaction)")
+}
+
+// A non-transaction statement gets no transaction hint.
+func TestParseSQL_WarnNoTxHintForOtherStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parser.ParseSQLWithSchema("SET foo = 1;", "public")
+	require.NoError(t, err)
+	assert.NotContains(t, buf.String(), "--with-tx")
 }
 
 func TestParseSQLFilesWithSchema(t *testing.T) {
