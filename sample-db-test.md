@@ -70,6 +70,9 @@ consumers, so the Makefile stays the single source of the list.
 | mediawiki | mediawiki | [wikimedia/mediawiki](https://github.com/wikimedia/mediawiki) |
 | synapse | synapse | [element-hq/synapse](https://github.com/element-hq/synapse) |
 | temporal | temporal | [temporalio/temporal](https://github.com/temporalio/temporal) |
+| icingadb | icingadb | [Icinga/icingadb](https://github.com/Icinga/icingadb) |
+| rt | rt | [bestpractical/rt](https://github.com/bestpractical/rt) |
+| znuny | znuny | [znuny/Znuny](https://github.com/znuny/Znuny) |
 | imdb | public | [gregrahn/join-order-benchmark](https://github.com/gregrahn/join-order-benchmark) |
 | adventureworks | person, humanresources, production, purchasing, sales | [lorint/AdventureWorks-for-Postgres](https://github.com/lorint/AdventureWorks-for-Postgres) |
 | clubdata | cd | [PostgreSQL Exercises](https://pgexercises.com/) |
@@ -78,9 +81,10 @@ consumers, so the Makefile stays the single source of the list.
 
 ## Coverage
 
-Object counts of the loaded schemas, as of 2026-08-04 on PostgreSQL 15.18.
-"Constraints" excludes foreign keys; "Types" counts enums and domains. All
-counts are limited to the schemas the sample is checked with.
+Object counts of the loaded schemas, as of 2026-08-04 on PostgreSQL 15.18
+(16.13 for icingadb, rt, and znuny). "Constraints" excludes foreign keys;
+"Types" counts enums and domains. All counts are limited to the schemas the
+sample is checked with.
 
 | Sample | Tables | Columns | Indexes | FKs | Constraints | Views | Types |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -103,15 +107,18 @@ counts are limited to the schemas the sample is checked with.
 | mediawiki | 64 | 389 | 192 | 0 | 60 | 0 | 1 |
 | synapse | 134 | 624 | 236 | 14 | 86 | 0 | 0 |
 | temporal | 37 | 217 | 44 | 0 | 40 | 0 | 0 |
+| icingadb | 66 | 634 | 179 | 7 | 74 | 0 | 13 |
+| rt | 38 | 407 | 88 | 1 | 38 | 0 | 0 |
 | imdb | 21 | 108 | 44 | 0 | 21 | 0 | 0 |
 | adventureworks | 68 | 456 | 71 | 90 | 157 | 21 | 0 |
 | clubdata | 3 | 19 | 10 | 3 | 3 | 0 | 0 |
 | demodb | 9 | 45 | 15 | 8 | 21 | 3 | 0 |
 | musicbrainz | 374 | 2,469 | 907 | 770 | 1,032 | 10 | 7 |
-| **Total** | **847** | **5,326** | **1,767** | **1,038** | **1,553** | **49** | **14** |
+| znuny | 126 | 1,103 | 326 | 286 | 190 | 0 | 0 |
+| **Total** | **1,077** | **7,470** | **2,360** | **1,332** | **1,855** | **49** | **27** |
 
-The 24 dumps come to about 14,500 lines of SQL. musicbrainz alone is still
-around half of the tables, columns, and indexes and two thirds of the
+The 27 dumps come to about 19,300 lines of SQL. musicbrainz alone is still
+about a third of the tables, columns, and indexes and over half of the
 constraints, and is the reason `reset-db` and `clean-schema` drop one schema per
 statement: cascading through all of them in a single transaction runs the server
 out of lock table space.
@@ -120,7 +127,9 @@ Beyond size, the samples bring in shapes the hand-written fixtures do not
 always reach: partial and expression indexes and gin, gist, hash, and brin
 methods (musicbrainz, plus 12 partial and 2 gin indexes in synapse), exclusion
 constraints and unlogged tables (demodb, which needs `btree_gist`), enums and
-domains (dvdrental, pagila, employees, mediawiki), materialized views
+domains (dvdrental, pagila, employees, mediawiki, and icingadb, whose 13 types
+are 6 enums and 7 domains, each domain carrying a named CHECK), unique indexes
+over an expression and a gin index over `to_tsvector` (rt), materialized views
 (adventureworks, pagila), tsvector columns (dvdrental, pagila), a non-default
 collation (musicbrainz), an index-heavy schema of 192 indexes over 64 tables
 (mediawiki), and foreign keys that cross a schema boundary: 20 of
@@ -142,11 +151,12 @@ strip only what is irrelevant to a schema round trip:
   constraint, and the `\copy` lines are dropped.
 - **imdb**: the schema and its foreign key indexes ship as two files, so
   `schema.sql` and `fkindexes.sql` are concatenated.
-- **mediawiki**, **synapse**, **temporal**: these dumps name no schema at all, so
-  whichever schema comes first in `search_path` gets them. Each is loaded into a
-  schema of its own instead of `public`, so that `make schema`, which puts every
-  sample in one database, does not stack them on top of the other public samples
-  (mediawiki and pagila both define `actor` and `category`).
+- **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**:
+  these dumps name no schema at all, so whichever schema comes first in
+  `search_path` gets them. Each is loaded into a schema of its own instead of
+  `public`, so that `make schema`, which puts every sample in one database, does
+  not stack them on top of the other public samples (mediawiki and pagila both
+  define `actor` and `category`).
 - **mimiciv**: the schema ships as three files, so `create.sql` (tables),
   `constraint.sql` (primary and foreign keys), and `index.sql` are concatenated
   in that order. Both later files drop what they create with `IF EXISTS` first,
@@ -156,6 +166,9 @@ strip only what is irrelevant to a schema round trip:
   concatenated in dependency order (extensions and collation, search
   configuration, types, tables, functions, then keys, indexes, constraints, and
   views).
+- **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
+  and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
+  table to exist) are concatenated in that order.
 
 None of these touch table, column, index, constraint, view, or type
 definitions, so the round trip still covers the full schema.
