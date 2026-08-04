@@ -191,24 +191,26 @@ func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
 	assert.Empty(t, buf.String())
 }
 
-// BEGIN/COMMIT are unsupported too, so they warn like any other statement
-// while the table between them is still parsed. The warning points at the
-// flags that run the apply in a transaction.
+// The statements that open or close a whole-file transaction warn like any
+// other unsupported statement, with a hint at the flags that wrap the apply.
+// The table between them is still parsed.
 func TestParseSQL_WarnsTransactionStmt(t *testing.T) {
 	var buf bytes.Buffer
 	restore := parser.SetWarnWriter(&buf)
 	defer restore()
 
-	sql := "BEGIN;\nCREATE TABLE t (id integer);\nCOMMIT;"
+	sql := "BEGIN;\nCREATE TABLE t (id integer);\nCOMMIT;\nSTART TRANSACTION;"
 	result, err := parser.ParseSQLWithSchema(sql, "public")
 	require.NoError(t, err)
 
 	_, ok := result.Tables.GetOk("public.t")
 	assert.True(t, ok)
 
+	const hint = " (use --with-tx or --try-tx to run the apply in a transaction)"
 	out := buf.String()
-	assert.Contains(t, out, "ignored unsupported statement: BEGIN (use --with-tx or --try-tx to run the apply in a transaction)")
-	assert.Contains(t, out, "ignored unsupported statement: COMMIT (use --with-tx or --try-tx to run the apply in a transaction)")
+	assert.Contains(t, out, "ignored unsupported statement: BEGIN"+hint)
+	assert.Contains(t, out, "ignored unsupported statement: COMMIT"+hint)
+	assert.Contains(t, out, "ignored unsupported statement: START TRANSACTION"+hint)
 }
 
 // A non-transaction statement gets no transaction hint.
