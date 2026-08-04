@@ -26,10 +26,11 @@ type ParseResult struct {
 // silently ignores. Tests swap it via SetWarnWriter.
 var warnWriter io.Writer = os.Stderr
 
-// ignoredStmtSnippet renders the ignored statement for the warning. Deparsing
-// yields a single canonical line and drops the comments and blank lines that
-// surround the statement in the file. The raw slice is a fallback for the rare
-// statement pg_query can parse but not deparse.
+// ignoredStmtSnippet returns the raw text of the ignored statement. Deparsing
+// drops the comments and blank lines that surround the statement in the file.
+// The raw slice is a fallback for the rare statement pg_query can parse but not
+// deparse. The caller collapses whitespace, so a multi-line body from either
+// path becomes one line.
 func ignoredStmtSnippet(sql string, rawStmt *pg_query.RawStmt) string {
 	single := &pg_query.ParseResult{Stmts: []*pg_query.RawStmt{rawStmt}}
 	if deparsed, err := pg_query.Deparse(single); err == nil {
@@ -42,14 +43,32 @@ func ignoredStmtSnippet(sql string, rawStmt *pg_query.RawStmt) string {
 	if rawStmt.StmtLen == 0 || end > int32(len(sql)) {
 		end = int32(len(sql))
 	}
-	return strings.Join(strings.Fields(sql[start:end]), " ")
+	return sql[start:end]
+}
+
+// txHint suggests the flags that wrap the apply in a transaction, but only for
+// the statements that open or close a whole-file transaction. ROLLBACK and
+// SAVEPOINT reach here too, and neither is answered by wrapping the apply.
+func txHint(rawStmt *pg_query.RawStmt) string {
+	ts := rawStmt.Stmt.GetTransactionStmt()
+	if ts == nil {
+		return ""
+	}
+	switch ts.Kind {
+	case pg_query.TransactionStmtKind_TRANS_STMT_BEGIN,
+		pg_query.TransactionStmtKind_TRANS_STMT_START,
+		pg_query.TransactionStmtKind_TRANS_STMT_COMMIT:
+		return " (use --with-tx or --try-tx to run the apply in a transaction)"
+	default:
+		return ""
+	}
 }
 
 // warnIgnoredStmt reports a statement type that no parser case handles. The
-// snippet is truncated on a rune boundary so the warning stays readable and
-// valid UTF-8 even for large statement bodies.
+// snippet is collapsed to one line and truncated on a rune boundary, so the
+// warning stays short and valid UTF-8 even for a large multi-line body.
 func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
-	snippet := ignoredStmtSnippet(sql, rawStmt)
+	snippet := strings.Join(strings.Fields(ignoredStmtSnippet(sql, rawStmt)), " ")
 	if snippet == "" {
 		return
 	}
@@ -59,13 +78,7 @@ func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
 		snippet = string(runes[:maxRunes]) + "..."
 	}
 
-	hint := ""
-	if rawStmt.Stmt.GetTransactionStmt() != nil {
-		// BEGIN/COMMIT in the file do nothing; the flags wrap the apply.
-		hint = " (use --with-tx or --try-tx to run the apply in a transaction)"
-	}
-
-	fmt.Fprintf(warnWriter, "pistachio: ignored unsupported statement: %s%s\n", snippet, hint) //nolint:errcheck
+	fmt.Fprintf(warnWriter, "pistachio: ignored unsupported statement: %s%s\n", snippet, txHint(rawStmt)) //nolint:errcheck
 }
 
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {

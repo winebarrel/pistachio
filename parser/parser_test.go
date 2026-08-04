@@ -154,7 +154,8 @@ func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {
 	restore := parser.SetWarnWriter(&buf)
 	defer restore()
 
-	body := strings.Repeat("あ", 250) // ascii-ignore: multibyte truncation input
+	// U+3042 is a 3-byte rune; the escape keeps this source file ASCII.
+	body := strings.Repeat("\u3042", 250)
 	_, err := parser.ParseSQLWithSchema("SELECT '"+body+"';", "public")
 	require.NoError(t, err)
 
@@ -162,6 +163,22 @@ func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {
 	assert.Contains(t, out, "...")
 	assert.NotContains(t, out, body, "the full body must be truncated")
 	assert.True(t, utf8.ValidString(out), "truncation must not split a rune")
+}
+
+// Deparse keeps the newlines inside a function body, so the warning must
+// collapse them; the message stays on one line.
+func TestParseSQL_WarnsUnsupportedStmt_CollapsesMultiline(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "CREATE FUNCTION f() RETURNS int AS $$\nBEGIN\n  RETURN 1;\nEND;\n$$ LANGUAGE plpgsql;"
+	_, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: CREATE FUNCTION f()")
+	assert.Equal(t, 1, strings.Count(out, "\n"), "the warning must be a single line")
 }
 
 func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
@@ -205,6 +222,22 @@ func TestParseSQL_WarnNoTxHintForOtherStmt(t *testing.T) {
 	assert.NotContains(t, buf.String(), "--with-tx")
 }
 
+// ROLLBACK and SAVEPOINT are transaction statements too, but wrapping the
+// apply does not answer them, so they warn without the hint.
+func TestParseSQL_WarnNoTxHintForRollback(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parser.ParseSQLWithSchema("ROLLBACK;\nSAVEPOINT sp;", "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: ROLLBACK")
+	assert.Contains(t, out, "ignored unsupported statement: SAVEPOINT")
+	assert.NotContains(t, out, "--with-tx")
+}
+
 // A statement marked -- pista:execute is skipped before the switch, so an
 // unsupported statement carrying it does not warn.
 func TestParseSQL_NoWarnForExecuteStmt(t *testing.T) {
@@ -219,12 +252,12 @@ func TestParseSQL_NoWarnForExecuteStmt(t *testing.T) {
 }
 
 // When Deparse rejects a statement, the snippet falls back to the raw slice.
-// A zero StmtLen runs the slice to the end of the input, and the surrounding
-// whitespace and newlines collapse to single spaces.
+// A zero StmtLen runs the slice to the end of the input; the caller collapses
+// the whitespace, so the helper returns the slice verbatim.
 func TestIgnoredStmtSnippet_DeparseFallback(t *testing.T) {
 	sql := "  GRANT  SELECT\n  ON t  "
 	rs := &pg_query.RawStmt{StmtLocation: 0, StmtLen: 0}
-	assert.Equal(t, "GRANT SELECT ON t", parser.IgnoredStmtSnippet(sql, rs))
+	assert.Equal(t, sql, parser.IgnoredStmtSnippet(sql, rs))
 }
 
 func TestParseSQLFilesWithSchema(t *testing.T) {
