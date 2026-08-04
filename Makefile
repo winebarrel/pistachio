@@ -49,6 +49,7 @@ keywords:
 #   name | loader-target | VAR=value ... | schemas for pista -n (blank = public)
 define SAMPLES
 chinook|sample-db|SQL_FILE=chinook.sql|
+dvdrental|sample-db|SQL_FILE=dvdrental.sql|
 happiness_index|sample-db|SQL_FILE=happiness_index.sql|
 lego|sample-db|SQL_FILE=lego.sql|
 netflix|sample-db|SQL_FILE=netflix.sql|
@@ -57,9 +58,11 @@ periodic_table|sample-db|SQL_FILE=periodic_table.sql|
 titanic|sample-db|SQL_FILE=titanic.sql|
 world|sample-db-tar|TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/world/world-1.0/world-1.0.tar.gz TAR_SQL_PATH=dbsamples-0.1/world/world.sql|
 usda|sample-db-tar|TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/usda/usda-r18-1.0/usda-r18-1.0.tar.gz TAR_SQL_PATH=usda-r18-1.0/usda.sql|
+dellstore2|sample-db-tar|TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/dellstore2/dellstore2-normal-1.0/dellstore2-normal-1.0.tar.gz TAR_SQL_PATH=dellstore2-normal-1.0/dellstore2-normal-1.0.sql|
 northwind|sample-db-url|URL=https://raw.githubusercontent.com/pthom/northwind_psql/master/northwind.sql|
 employees|sample-db-url|URL=https://raw.githubusercontent.com/h8/employees-database/master/employees_schema.sql|employees
 adventureworks|sample-db-adventureworks||person,humanresources,production,purchasing,sales
+demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/master/tables.sql|bookings
 endef
 
 # Print the sample manifest, one record per line, for shell consumers.
@@ -96,6 +99,19 @@ sample-db-adventureworks:
 	  | awk '/^\\copy/ { next } /^INSERT INTO Production.ProductReview/ { skip=1 } skip { if (/\);[[:space:]]*$$/) skip=0; next } { print }' \
 	  | psql
 
+# Postgres Pro demo database (postgrespro/demodb, PostgreSQL License). The repo
+# ships a schema-generation script, not a plain dump: tables.sql defines the
+# `gen` and `bookings` schemas and \copy-loads reference data from .dat files we
+# don't fetch. We only need the schema, so strip the \copy lines (their data is
+# irrelevant to a round-trip check) and enable btree_gist first, which the
+# bookings.routes exclusion constraint requires.
+.PHONY: sample-db-demodb
+sample-db-demodb:
+	psql -c 'CREATE EXTENSION IF NOT EXISTS btree_gist'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | awk '/^[[:space:]]*\\copy/ { next } { print }' \
+	  | psql
+
 .PHONY: test-scenario
 test-scenario:
 	bash test/scenario/run.sh
@@ -106,7 +122,7 @@ test-samples:
 
 .PHONY: clean-schema
 clean-schema:
-	psql -c 'DROP SCHEMA IF EXISTS person, humanresources, production, purchasing, sales, employees CASCADE ; DROP SCHEMA public CASCADE ; CREATE SCHEMA public'
+	psql -c 'DROP SCHEMA IF EXISTS person, humanresources, production, purchasing, sales, employees, bookings, gen CASCADE ; DROP SCHEMA public CASCADE ; CREATE SCHEMA public'
 
 # Drop every user schema (not just public), so a prior sample's schemas can't
 # leak into the next check. Used by test-samples between samples.
