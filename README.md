@@ -5,7 +5,7 @@
 
 Declarative schema management tool for PostgreSQL, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL; pistachio generates the DDL diff.
 
-See also: [Getting Started Guide](getting-started.md) / [Directives](directives.md) / [Performance](performance.md)
+See also: [Getting Started Guide](getting-started.md) / [Directives](directives.md) / [Performance](performance.md) / [Sample Database Tests](sample-db-test.md)
 
 ![](https://github.com/user-attachments/assets/8ceaef33-7d4e-4bd8-bf94-1a79342cf1e1)
 
