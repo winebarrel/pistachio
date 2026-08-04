@@ -79,6 +79,7 @@ synapse|sample-db-url-schema|URL=https://raw.githubusercontent.com/element-hq/sy
 temporal|sample-db-url-schema|URL=https://raw.githubusercontent.com/temporalio/temporal/a669256c743238702f29900100ce441f52a1d49f/schema/postgresql/v12/temporal/schema.sql SCHEMA=temporal|temporal
 icingadb|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icingadb/1f63fe3db7070b718a761050a316bfde60013401/schema/pgsql/schema.sql SCHEMA=icingadb|icingadb
 rt|sample-db-url-schema|URL=https://raw.githubusercontent.com/bestpractical/rt/9ffb1ed910b19eefd459ef5480369bf6a2a9038a/etc/schema.Pg SCHEMA=rt|rt
+sourcegraph|sample-db-url-schema|URL=https://raw.githubusercontent.com/sourcegraph/sourcegraph-public-snapshot/c864f15af264f0f456a6d8a83290b5c940715349/migrations/frontend/squashed.sql SCHEMA=sourcegraph|sourcegraph
 imdb|sample-db-imdb||
 adventureworks|sample-db-adventureworks||person,humanresources,production,purchasing,sales
 clubdata|sample-db-clubdata|URL=https://pgexercises.com/dbfiles/clubdata.sql|cd
@@ -267,9 +268,20 @@ clean-schema:
 # schemas is also what keeps the big samples cheap: cascading through gitlab's
 # 1,400 tables does not fit in one statement's locks, and musicbrainz's ~1,000
 # objects are close behind.
+#
+# Extensions are the exception, because they are visible to the next sample
+# whichever schema they sit in: a dump that says CREATE EXTENSION IF NOT EXISTS
+# does nothing when the extension already exists in some other sample's schema,
+# and then its types and operator classes do not resolve. icingadb and
+# sourcegraph both install citext, and sourcegraph and gitlab both install
+# pg_trgm. So drop the extensions too, before the next sample runs.
 .PHONY: reset-db
 reset-db:
 	psql -X -q -v ON_ERROR_STOP=1 -c 'SET client_min_messages TO warning; DROP SCHEMA IF EXISTS public CASCADE'
+	psql -X -q -At -v ON_ERROR_STOP=1 -c "SELECT quote_ident(extname) FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE n.nspname <> 'pg_catalog'" \
+	  | while read -r e; do \
+	      psql -X -q -v ON_ERROR_STOP=1 -c "SET client_min_messages TO warning; DROP EXTENSION IF EXISTS $$e CASCADE" || exit 1; \
+	    done
 	psql -X -q -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA public'
 
 .PHONY: demo

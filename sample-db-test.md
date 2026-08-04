@@ -25,10 +25,14 @@ The runner starts with `make clean-schema`, so a schema left behind by an
 earlier run cannot make a load fail on objects that already exist. Then, for
 each sample, it:
 
-1. Runs `make reset-db`, which drops and recreates `public`. The samples that
-   load into `public` are the only ones that can collide with each other; every
-   other sample owns a schema of its own and is checked with `pista -n`, so what
-   it leaves behind is invisible to the next sample.
+1. Runs `make reset-db`, which drops and recreates `public` and drops every
+   extension. The samples that load into `public` are the only ones that can
+   collide with each other; every other sample owns a schema of its own and is
+   checked with `pista -n`, so what it leaves behind is invisible to the next
+   sample. Extensions are the exception: they are visible whichever schema they
+   sit in, and a dump that says `CREATE EXTENSION IF NOT EXISTS` does nothing
+   when an earlier sample already installed that extension somewhere else,
+   leaving its types and operator classes unresolvable.
 2. Runs the sample's loader target to download and load the schema.
 3. Runs `pista dump -n <schemas>` to capture pistachio's model of the loaded
    schema as SQL.
@@ -83,6 +87,7 @@ the SHA in the Makefile, and re-run `make test-samples`.
 | temporal | temporal | [temporalio/temporal](https://github.com/temporalio/temporal) |
 | icingadb | icingadb | [Icinga/icingadb](https://github.com/Icinga/icingadb) |
 | rt | rt | [bestpractical/rt](https://github.com/bestpractical/rt) |
+| sourcegraph | sourcegraph | [sourcegraph/sourcegraph-public-snapshot](https://github.com/sourcegraph/sourcegraph-public-snapshot) |
 | imdb | public | [gregrahn/join-order-benchmark](https://github.com/gregrahn/join-order-benchmark) |
 | adventureworks | person, humanresources, production, purchasing, sales | [lorint/AdventureWorks-for-Postgres](https://github.com/lorint/AdventureWorks-for-Postgres) |
 | clubdata | cd | [PostgreSQL Exercises](https://pgexercises.com/) |
@@ -97,7 +102,9 @@ Object counts of the loaded schemas, as of 2026-08-04 on PostgreSQL 15.18
 (16.13 for icingadb, rt, znuny, and gitlab). "Constraints" excludes foreign
 keys;
 "Types" counts enums and domains. All counts are limited to the schemas the
-sample is checked with.
+sample is checked with, and exclude what an extension owns: the two views
+`pg_stat_statements` adds to sourcegraph's schema are not sourcegraph's schema
+and pistachio does not read them either.
 
 | Sample | Tables | Columns | Indexes | FKs | Constraints | Views | Types |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -122,6 +129,7 @@ sample is checked with.
 | temporal | 37 | 217 | 44 | 0 | 40 | 0 | 0 |
 | icingadb | 66 | 634 | 179 | 7 | 74 | 0 | 13 |
 | rt | 38 | 407 | 88 | 1 | 38 | 0 | 0 |
+| sourcegraph | 180 | 1,715 | 453 | 362 | 273 | 18 | 8 |
 | imdb | 21 | 108 | 44 | 0 | 21 | 0 | 0 |
 | adventureworks | 68 | 456 | 71 | 90 | 157 | 21 | 0 |
 | clubdata | 3 | 19 | 10 | 3 | 3 | 0 | 0 |
@@ -129,9 +137,9 @@ sample is checked with.
 | musicbrainz | 374 | 2,469 | 907 | 770 | 1,032 | 10 | 7 |
 | znuny | 126 | 1,103 | 326 | 286 | 190 | 0 | 0 |
 | gitlab | 1,422 | 14,293 | 6,353 | 2,325 | 3,949 | 15 | 0 |
-| **Total** | **2,499** | **21,763** | **8,713** | **3,657** | **5,804** | **64** | **27** |
+| **Total** | **2,679** | **23,478** | **9,166** | **4,019** | **6,077** | **82** | **35** |
 
-The 28 dumps come to about 47,000 lines of SQL, and gitlab is 27,600 of them.
+The 29 dumps come to about 51,000 lines of SQL, and gitlab is 27,600 of them.
 It is over half of the tables, columns, indexes, foreign keys, and constraints,
 and musicbrainz is the largest of what remains. gitlab is also why
 `clean-schema` drops tables a batch at a time rather than cascading through
@@ -146,8 +154,10 @@ methods (musicbrainz, plus 12 partial and 2 gin indexes in synapse), exclusion
 constraints and unlogged tables (demodb, which needs `btree_gist`), enums and
 domains (dvdrental, pagila, employees, mediawiki, and icingadb, whose 13 types
 are 6 enums and 7 domains, each domain carrying a named CHECK), unique indexes
-over an expression and a gin index over `to_tsvector` (rt), materialized views
-(adventureworks, pagila), tsvector columns (dvdrental, pagila), a non-default
+over an expression and a gin index over `to_tsvector` (rt), columns typed by a
+contrib extension (sourcegraph, with 49 `citext` columns, and six extensions
+installed at once), materialized views (adventureworks, pagila), tsvector
+columns (dvdrental, pagila), a non-default
 collation (musicbrainz), an index-heavy schema of 192 indexes over 64 tables
 (mediawiki), partitioned tables at scale (gitlab declares 100 of them and
 attaches 2,054 partitions, all of which live in schemas of their own), and
