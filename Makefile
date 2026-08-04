@@ -67,11 +67,14 @@ mimiciv|sample-db-mimiciv||mimiciv_hosp,mimiciv_icu
 mediawiki|sample-db-url-schema|URL=https://raw.githubusercontent.com/wikimedia/mediawiki/master/sql/postgres/tables-generated.sql SCHEMA=mediawiki|mediawiki
 synapse|sample-db-url-schema|URL=https://raw.githubusercontent.com/element-hq/synapse/develop/synapse/storage/schema/main/full_schemas/72/full.sql.postgres SCHEMA=synapse|synapse
 temporal|sample-db-url-schema|URL=https://raw.githubusercontent.com/temporalio/temporal/main/schema/postgresql/v12/temporal/schema.sql SCHEMA=temporal|temporal
+icingadb|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icingadb/main/schema/pgsql/schema.sql SCHEMA=icingadb|icingadb
+rt|sample-db-url-schema|URL=https://raw.githubusercontent.com/bestpractical/rt/stable/etc/schema.Pg SCHEMA=rt|rt
 imdb|sample-db-imdb||
 adventureworks|sample-db-adventureworks||person,humanresources,production,purchasing,sales
 clubdata|sample-db-clubdata|URL=https://pgexercises.com/dbfiles/clubdata.sql|cd
 demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/master/tables.sql|bookings
 musicbrainz|sample-db-musicbrainz||musicbrainz
+znuny|sample-db-znuny||znuny
 endef
 
 # Print the sample manifest, one record per line, for shell consumers.
@@ -196,6 +199,23 @@ sample-db-musicbrainz:
 	  echo; \
 	done | PGOPTIONS='-c search_path=musicbrainz,public -c client_min_messages=warning' psql
 
+# Znuny (znuny/Znuny, GPL-3.0). The schema ships as two files, so concatenate
+# them: schema.postgresql.sql (tables and indexes) and then
+# schema-post.postgresql.sql (the foreign keys, which need every table to
+# exist). Neither names a schema, so search_path decides where they land and
+# `public` would collide with the other public samples; create `znuny` up front
+# and point search_path at it, as sample-db-url-schema does for the one-file
+# dumps.
+ZNUNY_SQL_FILES = schema.postgresql.sql schema-post.postgresql.sql
+
+.PHONY: sample-db-znuny
+sample-db-znuny:
+	psql -c 'CREATE SCHEMA IF NOT EXISTS znuny'
+	for f in $(ZNUNY_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/znuny/Znuny/dev/scripts/database/$$f || exit 1; \
+	  echo; \
+	done | PGOPTIONS='-c search_path=znuny' psql
+
 .PHONY: test-scenario
 test-scenario:
 	bash test/scenario/run.sh
@@ -210,6 +230,7 @@ test-samples:
 SAMPLE_SCHEMAS = \
 	person humanresources production purchasing sales pe hr pr pu sa \
 	employees bookings gen cd musicbrainz mediawiki synapse temporal \
+	icingadb rt znuny \
 	mimiciv_hosp mimiciv_icu mimiciv_derived public
 
 .PHONY: clean-schema
