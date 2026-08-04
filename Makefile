@@ -47,6 +47,7 @@ keywords:
 # (loads them all into one database) and `test-samples` (loads each into an
 # isolated database and checks pista round-trips it). One record per line:
 #   name | loader-target | VAR=value ... | schemas for pista -n (blank = public)
+#     | extra pista plan flags (blank for almost every sample)
 #
 # Every GitHub source is pinned to a commit, not a branch, so that an upstream
 # schema change cannot turn this repository's CI red on its own. To move a
@@ -84,6 +85,7 @@ clubdata|sample-db-clubdata|URL=https://pgexercises.com/dbfiles/clubdata.sql|cd
 demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/bf7a1c1972d2f89dc9de21f19d7dd3aa650e8647/tables.sql|bookings
 musicbrainz|sample-db-musicbrainz||musicbrainz
 znuny|sample-db-znuny||znuny
+gitlab|sample-db-url-schema|URL=https://raw.githubusercontent.com/gitlabhq/gitlabhq/35e789d8f1173a11a7724ae360a80d1f19ec92dc/db/structure.sql SCHEMA=gitlab|gitlab,gitlab_partitions_static,gitlab_partitions_dynamic|--assume-validated
 endef
 
 # Print the sample manifest, one record per line, for shell consumers.
@@ -233,31 +235,41 @@ test-scenario:
 test-samples:
 	bash test/samples/run.sh
 
-# Every schema the samples create, plus public. Dropped one statement at a
-# time: cascading through all of them in a single transaction runs the server
-# out of lock table space, since musicbrainz alone owns ~1000 objects.
-SAMPLE_SCHEMAS = \
-	person humanresources production purchasing sales pe hr pr pu sa \
-	employees bookings gen cd musicbrainz mediawiki synapse temporal \
-	icingadb rt znuny \
-	mimiciv_hosp mimiciv_icu mimiciv_derived public
+# Wipe every user schema. Used by `schema` and `demo` to start from an empty
+# database, and by test-samples once before its first sample.
+#
+# The tables go first, a batch at a time, and only then the schemas. A single
+# DROP SCHEMA ... CASCADE takes locks on every object it reaches, and the
+# larger samples do not fit: gitlab owns 1,400 tables and their indexes, which
+# runs the server out of lock table space at the default
+# max_locks_per_transaction. Each batch is a statement of its own, so its locks
+# are released before the next one starts, and the schemas are empty by the
+# time they are dropped.
+DROP_TABLE_BATCH = 50
 
 .PHONY: clean-schema
 clean-schema:
-	for s in $(SAMPLE_SCHEMAS); do \
-	  psql -q -c "SET client_min_messages TO warning; DROP SCHEMA IF EXISTS $$s CASCADE" || exit 1; \
+	while :; do \
+	  batch=$$(psql -X -q -At -v ON_ERROR_STOP=1 -c "SELECT string_agg(format('%I.%I', schemaname, tablename), ', ') FROM (SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT LIKE 'pg_%' AND schemaname <> 'information_schema' LIMIT $(DROP_TABLE_BATCH)) t") || exit 1; \
+	  [ -n "$$batch" ] || break; \
+	  psql -X -q -v ON_ERROR_STOP=1 -c "SET client_min_messages TO warning; DROP TABLE IF EXISTS $$batch CASCADE" || exit 1; \
 	done
-	psql -q -c 'CREATE SCHEMA public'
-
-# Drop every user schema (not just public), so a prior sample's schemas can't
-# leak into the next check. Used by test-samples between samples. One DROP per
-# psql statement, for the same lock table reason as clean-schema.
-.PHONY: reset-db
-reset-db:
 	psql -X -q -At -v ON_ERROR_STOP=1 -c "SELECT quote_ident(nspname) FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' AND nspname <> 'information_schema'" \
 	  | while read -r s; do \
 	      psql -X -q -v ON_ERROR_STOP=1 -c "SET client_min_messages TO warning; DROP SCHEMA IF EXISTS $$s CASCADE" || exit 1; \
 	    done
+	psql -X -q -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA public'
+
+# Reset `public` between samples. The samples that load into `public` are the
+# only ones that can collide with each other; every other sample owns a schema
+# of its own and is checked with `pista -n`, so what it leaves behind is
+# invisible to the next sample and not worth dropping. Not dropping those
+# schemas is also what keeps the big samples cheap: cascading through gitlab's
+# 1,400 tables does not fit in one statement's locks, and musicbrainz's ~1,000
+# objects are close behind.
+.PHONY: reset-db
+reset-db:
+	psql -X -q -v ON_ERROR_STOP=1 -c 'SET client_min_messages TO warning; DROP SCHEMA IF EXISTS public CASCADE'
 	psql -X -q -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA public'
 
 .PHONY: demo

@@ -21,10 +21,14 @@ checking them one at a time, use `make schema`.
 
 ## What the check does
 
-For each sample, the runner:
+The runner starts with `make clean-schema`, so a schema left behind by an
+earlier run cannot make a load fail on objects that already exist. Then, for
+each sample, it:
 
-1. Runs `make reset-db`, which drops every user schema so the previous sample
-   cannot leak into the next one.
+1. Runs `make reset-db`, which drops and recreates `public`. The samples that
+   load into `public` are the only ones that can collide with each other; every
+   other sample owns a schema of its own and is checked with `pista -n`, so what
+   it leaves behind is invisible to the next sample.
 2. Runs the sample's loader target to download and load the schema.
 3. Runs `pista dump -n <schemas>` to capture pistachio's model of the loaded
    schema as SQL.
@@ -45,9 +49,10 @@ failed.
 ## Samples
 
 The sample list lives in the `SAMPLES` variable in the Makefile, one record per
-line: name, loader target, loader variables, and the schemas passed to
-`pista -n` (blank means `public`). `make print-samples` prints it for shell
-consumers, so the Makefile stays the single source of the list.
+line: name, loader target, loader variables, the schemas passed to `pista -n`
+(blank means `public`), and any extra `pista plan` flags (only gitlab needs
+one). `make print-samples` prints it for shell consumers, so the Makefile stays
+the single source of the list.
 
 Every GitHub source is fetched at a pinned commit rather than a branch, so an
 upstream schema change cannot turn CI red on its own and the object counts
@@ -78,17 +83,19 @@ the SHA in the Makefile, and re-run `make test-samples`.
 | temporal | temporal | [temporalio/temporal](https://github.com/temporalio/temporal) |
 | icingadb | icingadb | [Icinga/icingadb](https://github.com/Icinga/icingadb) |
 | rt | rt | [bestpractical/rt](https://github.com/bestpractical/rt) |
-| znuny | znuny | [znuny/Znuny](https://github.com/znuny/Znuny) |
 | imdb | public | [gregrahn/join-order-benchmark](https://github.com/gregrahn/join-order-benchmark) |
 | adventureworks | person, humanresources, production, purchasing, sales | [lorint/AdventureWorks-for-Postgres](https://github.com/lorint/AdventureWorks-for-Postgres) |
 | clubdata | cd | [PostgreSQL Exercises](https://pgexercises.com/) |
 | demodb | bookings | [postgrespro/demodb](https://github.com/postgrespro/demodb) |
 | musicbrainz | musicbrainz | [metabrainz/musicbrainz-server](https://github.com/metabrainz/musicbrainz-server) |
+| znuny | znuny | [znuny/Znuny](https://github.com/znuny/Znuny) |
+| gitlab | gitlab, gitlab_partitions_static, gitlab_partitions_dynamic | [gitlabhq/gitlabhq](https://github.com/gitlabhq/gitlabhq) |
 
 ## Coverage
 
 Object counts of the loaded schemas, as of 2026-08-04 on PostgreSQL 15.18
-(16.13 for icingadb, rt, and znuny). "Constraints" excludes foreign keys;
+(16.13 for icingadb, rt, znuny, and gitlab). "Constraints" excludes foreign
+keys;
 "Types" counts enums and domains. All counts are limited to the schemas the
 sample is checked with.
 
@@ -121,13 +128,17 @@ sample is checked with.
 | demodb | 9 | 45 | 15 | 8 | 21 | 3 | 0 |
 | musicbrainz | 374 | 2,469 | 907 | 770 | 1,032 | 10 | 7 |
 | znuny | 126 | 1,103 | 326 | 286 | 190 | 0 | 0 |
-| **Total** | **1,077** | **7,470** | **2,360** | **1,332** | **1,855** | **49** | **27** |
+| gitlab | 1,422 | 14,293 | 6,353 | 2,325 | 3,949 | 15 | 0 |
+| **Total** | **2,499** | **21,763** | **8,713** | **3,657** | **5,804** | **64** | **27** |
 
-The 27 dumps come to about 19,300 lines of SQL. musicbrainz alone is still
-about a third of the tables, columns, and indexes and over half of the
-constraints, and is the reason `reset-db` and `clean-schema` drop one schema per
-statement: cascading through all of them in a single transaction runs the server
-out of lock table space.
+The 28 dumps come to about 47,000 lines of SQL, and gitlab is 27,600 of them.
+It is over half of the tables, columns, indexes, foreign keys, and constraints,
+and musicbrainz is the largest of what remains. gitlab is also why
+`clean-schema` drops tables a batch at a time rather than cascading through
+`DROP SCHEMA`: a single statement takes locks on every object it reaches, and
+gitlab's 1,422 tables and their indexes run the server out of lock table space
+at the default `max_locks_per_transaction`. It is why `reset-db` resets only
+`public` between samples, too.
 
 Beyond size, the samples bring in shapes the hand-written fixtures do not
 always reach: partial and expression indexes and gin, gist, hash, and brin
@@ -138,9 +149,11 @@ are 6 enums and 7 domains, each domain carrying a named CHECK), unique indexes
 over an expression and a gin index over `to_tsvector` (rt), materialized views
 (adventureworks, pagila), tsvector columns (dvdrental, pagila), a non-default
 collation (musicbrainz), an index-heavy schema of 192 indexes over 64 tables
-(mediawiki), and foreign keys that cross a schema boundary: 20 of
-adventureworks' 90 span its five schemas, and 12 of mimiciv's 51 point from
-`mimiciv_icu` into `mimiciv_hosp`.
+(mediawiki), partitioned tables at scale (gitlab declares 100 of them and
+attaches 2,054 partitions, all of which live in schemas of their own), and
+foreign keys that cross a schema boundary: 20 of adventureworks' 90 span its
+five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into `mimiciv_hosp`,
+and every one of gitlab's partitions is attached across one.
 
 ## Load-time adjustments
 
@@ -157,12 +170,15 @@ strip only what is irrelevant to a schema round trip:
   constraint, and the `\copy` lines are dropped.
 - **imdb**: the schema and its foreign key indexes ship as two files, so
   `schema.sql` and `fkindexes.sql` are concatenated.
-- **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**:
-  these dumps name no schema at all, so whichever schema comes first in
-  `search_path` gets them. Each is loaded into a schema of its own instead of
+- **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
+  **gitlab**: these dumps name no schema at all, so whichever schema comes first
+  in `search_path` gets them. Each is loaded into a schema of its own instead of
   `public`, so that `make schema`, which puts every sample in one database, does
   not stack them on top of the other public samples (mediawiki and pagila both
-  define `actor` and `category`).
+  define `actor` and `category`). gitlab creates `gitlab_partitions_static` and
+  `gitlab_partitions_dynamic` itself and never qualifies anything with `public`,
+  so its 1,083 top-level tables follow `search_path` into `gitlab` while its
+  partitions stay in the two schemas it named.
 - **mimiciv**: the schema ships as three files, so `create.sql` (tables),
   `constraint.sql` (primary and foreign keys), and `index.sql` are concatenated
   in that order. Both later files drop what they create with `IF EXISTS` first,
@@ -179,6 +195,20 @@ strip only what is irrelevant to a schema round trip:
 None of these touch table, column, index, constraint, view, or type
 definitions, so the round trip still covers the full schema.
 
+## Check-time flags
+
+The last field of a `SAMPLES` record holds extra flags for the `pista plan`
+step. Only gitlab uses it, with `--assume-validated`.
+
+gitlab's schema has 68 constraints that are `NOT VALID`. `pista dump` writes
+CHECK constraints inline in `CREATE TABLE`, and PostgreSQL accepts `NOT VALID`
+only on `ALTER TABLE ... ADD CONSTRAINT`, so an inline constraint necessarily
+reads back as validated and the plan asks to validate 39 constraints that are
+already in the database. `--assume-validated` ignores validation state on both
+sides, which is what the check is after here: whether the tables, columns,
+indexes, constraints, and partitions round-trip. No other sample has an
+unvalidated constraint, so no other sample needs the flag.
+
 ## Adding a sample
 
 1. Add a line to `SAMPLES` in the Makefile: name, loader target, loader
@@ -189,9 +219,7 @@ definitions, so the round trip still covers the full schema.
    should not land in `public`). Otherwise add a target, and comment why the
    plain pipe does not work.
 3. If the source is on GitHub, put a commit SHA in the URL, not a branch name.
-4. If the sample creates schemas other than `public`, add them to
-   `SAMPLE_SCHEMAS` so `clean-schema` removes them.
-5. Run `make test-samples` and confirm the new sample reports `PASS`.
+4. Run `make test-samples` and confirm the new sample reports `PASS`.
 
 A `DRIFT` result is the interesting outcome: it means pistachio reads or writes
 that schema incorrectly. Fix the catalog reader, the parser, or the diff before

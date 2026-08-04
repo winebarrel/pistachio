@@ -25,15 +25,19 @@ indent() {
   sed 's/^/    /'
 }
 
-# check <name> <schemas>
+# check <name> <schemas> <flags>
 # <schemas> is passed to pista -n; empty means default (public).
+# <flags> are extra pista plan flags; empty for almost every sample.
 check() {
-  local name="$1" schemas="$2"
+  local name="$1" schemas="$2" flags="$3"
   local dump="${TMPDIR:-/tmp}/pista-sample-${name}.sql"
   printf "  %-20s " "$name"
 
   local ns=()
   [ -n "$schemas" ] && ns=(-n "$schemas")
+
+  # shellcheck disable=SC2206  # $flags must word-split into separate flags
+  local extra=($flags)
 
   if ! "$PISTA" dump "${ns[@]}" >"$dump" 2>"${dump}.err"; then
     echo "FAIL (dump)"
@@ -43,7 +47,7 @@ check() {
   fi
 
   local out
-  out=$("$PISTA" plan "${ns[@]}" "$dump" 2>&1) || {
+  out=$("$PISTA" plan "${ns[@]}" "${extra[@]}" "$dump" 2>&1) || {
     echo "FAIL (plan)"
     echo "$out" | indent >&2
     _fail=$((_fail + 1))
@@ -67,9 +71,14 @@ PISTA="./pista"
 echo ""
 echo "Sample schema check (dump then plan; expect No changes):"
 
+# Start from an empty database, so a schema left by an earlier run cannot make
+# a load fail on objects that already exist. Between samples only `public` is
+# reset; see the reset-db comment in the Makefile.
+make -s clean-schema >/dev/null
+
 # Iterate the sample manifest from the Makefile. For each sample let make
 # reset the database and load the schema, then run the drift check here.
-while IFS='|' read -r name target args schemas; do
+while IFS='|' read -r name target args schemas flags; do
   [ -n "$name" ] || continue
 
   make -s reset-db >/dev/null
@@ -80,7 +89,7 @@ while IFS='|' read -r name target args schemas; do
     continue
   fi
 
-  check "$name" "$schemas"
+  check "$name" "$schemas" "$flags"
 done < <(make -s print-samples)
 
 echo ""
