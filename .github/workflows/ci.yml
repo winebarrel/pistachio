@@ -42,6 +42,27 @@ jobs:
     env:
       CGO_ENABLED: "1"
     steps:
+      # Defender real-time scanning is the single biggest tax on this job: it
+      # inspects every object file the cgo build writes, every test binary the
+      # per-package `go test` links and executes, and every heap/WAL file
+      # PostgreSQL writes. Exclude the paths this job owns. Best effort - if a
+      # future image refuses the policy change, log it and carry on.
+      - name: Exclude build paths from Defender
+        shell: pwsh
+        run: |
+          $paths = @(
+            $env:GITHUB_WORKSPACE,
+            "$env:USERPROFILE\go",
+            "$env:LOCALAPPDATA\go-build",
+            $env:RUNNER_TEMP,
+            $env:PGDATA
+          ) | Where-Object { $_ }
+          try {
+            Add-MpPreference -ExclusionPath $paths -ErrorAction Stop
+            Add-MpPreference -ExclusionProcess go.exe, gcc.exe, cc1.exe, ld.exe, link.exe, compile.exe, postgres.exe -ErrorAction Stop
+          } catch {
+            Write-Host "Defender exclusions unavailable: $_"
+          }
       # Keep LF line endings; test fixtures are compared byte for byte.
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -55,6 +76,12 @@ jobs:
       # and point at that install. Switch it to trust auth to match the Linux
       # jobs (POSTGRES_HOST_AUTH_METHOD=trust), then start it. Fail loudly if
       # the image ever stops providing these paths.
+      #
+      # Durability is also turned off. The tests are thousands of tiny DDL
+      # transactions (every fixture drops and recreates the public schema), so
+      # they are bound by commit fsyncs on the runner's disk. The cluster is
+      # thrown away with the runner, so there is nothing to lose to a crash.
+      # Appended settings win: postgresql.conf takes the last assignment.
       - name: Start PostgreSQL
         shell: pwsh
         run: |
@@ -63,13 +90,18 @@ jobs:
             throw "PGDATA/PGBIN not set by the runner image; update this step"
           }
           Set-Content -Path "$env:PGDATA\pg_hba.conf" -Value "host all all 127.0.0.1/32 trust`nhost all all ::1/128 trust"
+          Add-Content -Path "$env:PGDATA\postgresql.conf" -Value "fsync = off`nsynchronous_commit = off`nfull_page_writes = off"
           Get-Service -Name postgresql* | Set-Service -StartupType Manual -PassThru | Start-Service
           & "$env:PGBIN\pg_isready" -h localhost -t 30
       - name: Build
         run: go build -o pista.exe ./cmd/pista
       - name: Smoke test
         run: ./pista.exe --help
-      - run: make TEST_OPTS='-coverprofile=coverage.txt'
+      # `make` with no target is `vet test build`, and both the vet and the
+      # build are already covered: the Build step above compiles the binary,
+      # and golangci-lint (govet is on by default) runs in the Linux test job.
+      # Only the tests need the native Windows toolchain.
+      - run: make test TEST_OPTS='-coverprofile=coverage.txt'
       - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
