@@ -415,7 +415,16 @@ The skipped transaction is recorded in the output:
 CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);
 ```
 
-An apply that skips the transaction is not all-or-nothing. A failure leaves the statements that already ran in place, and re-running `pista apply` applies the rest. A failed `CREATE INDEX CONCURRENTLY` also leaves an invalid index that must be dropped by hand.
+An apply that skips the transaction is not all-or-nothing. A failure leaves the statements that already ran in place, and re-running `pista apply` resumes the work: `pista` re-reads the current schema, regenerates the diff, and applies only what is still missing.
+
+Resuming after a failed `CREATE INDEX CONCURRENTLY` needs manual care. When `CREATE INDEX CONCURRENTLY` fails, PostgreSQL leaves behind an invalid index (a `pg_index` row with `indisvalid = false`). `pista` reads the current schema from the catalog and cannot tell an invalid index from a valid one, so it treats the index as already present. The regenerated diff shows no change for it, and both `pista plan` and a resumed `pista apply` report nothing to do even though the index is unusable. Re-running `pista apply` therefore does not repair it. Drop the invalid index by hand before resuming, so the next apply recreates it:
+
+```sql
+DROP INDEX CONCURRENTLY idx_users_name;
+```
+
+> [!WARNING]
+> This applies to `DROP INDEX CONCURRENTLY` as well: a failed drop can also leave the index marked invalid. `pista` still sees the index in the catalog and plans no change, so a resumed apply does not retry the drop. Finish the drop by hand before the next apply.
 
 To apply `CONCURRENTLY` to individual indexes, either write `CREATE INDEX CONCURRENTLY` directly or use the `-- pista:concurrently` directive before the `CREATE INDEX` statement. Both are treated equivalently:
 
