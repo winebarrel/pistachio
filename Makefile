@@ -63,6 +63,10 @@ french_towns|sample-db-tar|TAR_URL=https://ftp.postgresql.org/pub/projects/pgFou
 iso_3166|sample-db-tar|TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/iso-3166/iso-3166-1.0/iso-3166-1.0.tar.gz TAR_SQL_PATH=iso-3166/iso-3166.sql|
 northwind|sample-db-url|URL=https://raw.githubusercontent.com/pthom/northwind_psql/master/northwind.sql|
 employees|sample-db-url|URL=https://raw.githubusercontent.com/h8/employees-database/master/employees_schema.sql|employees
+mimiciv|sample-db-mimiciv||mimiciv_hosp,mimiciv_icu
+mediawiki|sample-db-url-schema|URL=https://raw.githubusercontent.com/wikimedia/mediawiki/master/sql/postgres/tables-generated.sql SCHEMA=mediawiki|mediawiki
+synapse|sample-db-url-schema|URL=https://raw.githubusercontent.com/element-hq/synapse/develop/synapse/storage/schema/main/full_schemas/72/full.sql.postgres SCHEMA=synapse|synapse
+temporal|sample-db-url-schema|URL=https://raw.githubusercontent.com/temporalio/temporal/main/schema/postgresql/v12/temporal/schema.sql SCHEMA=temporal|temporal
 imdb|sample-db-imdb||
 adventureworks|sample-db-adventureworks||person,humanresources,production,purchasing,sales
 clubdata|sample-db-clubdata|URL=https://pgexercises.com/dbfiles/clubdata.sql|cd
@@ -94,6 +98,33 @@ sample-db-tar:
 .PHONY: sample-db-url
 sample-db-url:
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) | psql
+
+# MIMIC-IV (MIT-LCP/mimic-code, MIT). The schema ships as three files, so
+# concatenate them in dependency order: create.sql (which creates the mimiciv_*
+# schemas and the tables), then the primary and foreign keys, then the indexes.
+# constraint.sql qualifies every table it touches and index.sql sets its own
+# search_path, so no search_path is needed here. Both files drop what they are
+# about to create with IF EXISTS, which floods a fresh database with NOTICEs, so
+# quiet those.
+MIMICIV_SQL_FILES = create.sql constraint.sql index.sql
+
+.PHONY: sample-db-mimiciv
+sample-db-mimiciv:
+	for f in $(MIMICIV_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/MIT-LCP/mimic-code/main/mimic-iv/buildmimic/postgres/$$f || exit 1; \
+	  echo; \
+	done | PGOPTIONS='-c client_min_messages=warning' psql
+
+# A plain SQL URL loaded into a schema of its own. These dumps name no schema at
+# all, so search_path decides where they land, and upstream expects them in the
+# search path's first schema. Loading them into `public` would collide with the
+# other public samples when `make schema` puts everything in one database
+# (mediawiki and pagila both define `actor` and `category`, for one), so each
+# gets its own schema instead.
+.PHONY: sample-db-url-schema
+sample-db-url-schema:
+	psql -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) | PGOPTIONS='-c search_path=$(SCHEMA)' psql
 
 # Join Order Benchmark (gregrahn/join-order-benchmark), the IMDB schema used by
 # the JOB query set. The tables and their indexes ship as two separate files, so
@@ -178,7 +209,8 @@ test-samples:
 # out of lock table space, since musicbrainz alone owns ~1000 objects.
 SAMPLE_SCHEMAS = \
 	person humanresources production purchasing sales pe hr pr pu sa \
-	employees bookings gen cd musicbrainz public
+	employees bookings gen cd musicbrainz mediawiki synapse temporal \
+	mimiciv_hosp mimiciv_icu mimiciv_derived public
 
 .PHONY: clean-schema
 clean-schema:

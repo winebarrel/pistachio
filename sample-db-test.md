@@ -66,6 +66,10 @@ consumers, so the Makefile stays the single source of the list.
 | iso_3166 | public | [pgFoundry dbsamples](https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/) |
 | northwind | public | [pthom/northwind_psql](https://github.com/pthom/northwind_psql) |
 | employees | employees | [h8/employees-database](https://github.com/h8/employees-database) |
+| mimiciv | mimiciv_hosp, mimiciv_icu | [MIT-LCP/mimic-code](https://github.com/MIT-LCP/mimic-code) |
+| mediawiki | mediawiki | [wikimedia/mediawiki](https://github.com/wikimedia/mediawiki) |
+| synapse | synapse | [element-hq/synapse](https://github.com/element-hq/synapse) |
+| temporal | temporal | [temporalio/temporal](https://github.com/temporalio/temporal) |
 | imdb | public | [gregrahn/join-order-benchmark](https://github.com/gregrahn/join-order-benchmark) |
 | adventureworks | person, humanresources, production, purchasing, sales | [lorint/AdventureWorks-for-Postgres](https://github.com/lorint/AdventureWorks-for-Postgres) |
 | clubdata | cd | [PostgreSQL Exercises](https://pgexercises.com/) |
@@ -95,25 +99,33 @@ counts are limited to the schemas the sample is checked with.
 | iso_3166 | 2 | 7 | 2 | 1 | 2 | 0 | 0 |
 | northwind | 14 | 92 | 14 | 13 | 14 | 0 | 0 |
 | employees | 6 | 24 | 9 | 6 | 6 | 0 | 1 |
+| mimiciv | 31 | 342 | 67 | 51 | 24 | 0 | 0 |
+| mediawiki | 64 | 389 | 192 | 0 | 60 | 0 | 1 |
+| synapse | 134 | 624 | 236 | 14 | 86 | 0 | 0 |
+| temporal | 37 | 217 | 44 | 0 | 40 | 0 | 0 |
 | imdb | 21 | 108 | 44 | 0 | 21 | 0 | 0 |
 | adventureworks | 68 | 456 | 71 | 90 | 157 | 21 | 0 |
 | clubdata | 3 | 19 | 10 | 3 | 3 | 0 | 0 |
 | demodb | 9 | 45 | 15 | 8 | 21 | 3 | 0 |
 | musicbrainz | 374 | 2,469 | 907 | 770 | 1,032 | 10 | 7 |
-| **Total** | **581** | **3,754** | **1,228** | **973** | **1,343** | **49** | **13** |
+| **Total** | **847** | **5,326** | **1,767** | **1,038** | **1,553** | **49** | **14** |
 
-The 20 dumps come to about 11,000 lines of SQL. musicbrainz alone is roughly
-two thirds of every count, and is the reason `reset-db` and `clean-schema` drop
-one schema per statement: cascading through all of them in a single transaction
-runs the server out of lock table space.
+The 24 dumps come to about 14,500 lines of SQL. musicbrainz alone is still
+around half of the tables, columns, and indexes and two thirds of the
+constraints, and is the reason `reset-db` and `clean-schema` drop one schema per
+statement: cascading through all of them in a single transaction runs the server
+out of lock table space.
 
 Beyond size, the samples bring in shapes the hand-written fixtures do not
 always reach: partial and expression indexes and gin, gist, hash, and brin
-methods (musicbrainz), exclusion constraints and unlogged tables (demodb, which
-needs `btree_gist`), enums and domains (dvdrental, pagila, employees),
-materialized views (adventureworks, pagila), tsvector columns (dvdrental,
-pagila), a non-default collation (musicbrainz), and 90 foreign keys spread over
-five schemas, 20 of which cross a schema boundary (adventureworks).
+methods (musicbrainz, plus 12 partial and 2 gin indexes in synapse), exclusion
+constraints and unlogged tables (demodb, which needs `btree_gist`), enums and
+domains (dvdrental, pagila, employees, mediawiki), materialized views
+(adventureworks, pagila), tsvector columns (dvdrental, pagila), a non-default
+collation (musicbrainz), an index-heavy schema of 192 indexes over 64 tables
+(mediawiki), and foreign keys that cross a schema boundary: 20 of
+adventureworks' 90 span its five schemas, and 12 of mimiciv's 51 point from
+`mimiciv_icu` into `mimiciv_hosp`.
 
 ## Load-time adjustments
 
@@ -130,6 +142,15 @@ strip only what is irrelevant to a schema round trip:
   constraint, and the `\copy` lines are dropped.
 - **imdb**: the schema and its foreign key indexes ship as two files, so
   `schema.sql` and `fkindexes.sql` are concatenated.
+- **mediawiki**, **synapse**, **temporal**: these dumps name no schema at all, so
+  whichever schema comes first in `search_path` gets them. Each is loaded into a
+  schema of its own instead of `public`, so that `make schema`, which puts every
+  sample in one database, does not stack them on top of the other public samples
+  (mediawiki and pagila both define `actor` and `category`).
+- **mimiciv**: the schema ships as three files, so `create.sql` (tables),
+  `constraint.sql` (primary and foreign keys), and `index.sql` are concatenated
+  in that order. Both later files drop what they create with `IF EXISTS` first,
+  so NOTICEs are quieted.
 - **musicbrainz**: the schema ships as one file per object kind and none of them
   create the schema, so `musicbrainz` is created up front and the files are
   concatenated in dependency order (extensions and collation, search
@@ -145,7 +166,9 @@ definitions, so the round trip still covers the full schema.
    variables, and the schemas for `pista -n`.
 2. Reuse a loader target if the source fits one (`sample-db` for the Neon
    collection, `sample-db-tar` for a tarball, `sample-db-url` for a plain SQL
-   URL). Otherwise add a target, and comment why the plain pipe does not work.
+   URL, `sample-db-url-schema` for a plain SQL URL that names no schema and
+   should not land in `public`). Otherwise add a target, and comment why the
+   plain pipe does not work.
 3. If the sample creates schemas other than `public`, add them to
    `SAMPLE_SCHEMAS` so `clean-schema` removes them.
 4. Run `make test-samples` and confirm the new sample reports `PASS`.
