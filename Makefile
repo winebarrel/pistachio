@@ -47,6 +47,15 @@ keywords:
 # (loads them all into one database) and `test-samples` (loads each into an
 # isolated database and checks pista round-trips it). One record per line:
 #   name | loader-target | VAR=value ... | schemas for pista -n (blank = public)
+#
+# Every GitHub source is pinned to a commit, not a branch, so that an upstream
+# schema change cannot turn this repository's CI red on its own. To move a
+# sample to a newer upstream schema, resolve the branch and replace the SHA:
+#   git ls-remote https://github.com/<owner>/<repo> <branch>
+# then run `make test-samples` to confirm the new schema still round-trips.
+# Each SHA is the tip of the upstream default branch as of the pin, except
+# synapse (develop), rt (stable), and znuny (dev), which ship their schema
+# elsewhere.
 define SAMPLES
 chinook|sample-db|SQL_FILE=chinook.sql|
 dvdrental|sample-db|SQL_FILE=dvdrental.sql|
@@ -61,18 +70,18 @@ usda|sample-db-tar|TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbs
 dellstore2|sample-db-tar|TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/dellstore2/dellstore2-normal-1.0/dellstore2-normal-1.0.tar.gz TAR_SQL_PATH=dellstore2-normal-1.0/dellstore2-normal-1.0.sql|
 french_towns|sample-db-tar|TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/french-towns-communes-francais/french-towns-communes-francaises-1.0/french-towns-communes-francaises-1.0.tar.gz TAR_SQL_PATH=french-towns-communes-francaises.sql|
 iso_3166|sample-db-tar|TAR_URL=https://ftp.postgresql.org/pub/projects/pgFoundry/dbsamples/iso-3166/iso-3166-1.0/iso-3166-1.0.tar.gz TAR_SQL_PATH=iso-3166/iso-3166.sql|
-northwind|sample-db-url|URL=https://raw.githubusercontent.com/pthom/northwind_psql/master/northwind.sql|
-employees|sample-db-url|URL=https://raw.githubusercontent.com/h8/employees-database/master/employees_schema.sql|employees
+northwind|sample-db-url|URL=https://raw.githubusercontent.com/pthom/northwind_psql/cd0ef28d66369fbe177778e604e4be0f153c9e5c/northwind.sql|
+employees|sample-db-url|URL=https://raw.githubusercontent.com/h8/employees-database/2d6007094f93bd887d6e2b8a409967efd75fc587/employees_schema.sql|employees
 mimiciv|sample-db-mimiciv||mimiciv_hosp,mimiciv_icu
-mediawiki|sample-db-url-schema|URL=https://raw.githubusercontent.com/wikimedia/mediawiki/master/sql/postgres/tables-generated.sql SCHEMA=mediawiki|mediawiki
-synapse|sample-db-url-schema|URL=https://raw.githubusercontent.com/element-hq/synapse/develop/synapse/storage/schema/main/full_schemas/72/full.sql.postgres SCHEMA=synapse|synapse
-temporal|sample-db-url-schema|URL=https://raw.githubusercontent.com/temporalio/temporal/main/schema/postgresql/v12/temporal/schema.sql SCHEMA=temporal|temporal
-icingadb|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icingadb/main/schema/pgsql/schema.sql SCHEMA=icingadb|icingadb
-rt|sample-db-url-schema|URL=https://raw.githubusercontent.com/bestpractical/rt/stable/etc/schema.Pg SCHEMA=rt|rt
+mediawiki|sample-db-url-schema|URL=https://raw.githubusercontent.com/wikimedia/mediawiki/2f1ddc8e7fc4e3b1678178f63c6c06895390d218/sql/postgres/tables-generated.sql SCHEMA=mediawiki|mediawiki
+synapse|sample-db-url-schema|URL=https://raw.githubusercontent.com/element-hq/synapse/415a869f1f53bd4bf22a69e74081875dc9c17735/synapse/storage/schema/main/full_schemas/72/full.sql.postgres SCHEMA=synapse|synapse
+temporal|sample-db-url-schema|URL=https://raw.githubusercontent.com/temporalio/temporal/a669256c743238702f29900100ce441f52a1d49f/schema/postgresql/v12/temporal/schema.sql SCHEMA=temporal|temporal
+icingadb|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icingadb/1f63fe3db7070b718a761050a316bfde60013401/schema/pgsql/schema.sql SCHEMA=icingadb|icingadb
+rt|sample-db-url-schema|URL=https://raw.githubusercontent.com/bestpractical/rt/9ffb1ed910b19eefd459ef5480369bf6a2a9038a/etc/schema.Pg SCHEMA=rt|rt
 imdb|sample-db-imdb||
 adventureworks|sample-db-adventureworks||person,humanresources,production,purchasing,sales
 clubdata|sample-db-clubdata|URL=https://pgexercises.com/dbfiles/clubdata.sql|cd
-demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/master/tables.sql|bookings
+demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/bf7a1c1972d2f89dc9de21f19d7dd3aa650e8647/tables.sql|bookings
 musicbrainz|sample-db-musicbrainz||musicbrainz
 znuny|sample-db-znuny||znuny
 endef
@@ -92,7 +101,7 @@ schema: clean-schema
 
 .PHONY: sample-db
 sample-db:
-	curl -sSf --retry 3 --retry-delay 2 https://raw.githubusercontent.com/neondatabase/postgres-sample-dbs/refs/heads/main/$(SQL_FILE) | psql
+	curl -sSf --retry 3 --retry-delay 2 https://raw.githubusercontent.com/neondatabase/postgres-sample-dbs/b54cb67534bf20775803b181b7a1c6f573422161/$(SQL_FILE) | psql
 
 .PHONY: sample-db-tar
 sample-db-tar:
@@ -114,7 +123,7 @@ MIMICIV_SQL_FILES = create.sql constraint.sql index.sql
 .PHONY: sample-db-mimiciv
 sample-db-mimiciv:
 	for f in $(MIMICIV_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/MIT-LCP/mimic-code/main/mimic-iv/buildmimic/postgres/$$f || exit 1; \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/MIT-LCP/mimic-code/3a914fce11e05888a4b659c7788e207bc34d1728/mimic-iv/buildmimic/postgres/$$f || exit 1; \
 	  echo; \
 	done | PGOPTIONS='-c client_min_messages=warning' psql
 
@@ -135,7 +144,7 @@ sample-db-url-schema:
 .PHONY: sample-db-imdb
 sample-db-imdb:
 	for f in schema.sql fkindexes.sql; do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/gregrahn/join-order-benchmark/master/$$f || exit 1; \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/gregrahn/join-order-benchmark/a39603662e023e449cb2121997a5034df9e02ebf/$$f || exit 1; \
 	  echo; \
 	done | psql
 
@@ -144,7 +153,7 @@ sample-db-imdb:
 # Production.ProductReview INSERT (FK target rows aren't loaded).
 .PHONY: sample-db-adventureworks
 sample-db-adventureworks:
-	curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/master/install.sql \
+	curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/b474991f0df1c4bf55ca4735eb0254ca0709eed2/install.sql \
 	  | awk '/^\\copy/ { next } /^INSERT INTO Production.ProductReview/ { skip=1 } skip { if (/\);[[:space:]]*$$/) skip=0; next } { print }' \
 	  | psql
 
@@ -195,7 +204,7 @@ MUSICBRAINZ_SQL_FILES = \
 sample-db-musicbrainz:
 	psql -c 'CREATE SCHEMA IF NOT EXISTS musicbrainz'
 	for f in $(MUSICBRAINZ_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/metabrainz/musicbrainz-server/master/admin/sql/$$f || exit 1; \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/metabrainz/musicbrainz-server/424c5fad44da2b3ad55d08286fe8ad07c11ec471/admin/sql/$$f || exit 1; \
 	  echo; \
 	done | PGOPTIONS='-c search_path=musicbrainz,public -c client_min_messages=warning' psql
 
@@ -212,7 +221,7 @@ ZNUNY_SQL_FILES = schema.postgresql.sql schema-post.postgresql.sql
 sample-db-znuny:
 	psql -c 'CREATE SCHEMA IF NOT EXISTS znuny'
 	for f in $(ZNUNY_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/znuny/Znuny/dev/scripts/database/$$f || exit 1; \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/znuny/Znuny/0b894348ebc458621545ccdab5f3d24d1b396a70/scripts/database/$$f || exit 1; \
 	  echo; \
 	done | PGOPTIONS='-c search_path=znuny' psql
 

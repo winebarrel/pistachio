@@ -49,6 +49,12 @@ line: name, loader target, loader variables, and the schemas passed to
 `pista -n` (blank means `public`). `make print-samples` prints it for shell
 consumers, so the Makefile stays the single source of the list.
 
+Every GitHub source is fetched at a pinned commit rather than a branch, so an
+upstream schema change cannot turn CI red on its own and the object counts
+below stay accurate. To move a sample to a newer upstream schema, resolve the
+branch with `git ls-remote https://github.com/<owner>/<repo> <branch>`, replace
+the SHA in the Makefile, and re-run `make test-samples`.
+
 | Sample | Schemas | Source |
 |---|---|---|
 | chinook | public | [neondatabase/postgres-sample-dbs](https://github.com/neondatabase/postgres-sample-dbs) |
@@ -182,9 +188,10 @@ definitions, so the round trip still covers the full schema.
    URL, `sample-db-url-schema` for a plain SQL URL that names no schema and
    should not land in `public`). Otherwise add a target, and comment why the
    plain pipe does not work.
-3. If the sample creates schemas other than `public`, add them to
+3. If the source is on GitHub, put a commit SHA in the URL, not a branch name.
+4. If the sample creates schemas other than `public`, add them to
    `SAMPLE_SCHEMAS` so `clean-schema` removes them.
-4. Run `make test-samples` and confirm the new sample reports `PASS`.
+5. Run `make test-samples` and confirm the new sample reports `PASS`.
 
 A `DRIFT` result is the interesting outcome: it means pistachio reads or writes
 that schema incorrectly. Fix the catalog reader, the parser, or the diff before
