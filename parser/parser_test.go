@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -110,36 +111,56 @@ func TestParseSQL_WarnsUnsupportedStmt(t *testing.T) {
 	assert.Contains(t, out, "CREATE EXTENSION pgcrypto")
 }
 
-// A supported statement is still parsed when an unsupported one follows it,
-// and the warning captures the whole last statement even though pg_query
-// reports its length as zero. Its multi-line body is normalized to one line.
-func TestParseSQL_WarnsUnsupportedStmt_LastNoSemicolon(t *testing.T) {
+// The warning carries only the statement, not the comments and blank lines
+// around it, and a supported statement before it is still parsed.
+func TestParseSQL_WarnsUnsupportedStmt_StripsComments(t *testing.T) {
 	var buf bytes.Buffer
 	restore := parser.SetWarnWriter(&buf)
 	defer restore()
 
-	sql := "CREATE TABLE t (id integer);\nGRANT SELECT\n    ON t\n    TO PUBLIC"
+	sql := "CREATE TABLE t (id integer);\n-- a leading comment\nSET foo = 1;"
 	result, err := parser.ParseSQLWithSchema(sql, "public")
 	require.NoError(t, err)
 
 	_, ok := result.Tables.GetOk("public.t")
 	assert.True(t, ok, "the supported table must still be parsed")
-	assert.Contains(t, buf.String(), "ignored unsupported statement: GRANT SELECT ON t TO PUBLIC")
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: SET foo TO 1")
+	assert.NotContains(t, out, "leading comment")
 }
 
-// A statement longer than the limit is truncated so the warning stays short.
+// A trailing comment after the last statement, which lacks a terminating
+// semicolon, is not folded into the warning.
+func TestParseSQL_WarnsUnsupportedStmt_LastNoSemicolon(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "CREATE TABLE t (id integer);\nGRANT SELECT ON t TO PUBLIC\n-- trailing comment"
+	_, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: GRANT")
+	assert.NotContains(t, out, "trailing comment")
+}
+
+// A statement longer than the limit is truncated on a rune boundary, so the
+// warning stays short and valid UTF-8 even for multibyte input.
 func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {
 	var buf bytes.Buffer
 	restore := parser.SetWarnWriter(&buf)
 	defer restore()
 
-	body := strings.Repeat("x", 250)
+	body := strings.Repeat("あ", 250)
 	_, err := parser.ParseSQLWithSchema("SELECT '"+body+"';", "public")
 	require.NoError(t, err)
 
 	out := buf.String()
 	assert.Contains(t, out, "...")
 	assert.NotContains(t, out, body, "the full body must be truncated")
+	assert.True(t, utf8.ValidString(out), "truncation must not split a rune")
 }
 
 func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
@@ -150,6 +171,25 @@ func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
 	_, err := parser.ParseSQLWithSchema("CREATE TABLE t (id integer);", "public")
 	require.NoError(t, err)
 	assert.Empty(t, buf.String())
+}
+
+// BEGIN/COMMIT are unsupported too, so they warn like any other statement
+// while the table between them is still parsed.
+func TestParseSQL_WarnsTransactionStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "BEGIN;\nCREATE TABLE t (id integer);\nCOMMIT;"
+	result, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+
+	_, ok := result.Tables.GetOk("public.t")
+	assert.True(t, ok)
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: BEGIN")
+	assert.Contains(t, out, "ignored unsupported statement: COMMIT")
 }
 
 func TestParseSQLFilesWithSchema(t *testing.T) {

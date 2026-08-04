@@ -26,26 +26,37 @@ type ParseResult struct {
 // silently ignores. Tests swap it via SetWarnWriter.
 var warnWriter io.Writer = os.Stderr
 
-// warnIgnoredStmt reports a statement type that no parser case handles. The
-// snippet is normalized to a single line and truncated so the warning stays
-// readable even for large statement bodies.
-func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
+// ignoredStmtSnippet renders the ignored statement for the warning. Deparsing
+// yields a single canonical line and drops the comments and blank lines that
+// surround the statement in the file. The raw slice is a fallback for the rare
+// statement pg_query can parse but not deparse.
+func ignoredStmtSnippet(sql string, rawStmt *pg_query.RawStmt) string {
+	single := &pg_query.ParseResult{Stmts: []*pg_query.RawStmt{rawStmt}}
+	if deparsed, err := pg_query.Deparse(single); err == nil {
+		return deparsed
+	}
+
 	start := rawStmt.StmtLocation
 	end := start + rawStmt.StmtLen
 	// pg_query leaves StmtLen at 0 for the final statement in the input.
 	if rawStmt.StmtLen == 0 || end > int32(len(sql)) {
 		end = int32(len(sql))
 	}
+	return strings.Join(strings.Fields(sql[start:end]), " ")
+}
 
-	snippet := strings.Join(strings.Fields(sql[start:end]), " ")
+// warnIgnoredStmt reports a statement type that no parser case handles. The
+// snippet is truncated on a rune boundary so the warning stays readable and
+// valid UTF-8 even for large statement bodies.
+func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
+	snippet := ignoredStmtSnippet(sql, rawStmt)
 	if snippet == "" {
-		// Empty statement (e.g. a stray semicolon); nothing was ignored.
 		return
 	}
 
-	const maxLen = 200
-	if len(snippet) > maxLen {
-		snippet = snippet[:maxLen] + "..."
+	const maxRunes = 200
+	if runes := []rune(snippet); len(runes) > maxRunes {
+		snippet = string(runes[:maxRunes]) + "..."
 	}
 
 	fmt.Fprintf(warnWriter, "pistachio: ignored unsupported statement: %s\n", snippet) //nolint:errcheck
