@@ -22,6 +22,65 @@ type ParseResult struct {
 	ExecuteStmts   []*ExecuteStmt
 }
 
+// warnWriter receives warnings about statements pistachio does not support and
+// silently ignores. Tests swap it via SetWarnWriter.
+var warnWriter io.Writer = os.Stderr
+
+// ignoredStmtSnippet returns the raw text of the ignored statement. Deparsing
+// drops the comments and blank lines that surround the statement in the file.
+// The raw slice is a fallback for the rare statement pg_query can parse but not
+// deparse. The caller collapses whitespace, so a multi-line body from either
+// path becomes one line.
+func ignoredStmtSnippet(sql string, rawStmt *pg_query.RawStmt) string {
+	single := &pg_query.ParseResult{Stmts: []*pg_query.RawStmt{rawStmt}}
+	if deparsed, err := pg_query.Deparse(single); err == nil {
+		return deparsed
+	}
+
+	start := rawStmt.StmtLocation
+	end := start + rawStmt.StmtLen
+	// pg_query leaves StmtLen at 0 for the final statement in the input.
+	if rawStmt.StmtLen == 0 || end > int32(len(sql)) {
+		end = int32(len(sql))
+	}
+	return sql[start:end]
+}
+
+// txHint suggests the flags that wrap the apply in a transaction, but only for
+// the statements that open or close a whole-file transaction. ROLLBACK and
+// SAVEPOINT reach here too, and neither is answered by wrapping the apply.
+func txHint(rawStmt *pg_query.RawStmt) string {
+	ts := rawStmt.Stmt.GetTransactionStmt()
+	if ts == nil {
+		return ""
+	}
+	switch ts.Kind {
+	case pg_query.TransactionStmtKind_TRANS_STMT_BEGIN,
+		pg_query.TransactionStmtKind_TRANS_STMT_START,
+		pg_query.TransactionStmtKind_TRANS_STMT_COMMIT:
+		return " (use --with-tx or --try-tx to run the apply in a transaction)"
+	default:
+		return ""
+	}
+}
+
+// warnIgnoredStmt reports a statement type that no parser case handles. The
+// snippet is collapsed to one line and truncated on a rune boundary, so the
+// warning stays short and valid UTF-8 even for a large multi-line body.
+func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
+	snippet := strings.Join(strings.Fields(ignoredStmtSnippet(sql, rawStmt)), " ")
+	if snippet == "" {
+		return
+	}
+
+	const maxRunes = 200
+	if runes := []rune(snippet); len(runes) > maxRunes {
+		snippet = string(runes[:maxRunes]) + "..."
+	}
+
+	fmt.Fprintf(warnWriter, "pistachio: ignored unsupported statement: %s%s\n", snippet, txHint(rawStmt)) //nolint:errcheck
+}
+
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
 	if _, ok := m.GetOk(key); ok {
 		return fmt.Errorf("duplicate %s: %s", kind, key)
@@ -350,6 +409,11 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
 			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, compositeTypes, sequences)
+
+		default:
+			// A statement type no case above handles. It is dropped from the
+			// desired schema, so warn instead of failing silently.
+			warnIgnoredStmt(sql, rawStmt)
 		}
 	}
 

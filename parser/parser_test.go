@@ -1,12 +1,15 @@
 package parser_test
 
 import (
+	"bytes"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/model"
@@ -94,6 +97,169 @@ func TestReadSQLFile_Stdin_ReadAll(t *testing.T) {
 func TestParseSQL_InvalidSQL(t *testing.T) {
 	_, err := parseSQLWithPublicSchema("NOT VALID SQL AT ALL ;;; {{{}}")
 	require.Error(t, err)
+}
+
+func TestParseSQL_WarnsUnsupportedStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parser.ParseSQLWithSchema("CREATE EXTENSION pgcrypto;", "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement")
+	assert.Contains(t, out, "CREATE EXTENSION pgcrypto")
+}
+
+// The warning carries only the statement, not the comments and blank lines
+// around it, and a supported statement before it is still parsed.
+func TestParseSQL_WarnsUnsupportedStmt_StripsComments(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "CREATE TABLE t (id integer);\n-- a leading comment\nSET foo = 1;"
+	result, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+
+	_, ok := result.Tables.GetOk("public.t")
+	assert.True(t, ok, "the supported table must still be parsed")
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: SET foo TO 1")
+	assert.NotContains(t, out, "leading comment")
+}
+
+// A trailing comment after the last statement, which lacks a terminating
+// semicolon, is not folded into the warning.
+func TestParseSQL_WarnsUnsupportedStmt_LastNoSemicolon(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "CREATE TABLE t (id integer);\nGRANT SELECT ON t TO PUBLIC\n-- trailing comment"
+	_, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: GRANT")
+	assert.NotContains(t, out, "trailing comment")
+}
+
+// A statement longer than the limit is truncated on a rune boundary, so the
+// warning stays short and valid UTF-8 even for multibyte input.
+func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	// U+3042 is a 3-byte rune; the escape keeps this source file ASCII.
+	body := strings.Repeat("\u3042", 250)
+	_, err := parser.ParseSQLWithSchema("SELECT '"+body+"';", "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "...")
+	assert.NotContains(t, out, body, "the full body must be truncated")
+	assert.True(t, utf8.ValidString(out), "truncation must not split a rune")
+}
+
+// Deparse keeps the newlines inside a function body, so the warning must
+// collapse them; the message stays on one line.
+func TestParseSQL_WarnsUnsupportedStmt_CollapsesMultiline(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "CREATE FUNCTION f() RETURNS int AS $$\nBEGIN\n  RETURN 1;\nEND;\n$$ LANGUAGE plpgsql;"
+	_, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: CREATE FUNCTION f()")
+	assert.Equal(t, 1, strings.Count(out, "\n"), "the warning must be a single line")
+}
+
+func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parser.ParseSQLWithSchema("CREATE TABLE t (id integer);", "public")
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// The statements that open or close a whole-file transaction warn like any
+// other unsupported statement, with a hint at the flags that wrap the apply.
+// The table between them is still parsed.
+func TestParseSQL_WarnsTransactionStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "BEGIN;\nCREATE TABLE t (id integer);\nCOMMIT;\nSTART TRANSACTION;"
+	result, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+
+	_, ok := result.Tables.GetOk("public.t")
+	assert.True(t, ok)
+
+	const hint = " (use --with-tx or --try-tx to run the apply in a transaction)"
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: BEGIN"+hint)
+	assert.Contains(t, out, "ignored unsupported statement: COMMIT"+hint)
+	assert.Contains(t, out, "ignored unsupported statement: START TRANSACTION"+hint)
+}
+
+// A non-transaction statement gets no transaction hint.
+func TestParseSQL_WarnNoTxHintForOtherStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parser.ParseSQLWithSchema("SET foo = 1;", "public")
+	require.NoError(t, err)
+	assert.NotContains(t, buf.String(), "--with-tx")
+}
+
+// ROLLBACK and SAVEPOINT are transaction statements too, but wrapping the
+// apply does not answer them, so they warn without the hint.
+func TestParseSQL_WarnNoTxHintForRollback(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parser.ParseSQLWithSchema("ROLLBACK;\nSAVEPOINT sp;", "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement: ROLLBACK")
+	assert.Contains(t, out, "ignored unsupported statement: SAVEPOINT")
+	assert.NotContains(t, out, "--with-tx")
+}
+
+// A statement marked -- pista:execute is skipped before the switch, so an
+// unsupported statement carrying it does not warn.
+func TestParseSQL_NoWarnForExecuteStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "CREATE TABLE t (id integer);\n-- pista:execute\nGRANT SELECT ON t TO PUBLIC;"
+	_, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// When Deparse rejects a statement, the snippet falls back to the raw slice.
+// A zero StmtLen runs the slice to the end of the input; the caller collapses
+// the whitespace, so the helper returns the slice verbatim.
+func TestIgnoredStmtSnippet_DeparseFallback(t *testing.T) {
+	sql := "  GRANT  SELECT\n  ON t  "
+	rs := &pg_query.RawStmt{StmtLocation: 0, StmtLen: 0}
+	assert.Equal(t, sql, parser.IgnoredStmtSnippet(sql, rs))
 }
 
 func TestParseSQLFilesWithSchema(t *testing.T) {
