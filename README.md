@@ -108,6 +108,8 @@ pista apply ./schema/*.sql         # apply it
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 
+pistachio parses only the statements above. It drops any other statement in a schema file, such as `SET`, `GRANT`, or `CREATE EXTENSION`, and prints a `pistachio: ignored unsupported statement:` warning to standard error for each one.
+
 ## Usage
 
 ```

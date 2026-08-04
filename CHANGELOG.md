@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.23.1] - 2026-08-04
+
+* Warn when the parser ignores an unsupported statement. A schema file may hold a statement pistachio does not manage, such as `SET`, `GRANT`, or `CREATE EXTENSION`. Before, it was dropped from the desired schema without any notice. pistachio now prints `pistachio: ignored unsupported statement: <sql>` to standard error for each one. The snippet is normalized to one line and truncated when long.
+
 ## [1.23.0] - 2026-08-01
 
 * **BREAKING**: `plan` now evaluates `-- pista:execute` check SQL and leaves out the statements `apply` would skip. Before, every marked statement was printed regardless, so a file with a false check produced a plan full of SQL while `apply` on the same file reported `-- No changes`. Three consequences:

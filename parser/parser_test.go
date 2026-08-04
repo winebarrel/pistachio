@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"bytes"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -94,6 +95,61 @@ func TestReadSQLFile_Stdin_ReadAll(t *testing.T) {
 func TestParseSQL_InvalidSQL(t *testing.T) {
 	_, err := parseSQLWithPublicSchema("NOT VALID SQL AT ALL ;;; {{{}}")
 	require.Error(t, err)
+}
+
+func TestParseSQL_WarnsUnsupportedStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parser.ParseSQLWithSchema("CREATE EXTENSION pgcrypto;", "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement")
+	assert.Contains(t, out, "CREATE EXTENSION pgcrypto")
+}
+
+// A supported statement is still parsed when an unsupported one follows it,
+// and the warning captures the whole last statement even though pg_query
+// reports its length as zero. Its multi-line body is normalized to one line.
+func TestParseSQL_WarnsUnsupportedStmt_LastNoSemicolon(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "CREATE TABLE t (id integer);\nGRANT SELECT\n    ON t\n    TO PUBLIC"
+	result, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+
+	_, ok := result.Tables.GetOk("public.t")
+	assert.True(t, ok, "the supported table must still be parsed")
+	assert.Contains(t, buf.String(), "ignored unsupported statement: GRANT SELECT ON t TO PUBLIC")
+}
+
+// A statement longer than the limit is truncated so the warning stays short.
+func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	body := strings.Repeat("x", 250)
+	_, err := parser.ParseSQLWithSchema("SELECT '"+body+"';", "public")
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "...")
+	assert.NotContains(t, out, body, "the full body must be truncated")
+}
+
+func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parser.ParseSQLWithSchema("CREATE TABLE t (id integer);", "public")
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
 }
 
 func TestParseSQLFilesWithSchema(t *testing.T) {

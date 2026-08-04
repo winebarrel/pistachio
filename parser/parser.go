@@ -22,6 +22,35 @@ type ParseResult struct {
 	ExecuteStmts   []*ExecuteStmt
 }
 
+// warnWriter receives warnings about statements pistachio does not support and
+// silently ignores. Tests swap it via SetWarnWriter.
+var warnWriter io.Writer = os.Stderr
+
+// warnIgnoredStmt reports a statement type that no parser case handles. The
+// snippet is normalized to a single line and truncated so the warning stays
+// readable even for large statement bodies.
+func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
+	start := rawStmt.StmtLocation
+	end := start + rawStmt.StmtLen
+	// pg_query leaves StmtLen at 0 for the final statement in the input.
+	if rawStmt.StmtLen == 0 || end > int32(len(sql)) {
+		end = int32(len(sql))
+	}
+
+	snippet := strings.Join(strings.Fields(sql[start:end]), " ")
+	if snippet == "" {
+		// Empty statement (e.g. a stray semicolon); nothing was ignored.
+		return
+	}
+
+	const maxLen = 200
+	if len(snippet) > maxLen {
+		snippet = snippet[:maxLen] + "..."
+	}
+
+	fmt.Fprintf(warnWriter, "pistachio: ignored unsupported statement: %s\n", snippet) //nolint:errcheck
+}
+
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
 	if _, ok := m.GetOk(key); ok {
 		return fmt.Errorf("duplicate %s: %s", kind, key)
@@ -350,6 +379,11 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
 			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, compositeTypes, sequences)
+
+		default:
+			// A statement type no case above handles. It is dropped from the
+			// desired schema, so warn instead of failing silently.
+			warnIgnoredStmt(sql, rawStmt)
 		}
 	}
 
