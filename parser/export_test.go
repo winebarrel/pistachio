@@ -8,6 +8,7 @@ import "io"
 var (
 	ParseSQLWithSchema = parseSQLWithSchema
 	ReadSQLFile        = readSQLFile
+	IgnoredStmtSnippet = ignoredStmtSnippet
 )
 
 // SetWarnWriter swaps the destination for ignored-statement warnings and

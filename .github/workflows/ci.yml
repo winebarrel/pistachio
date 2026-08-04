@@ -23,14 +23,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check for non-ASCII characters
         run: |
+          # git grep exit: 0 = found, 1 = none, >1 = real error.
           matches=$(LC_ALL=C git grep -nIP '[^\x00-\x7F]' -- .) && status=0 || status=$?
-          if [ "$status" -eq 0 ]; then
+          if [ "$status" -gt 1 ]; then
+            echo "Error: git grep failed with status $status"
+            exit "$status"
+          fi
+          # A line tagged "ascii-ignore" opts out, for the rare test that must
+          # hold a multibyte character.
+          matches=$(printf '%s\n' "$matches" | grep -ve '^$' -e 'ascii-ignore' || true)
+          if [ -n "$matches" ]; then
             echo "Error: non-ASCII characters found:"
             echo "$matches"
             exit 1
-          elif [ "$status" -ne 1 ]; then
-            echo "Error: git grep failed with status $status"
-            exit "$status"
           fi
 
   windows:

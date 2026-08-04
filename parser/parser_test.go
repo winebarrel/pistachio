@@ -9,6 +9,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/model"
@@ -153,7 +154,7 @@ func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {
 	restore := parser.SetWarnWriter(&buf)
 	defer restore()
 
-	body := strings.Repeat("あ", 250)
+	body := strings.Repeat("あ", 250) // ascii-ignore: multibyte truncation input
 	_, err := parser.ParseSQLWithSchema("SELECT '"+body+"';", "public")
 	require.NoError(t, err)
 
@@ -202,6 +203,28 @@ func TestParseSQL_WarnNoTxHintForOtherStmt(t *testing.T) {
 	_, err := parser.ParseSQLWithSchema("SET foo = 1;", "public")
 	require.NoError(t, err)
 	assert.NotContains(t, buf.String(), "--with-tx")
+}
+
+// A statement marked -- pista:execute is skipped before the switch, so an
+// unsupported statement carrying it does not warn.
+func TestParseSQL_NoWarnForExecuteStmt(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	sql := "CREATE TABLE t (id integer);\n-- pista:execute\nGRANT SELECT ON t TO PUBLIC;"
+	_, err := parser.ParseSQLWithSchema(sql, "public")
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// When Deparse rejects a statement, the snippet falls back to the raw slice.
+// A zero StmtLen runs the slice to the end of the input, and the surrounding
+// whitespace and newlines collapse to single spaces.
+func TestIgnoredStmtSnippet_DeparseFallback(t *testing.T) {
+	sql := "  GRANT  SELECT\n  ON t  "
+	rs := &pg_query.RawStmt{StmtLocation: 0, StmtLen: 0}
+	assert.Equal(t, "GRANT SELECT ON t", parser.IgnoredStmtSnippet(sql, rs))
 }
 
 func TestParseSQLFilesWithSchema(t *testing.T) {
