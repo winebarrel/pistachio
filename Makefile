@@ -86,6 +86,10 @@ clubdata|sample-db-clubdata|URL=https://pgexercises.com/dbfiles/clubdata.sql|cd
 demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/bf7a1c1972d2f89dc9de21f19d7dd3aa650e8647/tables.sql|bookings
 musicbrainz|sample-db-musicbrainz||musicbrainz
 znuny|sample-db-znuny||znuny
+hive|sample-db-hive|URL=https://raw.githubusercontent.com/apache/hive/d98bfeda81c23007866bd5bf7ee970fa017689ed/standalone-metastore/metastore-server/src/main/sql/postgres/hive-schema-4.2.0.postgres.sql SCHEMA=hive|hive
+ranger|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/ranger/0249cc1d8255c0370322508c7e1d30250e152340/security-admin/db/postgres/optimized/current/ranger_core_db_postgres.sql SCHEMA=ranger CLIENT_MIN_MESSAGES=error|ranger
+ambari|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/ambari/0347dc4503c09b0593d9cb12815e2f9784b6a86a/ambari-server/src/main/resources/Ambari-DDL-Postgres-CREATE.sql SCHEMA=ambari|ambari
+ovirt|sample-db-url-schema|URL=https://raw.githubusercontent.com/oVirt/ovirt-engine/be1f6647db1ebbf39186bbe4dd6b1a777376815b/packaging/dbscripts/create_tables.sql SCHEMA=ovirt|ovirt
 gitlab|sample-db-url-schema|URL=https://raw.githubusercontent.com/gitlabhq/gitlabhq/35e789d8f1173a11a7724ae360a80d1f19ec92dc/db/structure.sql SCHEMA=gitlab|gitlab,gitlab_partitions_static,gitlab_partitions_dynamic|--assume-validated
 endef
 
@@ -136,10 +140,29 @@ sample-db-mimiciv:
 # other public samples when `make schema` puts everything in one database
 # (mediawiki and pagila both define `actor` and `category`, for one), so each
 # gets its own schema instead.
+#
+# CLIENT_MIN_MESSAGES defaults to notice, the server default; a sample whose
+# dump is noisy on a fresh database can raise it from its SAMPLES record. Only
+# ranger does, which drops every object with IF EXISTS and commits outside a
+# transaction before it creates anything.
+CLIENT_MIN_MESSAGES ?= notice
+
 .PHONY: sample-db-url-schema
 sample-db-url-schema:
 	psql -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) | PGOPTIONS='-c search_path=$(SCHEMA)' psql
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) | PGOPTIONS='-c search_path=$(SCHEMA) -c client_min_messages=$(CLIENT_MIN_MESSAGES)' psql
+
+# Hive metastore (apache/hive, Apache-2.0). Like the sample-db-url-schema
+# dumps this one belongs in a schema of its own, but it is a pg_dump-style
+# file that sets `search_path` to public itself, which overrides anything
+# PGOPTIONS passes in. So rewrite that one line instead of setting the
+# search_path from outside.
+.PHONY: sample-db-hive
+sample-db-hive:
+	psql -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | awk '/^SET search_path = / { print "SET search_path = $(SCHEMA), pg_catalog;"; next } { print }' \
+	  | psql
 
 # Join Order Benchmark (gregrahn/join-order-benchmark), the IMDB schema used by
 # the JOB query set. The tables and their indexes ship as two separate files, so
