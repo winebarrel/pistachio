@@ -1,0 +1,42 @@
+sort_by_deps: true
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status public.status NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+  CREATE VIEW public.active_posts AS SELECT id FROM public.posts;
+dump: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status status NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+  -- public.active_posts
+  CREATE OR REPLACE VIEW public.active_posts AS
+  SELECT posts.id
+     FROM posts;

@@ -347,6 +347,10 @@ Flags:
                                type/sequence as a separate file in the specified
                                directory.
       --omit-schema            Omit schema name from the dump output.
+      --sort-by-deps           Order the dump output by object dependency
+                               instead of by name. Falls back to name order when
+                               the dependency graph has a cycle. No effect with
+                               --split.
       --no-read-only           Open the database connection read-write.
                                By default dump uses a read-only connection
                                ($PISTA_NO_READ_ONLY).
@@ -689,6 +693,16 @@ When schema is omitted in SQL files, `plan` and `apply` use the schema specified
 pista -n staging plan schema.sql   # schema-less SQL is treated as "staging"
 pista -n staging apply schema.sql
 ```
+
+### Sort by dependency
+
+By default the dump orders objects by name within each type. Use `--sort-by-deps` to order them by dependency instead, so each object comes after the objects it depends on. For example, a table is placed after the types it uses and after the tables its foreign keys reference.
+
+```bash
+pista dump --sort-by-deps
+```
+
+The output can then be loaded from top to bottom without forward references. If the dependency graph has a cycle, such as two tables with mutual foreign keys, the dump falls back to name order. The flag has no effect with `--split`, which writes each object to a separate file.
 
 ### Renaming objects
 

@@ -1,0 +1,26 @@
+# a_derived selects from z_base, so the dependency order is z_base before
+# a_derived. The default name order is the reverse (a_derived before z_base).
+sort_by_deps: true
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.z_base AS SELECT id FROM public.t;
+  CREATE VIEW public.a_derived AS SELECT id FROM public.z_base;
+dump: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+
+  -- public.z_base
+  CREATE OR REPLACE VIEW public.z_base AS
+  SELECT t.id
+     FROM t;
+
+  -- public.a_derived
+  CREATE OR REPLACE VIEW public.a_derived AS
+  SELECT z_base.id
+     FROM z_base;

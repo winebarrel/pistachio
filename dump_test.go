@@ -22,6 +22,7 @@ type dumpTestCase struct {
 	DumpPG17   string   `yaml:"dump_pg17,omitempty"`
 	DumpPG18   string   `yaml:"dump_pg18,omitempty"`
 	OmitSchema bool     `yaml:"omit_schema"`
+	SortByDeps bool     `yaml:"sort_by_deps"`
 	Include    []string `yaml:"include,omitempty"`
 	Exclude    []string `yaml:"exclude,omitempty"`
 	Enable     []string `yaml:"enable,omitempty"`
@@ -644,6 +645,157 @@ func TestDumpResult_Files_DuplicateFileNameCaseInsensitive(t *testing.T) {
 	assert.Len(t, files, 2)
 }
 
+func TestDumpResult_SortByDeps_NilMaps(t *testing.T) {
+	// A DumpResult built by hand may leave optional collections nil. With
+	// SortByDeps the dependency sort must still run over just the tables and
+	// order the referenced parent before the child.
+	newTable := func(name string) *model.Table {
+		tbl := &model.Table{
+			Schema:      "public",
+			Name:        name,
+			Columns:     orderedmap.New[string, *model.Column](),
+			Constraints: orderedmap.New[string, *model.Constraint](),
+			ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
+			Indexes:     orderedmap.New[string, *model.Index](),
+		}
+		tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+		return tbl
+	}
+
+	parent := newTable("parent")
+	child := newTable("child")
+	refSchema, refTable := "public", "parent"
+	child.ForeignKeys.Set("child_parent_fkey", &model.ForeignKey{
+		Constraint: model.Constraint{
+			Name:       "child_parent_fkey",
+			Definition: "FOREIGN KEY (id) REFERENCES parent(id)",
+			Validated:  true,
+		},
+		Schema:    "public",
+		Table:     "child",
+		RefSchema: &refSchema,
+		RefTable:  &refTable,
+	})
+
+	tables := orderedmap.New[string, *model.Table]()
+	// Insert child first so name order would emit it before parent; the
+	// dependency order must reverse that.
+	tables.Set("public.child", child)
+	tables.Set("public.parent", parent)
+
+	// Views/Enums/Domains/CompositeTypes/Sequences are left nil on purpose.
+	result := &pistachio.DumpResult{Tables: tables, SortByDeps: true}
+
+	s := result.String()
+	assert.Less(t,
+		strings.Index(s, "CREATE TABLE public.parent"),
+		strings.Index(s, "CREATE TABLE public.child"),
+		"referenced parent table comes before child")
+
+	// A DumpResult with every collection nil renders to an empty string.
+	assert.Empty(t, (&pistachio.DumpResult{SortByDeps: true}).String())
+}
+
+func TestDump_SortByDeps_SplitUnaffected(t *testing.T) {
+	// --split writes one file per object, which has no inter-object order, so
+	// SortByDeps must not change the Files() output.
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.posts (
+    id integer NOT NULL,
+    user_id integer,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);
+ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	def, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	sorted, err := client.Dump(ctx, &pistachio.DumpOptions{SortByDeps: true})
+	require.NoError(t, err)
+
+	assert.Equal(t, def.Files(), sorted.Files())
+}
+
+func TestDump_SortByDeps_TogglesOrder(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	// posts references users via FK, so the dependency order is users then
+	// posts. The default name order is the reverse (alphabetical).
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.posts (
+    id integer NOT NULL,
+    user_id integer,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);
+ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	def, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Less(t, strings.Index(def.String(), "public.posts"), strings.Index(def.String(), "public.users"),
+		"default dump is in name order: posts before users")
+
+	sorted, err := client.Dump(ctx, &pistachio.DumpOptions{SortByDeps: true})
+	require.NoError(t, err)
+	assert.Less(t, strings.Index(sorted.String(), "public.users"), strings.Index(sorted.String(), "public.posts"),
+		"dependency order puts the referenced users before posts")
+}
+
+func TestDump_SortByDeps_OmitSchema(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	// With --omit-schema the objects are schema-stripped before rendering, but
+	// the dependency order is still computed from the schema-qualified graph, so
+	// the FK from posts to users must still be honored.
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.posts (
+    id integer NOT NULL,
+    user_id integer,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);
+ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{SortByDeps: true, OmitSchema: true})
+	require.NoError(t, err)
+	s := got.String()
+	assert.NotContains(t, s, "public.")
+	assert.Less(t, strings.Index(s, "CREATE TABLE users"), strings.Index(s, "CREATE TABLE posts"),
+		"dependency order is preserved with --omit-schema")
+}
+
 func TestDump(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -665,6 +817,7 @@ func TestDump(t *testing.T) {
 			})
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{
 				OmitSchema: tc.OmitSchema,
+				SortByDeps: tc.SortByDeps,
 				FilterOptions: pistachio.FilterOptions{
 					Include: tc.Include,
 					Exclude: tc.Exclude,

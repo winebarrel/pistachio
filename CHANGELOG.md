@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.24.0] - 2026-08-05
+
+* Add `dump --sort-by-deps` to order the dump by object dependency instead of by name. Each object is written after the objects it depends on, so a table follows the types it uses and the tables its foreign keys reference, and a view follows the tables and views it selects from. The output loads from top to bottom with `psql` without forward references. When the dependency graph has a cycle, such as two tables with mutual foreign keys, the dump falls back to name order. The flag has no effect with `--split`, which writes each object to a separate file.
+
 ## [1.23.1] - 2026-08-04
 
 * Warn when the parser ignores an unsupported statement. A schema file may hold a statement pistachio does not manage, such as `SET`, `GRANT`, or `CREATE EXTENSION`. Before, it was dropped from the desired schema without any notice. pistachio now prints `pistachio: ignored unsupported statement: <sql>` to standard error for each one. The statement is shown as a single canonical line, without the surrounding comments, and truncated when long. Mark a statement with `-- pista:execute` to keep it and silence the warning. A `BEGIN`/`COMMIT` warning points at `--with-tx` and `--try-tx`.
