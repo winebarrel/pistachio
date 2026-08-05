@@ -24,3 +24,21 @@ dump: |
   CREATE OR REPLACE VIEW public.a_derived AS
   SELECT z_base.id
      FROM z_base;
+dump_pg16: &dump_pg16plus |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+
+  -- public.z_base
+  CREATE OR REPLACE VIEW public.z_base AS
+  SELECT id
+     FROM t;
+
+  -- public.a_derived
+  CREATE OR REPLACE VIEW public.a_derived AS
+  SELECT id
+     FROM z_base;
+dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus
