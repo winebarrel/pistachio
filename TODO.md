@@ -514,19 +514,6 @@ Workaround: write the call unqualified.
 
 Origin: found while adding `-- pista:execute-first`, 2026-07-31.
 
-## `dump` output is not ordered by dependency
-
-Objects are emitted in catalog order, which is `nspname, relname`. Nothing
-sorts a parent before the table that needs it, so a dump reloads only when
-the names happen to sort that way. Three cases hit it: a partition whose
-parent sorts later (`Odd Child` before `Odd Parent`), an `INHERITS` child in
-the same position, and a foreign key, which is emitted as an `ALTER TABLE ...
-ADD CONSTRAINT` directly after its own table and so can precede the table it
-references. `plan` and `apply` already order statements through `toposort`;
-`dump` does not call it.
-
-Origin: bug audit, 2026-07-31.
-
 ## `dump` drops `PARTITION BY` from a sub-partitioned partition
 
 `model.Table.SQL` returns right after the `PARTITION OF ... FOR VALUES`
