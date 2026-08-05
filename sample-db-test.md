@@ -94,13 +94,17 @@ the SHA in the Makefile, and re-run `make test-samples`.
 | demodb | bookings | [postgrespro/demodb](https://github.com/postgrespro/demodb) |
 | musicbrainz | musicbrainz | [metabrainz/musicbrainz-server](https://github.com/metabrainz/musicbrainz-server) |
 | znuny | znuny | [znuny/Znuny](https://github.com/znuny/Znuny) |
+| hive | hive | [apache/hive](https://github.com/apache/hive) |
+| ranger | ranger | [apache/ranger](https://github.com/apache/ranger) |
+| ambari | ambari | [apache/ambari](https://github.com/apache/ambari) |
+| ovirt | ovirt | [oVirt/ovirt-engine](https://github.com/oVirt/ovirt-engine) |
 | gitlab | gitlab, gitlab_partitions_static, gitlab_partitions_dynamic | [gitlabhq/gitlabhq](https://github.com/gitlabhq/gitlabhq) |
 
 ## Coverage
 
-Object counts of the loaded schemas, as of 2026-08-04 on PostgreSQL 15.18
-(16.13 for icingadb, rt, znuny, and gitlab). "Constraints" excludes foreign
-keys;
+Object counts of the loaded schemas, as of 2026-08-05 on PostgreSQL 15.18
+(16.13 for icingadb, rt, znuny, gitlab, hive, ranger, ambari, and ovirt).
+"Constraints" excludes foreign keys;
 "Types" counts enums and domains. All counts are limited to the schemas the
 sample is checked with, and exclude what an extension owns: the two views
 `pg_stat_statements` adds to sourcegraph's schema are not sourcegraph's schema
@@ -136,10 +140,14 @@ and pistachio does not read them either.
 | demodb | 9 | 45 | 15 | 8 | 21 | 3 | 0 |
 | musicbrainz | 374 | 2,469 | 907 | 770 | 1,032 | 10 | 7 |
 | znuny | 126 | 1,103 | 326 | 286 | 190 | 0 | 0 |
+| hive | 84 | 546 | 141 | 55 | 91 | 0 | 0 |
+| ranger | 85 | 889 | 305 | 213 | 130 | 1 | 0 |
+| ambari | 113 | 693 | 172 | 124 | 140 | 0 | 0 |
+| ovirt | 152 | 1,386 | 377 | 165 | 167 | 1 | 0 |
 | gitlab | 1,422 | 14,293 | 6,353 | 2,325 | 3,949 | 15 | 0 |
-| **Total** | **2,679** | **23,478** | **9,166** | **4,019** | **6,077** | **82** | **35** |
+| **Total** | **3,113** | **26,992** | **10,161** | **4,576** | **6,605** | **84** | **35** |
 
-The 29 dumps come to about 51,000 lines of SQL, and gitlab is 27,600 of them.
+The 33 dumps come to about 59,000 lines of SQL, and gitlab is 27,600 of them.
 It is over half of the tables, columns, indexes, foreign keys, and constraints,
 and musicbrainz is the largest of what remains. gitlab is also why
 `clean-schema` drops tables a batch at a time rather than cascading through
@@ -158,8 +166,12 @@ over an expression and a gin index over `to_tsvector` (rt), columns typed by a
 contrib extension (sourcegraph, with 49 `citext` columns, and six extensions
 installed at once), materialized views (adventureworks, pagila), tsvector
 columns (dvdrental, pagila), a non-default
-collation (musicbrainz), an index-heavy schema of 192 indexes over 64 tables
-(mediawiki), partitioned tables at scale (gitlab declares 100 of them and
+collation (musicbrainz), composite types (ovirt declares 10 of them, more than
+any other sample, and sourcegraph 2), standalone sequences rather than serial
+columns (ranger, whose 85 tables come with 84 of them), a schema written
+entirely in quoted mixed-case identifiers, so every name is case-sensitive
+(hive's 84 tables, where chinook has 11), an index-heavy schema of 192 indexes
+over 64 tables (mediawiki), partitioned tables at scale (gitlab declares 100 of them and
 attaches 2,054 partitions, all of which live in schemas of their own), and
 foreign keys that cross a schema boundary: 20 of adventureworks' 90 span its
 five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into `mimiciv_hosp`,
@@ -178,11 +190,16 @@ strip only what is irrelevant to a schema round trip:
   `cd` schema itself.
 - **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
   constraint, and the `\copy` lines are dropped.
+- **hive**: the dump belongs in a schema of its own like the group below, but
+  it is `pg_dump` output that sets `search_path` to `public` itself, which
+  overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
+  the `hive` schema.
 - **imdb**: the schema and its foreign key indexes ship as two files, so
   `schema.sql` and `fkindexes.sql` are concatenated.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
-  **gitlab**: these dumps name no schema at all, so whichever schema comes first
-  in `search_path` gets them. Each is loaded into a schema of its own instead of
+  **ranger**, **ambari**, **ovirt**, **gitlab**: these dumps name no schema at
+  all, so whichever schema comes first in `search_path` gets them. Each is
+  loaded into a schema of its own instead of
   `public`, so that `make schema`, which puts every sample in one database, does
   not stack them on top of the other public samples (mediawiki and pagila both
   define `actor` and `category`). gitlab creates `gitlab_partitions_static` and
@@ -198,6 +215,10 @@ strip only what is irrelevant to a schema round trip:
   concatenated in dependency order (extensions and collation, search
   configuration, types, tables, functions, then keys, indexes, constraints, and
   views).
+- **ranger**: the dump drops every object it is about to create with
+  `IF EXISTS` and commits outside a transaction, which floods a fresh database
+  with a few hundred NOTICEs and warnings, so `client_min_messages` is raised to
+  `error` for the load.
 - **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.
