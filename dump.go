@@ -229,34 +229,25 @@ func (r *DumpResult) dependencyOrderedSQL() (string, bool) {
 		pos[name] = i
 	}
 
-	// One appender per object type, each zipping its map into items using pos.
-	appenders := []func([]dumpItem) ([]dumpItem, bool){
-		func(it []dumpItem) ([]dumpItem, bool) {
-			return appendDumpItems(it, r.Enums, r.enums().CollectValues(), pos, model.EnumToSQL)
-		},
-		func(it []dumpItem) ([]dumpItem, bool) {
-			return appendDumpItems(it, r.Domains, r.domains().CollectValues(), pos, model.DomainToSQL)
-		},
-		func(it []dumpItem) ([]dumpItem, bool) {
-			return appendDumpItems(it, r.CompositeTypes, r.compositeTypes().CollectValues(), pos, model.CompositeTypeToSQL)
-		},
-		func(it []dumpItem) ([]dumpItem, bool) {
-			return appendDumpItems(it, r.Sequences, r.sequences().CollectValues(), pos, model.SequenceToSQL)
-		},
-		func(it []dumpItem) ([]dumpItem, bool) {
-			return appendDumpItems(it, r.Tables, r.tables().CollectValues(), pos, model.TableToSQL)
-		},
-		func(it []dumpItem) ([]dumpItem, bool) {
-			return appendDumpItems(it, r.Views, r.views().CollectValues(), pos, model.ViewToSQL)
-		},
-	}
-
 	var items []dumpItem
-	for _, appender := range appenders {
-		var ok bool
-		if items, ok = appender(items); !ok {
-			return "", false
-		}
+	var ok bool
+	if items, ok = appendDumpItems(items, r.Enums, r.enums().CollectValues(), pos, model.EnumToSQL); !ok {
+		return "", false
+	}
+	if items, ok = appendDumpItems(items, r.Domains, r.domains().CollectValues(), pos, model.DomainToSQL); !ok {
+		return "", false
+	}
+	if items, ok = appendDumpItems(items, r.CompositeTypes, r.compositeTypes().CollectValues(), pos, model.CompositeTypeToSQL); !ok {
+		return "", false
+	}
+	if items, ok = appendDumpItems(items, r.Sequences, r.sequences().CollectValues(), pos, model.SequenceToSQL); !ok {
+		return "", false
+	}
+	if items, ok = appendDumpItems(items, r.Tables, r.tables().CollectValues(), pos, model.TableToSQL); !ok {
+		return "", false
+	}
+	if items, ok = appendDumpItems(items, r.Views, r.views().CollectValues(), pos, model.ViewToSQL); !ok {
+		return "", false
 	}
 
 	sort.SliceStable(items, func(i, j int) bool {
