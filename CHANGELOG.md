@@ -2,7 +2,7 @@
 
 ## [1.24.0] - 2026-08-05
 
-* Add `dump --sort-by-deps` to order the dump by object dependency instead of by name. Each object is written after the objects it depends on, so a table follows the types it uses and the tables its foreign keys reference, and a view follows the tables and views it selects from. The output loads from top to bottom with `psql` without forward references. When the dependency graph has a cycle, such as two tables with mutual foreign keys, the dump falls back to name order. The flag has no effect with `--split`, which writes each object to a separate file.
+* Add `dump --sort-by-deps` to order the dump by object dependency instead of by name. Each object is written after the objects it depends on, so a table follows the types it uses and the tables its foreign keys reference, and a view follows the tables and views it selects from. The output loads from top to bottom with `psql` without forward references. When the dependency graph has a cycle, such as two tables with mutual foreign keys, the dump cannot be ordered and errors. The flag cannot be combined with `--split`, which writes each object to a separate file.
 
 ## [1.23.1] - 2026-08-04
 

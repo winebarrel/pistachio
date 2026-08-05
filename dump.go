@@ -14,9 +14,9 @@ import (
 
 type DumpOptions struct {
 	FilterOptions
-	Split      string `help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
+	Split      string `xor:"split-sort-by-deps" help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
-	SortByDeps bool   `help:"Order the dump output by object dependency instead of by name. Falls back to name order when the dependency graph has a cycle. No effect with --split."`
+	SortByDeps bool   `xor:"split-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle. Cannot be used with --split."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
 }
 
@@ -207,8 +207,10 @@ type dumpItem struct {
 
 // dependencyOrderedSQL renders all objects in a single dependency order
 // (dependencies first) rather than the category grouping used by
-// formatSchemaSQL. It returns ok=false when the dependency graph cannot be
-// sorted (e.g. a cycle), so the caller can fall back to the name order.
+// formatSchemaSQL. It returns ok=false when the graph cannot be sorted. Client.Dump
+// validates the same graph up front and errors on a cycle, so the ok=false path
+// is not reached through the CLI; a directly built DumpResult still degrades to
+// the name order rather than panicking.
 //
 // The topological order is computed from the original schema-qualified maps so
 // foreign-key and other cross-object references resolve correctly, then applied
@@ -227,13 +229,35 @@ func (r *DumpResult) dependencyOrderedSQL() (string, bool) {
 		pos[name] = i
 	}
 
+	// One appender per object type, each zipping its map into items using pos.
+	appenders := []func([]dumpItem) ([]dumpItem, bool){
+		func(it []dumpItem) ([]dumpItem, bool) {
+			return appendDumpItems(it, r.Enums, r.enums().CollectValues(), pos, model.EnumToSQL)
+		},
+		func(it []dumpItem) ([]dumpItem, bool) {
+			return appendDumpItems(it, r.Domains, r.domains().CollectValues(), pos, model.DomainToSQL)
+		},
+		func(it []dumpItem) ([]dumpItem, bool) {
+			return appendDumpItems(it, r.CompositeTypes, r.compositeTypes().CollectValues(), pos, model.CompositeTypeToSQL)
+		},
+		func(it []dumpItem) ([]dumpItem, bool) {
+			return appendDumpItems(it, r.Sequences, r.sequences().CollectValues(), pos, model.SequenceToSQL)
+		},
+		func(it []dumpItem) ([]dumpItem, bool) {
+			return appendDumpItems(it, r.Tables, r.tables().CollectValues(), pos, model.TableToSQL)
+		},
+		func(it []dumpItem) ([]dumpItem, bool) {
+			return appendDumpItems(it, r.Views, r.views().CollectValues(), pos, model.ViewToSQL)
+		},
+	}
+
 	var items []dumpItem
-	items = appendDumpItems(items, r.Enums, r.enums().CollectValues(), pos, model.EnumToSQL)
-	items = appendDumpItems(items, r.Domains, r.domains().CollectValues(), pos, model.DomainToSQL)
-	items = appendDumpItems(items, r.CompositeTypes, r.compositeTypes().CollectValues(), pos, model.CompositeTypeToSQL)
-	items = appendDumpItems(items, r.Sequences, r.sequences().CollectValues(), pos, model.SequenceToSQL)
-	items = appendDumpItems(items, r.Tables, r.tables().CollectValues(), pos, model.TableToSQL)
-	items = appendDumpItems(items, r.Views, r.views().CollectValues(), pos, model.ViewToSQL)
+	for _, appender := range appenders {
+		var ok bool
+		if items, ok = appender(items); !ok {
+			return "", false
+		}
+	}
 
 	sort.SliceStable(items, func(i, j int) bool {
 		return items[i].pos < items[j].pos
@@ -251,22 +275,30 @@ func (r *DumpResult) dependencyOrderedSQL() (string, bool) {
 // the rendered SQL). The helper methods preserve iteration order and count, so
 // the i-th key in orig corresponds to the i-th value in adjusted, and pos holds
 // every key because OrderFromSchema saw the same maps.
+//
+// Those invariants hold today, but rather than trust them blindly it returns
+// ok=false when a key is missing from pos or the counts disagree, so the caller
+// falls back to the name order instead of mis-sorting or panicking.
 func appendDumpItems[V any](
 	items []dumpItem,
 	orig *orderedmap.Map[string, V],
 	adjusted []V,
 	pos map[string]int,
 	toSQL func(V) string,
-) []dumpItem {
+) ([]dumpItem, bool) {
 	if orig == nil {
-		return items
+		return items, true
 	}
 	i := 0
 	for k := range orig.Keys() {
-		items = append(items, dumpItem{pos: pos[k], sql: toSQL(adjusted[i])})
+		p, ok := pos[k]
+		if !ok || i >= len(adjusted) {
+			return items, false
+		}
+		items = append(items, dumpItem{pos: p, sql: toSQL(adjusted[i])})
 		i++
 	}
-	return items
+	return items, true
 }
 
 // orEmpty returns an empty map when m is nil, so callers can pass optional
@@ -431,6 +463,17 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	filteredDomains := options.filterDomains(client.remapDomainSchemas(domains))
 	filteredCompositeTypes := options.filterCompositeTypes(client.remapCompositeTypeSchemas(compositeTypes))
 	filteredSequences := options.filterSequences(client.remapSequenceSchemas(sequences))
+
+	// Validate the dependency order up front so a cycle is a hard error rather
+	// than a silent fall back to name order. String() renders in this order.
+	if options.SortByDeps {
+		if _, err := toposort.OrderFromSchema(
+			filteredEnums, filteredDomains, filteredCompositeTypes,
+			filteredTables, filteredViews, filteredSequences,
+		); err != nil {
+			return nil, fmt.Errorf("failed to order dump by dependency: %w", err)
+		}
+	}
 
 	return &DumpResult{
 		Tables:         filteredTables,

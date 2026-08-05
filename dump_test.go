@@ -696,36 +696,80 @@ func TestDumpResult_SortByDeps_NilMaps(t *testing.T) {
 	assert.Empty(t, (&pistachio.DumpResult{SortByDeps: true}).String())
 }
 
-func TestDump_SortByDeps_SplitUnaffected(t *testing.T) {
-	// --split writes one file per object, which has no inter-object order, so
-	// SortByDeps must not change the Files() output.
+func TestDumpResult_SortByDeps_CycleFallsBackInString(t *testing.T) {
+	// Client.Dump rejects a cyclic schema, but String() has no error channel.
+	// A DumpResult built by hand with a cycle degrades to name order rather
+	// than panicking or emitting a partial order.
+	newTable := func(name string, refTable string) *model.Table {
+		tbl := &model.Table{
+			Schema:      "public",
+			Name:        name,
+			Columns:     orderedmap.New[string, *model.Column](),
+			Constraints: orderedmap.New[string, *model.Constraint](),
+			ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
+			Indexes:     orderedmap.New[string, *model.Index](),
+		}
+		tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+		refSchema := "public"
+		ref := refTable
+		tbl.ForeignKeys.Set(name+"_fkey", &model.ForeignKey{
+			Constraint: model.Constraint{
+				Name:       name + "_fkey",
+				Definition: "FOREIGN KEY (id) REFERENCES " + refTable + "(id)",
+				Validated:  true,
+			},
+			Schema:    "public",
+			Table:     name,
+			RefSchema: &refSchema,
+			RefTable:  &ref,
+		})
+		return tbl
+	}
+
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("public.a", newTable("a", "b"))
+	tables.Set("public.b", newTable("b", "a")) // a <-> b cycle
+
+	result := &pistachio.DumpResult{Tables: tables, SortByDeps: true}
+	s := result.String()
+
+	// Fallback is name order: a before b.
+	assert.Less(t, strings.Index(s, "CREATE TABLE public.a"), strings.Index(s, "CREATE TABLE public.b"))
+}
+
+func TestDump_SortByDeps_CycleErrors(t *testing.T) {
+	// Mutual foreign keys form a dependency cycle. --sort-by-deps cannot order
+	// the objects, so Dump returns an error rather than falling back.
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
 
 	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.users (
+CREATE TABLE public.a (
     id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
+    b_id integer,
+    CONSTRAINT a_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.posts (
+CREATE TABLE public.b (
     id integer NOT NULL,
-    user_id integer,
-    CONSTRAINT posts_pkey PRIMARY KEY (id)
+    a_id integer,
+    CONSTRAINT b_pkey PRIMARY KEY (id)
 );
-ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);`)
+ALTER TABLE ONLY public.a ADD CONSTRAINT a_b_fkey FOREIGN KEY (b_id) REFERENCES b(id);
+ALTER TABLE ONLY public.b ADD CONSTRAINT b_a_fkey FOREIGN KEY (a_id) REFERENCES a(id);`)
 
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	def, err := client.Dump(ctx, &pistachio.DumpOptions{})
-	require.NoError(t, err)
-	sorted, err := client.Dump(ctx, &pistachio.DumpOptions{SortByDeps: true})
-	require.NoError(t, err)
+	_, err := client.Dump(ctx, &pistachio.DumpOptions{SortByDeps: true})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to order dump by dependency")
 
-	assert.Equal(t, def.Files(), sorted.Files())
+	// Without --sort-by-deps the same schema dumps fine in name order.
+	_, err = client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
 }
 
 func TestDump_SortByDeps_TogglesOrder(t *testing.T) {

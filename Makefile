@@ -24,7 +24,7 @@ vet:
 	go vet ./...
 
 .PHONY: test
-test: clean-schema
+test:
 	go test -p 1 -v ./... $(TEST_OPTS)
 
 .PHONY: lint

@@ -54,7 +54,9 @@ else
 fi
 
 # --- Step 4: default name-ordered dump fails to restore with psql ---
-# This confirms --sort-by-deps is what makes the dump replayable here.
+# This confirms --sort-by-deps is what makes the dump replayable here. It pins a
+# negative: if the default dump order is ever made dependency-aware, this step
+# goes red without anything being broken, and should be removed or relaxed.
 step "04 default dump fails psql restore (forward reference)"
 setup_db "$DATA/init.sql"
 if ! default_output=$("$PISTA" dump 2>&1); then

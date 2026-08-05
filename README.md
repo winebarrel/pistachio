@@ -348,9 +348,8 @@ Flags:
                                directory.
       --omit-schema            Omit schema name from the dump output.
       --sort-by-deps           Order the dump output by object dependency
-                               instead of by name. Falls back to name order when
-                               the dependency graph has a cycle. No effect with
-                               --split.
+                               instead of by name. Errors when the dependency
+                               graph has a cycle. Cannot be used with --split.
       --no-read-only           Open the database connection read-write.
                                By default dump uses a read-only connection
                                ($PISTA_NO_READ_ONLY).
@@ -702,7 +701,7 @@ By default the dump orders objects by name within each type. Use `--sort-by-deps
 pista dump --sort-by-deps
 ```
 
-The output can then be loaded from top to bottom without forward references. If the dependency graph has a cycle, such as two tables with mutual foreign keys, the dump falls back to name order. The flag has no effect with `--split`, which writes each object to a separate file.
+The output can then be loaded from top to bottom without forward references. If the dependency graph has a cycle, such as two tables with mutual foreign keys, the dump cannot be ordered and errors. The flag cannot be combined with `--split`, which writes each object to a separate file with no inter-file order.
 
 ### Renaming objects
 
