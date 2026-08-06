@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id),
+      CONSTRAINT posts_user_id CHECK (user_id > 0),
+      CONSTRAINT posts_user_id FOREIGN KEY (user_id) REFERENCES public.users (id)
+  );
+error: 'duplicate constraint name: posts_user_id on public.posts (CHECK constraint and FOREIGN KEY constraint)'

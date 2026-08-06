@@ -518,7 +518,25 @@ CREATE VIEW x AS SELECT 1 AS n;`,
 CREATE TABLE t2 (id integer);
 CREATE INDEX x ON t1 (id);
 CREATE INDEX x ON t2 (id);`,
-			want: "duplicate index name: public.x",
+			want: "duplicate index: public.x",
+		},
+		{
+			name: "primary key constraint name reused on another table",
+			sql: `CREATE TABLE t1 (id integer, CONSTRAINT x PRIMARY KEY (id));
+CREATE TABLE t2 (id integer, CONSTRAINT x PRIMARY KEY (id));`,
+			want: "duplicate PRIMARY KEY constraint: public.x",
+		},
+		{
+			name: "check and foreign key constraint sharing a name on one table",
+			sql: `CREATE TABLE p (id integer, CONSTRAINT p_pkey PRIMARY KEY (id));
+CREATE TABLE t (id integer, CONSTRAINT c CHECK (id > 0), CONSTRAINT c FOREIGN KEY (id) REFERENCES p (id));`,
+			want: "duplicate constraint name: c on public.t (CHECK constraint and FOREIGN KEY constraint)",
+		},
+		{
+			name: "primary key and foreign key constraint sharing a name on one table",
+			sql: `CREATE TABLE p (id integer, CONSTRAINT p_pkey PRIMARY KEY (id));
+CREATE TABLE t (id integer, CONSTRAINT y PRIMARY KEY (id), CONSTRAINT y FOREIGN KEY (id) REFERENCES p (id));`,
+			want: "duplicate constraint name: y on public.t (PRIMARY KEY constraint and FOREIGN KEY constraint)",
 		},
 		{
 			name: "table and domain",
@@ -624,6 +642,20 @@ CREATE VIEW s2.x AS SELECT 1 AS n;`,
 			name: "names differing only in case",
 			sql: `CREATE TABLE "X" (id integer);
 CREATE VIEW x AS SELECT 1 AS n;`,
+		},
+		{
+			// PostgreSQL names these t1_id_idx and t2_id_idx.
+			name: "unnamed indexes on two tables",
+			sql: `CREATE TABLE t1 (id integer);
+CREATE TABLE t2 (id integer);
+CREATE INDEX ON t1 (id);
+CREATE INDEX ON t2 (id);`,
+		},
+		{
+			// pg_constraint scopes a constraint name to its relation.
+			name: "one constraint name on two tables",
+			sql: `CREATE TABLE t1 (id integer, CONSTRAINT c CHECK (id > 0));
+CREATE TABLE t2 (id integer, CONSTRAINT c CHECK (id > 0));`,
 		},
 	}
 

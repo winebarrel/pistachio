@@ -198,9 +198,12 @@ func walkExprColumnRefs(node *pg_query.Node) []string {
 }
 
 // namespace tracks the names registered in one PostgreSQL catalog, mapping
-// each name to the kind of object that claimed it.
+// each name to the kind of object that claimed it. scope names the relation
+// the names belong to, for a catalog that keys them per relation rather than
+// per schema; it is empty otherwise.
 type namespace struct {
 	catalog string
+	scope   string
 	names   map[string]string
 }
 
@@ -208,15 +211,24 @@ func newNamespace(catalog string) *namespace {
 	return &namespace{catalog: catalog, names: map[string]string{}}
 }
 
+func newRelationScopedNamespace(catalog, relation string) *namespace {
+	return &namespace{catalog: catalog, scope: relation, names: map[string]string{}}
+}
+
 func (ns *namespace) add(name, kind string) error {
 	if prev, ok := ns.names[name]; ok {
+		on := ""
+		if ns.scope != "" {
+			on = " on " + ns.scope
+		}
 		// Two objects of the same kind reach here when their own map is keyed
 		// by something narrower than the catalog: index names are unique per
-		// schema in PostgreSQL, but pistachio keys them per table.
+		// schema in PostgreSQL, but pistachio keys them per table. The message
+		// matches setUnique's, which reports the same clash within one table.
 		if prev == kind {
-			return fmt.Errorf("duplicate %s name: %s", kind, name)
+			return fmt.Errorf("duplicate %s: %s%s", kind, name, on)
 		}
-		return fmt.Errorf("duplicate %s name: %s (%s and %s)", ns.catalog, name, prev, kind)
+		return fmt.Errorf("duplicate %s name: %s%s (%s and %s)", ns.catalog, name, on, prev, kind)
 	}
 	ns.names[name] = kind
 	return nil
@@ -235,27 +247,39 @@ func (ns *namespace) add(name, kind string) error {
 // pg_type holds a row for every table, view, materialized view and composite
 // type, plus domains and enums. Sequences and indexes have no type entry.
 //
+// pg_constraint keys a constraint name to its relation rather than its schema,
+// so each table gets a namespace of its own. Every constraint kind shares it,
+// including the CHECK and foreign-key names pg_class does not see. Constraints
+// and ForeignKeys are separate maps, so setUnique compares a name only against
+// the constraints of the same kind.
+//
+// An index written without a name is skipped: PostgreSQL picks the name at
+// create time and pistachio cannot know it.
+//
 // Ignored objects are checked as well, since an unmanaged relation still
 // occupies its name in the database. All violations are aggregated via
-// errors.Join, one line per name.
+// errors.Join, one line per object.
 func validateNamespaces(r *ParseResult) error {
 	var errs []error
 	relations := newNamespace("relation")
 	types := newNamespace("type")
-	// A table and a composite type clash in both catalogs; report once.
-	reported := map[string]bool{}
 
 	add := func(name, kind string, nss ...*namespace) {
 		for _, ns := range nss {
-			if err := ns.add(name, kind); err != nil && !reported[name] {
-				reported[name] = true
+			if err := ns.add(name, kind); err != nil {
+				// A table and a composite type clash in both catalogs; the
+				// first rejection is the whole report for this object.
 				errs = append(errs, err)
+				return
 			}
 		}
 	}
 
 	addIndexes := func(indexes *orderedmap.Map[string, *model.Index]) {
 		for _, idx := range indexes.CollectValues() {
+			if idx.Name == "" {
+				continue
+			}
 			add(model.Ident(idx.Schema, idx.Name), "index", relations)
 		}
 	}
@@ -263,11 +287,16 @@ func validateNamespaces(r *ParseResult) error {
 	for fqtn, t := range r.Tables.All() {
 		add(fqtn, "table", relations, types)
 		addIndexes(t.Indexes)
+		constraints := newRelationScopedNamespace("constraint", fqtn)
 		for _, con := range t.Constraints.CollectValues() {
+			add(model.Ident(con.Name), constraintKindLabel(con.Type), constraints)
 			if !con.Type.IsPrimaryKeyConstraint() && !con.Type.IsUniqueConstraint() && !con.Type.IsExclusionConstraint() {
 				continue
 			}
 			add(model.Ident(t.Schema, con.Name), constraintKindLabel(con.Type), relations)
+		}
+		for _, fk := range t.ForeignKeys.CollectValues() {
+			add(model.Ident(fk.Name), constraintKindLabel(fk.Type), constraints)
 		}
 	}
 
