@@ -33,6 +33,28 @@ jobs:
             exit "$status"
           fi
 
+  keywords:
+    runs-on: ubuntu-latest
+    # model/testdata/keywords.txt is generated from the kwlist.h bundled with
+    # pg_query_go. Regenerate it and fail if the checked-in copy differs, which
+    # is what happens when pg_query_go is upgraded without running
+    # `make keywords`.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # gen-keywords.sh reads kwlist.h out of the module cache, so the module
+      # has to be on disk before it runs.
+      - run: go mod download github.com/pganalyze/pg_query_go/v6
+      - run: make keywords
+      - name: Check for a stale keyword corpus
+        run: |
+          if ! git diff --exit-code -- model/testdata/keywords.txt; then
+            echo "Error: model/testdata/keywords.txt is out of date; run 'make keywords' and commit the result." >&2
+            exit 1
+          fi
+
   windows:
     runs-on: windows-latest
     # cgo (libpg_query) builds with the mingw-w64 gcc bundled in the
