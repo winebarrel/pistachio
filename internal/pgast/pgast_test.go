@@ -126,6 +126,17 @@ func TestWalkExprColumnRefs_CollateClause(t *testing.T) {
 	assert.Equal(t, []string{"a"}, collectRefs(t, `CHECK (((a COLLATE "C") > 'x'))`))
 }
 
+func TestWalkExprColumnRefs_NamedArgExpr(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((f(x => a, y => 1) > 0))"))
+}
+
+func TestWalkExprColumnRefs_XmlExpr(t *testing.T) {
+	// The element name lives in XmlExpr.Name, so only the column comes back.
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((xmlelement(name e, a) IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((xmlelement(name e, xmlattributes(a AS x)) IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((xmlforest(a AS x) IS NOT NULL))"))
+}
+
 func TestWalkExprColumnRefs_NilSafe(t *testing.T) {
 	pgast.WalkExprColumnRefs(nil, func(s *pg_query.String) {
 		t.Fatal("visitor should not be invoked on nil node")

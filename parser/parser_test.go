@@ -889,6 +889,16 @@ CREATE TABLE public.t (a integer, b integer, FOREIGN KEY (a, b) REFERENCES publi
 			conName: "t_a_check",
 		},
 		{
+			name:    "CHECK reaching its column through a named argument",
+			sql:     `CREATE TABLE public.t (a integer, CHECK (f(x => a, y => 1) > 0));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK reaching its column through xmlelement",
+			sql:     `CREATE TABLE public.t (a text, CHECK (xmlelement(name e, a) IS NOT NULL));`,
+			conName: "t_a_check",
+		},
+		{
 			name:    "CHECK on a two-column row constructor",
 			sql:     `CREATE TABLE public.t (a integer, b integer, CHECK ((a, b) IS NOT NULL));`,
 			conName: "t_check",
