@@ -864,6 +864,36 @@ CREATE TABLE public.t (a integer, b integer, FOREIGN KEY (a, b) REFERENCES publi
 			conName: "t_expr_excl",
 		},
 		{
+			name:    "CHECK reaching its column through a subscript",
+			sql:     `CREATE TABLE public.t (a integer[], CHECK (a[1] > 0));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK reaching its column through GREATEST",
+			sql:     `CREATE TABLE public.t (a integer, CHECK (greatest(a, 1) > 0));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK reaching its column through a row constructor",
+			sql:     `CREATE TABLE public.t (a integer, CHECK (ROW(a) IS NOT NULL));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK reaching its column through IS TRUE",
+			sql:     `CREATE TABLE public.t (a boolean, CHECK (a IS TRUE));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK reaching its column through COLLATE",
+			sql:     `CREATE TABLE public.t (a text, CHECK ((a COLLATE "C") > 'x'));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK on a two-column row constructor",
+			sql:     `CREATE TABLE public.t (a integer, b integer, CHECK ((a, b) IS NOT NULL));`,
+			conName: "t_check",
+		},
+		{
 			name: "ALTER TABLE ADD FOREIGN KEY",
 			sql: `CREATE TABLE public.p (a integer, CONSTRAINT p_pkey PRIMARY KEY (a));
 CREATE TABLE public.t (a integer, b integer);

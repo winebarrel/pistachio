@@ -101,6 +101,31 @@ func TestWalkExprColumnRefs_InList(t *testing.T) {
 		"CHECK ((status IN ('a', 'b')))"))
 }
 
+// PostgreSQL names a CHECK constraint after the column its expression
+// references, so a node kind the walker skips costs the constraint its column
+// name. Each of these forms is named t_a_check by the server.
+func TestWalkExprColumnRefs_Indirection(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((a[1] > 0))"))
+}
+
+func TestWalkExprColumnRefs_MinMaxExpr(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((GREATEST(a, 1) > 0))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((LEAST(a, 1) > 0))"))
+}
+
+func TestWalkExprColumnRefs_RowExpr(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((ROW(a) IS NOT NULL))"))
+	assert.Equal(t, []string{"a", "b"}, collectRefs(t, "CHECK (((a, b) IS NOT NULL))"))
+}
+
+func TestWalkExprColumnRefs_BooleanTest(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((a IS TRUE))"))
+}
+
+func TestWalkExprColumnRefs_CollateClause(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, `CHECK (((a COLLATE "C") > 'x'))`))
+}
+
 func TestWalkExprColumnRefs_NilSafe(t *testing.T) {
 	pgast.WalkExprColumnRefs(nil, func(s *pg_query.String) {
 		t.Fatal("visitor should not be invoked on nil node")
