@@ -549,3 +549,40 @@ desired default is any `nextval` would also swallow a genuine change to a
 different sequence.
 
 Origin: bug audit, 2026-07-31.
+
+## Perpetual drift on a view defined with `SELECT *`
+
+A view whose desired definition uses `SELECT *` or `t.*` is re-emitted on
+every plan. `pg_get_viewdef` returns the star expanded into an explicit
+column list, while the desired side keeps the star, so `equalViewDef`
+(`diff/views.go`) never matches. `canCreateOrReplaceView` reports the output
+columns as undeterminable for the same reason, which routes the change
+through `DROP`+`CREATE`: under the default drop policy the plan prints
+`-- skipped: DROP VIEW ...` and then `-- No changes`, and with the view drop
+allowed every apply drops and recreates the view, taking its privileges and
+dependent views with it. Applies to plain views, `t.*`, and a star over a
+subquery alike.
+
+Expanding the star on the desired side needs the column list of every FROM
+item. `DiffViews` receives only the view maps, so the table columns would
+have to be threaded in, and `model.View` carries a definition rather than
+columns, so a star over another view has to be resolved recursively from
+that definition. Since `equalViewDef` already strips table qualification,
+the expansion only has to produce the column names in the right order, not
+the qualified form the catalog prints.
+
+What the star should mean is a separate decision. PostgreSQL expands it at
+`CREATE` time and freezes the result, so adding a column to a base table
+leaves the view alone. Expanding against the desired tables makes a column
+addition re-emit `CREATE OR REPLACE VIEW` for every star view over that
+table; expanding against the catalog matches PostgreSQL but never
+propagates the new column.
+
+Faithful expansion also has to reproduce PostgreSQL's name resolution:
+`JOIN ... USING` and `NATURAL JOIN` yield the join column once,
+`FROM (...) s(a, b)` renames the subquery's columns through the alias, and
+function FROM items and `LATERAL` cannot be resolved from the desired
+schema at all.
+
+Workaround: write the column list explicitly. `pista dump` emits the
+expanded form.
