@@ -586,3 +586,37 @@ schema at all.
 
 Workaround: write the column list explicitly. `pista dump` emits the
 expanded form.
+
+## JSON constructors hide a column from the expression walker
+
+`WalkExprColumnRefs` (`internal/pgast`) enumerates the node kinds it walks,
+and the JSON constructors PostgreSQL 16 added are not among them. A `CHECK`
+that reaches its only column through one of them loses the column from its
+generated name: PostgreSQL names
+`CHECK (JSON_OBJECT('k': a) IS NOT NULL)` as `t_a_check`, pistachio as
+`t_check`. Against a database that already holds the table, that plans an
+`ADD CONSTRAINT` under pistachio's name next to a `DROP CONSTRAINT` for
+PostgreSQL's, on every run.
+
+The walker backs two other things, so the same expression breaks them as
+well. `validateColumnRefs` (`parser/validate.go`) misses a column that does
+not exist, and `rewriteColumnRefsInExpr` (`diff/rename.go`) leaves a column
+renamed with `-- pista:renamed-from` under its old name. One change to the
+walker covers all three.
+
+`JSON_OBJECT` alone needs `JsonObjectConstructor` -> `JsonKeyValue` ->
+`JsonValueExpr`, and stopping there leaves the same gap in
+`JsonArrayConstructor`, `JsonIsPredicate`, `JsonParseExpr`,
+`JsonScalarExpr` and `JsonSerializeExpr`. pg_query_go v6 carries 26 JSON
+node kinds in total.
+
+Walking every child node generically is not the answer: the visitor mutates
+what it visits so renames can rewrite it, and a generic walk reaches
+`FuncCall.Funcname`, the field names in `A_Indirection` and the strings in
+`TypeName`, where it would rewrite a function or field that happens to
+share a column's name.
+
+Verifying the expected names needs PostgreSQL 16, since the syntax does not
+parse on 15. `compose.yaml` takes `PG_VERSION`.
+
+Workaround: name the constraint explicitly.

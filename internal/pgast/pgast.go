@@ -119,5 +119,51 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 				WalkExprColumnRefs(w.Result, visit)
 			}
 		}
+	case *pg_query.Node_AIndirection:
+		// col[1], col[1:2], (col).field
+		WalkExprColumnRefs(n.AIndirection.Arg, visit)
+		for _, ind := range n.AIndirection.Indirection {
+			if idx := ind.GetAIndices(); idx != nil {
+				WalkExprColumnRefs(idx.Lidx, visit)
+				WalkExprColumnRefs(idx.Uidx, visit)
+			}
+		}
+	case *pg_query.Node_MinMaxExpr:
+		// GREATEST / LEAST
+		for _, arg := range n.MinMaxExpr.Args {
+			WalkExprColumnRefs(arg, visit)
+		}
+	case *pg_query.Node_RowExpr:
+		// ROW(col), (col1, col2)
+		for _, arg := range n.RowExpr.Args {
+			WalkExprColumnRefs(arg, visit)
+		}
+	case *pg_query.Node_BooleanTest:
+		// col IS TRUE / IS NOT FALSE / IS UNKNOWN
+		WalkExprColumnRefs(n.BooleanTest.Arg, visit)
+	case *pg_query.Node_CollateClause:
+		// col COLLATE "C"
+		WalkExprColumnRefs(n.CollateClause.Arg, visit)
+	case *pg_query.Node_NamedArgExpr:
+		// f(x => col). The argument name is a plain string, not a node.
+		WalkExprColumnRefs(n.NamedArgExpr.Arg, visit)
+	case *pg_query.Node_XmlExpr:
+		// xmlelement(name e, col), xmlconcat(col, ...). ArgNames holds the
+		// attribute names rather than columns, so it stays out.
+		for _, arg := range n.XmlExpr.NamedArgs {
+			// xmlattributes(col AS x) and xmlforest(col AS x) wrap each
+			// element in a ResTarget whose Name is the alias, not a column.
+			if rt := arg.GetResTarget(); rt != nil {
+				arg = rt.Val
+			}
+			WalkExprColumnRefs(arg, visit)
+		}
+		for _, arg := range n.XmlExpr.Args {
+			WalkExprColumnRefs(arg, visit)
+		}
+	case *pg_query.Node_XmlSerialize:
+		// xmlserialize(content col AS text) is its own node kind rather than
+		// an XmlExpr. TypeName holds a type, so only Expr is walked.
+		WalkExprColumnRefs(n.XmlSerialize.Expr, visit)
 	}
 }

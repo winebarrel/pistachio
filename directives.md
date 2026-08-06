@@ -148,4 +148,6 @@ CREATE TABLE public.legacy (
 
 Each ignored object is reported as an `-- ignored: <name>` comment in `plan` and `apply` output.
 
+An ignored object still occupies its name in the database, so it takes part in the duplicate-name check across object kinds.
+
 The directive attaches to a statement written in the schema file, so it can only ignore an object you have declared. To keep an existing object that would otherwise be dropped, write its `CREATE` statement with the directive. Because the object is unmanaged, its column references are not validated at parse time.

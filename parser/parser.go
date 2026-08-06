@@ -421,7 +421,13 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		return nil, err
 	}
 
-	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, ExecuteStmts: executeStmts}, nil
+	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, ExecuteStmts: executeStmts}
+
+	if err := validateNamespaces(parsed); err != nil {
+		return nil, err
+	}
+
+	return parsed, nil
 }
 
 func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Table, error) {
@@ -617,19 +623,24 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 // ChooseConstraintName (src/backend/catalog/pg_constraint.c):
 //
 //	PRIMARY KEY -> {table}_pkey
-//	UNIQUE      -> {table}_{col}_key  (or {table}_key if colName is empty)
-//	CHECK       -> {table}_{col}_check (or {table}_check if colName is empty)
-//	EXCLUSION   -> {table}_{col}_excl  (or {table}_excl if colName is empty)
-//	FOREIGN KEY -> {table}_{col}_fkey  (or {table}_fkey if colName is empty)
+//	UNIQUE      -> {table}_{col}..._key
+//	CHECK       -> {table}_{col}_check (or {table}_check)
+//	EXCLUSION   -> {table}_{col}..._excl
+//	FOREIGN KEY -> {table}_{col}..._fkey
 //
-// colName is the first column involved when one is derivable; it may be empty
-// for table-level constraints where no single column name is available.
-// Duplicate name resolution is NOT handled; users should use explicit CONSTRAINT
-// names to avoid ambiguity.
-func autoNameConstraint(tableName, colName string, contype pg_query.ConstrType) string {
+// cols holds every column the constraint keys on, in order, joined with an
+// underscore the way PostgreSQL joins them. PRIMARY KEY carries no column, and
+// a CHECK carries one only when its expression references exactly one, so both
+// take an empty list in the other cases.
+//
+// Duplicate name resolution is NOT handled: PostgreSQL appends a number to the
+// second name (e.g. users_id_check1), which cannot be predicted from the
+// desired schema alone, so a file that generates one name twice is rejected as
+// a duplicate constraint name.
+func autoNameConstraint(tableName string, cols []string, contype pg_query.ConstrType) string {
 	base := tableName
-	if colName != "" {
-		base += "_" + colName
+	if len(cols) > 0 {
+		base += "_" + strings.Join(cols, "_")
 	}
 	switch contype {
 	case pg_query.ConstrType_CONSTR_PRIMARY:
@@ -645,6 +656,81 @@ func autoNameConstraint(tableName, colName string, contype pg_query.ConstrType) 
 	default:
 		return ""
 	}
+}
+
+// constraintKeyCols returns the columns a constraint keys on, in order. Keys
+// holds them for PRIMARY KEY and UNIQUE; EXCLUDE keeps its elements in
+// Exclusions instead, where PostgreSQL stands "expr" in for an element that is
+// an expression rather than a column.
+func constraintKeyCols(con *pg_query.Constraint) []string {
+	var cols []string
+	for _, k := range con.Keys {
+		if s := k.GetString_(); s != nil {
+			cols = append(cols, s.Sval)
+		}
+	}
+	for _, ex := range con.Exclusions {
+		list := ex.GetList()
+		if list == nil {
+			continue
+		}
+		for _, item := range list.Items {
+			ie := item.GetIndexElem()
+			if ie == nil {
+				continue
+			}
+			if ie.Name != "" {
+				cols = append(cols, ie.Name)
+			} else {
+				cols = append(cols, "expr")
+			}
+		}
+	}
+	return cols
+}
+
+// fkAttrCols returns the local-side columns of a foreign key, in order.
+func fkAttrCols(con *pg_query.Constraint) []string {
+	var cols []string
+	for _, attr := range con.FkAttrs {
+		if s := attr.GetString_(); s != nil {
+			cols = append(cols, s.Sval)
+		}
+	}
+	return cols
+}
+
+// checkExprCols returns the single column a CHECK expression references, or nil
+// when it references none or several. PostgreSQL names such a constraint after
+// the column only in the single-column case, and it reads the expression even
+// for a constraint written on a column, so `a integer CHECK (a > b)` becomes
+// {table}_check rather than {table}_a_check.
+//
+// walkExprColumnRefs does not descend into every expression node, so an exotic
+// CHECK can come back empty and take the {table}_check form where PostgreSQL
+// would name the column.
+func checkExprCols(expr *pg_query.Node) []string {
+	seen := map[string]bool{}
+	var cols []string
+	for _, ref := range walkExprColumnRefs(expr) {
+		if seen[ref] {
+			continue
+		}
+		seen[ref] = true
+		cols = append(cols, ref)
+	}
+	if len(cols) != 1 {
+		return nil
+	}
+	return cols
+}
+
+// autoNameColumnConstraint names an unnamed constraint written on a column.
+func autoNameColumnConstraint(tableName, colName string, con *pg_query.Constraint) string {
+	if con.Contype == pg_query.ConstrType_CONSTR_CHECK {
+		return autoNameConstraint(tableName, checkExprCols(con.RawExpr), con.Contype)
+	}
+	return autoNameConstraint(tableName, []string{colName}, con.Contype)
 }
 
 // extractColumnConstraints extracts named constraints from a column definition
@@ -665,7 +751,7 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 			continue
 		}
 		if con.Conname == "" {
-			con.Conname = autoNameConstraint(table.Name, cd.Colname, con.Contype)
+			con.Conname = autoNameColumnConstraint(table.Name, cd.Colname, con)
 		}
 		// Column-level PK/UNIQUE/EXCLUSION have no Keys; fill in the column name.
 		// CHECK constraints do not use Keys (they reference columns via the expression).
@@ -716,20 +802,11 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 
 func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Constraint, error) {
 	if con.Conname == "" {
-		var firstCol string
-		if len(con.Keys) > 0 {
-			if s := con.Keys[0].GetString_(); s != nil {
-				firstCol = s.Sval
-			}
-		} else if len(con.Exclusions) > 0 {
-			// EXCLUSION constraints store columns in Exclusions, not Keys
-			if elem := con.Exclusions[0].GetList(); elem != nil && len(elem.Items) > 0 {
-				if ie := elem.Items[0].GetIndexElem(); ie != nil {
-					firstCol = ie.Name
-				}
-			}
+		cols := constraintKeyCols(con)
+		if con.Contype == pg_query.ConstrType_CONSTR_CHECK {
+			cols = checkExprCols(con.RawExpr)
 		}
-		con.Conname = autoNameConstraint(tableName, firstCol, con.Contype)
+		con.Conname = autoNameConstraint(tableName, cols, con.Contype)
 	}
 
 	var conType model.ConstraintType
@@ -1430,6 +1507,14 @@ func parseAlterTableConstraints(as *pg_query.AlterTableStmt, defaultSchema strin
 			schema = defaultSchema
 		}
 
+		// A foreign key added here does not pass through
+		// parseInlineForeignKey, so name it before the definition is
+		// deparsed. Without this an unnamed one reaches the diff with an
+		// empty name and plans as `ADD CONSTRAINT  FOREIGN KEY ...`.
+		if con.Contype == pg_query.ConstrType_CONSTR_FOREIGN && con.Conname == "" {
+			con.Conname = autoNameConstraint(as.Relation.Relname, fkAttrCols(con), con.Contype)
+		}
+
 		def, err := deparseConstraintDef(con)
 		if err != nil {
 			return nil, nil, err
@@ -1489,13 +1574,7 @@ func parseAlterTableConstraints(as *pg_query.AlterTableStmt, defaultSchema strin
 // constraint inside a CREATE TABLE statement.
 func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchema string) (*model.ForeignKey, error) {
 	if con.Conname == "" {
-		var firstCol string
-		if len(con.FkAttrs) > 0 {
-			if s := con.FkAttrs[0].GetString_(); s != nil {
-				firstCol = s.Sval
-			}
-		}
-		con.Conname = autoNameConstraint(table, firstCol, con.Contype)
+		con.Conname = autoNameConstraint(table, fkAttrCols(con), con.Contype)
 	}
 
 	def, err := deparseConstraintDef(con)

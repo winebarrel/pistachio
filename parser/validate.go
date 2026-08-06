@@ -196,3 +196,157 @@ func walkExprColumnRefs(node *pg_query.Node) []string {
 	})
 	return refs
 }
+
+// namespace tracks the names registered in one PostgreSQL catalog, mapping
+// each name to the kind of object that claimed it. scope names the object the
+// names belong to, for a catalog that keys them per object rather than per
+// schema; it is empty otherwise.
+type namespace struct {
+	catalog string
+	scope   string
+	names   map[string]string
+}
+
+func newNamespace(catalog string) *namespace {
+	return &namespace{catalog: catalog, names: map[string]string{}}
+}
+
+func newScopedNamespace(catalog, scope string) *namespace {
+	return &namespace{catalog: catalog, scope: scope, names: map[string]string{}}
+}
+
+func (ns *namespace) add(name, kind string) error {
+	if prev, ok := ns.names[name]; ok {
+		on := ""
+		if ns.scope != "" {
+			on = " on " + ns.scope
+		}
+		// Two objects of the same kind reach here when their own map is keyed
+		// by something narrower than the catalog: index names are unique per
+		// schema in PostgreSQL, but pistachio keys them per table. The message
+		// matches setUnique's, which reports the same clash within one table.
+		if prev == kind {
+			return fmt.Errorf("duplicate %s: %s%s", kind, name, on)
+		}
+		return fmt.Errorf("duplicate %s name: %s%s (%s and %s)", ns.catalog, name, on, prev, kind)
+	}
+	ns.names[name] = kind
+	return nil
+}
+
+// validateNamespaces returns an error when one name is claimed twice within a
+// PostgreSQL catalog: by two objects in a schema, or by two members of a single
+// object. Left in, the file fails partway through an apply with
+// `relation "x" already exists`, `type "x" already exists`, or
+// `constraint "c" for relation "t" already exists`.
+//
+// pg_class holds tables, views, materialized views, sequences, composite types
+// and indexes. The indexes include the ones PostgreSQL builds for PRIMARY KEY,
+// UNIQUE and EXCLUDE constraints, which take the constraint name; CHECK and
+// foreign-key constraints build no index, so their names are not registered.
+// pg_type holds a row for every table, view, materialized view and composite
+// type, plus domains and enums. Sequences and indexes have no type entry.
+//
+// pg_constraint is unique on (conrelid, contypid, conname), so a constraint
+// name is scoped to the table or the domain that owns it rather than to the
+// schema, and each of those gets a namespace of its own. Every constraint kind
+// shares it, including the CHECK and foreign-key names pg_class does not see.
+//
+// pg_attribute and pg_enum scope a composite type's attribute names and an
+// enum's labels to that one type. Such a namespace only ever sees one kind, so
+// its catalog label never reaches a message.
+//
+// setUnique cannot stand in for any of this. Constraints and ForeignKeys are
+// separate maps, so it compares a constraint name only against the same kind,
+// and Domain.Constraints, CompositeType.Attributes and Enum.Values are plain
+// slices with no uniqueness check at all.
+//
+// An index written without a name is skipped: PostgreSQL picks the name at
+// create time and pistachio cannot know it.
+//
+// Ignored objects are checked as well, since an unmanaged relation still
+// occupies its name in the database. All violations are aggregated via
+// errors.Join, one line per object.
+func validateNamespaces(r *ParseResult) error {
+	var errs []error
+	relations := newNamespace("relation")
+	types := newNamespace("type")
+
+	add := func(name, kind string, nss ...*namespace) {
+		for _, ns := range nss {
+			if err := ns.add(name, kind); err != nil {
+				// A table and a composite type clash in both catalogs; the
+				// first rejection is the whole report for this object.
+				errs = append(errs, err)
+				return
+			}
+		}
+	}
+
+	addIndexes := func(indexes *orderedmap.Map[string, *model.Index]) {
+		for _, idx := range indexes.CollectValues() {
+			if idx.Name == "" {
+				continue
+			}
+			add(model.Ident(idx.Schema, idx.Name), "index", relations)
+		}
+	}
+
+	for fqtn, t := range r.Tables.All() {
+		add(fqtn, "table", relations, types)
+		addIndexes(t.Indexes)
+		constraints := newScopedNamespace("constraint", fqtn)
+		for _, con := range t.Constraints.CollectValues() {
+			add(model.Ident(con.Name), constraintKindLabel(con.Type), constraints)
+			if !con.Type.IsPrimaryKeyConstraint() && !con.Type.IsUniqueConstraint() && !con.Type.IsExclusionConstraint() {
+				continue
+			}
+			add(model.Ident(t.Schema, con.Name), constraintKindLabel(con.Type), relations)
+		}
+		for _, fk := range t.ForeignKeys.CollectValues() {
+			add(model.Ident(fk.Name), constraintKindLabel(fk.Type), constraints)
+		}
+	}
+
+	for fqvn, v := range r.Views.All() {
+		kind := "view"
+		if v.Materialized {
+			kind = "materialized view"
+		}
+		add(fqvn, kind, relations, types)
+		addIndexes(v.Indexes)
+	}
+
+	for name := range r.Sequences.Keys() {
+		add(name, "sequence", relations)
+	}
+
+	for fqcn, ct := range r.CompositeTypes.All() {
+		add(fqcn, "composite type", relations, types)
+		attributes := newScopedNamespace("attribute", fqcn)
+		for _, attr := range ct.Attributes {
+			add(model.Ident(attr.Name), "attribute", attributes)
+		}
+	}
+
+	for fqdn, d := range r.Domains.All() {
+		add(fqdn, "domain", types)
+		constraints := newScopedNamespace("constraint", fqdn)
+		for _, con := range d.Constraints {
+			// A domain constraint is always CHECK; NOT NULL is a flag on the
+			// domain rather than an entry here.
+			add(model.Ident(con.Name), "CHECK constraint", constraints)
+		}
+	}
+
+	for fqen, e := range r.Enums.All() {
+		add(fqen, "enum", types)
+		// Labels are literals, not identifiers, so they are not quoted.
+		values := newScopedNamespace("enum value", fqen)
+		for _, v := range e.Values {
+			add(v, "enum value", values)
+		}
+	}
+
+	return errors.Join(errs...)
+}

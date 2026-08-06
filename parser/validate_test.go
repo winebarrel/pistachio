@@ -406,3 +406,337 @@ func TestConstraintKindLabel(t *testing.T) {
 	assert.Equal(t, "EXCLUDE constraint", constraintKindLabel(model.ConstraintType('x')))
 	assert.Equal(t, "constraint", constraintKindLabel(model.ConstraintType('?')))
 }
+
+// PostgreSQL keeps tables, views, materialized views, sequences, indexes and
+// composite types in pg_class, and tables, views, materialized views,
+// composite types, domains and enums in pg_type. pistachio tracks each kind
+// in a separate map, so a name reused across kinds is only caught here.
+func TestValidateNamespaces_Collision(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want string
+	}{
+		{
+			name: "table and view",
+			sql: `CREATE TABLE x (id integer);
+CREATE VIEW x AS SELECT 1 AS n;`,
+			want: "duplicate relation name: public.x (table and view)",
+		},
+		{
+			name: "table and materialized view",
+			sql: `CREATE TABLE x (id integer);
+CREATE MATERIALIZED VIEW x AS SELECT 1 AS n;`,
+			want: "duplicate relation name: public.x (table and materialized view)",
+		},
+		{
+			name: "table and sequence",
+			sql: `CREATE TABLE x (id integer);
+CREATE SEQUENCE x;`,
+			want: "duplicate relation name: public.x (table and sequence)",
+		},
+		{
+			name: "table and composite type",
+			sql: `CREATE TABLE x (id integer);
+CREATE TYPE x AS (n integer);`,
+			want: "duplicate relation name: public.x (table and composite type)",
+		},
+		{
+			name: "view and sequence",
+			sql: `CREATE VIEW x AS SELECT 1 AS n;
+CREATE SEQUENCE x;`,
+			want: "duplicate relation name: public.x (view and sequence)",
+		},
+		{
+			name: "sequence and composite type",
+			sql: `CREATE SEQUENCE x;
+CREATE TYPE x AS (n integer);`,
+			want: "duplicate relation name: public.x (sequence and composite type)",
+		},
+		{
+			name: "index and view",
+			sql: `CREATE TABLE t (id integer);
+CREATE INDEX x ON t (id);
+CREATE VIEW x AS SELECT 1 AS n;`,
+			want: "duplicate relation name: public.x (index and view)",
+		},
+		{
+			name: "index and composite type",
+			sql: `CREATE TABLE t (id integer);
+CREATE INDEX x ON t (id);
+CREATE TYPE x AS (n integer);`,
+			want: "duplicate relation name: public.x (index and composite type)",
+		},
+		{
+			name: "primary key constraint and another table's index",
+			sql: `CREATE TABLE t1 (id integer, CONSTRAINT x PRIMARY KEY (id));
+CREATE TABLE t2 (id integer);
+CREATE INDEX x ON t2 (id);`,
+			want: "duplicate relation name: public.x (PRIMARY KEY constraint and index)",
+		},
+		{
+			// The message names the catalogs in registration order, not the
+			// order the statements appear in.
+			name: "view declared before the table",
+			sql: `CREATE VIEW x AS SELECT 1 AS n;
+CREATE TABLE x (id integer);`,
+			want: "duplicate relation name: public.x (table and view)",
+		},
+		{
+			name: "primary key constraint and view",
+			sql: `CREATE TABLE t (id integer, CONSTRAINT x PRIMARY KEY (id));
+CREATE VIEW x AS SELECT 1 AS n;`,
+			want: "duplicate relation name: public.x (PRIMARY KEY constraint and view)",
+		},
+		{
+			name: "unique constraint and sequence",
+			sql: `CREATE TABLE t (id integer, CONSTRAINT x UNIQUE (id));
+CREATE SEQUENCE x;`,
+			want: "duplicate relation name: public.x (UNIQUE constraint and sequence)",
+		},
+		{
+			name: "exclude constraint and view",
+			sql: `CREATE TABLE t (id integer, CONSTRAINT x EXCLUDE (id WITH =));
+CREATE VIEW x AS SELECT 1 AS n;`,
+			want: "duplicate relation name: public.x (EXCLUDE constraint and view)",
+		},
+		{
+			name: "table and its own primary key constraint",
+			sql:  `CREATE TABLE x (id integer, CONSTRAINT x PRIMARY KEY (id));`,
+			want: "duplicate relation name: public.x (table and PRIMARY KEY constraint)",
+		},
+		{
+			name: "materialized view index and view",
+			sql: `CREATE MATERIALIZED VIEW mv AS SELECT 1 AS n;
+CREATE INDEX x ON mv (n);
+CREATE VIEW x AS SELECT 1 AS n;`,
+			want: "duplicate relation name: public.x (index and view)",
+		},
+		{
+			name: "index name reused on another table",
+			sql: `CREATE TABLE t1 (id integer);
+CREATE TABLE t2 (id integer);
+CREATE INDEX x ON t1 (id);
+CREATE INDEX x ON t2 (id);`,
+			want: "duplicate index: public.x",
+		},
+		{
+			name: "primary key constraint name reused on another table",
+			sql: `CREATE TABLE t1 (id integer, CONSTRAINT x PRIMARY KEY (id));
+CREATE TABLE t2 (id integer, CONSTRAINT x PRIMARY KEY (id));`,
+			want: "duplicate PRIMARY KEY constraint: public.x",
+		},
+		{
+			name: "check and foreign key constraint sharing a name on one table",
+			sql: `CREATE TABLE p (id integer, CONSTRAINT p_pkey PRIMARY KEY (id));
+CREATE TABLE t (id integer, CONSTRAINT c CHECK (id > 0), CONSTRAINT c FOREIGN KEY (id) REFERENCES p (id));`,
+			want: "duplicate constraint name: c on public.t (CHECK constraint and FOREIGN KEY constraint)",
+		},
+		{
+			name: "primary key and foreign key constraint sharing a name on one table",
+			sql: `CREATE TABLE p (id integer, CONSTRAINT p_pkey PRIMARY KEY (id));
+CREATE TABLE t (id integer, CONSTRAINT y PRIMARY KEY (id), CONSTRAINT y FOREIGN KEY (id) REFERENCES p (id));`,
+			want: "duplicate constraint name: y on public.t (PRIMARY KEY constraint and FOREIGN KEY constraint)",
+		},
+		{
+			name: "table and domain",
+			sql: `CREATE TABLE x (id integer);
+CREATE DOMAIN x AS integer;`,
+			want: "duplicate type name: public.x (table and domain)",
+		},
+		{
+			name: "table and enum",
+			sql: `CREATE TABLE x (id integer);
+CREATE TYPE x AS ENUM ('a');`,
+			want: "duplicate type name: public.x (table and enum)",
+		},
+		{
+			name: "view and enum",
+			sql: `CREATE VIEW x AS SELECT 1 AS n;
+CREATE TYPE x AS ENUM ('a');`,
+			want: "duplicate type name: public.x (view and enum)",
+		},
+		{
+			name: "materialized view and domain",
+			sql: `CREATE MATERIALIZED VIEW x AS SELECT 1 AS n;
+CREATE DOMAIN x AS integer;`,
+			want: "duplicate type name: public.x (materialized view and domain)",
+		},
+		{
+			name: "composite type and domain",
+			sql: `CREATE TYPE x AS (n integer);
+CREATE DOMAIN x AS integer;`,
+			want: "duplicate type name: public.x (composite type and domain)",
+		},
+		{
+			name: "composite type and enum",
+			sql: `CREATE TYPE x AS (n integer);
+CREATE TYPE x AS ENUM ('a');`,
+			want: "duplicate type name: public.x (composite type and enum)",
+		},
+		{
+			name: "domain and enum",
+			sql: `CREATE DOMAIN x AS integer;
+CREATE TYPE x AS ENUM ('a');`,
+			want: "duplicate type name: public.x (domain and enum)",
+		},
+		{
+			name: "two check constraints sharing a name on one domain",
+			sql:  `CREATE DOMAIN d AS integer CONSTRAINT c CHECK (VALUE > 0) CONSTRAINT c CHECK (VALUE < 10);`,
+			want: "duplicate CHECK constraint: c on public.d",
+		},
+		{
+			// PostgreSQL names these d_check and d_check1. pistachio cannot
+			// predict the suffix, so both come out as d_check; the same
+			// limitation applies to unnamed table constraints, where
+			// setUnique rejects them.
+			name: "two unnamed check constraints on one domain",
+			sql:  `CREATE DOMAIN d AS integer CHECK (VALUE > 0) CHECK (VALUE < 10);`,
+			want: "duplicate CHECK constraint: d_check on public.d",
+		},
+		{
+			// PostgreSQL names the unnamed one d_check1, so it does not
+			// collide with the explicit name.
+			name: "explicit and unnamed check constraint colliding on one domain",
+			sql:  `CREATE DOMAIN d AS integer CONSTRAINT d_check CHECK (VALUE > 0) CHECK (VALUE < 10);`,
+			want: "duplicate CHECK constraint: d_check on public.d",
+		},
+		{
+			name: "attribute name repeated in one composite type",
+			sql:  `CREATE TYPE ct AS (n integer, n integer);`,
+			want: "duplicate attribute: n on public.ct",
+		},
+		{
+			name: "label repeated in one enum",
+			sql:  `CREATE TYPE et AS ENUM ('a', 'a');`,
+			want: "duplicate enum value: a on public.et",
+		},
+		{
+			name: "collision outside the default schema",
+			sql: `CREATE TABLE s1.x (id integer);
+CREATE VIEW s1.x AS SELECT 1 AS n;`,
+			want: "duplicate relation name: s1.x (table and view)",
+		},
+		{
+			name: "ignored table and view",
+			sql: `-- pista:ignore
+CREATE TABLE x (id integer);
+CREATE VIEW x AS SELECT 1 AS n;`,
+			want: "duplicate relation name: public.x (table and view)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseSQLWithSchema(tt.sql, "public")
+			require.Error(t, err)
+			assert.EqualError(t, err, tt.want)
+		})
+	}
+}
+
+// Kinds that share no namespace keep working, so the check does not reject
+// schemas PostgreSQL accepts.
+func TestValidateNamespaces_NoCollision(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+	}{
+		{
+			name: "sequence and domain",
+			sql: `CREATE SEQUENCE x;
+CREATE DOMAIN x AS integer;`,
+		},
+		{
+			name: "index and domain",
+			sql: `CREATE TABLE t (id integer);
+CREATE INDEX x ON t (id);
+CREATE DOMAIN x AS integer;`,
+		},
+		{
+			name: "check constraint and view",
+			sql: `CREATE TABLE t (id integer, CONSTRAINT x CHECK (id > 0));
+CREATE VIEW x AS SELECT 1 AS n;`,
+		},
+		{
+			name: "foreign key constraint and view",
+			sql: `CREATE TABLE p (id integer, CONSTRAINT p_pkey PRIMARY KEY (id));
+CREATE TABLE t (id integer, CONSTRAINT x FOREIGN KEY (id) REFERENCES p (id));
+CREATE VIEW x AS SELECT 1 AS n;`,
+		},
+		{
+			name: "same name in different schemas",
+			sql: `CREATE TABLE s1.x (id integer);
+CREATE VIEW s2.x AS SELECT 1 AS n;`,
+		},
+		{
+			name: "names differing only in case",
+			sql: `CREATE TABLE "X" (id integer);
+CREATE VIEW x AS SELECT 1 AS n;`,
+		},
+		{
+			// PostgreSQL names these t1_id_idx and t2_id_idx.
+			name: "unnamed indexes on two tables",
+			sql: `CREATE TABLE t1 (id integer);
+CREATE TABLE t2 (id integer);
+CREATE INDEX ON t1 (id);
+CREATE INDEX ON t2 (id);`,
+		},
+		{
+			// pg_constraint scopes a constraint name to its relation.
+			name: "one constraint name on two tables",
+			sql: `CREATE TABLE t1 (id integer, CONSTRAINT c CHECK (id > 0));
+CREATE TABLE t2 (id integer, CONSTRAINT c CHECK (id > 0));`,
+		},
+		{
+			name: "one constraint name on two domains",
+			sql: `CREATE DOMAIN d1 AS integer CONSTRAINT c CHECK (VALUE > 0);
+CREATE DOMAIN d2 AS integer CONSTRAINT c CHECK (VALUE > 0);`,
+		},
+		{
+			name: "one constraint name on a domain and a table",
+			sql: `CREATE DOMAIN d AS integer CONSTRAINT c CHECK (VALUE > 0);
+CREATE TABLE t (id integer, CONSTRAINT c CHECK (id > 0));`,
+		},
+		{
+			name: "one attribute name in two composite types",
+			sql: `CREATE TYPE ct1 AS (n integer);
+CREATE TYPE ct2 AS (n integer);`,
+		},
+		{
+			name: "one label in two enums",
+			sql: `CREATE TYPE et1 AS ENUM ('a');
+CREATE TYPE et2 AS ENUM ('a');`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseSQLWithSchema(tt.sql, "public")
+			require.NoError(t, err)
+		})
+	}
+}
+
+// A table occupies both namespaces, so a table / composite type clash hits
+// pg_class and pg_type alike. One line per name is enough.
+func TestValidateNamespaces_ReportsEachNameOnce(t *testing.T) {
+	sql := `CREATE TABLE x (id integer);
+CREATE TYPE x AS (n integer);`
+
+	_, err := parseSQLWithSchema(sql, "public")
+	require.Error(t, err)
+	assert.Equal(t, 1, strings.Count(err.Error(), "duplicate"))
+}
+
+func TestValidateNamespaces_AggregatesAcrossNames(t *testing.T) {
+	sql := `CREATE TABLE x (id integer);
+CREATE VIEW x AS SELECT 1 AS n;
+CREATE TABLE y (id integer);
+CREATE DOMAIN y AS integer;`
+
+	_, err := parseSQLWithSchema(sql, "public")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate relation name: public.x (table and view)")
+	assert.Contains(t, err.Error(), "duplicate type name: public.y (table and domain)")
+}
