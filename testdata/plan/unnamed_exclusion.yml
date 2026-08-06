@@ -13,5 +13,5 @@ plan: |
       room integer NOT NULL,
       during tsrange NOT NULL,
       CONSTRAINT reservations_pkey PRIMARY KEY (id),
-      CONSTRAINT reservations_room_excl EXCLUDE USING gist (room WITH =, during WITH &&)
+      CONSTRAINT reservations_room_during_excl EXCLUDE USING gist (room WITH =, during WITH &&)
   );

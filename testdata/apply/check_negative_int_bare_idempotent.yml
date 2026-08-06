@@ -2,7 +2,7 @@ init: |
   CREATE TABLE public.employees (
       id integer NOT NULL,
       vacation_hours smallint NOT NULL,
-      CONSTRAINT employees_check CHECK (vacation_hours >= '-40'::integer AND vacation_hours <= 240)
+      CONSTRAINT employees_vacation_hours_check CHECK (vacation_hours >= '-40'::integer AND vacation_hours <= 240)
   );
 desired: |
   CREATE TABLE public.employees (
@@ -15,7 +15,7 @@ applied: |
   CREATE TABLE public.employees (
       id integer NOT NULL,
       vacation_hours smallint NOT NULL,
-      CONSTRAINT employees_check CHECK (vacation_hours >= '-40'::integer AND vacation_hours <= 240)
+      CONSTRAINT employees_vacation_hours_check CHECK (vacation_hours >= '-40'::integer AND vacation_hours <= 240)
   );
 applied_sql: ""
 verify_no_drift: true

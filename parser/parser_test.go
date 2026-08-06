@@ -799,8 +799,107 @@ func TestParseSQL_TableLevelUnnamedExclusionAutoNamed(t *testing.T) {
 	require.NoError(t, err)
 	tbl := result.Tables.Get("public.reservations")
 	require.NotNil(t, tbl)
-	_, ok := tbl.Constraints.GetOk("reservations_room_excl")
+	_, ok := tbl.Constraints.GetOk("reservations_room_during_excl")
 	assert.True(t, ok)
+}
+
+// PostgreSQL's ChooseConstraintName joins every key column, and takes a CHECK
+// name from the one column its expression references, so these are the names
+// the server picks for the same SQL. Getting them wrong means the plan adds a
+// constraint under one name and offers to drop the server's, on every run
+// against a database that already holds the table.
+func TestParseSQL_UnnamedConstraintNamesFollowEveryColumn(t *testing.T) {
+	tests := []struct {
+		name         string
+		sql          string
+		conName      string
+		isForeignKey bool
+	}{
+		{
+			name:    "multi-column UNIQUE",
+			sql:     `CREATE TABLE public.t (a integer, b integer, UNIQUE (a, b));`,
+			conName: "t_a_b_key",
+		},
+		{
+			name:    "multi-column PRIMARY KEY carries no column",
+			sql:     `CREATE TABLE public.t (a integer, b integer, PRIMARY KEY (a, b));`,
+			conName: "t_pkey",
+		},
+		{
+			name:    "CHECK on one column",
+			sql:     `CREATE TABLE public.t (a integer, b integer, CHECK (a > 0));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK on one column twice",
+			sql:     `CREATE TABLE public.t (a integer, b integer, CHECK (a > 0 AND a < 10));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK on two columns",
+			sql:     `CREATE TABLE public.t (a integer, b integer, CHECK (a > b));`,
+			conName: "t_check",
+		},
+		{
+			// The expression decides the name even for a column constraint.
+			name:    "column CHECK referencing another column",
+			sql:     `CREATE TABLE public.t (a integer CHECK (a > b), b integer);`,
+			conName: "t_check",
+		},
+		{
+			name: "multi-column FOREIGN KEY",
+			sql: `CREATE TABLE public.p (a integer, b integer, CONSTRAINT p_pkey PRIMARY KEY (a, b));
+CREATE TABLE public.t (a integer, b integer, FOREIGN KEY (a, b) REFERENCES public.p (a, b));`,
+			conName:      "t_a_b_fkey",
+			isForeignKey: true,
+		},
+		{
+			name:    "multi-column EXCLUDE",
+			sql:     `CREATE TABLE public.t (a integer, b integer, EXCLUDE (a WITH =, b WITH =));`,
+			conName: "t_a_b_excl",
+		},
+		{
+			name:    "EXCLUDE on an expression",
+			sql:     `CREATE TABLE public.t (a integer, b integer, EXCLUDE ((a + b) WITH =));`,
+			conName: "t_expr_excl",
+		},
+		{
+			name: "ALTER TABLE ADD FOREIGN KEY",
+			sql: `CREATE TABLE public.p (a integer, CONSTRAINT p_pkey PRIMARY KEY (a));
+CREATE TABLE public.t (a integer, b integer);
+ALTER TABLE public.t ADD FOREIGN KEY (a) REFERENCES public.p (a);`,
+			conName:      "t_a_fkey",
+			isForeignKey: true,
+		},
+		{
+			name: "ALTER TABLE ADD UNIQUE",
+			sql: `CREATE TABLE public.t (a integer, b integer);
+ALTER TABLE public.t ADD UNIQUE (a, b);`,
+			conName: "t_a_b_key",
+		},
+		{
+			name: "ALTER TABLE ADD CHECK",
+			sql: `CREATE TABLE public.t (a integer, b integer);
+ALTER TABLE public.t ADD CHECK (a > 0);`,
+			conName: "t_a_check",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseSQLWithPublicSchema(tt.sql)
+			require.NoError(t, err)
+			tbl := result.Tables.Get("public.t")
+			require.NotNil(t, tbl)
+			if tt.isForeignKey {
+				_, ok := tbl.ForeignKeys.GetOk(tt.conName)
+				assert.True(t, ok, "expected FK %s, got %v", tt.conName, tbl.ForeignKeys.CollectKeys())
+			} else {
+				_, ok := tbl.Constraints.GetOk(tt.conName)
+				assert.True(t, ok, "expected constraint %s, got %v", tt.conName, tbl.Constraints.CollectKeys())
+			}
+		})
+	}
 }
 
 func TestParseSQL_TablespaceOnCreate(t *testing.T) {
