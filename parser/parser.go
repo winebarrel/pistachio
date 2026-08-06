@@ -421,7 +421,13 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		return nil, err
 	}
 
-	return &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, ExecuteStmts: executeStmts}, nil
+	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, ExecuteStmts: executeStmts}
+
+	if err := validateNamespaces(parsed); err != nil {
+		return nil, err
+	}
+
+	return parsed, nil
 }
 
 func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Table, error) {

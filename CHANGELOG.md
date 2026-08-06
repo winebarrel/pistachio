@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.25.0] - 2026-08-06
+
+* Error when one name is used for two objects PostgreSQL keeps in the same catalog. Each object kind is tracked in its own map, so a duplicate was caught only within a kind: `CREATE TABLE x` next to `CREATE VIEW x` passed the parser and failed partway through the apply with `"x" is not a view`. pg_class holds tables, views, materialized views, sequences, composite types and indexes. pg_type holds a row for every table, view, materialized view and composite type, plus domains and enums, and none for a sequence or an index. The indexes PostgreSQL builds for `PRIMARY KEY`, `UNIQUE` and `EXCLUDE` constraints take the constraint name, so those names are checked too; `CHECK` and foreign-key constraints build no index, so theirs are not. Objects marked `-- pista:ignore` are included, since an unmanaged relation still occupies its name. Each clash is reported as `duplicate relation name: public.x (table and view)` or `duplicate type name: public.x (table and domain)`, one line per name. A duplicate index name on two tables in one schema is now an error as well; index names were unique per table before.
+
 ## [1.24.0] - 2026-08-05
 
 * Add `dump --sort-by-deps` to order the dump by object dependency instead of by name. Each object is written after the objects it depends on, so a table follows the types it uses and the tables its foreign keys reference, and a view follows the tables and views it selects from. The output loads from top to bottom with `psql` without forward references. When the dependency graph has a cycle, such as two tables with mutual foreign keys, the dump cannot be ordered and errors. The flag cannot be combined with `--split`, which writes each object to a separate file.

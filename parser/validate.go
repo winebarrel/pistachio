@@ -196,3 +196,105 @@ func walkExprColumnRefs(node *pg_query.Node) []string {
 	})
 	return refs
 }
+
+// namespace tracks the names registered in one PostgreSQL catalog, mapping
+// each name to the kind of object that claimed it.
+type namespace struct {
+	catalog string
+	names   map[string]string
+}
+
+func newNamespace(catalog string) *namespace {
+	return &namespace{catalog: catalog, names: map[string]string{}}
+}
+
+func (ns *namespace) add(name, kind string) error {
+	if prev, ok := ns.names[name]; ok {
+		// Two objects of the same kind reach here when their own map is keyed
+		// by something narrower than the catalog: index names are unique per
+		// schema in PostgreSQL, but pistachio keys them per table.
+		if prev == kind {
+			return fmt.Errorf("duplicate %s name: %s", kind, name)
+		}
+		return fmt.Errorf("duplicate %s name: %s (%s and %s)", ns.catalog, name, prev, kind)
+	}
+	ns.names[name] = kind
+	return nil
+}
+
+// validateNamespaces returns an error when one name is claimed by two objects
+// that PostgreSQL keeps in the same catalog. Each object kind lives in its own
+// map, so setUnique only catches a repeat within a kind; a clash across kinds
+// would otherwise surface as `relation "x" already exists` or
+// `type "x" already exists` partway through an apply.
+//
+// pg_class holds tables, views, materialized views, sequences, composite types
+// and indexes. The indexes include the ones PostgreSQL builds for PRIMARY KEY,
+// UNIQUE and EXCLUDE constraints, which take the constraint name; CHECK and
+// foreign-key constraints build no index, so their names are not registered.
+// pg_type holds a row for every table, view, materialized view and composite
+// type, plus domains and enums. Sequences and indexes have no type entry.
+//
+// Ignored objects are checked as well, since an unmanaged relation still
+// occupies its name in the database. All violations are aggregated via
+// errors.Join, one line per name.
+func validateNamespaces(r *ParseResult) error {
+	var errs []error
+	relations := newNamespace("relation")
+	types := newNamespace("type")
+	// A table and a composite type clash in both catalogs; report once.
+	reported := map[string]bool{}
+
+	add := func(name, kind string, nss ...*namespace) {
+		for _, ns := range nss {
+			if err := ns.add(name, kind); err != nil && !reported[name] {
+				reported[name] = true
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	addIndexes := func(indexes *orderedmap.Map[string, *model.Index]) {
+		for _, idx := range indexes.CollectValues() {
+			add(model.Ident(idx.Schema, idx.Name), "index", relations)
+		}
+	}
+
+	for fqtn, t := range r.Tables.All() {
+		add(fqtn, "table", relations, types)
+		addIndexes(t.Indexes)
+		for _, con := range t.Constraints.CollectValues() {
+			if !con.Type.IsPrimaryKeyConstraint() && !con.Type.IsUniqueConstraint() && !con.Type.IsExclusionConstraint() {
+				continue
+			}
+			add(model.Ident(t.Schema, con.Name), constraintKindLabel(con.Type), relations)
+		}
+	}
+
+	for fqvn, v := range r.Views.All() {
+		kind := "view"
+		if v.Materialized {
+			kind = "materialized view"
+		}
+		add(fqvn, kind, relations, types)
+		addIndexes(v.Indexes)
+	}
+
+	for name := range r.Sequences.Keys() {
+		add(name, "sequence", relations)
+	}
+
+	for name := range r.CompositeTypes.Keys() {
+		add(name, "composite type", relations, types)
+	}
+
+	for name := range r.Domains.Keys() {
+		add(name, "domain", types)
+	}
+
+	for name := range r.Enums.Keys() {
+		add(name, "enum", types)
+	}
+
+	return errors.Join(errs...)
+}

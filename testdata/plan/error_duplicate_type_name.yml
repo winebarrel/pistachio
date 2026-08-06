@@ -1,0 +1,12 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE DOMAIN public.users AS integer;
+error: 'duplicate type name: public.users (table and domain)'
