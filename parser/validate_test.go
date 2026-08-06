@@ -595,6 +595,13 @@ CREATE TYPE x AS ENUM ('a');`,
 			want: "duplicate CHECK constraint: d_check on public.d",
 		},
 		{
+			// PostgreSQL names the unnamed one d_check1, so it does not
+			// collide with the explicit name.
+			name: "explicit and unnamed check constraint colliding on one domain",
+			sql:  `CREATE DOMAIN d AS integer CONSTRAINT d_check CHECK (VALUE > 0) CHECK (VALUE < 10);`,
+			want: "duplicate CHECK constraint: d_check on public.d",
+		},
+		{
 			name: "attribute name repeated in one composite type",
 			sql:  `CREATE TYPE ct AS (n integer, n integer);`,
 			want: "duplicate attribute: n on public.ct",

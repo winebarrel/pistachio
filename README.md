@@ -819,7 +819,7 @@ pista dump --split ./schema/
 
 > [!IMPORTANT]
 > Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are auto-named by pistachio following PostgreSQL's convention (`{table}_pkey`, `{table}_{col}_key`, `{table}_{col}_check`, `{table}_{col}_fkey`, `{table}_{col}_excl`). The auto-naming has two limitations:
-> - When multiple constraints would generate the same name, PostgreSQL appends a numeric suffix (e.g. `_1`) that pistachio cannot predict.
+> - When multiple constraints would generate the same name, PostgreSQL appends a number with no separator (e.g. `users_id_check1`) that pistachio cannot predict, so such a file is rejected as a duplicate constraint name.
 > - PostgreSQL truncates identifier names to 63 bytes (NAMEDATALEN - 1). pistachio does not apply this truncation, so very long table/column names may produce mismatched constraint names.
 >
 > Use explicit `CONSTRAINT <name>` clauses to avoid these issues.
