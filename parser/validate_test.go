@@ -581,6 +581,30 @@ CREATE TYPE x AS ENUM ('a');`,
 			want: "duplicate type name: public.x (domain and enum)",
 		},
 		{
+			name: "two check constraints sharing a name on one domain",
+			sql:  `CREATE DOMAIN d AS integer CONSTRAINT c CHECK (VALUE > 0) CONSTRAINT c CHECK (VALUE < 10);`,
+			want: "duplicate CHECK constraint: c on public.d",
+		},
+		{
+			// PostgreSQL names these d_check and d_check1. pistachio cannot
+			// predict the suffix, so both come out as d_check; the same
+			// limitation applies to unnamed table constraints, where
+			// setUnique rejects them.
+			name: "two unnamed check constraints on one domain",
+			sql:  `CREATE DOMAIN d AS integer CHECK (VALUE > 0) CHECK (VALUE < 10);`,
+			want: "duplicate CHECK constraint: d_check on public.d",
+		},
+		{
+			name: "attribute name repeated in one composite type",
+			sql:  `CREATE TYPE ct AS (n integer, n integer);`,
+			want: "duplicate attribute: n on public.ct",
+		},
+		{
+			name: "label repeated in one enum",
+			sql:  `CREATE TYPE et AS ENUM ('a', 'a');`,
+			want: "duplicate enum value: a on public.et",
+		},
+		{
 			name: "collision outside the default schema",
 			sql: `CREATE TABLE s1.x (id integer);
 CREATE VIEW s1.x AS SELECT 1 AS n;`,
@@ -656,6 +680,26 @@ CREATE INDEX ON t2 (id);`,
 			name: "one constraint name on two tables",
 			sql: `CREATE TABLE t1 (id integer, CONSTRAINT c CHECK (id > 0));
 CREATE TABLE t2 (id integer, CONSTRAINT c CHECK (id > 0));`,
+		},
+		{
+			name: "one constraint name on two domains",
+			sql: `CREATE DOMAIN d1 AS integer CONSTRAINT c CHECK (VALUE > 0);
+CREATE DOMAIN d2 AS integer CONSTRAINT c CHECK (VALUE > 0);`,
+		},
+		{
+			name: "one constraint name on a domain and a table",
+			sql: `CREATE DOMAIN d AS integer CONSTRAINT c CHECK (VALUE > 0);
+CREATE TABLE t (id integer, CONSTRAINT c CHECK (id > 0));`,
+		},
+		{
+			name: "one attribute name in two composite types",
+			sql: `CREATE TYPE ct1 AS (n integer);
+CREATE TYPE ct2 AS (n integer);`,
+		},
+		{
+			name: "one label in two enums",
+			sql: `CREATE TYPE et1 AS ENUM ('a');
+CREATE TYPE et2 AS ENUM ('a');`,
 		},
 	}
 

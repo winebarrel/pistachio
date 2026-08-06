@@ -198,9 +198,9 @@ func walkExprColumnRefs(node *pg_query.Node) []string {
 }
 
 // namespace tracks the names registered in one PostgreSQL catalog, mapping
-// each name to the kind of object that claimed it. scope names the relation
-// the names belong to, for a catalog that keys them per relation rather than
-// per schema; it is empty otherwise.
+// each name to the kind of object that claimed it. scope names the object the
+// names belong to, for a catalog that keys them per object rather than per
+// schema; it is empty otherwise.
 type namespace struct {
 	catalog string
 	scope   string
@@ -211,8 +211,8 @@ func newNamespace(catalog string) *namespace {
 	return &namespace{catalog: catalog, names: map[string]string{}}
 }
 
-func newRelationScopedNamespace(catalog, relation string) *namespace {
-	return &namespace{catalog: catalog, scope: relation, names: map[string]string{}}
+func newScopedNamespace(catalog, scope string) *namespace {
+	return &namespace{catalog: catalog, scope: scope, names: map[string]string{}}
 }
 
 func (ns *namespace) add(name, kind string) error {
@@ -234,11 +234,11 @@ func (ns *namespace) add(name, kind string) error {
 	return nil
 }
 
-// validateNamespaces returns an error when one name is claimed by two objects
-// that PostgreSQL keeps in the same catalog. Each object kind lives in its own
-// map, so setUnique only catches a repeat within a kind; a clash across kinds
-// would otherwise surface as `relation "x" already exists` or
-// `type "x" already exists` partway through an apply.
+// validateNamespaces returns an error when one name is claimed twice within a
+// PostgreSQL catalog: by two objects in a schema, or by two members of a single
+// object. Left in, the file fails partway through an apply with
+// `relation "x" already exists`, `type "x" already exists`, or
+// `constraint "c" for relation "t" already exists`.
 //
 // pg_class holds tables, views, materialized views, sequences, composite types
 // and indexes. The indexes include the ones PostgreSQL builds for PRIMARY KEY,
@@ -247,11 +247,19 @@ func (ns *namespace) add(name, kind string) error {
 // pg_type holds a row for every table, view, materialized view and composite
 // type, plus domains and enums. Sequences and indexes have no type entry.
 //
-// pg_constraint keys a constraint name to its relation rather than its schema,
-// so each table gets a namespace of its own. Every constraint kind shares it,
-// including the CHECK and foreign-key names pg_class does not see. Constraints
-// and ForeignKeys are separate maps, so setUnique compares a name only against
-// the constraints of the same kind.
+// pg_constraint is unique on (conrelid, contypid, conname), so a constraint
+// name is scoped to the table or the domain that owns it rather than to the
+// schema, and each of those gets a namespace of its own. Every constraint kind
+// shares it, including the CHECK and foreign-key names pg_class does not see.
+//
+// pg_attribute and pg_enum scope a composite type's attribute names and an
+// enum's labels to that one type. Such a namespace only ever sees one kind, so
+// its catalog label never reaches a message.
+//
+// setUnique cannot stand in for any of this. Constraints and ForeignKeys are
+// separate maps, so it compares a constraint name only against the same kind,
+// and Domain.Constraints, CompositeType.Attributes and Enum.Values are plain
+// slices with no uniqueness check at all.
 //
 // An index written without a name is skipped: PostgreSQL picks the name at
 // create time and pistachio cannot know it.
@@ -287,7 +295,7 @@ func validateNamespaces(r *ParseResult) error {
 	for fqtn, t := range r.Tables.All() {
 		add(fqtn, "table", relations, types)
 		addIndexes(t.Indexes)
-		constraints := newRelationScopedNamespace("constraint", fqtn)
+		constraints := newScopedNamespace("constraint", fqtn)
 		for _, con := range t.Constraints.CollectValues() {
 			add(model.Ident(con.Name), constraintKindLabel(con.Type), constraints)
 			if !con.Type.IsPrimaryKeyConstraint() && !con.Type.IsUniqueConstraint() && !con.Type.IsExclusionConstraint() {
@@ -313,16 +321,31 @@ func validateNamespaces(r *ParseResult) error {
 		add(name, "sequence", relations)
 	}
 
-	for name := range r.CompositeTypes.Keys() {
-		add(name, "composite type", relations, types)
+	for fqcn, ct := range r.CompositeTypes.All() {
+		add(fqcn, "composite type", relations, types)
+		attributes := newScopedNamespace("attribute", fqcn)
+		for _, attr := range ct.Attributes {
+			add(model.Ident(attr.Name), "attribute", attributes)
+		}
 	}
 
-	for name := range r.Domains.Keys() {
-		add(name, "domain", types)
+	for fqdn, d := range r.Domains.All() {
+		add(fqdn, "domain", types)
+		constraints := newScopedNamespace("constraint", fqdn)
+		for _, con := range d.Constraints {
+			// A domain constraint is always CHECK; NOT NULL is a flag on the
+			// domain rather than an entry here.
+			add(model.Ident(con.Name), "CHECK constraint", constraints)
+		}
 	}
 
-	for name := range r.Enums.Keys() {
-		add(name, "enum", types)
+	for fqen, e := range r.Enums.All() {
+		add(fqen, "enum", types)
+		// Labels are literals, not identifiers, so they are not quoted.
+		values := newScopedNamespace("enum value", fqen)
+		for _, v := range e.Values {
+			add(v, "enum value", values)
+		}
 	}
 
 	return errors.Join(errs...)
