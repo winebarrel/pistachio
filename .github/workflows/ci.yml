@@ -48,12 +48,8 @@ jobs:
       # has to be on disk before it runs.
       - run: go mod download github.com/pganalyze/pg_query_go/v6
       - run: make keywords
-      - name: Check for a stale keyword corpus
-        run: |
-          if ! git diff --exit-code -- model/testdata/keywords.txt; then
-            echo "Error: model/testdata/keywords.txt is out of date; run 'make keywords' and commit the result." >&2
-            exit 1
-          fi
+      # A diff here means the corpus is stale: run `make keywords` and commit it.
+      - run: git diff --exit-code -- model/testdata/keywords.txt
 
   windows:
     runs-on: windows-latest
