@@ -161,5 +161,9 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 		for _, arg := range n.XmlExpr.Args {
 			WalkExprColumnRefs(arg, visit)
 		}
+	case *pg_query.Node_XmlSerialize:
+		// xmlserialize(content col AS text) is its own node kind rather than
+		// an XmlExpr. TypeName holds a type, so only Expr is walked.
+		WalkExprColumnRefs(n.XmlSerialize.Expr, visit)
 	}
 }

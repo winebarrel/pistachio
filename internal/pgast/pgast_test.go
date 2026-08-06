@@ -137,6 +137,23 @@ func TestWalkExprColumnRefs_XmlExpr(t *testing.T) {
 	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((xmlforest(a AS x) IS NOT NULL))"))
 }
 
+// An element name, an attribute alias and an argument name are written where
+// a column name could be, so a walk that picked them up would name a
+// constraint after the wrong one. Each of these has a column of that name on
+// the same table.
+func TestWalkExprColumnRefs_NamesAreNotColumns(t *testing.T) {
+	assert.Equal(t, []string{"b"}, collectRefs(t, "CHECK ((xmlelement(name a, b) IS NOT NULL))"))
+	assert.Equal(t, []string{"b"}, collectRefs(t, "CHECK ((xmlelement(name e, xmlattributes(b AS a)) IS NOT NULL))"))
+	assert.Equal(t, []string{"b"}, collectRefs(t, "CHECK ((xmlforest(b AS a) IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((f(x => a, y => 1) > 0))"))
+}
+
+func TestWalkExprColumnRefs_XmlSerialize(t *testing.T) {
+	// xmlserialize is its own node kind, not an XmlExpr. TypeName is a type,
+	// so only the serialized expression is walked.
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((xmlserialize(content a AS text) > ''))"))
+}
+
 func TestWalkExprColumnRefs_NilSafe(t *testing.T) {
 	pgast.WalkExprColumnRefs(nil, func(s *pg_query.String) {
 		t.Fatal("visitor should not be invoked on nil node")

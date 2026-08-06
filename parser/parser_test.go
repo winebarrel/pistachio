@@ -899,6 +899,11 @@ CREATE TABLE public.t (a integer, b integer, FOREIGN KEY (a, b) REFERENCES publi
 			conName: "t_a_check",
 		},
 		{
+			name:    "CHECK reaching its column through xmlserialize",
+			sql:     `CREATE TABLE public.t (a xml, b integer, CHECK (xmlserialize(content a AS text) > ''));`,
+			conName: "t_a_check",
+		},
+		{
 			name:    "CHECK on a two-column row constructor",
 			sql:     `CREATE TABLE public.t (a integer, b integer, CHECK ((a, b) IS NOT NULL));`,
 			conName: "t_check",
