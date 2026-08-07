@@ -1,0 +1,21 @@
+# Stripping the schema must not swallow a real change. The call moves to a
+# different function, so the constraint is still recreated.
+init: |
+  CREATE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE FUNCTION public.upper_v(t text) RETURNS text AS $$ SELECT upper(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (public.lower_v(v) <> 'x')
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (public.upper_v(v) <> 'x')
+  );
+plan: |
+  ALTER TABLE public.users DROP CONSTRAINT users_v_check;
+  ALTER TABLE public.users ADD CONSTRAINT users_v_check CHECK (public.upper_v(v) <> 'x');

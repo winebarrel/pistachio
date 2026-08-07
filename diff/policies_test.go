@@ -210,6 +210,16 @@ func TestEqualSelectExpr_ParseErrorFallback(t *testing.T) {
 	assert.True(t, equalSelectExpr("not a valid expr )", "not a valid expr )"))
 }
 
+func TestEqualSelectExpr_qualifiedFuncCall(t *testing.T) {
+	// pg_get_expr prints the call without the schema when the function's
+	// schema is on the search_path. Reaches RLS USING / WITH CHECK and the
+	// stored-generated column expression alike.
+	assert.True(t, equalSelectExpr(
+		"lower_v(owner) = CURRENT_USER",
+		"public.lower_v(owner) = current_user",
+	))
+}
+
 func TestEqualSelectExpr_currentTimeCastStripped(t *testing.T) {
 	// pg_get_expr adds `'00:00:00'::time without time zone` on a time-column
 	// USING / WITH CHECK comparison; users write the bare literal.

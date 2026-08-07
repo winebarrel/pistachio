@@ -1966,6 +1966,153 @@ func TestEqualConstraintDef_desiredCastCurrentBare(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_schemaQualifiedFuncCall(t *testing.T) {
+	// pg_get_constraintdef prints the call without the schema when the
+	// function's schema is on the search_path.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((lower_v(v) <> 'x'::text))",
+		"CHECK (public.lower_v(v) <> 'x')",
+	))
+}
+
+func TestEqualConstraintDef_funcCallSchemaDiffers(t *testing.T) {
+	// Documented tradeoff: the strip does not consult the search_path, so two
+	// same-named functions in different schemas compare equal. Views already
+	// accept the same for a table reference.
+	assert.True(t, equalConstraintDef(
+		"CHECK (a.f(v) <> 'x'::text)",
+		"CHECK (b.f(v) <> 'x')",
+	))
+}
+
+func TestEqualConstraintDef_differentFuncName(t *testing.T) {
+	assert.False(t, equalConstraintDef(
+		"CHECK (lower_v(v) <> 'x'::text)",
+		"CHECK (public.upper_v(v) <> 'x')",
+	))
+}
+
+func TestEqualConstraintDef_nestedQualifiedFuncCall(t *testing.T) {
+	// The walk reaches a call nested under another call.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((length(lower_v(v)) > 0))",
+		"CHECK (length(public.lower_v(v)) > 0)",
+	))
+}
+
+func TestEqualConstraintDef_threePartFuncNameKept(t *testing.T) {
+	// Only a two-part name is stripped.
+	assert.False(t, equalConstraintDef(
+		"CHECK (f(v) > 0)",
+		"CHECK (postgres.public.f(v) > 0)",
+	))
+}
+
+func TestEqualConstraintDef_pgCatalogQualificationKept(t *testing.T) {
+	// pg_catalog is exempt from the strip, so a call written with that prefix
+	// still differs from the bare form the catalog prints.
+	assert.False(t, equalConstraintDef(
+		"CHECK (length(v) > 0)",
+		"CHECK (pg_catalog.length(v) > 0)",
+	))
+}
+
+// keywordSyntaxExprs holds the expressions PostgreSQL parses into a FuncCall
+// named pg_catalog.<x> that the deparser prints back as keyword syntax, plus
+// SIMILAR TO, whose A_Expr holds a pg_catalog.similar_to_escape call. Every
+// one of those deparser branches matches on the literal pg_catalog prefix, so
+// dropping the guard in stripFuncCallSchema would rewrite each of these into a
+// plain function call: SUBSTRING(v FROM 1 FOR 2) as substring(v, 1, 2), and so
+// on down the list.
+//
+// An equality assertion cannot catch that. The strip is symmetric, so both
+// sides would degrade together and still compare equal. The deparsed output is
+// what has to be pinned.
+var keywordSyntaxExprs = []string{
+	"substring(v FROM 1 FOR 2) = 'ab'",
+	"position('a' IN v) > 0",
+	"overlay(v PLACING 'a' FROM 1 FOR 2) = 'ab'",
+	"extract(year FROM ts) > 2000",
+	"trim(BOTH ' ' FROM v) = 'a'",
+	"(ts AT TIME ZONE 'UTC') > ts",
+	"normalize(v, NFC) = v",
+	"v IS NFC NORMALIZED",
+	"v SIMILAR TO 'a%'",
+	"(a, b) OVERLAPS (c, d)",
+	"xmlexists('//x' PASSING v)",
+	"pg_collation_for(v) = 'C'",
+	"SYSTEM_USER = 'postgres'",
+}
+
+func TestNormalizeCheckExpr_keywordSyntaxLeftAlone(t *testing.T) {
+	for _, expr := range keywordSyntaxExprs {
+		t.Run(expr, func(t *testing.T) {
+			wantResult, _, err := parseSelectExpr(expr)
+			require.NoError(t, err)
+			want, err := pg_query.Deparse(wantResult)
+			require.NoError(t, err)
+
+			gotResult, target, err := parseSelectExpr(expr)
+			require.NoError(t, err)
+			target.Val = normalizeCheckExpr(target.Val)
+			got, err := pg_query.Deparse(gotResult)
+			require.NoError(t, err)
+
+			assert.Equal(t, want, got)
+		})
+	}
+}
+
+func TestEqualConstraintDef_excludeQualifiedFuncCall(t *testing.T) {
+	// An EXCLUDE keeps its expression in Exclusions rather than RawExpr.
+	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING gist (lower_v(v) WITH =)",
+		"EXCLUDE USING gist ((public.lower_v(v)) WITH =)",
+	))
+}
+
+func TestEqualConstraintDef_excludeWhereQualifiedFuncCall(t *testing.T) {
+	// An EXCLUDE predicate lives in WhereClause, also outside RawExpr.
+	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING gist (v WITH =) WHERE (lower_v(v) <> 'x'::text)",
+		"EXCLUDE USING gist (v WITH =) WHERE (public.lower_v(v) <> 'x')",
+	))
+}
+
+func TestEqualConstraintDef_excludeRealChange(t *testing.T) {
+	assert.False(t, equalConstraintDef(
+		"EXCLUDE USING gist (lower_v(v) WITH =)",
+		"EXCLUDE USING gist ((public.upper_v(v)) WITH =)",
+	))
+}
+
+func TestEqualIndexDef_expressionQualifiedFuncCall(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX i ON public.t USING btree (lower_v(v))",
+		"CREATE INDEX i ON t USING btree (public.lower_v(v))",
+	))
+}
+
+func TestEqualIndexDef_whereQualifiedFuncCall(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX i ON public.t USING btree (id) WHERE (lower_v(v) <> 'x'::text)",
+		"CREATE INDEX i ON t USING btree (id) WHERE public.lower_v(v) <> 'x'",
+	))
+}
+
+func TestEqualIndexDef_qualifiedFuncCallRealChange(t *testing.T) {
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX i ON public.t USING btree (lower_v(v))",
+		"CREATE INDEX i ON t USING btree (public.upper_v(v))",
+	))
+}
+
+func TestEqualDefault_qualifiedFuncCall(t *testing.T) {
+	cur := "lower_v('X'::text)"
+	des := "public.lower_v('X')"
+	assert.True(t, equalDefault(&cur, &des))
+}
+
 func TestEqualConstraintDef_currentCastInsideBoolExpr(t *testing.T) {
 	assert.True(t, equalConstraintDef(
 		"CHECK ((a > 0) AND (b >= '00:00:00'::time without time zone))",

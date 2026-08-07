@@ -1,0 +1,64 @@
+# pg_get_constraintdef, pg_get_expr, pg_get_indexdef and pg_get_viewdef all
+# print a function call unqualified when the function's schema is on the
+# search_path, so a file writing public.lower_v(v) disagrees with the catalog
+# and the object is re-emitted on every plan.
+#
+# normalizeCheckExpr is shared by every comparison below, so one object per
+# path, and a failure names the path that drifted. The walk does not stop at a
+# nested SELECT here, which users_sub_v covers, and a materialized view takes
+# DROP + CREATE rather than CREATE OR REPLACE when its body differs.
+#
+# users_sub_v writes AS lower_v because PostgreSQL names a sub-select's output
+# column on its own and pg_get_viewdef prints the name it chose. That drift is
+# unrelated to qualification and is recorded in TODO.md.
+init: |
+  CREATE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE FUNCTION public.shift_r(r tsrange) RETURNS tsrange AS $$ SELECT r $$ LANGUAGE sql IMMUTABLE;
+  CREATE DOMAIN public.dom AS text
+      DEFAULT public.lower_v('a')
+      CONSTRAINT dom_check CHECK (public.lower_v(VALUE) <> 'x');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text DEFAULT public.lower_v('a'),
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (public.lower_v(v) <> 'x')
+  );
+  CREATE TABLE public.res (
+      id integer NOT NULL,
+      during tsrange NOT NULL,
+      CONSTRAINT res_pkey PRIMARY KEY (id),
+      CONSTRAINT res_excl EXCLUDE USING gist (public.shift_r(during) WITH &&) WHERE (public.shift_r(during) IS NOT NULL)
+  );
+  CREATE INDEX users_expr_idx ON public.users USING btree (public.lower_v(v));
+  CREATE INDEX users_partial_idx ON public.users USING btree (id) WHERE public.lower_v(v) <> 'y';
+  CREATE VIEW public.users_v AS SELECT public.lower_v(users.v) AS c FROM public.users;
+  CREATE VIEW public.users_sub_v AS SELECT users.id FROM public.users WHERE users.v = (SELECT public.lower_v(o.v) AS lower_v FROM public.users o WHERE o.id = users.id);
+  CREATE MATERIALIZED VIEW public.users_mv AS SELECT public.lower_v(users.v) AS c FROM public.users;
+  CREATE INDEX users_mv_expr_idx ON public.users_mv USING btree (public.lower_v(c));
+  ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY users_pol ON public.users FOR ALL USING (public.lower_v(v) <> 'z') WITH CHECK (public.lower_v(v) <> 'w');
+desired: |
+  CREATE DOMAIN public.dom AS text
+      DEFAULT public.lower_v('a')
+      CONSTRAINT dom_check CHECK (public.lower_v(VALUE) <> 'x');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text DEFAULT public.lower_v('a'),
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (public.lower_v(v) <> 'x')
+  );
+  CREATE TABLE public.res (
+      id integer NOT NULL,
+      during tsrange NOT NULL,
+      CONSTRAINT res_pkey PRIMARY KEY (id),
+      CONSTRAINT res_excl EXCLUDE USING gist (public.shift_r(during) WITH &&) WHERE (public.shift_r(during) IS NOT NULL)
+  );
+  CREATE INDEX users_expr_idx ON public.users USING btree (public.lower_v(v));
+  CREATE INDEX users_partial_idx ON public.users USING btree (id) WHERE public.lower_v(v) <> 'y';
+  CREATE VIEW public.users_v AS SELECT public.lower_v(users.v) AS c FROM public.users;
+  CREATE VIEW public.users_sub_v AS SELECT users.id FROM public.users WHERE users.v = (SELECT public.lower_v(o.v) AS lower_v FROM public.users o WHERE o.id = users.id);
+  CREATE MATERIALIZED VIEW public.users_mv AS SELECT public.lower_v(users.v) AS c FROM public.users;
+  CREATE INDEX users_mv_expr_idx ON public.users_mv USING btree (public.lower_v(c));
+  ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY users_pol ON public.users FOR ALL USING (public.lower_v(v) <> 'z') WITH CHECK (public.lower_v(v) <> 'w');
+plan: ""

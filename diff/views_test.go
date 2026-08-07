@@ -194,6 +194,22 @@ func TestEqualViewDef_different(t *testing.T) {
 	assert.False(t, equalViewDef("SELECT 1", "SELECT 2"))
 }
 
+func TestEqualViewDef_qualifiedFuncCall(t *testing.T) {
+	// pg_get_viewdef prints the call without the schema and the column with
+	// it, the opposite of what the file writes on both counts.
+	assert.True(t, equalViewDef(
+		"SELECT t.id, lower_v(t.v) AS lv FROM t",
+		"SELECT id, public.lower_v(v) AS lv FROM public.t",
+	))
+}
+
+func TestEqualViewDef_qualifiedFuncCallRealChange(t *testing.T) {
+	assert.False(t, equalViewDef(
+		"SELECT t.id, lower_v(t.v) AS lv FROM t",
+		"SELECT id, public.upper_v(v) AS lv FROM public.t",
+	))
+}
+
 func TestEqualViewDef_schemaQualificationDifference(t *testing.T) {
 	// pg_get_viewdef omits schema, parser preserves it
 	assert.True(t, equalViewDef(

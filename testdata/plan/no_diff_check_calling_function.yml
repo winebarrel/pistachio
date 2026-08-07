@@ -1,7 +1,7 @@
 # A CHECK that calls a function must not drift when the call is written
 # unqualified. pg_get_constraintdef returns it unqualified and adds a ::text
 # cast that normalizeCheckExpr strips, so both differences have to cancel out.
-# See TODO.md for the qualified form, which does drift.
+# no_diff_qualified_function_call.yml covers the qualified form.
 init: |
   CREATE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
   CREATE TABLE public.users (

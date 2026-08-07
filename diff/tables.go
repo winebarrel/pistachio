@@ -451,8 +451,11 @@ func isSerialType(typeName string) bool {
 //     adds to anything string-typed and a written definition practically never
 //     carries.
 //   - Converts = ANY(ARRAY[...]) to IN (...) (PostgreSQL internal representation).
+//   - Strips the schema from a two-part function name, which the catalog prints
+//     unqualified when the function's schema is on the search_path. pg_catalog
+//     is left alone; see stripFuncCallSchema.
 //
-// Both are symmetric: they apply to the catalog side and the written side
+// All three are symmetric: they apply to the catalog side and the written side
 // alike. The walk reaches every node kind, so a sub-query inside an RLS policy
 // or a view body, and an expression inside a SQL/JSON constructor, get the
 // same treatment as a top-level operand.
@@ -482,8 +485,42 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 		}
 		return node
 	}
+	if fc := node.GetFuncCall(); fc != nil {
+		stripFuncCallSchema(fc)
+		return node
+	}
 	normalizeJsonClauses(node)
 	return node
+}
+
+// stripFuncCallSchema removes the schema from a two-part function name, so a
+// call written public.lower_v(v) and the same call written lower_v(v) compare
+// equal. pg_get_constraintdef, pg_get_expr, pg_get_indexdef and pg_get_viewdef
+// all print a call unqualified when the function's schema is on the
+// search_path, while a written definition keeps whatever the file says.
+//
+// Symmetric, and the same shape stripQualifications (diff/views.go) uses for a
+// RangeVar and a two-part ColumnRef. It carries the same cost: the diff does
+// not thread the search_path, so it cannot say which schema the unqualified
+// form resolves to, and two same-named functions in different schemas compare
+// equal. Recorded in TODO.md.
+//
+// pg_catalog is exempt. The deparser reads that prefix off the funcname to
+// print SUBSTRING(x FROM y FOR z), POSITION, OVERLAY, EXTRACT, OVERLAPS, TRIM,
+// AT TIME ZONE, NORMALIZE, IS NORMALIZED, COLLATION FOR, xmlexists and
+// SYSTEM_USER in keyword form, and SIMILAR TO parses to an A_Expr whose rexpr
+// is a pg_catalog.similar_to_escape call matched the same way. Stripping the
+// prefix rewrites what those deparse to, on both sides at once, so a written
+// pg_catalog.length(v) still differs from the catalog's length(v). A
+// three-part name is left alone as well.
+func stripFuncCallSchema(fc *pg_query.FuncCall) {
+	if len(fc.Funcname) != 2 {
+		return
+	}
+	if s := fc.Funcname[0].GetString_(); s == nil || s.Sval == "pg_catalog" {
+		return
+	}
+	fc.Funcname = fc.Funcname[1:]
 }
 
 // isTextLikeTypeName returns true if the TypeName refers to a text-like type
@@ -657,12 +694,41 @@ func equalConstraintDef(current, desired string) bool {
 	curCon.RawExpr = normalizeCheckExpr(curCon.RawExpr)
 	desCon.RawExpr = normalizeCheckExpr(desCon.RawExpr)
 	curCon.RawExpr = alignCurrentCasts(desCon.RawExpr, curCon.RawExpr)
+	normalizeConstraintIndexExprs(curCon)
+	normalizeConstraintIndexExprs(desCon)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
 	if deparseErrCur != nil || deparseErrDes != nil {
 		return current == desired
 	}
 	return curStr == desStr
+}
+
+// normalizeConstraintIndexExprs applies the expression normalizations to the
+// parts of a constraint that live outside RawExpr. An EXCLUDE constraint keeps
+// its elements in Exclusions and its predicate in WhereClause, so
+// `EXCLUDE USING gist ((public.lower_v(v)) WITH =)` was compared verbatim
+// against the `lower_v(v)` the catalog prints and the constraint was recreated
+// on every plan. The same holds for the text-like cast strip and the
+// `= ANY(ARRAY[...])` canonicalisation, which never reached an EXCLUDE either.
+//
+// Only the symmetric normalizations run here. alignCurrentCasts is asymmetric
+// and walks a pair of trees, which the exclusion list would have to be paired
+// up element by element to support; a non-text cast the catalog spelled out
+// inside an EXCLUDE expression is still read as a difference.
+func normalizeConstraintIndexExprs(con *pg_query.Constraint) {
+	// Each exclusion is a two-item list, the IndexElem and the operator name,
+	// so the IndexElem lookup skips the second item on its own.
+	for _, ex := range con.Exclusions {
+		for _, item := range ex.GetList().GetItems() {
+			if ie := item.GetIndexElem(); ie != nil && ie.Expr != nil {
+				ie.Expr = normalizeCheckExpr(ie.Expr)
+			}
+		}
+	}
+	if con.WhereClause != nil {
+		con.WhereClause = normalizeCheckExpr(con.WhereClause)
+	}
 }
 
 // alignCurrentCasts walks desired and current in step, stripping TypeCast

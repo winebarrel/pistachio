@@ -1,0 +1,20 @@
+# A stored generated column is compared through equalSelectExpr, and an
+# inequality there is an error rather than a plan, because PostgreSQL has no
+# ALTER COLUMN ... SET GENERATED AS. So a qualified call in the expression did
+# not merely drift, it failed the plan outright on every run.
+init: |
+  CREATE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      g text GENERATED ALWAYS AS (public.lower_v(v)) STORED,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      g text GENERATED ALWAYS AS (public.lower_v(v)) STORED,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: ""

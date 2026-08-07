@@ -1,0 +1,23 @@
+# The written form keeps the schema, the catalog prints the call without it.
+# Applying has to leave the database with no drift left behind.
+init: ""
+desired: |
+  -- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
+  CREATE OR REPLACE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (public.lower_v(v) <> 'x')
+  );
+  CREATE INDEX users_expr_idx ON public.users USING btree (public.lower_v(v));
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      v text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_v_check CHECK (lower_v(v) <> 'x'::text)
+  );
+  CREATE INDEX users_expr_idx ON public.users USING btree (lower_v(v));
+verify_no_drift: true
