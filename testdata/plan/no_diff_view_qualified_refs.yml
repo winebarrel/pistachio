@@ -1,0 +1,55 @@
+# pg_get_viewdef returns a column reference unqualified where the desired file
+# writes it as table.column, so stripQualifications has to reach the reference
+# wherever it sits. Each expression here held one that was missed, and the view
+# was re-emitted on every plan.
+init: |
+  CREATE TABLE public.t (
+      a text,
+      n integer,
+      b boolean
+  );
+  CREATE VIEW public.v1 AS
+      SELECT COALESCE(t.a, 'x') AS c1,
+          CASE WHEN t.b THEN t.n ELSE 0 END AS c2,
+          GREATEST(t.n, 1) AS c3,
+          (t.b IS TRUE) AS c4
+      FROM public.t;
+  CREATE VIEW public.v2 AS
+      SELECT string_agg(t.a, ',' ORDER BY t.a) AS c1,
+          count(*) FILTER (WHERE t.b) AS c2
+      FROM public.t
+      GROUP BY ROLLUP(t.a);
+  CREATE VIEW public.v3 AS
+      SELECT sum(t.n) OVER w AS c1
+      FROM public.t
+      WINDOW w AS (PARTITION BY t.a ORDER BY t.n);
+  CREATE VIEW public.v4 AS
+      SELECT DISTINCT ON (t.a) COALESCE(t.n, (SELECT max(t2.n) AS max FROM public.t t2)) AS c1
+      FROM public.t
+      ORDER BY t.a;
+desired: |
+  CREATE TABLE public.t (
+      a text,
+      n integer,
+      b boolean
+  );
+  CREATE VIEW public.v1 AS
+      SELECT COALESCE(t.a, 'x') AS c1,
+          CASE WHEN t.b THEN t.n ELSE 0 END AS c2,
+          GREATEST(t.n, 1) AS c3,
+          (t.b IS TRUE) AS c4
+      FROM public.t;
+  CREATE VIEW public.v2 AS
+      SELECT string_agg(t.a, ',' ORDER BY t.a) AS c1,
+          count(*) FILTER (WHERE t.b) AS c2
+      FROM public.t
+      GROUP BY ROLLUP(t.a);
+  CREATE VIEW public.v3 AS
+      SELECT sum(t.n) OVER w AS c1
+      FROM public.t
+      WINDOW w AS (PARTITION BY t.a ORDER BY t.n);
+  CREATE VIEW public.v4 AS
+      SELECT DISTINCT ON (t.a) COALESCE(t.n, (SELECT max(t2.n) AS max FROM public.t t2)) AS c1
+      FROM public.t
+      ORDER BY t.a;
+plan: ""

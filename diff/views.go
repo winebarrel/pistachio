@@ -6,6 +6,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -389,10 +390,14 @@ func stripQualifications(node *pg_query.Node) {
 	}
 
 	if cr := node.GetColumnRef(); cr != nil {
-		// "table.column" -> "column" (remove table prefix)
-		// Only strip when both parts are plain identifiers (not table.*)
-		if len(cr.Fields) == 2 && cr.Fields[1].GetString_() != nil {
-			cr.Fields = cr.Fields[1:]
+		stripColumnRefQualification(cr)
+		return
+	}
+
+	if gs := node.GetGroupingSet(); gs != nil {
+		// GROUP BY ROLLUP (...) / CUBE (...) / GROUPING SETS (...)
+		for _, item := range gs.Content {
+			stripQualifications(item)
 		}
 		return
 	}
@@ -410,6 +415,15 @@ func stripQualifications(node *pg_query.Node) {
 		}
 		for _, target := range ss.TargetList {
 			stripQualifications(target)
+		}
+		// DISTINCT ON (expr) and a named WINDOW hold expressions of their own.
+		for _, d := range ss.DistinctClause {
+			stripQualifications(d)
+		}
+		for _, w := range ss.WindowClause {
+			if wd := w.GetWindowDef(); wd != nil {
+				stripWindowDefQualifications(wd)
+			}
 		}
 		if ss.WhereClause != nil {
 			stripQualifications(ss.WhereClause)
@@ -458,46 +472,40 @@ func stripQualifications(node *pg_query.Node) {
 	}
 
 	if sl := node.GetSubLink(); sl != nil {
-		// Testexpr holds the LHS of `x IN (SELECT ...)` / `x = ANY (SELECT ...)`
-		// forms; stripping qualifications here matches the bare-IN A_Expr path.
+		// Testexpr holds the LHS of `x IN (SELECT ...)` / `x = ANY (SELECT ...)`.
 		stripQualifications(sl.Testexpr)
 		stripQualifications(sl.Subselect)
 		return
 	}
 
-	if expr := node.GetAExpr(); expr != nil {
-		stripQualifications(expr.Lexpr)
-		stripQualifications(expr.Rexpr)
-		return
-	}
+	// Anything else is an expression. The walker enumerates the node kinds
+	// that hold a column reference, and it hands back any sub-query it meets
+	// so the SELECT inside gets the same treatment.
+	pgast.WalkExprColumnRefNodes(node, stripColumnRefQualification, func(sl *pg_query.SubLink) {
+		stripQualifications(sl.Testexpr)
+		stripQualifications(sl.Subselect)
+	})
+}
 
-	if boolExpr := node.GetBoolExpr(); boolExpr != nil {
-		for _, arg := range boolExpr.Args {
-			stripQualifications(arg)
-		}
-		return
+// stripWindowDefQualifications strips the qualifications in an OVER clause,
+// whether written inline or under a WINDOW name. The window's own name and
+// the name it refines are not column references, and a frame offset is left
+// out because PostgreSQL rejects a variable there.
+func stripWindowDefQualifications(w *pg_query.WindowDef) {
+	for _, pb := range w.PartitionClause {
+		stripQualifications(pb)
 	}
-
-	if fc := node.GetFuncCall(); fc != nil {
-		for _, arg := range fc.Args {
-			stripQualifications(arg)
-		}
-		return
+	for _, ob := range w.OrderClause {
+		stripQualifications(ob)
 	}
+}
 
-	if sb := node.GetSortBy(); sb != nil {
-		stripQualifications(sb.Node)
-		return
-	}
-
-	if tc := node.GetTypeCast(); tc != nil {
-		// Recurse into the cast argument so qualified ColumnRefs nested under
-		// a TypeCast still get stripped. Matters because normalizeSelectExprs
-		// can later strip the text-like cast wrapper, exposing the inner
-		// reference; if its qualification stayed it would diff against the
-		// unqualified desired form.
-		stripQualifications(tc.Arg)
-		return
+// stripColumnRefQualification rewrites "table.column" as "column". Only a
+// two-field reference whose second field is a plain identifier is stripped,
+// which leaves table.* and schema.table.column alone.
+func stripColumnRefQualification(cr *pg_query.ColumnRef) {
+	if len(cr.Fields) == 2 && cr.Fields[1].GetString_() != nil {
+		cr.Fields = cr.Fields[1:]
 	}
 }
 

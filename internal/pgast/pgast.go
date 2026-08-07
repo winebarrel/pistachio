@@ -73,80 +73,108 @@ func DeparseConstraintDef(result *pg_query.ParseResult) (string, error) {
 // (table.col, schema.table.col) are skipped because they refer outside the
 // local scope.
 func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
+	WalkExprColumnRefNodes(node, func(cr *pg_query.ColumnRef) {
+		if len(cr.Fields) != 1 {
+			return
+		}
+		if s := cr.Fields[0].GetString_(); s != nil {
+			visit(s)
+		}
+	}, nil)
+}
+
+// WalkExprColumnRefNodes walks an expression tree and invokes visit for every
+// ColumnRef it holds, qualified or not. Visitors may mutate what they are
+// given. A nested SELECT is reached only through visitSubLink, which receives
+// the SubLink and decides what to do with it; pass nil to leave sub-queries
+// alone.
+func WalkExprColumnRefNodes(node *pg_query.Node, visit func(*pg_query.ColumnRef), visitSubLink func(*pg_query.SubLink)) {
 	if node == nil {
 		return
 	}
 	switch n := node.Node.(type) {
 	case *pg_query.Node_ColumnRef:
-		if len(n.ColumnRef.Fields) == 1 {
-			if s := n.ColumnRef.Fields[0].GetString_(); s != nil {
-				visit(s)
-			}
-		}
+		visit(n.ColumnRef)
 	case *pg_query.Node_AExpr:
-		WalkExprColumnRefs(n.AExpr.Lexpr, visit)
-		WalkExprColumnRefs(n.AExpr.Rexpr, visit)
+		WalkExprColumnRefNodes(n.AExpr.Lexpr, visit, visitSubLink)
+		WalkExprColumnRefNodes(n.AExpr.Rexpr, visit, visitSubLink)
 	case *pg_query.Node_BoolExpr:
 		for _, arg := range n.BoolExpr.Args {
-			WalkExprColumnRefs(arg, visit)
+			WalkExprColumnRefNodes(arg, visit, visitSubLink)
 		}
 	case *pg_query.Node_TypeCast:
-		WalkExprColumnRefs(n.TypeCast.Arg, visit)
+		WalkExprColumnRefNodes(n.TypeCast.Arg, visit, visitSubLink)
 	case *pg_query.Node_FuncCall:
 		for _, arg := range n.FuncCall.Args {
-			WalkExprColumnRefs(arg, visit)
+			WalkExprColumnRefNodes(arg, visit, visitSubLink)
+		}
+		// An aggregate holds its ORDER BY and FILTER outside the argument
+		// list, and a window function its OVER clause. Funcname is the
+		// function's, not a column's, and a frame offset cannot hold a
+		// variable.
+		for _, ob := range n.FuncCall.AggOrder {
+			WalkExprColumnRefNodes(ob, visit, visitSubLink)
+		}
+		WalkExprColumnRefNodes(n.FuncCall.AggFilter, visit, visitSubLink)
+		if w := n.FuncCall.Over; w != nil {
+			for _, pb := range w.PartitionClause {
+				WalkExprColumnRefNodes(pb, visit, visitSubLink)
+			}
+			for _, ob := range w.OrderClause {
+				WalkExprColumnRefNodes(ob, visit, visitSubLink)
+			}
 		}
 	case *pg_query.Node_NullTest:
-		WalkExprColumnRefs(n.NullTest.Arg, visit)
+		WalkExprColumnRefNodes(n.NullTest.Arg, visit, visitSubLink)
 	case *pg_query.Node_AArrayExpr:
 		for _, elem := range n.AArrayExpr.Elements {
-			WalkExprColumnRefs(elem, visit)
+			WalkExprColumnRefNodes(elem, visit, visitSubLink)
 		}
 	case *pg_query.Node_List:
 		for _, item := range n.List.Items {
-			WalkExprColumnRefs(item, visit)
+			WalkExprColumnRefNodes(item, visit, visitSubLink)
 		}
 	case *pg_query.Node_CoalesceExpr:
 		for _, arg := range n.CoalesceExpr.Args {
-			WalkExprColumnRefs(arg, visit)
+			WalkExprColumnRefNodes(arg, visit, visitSubLink)
 		}
 	case *pg_query.Node_CaseExpr:
-		WalkExprColumnRefs(n.CaseExpr.Arg, visit)
-		WalkExprColumnRefs(n.CaseExpr.Defresult, visit)
+		WalkExprColumnRefNodes(n.CaseExpr.Arg, visit, visitSubLink)
+		WalkExprColumnRefNodes(n.CaseExpr.Defresult, visit, visitSubLink)
 		for _, when := range n.CaseExpr.Args {
 			if w := when.GetCaseWhen(); w != nil {
-				WalkExprColumnRefs(w.Expr, visit)
-				WalkExprColumnRefs(w.Result, visit)
+				WalkExprColumnRefNodes(w.Expr, visit, visitSubLink)
+				WalkExprColumnRefNodes(w.Result, visit, visitSubLink)
 			}
 		}
 	case *pg_query.Node_AIndirection:
 		// col[1], col[1:2], (col).field
-		WalkExprColumnRefs(n.AIndirection.Arg, visit)
+		WalkExprColumnRefNodes(n.AIndirection.Arg, visit, visitSubLink)
 		for _, ind := range n.AIndirection.Indirection {
 			if idx := ind.GetAIndices(); idx != nil {
-				WalkExprColumnRefs(idx.Lidx, visit)
-				WalkExprColumnRefs(idx.Uidx, visit)
+				WalkExprColumnRefNodes(idx.Lidx, visit, visitSubLink)
+				WalkExprColumnRefNodes(idx.Uidx, visit, visitSubLink)
 			}
 		}
 	case *pg_query.Node_MinMaxExpr:
 		// GREATEST / LEAST
 		for _, arg := range n.MinMaxExpr.Args {
-			WalkExprColumnRefs(arg, visit)
+			WalkExprColumnRefNodes(arg, visit, visitSubLink)
 		}
 	case *pg_query.Node_RowExpr:
 		// ROW(col), (col1, col2)
 		for _, arg := range n.RowExpr.Args {
-			WalkExprColumnRefs(arg, visit)
+			WalkExprColumnRefNodes(arg, visit, visitSubLink)
 		}
 	case *pg_query.Node_BooleanTest:
 		// col IS TRUE / IS NOT FALSE / IS UNKNOWN
-		WalkExprColumnRefs(n.BooleanTest.Arg, visit)
+		WalkExprColumnRefNodes(n.BooleanTest.Arg, visit, visitSubLink)
 	case *pg_query.Node_CollateClause:
 		// col COLLATE "C"
-		WalkExprColumnRefs(n.CollateClause.Arg, visit)
+		WalkExprColumnRefNodes(n.CollateClause.Arg, visit, visitSubLink)
 	case *pg_query.Node_NamedArgExpr:
 		// f(x => col). The argument name is a plain string, not a node.
-		WalkExprColumnRefs(n.NamedArgExpr.Arg, visit)
+		WalkExprColumnRefNodes(n.NamedArgExpr.Arg, visit, visitSubLink)
 	case *pg_query.Node_XmlExpr:
 		// xmlelement(name e, col), xmlconcat(col, ...). ArgNames holds the
 		// attribute names rather than columns, so it stays out.
@@ -156,57 +184,67 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 			if rt := arg.GetResTarget(); rt != nil {
 				arg = rt.Val
 			}
-			WalkExprColumnRefs(arg, visit)
+			WalkExprColumnRefNodes(arg, visit, visitSubLink)
 		}
 		for _, arg := range n.XmlExpr.Args {
-			WalkExprColumnRefs(arg, visit)
+			WalkExprColumnRefNodes(arg, visit, visitSubLink)
 		}
 	case *pg_query.Node_XmlSerialize:
 		// xmlserialize(content col AS text) is its own node kind rather than
 		// an XmlExpr. TypeName holds a type, so only Expr is walked.
-		WalkExprColumnRefs(n.XmlSerialize.Expr, visit)
+		WalkExprColumnRefNodes(n.XmlSerialize.Expr, visit, visitSubLink)
 	case *pg_query.Node_JsonObjectConstructor:
 		// JSON_OBJECT('k': col). Exprs holds JsonKeyValue nodes.
 		for _, e := range n.JsonObjectConstructor.Exprs {
-			WalkExprColumnRefs(e, visit)
+			WalkExprColumnRefNodes(e, visit, visitSubLink)
 		}
 	case *pg_query.Node_JsonKeyValue:
 		// A key is an expression as well, and PostgreSQL counts a column
 		// written there, so JSON_OBJECT(a: b) reaches both columns.
-		WalkExprColumnRefs(n.JsonKeyValue.Key, visit)
-		walkJsonValueExpr(n.JsonKeyValue.Value, visit)
+		WalkExprColumnRefNodes(n.JsonKeyValue.Key, visit, visitSubLink)
+		walkJsonValueExpr(n.JsonKeyValue.Value, visit, visitSubLink)
 	case *pg_query.Node_JsonArrayConstructor:
 		// JSON_ARRAY(col, ...). Exprs holds JsonValueExpr nodes.
 		for _, e := range n.JsonArrayConstructor.Exprs {
-			WalkExprColumnRefs(e, visit)
+			WalkExprColumnRefNodes(e, visit, visitSubLink)
 		}
 	case *pg_query.Node_JsonValueExpr:
-		walkJsonValueExpr(n.JsonValueExpr, visit)
+		walkJsonValueExpr(n.JsonValueExpr, visit, visitSubLink)
 	case *pg_query.Node_JsonIsPredicate:
 		// col IS JSON
-		WalkExprColumnRefs(n.JsonIsPredicate.Expr, visit)
+		WalkExprColumnRefNodes(n.JsonIsPredicate.Expr, visit, visitSubLink)
 	case *pg_query.Node_JsonParseExpr:
 		// JSON(col)
-		walkJsonValueExpr(n.JsonParseExpr.Expr, visit)
+		walkJsonValueExpr(n.JsonParseExpr.Expr, visit, visitSubLink)
 	case *pg_query.Node_JsonScalarExpr:
 		// JSON_SCALAR(col)
-		WalkExprColumnRefs(n.JsonScalarExpr.Expr, visit)
+		WalkExprColumnRefNodes(n.JsonScalarExpr.Expr, visit, visitSubLink)
 	case *pg_query.Node_JsonSerializeExpr:
 		// JSON_SERIALIZE(col)
-		walkJsonValueExpr(n.JsonSerializeExpr.Expr, visit)
+		walkJsonValueExpr(n.JsonSerializeExpr.Expr, visit, visitSubLink)
 	case *pg_query.Node_JsonFuncExpr:
 		// JSON_EXISTS / JSON_VALUE / JSON_QUERY. ColumnName names a JSON_TABLE
 		// output column rather than a table column, so it stays out.
-		walkJsonValueExpr(n.JsonFuncExpr.ContextItem, visit)
-		WalkExprColumnRefs(n.JsonFuncExpr.Pathspec, visit)
+		walkJsonValueExpr(n.JsonFuncExpr.ContextItem, visit, visitSubLink)
+		WalkExprColumnRefNodes(n.JsonFuncExpr.Pathspec, visit, visitSubLink)
 		for _, arg := range n.JsonFuncExpr.Passing {
-			WalkExprColumnRefs(arg, visit)
+			WalkExprColumnRefNodes(arg, visit, visitSubLink)
 		}
-		walkJsonBehavior(n.JsonFuncExpr.OnEmpty, visit)
-		walkJsonBehavior(n.JsonFuncExpr.OnError, visit)
+		walkJsonBehavior(n.JsonFuncExpr.OnEmpty, visit, visitSubLink)
+		walkJsonBehavior(n.JsonFuncExpr.OnError, visit, visitSubLink)
 	case *pg_query.Node_JsonArgument:
 		// PASSING col AS name. The name is the argument's, not a column's.
-		walkJsonValueExpr(n.JsonArgument.Val, visit)
+		walkJsonValueExpr(n.JsonArgument.Val, visit, visitSubLink)
+	case *pg_query.Node_SortBy:
+		// An ORDER BY item, which an aggregate and a window function both
+		// carry.
+		WalkExprColumnRefNodes(n.SortBy.Node, visit, visitSubLink)
+	case *pg_query.Node_SubLink:
+		// EXISTS (SELECT ...), x IN (SELECT ...). The contained SELECT is out
+		// of the local scope, so only a caller that asked for it gets here.
+		if visitSubLink != nil {
+			visitSubLink(n.SubLink)
+		}
 	}
 	// The other SQL/JSON node kinds are out of reach for the callers:
 	// JSON_OBJECTAGG and JSON_ARRAYAGG are aggregates, which a CHECK, an index
@@ -218,12 +256,12 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 // up both on its own and as a typed field of the SQL/JSON nodes. FormattedExpr
 // is filled in by the analyzer, not by the raw parser these callers run, so
 // only RawExpr is walked.
-func walkJsonValueExpr(v *pg_query.JsonValueExpr, visit func(*pg_query.String)) {
-	WalkExprColumnRefs(v.GetRawExpr(), visit)
+func walkJsonValueExpr(v *pg_query.JsonValueExpr, visit func(*pg_query.ColumnRef), visitSubLink func(*pg_query.SubLink)) {
+	WalkExprColumnRefNodes(v.GetRawExpr(), visit, visitSubLink)
 }
 
 // walkJsonBehavior walks the expression of an ON EMPTY / ON ERROR clause,
 // which only DEFAULT <expr> carries.
-func walkJsonBehavior(b *pg_query.JsonBehavior, visit func(*pg_query.String)) {
-	WalkExprColumnRefs(b.GetExpr(), visit)
+func walkJsonBehavior(b *pg_query.JsonBehavior, visit func(*pg_query.ColumnRef), visitSubLink func(*pg_query.SubLink)) {
+	WalkExprColumnRefNodes(b.GetExpr(), visit, visitSubLink)
 }

@@ -210,6 +210,121 @@ func TestEqualViewDef_columnQualificationDifference(t *testing.T) {
 	))
 }
 
+// pg_get_viewdef returns a column reference unqualified when the desired file
+// writes it as table.column, so every expression node kind that can hold one
+// has to be reached. Each of these was re-emitted on every plan before.
+func TestEqualViewDef_qualificationInsideExpressions(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		current string
+		desired string
+	}{
+		{
+			name:    "coalesce",
+			current: "SELECT COALESCE(a, 'x') AS c FROM t",
+			desired: "SELECT COALESCE(t.a, 'x') AS c FROM public.t",
+		},
+		{
+			name:    "case",
+			current: "SELECT CASE WHEN a IS NULL THEN 'y' ELSE a END AS c FROM t",
+			desired: "SELECT CASE WHEN t.a IS NULL THEN 'y' ELSE t.a END AS c FROM public.t",
+		},
+		{
+			name:    "greatest",
+			current: "SELECT GREATEST(n, 1) AS c FROM t",
+			desired: "SELECT GREATEST(t.n, 1) AS c FROM public.t",
+		},
+		{
+			name:    "subscript",
+			current: "SELECT arr[1] AS c FROM t",
+			desired: "SELECT t.arr[1] AS c FROM public.t",
+		},
+		{
+			name:    "array constructor",
+			current: "SELECT ARRAY[n, 1] AS c FROM t",
+			desired: "SELECT ARRAY[t.n, 1] AS c FROM public.t",
+		},
+		{
+			name:    "row constructor",
+			current: "SELECT (ROW(a, n))::text AS c FROM t",
+			desired: "SELECT (ROW(t.a, t.n))::text AS c FROM public.t",
+		},
+		{
+			name:    "boolean test",
+			current: "SELECT (b IS TRUE) AS c FROM t",
+			desired: "SELECT (t.b IS TRUE) AS c FROM public.t",
+		},
+		{
+			name:    "collate",
+			current: `SELECT (a COLLATE "C") AS c FROM t`,
+			desired: `SELECT (t.a COLLATE "C") AS c FROM public.t`,
+		},
+		{
+			name:    "xmlelement",
+			current: "SELECT xmlelement(name e, a) AS c FROM t",
+			desired: "SELECT xmlelement(name e, t.a) AS c FROM public.t",
+		},
+		{
+			name:    "json constructor",
+			current: "SELECT (JSON_OBJECT('k' : a RETURNING json))::text AS c FROM t",
+			desired: "SELECT (JSON_OBJECT('k': t.a))::text AS c FROM public.t",
+		},
+		{
+			name:    "aggregate order by",
+			current: "SELECT string_agg(a, ',' ORDER BY a) AS c FROM t",
+			desired: "SELECT string_agg(t.a, ',' ORDER BY t.a) AS c FROM public.t",
+		},
+		{
+			name:    "aggregate filter",
+			current: "SELECT count(*) FILTER (WHERE b) AS c FROM t",
+			desired: "SELECT count(*) FILTER (WHERE t.b) AS c FROM public.t",
+		},
+		{
+			name:    "window inline",
+			current: "SELECT sum(n) OVER (PARTITION BY a) AS c FROM t",
+			desired: "SELECT sum(t.n) OVER (PARTITION BY t.a) AS c FROM public.t",
+		},
+		{
+			name:    "window named",
+			current: "SELECT sum(n) OVER w AS c FROM t WINDOW w AS (PARTITION BY a ORDER BY n)",
+			desired: "SELECT sum(t.n) OVER w AS c FROM public.t WINDOW w AS (PARTITION BY t.a ORDER BY t.n)",
+		},
+		{
+			name:    "distinct on",
+			current: "SELECT DISTINCT ON (a) n AS c FROM t ORDER BY a",
+			desired: "SELECT DISTINCT ON (t.a) t.n AS c FROM public.t ORDER BY t.a",
+		},
+		{
+			name:    "grouping set",
+			current: "SELECT a AS c FROM t GROUP BY ROLLUP(a)",
+			desired: "SELECT t.a AS c FROM public.t GROUP BY ROLLUP(t.a)",
+		},
+		{
+			name:    "aggregate filter under an expression",
+			current: "SELECT COALESCE(count(*) FILTER (WHERE b), 0) AS c FROM t GROUP BY a",
+			desired: "SELECT COALESCE(count(*) FILTER (WHERE t.b), 0) AS c FROM public.t GROUP BY t.a",
+		},
+		{
+			name:    "subquery under an expression",
+			current: "SELECT COALESCE(a, ( SELECT t2.a FROM t t2 LIMIT 1)) AS c FROM t",
+			desired: "SELECT COALESCE(t.a, (SELECT t2.a FROM public.t t2 LIMIT 1)) AS c FROM public.t",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.True(t, equalViewDef(tt.current, tt.desired))
+		})
+	}
+}
+
+// A star keeps its table prefix: t.* is not a column reference, and dropping
+// the prefix would change which table the star expands.
+func TestEqualViewDef_starKeepsItsQualification(t *testing.T) {
+	assert.False(t, equalViewDef(
+		"SELECT u.* FROM users u JOIN orders o ON u.id = o.user_id",
+		"SELECT o.* FROM public.users u JOIN public.orders o ON u.id = o.user_id",
+	))
+}
+
 func TestEqualViewDef_joinQualification(t *testing.T) {
 	// Covers JoinExpr + A_Expr paths in stripQualifications
 	assert.True(t, equalViewDef(

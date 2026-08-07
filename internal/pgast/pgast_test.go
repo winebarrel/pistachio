@@ -1,6 +1,7 @@
 package pgast_test
 
 import (
+	"strings"
 	"testing"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -206,6 +207,65 @@ func TestWalkExprColumnRefs_JsonNested(t *testing.T) {
 func TestWalkExprColumnRefs_JsonArgumentNameIsNotAColumn(t *testing.T) {
 	assert.Equal(t, []string{"b", "c"}, collectRefs(t,
 		"CHECK ((JSON_VALUE(b, '$.x' PASSING c AS a) > ''))"))
+}
+
+// collectRefNodes returns every column reference in a CHECK definition,
+// qualified ones included, and counts the sub-queries handed back.
+func collectRefNodes(t *testing.T, def string, enter bool) (refs []string, subs int) {
+	t.Helper()
+	con := pgast.ParseConstraintDef(def)
+	require.NotNil(t, con)
+	var visitSubLink func(*pg_query.SubLink)
+	if enter {
+		visitSubLink = func(*pg_query.SubLink) { subs++ }
+	}
+	pgast.WalkExprColumnRefNodes(con.RawExpr, func(cr *pg_query.ColumnRef) {
+		var parts []string
+		for _, f := range cr.Fields {
+			parts = append(parts, f.GetString_().GetSval())
+		}
+		refs = append(refs, strings.Join(parts, "."))
+	}, visitSubLink)
+	return refs, subs
+}
+
+// collectSelectRefs returns every column reference in one SELECT target. A
+// view body is where the walker meets an aggregate or a window function; a
+// CHECK constraint cannot hold either.
+func collectSelectRefs(t *testing.T, target string) []string {
+	t.Helper()
+	result, err := pg_query.Parse("SELECT " + target + " FROM t")
+	require.NoError(t, err)
+	rt := result.Stmts[0].Stmt.GetSelectStmt().TargetList[0].GetResTarget()
+	require.NotNil(t, rt)
+	var refs []string
+	pgast.WalkExprColumnRefNodes(rt.Val, func(cr *pg_query.ColumnRef) {
+		refs = append(refs, cr.Fields[0].GetString_().GetSval())
+	}, nil)
+	return refs
+}
+
+func TestWalkExprColumnRefNodes_AggregateAndWindow(t *testing.T) {
+	assert.Equal(t, []string{"a", "a"}, collectSelectRefs(t, "string_agg(a, ',' ORDER BY a)"))
+	assert.Equal(t, []string{"b"}, collectSelectRefs(t, "count(*) FILTER (WHERE b)"))
+	assert.Equal(t, []string{"n", "a", "n"}, collectSelectRefs(t, "sum(n) OVER (PARTITION BY a ORDER BY n)"))
+}
+
+func TestWalkExprColumnRefNodes_VisitsQualifiedRefs(t *testing.T) {
+	refs, _ := collectRefNodes(t, "CHECK ((t.a > b))", false)
+	assert.Equal(t, []string{"t.a", "b"}, refs)
+}
+
+func TestWalkExprColumnRefNodes_SubLink(t *testing.T) {
+	def := "CHECK ((a > (SELECT max(b) FROM other)))"
+	// Without a visitor the sub-query is left alone.
+	refs, subs := collectRefNodes(t, def, false)
+	assert.Equal(t, []string{"a"}, refs)
+	assert.Equal(t, 0, subs)
+
+	refs, subs = collectRefNodes(t, def, true)
+	assert.Equal(t, []string{"a"}, refs)
+	assert.Equal(t, 1, subs)
 }
 
 func TestWalkExprColumnRefs_NilSafe(t *testing.T) {

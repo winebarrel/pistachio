@@ -636,23 +636,40 @@ subquery anywhere. A deliberate choice, not a bug.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 
-## View drift on a qualified column reference inside an expression
+## View drift on a target alias the catalog writes differently
 
-`stripQualifications` (`diff/views.go`) removes the table prefix from a column
-reference so that a desired `t.a` matches the `a` that `pg_get_viewdef`
-returns. It handles a plain reference, an operator expression, a boolean
-expression, a function call, a cast, a sort key and a subquery, but not the
-other expression node kinds. A view whose body writes `COALESCE(t.a, 'x')`,
-`CASE WHEN t.a ...`, `GREATEST(t.a, ...)`, a JSON constructor or any other
-kind the function does not walk keeps the prefix, so `equalViewDef` never
-matches and every plan re-emits `CREATE OR REPLACE VIEW`. Applying it succeeds
-and changes nothing, so `plan --check` stays at exit code 2 forever.
+`pg_get_viewdef` decides the alias of every output column on its own. It drops
+one that repeats the column name, so `SELECT t.a AS a` comes back as
+`SELECT a`, and it adds one where the desired file has none, so
+`(SELECT max(t2.n) FROM t t2)` comes back as `(SELECT max(t2.n) AS max FROM t
+t2)`. `equalViewDef` compares the deparsed forms, where the alias is part of
+the text, so either shape re-emits `CREATE OR REPLACE VIEW` on every plan.
+Applying it succeeds and changes nothing, so `plan --check` stays at exit code
+2 forever.
 
-`WalkExprColumnRefs` (`internal/pgast`) already enumerates the expression node
-kinds, and it visits exactly the ColumnRefs this needs, but it skips a
-qualified reference by design, since its callers work within one table. Adding
-an option to visit qualified references too would let both share one walk.
+Closing it means normalizing the alias on both sides in `normalizeSelectExprs`
+(`diff/views.go`): drop a `ResTarget.Name` that repeats the target's own column
+name, and read a missing name as the name PostgreSQL would pick. The second
+half needs the name for an arbitrary expression, which is what PostgreSQL's
+`FigureColname` does, so only the simple cases (a column reference, a function
+call) can be reproduced.
 
-Workaround: write the reference unqualified.
+Workaround: write the alias the way `pista dump` emits it.
 
-Origin: found while adding the SQL/JSON walk, [#371](https://github.com/winebarrel/pistachio/pull/371).
+Origin: found while widening stripQualifications, [#371](https://github.com/winebarrel/pistachio/pull/371).
+
+## View drift on BETWEEN
+
+PostgreSQL rewrites `x BETWEEN a AND b` as `x >= a AND x <= b` before storing
+a view, so `pg_get_viewdef` never returns the written form and the view is
+re-emitted on every plan. The same holds for `NOT BETWEEN` and the SYMMETRIC
+variants.
+
+`normalizeCheckExpr` (`diff/tables.go`) could rewrite the desired side the same
+way: an `A_Expr` of kind `AEXPR_BETWEEN` over `x` and a two-item list becomes
+the `AND` of two comparisons. The expression is evaluated twice in the
+rewritten form, which matches what PostgreSQL itself stores.
+
+Workaround: write the two comparisons.
+
+Origin: found while widening stripQualifications, [#371](https://github.com/winebarrel/pistachio/pull/371).
