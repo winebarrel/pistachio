@@ -480,39 +480,55 @@ is the same prerequisite as the INHERITS plan / apply entry above.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
-## Perpetual drift on a schema-qualified function call in a CHECK constraint
+## Same-named functions in two schemas compare equal
 
-A CHECK constraint that calls a function schema-qualified, written as
-`CHECK (public.lower_v(v) <> 'x')`, is re-emitted as `DROP CONSTRAINT` +
-`ADD CONSTRAINT` on every plan. Applying it succeeds and changes nothing, so
-`plan --check` stays at exit code 2 forever. `pg_get_constraintdef` returns
-the call unqualified when the function's schema is on the search_path, while
-the desired side keeps what the user wrote.
+`stripFuncCallSchema` (`diff/tables.go`) removes the schema from a two-part
+function name on both sides, so `public.f(v)` and `f(v)` no longer drift. The
+diff does not carry the search_path, so it cannot say which schema the
+unqualified form resolves to, and `a.f(v)` against `b.f(v)` reads as no
+change. `stripQualifications` (`diff/views.go`) takes the same tradeoff for a
+table and a column reference. Closing it needs the target-schema list in the
+diff, the same thing the cross-schema user-type entry above needs. The same
+reasoning makes a user function named `public.substring(v, 1, 2)` compare
+equal to a call of the built-in.
 
-`normalizeCheckExpr` (`diff/tables.go`) strips text-like casts and
-canonicalises `= ANY(ARRAY[...])` -> `IN (...)`, but never touches the
-`FuncCall` name, so the two forms deparse differently. Index expressions
-and index predicates run through `normalizeCheckExpr` as well
-(`normalizeIndexStmt`), so the same drift is expected there.
+An `EXCLUDE` constraint now runs the symmetric normalizations over its
+`Exclusions` elements and its `WhereClause`, but not `alignCurrentCasts`,
+which is asymmetric and walks a pair of trees the exclusion list would have to
+be paired up element by element to feed. A non-text cast the catalog spelled
+out inside an `EXCLUDE` expression is still read as a difference.
 
-The codebase already normalizes schema qualification three different ways.
-`stripQualifications` (`diff/views.go`) clears `RangeVar.Schemaname` and a
-table-qualified `ColumnRef` unconditionally on both sides, without
-consulting the search_path. `normalizeFKSchema` (`diff/tables.go`) goes the
-other way and fills an empty schema in with the owning table's. And
-`stripTypeSchema` (`diff/tables.go`) removes only the container's own
-schema prefix.
+Two forms are left qualified and still drift. A `pg_catalog` prefix stays,
+because the deparser reads it to print `SUBSTRING(x FROM y)`, `POSITION`,
+`OVERLAY`, `EXTRACT`, `OVERLAPS`, `TRIM`, `AT TIME ZONE`, `NORMALIZE`,
+`IS NORMALIZED`, `COLLATION FOR`, `xmlexists`, `SYSTEM_USER` and the
+`similar_to_escape` call behind `SIMILAR TO` in keyword form, so a written
+`pg_catalog.length(v)` still differs from the catalog's `length(v)`. A
+three-part name such as `db.public.f(v)` stays as well.
 
-The view approach is the cheapest fit here: strip the schema from a
-`FuncCall` name symmetrically in `normalizeCheckExpr`. It carries the same
-tradeoff views already accept, that two same-named functions in different
-schemas compare equal. The stricter alternative is the search_path-aware
-stripping described in the cross-schema user-type entry above, which the
-diff cannot do today because it does not thread the schema list.
+Origin: found while fixing the qualified-call drift, 2026-08-08.
 
-Workaround: write the call unqualified.
+## Perpetual drift on a schema-qualified operator
 
-Origin: found while adding `-- pista:execute-first`, 2026-07-31.
+`CHECK (a OPERATOR(public.=) b)` is expected to be re-emitted on every plan.
+`pg_get_constraintdef` prints the operator bare when it is visible on the
+search_path, while `A_Expr.Name` keeps the two-part form the file wrote. The
+same shape probably applies to an index opclass written `public.text_ops` and
+to `COLLATE public."C"`, and a `TypeCast` to a schema-qualified user type is
+the case the cross-schema user-type entry above already records. None of
+these has been checked against a server.
+
+This is the class `stripFuncCallSchema` (`diff/tables.go`) closes for a
+function call, and the fix has the same shape: strip a two-element name
+symmetrically, exempting `pg_catalog`. It is left out because `A_Expr.Name`
+means different things per `A_Expr_Kind`, with `BETWEEN`, `LIKE` and
+`SIMILAR TO` all storing a name there, so the strip has to be narrowed to
+`AEXPR_OP` and needs its own round-trip test over those kinds. A qualified
+operator appears nowhere in `testdata/` or in any sample schema.
+
+Workaround: write the operator unqualified.
+
+Origin: found while fixing the qualified-call drift, 2026-08-08.
 
 ## `dump` drops `PARTITION BY` from a sub-partitioned partition
 
