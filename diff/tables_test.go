@@ -2181,6 +2181,140 @@ func TestEqualConstraintDef_textCastInCase(t *testing.T) {
 	))
 }
 
+// pg_get_expr spells out the RETURNING clause of a SQL/JSON constructor even
+// when it names the default type, which the written form leaves off.
+func TestEqualConstraintDef_jsonObjectDefaultReturningStripped(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_OBJECT('k' : a RETURNING json) IS NOT NULL))",
+		"CHECK (JSON_OBJECT('k': a) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_jsonArrayDefaultReturningStripped(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_ARRAY(a, b RETURNING json) IS NOT NULL))",
+		"CHECK (JSON_ARRAY(a, b) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_jsonQuotedDefaultReturningStripped(t *testing.T) {
+	// A quoted type name is not resolved to pg_catalog.json, so it reaches the
+	// comparison as a bare `json`.
+	assert.True(t, equalConstraintDef(
+		`CHECK ((JSON_ARRAY(a RETURNING "json") IS NOT NULL))`,
+		"CHECK (JSON_ARRAY(a) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_jsonReturningOtherTypeKept(t *testing.T) {
+	assert.False(t, equalConstraintDef(
+		"CHECK ((JSON_ARRAY(a RETURNING jsonb) IS NOT NULL))",
+		"CHECK (JSON_ARRAY(a) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_jsonReturningFormatIgnored(t *testing.T) {
+	// PostgreSQL never prints the FORMAT of a RETURNING clause, so a written
+	// one has to compare equal to the stored form that lacks it. The type the
+	// clause names still counts.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_ARRAY(a RETURNING text) IS NOT NULL))",
+		"CHECK (JSON_ARRAY(a RETURNING text FORMAT JSON) IS NOT NULL)",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_ARRAY(a) IS NOT NULL))",
+		"CHECK (JSON_ARRAY(a RETURNING json FORMAT JSON) IS NOT NULL)",
+	))
+	assert.False(t, equalConstraintDef(
+		"CHECK ((JSON_ARRAY(a RETURNING text) IS NOT NULL))",
+		"CHECK (JSON_ARRAY(a RETURNING jsonb FORMAT JSON) IS NOT NULL)",
+	))
+}
+
+// The normalizations a CHECK already gets have to reach inside the SQL/JSON
+// nodes as well, since pg_get_expr rewrites there too.
+func TestEqualConstraintDef_normalizesInsideJsonObject(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_OBJECT('k' : (a = ANY (ARRAY['x'::text, 'y'::text])) RETURNING json) IS NOT NULL))",
+		"CHECK (JSON_OBJECT('k': (a IN ('x', 'y'))) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_currentCastStrippedInsideJson(t *testing.T) {
+	// pg_get_constraintdef spells out a literal's type inside a constructor
+	// the same way it does outside one, and the desired side rarely writes it.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_OBJECT('k' : (ts >= '2020-01-01 00:00:00'::timestamp without time zone) RETURNING json) IS NOT NULL))",
+		"CHECK (JSON_OBJECT('k': (ts >= '2020-01-01 00:00:00')) IS NOT NULL)",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_ARRAY((val > '0'::integer) RETURNING json) IS NOT NULL))",
+		"CHECK (JSON_ARRAY(val > 0) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_desiredCastInsideJsonKept(t *testing.T) {
+	// A cast the desired side wrote is preserved, so a disagreement with the
+	// database still surfaces.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((JSON_ARRAY((val > '0'::integer) RETURNING json) IS NOT NULL))",
+		"CHECK (JSON_ARRAY(val > '0'::bigint) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_normalizesInsideJsonObjectKey(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_OBJECT(a : b RETURNING json) IS NOT NULL))",
+		"CHECK (JSON_OBJECT(a::text: b) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_normalizesInsideJsonArray(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_ARRAY(a RETURNING json) IS NOT NULL))",
+		"CHECK (JSON_ARRAY(a::text) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_normalizesInsideJsonIsPredicate(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((a IS JSON))",
+		"CHECK (a::text IS JSON)",
+	))
+}
+
+// PostgreSQL 17 added these; pg_query parses them on any server, so the
+// normalization is exercised here rather than through a fixture.
+func TestEqualConstraintDef_normalizesInsideJsonParse(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON(a) IS NOT NULL))",
+		"CHECK (JSON(a::text) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_normalizesInsideJsonScalar(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_SCALAR(a) IS NOT NULL))",
+		"CHECK (JSON_SCALAR(a::text) IS NOT NULL)",
+	))
+}
+
+func TestEqualConstraintDef_normalizesInsideJsonSerialize(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_SERIALIZE(a) > ''))",
+		"CHECK (JSON_SERIALIZE(a::text) > '')",
+	))
+}
+
+func TestEqualConstraintDef_normalizesInsideJsonValue(t *testing.T) {
+	// The context item, the path, a PASSING argument and an ON ERROR default
+	// are all normalized.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_VALUE(a, '$.x' PASSING b AS v DEFAULT c ON ERROR) > ''))",
+		"CHECK (JSON_VALUE(a::text, '$.x'::text PASSING b::text AS v DEFAULT c::text ON ERROR) > '')",
+	))
+}
+
 func TestEqualConstraintDef_parseError(t *testing.T) {
 	assert.True(t, equalConstraintDef(")))invalid", ")))invalid"))
 	assert.False(t, equalConstraintDef(")))invalid", ")))other"))

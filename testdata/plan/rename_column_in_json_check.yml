@@ -1,0 +1,22 @@
+# A column renamed with -- pista:renamed-from is rewritten inside the CHECK
+# expressions that reference it, including one that reaches the column through
+# a SQL/JSON constructor. PostgreSQL rewrites the stored expression on RENAME,
+# so the constraint itself needs no DDL.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      payload text,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_payload_check CHECK (JSON_OBJECT('k': payload) IS NOT NULL)
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      -- pista:renamed-from payload
+      body text,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_payload_check CHECK (JSON_OBJECT('k': body) IS NOT NULL)
+  );
+plan: |
+  ALTER TABLE public.t RENAME COLUMN payload TO body;

@@ -1,0 +1,20 @@
+# Only the default RETURNING json is dropped before a CHECK is compared, so a
+# RETURNING that names another type still reads as a change.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      a text,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_a_check CHECK (JSON_ARRAY(a) IS NOT NULL)
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      a text,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_a_check CHECK (JSON_ARRAY(a RETURNING jsonb) IS NOT NULL)
+  );
+plan: |
+  ALTER TABLE public.t DROP CONSTRAINT t_a_check;
+  ALTER TABLE public.t ADD CONSTRAINT t_a_check CHECK (JSON_ARRAY(a RETURNING jsonb) IS NOT NULL);

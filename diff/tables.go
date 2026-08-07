@@ -449,6 +449,8 @@ func isSerialType(typeName string) bool {
 // so that semantically equivalent definitions compare as equal:
 //   - Strips casts to text-like types (text, varchar), which pg_get_constraintdef adds.
 //   - Converts = ANY(ARRAY[...]) to IN (...) (PostgreSQL internal representation).
+//   - Strips the RETURNING json that pg_get_constraintdef spells out on
+//     JSON_OBJECT / JSON_ARRAY, where json is the default return type.
 func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 	if node == nil {
 		return nil
@@ -516,8 +518,112 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 			normalizeSelectExprs(n.SubLink.Subselect)
 		}
 		n.SubLink.Testexpr = normalizeCheckExpr(n.SubLink.Testexpr)
+	case *pg_query.Node_JsonObjectConstructor:
+		c := n.JsonObjectConstructor
+		for i, e := range c.Exprs {
+			c.Exprs[i] = normalizeCheckExpr(e)
+		}
+		c.Output = normalizeJsonOutput(c.Output)
+	case *pg_query.Node_JsonKeyValue:
+		kv := n.JsonKeyValue
+		kv.Key = normalizeCheckExpr(kv.Key)
+		normalizeJsonValueExpr(kv.Value)
+	case *pg_query.Node_JsonArrayConstructor:
+		c := n.JsonArrayConstructor
+		for i, e := range c.Exprs {
+			c.Exprs[i] = normalizeCheckExpr(e)
+		}
+		c.Output = normalizeJsonOutput(c.Output)
+	case *pg_query.Node_JsonValueExpr:
+		normalizeJsonValueExpr(n.JsonValueExpr)
+	case *pg_query.Node_JsonIsPredicate:
+		n.JsonIsPredicate.Expr = normalizeCheckExpr(n.JsonIsPredicate.Expr)
+	case *pg_query.Node_JsonParseExpr:
+		normalizeJsonValueExpr(n.JsonParseExpr.Expr)
+	case *pg_query.Node_JsonScalarExpr:
+		n.JsonScalarExpr.Expr = normalizeCheckExpr(n.JsonScalarExpr.Expr)
+	case *pg_query.Node_JsonSerializeExpr:
+		normalizeJsonValueExpr(n.JsonSerializeExpr.Expr)
+	case *pg_query.Node_JsonFuncExpr:
+		f := n.JsonFuncExpr
+		normalizeJsonValueExpr(f.ContextItem)
+		f.Pathspec = normalizeCheckExpr(f.Pathspec)
+		for i, arg := range f.Passing {
+			f.Passing[i] = normalizeCheckExpr(arg)
+		}
+		normalizeJsonBehavior(f.OnEmpty)
+		normalizeJsonBehavior(f.OnError)
+	case *pg_query.Node_JsonArgument:
+		normalizeJsonValueExpr(n.JsonArgument.Val)
 	}
 	return node
+}
+
+// normalizeJsonValueExpr normalizes the expression a JsonValueExpr wraps. The
+// node shows up both on its own and as a typed field of the SQL/JSON
+// constructors. FormattedExpr is filled in by the analyzer rather than the raw
+// parser this package runs, so only RawExpr is normalized.
+func normalizeJsonValueExpr(v *pg_query.JsonValueExpr) {
+	if v == nil {
+		return
+	}
+	v.RawExpr = normalizeCheckExpr(v.RawExpr)
+}
+
+// normalizeJsonBehavior normalizes the expression of an ON EMPTY / ON ERROR
+// clause, which only DEFAULT <expr> carries.
+func normalizeJsonBehavior(b *pg_query.JsonBehavior) {
+	if b == nil {
+		return
+	}
+	b.Expr = normalizeCheckExpr(b.Expr)
+}
+
+// normalizeJsonOutput canonicalises the RETURNING clause of a SQL/JSON
+// constructor the way pg_get_expr prints it:
+//
+//   - The FORMAT is dropped. PostgreSQL never prints it, so a written
+//     `RETURNING text FORMAT JSON` has to compare equal to the stored
+//     `RETURNING text`.
+//   - A clause naming json is dropped whole, since json is what JSON_OBJECT
+//     and JSON_ARRAY return when the clause is left off, and pg_get_expr
+//     spells it out where the written form leaves it off. A clause naming any
+//     other type is a real difference and stays.
+func normalizeJsonOutput(out *pg_query.JsonOutput) *pg_query.JsonOutput {
+	if out == nil {
+		return nil
+	}
+	// The clause itself has to stay in place; libpg_query's deparser reads it
+	// unconditionally. Resetting the format to the default is what drops the
+	// FORMAT from the deparsed form.
+	if r := out.Returning; r != nil && r.Format != nil {
+		r.Format.FormatType = pg_query.JsonFormatType_JS_FORMAT_DEFAULT
+		r.Format.Encoding = pg_query.JsonEncoding_JS_ENC_DEFAULT
+	}
+	if isJSONTypeName(out.TypeName) {
+		return nil
+	}
+	return out
+}
+
+// isJSONTypeName reports whether a TypeName names the json type. The parser
+// resolves an unquoted `json` to pg_catalog.json and leaves a quoted one
+// alone, so both spellings have to be recognised.
+func isJSONTypeName(tn *pg_query.TypeName) bool {
+	if tn == nil {
+		return false
+	}
+	names := make([]string, 0, len(tn.Names))
+	for _, n := range tn.Names {
+		names = append(names, n.GetString_().GetSval())
+	}
+	switch len(names) {
+	case 1:
+		return names[0] == "json"
+	case 2:
+		return names[0] == "pg_catalog" && names[1] == "json"
+	}
+	return false
 }
 
 // isTextLikeTypeName returns true if the TypeName refers to a text-like type
@@ -803,8 +909,79 @@ func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
 			}
 			cn.Testexpr = alignCurrentCasts(dn.SubLink.Testexpr, cn.Testexpr)
 		}
+	// Mirror the normalizeCheckExpr SQL/JSON cases: pg_get_expr adds a cast
+	// inside a constructor the same way it does outside one.
+	case *pg_query.Node_JsonObjectConstructor:
+		if cn := current.GetJsonObjectConstructor(); cn != nil && len(cn.Exprs) == len(dn.JsonObjectConstructor.Exprs) {
+			for i := range dn.JsonObjectConstructor.Exprs {
+				cn.Exprs[i] = alignCurrentCasts(dn.JsonObjectConstructor.Exprs[i], cn.Exprs[i])
+			}
+		}
+	case *pg_query.Node_JsonKeyValue:
+		if cn := current.GetJsonKeyValue(); cn != nil {
+			cn.Key = alignCurrentCasts(dn.JsonKeyValue.Key, cn.Key)
+			alignJsonValueExprCasts(dn.JsonKeyValue.Value, cn.Value)
+		}
+	case *pg_query.Node_JsonArrayConstructor:
+		if cn := current.GetJsonArrayConstructor(); cn != nil && len(cn.Exprs) == len(dn.JsonArrayConstructor.Exprs) {
+			for i := range dn.JsonArrayConstructor.Exprs {
+				cn.Exprs[i] = alignCurrentCasts(dn.JsonArrayConstructor.Exprs[i], cn.Exprs[i])
+			}
+		}
+	case *pg_query.Node_JsonValueExpr:
+		alignJsonValueExprCasts(dn.JsonValueExpr, current.GetJsonValueExpr())
+	case *pg_query.Node_JsonIsPredicate:
+		if cn := current.GetJsonIsPredicate(); cn != nil {
+			cn.Expr = alignCurrentCasts(dn.JsonIsPredicate.Expr, cn.Expr)
+		}
+	case *pg_query.Node_JsonParseExpr:
+		if cn := current.GetJsonParseExpr(); cn != nil {
+			alignJsonValueExprCasts(dn.JsonParseExpr.Expr, cn.Expr)
+		}
+	case *pg_query.Node_JsonScalarExpr:
+		if cn := current.GetJsonScalarExpr(); cn != nil {
+			cn.Expr = alignCurrentCasts(dn.JsonScalarExpr.Expr, cn.Expr)
+		}
+	case *pg_query.Node_JsonSerializeExpr:
+		if cn := current.GetJsonSerializeExpr(); cn != nil {
+			alignJsonValueExprCasts(dn.JsonSerializeExpr.Expr, cn.Expr)
+		}
+	case *pg_query.Node_JsonFuncExpr:
+		if cn := current.GetJsonFuncExpr(); cn != nil {
+			alignJsonValueExprCasts(dn.JsonFuncExpr.ContextItem, cn.ContextItem)
+			cn.Pathspec = alignCurrentCasts(dn.JsonFuncExpr.Pathspec, cn.Pathspec)
+			if len(cn.Passing) == len(dn.JsonFuncExpr.Passing) {
+				for i := range dn.JsonFuncExpr.Passing {
+					cn.Passing[i] = alignCurrentCasts(dn.JsonFuncExpr.Passing[i], cn.Passing[i])
+				}
+			}
+			alignJsonBehaviorCasts(dn.JsonFuncExpr.OnEmpty, cn.OnEmpty)
+			alignJsonBehaviorCasts(dn.JsonFuncExpr.OnError, cn.OnError)
+		}
+	case *pg_query.Node_JsonArgument:
+		if cn := current.GetJsonArgument(); cn != nil {
+			alignJsonValueExprCasts(dn.JsonArgument.Val, cn.Val)
+		}
 	}
 	return current
+}
+
+// alignJsonValueExprCasts is alignCurrentCasts for the JsonValueExpr that the
+// SQL/JSON nodes hold as a typed field.
+func alignJsonValueExprCasts(desired, current *pg_query.JsonValueExpr) {
+	if desired == nil || current == nil {
+		return
+	}
+	current.RawExpr = alignCurrentCasts(desired.RawExpr, current.RawExpr)
+}
+
+// alignJsonBehaviorCasts is alignCurrentCasts for an ON EMPTY / ON ERROR
+// clause, which only DEFAULT <expr> carries.
+func alignJsonBehaviorCasts(desired, current *pg_query.JsonBehavior) {
+	if desired == nil || current == nil {
+		return
+	}
+	current.Expr = alignCurrentCasts(desired.Expr, current.Expr)
 }
 
 func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, disallowed []string, err error) {

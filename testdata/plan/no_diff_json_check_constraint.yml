@@ -1,0 +1,47 @@
+# A CHECK built on a SQL/JSON constructor must not drift. The server names
+# each unnamed constraint after the single column its expression reaches, so
+# the desired side has to reach the same column, and pg_get_expr spells out the
+# default RETURNING json that the desired side leaves off. The normalizations
+# the diff already applies to a CHECK -- stripping a text cast, reading
+# = ANY(ARRAY[...]) as IN (...), stripping a cast the catalog added to a
+# literal -- have to reach inside the constructor as well, and a RETURNING
+# that names another type has to survive. An index predicate goes through the
+# same comparison.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      a text,
+      b text,
+      c text,
+      d text,
+      e text,
+      ts timestamp,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CHECK (JSON_OBJECT('k': a) IS NOT NULL),
+      CHECK (JSON_ARRAY(b) IS NOT NULL),
+      CHECK (c IS JSON),
+      CHECK (JSON_OBJECT('k': (ts >= '2020-01-01 00:00:00')) IS NOT NULL),
+      CONSTRAINT t_d_check CHECK (JSON_OBJECT('k': (d IN ('x', 'y'))) IS NOT NULL),
+      CONSTRAINT t_e_check CHECK (JSON_ARRAY(e::text RETURNING jsonb) IS NOT NULL)
+  );
+  CREATE INDEX idx_t_a ON public.t (id) WHERE (JSON_ARRAY(a) IS NOT NULL);
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      a text,
+      b text,
+      c text,
+      d text,
+      e text,
+      ts timestamp,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CHECK (JSON_OBJECT('k': a) IS NOT NULL),
+      CHECK (JSON_ARRAY(b) IS NOT NULL),
+      CHECK (c IS JSON),
+      CHECK (JSON_OBJECT('k': (ts >= '2020-01-01 00:00:00')) IS NOT NULL),
+      CONSTRAINT t_d_check CHECK (JSON_OBJECT('k': (d IN ('x', 'y'))) IS NOT NULL),
+      CONSTRAINT t_e_check CHECK (JSON_ARRAY(e::text RETURNING jsonb) IS NOT NULL)
+  );
+  CREATE INDEX idx_t_a ON public.t (id) WHERE (JSON_ARRAY(a) IS NOT NULL);
+plan: ""

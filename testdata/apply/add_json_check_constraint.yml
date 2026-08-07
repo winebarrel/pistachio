@@ -1,0 +1,28 @@
+# An unnamed CHECK built on a SQL/JSON constructor is named after the column
+# the constructor reaches, which is the name PostgreSQL would have chosen, so
+# the schema settles after one apply.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      a text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      a text,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CHECK (JSON_OBJECT('k': a) IS NOT NULL)
+  );
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      a text,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_a_check CHECK (JSON_OBJECT('k' : a RETURNING json) IS NOT NULL)
+  );
+applied_sql: |
+  ALTER TABLE public.t ADD CONSTRAINT t_a_check CHECK (JSON_OBJECT('k': a) IS NOT NULL);
+verify_no_drift: true
