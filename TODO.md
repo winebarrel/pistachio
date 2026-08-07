@@ -587,36 +587,50 @@ schema at all.
 Workaround: write the column list explicitly. `pista dump` emits the
 expanded form.
 
-## JSON constructors hide a column from the expression walker
+## Perpetual drift on `JSON(...)` in a CHECK constraint
 
-`WalkExprColumnRefs` (`internal/pgast`) enumerates the node kinds it walks,
-and the JSON constructors PostgreSQL 16 added are not among them. A `CHECK`
-that reaches its only column through one of them loses the column from its
-generated name: PostgreSQL names
-`CHECK (JSON_OBJECT('k': a) IS NOT NULL)` as `t_a_check`, pistachio as
-`t_check`. Against a database that already holds the table, that plans an
-`ADD CONSTRAINT` under pistachio's name next to a `DROP CONSTRAINT` for
-PostgreSQL's, on every run.
+PostgreSQL stores `CHECK (JSON(a) IS NOT NULL)` as a cast, and
+`pg_get_constraintdef` prints it back as `CHECK (((a)::json IS NOT NULL))`,
+while the desired side keeps the `JSON(...)` the user wrote. The two forms
+deparse differently, so the constraint is re-emitted as `DROP CONSTRAINT` +
+`ADD CONSTRAINT` on every plan. Applying it succeeds and changes nothing, so
+`plan --check` stays at exit code 2 forever.
 
-The walker backs two other things, so the same expression breaks them as
-well. `validateColumnRefs` (`parser/validate.go`) misses a column that does
-not exist, and `rewriteColumnRefsInExpr` (`diff/rename.go`) leaves a column
-renamed with `-- pista:renamed-from` under its old name. One change to the
-walker covers all three.
+Reading the two as equal means teaching `normalizeCheckExpr` (`diff/tables.go`)
+that a `JsonParseExpr` over an expression is the same thing as a cast of that
+expression to json. The reverse direction is not equivalent -- a written
+`a::json` is what the catalog holds either way -- so the rewrite has to run on
+the desired side only, which the normalizer does not do today. `JSON_SCALAR`
+and `JSON_SERIALIZE` are worth checking for the same treatment; both are
+PostgreSQL 17 syntax, which was not available while this was written.
 
-`JSON_OBJECT` alone needs `JsonObjectConstructor` -> `JsonKeyValue` ->
-`JsonValueExpr`, and stopping there leaves the same gap in
-`JsonArrayConstructor`, `JsonIsPredicate`, `JsonParseExpr`,
-`JsonScalarExpr` and `JsonSerializeExpr`. pg_query_go v6 carries 26 JSON
-node kinds in total.
+Workaround: write the cast, `a::json`, which round-trips.
 
-Walking every child node generically is not the answer: the visitor mutates
-what it visits so renames can rewrite it, and a generic walk reaches
-`FuncCall.Funcname`, the field names in `A_Indirection` and the strings in
-`TypeName`, where it would rewrite a function or field that happens to
-share a column's name.
+Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 
-Verifying the expected names needs PostgreSQL 16, since the syntax does not
-parse on 15. `compose.yaml` takes `PG_VERSION`.
+## RETURNING clause of the SQL/JSON query functions is not normalized
 
-Workaround: name the constraint explicitly.
+`normalizeJsonOutput` (`diff/tables.go`) canonicalises the RETURNING clause of
+`JSON_OBJECT` and `JSON_ARRAY`: it drops the FORMAT, which PostgreSQL never
+prints, and drops a clause naming json, which is what both return when the
+clause is left off. The PostgreSQL 17 constructs that carry the same clause --
+`JSON_SCALAR`, `JSON_SERIALIZE`, `JSON_VALUE`, `JSON_QUERY` -- are left alone,
+so a written `RETURNING ... FORMAT JSON` on one of them may drift. json is not
+the default return type there (`JSON_SERIALIZE` and `JSON_VALUE` return text,
+`JSON_QUERY` jsonb), so only the FORMAT part carries over.
+
+What PostgreSQL 17 prints for these was not verified: no 17 server was
+available while this was written, and the syntax does not parse on 16.
+
+Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
+
+## SQL/JSON node kinds the expression walker leaves out
+
+`WalkExprColumnRefs` (`internal/pgast`) walks the SQL/JSON constructors and
+query functions, but not the aggregates (`JSON_OBJECTAGG`, `JSON_ARRAYAGG`),
+`JSON_ARRAY` over a subquery, or `JSON_TABLE`. None of them can appear where
+the walker's callers look: a CHECK, an index and a generated column all reject
+an aggregate, `JSON_TABLE` is a FROM item, and the walker descends into no
+subquery anywhere. Recorded as a deliberate choice, not a bug.
+
+Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
