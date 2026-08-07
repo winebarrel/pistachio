@@ -165,5 +165,73 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 		// xmlserialize(content col AS text) is its own node kind rather than
 		// an XmlExpr. TypeName holds a type, so only Expr is walked.
 		WalkExprColumnRefs(n.XmlSerialize.Expr, visit)
+	case *pg_query.Node_JsonObjectConstructor:
+		// JSON_OBJECT('k': col). Exprs holds JsonKeyValue nodes; Output holds
+		// the RETURNING type.
+		for _, e := range n.JsonObjectConstructor.Exprs {
+			WalkExprColumnRefs(e, visit)
+		}
+	case *pg_query.Node_JsonKeyValue:
+		// A key is an expression as well, and PostgreSQL counts a column
+		// written there, so JSON_OBJECT(a: b) reaches both columns.
+		WalkExprColumnRefs(n.JsonKeyValue.Key, visit)
+		walkJsonValueExpr(n.JsonKeyValue.Value, visit)
+	case *pg_query.Node_JsonArrayConstructor:
+		// JSON_ARRAY(col, ...). Exprs holds JsonValueExpr nodes.
+		for _, e := range n.JsonArrayConstructor.Exprs {
+			WalkExprColumnRefs(e, visit)
+		}
+	case *pg_query.Node_JsonValueExpr:
+		walkJsonValueExpr(n.JsonValueExpr, visit)
+	case *pg_query.Node_JsonIsPredicate:
+		// col IS JSON
+		WalkExprColumnRefs(n.JsonIsPredicate.Expr, visit)
+	case *pg_query.Node_JsonParseExpr:
+		// JSON(col)
+		walkJsonValueExpr(n.JsonParseExpr.Expr, visit)
+	case *pg_query.Node_JsonScalarExpr:
+		// JSON_SCALAR(col)
+		WalkExprColumnRefs(n.JsonScalarExpr.Expr, visit)
+	case *pg_query.Node_JsonSerializeExpr:
+		// JSON_SERIALIZE(col)
+		walkJsonValueExpr(n.JsonSerializeExpr.Expr, visit)
+	case *pg_query.Node_JsonFuncExpr:
+		// JSON_EXISTS / JSON_VALUE / JSON_QUERY. ColumnName names a JSON_TABLE
+		// output column rather than a table column, so it stays out.
+		walkJsonValueExpr(n.JsonFuncExpr.ContextItem, visit)
+		WalkExprColumnRefs(n.JsonFuncExpr.Pathspec, visit)
+		for _, arg := range n.JsonFuncExpr.Passing {
+			WalkExprColumnRefs(arg, visit)
+		}
+		walkJsonBehavior(n.JsonFuncExpr.OnEmpty, visit)
+		walkJsonBehavior(n.JsonFuncExpr.OnError, visit)
+	case *pg_query.Node_JsonArgument:
+		// PASSING col AS name. The name is the argument's, not a column's.
+		walkJsonValueExpr(n.JsonArgument.Val, visit)
 	}
+	// The remaining SQL/JSON node kinds stay out because the callers cannot
+	// reach them: JSON_OBJECTAGG / JSON_ARRAYAGG are aggregates, which a
+	// CHECK, an index and a generated column all reject, JSON_ARRAY over a
+	// subquery carries a SELECT, which the walker does not descend into
+	// anywhere, and JSON_TABLE is a FROM item.
+}
+
+// walkJsonValueExpr walks the expression a JsonValueExpr wraps. The node shows
+// up both on its own and as a typed field of the SQL/JSON constructors.
+// FormattedExpr is filled in by the analyzer rather than the raw parser these
+// callers run, so only RawExpr is walked.
+func walkJsonValueExpr(v *pg_query.JsonValueExpr, visit func(*pg_query.String)) {
+	if v == nil {
+		return
+	}
+	WalkExprColumnRefs(v.RawExpr, visit)
+}
+
+// walkJsonBehavior walks the expression of an ON EMPTY / ON ERROR clause,
+// which only DEFAULT <expr> carries.
+func walkJsonBehavior(b *pg_query.JsonBehavior, visit func(*pg_query.String)) {
+	if b == nil {
+		return
+	}
+	WalkExprColumnRefs(b.Expr, visit)
 }

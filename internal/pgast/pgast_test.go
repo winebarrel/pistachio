@@ -154,6 +154,53 @@ func TestWalkExprColumnRefs_XmlSerialize(t *testing.T) {
 	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((xmlserialize(content a AS text) > ''))"))
 }
 
+// PostgreSQL 16 added the SQL/JSON constructors, and PostgreSQL 17 the query
+// functions. Each of these forms reaches a column, so the server names the
+// constraint after it.
+func TestWalkExprColumnRefs_JsonObjectConstructor(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_OBJECT('k': a) IS NOT NULL))"))
+	// A key is an expression as well, and the server counts a column there.
+	assert.Equal(t, []string{"a", "b"}, collectRefs(t, "CHECK ((JSON_OBJECT(a: b) IS NOT NULL))"))
+}
+
+func TestWalkExprColumnRefs_JsonArrayConstructor(t *testing.T) {
+	assert.Equal(t, []string{"a", "b"}, collectRefs(t, "CHECK ((JSON_ARRAY(a, b) IS NOT NULL))"))
+	// RETURNING holds a type, so it contributes no column.
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_ARRAY(a RETURNING jsonb) IS NOT NULL))"))
+}
+
+func TestWalkExprColumnRefs_JsonIsPredicate(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((a IS JSON))"))
+}
+
+func TestWalkExprColumnRefs_JsonParseExpr(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON(a) IS NOT NULL))"))
+}
+
+func TestWalkExprColumnRefs_JsonScalarExpr(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_SCALAR(a) IS NOT NULL))"))
+}
+
+func TestWalkExprColumnRefs_JsonSerializeExpr(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_SERIALIZE(a) > ''))"))
+}
+
+func TestWalkExprColumnRefs_JsonFuncExpr(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_EXISTS(a, '$.x')))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_QUERY(a, '$.x') IS NOT NULL))"))
+	// The context item, a PASSING argument and an ON ERROR default are all
+	// expressions the server reads.
+	assert.Equal(t, []string{"a", "b", "c"}, collectRefs(t,
+		"CHECK ((JSON_VALUE(a, '$.x' PASSING b AS v DEFAULT c ON ERROR) > ''))"))
+}
+
+// A PASSING argument is named where a column name could be, so a walk that
+// picked the name up would name the constraint after the wrong one.
+func TestWalkExprColumnRefs_JsonArgumentNameIsNotAColumn(t *testing.T) {
+	assert.Equal(t, []string{"b", "c"}, collectRefs(t,
+		"CHECK ((JSON_VALUE(b, '$.x' PASSING c AS a) > ''))"))
+}
+
 func TestWalkExprColumnRefs_NilSafe(t *testing.T) {
 	pgast.WalkExprColumnRefs(nil, func(s *pg_query.String) {
 		t.Fatal("visitor should not be invoked on nil node")

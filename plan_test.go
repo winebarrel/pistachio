@@ -15,23 +15,27 @@ import (
 )
 
 type planTestCase struct {
-	Init                     string          `yaml:"init"`
-	Desired                  string          `yaml:"desired"`
-	Plan                     string          `yaml:"plan"`
-	Error                    string          `yaml:"error"`
-	Count                    *expectedCount  `yaml:"count,omitempty"`
-	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
-	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
-	Ignored                  string          `yaml:"ignored,omitempty"`
-	DisableIndexConcurrently bool            `yaml:"disable_index_concurrently,omitempty"`
-	ForceIndexConcurrently   bool            `yaml:"force_index_concurrently,omitempty"`
-	BulkAlter                bool            `yaml:"bulk_alter,omitempty"`
-	AssumeValidated          bool            `yaml:"assume_validated,omitempty"`
-	Include                  []string        `yaml:"include,omitempty"`
-	Exclude                  []string        `yaml:"exclude,omitempty"`
-	Enable                   []string        `yaml:"enable,omitempty"`
-	Disable                  []string        `yaml:"disable,omitempty"`
-	PreSQL                   string          `yaml:"pre_sql,omitempty"`
+	Init            string          `yaml:"init"`
+	Desired         string          `yaml:"desired"`
+	Plan            string          `yaml:"plan"`
+	Error           string          `yaml:"error"`
+	Count           *expectedCount  `yaml:"count,omitempty"`
+	DropPolicy      *planDropPolicy `yaml:"drop_policy,omitempty"`
+	DisallowedDrops string          `yaml:"disallowed_drops,omitempty"`
+	Ignored         string          `yaml:"ignored,omitempty"`
+	// MinPG skips the fixture on a server older than this major version, for
+	// syntax that does not exist there (e.g. the SQL/JSON constructors, which
+	// PostgreSQL 16 added).
+	MinPG                    int      `yaml:"min_pg,omitempty"`
+	DisableIndexConcurrently bool     `yaml:"disable_index_concurrently,omitempty"`
+	ForceIndexConcurrently   bool     `yaml:"force_index_concurrently,omitempty"`
+	BulkAlter                bool     `yaml:"bulk_alter,omitempty"`
+	AssumeValidated          bool     `yaml:"assume_validated,omitempty"`
+	Include                  []string `yaml:"include,omitempty"`
+	Exclude                  []string `yaml:"exclude,omitempty"`
+	Enable                   []string `yaml:"enable,omitempty"`
+	Disable                  []string `yaml:"disable,omitempty"`
+	PreSQL                   string   `yaml:"pre_sql,omitempty"`
 	// PreSQLFile holds SQL content; the runner writes it to a temp file and
 	// passes the path to PlanOptions.PreSQLFile.
 	PreSQLFile         string `yaml:"pre_sql_file,omitempty"`
@@ -326,6 +330,7 @@ func TestPlan(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
+	pgMajor := testutil.ServerMajorVersion(t, ctx, conn)
 
 	files, err := filepath.Glob("testdata/plan/*.yml")
 	require.NoError(t, err)
@@ -336,6 +341,9 @@ func TestPlan(t *testing.T) {
 
 		t.Run(name, func(t *testing.T) {
 			tc := loadYAML[planTestCase](t, file)
+			if tc.MinPG > 0 && pgMajor < tc.MinPG {
+				t.Skipf("requires PostgreSQL %d or later", tc.MinPG)
+			}
 			testutil.SetupDB(t, ctx, conn, tc.Init)
 
 			tmpDir := t.TempDir()

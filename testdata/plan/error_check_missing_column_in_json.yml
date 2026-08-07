@@ -1,0 +1,19 @@
+# The column-reference validator reads a CHECK expression that reaches its
+# column through a SQL/JSON constructor, so a stale reference left behind by a
+# rename is reported at plan time rather than at apply time. The init schema
+# stays free of SQL/JSON syntax, which the parser accepts on every server.
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_qty_check CHECK (JSON_ARRAY(qty) IS NOT NULL)
+  );
+error: 'column qty referenced in CHECK constraint products_qty_check does not exist on table public.products'

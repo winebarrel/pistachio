@@ -904,6 +904,33 @@ CREATE TABLE public.t (a integer, b integer, FOREIGN KEY (a, b) REFERENCES publi
 			conName: "t_a_check",
 		},
 		{
+			name:    "CHECK reaching its column through JSON_OBJECT",
+			sql:     `CREATE TABLE public.t (a text, CHECK (JSON_OBJECT('k': a) IS NOT NULL));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK reaching its column through JSON_ARRAY",
+			sql:     `CREATE TABLE public.t (a text, CHECK (JSON_ARRAY(a) IS NOT NULL));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK reaching its column through JSON",
+			sql:     `CREATE TABLE public.t (a text, CHECK (JSON(a) IS NOT NULL));`,
+			conName: "t_a_check",
+		},
+		{
+			name:    "CHECK reaching its column through IS JSON",
+			sql:     `CREATE TABLE public.t (a text, CHECK (a IS JSON));`,
+			conName: "t_a_check",
+		},
+		{
+			// A JSON_OBJECT key is an expression, so this CHECK reaches two
+			// columns and PostgreSQL names neither.
+			name:    "CHECK on a JSON_OBJECT keyed by a column",
+			sql:     `CREATE TABLE public.t (a text, b text, CHECK (JSON_OBJECT(a: b) IS NOT NULL));`,
+			conName: "t_check",
+		},
+		{
 			name:    "CHECK on a two-column row constructor",
 			sql:     `CREATE TABLE public.t (a integer, b integer, CHECK ((a, b) IS NOT NULL));`,
 			conName: "t_check",
