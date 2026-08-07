@@ -1,0 +1,14 @@
+# A view body is compared with the same normalization a CHECK gets, so the
+# RETURNING json that pg_get_viewdef adds must not drift there either.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      a text
+  );
+  CREATE VIEW public.v AS SELECT (JSON_OBJECT('k': a))::text AS c FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a text
+  );
+  CREATE VIEW public.v AS SELECT (JSON_OBJECT('k': a))::text AS c FROM public.t;
+plan: ""

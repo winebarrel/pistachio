@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -560,9 +561,9 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 }
 
 // normalizeJsonValueExpr normalizes the expression a JsonValueExpr wraps. The
-// node shows up both on its own and as a typed field of the SQL/JSON
-// constructors. FormattedExpr is filled in by the analyzer rather than the raw
-// parser this package runs, so only RawExpr is normalized.
+// node shows up both on its own and as a typed field of the SQL/JSON nodes.
+// FormattedExpr is filled in by the analyzer, not by the raw parser this
+// package runs, so only RawExpr is normalized.
 func normalizeJsonValueExpr(v *pg_query.JsonValueExpr) {
 	if v == nil {
 		return
@@ -579,21 +580,20 @@ func normalizeJsonBehavior(b *pg_query.JsonBehavior) {
 	b.Expr = normalizeCheckExpr(b.Expr)
 }
 
-// normalizeJsonOutput canonicalises the RETURNING clause of a SQL/JSON
-// constructor the way pg_get_expr prints it:
+// normalizeJsonOutput rewrites the RETURNING clause of a SQL/JSON constructor
+// the way pg_get_expr prints it:
 //
-//   - The FORMAT is dropped. PostgreSQL never prints it, so a written
-//     `RETURNING text FORMAT JSON` has to compare equal to the stored
-//     `RETURNING text`.
-//   - A clause naming json is dropped whole, since json is what JSON_OBJECT
+//   - The FORMAT is dropped, since PostgreSQL never prints it. A written
+//     `RETURNING text FORMAT JSON` then equals the stored `RETURNING text`.
+//   - A clause naming json is dropped whole, since that is what JSON_OBJECT
 //     and JSON_ARRAY return when the clause is left off, and pg_get_expr
-//     spells it out where the written form leaves it off. A clause naming any
-//     other type is a real difference and stays.
+//     spells it out where the written form leaves it off. A clause naming
+//     another type is a real difference and stays.
 func normalizeJsonOutput(out *pg_query.JsonOutput) *pg_query.JsonOutput {
 	if out == nil {
 		return nil
 	}
-	// The clause itself has to stay in place; libpg_query's deparser reads it
+	// The clause has to stay in place, since libpg_query's deparser reads it
 	// unconditionally. Resetting the format to the default is what drops the
 	// FORMAT from the deparsed form.
 	if r := out.Returning; r != nil && r.Format != nil {
@@ -610,20 +610,12 @@ func normalizeJsonOutput(out *pg_query.JsonOutput) *pg_query.JsonOutput {
 // resolves an unquoted `json` to pg_catalog.json and leaves a quoted one
 // alone, so both spellings have to be recognised.
 func isJSONTypeName(tn *pg_query.TypeName) bool {
-	if tn == nil {
-		return false
-	}
-	names := make([]string, 0, len(tn.Names))
-	for _, n := range tn.Names {
+	names := make([]string, 0, len(tn.GetNames()))
+	for _, n := range tn.GetNames() {
 		names = append(names, n.GetString_().GetSval())
 	}
-	switch len(names) {
-	case 1:
-		return names[0] == "json"
-	case 2:
-		return names[0] == "pg_catalog" && names[1] == "json"
-	}
-	return false
+	return slices.Equal(names, []string{"json"}) ||
+		slices.Equal(names, []string{"pg_catalog", "json"})
 }
 
 // isTextLikeTypeName returns true if the TypeName refers to a text-like type

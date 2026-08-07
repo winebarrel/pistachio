@@ -924,6 +924,11 @@ CREATE TABLE public.t (a integer, b integer, FOREIGN KEY (a, b) REFERENCES publi
 			conName: "t_a_check",
 		},
 		{
+			name:    "CHECK reaching its column through nested JSON constructors",
+			sql:     `CREATE TABLE public.t (a text, CHECK (JSON_OBJECT('k': JSON_ARRAY(a)) IS NOT NULL));`,
+			conName: "t_a_check",
+		},
+		{
 			// A JSON_OBJECT key is an expression, so this CHECK reaches two
 			// columns and PostgreSQL names neither.
 			name:    "CHECK on a JSON_OBJECT keyed by a column",

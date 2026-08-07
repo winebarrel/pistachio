@@ -1,0 +1,14 @@
+# A generated column is compared with the same normalization a CHECK gets, so
+# the RETURNING json that pg_get_expr adds must not drift there either.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      a text,
+      j text GENERATED ALWAYS AS ((JSON_OBJECT('k': a))::text) STORED
+  );
+desired: |
+  CREATE TABLE public.t (
+      a text,
+      j text GENERATED ALWAYS AS ((JSON_OBJECT('k': a))::text) STORED
+  );
+plan: ""

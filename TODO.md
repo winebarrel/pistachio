@@ -589,37 +589,38 @@ expanded form.
 
 ## Perpetual drift on `JSON(...)` in a CHECK constraint
 
-PostgreSQL stores `CHECK (JSON(a) IS NOT NULL)` as a cast, and
-`pg_get_constraintdef` prints it back as `CHECK (((a)::json IS NOT NULL))`,
-while the desired side keeps the `JSON(...)` the user wrote. The two forms
-deparse differently, so the constraint is re-emitted as `DROP CONSTRAINT` +
+PostgreSQL stores `CHECK (JSON(a) IS NOT NULL)` as a cast, so
+`pg_get_constraintdef` prints `CHECK (((a)::json IS NOT NULL))` while the
+desired side keeps the `JSON(...)` the user wrote. The two deparse
+differently, so the constraint is re-emitted as `DROP CONSTRAINT` +
 `ADD CONSTRAINT` on every plan. Applying it succeeds and changes nothing, so
 `plan --check` stays at exit code 2 forever.
 
 Reading the two as equal means teaching `normalizeCheckExpr` (`diff/tables.go`)
-that a `JsonParseExpr` over an expression is the same thing as a cast of that
-expression to json. The reverse direction is not equivalent -- a written
-`a::json` is what the catalog holds either way -- so the rewrite has to run on
-the desired side only, which the normalizer does not do today. `JSON_SCALAR`
-and `JSON_SERIALIZE` are worth checking for the same treatment; both are
-PostgreSQL 17 syntax, which was not available while this was written.
+that a `JsonParseExpr` is a cast to json. It has to run on the desired side
+only, since a written `a::json` is already what the catalog holds, and the
+normalizer treats both sides alike today. `JSON_SCALAR` and `JSON_SERIALIZE`
+may need the same; both are PostgreSQL 17 syntax, which was not available
+while this was written.
 
-Workaround: write the cast, `a::json`, which round-trips.
+Workaround: write `a::json`, which round-trips.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 
 ## RETURNING clause of the SQL/JSON query functions is not normalized
 
 `normalizeJsonOutput` (`diff/tables.go`) canonicalises the RETURNING clause of
-`JSON_OBJECT` and `JSON_ARRAY`: it drops the FORMAT, which PostgreSQL never
+`JSON_OBJECT` and `JSON_ARRAY`. It drops the FORMAT, which PostgreSQL never
 prints, and drops a clause naming json, which is what both return when the
-clause is left off. The PostgreSQL 17 constructs that carry the same clause --
-`JSON_SCALAR`, `JSON_SERIALIZE`, `JSON_VALUE`, `JSON_QUERY` -- are left alone,
-so a written `RETURNING ... FORMAT JSON` on one of them may drift. json is not
-the default return type there (`JSON_SERIALIZE` and `JSON_VALUE` return text,
-`JSON_QUERY` jsonb), so only the FORMAT part carries over.
+clause is left off.
 
-What PostgreSQL 17 prints for these was not verified: no 17 server was
+The PostgreSQL 17 constructs that carry the same clause (`JSON_SCALAR`,
+`JSON_SERIALIZE`, `JSON_VALUE`, `JSON_QUERY`) are left alone, so a written
+`RETURNING ... FORMAT JSON` on one of them may drift. Only the FORMAT part
+carries over: json is not the default return type there, since
+`JSON_SERIALIZE` and `JSON_VALUE` return text and `JSON_QUERY` jsonb.
+
+What PostgreSQL 17 prints for these was not verified. No 17 server was
 available while this was written, and the syntax does not parse on 16.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
@@ -631,6 +632,27 @@ query functions, but not the aggregates (`JSON_OBJECTAGG`, `JSON_ARRAYAGG`),
 `JSON_ARRAY` over a subquery, or `JSON_TABLE`. None of them can appear where
 the walker's callers look: a CHECK, an index and a generated column all reject
 an aggregate, `JSON_TABLE` is a FROM item, and the walker descends into no
-subquery anywhere. Recorded as a deliberate choice, not a bug.
+subquery anywhere. A deliberate choice, not a bug.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
+
+## View drift on a qualified column reference inside an expression
+
+`stripQualifications` (`diff/views.go`) removes the table prefix from a column
+reference so that a desired `t.a` matches the `a` that `pg_get_viewdef`
+returns. It handles a plain reference, an operator expression, a boolean
+expression, a function call, a cast, a sort key and a subquery, but not the
+other expression node kinds. A view whose body writes `COALESCE(t.a, 'x')`,
+`CASE WHEN t.a ...`, `GREATEST(t.a, ...)`, a JSON constructor or any other
+kind the function does not walk keeps the prefix, so `equalViewDef` never
+matches and every plan re-emits `CREATE OR REPLACE VIEW`. Applying it succeeds
+and changes nothing, so `plan --check` stays at exit code 2 forever.
+
+`WalkExprColumnRefs` (`internal/pgast`) already enumerates the expression node
+kinds, and it visits exactly the ColumnRefs this needs, but it skips a
+qualified reference by design, since its callers work within one table. Adding
+an option to visit qualified references too would let both share one walk.
+
+Workaround: write the reference unqualified.
+
+Origin: found while adding the SQL/JSON walk, [#371](https://github.com/winebarrel/pistachio/pull/371).

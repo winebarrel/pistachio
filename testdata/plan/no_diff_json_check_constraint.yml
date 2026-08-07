@@ -1,12 +1,11 @@
-# A CHECK built on a SQL/JSON constructor must not drift. The server names
-# each unnamed constraint after the single column its expression reaches, so
-# the desired side has to reach the same column, and pg_get_expr spells out the
+# A CHECK built on a SQL/JSON constructor must not drift. The server names an
+# unnamed constraint after the single column its expression reaches, so the
+# desired side has to reach the same column, and pg_get_expr spells out the
 # default RETURNING json that the desired side leaves off. The normalizations
-# the diff already applies to a CHECK -- stripping a text cast, reading
-# = ANY(ARRAY[...]) as IN (...), stripping a cast the catalog added to a
-# literal -- have to reach inside the constructor as well, and a RETURNING
-# that names another type has to survive. An index predicate goes through the
-# same comparison.
+# a CHECK already gets (a text cast stripped, = ANY(ARRAY[...]) read as
+# IN (...), a cast the catalog added to a literal stripped) have to apply
+# inside the constructor too, and a RETURNING naming another type has to
+# survive. An index predicate goes through the same comparison.
 min_pg: 16
 init: |
   CREATE TABLE public.t (

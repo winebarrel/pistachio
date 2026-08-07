@@ -166,8 +166,7 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 		// an XmlExpr. TypeName holds a type, so only Expr is walked.
 		WalkExprColumnRefs(n.XmlSerialize.Expr, visit)
 	case *pg_query.Node_JsonObjectConstructor:
-		// JSON_OBJECT('k': col). Exprs holds JsonKeyValue nodes; Output holds
-		// the RETURNING type.
+		// JSON_OBJECT('k': col). Exprs holds JsonKeyValue nodes.
 		for _, e := range n.JsonObjectConstructor.Exprs {
 			WalkExprColumnRefs(e, visit)
 		}
@@ -209,29 +208,22 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 		// PASSING col AS name. The name is the argument's, not a column's.
 		walkJsonValueExpr(n.JsonArgument.Val, visit)
 	}
-	// The remaining SQL/JSON node kinds stay out because the callers cannot
-	// reach them: JSON_OBJECTAGG / JSON_ARRAYAGG are aggregates, which a
-	// CHECK, an index and a generated column all reject, JSON_ARRAY over a
-	// subquery carries a SELECT, which the walker does not descend into
-	// anywhere, and JSON_TABLE is a FROM item.
+	// The other SQL/JSON node kinds are out of reach for the callers:
+	// JSON_OBJECTAGG and JSON_ARRAYAGG are aggregates, which a CHECK, an index
+	// and a generated column all reject; JSON_ARRAY over a subquery carries a
+	// SELECT, which the walker never descends into; JSON_TABLE is a FROM item.
 }
 
 // walkJsonValueExpr walks the expression a JsonValueExpr wraps. The node shows
-// up both on its own and as a typed field of the SQL/JSON constructors.
-// FormattedExpr is filled in by the analyzer rather than the raw parser these
-// callers run, so only RawExpr is walked.
+// up both on its own and as a typed field of the SQL/JSON nodes. FormattedExpr
+// is filled in by the analyzer, not by the raw parser these callers run, so
+// only RawExpr is walked.
 func walkJsonValueExpr(v *pg_query.JsonValueExpr, visit func(*pg_query.String)) {
-	if v == nil {
-		return
-	}
-	WalkExprColumnRefs(v.RawExpr, visit)
+	WalkExprColumnRefs(v.GetRawExpr(), visit)
 }
 
 // walkJsonBehavior walks the expression of an ON EMPTY / ON ERROR clause,
 // which only DEFAULT <expr> carries.
 func walkJsonBehavior(b *pg_query.JsonBehavior, visit func(*pg_query.String)) {
-	if b == nil {
-		return
-	}
-	WalkExprColumnRefs(b.Expr, visit)
+	WalkExprColumnRefs(b.GetExpr(), visit)
 }

@@ -188,10 +188,17 @@ func TestWalkExprColumnRefs_JsonSerializeExpr(t *testing.T) {
 func TestWalkExprColumnRefs_JsonFuncExpr(t *testing.T) {
 	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_EXISTS(a, '$.x')))"))
 	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_QUERY(a, '$.x') IS NOT NULL))"))
-	// The context item, a PASSING argument and an ON ERROR default are all
-	// expressions the server reads.
+	// The context item, a PASSING argument and an ON EMPTY / ON ERROR default
+	// are all expressions the server reads.
 	assert.Equal(t, []string{"a", "b", "c"}, collectRefs(t,
 		"CHECK ((JSON_VALUE(a, '$.x' PASSING b AS v DEFAULT c ON ERROR) > ''))"))
+	assert.Equal(t, []string{"a", "b", "c", "d"}, collectRefs(t,
+		"CHECK ((JSON_VALUE(a, '$.x' PASSING b AS v DEFAULT c ON EMPTY DEFAULT d ON ERROR) > ''))"))
+}
+
+func TestWalkExprColumnRefs_JsonNested(t *testing.T) {
+	assert.Equal(t, []string{"a", "b"}, collectRefs(t,
+		"CHECK ((JSON_OBJECT('k': JSON_ARRAY(a, b)) IS NOT NULL))"))
 }
 
 // A PASSING argument is named where a column name could be, so a walk that

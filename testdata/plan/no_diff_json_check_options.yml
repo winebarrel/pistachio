@@ -1,0 +1,43 @@
+# The options a SQL/JSON constructor and the IS JSON predicate take are stored
+# as written, so they must not drift. Only the RETURNING clause needs
+# normalizing, and each of these leaves it off.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      a text,
+      b text,
+      c text,
+      d text,
+      e text,
+      f text,
+      g text,
+      h text,
+      CONSTRAINT t_absent_check CHECK (JSON_OBJECT('k': a ABSENT ON NULL) IS NOT NULL),
+      CONSTRAINT t_unique_check CHECK (JSON_OBJECT('k': b WITH UNIQUE KEYS) IS NOT NULL),
+      CONSTRAINT t_null_check CHECK (JSON_ARRAY(c NULL ON NULL) IS NOT NULL),
+      CONSTRAINT t_format_check CHECK (JSON_OBJECT('k': d FORMAT JSON) IS NOT NULL),
+      CONSTRAINT t_object_check CHECK (e IS JSON OBJECT),
+      CONSTRAINT t_not_check CHECK (f IS NOT JSON),
+      CONSTRAINT t_keys_check CHECK (g IS JSON WITH UNIQUE KEYS),
+      CONSTRAINT t_nested_check CHECK (JSON_OBJECT('k': JSON_ARRAY(h)) IS NOT NULL)
+  );
+desired: |
+  CREATE TABLE public.t (
+      a text,
+      b text,
+      c text,
+      d text,
+      e text,
+      f text,
+      g text,
+      h text,
+      CONSTRAINT t_absent_check CHECK (JSON_OBJECT('k': a ABSENT ON NULL) IS NOT NULL),
+      CONSTRAINT t_unique_check CHECK (JSON_OBJECT('k': b WITH UNIQUE KEYS) IS NOT NULL),
+      CONSTRAINT t_null_check CHECK (JSON_ARRAY(c NULL ON NULL) IS NOT NULL),
+      CONSTRAINT t_format_check CHECK (JSON_OBJECT('k': d FORMAT JSON) IS NOT NULL),
+      CONSTRAINT t_object_check CHECK (e IS JSON OBJECT),
+      CONSTRAINT t_not_check CHECK (f IS NOT JSON),
+      CONSTRAINT t_keys_check CHECK (g IS JSON WITH UNIQUE KEYS),
+      CONSTRAINT t_nested_check CHECK (JSON_OBJECT('k': JSON_ARRAY(h)) IS NOT NULL)
+  );
+plan: ""
