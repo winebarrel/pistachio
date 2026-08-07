@@ -71,99 +71,26 @@ func DeparseConstraintDef(result *pg_query.ParseResult) (string, error) {
 // unqualified single-field ColumnRef's underlying String node. Visitors may
 // mutate the String's Sval to rename the column. Qualified references
 // (table.col, schema.table.col) are skipped because they refer outside the
-// local scope.
+// local scope, and so is a sub-link's contained SELECT.
+//
+// Every other node kind is reached, because Walk enumerates children through
+// protoreflect rather than from a list. That matters for the three callers:
+// the constraint namer copies the column into the name PostgreSQL would
+// generate, the desired-schema validator reports a column that does not
+// exist, and the column renamer rewrites the reference in place. A node kind
+// missing from the walk breaks all three at once.
+//
+// The names written where a column could go stay out on their own: an
+// xmlelement name, an xmlattributes alias, a named-argument label, a function
+// name, an A_Indirection field and a type name are all String nodes outside
+// any ColumnRef.
 func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
-	if node == nil {
-		return
-	}
-	switch n := node.Node.(type) {
-	case *pg_query.Node_ColumnRef:
-		if len(n.ColumnRef.Fields) == 1 {
-			if s := n.ColumnRef.Fields[0].GetString_(); s != nil {
+	Walk(node, WalkOptions{SkipSubqueries: true}, func(_ Ctx, n *pg_query.Node) *pg_query.Node {
+		if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 1 {
+			if s := cr.Fields[0].GetString_(); s != nil {
 				visit(s)
 			}
 		}
-	case *pg_query.Node_AExpr:
-		WalkExprColumnRefs(n.AExpr.Lexpr, visit)
-		WalkExprColumnRefs(n.AExpr.Rexpr, visit)
-	case *pg_query.Node_BoolExpr:
-		for _, arg := range n.BoolExpr.Args {
-			WalkExprColumnRefs(arg, visit)
-		}
-	case *pg_query.Node_TypeCast:
-		WalkExprColumnRefs(n.TypeCast.Arg, visit)
-	case *pg_query.Node_FuncCall:
-		for _, arg := range n.FuncCall.Args {
-			WalkExprColumnRefs(arg, visit)
-		}
-	case *pg_query.Node_NullTest:
-		WalkExprColumnRefs(n.NullTest.Arg, visit)
-	case *pg_query.Node_AArrayExpr:
-		for _, elem := range n.AArrayExpr.Elements {
-			WalkExprColumnRefs(elem, visit)
-		}
-	case *pg_query.Node_List:
-		for _, item := range n.List.Items {
-			WalkExprColumnRefs(item, visit)
-		}
-	case *pg_query.Node_CoalesceExpr:
-		for _, arg := range n.CoalesceExpr.Args {
-			WalkExprColumnRefs(arg, visit)
-		}
-	case *pg_query.Node_CaseExpr:
-		WalkExprColumnRefs(n.CaseExpr.Arg, visit)
-		WalkExprColumnRefs(n.CaseExpr.Defresult, visit)
-		for _, when := range n.CaseExpr.Args {
-			if w := when.GetCaseWhen(); w != nil {
-				WalkExprColumnRefs(w.Expr, visit)
-				WalkExprColumnRefs(w.Result, visit)
-			}
-		}
-	case *pg_query.Node_AIndirection:
-		// col[1], col[1:2], (col).field
-		WalkExprColumnRefs(n.AIndirection.Arg, visit)
-		for _, ind := range n.AIndirection.Indirection {
-			if idx := ind.GetAIndices(); idx != nil {
-				WalkExprColumnRefs(idx.Lidx, visit)
-				WalkExprColumnRefs(idx.Uidx, visit)
-			}
-		}
-	case *pg_query.Node_MinMaxExpr:
-		// GREATEST / LEAST
-		for _, arg := range n.MinMaxExpr.Args {
-			WalkExprColumnRefs(arg, visit)
-		}
-	case *pg_query.Node_RowExpr:
-		// ROW(col), (col1, col2)
-		for _, arg := range n.RowExpr.Args {
-			WalkExprColumnRefs(arg, visit)
-		}
-	case *pg_query.Node_BooleanTest:
-		// col IS TRUE / IS NOT FALSE / IS UNKNOWN
-		WalkExprColumnRefs(n.BooleanTest.Arg, visit)
-	case *pg_query.Node_CollateClause:
-		// col COLLATE "C"
-		WalkExprColumnRefs(n.CollateClause.Arg, visit)
-	case *pg_query.Node_NamedArgExpr:
-		// f(x => col). The argument name is a plain string, not a node.
-		WalkExprColumnRefs(n.NamedArgExpr.Arg, visit)
-	case *pg_query.Node_XmlExpr:
-		// xmlelement(name e, col), xmlconcat(col, ...). ArgNames holds the
-		// attribute names rather than columns, so it stays out.
-		for _, arg := range n.XmlExpr.NamedArgs {
-			// xmlattributes(col AS x) and xmlforest(col AS x) wrap each
-			// element in a ResTarget whose Name is the alias, not a column.
-			if rt := arg.GetResTarget(); rt != nil {
-				arg = rt.Val
-			}
-			WalkExprColumnRefs(arg, visit)
-		}
-		for _, arg := range n.XmlExpr.Args {
-			WalkExprColumnRefs(arg, visit)
-		}
-	case *pg_query.Node_XmlSerialize:
-		// xmlserialize(content col AS text) is its own node kind rather than
-		// an XmlExpr. TypeName holds a type, so only Expr is walked.
-		WalkExprColumnRefs(n.XmlSerialize.Expr, visit)
-	}
+		return n
+	})
 }

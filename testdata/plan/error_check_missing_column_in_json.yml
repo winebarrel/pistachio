@@ -1,0 +1,23 @@
+# validateColumnRefs reads the columns a CHECK references through the same
+# expression walker the constraint namer uses, so a column that only appears
+# inside a SQL/JSON constructor has to be found there too. Without it the
+# missing column goes unreported and the apply fails partway through.
+#
+# The init schema stays free of SQL/JSON syntax, which the parser accepts on
+# every server; only the desired file uses it, and that is never sent to the
+# server because validation rejects it first.
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_qty_check CHECK (JSON_ARRAY(qty) IS NOT NULL)
+  );
+error: 'column qty referenced in CHECK constraint products_qty_check does not exist on table public.products'
