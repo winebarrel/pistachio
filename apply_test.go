@@ -24,6 +24,7 @@ type applyTestCase struct {
 	AppliedPG17              string           `yaml:"applied_pg17,omitempty"`
 	AppliedPG18              string           `yaml:"applied_pg18,omitempty"`
 	AppliedSQL               *string          `yaml:"applied_sql,omitempty"`
+	MinPG                    int              `yaml:"min_pg,omitempty"`
 	Count                    *expectedCount   `yaml:"count,omitempty"`
 	DisallowedDrops          string           `yaml:"disallowed_drops,omitempty"`
 	DropPolicy               *applyDropPolicy `yaml:"drop_policy,omitempty"`
@@ -86,6 +87,9 @@ func TestApply(t *testing.T) {
 		name := strings.TrimSuffix(filepath.Base(file), ".yml")
 		t.Run(name, func(t *testing.T) {
 			tc := loadYAML[applyTestCase](t, file)
+			if tc.MinPG > 0 && pgMajor < tc.MinPG {
+				t.Skipf("requires PostgreSQL %d or later", tc.MinPG)
+			}
 			testutil.SetupDB(t, ctx, conn, tc.Init)
 
 			// Apply

@@ -170,3 +170,49 @@ func TestWalkExprColumnRefs_SkipsQualifiedRefs(t *testing.T) {
 	})
 	assert.False(t, called)
 }
+
+// PostgreSQL 16 added the SQL/JSON constructors and 17 the query functions.
+// pg_query parses both on any server, so these run everywhere; the names the
+// server actually generates for the same expressions are pinned by
+// testdata/plan/no_diff_json_constructors.yml.
+func TestWalkExprColumnRefs_JSONConstructors(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_OBJECT('k': a) IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_ARRAY(a) IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_SCALAR(a) IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_SERIALIZE(a) IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON(a) IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((a IS JSON))"))
+}
+
+// A JSON_OBJECT key is an expression too, so this reaches two columns and the
+// generated name drops the column part, which is what the server does.
+func TestWalkExprColumnRefs_JSONObjectKeyIsAColumn(t *testing.T) {
+	assert.Equal(t, []string{"a", "b"}, collectRefs(t, "CHECK ((JSON_OBJECT(a: b) IS NOT NULL))"))
+}
+
+func TestWalkExprColumnRefs_JSONAggregates(t *testing.T) {
+	assert.Equal(t, []string{"a", "b"}, collectRefs(t, "CHECK ((JSON_OBJECTAGG(a: b) IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_ARRAYAGG(a) IS NOT NULL))"))
+}
+
+func TestWalkExprColumnRefs_JSONQueryFunctions(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_VALUE(a, '$.x') IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((JSON_QUERY(a, '$.x') IS NOT NULL))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK (JSON_EXISTS(a, '$.x'))"))
+}
+
+// A PASSING argument's label sits where a column name could go, and the path
+// is a string constant rather than a reference. Neither is a column.
+func TestWalkExprColumnRefs_JSONPassingLabelIsNotAColumn(t *testing.T) {
+	assert.Equal(t, []string{"a", "b"}, collectRefs(t,
+		"CHECK ((JSON_VALUE(a, '$.x' PASSING b AS c) IS NOT NULL))"))
+}
+
+// The left-hand side of a sub-query predicate is in the local scope, so it is
+// walked; the columns of the contained SELECT belong to another table and are
+// not. A CHECK cannot hold one, but a view body can, and the walk is shared.
+func TestWalkExprColumnRefs_SubLink(t *testing.T) {
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((a IN (SELECT b FROM other)))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((a = ANY (SELECT b FROM other)))"))
+	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((COALESCE(a, 0) IN (SELECT b FROM other)))"))
+}

@@ -1,0 +1,57 @@
+# pg_get_viewdef returns a column reference unqualified where the file writes
+# it as table.column, so stripQualifications has to reach the reference wherever
+# it sits. It used to know only a handful of node kinds, which left every form
+# below re-emitting CREATE OR REPLACE VIEW on each plan and kept plan --check at
+# exit code 2 forever.
+#
+# One view per node kind, so a failure names the one that drifted. None of these
+# need PostgreSQL 16 syntax, so this runs from 15 up.
+#
+# The sub-query in v_nested_sub writes AS max because PostgreSQL names a
+# sub-select's output column on its own and pg_get_viewdef then prints the name
+# it chose. That drift is unrelated to qualification and is recorded in TODO.md.
+init: |
+  CREATE TABLE public.t (
+      a text,
+      n integer,
+      ts timestamp
+  );
+  CREATE VIEW public.v_coalesce AS SELECT COALESCE(t.a, 'x') AS c FROM public.t;
+  CREATE VIEW public.v_case AS SELECT CASE WHEN t.n > 0 THEN t.a ELSE 'x' END AS c FROM public.t;
+  CREATE VIEW public.v_greatest AS SELECT GREATEST(t.n, 1) AS c FROM public.t;
+  CREATE VIEW public.v_least AS SELECT LEAST(t.n, 1) AS c FROM public.t;
+  CREATE VIEW public.v_nulltest AS SELECT t.n FROM public.t WHERE t.a IS NULL;
+  CREATE VIEW public.v_row AS SELECT (ROW(t.a, t.n) IS NOT NULL) AS c FROM public.t;
+  CREATE VIEW public.v_array AS SELECT ARRAY[t.a, 'x'] AS c FROM public.t;
+  CREATE VIEW public.v_booleantest AS SELECT t.n FROM public.t WHERE (t.n > 0) IS TRUE;
+  CREATE VIEW public.v_collate AS SELECT (t.a COLLATE "C") AS c FROM public.t;
+  CREATE VIEW public.v_filter AS SELECT count(*) FILTER (WHERE t.n > 0) AS c FROM public.t;
+  CREATE VIEW public.v_aggorder AS SELECT string_agg(t.a, ',' ORDER BY t.n) AS c FROM public.t;
+  CREATE VIEW public.v_over AS SELECT sum(t.n) OVER (PARTITION BY t.a) AS c FROM public.t;
+  CREATE VIEW public.v_window AS SELECT sum(t.n) OVER w AS c FROM public.t WINDOW w AS (PARTITION BY t.a);
+  CREATE VIEW public.v_distinct_on AS SELECT DISTINCT ON (t.a) t.n AS c FROM public.t ORDER BY t.a;
+  CREATE VIEW public.v_grouping_sets AS SELECT t.a, count(*) AS c FROM public.t GROUP BY GROUPING SETS ((t.a), ());
+  CREATE VIEW public.v_nested_sub AS SELECT COALESCE((SELECT max(s.n) AS max FROM public.t s WHERE s.a = t.a), 0) AS c FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a text,
+      n integer,
+      ts timestamp
+  );
+  CREATE VIEW public.v_coalesce AS SELECT COALESCE(t.a, 'x') AS c FROM public.t;
+  CREATE VIEW public.v_case AS SELECT CASE WHEN t.n > 0 THEN t.a ELSE 'x' END AS c FROM public.t;
+  CREATE VIEW public.v_greatest AS SELECT GREATEST(t.n, 1) AS c FROM public.t;
+  CREATE VIEW public.v_least AS SELECT LEAST(t.n, 1) AS c FROM public.t;
+  CREATE VIEW public.v_nulltest AS SELECT t.n FROM public.t WHERE t.a IS NULL;
+  CREATE VIEW public.v_row AS SELECT (ROW(t.a, t.n) IS NOT NULL) AS c FROM public.t;
+  CREATE VIEW public.v_array AS SELECT ARRAY[t.a, 'x'] AS c FROM public.t;
+  CREATE VIEW public.v_booleantest AS SELECT t.n FROM public.t WHERE (t.n > 0) IS TRUE;
+  CREATE VIEW public.v_collate AS SELECT (t.a COLLATE "C") AS c FROM public.t;
+  CREATE VIEW public.v_filter AS SELECT count(*) FILTER (WHERE t.n > 0) AS c FROM public.t;
+  CREATE VIEW public.v_aggorder AS SELECT string_agg(t.a, ',' ORDER BY t.n) AS c FROM public.t;
+  CREATE VIEW public.v_over AS SELECT sum(t.n) OVER (PARTITION BY t.a) AS c FROM public.t;
+  CREATE VIEW public.v_window AS SELECT sum(t.n) OVER w AS c FROM public.t WINDOW w AS (PARTITION BY t.a);
+  CREATE VIEW public.v_distinct_on AS SELECT DISTINCT ON (t.a) t.n AS c FROM public.t ORDER BY t.a;
+  CREATE VIEW public.v_grouping_sets AS SELECT t.a, count(*) AS c FROM public.t GROUP BY GROUPING SETS ((t.a), ());
+  CREATE VIEW public.v_nested_sub AS SELECT COALESCE((SELECT max(s.n) AS max FROM public.t s WHERE s.a = t.a), 0) AS c FROM public.t;
+plan: ""

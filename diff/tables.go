@@ -445,78 +445,44 @@ func isSerialType(typeName string) bool {
 	return ok
 }
 
-// normalizeCheckExpr recursively normalizes a CHECK constraint expression
-// so that semantically equivalent definitions compare as equal:
-//   - Strips casts to text-like types (text, varchar), which pg_get_constraintdef adds.
+// normalizeCheckExpr normalizes an expression so that semantically equivalent
+// definitions compare as equal:
+//   - Strips casts to text-like types (text, varchar), which pg_get_constraintdef
+//     adds to anything string-typed and a written definition practically never
+//     carries.
 //   - Converts = ANY(ARRAY[...]) to IN (...) (PostgreSQL internal representation).
+//
+// Both are symmetric: they apply to the catalog side and the written side
+// alike. The walk reaches every node kind, so a sub-query inside an RLS policy
+// or a view body, and an expression inside a SQL/JSON constructor, get the
+// same treatment as a top-level operand.
+//
+// The one position left alone is a top-level cast on a SELECT target: the cast
+// type there decides the resulting view's output column type, so stripping it
+// would hide a `SELECT col` -> `SELECT col::text` change.
 func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
-	if node == nil {
-		return nil
-	}
-	switch n := node.Node.(type) {
-	case *pg_query.Node_TypeCast:
-		tc := n.TypeCast
-		tc.Arg = normalizeCheckExpr(tc.Arg)
-		if isTextLikeTypeName(tc.TypeName) {
+	return pgast.Walk(node, pgast.WalkOptions{}, normalizeExprNode)
+}
+
+func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
+	if tc := node.GetTypeCast(); tc != nil {
+		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) {
 			return tc.Arg
 		}
-	case *pg_query.Node_AExpr:
-		ae := n.AExpr
-		ae.Lexpr = normalizeCheckExpr(ae.Lexpr)
-		ae.Rexpr = normalizeCheckExpr(ae.Rexpr)
-		if ae.Kind == pg_query.A_Expr_Kind_AEXPR_OP_ANY {
-			if arr := ae.Rexpr.GetAArrayExpr(); arr != nil {
-				ae.Kind = pg_query.A_Expr_Kind_AEXPR_IN
-				ae.Rexpr = &pg_query.Node{
-					Node: &pg_query.Node_List{
-						List: &pg_query.List{Items: arr.Elements},
-					},
-				}
-			}
-		}
-	case *pg_query.Node_BoolExpr:
-		for i, arg := range n.BoolExpr.Args {
-			n.BoolExpr.Args[i] = normalizeCheckExpr(arg)
-		}
-	case *pg_query.Node_AArrayExpr:
-		for i, elem := range n.AArrayExpr.Elements {
-			n.AArrayExpr.Elements[i] = normalizeCheckExpr(elem)
-		}
-	case *pg_query.Node_List:
-		for i, item := range n.List.Items {
-			n.List.Items[i] = normalizeCheckExpr(item)
-		}
-	case *pg_query.Node_FuncCall:
-		for i, arg := range n.FuncCall.Args {
-			n.FuncCall.Args[i] = normalizeCheckExpr(arg)
-		}
-	case *pg_query.Node_NullTest:
-		n.NullTest.Arg = normalizeCheckExpr(n.NullTest.Arg)
-	case *pg_query.Node_CoalesceExpr:
-		for i, arg := range n.CoalesceExpr.Args {
-			n.CoalesceExpr.Args[i] = normalizeCheckExpr(arg)
-		}
-	case *pg_query.Node_CaseExpr:
-		n.CaseExpr.Arg = normalizeCheckExpr(n.CaseExpr.Arg)
-		n.CaseExpr.Defresult = normalizeCheckExpr(n.CaseExpr.Defresult)
-		for _, when := range n.CaseExpr.Args {
-			if w := when.GetCaseWhen(); w != nil {
-				w.Expr = normalizeCheckExpr(w.Expr)
-				w.Result = normalizeCheckExpr(w.Result)
-			}
-		}
-	case *pg_query.Node_SubLink:
-		// Recurse into the contained SELECT so that IN <-> ANY(ARRAY[...])
-		// rewrites and text-cast strips reach sub-queries inside EXISTS /
-		// IN-subquery / ANY-subquery predicates. CHECK / DEFAULT /
-		// generated-column / index-predicate callers can't actually emit
-		// SubLinks, so this only matters for RLS policy USING/WITH CHECK
-		// and for view bodies; both legitimate cases.
-		if n.SubLink.Subselect != nil {
-			normalizeSelectExprs(n.SubLink.Subselect)
-		}
-		n.SubLink.Testexpr = normalizeCheckExpr(n.SubLink.Testexpr)
+		return node
 	}
+	if ae := node.GetAExpr(); ae != nil && ae.Kind == pg_query.A_Expr_Kind_AEXPR_OP_ANY {
+		if arr := ae.Rexpr.GetAArrayExpr(); arr != nil {
+			ae.Kind = pg_query.A_Expr_Kind_AEXPR_IN
+			ae.Rexpr = &pg_query.Node{
+				Node: &pg_query.Node_List{
+					List: &pg_query.List{Items: arr.Elements},
+				},
+			}
+		}
+		return node
+	}
+	normalizeJsonClauses(node)
 	return node
 }
 
@@ -699,19 +665,33 @@ func equalConstraintDef(current, desired string) bool {
 	return curStr == desStr
 }
 
-// alignCurrentCasts walks desired and current in parallel, stripping
-// TypeCast wrappers from current at positions where desired has no
-// matching TypeCast. The function mutates the current tree in place
-// and returns the (possibly unwrapped) current node so callers can
-// reassign at parent boundaries.
+// alignCurrentCasts walks desired and current in step, stripping TypeCast
+// wrappers from current at positions where desired has no matching TypeCast.
+// pg_get_constraintdef and pg_get_viewdef spell out casts the written form
+// leaves implicit ('00:00:00'::time, '0'::integer, 'lit'::enum_type), and a
+// cast the desired side did write is compared as written, so a real
+// disagreement still surfaces.
+//
+// The function mutates the current tree in place and returns the (possibly
+// unwrapped) current node so callers can reassign at parent boundaries.
 func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
-	if desired == nil || current == nil {
+	return pgast.WalkPair(desired, current, alignCastNode)
+}
+
+func alignCastNode(ctx pgast.Ctx, desired, current *pg_query.Node) *pg_query.Node {
+	// A cast on a SELECT target decides the view's output column type, so one
+	// side carrying it and the other not is a difference rather than something
+	// to strip. Below a cast matched on both sides the normal rule applies
+	// again, because the position is then a cast argument rather than a target.
+	if ctx.IsSelectTarget() && desired.GetTypeCast() == nil && current.GetTypeCast() != nil {
 		return current
 	}
+	alignJsonConstructorOutput(desired, current)
+	alignJsonPathCast(desired, current)
 	for {
 		ct := current.GetTypeCast()
 		if ct == nil || desired.GetTypeCast() != nil {
-			break
+			return current
 		}
 		if ct.Arg == nil {
 			return current
@@ -734,77 +714,6 @@ func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
 		}
 		current = arg
 	}
-	switch dn := desired.Node.(type) {
-	case *pg_query.Node_TypeCast:
-		if cn := current.GetTypeCast(); cn != nil {
-			cn.Arg = alignCurrentCasts(dn.TypeCast.Arg, cn.Arg)
-		}
-	case *pg_query.Node_AExpr:
-		if cn := current.GetAExpr(); cn != nil {
-			cn.Lexpr = alignCurrentCasts(dn.AExpr.Lexpr, cn.Lexpr)
-			cn.Rexpr = alignCurrentCasts(dn.AExpr.Rexpr, cn.Rexpr)
-		}
-	case *pg_query.Node_BoolExpr:
-		if cn := current.GetBoolExpr(); cn != nil && len(cn.Args) == len(dn.BoolExpr.Args) {
-			for i := range dn.BoolExpr.Args {
-				cn.Args[i] = alignCurrentCasts(dn.BoolExpr.Args[i], cn.Args[i])
-			}
-		}
-	case *pg_query.Node_AArrayExpr:
-		if cn := current.GetAArrayExpr(); cn != nil && len(cn.Elements) == len(dn.AArrayExpr.Elements) {
-			for i := range dn.AArrayExpr.Elements {
-				cn.Elements[i] = alignCurrentCasts(dn.AArrayExpr.Elements[i], cn.Elements[i])
-			}
-		}
-	case *pg_query.Node_List:
-		if cn := current.GetList(); cn != nil && len(cn.Items) == len(dn.List.Items) {
-			for i := range dn.List.Items {
-				cn.Items[i] = alignCurrentCasts(dn.List.Items[i], cn.Items[i])
-			}
-		}
-	case *pg_query.Node_FuncCall:
-		if cn := current.GetFuncCall(); cn != nil && len(cn.Args) == len(dn.FuncCall.Args) {
-			for i := range dn.FuncCall.Args {
-				cn.Args[i] = alignCurrentCasts(dn.FuncCall.Args[i], cn.Args[i])
-			}
-		}
-	case *pg_query.Node_NullTest:
-		if cn := current.GetNullTest(); cn != nil {
-			cn.Arg = alignCurrentCasts(dn.NullTest.Arg, cn.Arg)
-		}
-	case *pg_query.Node_CoalesceExpr:
-		if cn := current.GetCoalesceExpr(); cn != nil && len(cn.Args) == len(dn.CoalesceExpr.Args) {
-			for i := range dn.CoalesceExpr.Args {
-				cn.Args[i] = alignCurrentCasts(dn.CoalesceExpr.Args[i], cn.Args[i])
-			}
-		}
-	case *pg_query.Node_CaseExpr:
-		if cn := current.GetCaseExpr(); cn != nil {
-			cn.Arg = alignCurrentCasts(dn.CaseExpr.Arg, cn.Arg)
-			cn.Defresult = alignCurrentCasts(dn.CaseExpr.Defresult, cn.Defresult)
-			if len(cn.Args) == len(dn.CaseExpr.Args) {
-				for i := range dn.CaseExpr.Args {
-					dw := dn.CaseExpr.Args[i].GetCaseWhen()
-					cw := cn.Args[i].GetCaseWhen()
-					if dw != nil && cw != nil {
-						cw.Expr = alignCurrentCasts(dw.Expr, cw.Expr)
-						cw.Result = alignCurrentCasts(dw.Result, cw.Result)
-					}
-				}
-			}
-		}
-	case *pg_query.Node_SubLink:
-		// Mirror the normalizeCheckExpr SubLink case: recurse into the
-		// contained SELECT pair so that current-only casts inside an
-		// EXISTS / IN-subquery / ANY-subquery predicate are stripped too.
-		if cn := current.GetSubLink(); cn != nil {
-			if dn.SubLink.Subselect != nil && cn.Subselect != nil {
-				alignSelectCasts(dn.SubLink.Subselect, cn.Subselect)
-			}
-			cn.Testexpr = alignCurrentCasts(dn.SubLink.Testexpr, cn.Testexpr)
-		}
-	}
-	return current
 }
 
 func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, disallowed []string, err error) {

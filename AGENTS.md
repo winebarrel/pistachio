@@ -49,9 +49,9 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - Package-level tests generally use external test packages (e.g., `package catalog_test`, `package model_test`). Use same-package tests only when access to unexported identifiers is required (e.g., `package diff`).
 - Root-level integration tests use `package pistachio_test`.
 - Test fixtures are YAML files in `testdata/`. Required fields vary by test suite: `apply` uses `init`/`desired`/`applied`, `plan` uses `init`/`desired`/`plan`/`error`, `dump` uses `init`/`dump`, and `parser` uses `input`/`expected`. The plan/apply/dump harnesses also accept optional fields, but **the set differs per suite** (the lists below are not interchangeable):
-  - `dump`: `omit_schema`, `include`/`exclude`/`enable`/`disable`.
-  - `plan`: `count`, `drop_policy`, `disallowed_drops`, `disable_index_concurrently`, `force_index_concurrently`, `include`/`exclude`/`enable`/`disable`, `pre_sql`/`pre_sql_file`/`concurrently_pre_sql`/`concurrently_pre_sql_file`.
-  - `apply`: everything `plan` accepts (without the `plan`/`error` fields), plus `applied_sql` and `verify_no_drift`.
+  - `dump`: `omit_schema`, `include`/`exclude`/`enable`/`disable`, `dump_pg16`/`dump_pg17`/`dump_pg18`.
+  - `plan`: `min_pg`, `count`, `drop_policy`, `disallowed_drops`, `disable_index_concurrently`, `force_index_concurrently`, `include`/`exclude`/`enable`/`disable`, `pre_sql`/`pre_sql_file`/`concurrently_pre_sql`/`concurrently_pre_sql_file`.
+  - `apply`: everything `plan` accepts (without the `plan`/`error` fields), plus `applied_sql`, `verify_no_drift` and `applied_pg16`/`applied_pg17`/`applied_pg18`.
 
   The authoritative list is the `planTestCase` / `applyTestCase` / `dumpTestCase` structs at the top of `plan_test.go` / `apply_test.go` / `dump_test.go`. Check the suite-specific struct when writing a new fixture.
 - New plan/apply/dump tests should be added as YAML fixtures whenever the test is purely SQL-input -> SQL/dump-output. Reach for a Go test only when the scenario can't be expressed that way: connection or auth errors, transaction/Writer plumbing, file-IO failures, the `--execute*` features, multi-schema setups that need helpers like `setupSchemaDB`, or assertions that examine internal Go data structures (`Files()` map, `ObjectCount` methods, schema-map helpers, etc.). When the harness lacks a field for a behavior you want to assert in a fixture, prefer extending the `*TestCase` struct with one optional field (defaulting to nil/zero so existing fixtures are unaffected) over keeping the test in Go.

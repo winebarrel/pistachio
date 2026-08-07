@@ -15,10 +15,14 @@ import (
 )
 
 type planTestCase struct {
-	Init                     string          `yaml:"init"`
-	Desired                  string          `yaml:"desired"`
-	Plan                     string          `yaml:"plan"`
-	Error                    string          `yaml:"error"`
+	Init    string `yaml:"init"`
+	Desired string `yaml:"desired"`
+	Plan    string `yaml:"plan"`
+	Error   string `yaml:"error"`
+	// MinPG skips the fixture on a server older than this major version, for
+	// syntax that does not exist there. PostgreSQL 16 added the SQL/JSON
+	// constructors, 17 the query functions.
+	MinPG                    int             `yaml:"min_pg,omitempty"`
 	Count                    *expectedCount  `yaml:"count,omitempty"`
 	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
@@ -327,6 +331,8 @@ func TestPlan(t *testing.T) {
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
 
+	pgMajor := testutil.ServerMajorVersion(t, ctx, conn)
+
 	files, err := filepath.Glob("testdata/plan/*.yml")
 	require.NoError(t, err)
 	require.NotEmpty(t, files)
@@ -336,6 +342,9 @@ func TestPlan(t *testing.T) {
 
 		t.Run(name, func(t *testing.T) {
 			tc := loadYAML[planTestCase](t, file)
+			if tc.MinPG > 0 && pgMajor < tc.MinPG {
+				t.Skipf("requires PostgreSQL %d or later", tc.MinPG)
+			}
 			testutil.SetupDB(t, ctx, conn, tc.Init)
 
 			tmpDir := t.TempDir()

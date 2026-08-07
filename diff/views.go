@@ -6,6 +6,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -19,12 +20,16 @@ import (
 //   - schema/column qualification stripping (pg_get_viewdef adds
 //     table-qualified columns and omits the default schema, parsed SQL is
 //     the opposite),
-//   - symmetric expression normalization via normalizeSelectExprs:
+//   - symmetric expression normalization via normalizeCheckExpr:
 //     paren / text-like cast stripping and `= ANY(ARRAY[...])` -> `IN (...)`,
-//   - asymmetric current-only cast alignment via alignSelectCasts: strips
+//   - asymmetric current-only cast alignment via alignCurrentCasts: strips
 //     TypeCasts (notably 'lit'::enum_type) the catalog added but the user
 //     didn't write. Top-level casts at the target list are preserved on
 //     both sides since they affect the resulting view's column type.
+//
+// All three walk the whole statement, so a nested SELECT, a join qualifier,
+// a DISTINCT ON element, a named WINDOW or a sub-query gets the same
+// treatment as the target list without any of them being enumerated here.
 //
 // The caller convention is equalViewDef(current, desired): current is the
 // pg_get_viewdef form (from the catalog), desired is the user SQL. The
@@ -40,14 +45,14 @@ func equalViewDef(current, desired string) bool {
 	}
 	for _, stmt := range curResult.Stmts {
 		stripQualifications(stmt.Stmt)
-		normalizeSelectExprs(stmt.Stmt)
+		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
 	}
 	for _, stmt := range desResult.Stmts {
 		stripQualifications(stmt.Stmt)
-		normalizeSelectExprs(stmt.Stmt)
+		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
 	}
 	if len(curResult.Stmts) == 1 && len(desResult.Stmts) == 1 {
-		alignSelectCasts(desResult.Stmts[0].Stmt, curResult.Stmts[0].Stmt)
+		curResult.Stmts[0].Stmt = alignCurrentCasts(desResult.Stmts[0].Stmt, curResult.Stmts[0].Stmt)
 	}
 	curStr, errCur := pg_query.Deparse(curResult)
 	desStr, errDes := pg_query.Deparse(desResult)
@@ -161,344 +166,33 @@ func selectOutputColumns(node *pg_query.Node) ([]string, bool) {
 	return names, true
 }
 
-// normalizeSelectExprs walks a SELECT statement (and any nested
-// SELECT/JOIN/CTE) and applies normalizeCheckExpr at every position that
-// holds an expression. Converts `= ANY(ARRAY[...])` back to `IN (...)` and
-// strips text-like TypeCasts. Called both from equalViewDef and from
-// normalizeCheckExpr's SubLink case for sub-queries inside CHECK / RLS
-// expressions.
-func normalizeSelectExprs(node *pg_query.Node) {
-	if node == nil {
-		return
-	}
-
-	if vs := node.GetViewStmt(); vs != nil {
-		normalizeSelectExprs(vs.Query)
-		return
-	}
-
-	if ss := node.GetSelectStmt(); ss != nil {
-		if ss.WithClause != nil {
-			for _, cte := range ss.WithClause.Ctes {
-				if c := cte.GetCommonTableExpr(); c != nil {
-					normalizeSelectExprs(c.Ctequery)
-				}
-			}
-		}
-		for _, from := range ss.FromClause {
-			normalizeSelectExprs(from)
-		}
-		for _, target := range ss.TargetList {
-			if rt := target.GetResTarget(); rt != nil && rt.Val != nil {
-				rt.Val = normalizeTargetExpr(rt.Val)
-			}
-		}
-		if ss.WhereClause != nil {
-			ss.WhereClause = normalizeCheckExpr(ss.WhereClause)
-		}
-		if ss.HavingClause != nil {
-			ss.HavingClause = normalizeCheckExpr(ss.HavingClause)
-		}
-		for i, gb := range ss.GroupClause {
-			ss.GroupClause[i] = normalizeCheckExpr(gb)
-		}
-		for _, sb := range ss.SortClause {
-			if s := sb.GetSortBy(); s != nil {
-				s.Node = normalizeCheckExpr(s.Node)
-			}
-		}
-		if ss.LimitCount != nil {
-			ss.LimitCount = normalizeCheckExpr(ss.LimitCount)
-		}
-		if ss.LimitOffset != nil {
-			ss.LimitOffset = normalizeCheckExpr(ss.LimitOffset)
-		}
-		if ss.Larg != nil {
-			normalizeSelectExprs(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}})
-		}
-		if ss.Rarg != nil {
-			normalizeSelectExprs(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}})
-		}
-		return
-	}
-
-	if join := node.GetJoinExpr(); join != nil {
-		normalizeSelectExprs(join.Larg)
-		normalizeSelectExprs(join.Rarg)
-		if join.Quals != nil {
-			join.Quals = normalizeCheckExpr(join.Quals)
-		}
-		return
-	}
-
-	if sub := node.GetRangeSubselect(); sub != nil {
-		normalizeSelectExprs(sub.Subquery)
-		return
-	}
-}
-
-// normalizeTargetExpr is normalizeCheckExpr with a top-level TypeCast
-// preserved. In a SELECT target list the cast type determines the output
-// column type, so symmetric text-cast stripping at that position would
-// hide an intentional `SELECT col` -> `SELECT col::text` change.
-func normalizeTargetExpr(node *pg_query.Node) *pg_query.Node {
-	if tc := node.GetTypeCast(); tc != nil {
-		tc.Arg = normalizeCheckExpr(tc.Arg)
-		return node
-	}
-	return normalizeCheckExpr(node)
-}
-
-// alignTargetCasts is alignCurrentCasts with a top-level TypeCast
-// asymmetry preserved (a cast on one side but not the other surfaces
-// as a diff). Below a matched top-level cast on both sides, normal
-// alignment applies. Rationale matches normalizeTargetExpr.
-func alignTargetCasts(desired, current *pg_query.Node) *pg_query.Node {
-	dt := desired.GetTypeCast()
-	ct := current.GetTypeCast()
-	if dt != nil && ct != nil {
-		ct.Arg = alignCurrentCasts(dt.Arg, ct.Arg)
-		return current
-	}
-	if dt != nil || ct != nil {
-		return current
-	}
-	return alignCurrentCasts(desired, current)
-}
-
-// alignSelectCasts performs the same parallel walk as normalizeSelectExprs but
-// across two trees, applying alignCurrentCasts at each expression position
-// to strip TypeCasts present only on the current side. Used by equalViewDef
-// for the asymmetric current<->desired comparison, and from alignCurrentCasts'
-// SubLink case for sub-queries inside CHECK / RLS expressions.
-func alignSelectCasts(desired, current *pg_query.Node) {
-	if desired == nil || current == nil {
-		return
-	}
-
-	if dv := desired.GetViewStmt(); dv != nil {
-		if cv := current.GetViewStmt(); cv != nil {
-			alignSelectCasts(dv.Query, cv.Query)
-		}
-		return
-	}
-
-	if ds := desired.GetSelectStmt(); ds != nil {
-		cs := current.GetSelectStmt()
-		if cs == nil {
-			return
-		}
-		if ds.WithClause != nil && cs.WithClause != nil && len(ds.WithClause.Ctes) == len(cs.WithClause.Ctes) {
-			for i := range ds.WithClause.Ctes {
-				dc := ds.WithClause.Ctes[i].GetCommonTableExpr()
-				cc := cs.WithClause.Ctes[i].GetCommonTableExpr()
-				if dc != nil && cc != nil {
-					alignSelectCasts(dc.Ctequery, cc.Ctequery)
-				}
-			}
-		}
-		if len(ds.FromClause) == len(cs.FromClause) {
-			for i := range ds.FromClause {
-				alignSelectCasts(ds.FromClause[i], cs.FromClause[i])
-			}
-		}
-		if len(ds.TargetList) == len(cs.TargetList) {
-			for i := range ds.TargetList {
-				dt := ds.TargetList[i].GetResTarget()
-				ct := cs.TargetList[i].GetResTarget()
-				if dt != nil && ct != nil && dt.Val != nil && ct.Val != nil {
-					ct.Val = alignTargetCasts(dt.Val, ct.Val)
-				}
-			}
-		}
-		if ds.WhereClause != nil && cs.WhereClause != nil {
-			cs.WhereClause = alignCurrentCasts(ds.WhereClause, cs.WhereClause)
-		}
-		if ds.HavingClause != nil && cs.HavingClause != nil {
-			cs.HavingClause = alignCurrentCasts(ds.HavingClause, cs.HavingClause)
-		}
-		if len(ds.GroupClause) == len(cs.GroupClause) {
-			for i := range ds.GroupClause {
-				cs.GroupClause[i] = alignCurrentCasts(ds.GroupClause[i], cs.GroupClause[i])
-			}
-		}
-		if len(ds.SortClause) == len(cs.SortClause) {
-			for i := range ds.SortClause {
-				dsb := ds.SortClause[i].GetSortBy()
-				csb := cs.SortClause[i].GetSortBy()
-				if dsb != nil && csb != nil {
-					csb.Node = alignCurrentCasts(dsb.Node, csb.Node)
-				}
-			}
-		}
-		if ds.LimitCount != nil && cs.LimitCount != nil {
-			cs.LimitCount = alignCurrentCasts(ds.LimitCount, cs.LimitCount)
-		}
-		if ds.LimitOffset != nil && cs.LimitOffset != nil {
-			cs.LimitOffset = alignCurrentCasts(ds.LimitOffset, cs.LimitOffset)
-		}
-		if ds.Larg != nil && cs.Larg != nil {
-			alignSelectCasts(
-				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ds.Larg}},
-				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: cs.Larg}},
-			)
-		}
-		if ds.Rarg != nil && cs.Rarg != nil {
-			alignSelectCasts(
-				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ds.Rarg}},
-				&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: cs.Rarg}},
-			)
-		}
-		return
-	}
-
-	if dj := desired.GetJoinExpr(); dj != nil {
-		if cj := current.GetJoinExpr(); cj != nil {
-			alignSelectCasts(dj.Larg, cj.Larg)
-			alignSelectCasts(dj.Rarg, cj.Rarg)
-			if dj.Quals != nil && cj.Quals != nil {
-				cj.Quals = alignCurrentCasts(dj.Quals, cj.Quals)
-			}
-		}
-		return
-	}
-
-	if drs := desired.GetRangeSubselect(); drs != nil {
-		if crs := current.GetRangeSubselect(); crs != nil {
-			alignSelectCasts(drs.Subquery, crs.Subquery)
-		}
-		return
-	}
-}
-
-// stripQualifications recursively strips schema from RangeVars and
-// table qualifications from ColumnRefs in the AST.
+// stripQualifications removes the schema from every RangeVar and the table
+// prefix from every two-part ColumnRef in the statement. pg_get_viewdef omits
+// the schema when it is on the search path and qualifies a column with its
+// table, and a written view definition tends to do the opposite, so both sides
+// are reduced to the bare form before they are compared.
+//
+// The walk reaches every node kind, which is what the older enumeration could
+// not do: a reference sitting inside COALESCE, CASE, GREATEST, a subscript, a
+// row or array constructor, IS TRUE, COLLATE, an XML or SQL/JSON expression,
+// an aggregate ORDER BY or FILTER, an OVER clause, DISTINCT ON, GROUPING SETS
+// or a sub-query nested under any of them kept its prefix and re-emitted
+// CREATE OR REPLACE VIEW on every plan.
 func stripQualifications(node *pg_query.Node) {
-	if node == nil {
-		return
-	}
-
-	if vs := node.GetViewStmt(); vs != nil {
-		stripQualifications(vs.Query)
-		return
-	}
-
-	if rv := node.GetRangeVar(); rv != nil {
-		rv.Schemaname = ""
-		return
-	}
-
-	if cr := node.GetColumnRef(); cr != nil {
-		// "table.column" -> "column" (remove table prefix)
-		// Only strip when both parts are plain identifiers (not table.*)
-		if len(cr.Fields) == 2 && cr.Fields[1].GetString_() != nil {
-			cr.Fields = cr.Fields[1:]
+	pgast.Walk(node, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+		if rv := n.GetRangeVar(); rv != nil {
+			rv.Schemaname = ""
+			return n
 		}
-		return
-	}
-
-	if ss := node.GetSelectStmt(); ss != nil {
-		if ss.WithClause != nil {
-			for _, cte := range ss.WithClause.Ctes {
-				if c := cte.GetCommonTableExpr(); c != nil {
-					stripQualifications(c.Ctequery)
-				}
+		if cr := n.GetColumnRef(); cr != nil {
+			// "table.column" -> "column". Only when both parts are plain
+			// identifiers, so table.* keeps its prefix.
+			if len(cr.Fields) == 2 && cr.Fields[1].GetString_() != nil {
+				cr.Fields = cr.Fields[1:]
 			}
 		}
-		for _, from := range ss.FromClause {
-			stripQualifications(from)
-		}
-		for _, target := range ss.TargetList {
-			stripQualifications(target)
-		}
-		if ss.WhereClause != nil {
-			stripQualifications(ss.WhereClause)
-		}
-		if ss.HavingClause != nil {
-			stripQualifications(ss.HavingClause)
-		}
-		for _, gb := range ss.GroupClause {
-			stripQualifications(gb)
-		}
-		for _, ob := range ss.SortClause {
-			stripQualifications(ob)
-		}
-		if ss.LimitCount != nil {
-			stripQualifications(ss.LimitCount)
-		}
-		if ss.LimitOffset != nil {
-			stripQualifications(ss.LimitOffset)
-		}
-		if ss.Larg != nil {
-			stripQualifications(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}})
-		}
-		if ss.Rarg != nil {
-			stripQualifications(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}})
-		}
-		return
-	}
-
-	if rt := node.GetResTarget(); rt != nil {
-		stripQualifications(rt.Val)
-		return
-	}
-
-	if join := node.GetJoinExpr(); join != nil {
-		stripQualifications(join.Larg)
-		stripQualifications(join.Rarg)
-		if join.Quals != nil {
-			stripQualifications(join.Quals)
-		}
-		return
-	}
-
-	if sub := node.GetRangeSubselect(); sub != nil {
-		stripQualifications(sub.Subquery)
-		return
-	}
-
-	if sl := node.GetSubLink(); sl != nil {
-		// Testexpr holds the LHS of `x IN (SELECT ...)` / `x = ANY (SELECT ...)`
-		// forms; stripping qualifications here matches the bare-IN A_Expr path.
-		stripQualifications(sl.Testexpr)
-		stripQualifications(sl.Subselect)
-		return
-	}
-
-	if expr := node.GetAExpr(); expr != nil {
-		stripQualifications(expr.Lexpr)
-		stripQualifications(expr.Rexpr)
-		return
-	}
-
-	if boolExpr := node.GetBoolExpr(); boolExpr != nil {
-		for _, arg := range boolExpr.Args {
-			stripQualifications(arg)
-		}
-		return
-	}
-
-	if fc := node.GetFuncCall(); fc != nil {
-		for _, arg := range fc.Args {
-			stripQualifications(arg)
-		}
-		return
-	}
-
-	if sb := node.GetSortBy(); sb != nil {
-		stripQualifications(sb.Node)
-		return
-	}
-
-	if tc := node.GetTypeCast(); tc != nil {
-		// Recurse into the cast argument so qualified ColumnRefs nested under
-		// a TypeCast still get stripped. Matters because normalizeSelectExprs
-		// can later strip the text-like cast wrapper, exposing the inner
-		// reference; if its qualification stayed it would diff against the
-		// unqualified desired form.
-		stripQualifications(tc.Arg)
-		return
-	}
+		return n
+	})
 }
 
 // ViewDiffResult separates view DROP and CREATE/MODIFY statements.
