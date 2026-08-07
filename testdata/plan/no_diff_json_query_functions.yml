@@ -1,0 +1,32 @@
+# The PostgreSQL 17 SQL/JSON query functions carry a RETURNING clause that
+# normalizeJsonOutput does not touch, since json is not the default return type
+# for them. This fixture asks the server what it prints when the clause is left
+# off. It runs only on 17 and later; if it fails, the failure carries the
+# catalog form, which is the missing evidence for that TODO entry.
+#
+# A view is used rather than a CHECK so nothing depends on these functions
+# being immutable.
+min_pg: 17
+init: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v AS
+      SELECT JSON_VALUE(t.a, '$.x') AS c1,
+          JSON_QUERY(t.a, '$.y') AS c2,
+          JSON_EXISTS(t.a, '$.z') AS c3,
+          JSON_SCALAR(1) AS c4,
+          JSON_SERIALIZE(t.a) AS c5
+      FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v AS
+      SELECT JSON_VALUE(t.a, '$.x') AS c1,
+          JSON_QUERY(t.a, '$.y') AS c2,
+          JSON_EXISTS(t.a, '$.z') AS c3,
+          JSON_SCALAR(1) AS c4,
+          JSON_SERIALIZE(t.a) AS c5
+      FROM public.t;
+plan: ""

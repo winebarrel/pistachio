@@ -1,0 +1,24 @@
+# DISTINCT ON and a named WINDOW hold expressions that pg_get_viewdef rewrites
+# the same way it rewrites the rest of a view body: a column reference comes
+# back unqualified, IN (...) comes back as = ANY (ARRAY[...]), and a literal
+# gets its type spelled out. All three normalizations have to reach both
+# clauses, not just the qualification.
+init: |
+  CREATE TABLE public.dw (
+      a text,
+      n integer,
+      ts timestamp
+  );
+  CREATE VIEW public.dwv AS SELECT DISTINCT ON ((dw.a IN ('x', 'y'))) dw.n AS c FROM public.dw ORDER BY (dw.a IN ('x', 'y'));
+  CREATE VIEW public.dwv2 AS SELECT sum(dw.n) OVER w AS c FROM public.dw WINDOW w AS (PARTITION BY (dw.a IN ('x', 'y')) ORDER BY (dw.ts >= '2020-01-01 00:00:00'));
+  CREATE VIEW public.dwv3 AS SELECT DISTINCT ON ((dw.ts >= '2020-01-01 00:00:00')) dw.n AS c FROM public.dw ORDER BY (dw.ts >= '2020-01-01 00:00:00');
+desired: |
+  CREATE TABLE public.dw (
+      a text,
+      n integer,
+      ts timestamp
+  );
+  CREATE VIEW public.dwv AS SELECT DISTINCT ON ((dw.a IN ('x', 'y'))) dw.n AS c FROM public.dw ORDER BY (dw.a IN ('x', 'y'));
+  CREATE VIEW public.dwv2 AS SELECT sum(dw.n) OVER w AS c FROM public.dw WINDOW w AS (PARTITION BY (dw.a IN ('x', 'y')) ORDER BY (dw.ts >= '2020-01-01 00:00:00'));
+  CREATE VIEW public.dwv3 AS SELECT DISTINCT ON ((dw.ts >= '2020-01-01 00:00:00')) dw.n AS c FROM public.dw ORDER BY (dw.ts >= '2020-01-01 00:00:00');
+plan: ""

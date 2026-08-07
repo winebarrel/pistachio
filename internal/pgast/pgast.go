@@ -86,8 +86,9 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 // WalkExprColumnRefNodes walks an expression tree and invokes visit for every
 // ColumnRef it holds, qualified or not. Visitors may mutate what they are
 // given. A nested SELECT is reached only through visitSubLink, which receives
-// the SubLink and decides what to do with it; pass nil to leave sub-queries
-// alone.
+// the SubLink whose Subselect holds it; pass nil to leave sub-queries alone.
+// The LHS of a sub-query predicate is walked either way, since it belongs to
+// the local scope.
 func WalkExprColumnRefNodes(node *pg_query.Node, visit func(*pg_query.ColumnRef), visitSubLink func(*pg_query.SubLink)) {
 	if node == nil {
 		return
@@ -243,8 +244,10 @@ func WalkExprColumnRefNodes(node *pg_query.Node, visit func(*pg_query.ColumnRef)
 		// carry.
 		WalkExprColumnRefNodes(n.SortBy.Node, visit, visitSubLink)
 	case *pg_query.Node_SubLink:
-		// EXISTS (SELECT ...), x IN (SELECT ...). The contained SELECT is out
-		// of the local scope, so only a caller that asked for it gets here.
+		// EXISTS (SELECT ...), x IN (SELECT ...). Testexpr holds the LHS,
+		// which is in the local scope. The contained SELECT is not, so it
+		// reaches only a caller that asked for it.
+		WalkExprColumnRefNodes(n.SubLink.Testexpr, visit, visitSubLink)
 		if visitSubLink != nil {
 			visitSubLink(n.SubLink)
 		}

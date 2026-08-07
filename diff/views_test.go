@@ -377,6 +377,33 @@ func TestEqualViewDef_aggregateClauseDifference(t *testing.T) {
 	))
 }
 
+// DISTINCT ON and a named WINDOW hold expressions of their own, and the
+// normalizations have to reach them the same as the qualification does.
+func TestEqualViewDef_normalizesDistinctOnAndWindow(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT DISTINCT ON ((a = ANY (ARRAY['x'::text, 'y'::text]))) n AS c FROM t ORDER BY (a = ANY (ARRAY['x'::text, 'y'::text]))",
+		"SELECT DISTINCT ON ((t.a IN ('x', 'y'))) t.n AS c FROM public.t ORDER BY (t.a IN ('x', 'y'))",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT sum(n) OVER w AS c FROM t WINDOW w AS (PARTITION BY (a = ANY (ARRAY['x'::text])))",
+		"SELECT sum(t.n) OVER w AS c FROM public.t WINDOW w AS (PARTITION BY (t.a IN ('x')))",
+	))
+	// A cast the catalog added is stripped in both clauses as well.
+	assert.True(t, equalViewDef(
+		"SELECT DISTINCT ON ((ts >= '2020-01-01 00:00:00'::timestamp without time zone)) n AS c FROM t ORDER BY (ts >= '2020-01-01 00:00:00'::timestamp without time zone)",
+		"SELECT DISTINCT ON ((t.ts >= '2020-01-01 00:00:00')) t.n AS c FROM public.t ORDER BY (t.ts >= '2020-01-01 00:00:00')",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT sum(n) OVER w AS c FROM t WINDOW w AS (ORDER BY (ts >= '2020-01-01 00:00:00'::timestamp without time zone))",
+		"SELECT sum(t.n) OVER w AS c FROM public.t WINDOW w AS (ORDER BY (t.ts >= '2020-01-01 00:00:00'))",
+	))
+	// A real difference in either clause still surfaces.
+	assert.False(t, equalViewDef(
+		"SELECT DISTINCT ON (a) n AS c FROM t ORDER BY a",
+		"SELECT DISTINCT ON (t.n) t.n AS c FROM public.t ORDER BY t.n",
+	))
+}
+
 // A star keeps its table prefix: t.* is not a column reference, and dropping
 // the prefix would change which table the star expands.
 func TestEqualViewDef_starKeepsItsQualification(t *testing.T) {

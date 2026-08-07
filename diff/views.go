@@ -194,6 +194,14 @@ func normalizeSelectExprs(node *pg_query.Node) {
 				rt.Val = normalizeTargetExpr(rt.Val)
 			}
 		}
+		// DISTINCT ON (expr) and a named WINDOW hold expressions of their own,
+		// the same pair stripQualifications reaches.
+		for i, d := range ss.DistinctClause {
+			ss.DistinctClause[i] = normalizeCheckExpr(d)
+		}
+		for _, w := range ss.WindowClause {
+			normalizeWindowDefExprs(w.GetWindowDef())
+		}
 		if ss.WhereClause != nil {
 			ss.WhereClause = normalizeCheckExpr(ss.WhereClause)
 		}
@@ -310,6 +318,16 @@ func alignSelectCasts(desired, current *pg_query.Node) {
 				if dt != nil && ct != nil && dt.Val != nil && ct.Val != nil {
 					ct.Val = alignTargetCasts(dt.Val, ct.Val)
 				}
+			}
+		}
+		if len(ds.DistinctClause) == len(cs.DistinctClause) {
+			for i := range ds.DistinctClause {
+				cs.DistinctClause[i] = alignCurrentCasts(ds.DistinctClause[i], cs.DistinctClause[i])
+			}
+		}
+		if len(ds.WindowClause) == len(cs.WindowClause) {
+			for i := range ds.WindowClause {
+				alignWindowDefCasts(ds.WindowClause[i].GetWindowDef(), cs.WindowClause[i].GetWindowDef())
 			}
 		}
 		if ds.WhereClause != nil && cs.WhereClause != nil {
@@ -469,21 +487,15 @@ func stripQualifications(node *pg_query.Node) {
 		return
 	}
 
-	if sl := node.GetSubLink(); sl != nil {
-		stripSubLinkQualifications(sl)
-		return
-	}
-
 	// Anything else is an expression. The walker enumerates the node kinds
 	// that hold a column reference, and it hands back any sub-query it meets
 	// so the SELECT inside gets the same treatment.
 	pgast.WalkExprColumnRefNodes(node, stripColumnRefQualification, stripSubLinkQualifications)
 }
 
-// stripSubLinkQualifications strips both halves of a sub-query predicate.
-// Testexpr holds the LHS of `x IN (SELECT ...)` / `x = ANY (SELECT ...)`.
+// stripSubLinkQualifications strips the SELECT a sub-query predicate contains.
+// The walker hands the predicate over for this and walks its LHS itself.
 func stripSubLinkQualifications(sl *pg_query.SubLink) {
-	stripQualifications(sl.Testexpr)
 	stripQualifications(sl.Subselect)
 }
 

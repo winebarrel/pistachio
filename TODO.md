@@ -603,11 +603,20 @@ today. Workaround: write `a::json`, which round-trips.
 
 `normalizeJsonOutput` (`diff/tables.go`) canonicalises the RETURNING clause of
 `JSON_OBJECT`, `JSON_ARRAY` and the two aggregates. The PostgreSQL 17
-constructs that carry the same clause (`JSON_SCALAR`, `JSON_SERIALIZE`,
-`JSON_VALUE`, `JSON_QUERY`) are left alone, so a written
-`RETURNING ... FORMAT JSON` on one of them may drift. Only the FORMAT part
-carries over: json is not the default return type there, since
-`JSON_SERIALIZE` and `JSON_VALUE` return text and `JSON_QUERY` jsonb.
+constructs that carry the same clause are left alone: `JSON_SCALAR` and
+`JSON()`, which return json like the four above, and `JSON_SERIALIZE`,
+`JSON_VALUE` and `JSON_QUERY`, which return text, text and jsonb.
+
+`get_json_returning` in ruleutils appends `RETURNING <type>` once a return
+type is set, so a written `JSON_VALUE(a, '$.x')` is expected to come back as
+`JSON_VALUE(a, '$.x' RETURNING text)` and drift on the whole clause rather
+than on the FORMAT alone. Closing it means giving `normalizeJsonOutput` the
+default type per node kind instead of a fixed json.
+
+`testdata/plan/no_diff_json_query_functions.yml` asks the server. It runs on
+17 and later only, so its result decides whether this entry survives; a
+failure there carries the catalog form, which is the evidence this note is
+missing.
 
 `JSON_ARRAY` over a subquery and `JSON_TABLE` are out of the expression walk.
 The first carries a raw SELECT rather than a SubLink, and PostgreSQL stores

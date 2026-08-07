@@ -582,14 +582,20 @@ func normalizeAggClauses(aggOrder []*pg_query.Node, over *pg_query.WindowDef) {
 	for i, ob := range aggOrder {
 		aggOrder[i] = normalizeCheckExpr(ob)
 	}
-	if over == nil {
+	normalizeWindowDefExprs(over)
+}
+
+// normalizeWindowDefExprs normalizes the PARTITION BY and ORDER BY of an OVER
+// clause, written inline or under a WINDOW name.
+func normalizeWindowDefExprs(w *pg_query.WindowDef) {
+	if w == nil {
 		return
 	}
-	for i, pb := range over.PartitionClause {
-		over.PartitionClause[i] = normalizeCheckExpr(pb)
+	for i, pb := range w.PartitionClause {
+		w.PartitionClause[i] = normalizeCheckExpr(pb)
 	}
-	for i, ob := range over.OrderClause {
-		over.OrderClause[i] = normalizeCheckExpr(ob)
+	for i, ob := range w.OrderClause {
+		w.OrderClause[i] = normalizeCheckExpr(ob)
 	}
 }
 
@@ -653,8 +659,12 @@ func normalizeJsonOutput(out *pg_query.JsonOutput) *pg_query.JsonOutput {
 
 // isJSONTypeName reports whether a TypeName names the json type. The parser
 // resolves an unquoted `json` to pg_catalog.json and leaves a quoted one
-// alone, so both spellings have to be recognised.
+// alone, so both spellings have to be recognised. An array of json is a
+// different type, even though it carries the same name.
 func isJSONTypeName(tn *pg_query.TypeName) bool {
+	if len(tn.GetArrayBounds()) != 0 {
+		return false
+	}
 	names := make([]string, 0, len(tn.GetNames()))
 	for _, n := range tn.GetNames() {
 		names = append(names, n.GetString_().GetSval())

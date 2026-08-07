@@ -278,6 +278,19 @@ func TestWalkExprColumnRefNodes_SubLink(t *testing.T) {
 	assert.Equal(t, 1, subs)
 }
 
+// The LHS of a sub-query predicate is in the local scope, so it is walked with
+// or without a visitor. The SELECT beside it is not.
+func TestWalkExprColumnRefNodes_SubLinkTestexpr(t *testing.T) {
+	def := "CHECK ((a IN (SELECT b FROM other)))"
+	refs, subs := collectRefNodes(t, def, false)
+	assert.Equal(t, []string{"a"}, refs)
+	assert.Equal(t, 0, subs)
+
+	refs, subs = collectRefNodes(t, def, true)
+	assert.Equal(t, []string{"a"}, refs)
+	assert.Equal(t, 1, subs)
+}
+
 func TestWalkExprColumnRefs_NilSafe(t *testing.T) {
 	pgast.WalkExprColumnRefs(nil, func(s *pg_query.String) {
 		t.Fatal("visitor should not be invoked on nil node")
