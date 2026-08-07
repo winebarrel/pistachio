@@ -159,9 +159,20 @@ func canonicalizeJsonPathLiteral(node *pg_query.Node) {
 // says so, so the written side cannot be recognised as a path on its own.
 // Pairing the two sides is what identifies it. The cast itself is then
 // stripped by the caller, as any other current-only cast would be.
+//
+// The written side may spell the cast out as well, since that is what the
+// catalog form looks like. Then the literal sits under it, and the pair walk
+// never reaches it: with a cast on both sides nothing is stripped, and one
+// level down the current side is a bare constant again.
 func alignJsonPathCast(desired, current *pg_query.Node) {
 	ct := current.GetTypeCast()
 	if ct == nil || !isPlainJsonTypeName(ct.TypeName, "jsonpath") {
+		return
+	}
+	if dt := desired.GetTypeCast(); dt != nil {
+		if isPlainJsonTypeName(dt.TypeName, "jsonpath") {
+			canonicalizeJsonPathLiteral(dt.Arg)
+		}
 		return
 	}
 	canonicalizeJsonPathLiteral(desired)

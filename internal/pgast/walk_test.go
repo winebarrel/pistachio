@@ -89,9 +89,12 @@ func TestWalk_ReplacesRoot(t *testing.T) {
 	assert.Same(t, replacement, out)
 }
 
+// A nested query is skipped wherever it hangs, not only under a sub-link:
+// JSON_ARRAY holds one directly, which is a shape that only appeared once the
+// walk stopped enumerating node kinds.
 func TestWalk_SkipSubqueries(t *testing.T) {
-	collect := func(opts pgast.WalkOptions) []string {
-		stmt := parseStmt(t, "SELECT a FROM t WHERE b IN (SELECT c FROM other)")
+	collect := func(sql string, opts pgast.WalkOptions) []string {
+		stmt := parseStmt(t, sql)
 		var names []string
 		pgast.Walk(stmt, opts, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
 			if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 1 {
@@ -101,8 +104,16 @@ func TestWalk_SkipSubqueries(t *testing.T) {
 		})
 		return names
 	}
-	assert.Equal(t, []string{"a", "b", "c"}, collect(pgast.WalkOptions{}))
-	assert.Equal(t, []string{"a", "b"}, collect(pgast.WalkOptions{SkipSubqueries: true}))
+	sublink := "SELECT a FROM t WHERE b IN (SELECT c FROM other)"
+	assert.Equal(t, []string{"a", "b", "c"}, collect(sublink, pgast.WalkOptions{}))
+	assert.Equal(t, []string{"a", "b"}, collect(sublink, pgast.WalkOptions{SkipSubqueries: true}))
+
+	jsonArray := "SELECT a FROM t WHERE JSON_ARRAY(SELECT c FROM other) IS NOT NULL"
+	assert.Equal(t, []string{"a", "c"}, collect(jsonArray, pgast.WalkOptions{}))
+	assert.Equal(t, []string{"a"}, collect(jsonArray, pgast.WalkOptions{SkipSubqueries: true}))
+
+	cte := "SELECT a FROM t WHERE b IN (WITH x AS (SELECT c FROM other) SELECT c FROM x)"
+	assert.Equal(t, []string{"a", "b"}, collect(cte, pgast.WalkOptions{SkipSubqueries: true}))
 }
 
 // IsSelectTarget has to separate a SELECT target from the ResTarget that

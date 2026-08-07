@@ -122,6 +122,17 @@ func TestEqualViewDef_jsonPathOutsideQueryFunctions(t *testing.T) {
 	assert.True(t, equalViewDef(
 		`SELECT jsonb_path_query_first(a, '$."x"'::jsonpath) AS c FROM t`,
 		`SELECT jsonb_path_query_first(t.a, '$.x') AS c FROM public.t`))
+	// The written side may spell the cast out as well, since that is what the
+	// catalog form looks like.
+	assert.True(t, equalViewDef(
+		`SELECT a @? '$."x"'::jsonpath AS c FROM t`,
+		`SELECT (t.a @? '$.x'::jsonpath) AS c FROM public.t`))
+	assert.True(t, equalViewDef(
+		`SELECT jsonb_path_query_first(a, '$."x"'::jsonpath) AS c FROM t`,
+		`SELECT jsonb_path_query_first(t.a, '$.x'::jsonpath) AS c FROM public.t`))
+	assert.False(t, equalViewDef(
+		`SELECT a @? '$."x"'::jsonpath AS c FROM t`,
+		`SELECT (t.a @? '$.y'::jsonpath) AS c FROM public.t`))
 	assert.False(t, equalViewDef(
 		`SELECT a @? '$."x"'::jsonpath AS c FROM t`,
 		`SELECT (t.a @? '$.y') AS c FROM public.t`))

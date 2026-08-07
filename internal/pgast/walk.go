@@ -20,13 +20,15 @@ import (
 //
 // Two things the traversal deliberately does not do:
 //
-//   - It hands the visitor whole Nodes, never the String nodes underneath one.
-//     A visitor that mutates (the column renamer does) would otherwise reach a
-//     function name in FuncCall.Funcname, a field name in an A_Indirection or a
-//     type name in a TypeName, all of which are String nodes written where a
-//     column name could go. Acting on ColumnRef alone cannot reach them.
-//   - It stops at a sub-link's contained SELECT when asked. Columns there
-//     resolve against another table.
+//   - It decides nothing about which nodes matter. Every node is handed over,
+//     including the ones wrapping a String: a function name in
+//     FuncCall.Funcname, a field name in an A_Indirection and a type name in a
+//     TypeName all arrive, and each is written where a column name could go.
+//     What keeps the column renamer off them is that it acts on ColumnRef
+//     alone and those names sit outside any ColumnRef. A visitor matching
+//     String directly would rewrite them, so do not write one.
+//   - It stops at a nested query when asked. Columns there resolve against
+//     another table.
 
 // Ctx tells a visitor where the node it is looking at sits: Parent is the
 // message holding it and Field is the name of the holding field, with
@@ -73,7 +75,8 @@ type PairVisitFunc func(ctx Ctx, desired, current *pg_query.Node) *pg_query.Node
 
 // WalkOptions carries the one exception the traversal knows about.
 type WalkOptions struct {
-	// SkipSubqueries stops the walk at a sub-link's contained SELECT. The
+	// SkipSubqueries stops the walk at a nested SELECT, wherever it hangs: a
+	// sub-link's contained query, a JSON_ARRAY over a sub-query, a CTE. The
 	// constraint namer, the desired-schema validator and the column renamer all
 	// work within one table, so a column named in a sub-query is not theirs to
 	// read or rewrite. The view comparison, which has to normalize the whole
@@ -128,9 +131,6 @@ func walkMessage(m proto.Message, ctx Ctx, opts WalkOptions, visit VisitFunc) {
 		if fd.Kind() != protoreflect.MessageKind || !r.Has(fd) {
 			continue
 		}
-		if opts.SkipSubqueries && isSubLinkSubselect(m, fd) {
-			continue
-		}
 		childCtx := ctx.push(m, fd.TextName())
 		value := r.Get(fd)
 
@@ -139,7 +139,7 @@ func walkMessage(m proto.Message, ctx Ctx, opts WalkOptions, visit VisitFunc) {
 			list := value.List()
 			for j := range list.Len() {
 				node, ok := list.Get(j).Message().Interface().(*pg_query.Node)
-				if !ok {
+				if !ok || (opts.SkipSubqueries && isNestedQuery(node)) {
 					continue
 				}
 				if replaced := walkNode(node, childCtx, opts, visit); replaced != nil && replaced != node {
@@ -153,6 +153,9 @@ func walkMessage(m proto.Message, ctx Ctx, opts WalkOptions, visit VisitFunc) {
 		node, ok := child.(*pg_query.Node)
 		if !ok {
 			walkMessage(child, childCtx, opts, visit)
+			continue
+		}
+		if opts.SkipSubqueries && isNestedQuery(node) {
 			continue
 		}
 		if replaced := walkNode(node, childCtx, opts, visit); replaced != nil && replaced != node {
@@ -231,7 +234,12 @@ func nodeOneof(r protoreflect.Message) protoreflect.FieldDescriptor {
 	return r.WhichOneof(r.Descriptor().Oneofs().Get(0))
 }
 
-func isSubLinkSubselect(m proto.Message, fd protoreflect.FieldDescriptor) bool {
-	_, ok := m.(*pg_query.SubLink)
-	return ok && fd.TextName() == "subselect"
+// isNestedQuery reports whether a child node opens a scope of its own. Keying
+// on the node rather than on the field that holds it covers every way one is
+// reached: SubLink.subselect, JsonArrayQueryConstructor.query,
+// CommonTableExpr.ctequery and RangeSubselect.subquery all arrive here as a
+// Node wrapping a SelectStmt. The root of a walk is never checked, so passing
+// a whole statement in still works.
+func isNestedQuery(node *pg_query.Node) bool {
+	return node.GetSelectStmt() != nil
 }

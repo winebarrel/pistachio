@@ -80,10 +80,11 @@ func DeparseConstraintDef(result *pg_query.ParseResult) (string, error) {
 // exist, and the column renamer rewrites the reference in place. A node kind
 // missing from the walk breaks all three at once.
 //
-// The names written where a column could go stay out on their own: an
+// The walk hands over those names too, since it decides nothing: an
 // xmlelement name, an xmlattributes alias, a named-argument label, a function
-// name, an A_Indirection field and a type name are all String nodes outside
-// any ColumnRef.
+// name, an A_Indirection field and a type name all arrive. They stay out
+// because they are String nodes sitting outside any ColumnRef, and this acts
+// on ColumnRef alone.
 func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 	Walk(node, WalkOptions{SkipSubqueries: true}, func(_ Ctx, n *pg_query.Node) *pg_query.Node {
 		if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 1 {
