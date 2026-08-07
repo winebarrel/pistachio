@@ -2213,6 +2213,16 @@ func TestEqualConstraintDef_jsonReturningOtherTypeKept(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_jsonReturningArrayTypeKept(t *testing.T) {
+	// An array of json is a different type, even though it carries the same
+	// name. The server rejects the spelling, but the comparison should not
+	// read it as the default either.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((JSON_ARRAY(a RETURNING json[]) IS NOT NULL))",
+		"CHECK (JSON_ARRAY(a) IS NOT NULL)",
+	))
+}
+
 func TestEqualConstraintDef_jsonReturningFormatIgnored(t *testing.T) {
 	// PostgreSQL never prints the FORMAT of a RETURNING clause, so a written
 	// one has to compare equal to the stored form that lacks it. The type the
@@ -2312,6 +2322,68 @@ func TestEqualConstraintDef_normalizesInsideJsonValue(t *testing.T) {
 	assert.True(t, equalConstraintDef(
 		"CHECK ((JSON_VALUE(a, '$.x' PASSING b AS v DEFAULT c ON ERROR) > ''))",
 		"CHECK (JSON_VALUE(a::text, '$.x'::text PASSING b::text AS v DEFAULT c::text ON ERROR) > '')",
+	))
+}
+
+// The SQL/JSON query functions each return a different type when the RETURNING
+// clause is left off, and pg_get_expr prints the one the server resolved. The
+// written form leaves it off, so the clause is dropped from the current side
+// where the desired side has none.
+func TestEqualConstraintDef_jsonQueryFunctionReturningDropped(t *testing.T) {
+	for _, tt := range []struct{ current, desired string }{
+		{"CHECK ((JSON_VALUE(a, '$.x' RETURNING text) > ''))", "CHECK (JSON_VALUE(a, '$.x') > '')"},
+		{"CHECK ((JSON_QUERY(a, '$.x' RETURNING jsonb) IS NOT NULL))", "CHECK (JSON_QUERY(a, '$.x') IS NOT NULL)"},
+		{"CHECK ((JSON_SERIALIZE(a RETURNING text) > ''))", "CHECK (JSON_SERIALIZE(a) > '')"},
+	} {
+		assert.True(t, equalConstraintDef(tt.current, tt.desired), tt.desired)
+	}
+}
+
+func TestEqualConstraintDef_jsonQueryFunctionFormatDropped(t *testing.T) {
+	// PostgreSQL never prints the FORMAT of a RETURNING clause.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_VALUE(a, '$.x' RETURNING text) > ''))",
+		"CHECK (JSON_VALUE(a, '$.x' RETURNING text FORMAT JSON) > '')",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_SERIALIZE(a RETURNING text) > ''))",
+		"CHECK (JSON_SERIALIZE(a RETURNING text FORMAT JSON) > '')",
+	))
+}
+
+// JSON_QUERY carries a wrapper and a quote behaviour, and every query function
+// an ON EMPTY / ON ERROR default. The server resolves each and pg_get_expr
+// prints it, so they follow the same rule as the RETURNING type.
+func TestEqualConstraintDef_jsonQueryFunctionResolvedClausesDropped(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_QUERY(a, '$.x' RETURNING jsonb WITHOUT WRAPPER KEEP QUOTES) IS NOT NULL))",
+		"CHECK (JSON_QUERY(a, '$.x') IS NOT NULL)",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_VALUE(a, '$.x' RETURNING text NULL ON EMPTY NULL ON ERROR) > ''))",
+		"CHECK (JSON_VALUE(a, '$.x') > '')",
+	))
+	// One the desired side wrote is compared as written.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((JSON_QUERY(a, '$.x' RETURNING jsonb WITHOUT WRAPPER) IS NOT NULL))",
+		"CHECK (JSON_QUERY(a, '$.x' WITH WRAPPER) IS NOT NULL)",
+	))
+	assert.False(t, equalConstraintDef(
+		"CHECK ((JSON_VALUE(a, '$.x' RETURNING text NULL ON ERROR) > ''))",
+		"CHECK (JSON_VALUE(a, '$.x' ERROR ON ERROR) > '')",
+	))
+}
+
+func TestEqualConstraintDef_jsonQueryFunctionWrittenReturningKept(t *testing.T) {
+	// A clause the desired side wrote is compared as written, so a real
+	// disagreement still surfaces.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((JSON_VALUE(a, '$.x' RETURNING text) > ''))",
+		"CHECK (JSON_VALUE(a, '$.x' RETURNING varchar) > '')",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((JSON_VALUE(a, '$.x' RETURNING text) > ''))",
+		"CHECK (JSON_VALUE(a, '$.x' RETURNING text) > '')",
 	))
 }
 

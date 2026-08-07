@@ -601,32 +601,15 @@ is a cast to json, on the desired side only, since a written `a::json` is
 already what the catalog holds and the normalizer treats both sides alike
 today. Workaround: write `a::json`, which round-trips.
 
-`normalizeJsonOutput` (`diff/tables.go`) canonicalises the RETURNING clause of
-`JSON_OBJECT`, `JSON_ARRAY` and the two aggregates. The PostgreSQL 17
-constructs that carry the same clause are left alone: `JSON_SCALAR` and
-`JSON()`, which return json like the four above, and `JSON_SERIALIZE`,
-`JSON_VALUE` and `JSON_QUERY`, which return text, text and jsonb.
+`JSON_TABLE` is a FROM item, so reaching its context item is the FROM-clause
+loop in `stripQualifications` (`diff/views.go`) rather than the expression
+walk. It is PostgreSQL 17 syntax and no 17 server was available while this was
+written, so the drift is expected rather than observed.
 
-`get_json_returning` in ruleutils appends `RETURNING <type>` once a return
-type is set, so a written `JSON_VALUE(a, '$.x')` is expected to come back as
-`JSON_VALUE(a, '$.x' RETURNING text)` and drift on the whole clause rather
-than on the FORMAT alone. Closing it means giving `normalizeJsonOutput` the
-default type per node kind instead of a fixed json.
-
-`testdata/plan/no_diff_json_query_functions.yml` asks the server. It runs on
-17 and later only, so its result decides whether this entry survives; a
-failure there carries the catalog form, which is the evidence this note is
-missing.
-
-`JSON_ARRAY` over a subquery and `JSON_TABLE` are out of the expression walk.
-The first carries a raw SELECT rather than a SubLink, and PostgreSQL stores
-the whole construct rewritten as an aggregate over a derived table, so it
-drifts on the rewrite rather than on the walk, the same as the BETWEEN entry
-below. The second is a FROM item, so reaching its context item is the
-FROM-clause loop in `stripQualifications` (`diff/views.go`), not the walk.
-
-Everything PostgreSQL 17 above is expected rather than observed: no 17 server
-was available while this was written, and the syntax does not parse on 16.
+`JSON_ARRAY` over a subquery is out of the expression walk. It carries a raw
+SELECT rather than a SubLink, and PostgreSQL stores the whole construct
+rewritten as an aggregate over a derived table, so it drifts on the rewrite
+rather than on the walk, the same as the BETWEEN entry below.
 
 ## View drift on a target alias the catalog writes differently
 

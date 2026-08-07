@@ -547,6 +547,7 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 		n.JsonScalarExpr.Expr = normalizeCheckExpr(n.JsonScalarExpr.Expr)
 	case *pg_query.Node_JsonSerializeExpr:
 		normalizeJsonValueExpr(n.JsonSerializeExpr.Expr)
+		n.JsonSerializeExpr.Output = normalizeJsonOutputFormat(n.JsonSerializeExpr.Output)
 	case *pg_query.Node_JsonFuncExpr:
 		f := n.JsonFuncExpr
 		normalizeJsonValueExpr(f.ContextItem)
@@ -556,6 +557,7 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 		}
 		normalizeJsonBehavior(f.OnEmpty)
 		normalizeJsonBehavior(f.OnError)
+		f.Output = normalizeJsonOutputFormat(f.Output)
 	case *pg_query.Node_JsonArgument:
 		normalizeJsonValueExpr(n.JsonArgument.Val)
 	case *pg_query.Node_JsonObjectAgg:
@@ -632,29 +634,74 @@ func normalizeJsonBehavior(b *pg_query.JsonBehavior) {
 }
 
 // normalizeJsonOutput rewrites the RETURNING clause of a SQL/JSON constructor
-// the way pg_get_expr prints it:
-//
-//   - The FORMAT is dropped, since PostgreSQL never prints it. A written
-//     `RETURNING text FORMAT JSON` then equals the stored `RETURNING text`.
-//   - A clause naming json is dropped whole, since that is what JSON_OBJECT
-//     and JSON_ARRAY return when the clause is left off, and pg_get_expr
-//     spells it out where the written form leaves it off. A clause naming
-//     another type is a real difference and stays.
+// the way pg_get_expr prints it. The FORMAT goes, and a clause naming json
+// goes whole, since that is what JSON_OBJECT, JSON_ARRAY and the two
+// aggregates return when the clause is left off, and pg_get_expr spells it out
+// where the written form leaves it off. A clause naming another type is a real
+// difference and stays.
 func normalizeJsonOutput(out *pg_query.JsonOutput) *pg_query.JsonOutput {
+	out = normalizeJsonOutputFormat(out)
+	if out != nil && isJSONTypeName(out.TypeName) {
+		return nil
+	}
+	return out
+}
+
+// normalizeJsonOutputFormat drops the FORMAT of a RETURNING clause, which
+// PostgreSQL never prints, so a written `RETURNING text FORMAT JSON` equals
+// the stored `RETURNING text`. The clause itself stays in place, since
+// libpg_query's deparser reads it unconditionally; resetting the format to the
+// default is what drops the FORMAT from the deparsed form.
+func normalizeJsonOutputFormat(out *pg_query.JsonOutput) *pg_query.JsonOutput {
 	if out == nil {
 		return nil
 	}
-	// The clause has to stay in place, since libpg_query's deparser reads it
-	// unconditionally. Resetting the format to the default is what drops the
-	// FORMAT from the deparsed form.
 	if r := out.Returning; r != nil && r.Format != nil {
 		r.Format.FormatType = pg_query.JsonFormatType_JS_FORMAT_DEFAULT
 		r.Format.Encoding = pg_query.JsonEncoding_JS_ENC_DEFAULT
 	}
-	if isJSONTypeName(out.TypeName) {
+	return out
+}
+
+// dropCurrentJsonOutput drops a RETURNING clause the current side carries
+// where the desired side wrote none.
+//
+// JSON_VALUE, JSON_QUERY and JSON_SERIALIZE each return a different type when
+// the clause is left off, and pg_get_expr prints the one the server resolved,
+// so the written form and the stored form disagree on every plan. Which type
+// that is per function cannot be read off the parse tree, and the asymmetric
+// rule does not need it: no clause written means whatever the function
+// returns, which is what the catalog holds. A clause the desired side did
+// write is compared as written, so a real disagreement still surfaces.
+//
+// JSON() and JSON_SCALAR take no RETURNING clause; the grammar rejects one.
+func dropCurrentJsonOutput(desired, current *pg_query.JsonOutput) *pg_query.JsonOutput {
+	if desired == nil {
 		return nil
 	}
-	return out
+	return current
+}
+
+// dropCurrentJsonFuncClauses applies that rule to every clause of a SQL/JSON
+// query function that the server resolves and pg_get_expr then prints: the
+// RETURNING type, the wrapper and quote behaviour of JSON_QUERY, and the
+// ON EMPTY / ON ERROR defaults. Each is dropped from the current side where
+// the desired side wrote none; one the desired side did write is compared as
+// written.
+func dropCurrentJsonFuncClauses(desired, current *pg_query.JsonFuncExpr) {
+	current.Output = dropCurrentJsonOutput(desired.Output, current.Output)
+	if desired.Wrapper == pg_query.JsonWrapper_JSW_UNSPEC {
+		current.Wrapper = pg_query.JsonWrapper_JSW_UNSPEC
+	}
+	if desired.Quotes == pg_query.JsonQuotes_JS_QUOTES_UNSPEC {
+		current.Quotes = pg_query.JsonQuotes_JS_QUOTES_UNSPEC
+	}
+	if desired.OnEmpty == nil {
+		current.OnEmpty = nil
+	}
+	if desired.OnError == nil {
+		current.OnError = nil
+	}
 }
 
 // isJSONTypeName reports whether a TypeName names the json type. The parser
@@ -997,6 +1044,7 @@ func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
 	case *pg_query.Node_JsonSerializeExpr:
 		if cn := current.GetJsonSerializeExpr(); cn != nil {
 			alignJsonValueExprCasts(dn.JsonSerializeExpr.Expr, cn.Expr)
+			cn.Output = dropCurrentJsonOutput(dn.JsonSerializeExpr.Output, cn.Output)
 		}
 	case *pg_query.Node_JsonFuncExpr:
 		if cn := current.GetJsonFuncExpr(); cn != nil {
@@ -1009,6 +1057,7 @@ func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
 			}
 			alignJsonBehaviorCasts(dn.JsonFuncExpr.OnEmpty, cn.OnEmpty)
 			alignJsonBehaviorCasts(dn.JsonFuncExpr.OnError, cn.OnError)
+			dropCurrentJsonFuncClauses(dn.JsonFuncExpr, cn)
 		}
 	case *pg_query.Node_JsonArgument:
 		if cn := current.GetJsonArgument(); cn != nil {
