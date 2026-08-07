@@ -225,13 +225,10 @@ func walkPairMessage(desired, current proto.Message, ctx Ctx, visit PairVisitFun
 }
 
 // nodeOneof returns the descriptor of the oneof member a Node holds, or nil
-// for an empty one.
+// for an empty Node. Only ever called on a Node, which declares exactly one
+// oneof.
 func nodeOneof(r protoreflect.Message) protoreflect.FieldDescriptor {
-	oneofs := r.Descriptor().Oneofs()
-	if oneofs.Len() == 0 {
-		return nil
-	}
-	return r.WhichOneof(oneofs.Get(0))
+	return r.WhichOneof(r.Descriptor().Oneofs().Get(0))
 }
 
 func isSubLinkSubselect(m proto.Message, fd protoreflect.FieldDescriptor) bool {

@@ -77,6 +77,10 @@ func TestEqualViewDef_jsonQueryFunctionNonDefaultsSurface(t *testing.T) {
 	}
 
 	assert.False(t, equalViewDef(
+		`SELECT JSON_SERIALIZE(a RETURNING bytea) AS c FROM t`,
+		`SELECT JSON_SERIALIZE(t.a) AS c FROM public.t`))
+
+	assert.False(t, equalViewDef(
 		`SELECT JSON_EXISTS(a, '$."x"' UNKNOWN ON ERROR) AS c FROM t`,
 		`SELECT JSON_EXISTS(t.a, '$.x') AS c FROM public.t`))
 }
@@ -162,4 +166,8 @@ func TestEqualViewDef_jsonPathWrittenSideNotALiteral(t *testing.T) {
 	assert.False(t, equalViewDef(
 		`SELECT a @? '$."x"'::jsonpath AS c FROM t`,
 		`SELECT (t.a @? t.b) AS c FROM public.t`))
+	// A constant that is not a string is not a path either.
+	assert.False(t, equalViewDef(
+		`SELECT a @? '$."x"'::jsonpath AS c FROM t`,
+		`SELECT (t.a @? 1) AS c FROM public.t`))
 }
