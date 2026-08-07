@@ -627,12 +627,20 @@ Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 
 ## SQL/JSON node kinds the expression walker leaves out
 
-`WalkExprColumnRefs` (`internal/pgast`) walks the SQL/JSON constructors and
-query functions, but not the aggregates (`JSON_OBJECTAGG`, `JSON_ARRAYAGG`),
-`JSON_ARRAY` over a subquery, or `JSON_TABLE`. None of them can appear where
-the walker's callers look: a CHECK, an index and a generated column all reject
-an aggregate, `JSON_TABLE` is a FROM item, and the walker descends into no
-subquery anywhere. A deliberate choice, not a bug.
+`WalkExprColumnRefNodes` (`internal/pgast`) walks the SQL/JSON constructors,
+query functions and aggregates, but not `JSON_ARRAY` over a subquery or
+`JSON_TABLE`.
+
+`JSON_ARRAY(SELECT ...)` carries a raw SELECT rather than a SubLink, and
+PostgreSQL stores the whole construct rewritten as an aggregate over a derived
+table, so a view written that way drifts on the rewrite rather than on the
+walk. Same family as the BETWEEN entry below.
+
+`JSON_TABLE` is a FROM item, so it is the FROM-clause loop in
+`stripQualifications` (`diff/views.go`) that would have to reach the context
+item, not the expression walk. It is PostgreSQL 17 syntax; no 17 server was
+available while this was written, so the drift is expected rather than
+observed.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 

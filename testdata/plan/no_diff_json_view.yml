@@ -1,14 +1,24 @@
 # A view body is compared with the same normalization a CHECK gets, so the
-# RETURNING json that pg_get_viewdef adds must not drift there either.
+# RETURNING json that pg_get_viewdef adds must not drift there either. A view
+# is also where a SQL/JSON aggregate can appear, which carries that RETURNING
+# on a constructor of its own, next to its ORDER BY and FILTER.
 min_pg: 16
 init: |
   CREATE TABLE public.t (
-      a text
+      a text,
+      n integer,
+      ts timestamp
   );
   CREATE VIEW public.v AS SELECT (JSON_OBJECT('k': a))::text AS c FROM public.t;
+  CREATE VIEW public.v_objectagg AS SELECT (JSON_OBJECTAGG(t.a: t.n))::text AS c FROM public.t;
+  CREATE VIEW public.v_arrayagg AS SELECT (JSON_ARRAYAGG(t.n ORDER BY t.a) FILTER (WHERE t.ts >= '2020-01-01 00:00:00'))::text AS c FROM public.t;
 desired: |
   CREATE TABLE public.t (
-      a text
+      a text,
+      n integer,
+      ts timestamp
   );
   CREATE VIEW public.v AS SELECT (JSON_OBJECT('k': a))::text AS c FROM public.t;
+  CREATE VIEW public.v_objectagg AS SELECT (JSON_OBJECTAGG(t.a: t.n))::text AS c FROM public.t;
+  CREATE VIEW public.v_arrayagg AS SELECT (JSON_ARRAYAGG(t.n ORDER BY t.a) FILTER (WHERE t.ts >= '2020-01-01 00:00:00'))::text AS c FROM public.t;
 plan: ""

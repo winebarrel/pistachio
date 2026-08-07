@@ -493,6 +493,8 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 		for i, arg := range n.FuncCall.Args {
 			n.FuncCall.Args[i] = normalizeCheckExpr(arg)
 		}
+		normalizeAggClauses(n.FuncCall.AggOrder, n.FuncCall.Over)
+		n.FuncCall.AggFilter = normalizeCheckExpr(n.FuncCall.AggFilter)
 	case *pg_query.Node_NullTest:
 		n.NullTest.Arg = normalizeCheckExpr(n.NullTest.Arg)
 	case *pg_query.Node_CoalesceExpr:
@@ -556,8 +558,51 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 		normalizeJsonBehavior(f.OnError)
 	case *pg_query.Node_JsonArgument:
 		normalizeJsonValueExpr(n.JsonArgument.Val)
+	case *pg_query.Node_JsonObjectAgg:
+		agg := n.JsonObjectAgg
+		if kv := agg.Arg; kv != nil {
+			kv.Key = normalizeCheckExpr(kv.Key)
+			normalizeJsonValueExpr(kv.Value)
+		}
+		normalizeJsonAggConstructor(agg.Constructor)
+	case *pg_query.Node_JsonArrayAgg:
+		agg := n.JsonArrayAgg
+		normalizeJsonValueExpr(agg.Arg)
+		normalizeJsonAggConstructor(agg.Constructor)
+	case *pg_query.Node_SortBy:
+		n.SortBy.Node = normalizeCheckExpr(n.SortBy.Node)
 	}
 	return node
+}
+
+// normalizeAggClauses normalizes the ORDER BY and OVER clauses an aggregate or
+// a window function carries beside its arguments. The FILTER stays with the
+// caller, which has to assign the returned node back.
+func normalizeAggClauses(aggOrder []*pg_query.Node, over *pg_query.WindowDef) {
+	for i, ob := range aggOrder {
+		aggOrder[i] = normalizeCheckExpr(ob)
+	}
+	if over == nil {
+		return
+	}
+	for i, pb := range over.PartitionClause {
+		over.PartitionClause[i] = normalizeCheckExpr(pb)
+	}
+	for i, ob := range over.OrderClause {
+		over.OrderClause[i] = normalizeCheckExpr(ob)
+	}
+}
+
+// normalizeJsonAggConstructor normalizes the clauses a SQL/JSON aggregate
+// carries beside its argument, including the RETURNING that json is the
+// default for, the same as on JSON_OBJECT and JSON_ARRAY.
+func normalizeJsonAggConstructor(c *pg_query.JsonAggConstructor) {
+	if c == nil {
+		return
+	}
+	c.Output = normalizeJsonOutput(c.Output)
+	normalizeAggClauses(c.AggOrder, c.Over)
+	c.AggFilter = normalizeCheckExpr(c.AggFilter)
 }
 
 // normalizeJsonValueExpr normalizes the expression a JsonValueExpr wraps. The
@@ -861,10 +906,15 @@ func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
 			}
 		}
 	case *pg_query.Node_FuncCall:
-		if cn := current.GetFuncCall(); cn != nil && len(cn.Args) == len(dn.FuncCall.Args) {
-			for i := range dn.FuncCall.Args {
-				cn.Args[i] = alignCurrentCasts(dn.FuncCall.Args[i], cn.Args[i])
+		if cn := current.GetFuncCall(); cn != nil {
+			if len(cn.Args) == len(dn.FuncCall.Args) {
+				for i := range dn.FuncCall.Args {
+					cn.Args[i] = alignCurrentCasts(dn.FuncCall.Args[i], cn.Args[i])
+				}
 			}
+			alignNodeListCasts(dn.FuncCall.AggOrder, cn.AggOrder)
+			cn.AggFilter = alignCurrentCasts(dn.FuncCall.AggFilter, cn.AggFilter)
+			alignWindowDefCasts(dn.FuncCall.Over, cn.Over)
 		}
 	case *pg_query.Node_NullTest:
 		if cn := current.GetNullTest(); cn != nil {
@@ -954,8 +1004,55 @@ func alignCurrentCasts(desired, current *pg_query.Node) *pg_query.Node {
 		if cn := current.GetJsonArgument(); cn != nil {
 			alignJsonValueExprCasts(dn.JsonArgument.Val, cn.Val)
 		}
+	case *pg_query.Node_JsonObjectAgg:
+		if cn := current.GetJsonObjectAgg(); cn != nil {
+			if dkv, ckv := dn.JsonObjectAgg.Arg, cn.Arg; dkv != nil && ckv != nil {
+				ckv.Key = alignCurrentCasts(dkv.Key, ckv.Key)
+				alignJsonValueExprCasts(dkv.Value, ckv.Value)
+			}
+			alignJsonAggConstructorCasts(dn.JsonObjectAgg.Constructor, cn.Constructor)
+		}
+	case *pg_query.Node_JsonArrayAgg:
+		if cn := current.GetJsonArrayAgg(); cn != nil {
+			alignJsonValueExprCasts(dn.JsonArrayAgg.Arg, cn.Arg)
+			alignJsonAggConstructorCasts(dn.JsonArrayAgg.Constructor, cn.Constructor)
+		}
+	case *pg_query.Node_SortBy:
+		if cn := current.GetSortBy(); cn != nil {
+			cn.Node = alignCurrentCasts(dn.SortBy.Node, cn.Node)
+		}
 	}
 	return current
+}
+
+// alignNodeListCasts aligns two lists of expressions position by position.
+func alignNodeListCasts(desired, current []*pg_query.Node) {
+	if len(desired) != len(current) {
+		return
+	}
+	for i := range desired {
+		current[i] = alignCurrentCasts(desired[i], current[i])
+	}
+}
+
+// alignWindowDefCasts aligns the PARTITION BY and ORDER BY of an OVER clause.
+func alignWindowDefCasts(desired, current *pg_query.WindowDef) {
+	if desired == nil || current == nil {
+		return
+	}
+	alignNodeListCasts(desired.PartitionClause, current.PartitionClause)
+	alignNodeListCasts(desired.OrderClause, current.OrderClause)
+}
+
+// alignJsonAggConstructorCasts aligns the clauses a SQL/JSON aggregate carries
+// beside its argument.
+func alignJsonAggConstructorCasts(desired, current *pg_query.JsonAggConstructor) {
+	if desired == nil || current == nil {
+		return
+	}
+	alignNodeListCasts(desired.AggOrder, current.AggOrder)
+	current.AggFilter = alignCurrentCasts(desired.AggFilter, current.AggFilter)
+	alignWindowDefCasts(desired.Over, current.Over)
 }
 
 // alignJsonValueExprCasts is alignCurrentCasts for the JsonValueExpr that the

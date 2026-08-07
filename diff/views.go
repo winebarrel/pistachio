@@ -421,9 +421,7 @@ func stripQualifications(node *pg_query.Node) {
 			stripQualifications(d)
 		}
 		for _, w := range ss.WindowClause {
-			if wd := w.GetWindowDef(); wd != nil {
-				stripWindowDefQualifications(wd)
-			}
+			pgast.WalkWindowDefColumnRefNodes(w.GetWindowDef(), stripColumnRefQualification, stripSubLinkQualifications)
 		}
 		if ss.WhereClause != nil {
 			stripQualifications(ss.WhereClause)
@@ -472,32 +470,21 @@ func stripQualifications(node *pg_query.Node) {
 	}
 
 	if sl := node.GetSubLink(); sl != nil {
-		// Testexpr holds the LHS of `x IN (SELECT ...)` / `x = ANY (SELECT ...)`.
-		stripQualifications(sl.Testexpr)
-		stripQualifications(sl.Subselect)
+		stripSubLinkQualifications(sl)
 		return
 	}
 
 	// Anything else is an expression. The walker enumerates the node kinds
 	// that hold a column reference, and it hands back any sub-query it meets
 	// so the SELECT inside gets the same treatment.
-	pgast.WalkExprColumnRefNodes(node, stripColumnRefQualification, func(sl *pg_query.SubLink) {
-		stripQualifications(sl.Testexpr)
-		stripQualifications(sl.Subselect)
-	})
+	pgast.WalkExprColumnRefNodes(node, stripColumnRefQualification, stripSubLinkQualifications)
 }
 
-// stripWindowDefQualifications strips the qualifications in an OVER clause,
-// whether written inline or under a WINDOW name. The window's own name and
-// the name it refines are not column references, and a frame offset is left
-// out because PostgreSQL rejects a variable there.
-func stripWindowDefQualifications(w *pg_query.WindowDef) {
-	for _, pb := range w.PartitionClause {
-		stripQualifications(pb)
-	}
-	for _, ob := range w.OrderClause {
-		stripQualifications(ob)
-	}
+// stripSubLinkQualifications strips both halves of a sub-query predicate.
+// Testexpr holds the LHS of `x IN (SELECT ...)` / `x = ANY (SELECT ...)`.
+func stripSubLinkQualifications(sl *pg_query.SubLink) {
+	stripQualifications(sl.Testexpr)
+	stripQualifications(sl.Subselect)
 }
 
 // stripColumnRefQualification rewrites "table.column" as "column". Only a

@@ -300,6 +300,16 @@ func TestEqualViewDef_qualificationInsideExpressions(t *testing.T) {
 			desired: "SELECT t.a AS c FROM public.t GROUP BY ROLLUP(t.a)",
 		},
 		{
+			name:    "json object aggregate",
+			current: "SELECT JSON_OBJECTAGG(a: n) AS c FROM t",
+			desired: "SELECT JSON_OBJECTAGG(t.a: t.n) AS c FROM public.t",
+		},
+		{
+			name:    "json array aggregate",
+			current: "SELECT JSON_ARRAYAGG(n ORDER BY a) AS c FROM t",
+			desired: "SELECT JSON_ARRAYAGG(t.n ORDER BY t.a) AS c FROM public.t",
+		},
+		{
 			name:    "aggregate filter under an expression",
 			current: "SELECT COALESCE(count(*) FILTER (WHERE b), 0) AS c FROM t GROUP BY a",
 			desired: "SELECT COALESCE(count(*) FILTER (WHERE t.b), 0) AS c FROM public.t GROUP BY t.a",
@@ -314,6 +324,57 @@ func TestEqualViewDef_qualificationInsideExpressions(t *testing.T) {
 			assert.True(t, equalViewDef(tt.current, tt.desired))
 		})
 	}
+}
+
+// A SQL/JSON aggregate carries the RETURNING that json is the default for on a
+// constructor of its own, and pg_get_viewdef spells it out there too.
+func TestEqualViewDef_jsonAggregateReturning(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT (JSON_ARRAYAGG(n RETURNING json))::text AS c FROM t",
+		"SELECT (JSON_ARRAYAGG(t.n))::text AS c FROM public.t",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT (JSON_OBJECTAGG(a : n RETURNING json))::text AS c FROM t",
+		"SELECT (JSON_OBJECTAGG(t.a: t.n))::text AS c FROM public.t",
+	))
+	// A RETURNING naming another type is still a difference.
+	assert.False(t, equalViewDef(
+		"SELECT (JSON_ARRAYAGG(n RETURNING jsonb))::text AS c FROM t",
+		"SELECT (JSON_ARRAYAGG(t.n))::text AS c FROM public.t",
+	))
+}
+
+// pg_get_viewdef spells out a literal's type inside the clauses an aggregate
+// or a window function carries, where the desired side rarely writes it.
+func TestEqualViewDef_currentCastStrippedInAggregateClauses(t *testing.T) {
+	assert.True(t, equalViewDef(
+		"SELECT (JSON_ARRAYAGG(n RETURNING json) FILTER (WHERE (ts >= '2020-01-01 00:00:00'::timestamp without time zone)))::text AS c FROM t",
+		"SELECT (JSON_ARRAYAGG(t.n) FILTER (WHERE t.ts >= '2020-01-01 00:00:00'))::text AS c FROM public.t",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT string_agg(a, ',' ORDER BY (ts >= '2020-01-01 00:00:00'::timestamp without time zone)) AS c FROM t",
+		"SELECT string_agg(t.a, ',' ORDER BY (t.ts >= '2020-01-01 00:00:00')) AS c FROM public.t",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT sum(n) OVER (PARTITION BY (ts >= '2020-01-01 00:00:00'::timestamp without time zone)) AS c FROM t",
+		"SELECT sum(t.n) OVER (PARTITION BY (t.ts >= '2020-01-01 00:00:00')) AS c FROM public.t",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT sum(n) OVER (ORDER BY (ts >= '2020-01-01 00:00:00'::timestamp without time zone)) AS c FROM t",
+		"SELECT sum(t.n) OVER (ORDER BY (t.ts >= '2020-01-01 00:00:00')) AS c FROM public.t",
+	))
+}
+
+// The clauses still have to disagree when they really differ.
+func TestEqualViewDef_aggregateClauseDifference(t *testing.T) {
+	assert.False(t, equalViewDef(
+		"SELECT string_agg(a, ',' ORDER BY a) AS c FROM t",
+		"SELECT string_agg(t.a, ',' ORDER BY t.a, t.n) AS c FROM public.t",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT sum(n) AS c FROM t",
+		"SELECT sum(t.n) OVER (PARTITION BY t.a) AS c FROM public.t",
+	))
 }
 
 // A star keeps its table prefix: t.* is not a column reference, and dropping

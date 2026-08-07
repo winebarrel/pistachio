@@ -251,6 +251,16 @@ func TestWalkExprColumnRefNodes_AggregateAndWindow(t *testing.T) {
 	assert.Equal(t, []string{"n", "a", "n"}, collectSelectRefs(t, "sum(n) OVER (PARTITION BY a ORDER BY n)"))
 }
 
+// The SQL/JSON aggregates carry their argument in a shape of their own, and
+// the ORDER BY, FILTER and OVER clauses in a constructor beside it.
+func TestWalkExprColumnRefNodes_JsonAggregates(t *testing.T) {
+	assert.Equal(t, []string{"a", "n"}, collectSelectRefs(t, "JSON_OBJECTAGG(a: n)"))
+	assert.Equal(t, []string{"n", "a"}, collectSelectRefs(t, "JSON_ARRAYAGG(n ORDER BY a)"))
+	assert.Equal(t, []string{"n", "b"}, collectSelectRefs(t, "JSON_ARRAYAGG(n) FILTER (WHERE b)"))
+	assert.Equal(t, []string{"a", "n", "b"}, collectSelectRefs(t, "JSON_OBJECTAGG(a: n) FILTER (WHERE b)"))
+	assert.Equal(t, []string{"n", "a"}, collectSelectRefs(t, "JSON_ARRAYAGG(n) OVER (PARTITION BY a)"))
+}
+
 func TestWalkExprColumnRefNodes_VisitsQualifiedRefs(t *testing.T) {
 	refs, _ := collectRefNodes(t, "CHECK ((t.a > b))", false)
 	assert.Equal(t, []string{"t.a", "b"}, refs)

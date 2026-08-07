@@ -110,20 +110,12 @@ func WalkExprColumnRefNodes(node *pg_query.Node, visit func(*pg_query.ColumnRef)
 		}
 		// An aggregate holds its ORDER BY and FILTER outside the argument
 		// list, and a window function its OVER clause. Funcname is the
-		// function's, not a column's, and a frame offset cannot hold a
-		// variable.
+		// function's, not a column's.
 		for _, ob := range n.FuncCall.AggOrder {
 			WalkExprColumnRefNodes(ob, visit, visitSubLink)
 		}
 		WalkExprColumnRefNodes(n.FuncCall.AggFilter, visit, visitSubLink)
-		if w := n.FuncCall.Over; w != nil {
-			for _, pb := range w.PartitionClause {
-				WalkExprColumnRefNodes(pb, visit, visitSubLink)
-			}
-			for _, ob := range w.OrderClause {
-				WalkExprColumnRefNodes(ob, visit, visitSubLink)
-			}
-		}
+		WalkWindowDefColumnRefNodes(n.FuncCall.Over, visit, visitSubLink)
 	case *pg_query.Node_NullTest:
 		WalkExprColumnRefNodes(n.NullTest.Arg, visit, visitSubLink)
 	case *pg_query.Node_AArrayExpr:
@@ -235,6 +227,17 @@ func WalkExprColumnRefNodes(node *pg_query.Node, visit func(*pg_query.ColumnRef)
 	case *pg_query.Node_JsonArgument:
 		// PASSING col AS name. The name is the argument's, not a column's.
 		walkJsonValueExpr(n.JsonArgument.Val, visit, visitSubLink)
+	case *pg_query.Node_JsonObjectAgg:
+		// JSON_OBJECTAGG(key: value)
+		if kv := n.JsonObjectAgg.Arg; kv != nil {
+			WalkExprColumnRefNodes(kv.Key, visit, visitSubLink)
+			walkJsonValueExpr(kv.Value, visit, visitSubLink)
+		}
+		walkJsonAggConstructor(n.JsonObjectAgg.Constructor, visit, visitSubLink)
+	case *pg_query.Node_JsonArrayAgg:
+		// JSON_ARRAYAGG(col)
+		walkJsonValueExpr(n.JsonArrayAgg.Arg, visit, visitSubLink)
+		walkJsonAggConstructor(n.JsonArrayAgg.Constructor, visit, visitSubLink)
 	case *pg_query.Node_SortBy:
 		// An ORDER BY item, which an aggregate and a window function both
 		// carry.
@@ -246,10 +249,40 @@ func WalkExprColumnRefNodes(node *pg_query.Node, visit func(*pg_query.ColumnRef)
 			visitSubLink(n.SubLink)
 		}
 	}
-	// The other SQL/JSON node kinds are out of reach for the callers:
-	// JSON_OBJECTAGG and JSON_ARRAYAGG are aggregates, which a CHECK, an index
-	// and a generated column all reject; JSON_ARRAY over a subquery carries a
-	// SELECT, which the walker never descends into; JSON_TABLE is a FROM item.
+	// Two SQL/JSON node kinds are left out. JSON_ARRAY over a subquery carries
+	// a raw SELECT rather than a SubLink, and PostgreSQL stores the whole
+	// construct rewritten as an aggregate over a derived table, so matching
+	// the written form takes more than a walk. JSON_TABLE is a FROM item, not
+	// an expression.
+}
+
+// WalkWindowDefColumnRefNodes walks the PARTITION BY and ORDER BY of an OVER
+// clause, written inline or under a WINDOW name. The window's own name and the
+// name it refines are not column references, and a frame offset cannot hold a
+// variable.
+func WalkWindowDefColumnRefNodes(w *pg_query.WindowDef, visit func(*pg_query.ColumnRef), visitSubLink func(*pg_query.SubLink)) {
+	if w == nil {
+		return
+	}
+	for _, pb := range w.PartitionClause {
+		WalkExprColumnRefNodes(pb, visit, visitSubLink)
+	}
+	for _, ob := range w.OrderClause {
+		WalkExprColumnRefNodes(ob, visit, visitSubLink)
+	}
+}
+
+// walkJsonAggConstructor walks the ORDER BY, FILTER and OVER clauses that a
+// SQL/JSON aggregate carries, the same ones a FuncCall holds.
+func walkJsonAggConstructor(c *pg_query.JsonAggConstructor, visit func(*pg_query.ColumnRef), visitSubLink func(*pg_query.SubLink)) {
+	if c == nil {
+		return
+	}
+	for _, ob := range c.AggOrder {
+		WalkExprColumnRefNodes(ob, visit, visitSubLink)
+	}
+	WalkExprColumnRefNodes(c.AggFilter, visit, visitSubLink)
+	WalkWindowDefColumnRefNodes(c.Over, visit, visitSubLink)
 }
 
 // walkJsonValueExpr walks the expression a JsonValueExpr wraps. The node shows
