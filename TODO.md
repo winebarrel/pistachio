@@ -587,62 +587,37 @@ schema at all.
 Workaround: write the column list explicitly. `pista dump` emits the
 expanded form.
 
-## Perpetual drift on `JSON(...)` in a CHECK constraint
+## SQL/JSON forms that still drift
 
-PostgreSQL stores `CHECK (JSON(a) IS NOT NULL)` as a cast, so
+Three shapes are left after the SQL/JSON work in
+[#371](https://github.com/winebarrel/pistachio/pull/371).
+
+`CHECK (JSON(a) IS NOT NULL)` is stored as a cast, so
 `pg_get_constraintdef` prints `CHECK (((a)::json IS NOT NULL))` while the
-desired side keeps the `JSON(...)` the user wrote. The two deparse
-differently, so the constraint is re-emitted as `DROP CONSTRAINT` +
-`ADD CONSTRAINT` on every plan. Applying it succeeds and changes nothing, so
-`plan --check` stays at exit code 2 forever.
-
-Reading the two as equal means teaching `normalizeCheckExpr` (`diff/tables.go`)
-that a `JsonParseExpr` is a cast to json. It has to run on the desired side
-only, since a written `a::json` is already what the catalog holds, and the
-normalizer treats both sides alike today. `JSON_SCALAR` and `JSON_SERIALIZE`
-may need the same; both are PostgreSQL 17 syntax, which was not available
-while this was written.
-
-Workaround: write `a::json`, which round-trips.
-
-Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
-
-## RETURNING clause of the SQL/JSON query functions is not normalized
+desired side keeps what the user wrote, and the constraint is re-emitted as
+`DROP CONSTRAINT` + `ADD CONSTRAINT` on every plan. Reading the two as equal
+means teaching `normalizeCheckExpr` (`diff/tables.go`) that a `JsonParseExpr`
+is a cast to json, on the desired side only, since a written `a::json` is
+already what the catalog holds and the normalizer treats both sides alike
+today. Workaround: write `a::json`, which round-trips.
 
 `normalizeJsonOutput` (`diff/tables.go`) canonicalises the RETURNING clause of
-`JSON_OBJECT` and `JSON_ARRAY`. It drops the FORMAT, which PostgreSQL never
-prints, and drops a clause naming json, which is what both return when the
-clause is left off.
-
-The PostgreSQL 17 constructs that carry the same clause (`JSON_SCALAR`,
-`JSON_SERIALIZE`, `JSON_VALUE`, `JSON_QUERY`) are left alone, so a written
+`JSON_OBJECT`, `JSON_ARRAY` and the two aggregates. The PostgreSQL 17
+constructs that carry the same clause (`JSON_SCALAR`, `JSON_SERIALIZE`,
+`JSON_VALUE`, `JSON_QUERY`) are left alone, so a written
 `RETURNING ... FORMAT JSON` on one of them may drift. Only the FORMAT part
 carries over: json is not the default return type there, since
 `JSON_SERIALIZE` and `JSON_VALUE` return text and `JSON_QUERY` jsonb.
 
-What PostgreSQL 17 prints for these was not verified. No 17 server was
-available while this was written, and the syntax does not parse on 16.
+`JSON_ARRAY` over a subquery and `JSON_TABLE` are out of the expression walk.
+The first carries a raw SELECT rather than a SubLink, and PostgreSQL stores
+the whole construct rewritten as an aggregate over a derived table, so it
+drifts on the rewrite rather than on the walk, the same as the BETWEEN entry
+below. The second is a FROM item, so reaching its context item is the
+FROM-clause loop in `stripQualifications` (`diff/views.go`), not the walk.
 
-Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
-
-## SQL/JSON node kinds the expression walker leaves out
-
-`WalkExprColumnRefNodes` (`internal/pgast`) walks the SQL/JSON constructors,
-query functions and aggregates, but not `JSON_ARRAY` over a subquery or
-`JSON_TABLE`.
-
-`JSON_ARRAY(SELECT ...)` carries a raw SELECT rather than a SubLink, and
-PostgreSQL stores the whole construct rewritten as an aggregate over a derived
-table, so a view written that way drifts on the rewrite rather than on the
-walk. Same family as the BETWEEN entry below.
-
-`JSON_TABLE` is a FROM item, so it is the FROM-clause loop in
-`stripQualifications` (`diff/views.go`) that would have to reach the context
-item, not the expression walk. It is PostgreSQL 17 syntax; no 17 server was
-available while this was written, so the drift is expected rather than
-observed.
-
-Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
+Everything PostgreSQL 17 above is expected rather than observed: no 17 server
+was available while this was written, and the syntax does not parse on 16.
 
 ## View drift on a target alias the catalog writes differently
 
