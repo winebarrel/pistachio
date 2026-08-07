@@ -1,0 +1,24 @@
+# A column renamed with -- pista:renamed-from has to be rewritten inside the
+# expression of every constraint that mentions it. The rewriter uses the same
+# expression walker as the namer and the validator, so a reference sitting
+# inside a SQL/JSON constructor was left with the old name: the CHECK was then
+# compared against the catalog with a column that no longer exists and
+# re-emitted as a DROP plus ADD on every plan.
+min_pg: 16
+init: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_qty_check CHECK (JSON_ARRAY(qty) IS NOT NULL)
+  );
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_qty_check CHECK (JSON_ARRAY(quantity) IS NOT NULL)
+  );
+plan: |
+  ALTER TABLE public.products RENAME COLUMN qty TO quantity;

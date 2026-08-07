@@ -1,0 +1,39 @@
+# PostgreSQL 16 added the SQL/JSON constructors. Three things have to line up
+# for a schema written with them to stay settled. The expression walker has to
+# reach the column inside the constructor, or an unnamed CHECK loses the column
+# from its generated name and drifts against the name the server picked.
+# pg_get_constraintdef and pg_get_viewdef spell out the RETURNING clause the
+# server resolved where the written form left it off. And pg_get_viewdef
+# returns a column reference unqualified where the file writes it qualified.
+#
+# The desired CHECK constraints are written without a name on purpose: that is
+# what exercises the naming path. PostgreSQL names them t_a_check and
+# t_b_check, verified on 17.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      a jsonb,
+      b text,
+      n integer,
+      CONSTRAINT t_a_check CHECK (JSON_OBJECT('k': a) IS NOT NULL),
+      CONSTRAINT t_b_check CHECK (JSON_ARRAY(b) IS NOT NULL)
+  );
+  CREATE VIEW public.v_object AS SELECT JSON_OBJECT('k': t.a) AS c FROM public.t;
+  CREATE VIEW public.v_array AS SELECT JSON_ARRAY(t.b) AS c FROM public.t;
+  CREATE VIEW public.v_objectagg AS SELECT JSON_OBJECTAGG(t.b: t.a) AS c FROM public.t;
+  CREATE VIEW public.v_arrayagg AS SELECT JSON_ARRAYAGG(t.a ORDER BY t.n) AS c FROM public.t;
+  CREATE VIEW public.v_isjson AS SELECT (t.b IS JSON) AS c FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a jsonb,
+      b text,
+      n integer,
+      CHECK (JSON_OBJECT('k': a) IS NOT NULL),
+      CHECK (JSON_ARRAY(b) IS NOT NULL)
+  );
+  CREATE VIEW public.v_object AS SELECT JSON_OBJECT('k': t.a) AS c FROM public.t;
+  CREATE VIEW public.v_array AS SELECT JSON_ARRAY(t.b) AS c FROM public.t;
+  CREATE VIEW public.v_objectagg AS SELECT JSON_OBJECTAGG(t.b: t.a) AS c FROM public.t;
+  CREATE VIEW public.v_arrayagg AS SELECT JSON_ARRAYAGG(t.a ORDER BY t.n) AS c FROM public.t;
+  CREATE VIEW public.v_isjson AS SELECT (t.b IS JSON) AS c FROM public.t;
+plan: ""

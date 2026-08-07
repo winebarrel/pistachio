@@ -1,0 +1,35 @@
+# The server prints the wrapper, the quote behaviour, the ON ERROR behaviour
+# and the RETURNING type it resolved, whether or not they hold the default. So
+# a rule that drops those clauses from the catalog side whenever the desired
+# file writes none would report a settled schema for all four views below, even
+# though each behaves differently at runtime: a wrapped array instead of a bare
+# value, unquoted output, an error instead of a NULL, and a truncating varchar.
+# Only the resolved default is dropped, so each of these still surfaces.
+min_pg: 17
+init: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_wrapper AS SELECT JSON_QUERY(t.a, '$.x' WITH UNCONDITIONAL WRAPPER) AS c FROM public.t;
+  CREATE VIEW public.v_quotes AS SELECT JSON_QUERY(t.a, '$.x' OMIT QUOTES) AS c FROM public.t;
+  CREATE VIEW public.v_on_error AS SELECT JSON_VALUE(t.a, '$.x' ERROR ON ERROR) AS c FROM public.t;
+  CREATE VIEW public.v_returning AS SELECT JSON_VALUE(t.a, '$.x' RETURNING varchar(10)) AS c FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_wrapper AS SELECT JSON_QUERY(t.a, '$.x') AS c FROM public.t;
+  CREATE VIEW public.v_quotes AS SELECT JSON_QUERY(t.a, '$.x') AS c FROM public.t;
+  CREATE VIEW public.v_on_error AS SELECT JSON_VALUE(t.a, '$.x') AS c FROM public.t;
+  CREATE VIEW public.v_returning AS SELECT JSON_VALUE(t.a, '$.x') AS c FROM public.t;
+# The space before the comma is libpg_query's deparser for JsonFuncExpr. It is
+# valid SQL and only shows up in emitted DDL; recorded in TODO.md.
+plan: |
+  CREATE OR REPLACE VIEW public.v_on_error AS
+  SELECT JSON_VALUE(t.a , '$.x') AS c FROM public.t;
+  CREATE OR REPLACE VIEW public.v_quotes AS
+  SELECT JSON_QUERY(t.a , '$.x') AS c FROM public.t;
+  CREATE OR REPLACE VIEW public.v_returning AS
+  SELECT JSON_VALUE(t.a , '$.x') AS c FROM public.t;
+  CREATE OR REPLACE VIEW public.v_wrapper AS
+  SELECT JSON_QUERY(t.a , '$.x') AS c FROM public.t;

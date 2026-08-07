@@ -482,6 +482,7 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 		}
 		return node
 	}
+	normalizeJsonClauses(node)
 	return node
 }
 
@@ -685,6 +686,8 @@ func alignCastNode(ctx pgast.Ctx, desired, current *pg_query.Node) *pg_query.Nod
 	if ctx.IsSelectTarget() && desired.GetTypeCast() == nil && current.GetTypeCast() != nil {
 		return current
 	}
+	alignJsonConstructorOutput(desired, current)
+	alignJsonPathCast(desired, current)
 	for {
 		ct := current.GetTypeCast()
 		if ct == nil || desired.GetTypeCast() != nil {

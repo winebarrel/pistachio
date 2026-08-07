@@ -1,0 +1,36 @@
+# PostgreSQL parses the path argument into a jsonpath value and prints its
+# canonical form back, so the spelling in the file and the spelling in the
+# catalog disagree unless pistachio canonicalises too. Observed on 17 and 18:
+#
+#   $.x         -> $."x"
+#   $.x.y[0]    -> $."x"."y"[0]
+#   $.a[*].b    -> $."a"[*]."b"
+#   lax $.x     -> $."x"          (the default mode is not printed)
+#   strict $.x  -> strict $."x"
+#   $."x"       -> $."x"          (already canonical)
+#
+# One view per spelling so a failure names the one that drifted.
+min_pg: 17
+init: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_plain AS SELECT JSON_VALUE(t.a, '$.x') AS c FROM public.t;
+  CREATE VIEW public.v_nested AS SELECT JSON_VALUE(t.a, '$.x.y[0]') AS c FROM public.t;
+  CREATE VIEW public.v_wildcard AS SELECT JSON_VALUE(t.a, '$.a[*].b') AS c FROM public.t;
+  CREATE VIEW public.v_lax AS SELECT JSON_VALUE(t.a, 'lax $.x') AS c FROM public.t;
+  CREATE VIEW public.v_strict AS SELECT JSON_VALUE(t.a, 'strict $.x') AS c FROM public.t;
+  CREATE VIEW public.v_quoted AS SELECT JSON_VALUE(t.a, '$."x"') AS c FROM public.t;
+  CREATE VIEW public.v_root AS SELECT JSON_VALUE(t.a, '$') AS c FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_plain AS SELECT JSON_VALUE(t.a, '$.x') AS c FROM public.t;
+  CREATE VIEW public.v_nested AS SELECT JSON_VALUE(t.a, '$.x.y[0]') AS c FROM public.t;
+  CREATE VIEW public.v_wildcard AS SELECT JSON_VALUE(t.a, '$.a[*].b') AS c FROM public.t;
+  CREATE VIEW public.v_lax AS SELECT JSON_VALUE(t.a, 'lax $.x') AS c FROM public.t;
+  CREATE VIEW public.v_strict AS SELECT JSON_VALUE(t.a, 'strict $.x') AS c FROM public.t;
+  CREATE VIEW public.v_quoted AS SELECT JSON_VALUE(t.a, '$."x"') AS c FROM public.t;
+  CREATE VIEW public.v_root AS SELECT JSON_VALUE(t.a, '$') AS c FROM public.t;
+plan: ""
