@@ -62,26 +62,36 @@ func TestOrderPersistenceChanges_BothDirections(t *testing.T) {
 	}, stmts)
 }
 
-// A key missing either half of its target, and one pointing outside the set,
-// both drop out rather than constraining the order.
-func TestOrderPersistenceChanges_ReferencesOutsideTheSet(t *testing.T) {
-	a := persistenceTable("public", "a", true)
+// A key pointing at a table that is not changing constrains nothing, so the
+// two keep the order they came in, reversed for the unlogged direction.
+func TestOrderPersistenceChanges_ReferenceOutsideTheSet(t *testing.T) {
+	a := persistenceTable("public", "a", true, "elsewhere")
 	b := persistenceTable("public", "b", true)
-
-	nameless := &model.ForeignKey{Schema: "public", Table: "a"}
-	nameless.Name = "a_nil_fkey"
-	a.ForeignKeys.Set(nameless.Name, nameless)
-
-	outside := "elsewhere"
-	stray := &model.ForeignKey{Schema: "public", Table: "a", RefTable: &outside}
-	stray.Name = "a_stray_fkey"
-	a.ForeignKeys.Set(stray.Name, stray)
 
 	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(a), changeFor(b)})
 
 	assert.Equal(t, []string{
 		"ALTER TABLE public.b SET UNLOGGED;",
 		"ALTER TABLE public.a SET UNLOGGED;",
+	}, stmts)
+}
+
+// The referenced table living in another schema is the shape the parser
+// produces for a bare reference under --schemas public,app, where it resolves
+// to the first target schema rather than the owning table's.
+func TestOrderPersistenceChanges_CrossSchemaReference(t *testing.T) {
+	parent := persistenceTable("public", "parent", true)
+	child := persistenceTable("app", "child", true)
+	refSchema, refTable := "public", "parent"
+	fk := &model.ForeignKey{Schema: "app", Table: "child", RefSchema: &refSchema, RefTable: &refTable}
+	fk.Name = "child_p_fkey"
+	child.ForeignKeys.Set(fk.Name, fk)
+
+	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(parent), changeFor(child)})
+
+	assert.Equal(t, []string{
+		"ALTER TABLE app.child SET UNLOGGED;",
+		"ALTER TABLE public.parent SET UNLOGGED;",
 	}, stmts)
 }
 

@@ -94,11 +94,14 @@ func sortByRefs(changes []*persistenceChange) []*persistenceChange {
 	refs := make([][]int, len(changes))
 	for i, c := range changes {
 		for _, fk := range c.table.ForeignKeys.CollectValues() {
-			// A reference written without a schema does not arrive here
-			// without one: the parser fills RefSchema from the owning table's
-			// schema, and the catalog reads it from pg_namespace. So there is
-			// no bare name to resolve, and nothing like
-			// toposort.resolveUnqualified is needed.
+			// A reference written without a schema arrives with one already.
+			// The parser fills RefSchema with the first target schema, which
+			// is where search_path lands a bare name, not with the owning
+			// table's, and the catalog reads it from pg_namespace. So there is
+			// no bare name left to resolve and nothing like
+			// toposort.resolveUnqualified to do. The nil test below is a cheap
+			// guard rather than part of that: a foreign key carries both
+			// halves or neither.
 			if fk.RefSchema == nil || fk.RefTable == nil {
 				continue
 			}
