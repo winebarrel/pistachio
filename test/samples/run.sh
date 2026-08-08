@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Check that pista handles real-world sample schemas correctly.
 #
-# The sample list, downloads, and DB setup all live in the Makefile. This
+# The sample list, downloads, and DB setup all live in sample-db.mk. This
 # script only drives the check: for each sample it asks make to reset the
 # database and load the sample, runs `pista dump` to capture pista's model of
 # the schema, then runs `pista plan` against the dump. A faithful round-trip
@@ -84,10 +84,10 @@ echo "Sample schema check (dump then plan; expect No changes):"
 
 # Start from an empty database, so a schema left by an earlier run cannot make
 # a load fail on objects that already exist. Between samples only `public` is
-# reset; see the reset-db comment in the Makefile.
+# reset; see the reset-db comment in sample-db.mk.
 make -s clean-schema >/dev/null
 
-# Iterate the sample manifest from the Makefile. For each sample let make
+# Iterate the sample manifest from sample-db.mk. For each sample let make
 # reset the database and load the schema, then run the drift check here.
 while IFS='|' read -r name target args schemas flags; do
   [ -n "$name" ] || continue
