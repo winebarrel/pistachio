@@ -1,4 +1,4 @@
-# The other side of no_diff_json_path_canonical. A path is compared as written,
+# The other side of no_diff_json_path_argument. A path is compared as written,
 # so a file writing '$.x' against a catalog holding '$."x"' re-emits its view on
 # every plan. That is drift the round trip does not hit, since `pista dump`
 # writes the canonical form, and closing it would need a jsonpath expression

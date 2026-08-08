@@ -4,7 +4,7 @@
 # and the canonical jsonpath, neither of which the init schema writes.
 #
 # The second half, that this output feeds back clean, is testdata/plan/
-# no_diff_json_constructors and no_diff_json_path_canonical.
+# no_diff_json_constructors and no_diff_json_path_argument.
 min_pg: 16
 init: |
   CREATE TABLE public.t (
