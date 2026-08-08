@@ -10,6 +10,8 @@ Pistachio is a declarative schema management tool for PostgreSQL, written in Go.
 
 Drift that appears only with a desired schema written some other way is low priority, since matching what `dump` writes avoids it.
 
+Avoid normalization that makes the diff complex.
+
 ## Build & test
 
 ```sh
