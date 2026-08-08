@@ -57,7 +57,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - Package-level tests generally use external test packages (e.g., `package catalog_test`, `package model_test`). Use same-package tests only when access to unexported identifiers is required (e.g., `package diff`).
 - Root-level integration tests use `package pistachio_test`.
 - Test fixtures are YAML files in `testdata/`. Required fields vary by test suite: `apply` uses `init`/`desired`/`applied`, `plan` uses `init`/`desired`/`plan`/`error`, `dump` uses `init`/`dump`, and `parser` uses `input`/`expected`. The plan/apply/dump harnesses also accept optional fields, but **the set differs per suite** (the lists below are not interchangeable):
-  - `dump`: `omit_schema`, `include`/`exclude`/`enable`/`disable`, `dump_pg16`/`dump_pg17`/`dump_pg18`.
+  - `dump`: `min_pg`, `omit_schema`, `include`/`exclude`/`enable`/`disable`, `dump_pg16`/`dump_pg17`/`dump_pg18`.
   - `plan`: `min_pg`, `count`, `drop_policy`, `disallowed_drops`, `disable_index_concurrently`, `force_index_concurrently`, `include`/`exclude`/`enable`/`disable`, `pre_sql`/`pre_sql_file`/`concurrently_pre_sql`/`concurrently_pre_sql_file`.
   - `apply`: everything `plan` accepts (without the `plan`/`error` fields), plus `applied_sql`, `verify_no_drift` and `applied_pg16`/`applied_pg17`/`applied_pg18`.
 

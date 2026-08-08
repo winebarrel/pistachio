@@ -1,0 +1,31 @@
+# JSON_OBJECT, JSON_ARRAY and the two aggregates resolve RETURNING json or
+# jsonb from their argument types, and pg_get_viewdef prints the one the server
+# picked. pistachio does no type inference, so it cannot tell which the server
+# would pick for the file's form, and the catalog's clause has to surface.
+#
+# This is the case that used to fail silently: the clause was dropped from the
+# catalog side wherever the file wrote none, so a stored `RETURNING jsonb`
+# against a file writing nothing reported no difference where the two return
+# different types. Both views below store the type that is not the default for
+# their argument, so a rule that dropped the clause would report a settled
+# schema for a view that returns something else.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      a jsonb,
+      b text
+  );
+  CREATE VIEW public.v_obj AS SELECT JSON_OBJECT('k': t.a RETURNING json) AS c FROM public.t;
+  CREATE VIEW public.v_arr AS SELECT JSON_ARRAY(t.b RETURNING jsonb) AS c FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a jsonb,
+      b text
+  );
+  CREATE VIEW public.v_obj AS SELECT JSON_OBJECT('k': t.a) AS c FROM public.t;
+  CREATE VIEW public.v_arr AS SELECT JSON_ARRAY(t.b) AS c FROM public.t;
+plan: |
+  CREATE OR REPLACE VIEW public.v_arr AS
+  SELECT JSON_ARRAY(t.b) AS c FROM public.t;
+  CREATE OR REPLACE VIEW public.v_obj AS
+  SELECT JSON_OBJECT('k': t.a) AS c FROM public.t;

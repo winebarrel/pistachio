@@ -1,0 +1,25 @@
+# The other side of no_diff_json_path_argument. A path is compared as written,
+# so a file writing '$.x' against a catalog holding '$."x"' re-emits its view on
+# every plan. That is drift the round trip does not hit, since `pista dump`
+# writes the canonical form, and closing it would need a jsonpath expression
+# parser rather than the lexer that was here before; recorded in TODO.md.
+#
+# The operator and function positions are used because they work on every
+# supported server, where the query functions need 17.
+init: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_op AS SELECT t.a FROM public.t WHERE (t.a @? '$."x"'::jsonpath);
+  CREATE VIEW public.v_func AS SELECT jsonb_path_query_array(t.a, '$."x"'::jsonpath) AS c FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_op AS SELECT t.a FROM public.t WHERE (t.a @? '$.x'::jsonpath);
+  CREATE VIEW public.v_func AS SELECT jsonb_path_query_array(t.a, '$.x'::jsonpath) AS c FROM public.t;
+plan: |
+  CREATE OR REPLACE VIEW public.v_func AS
+  SELECT jsonb_path_query_array(t.a, '$.x'::jsonpath) AS c FROM public.t;
+  CREATE OR REPLACE VIEW public.v_op AS
+  SELECT t.a FROM public.t WHERE t.a @? '$.x'::jsonpath;

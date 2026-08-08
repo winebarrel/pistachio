@@ -1,10 +1,13 @@
-# The server prints the wrapper, the quote behaviour, the ON ERROR behaviour
-# and the RETURNING type it resolved, whether or not they hold the default. So
-# a rule that drops those clauses from the catalog side whenever the desired
-# file writes none would report a settled schema for all four views below, even
-# though each behaves differently at runtime: a wrapped array instead of a bare
+# The clauses of a query function are compared as written. Each view below
+# differs from the catalog in exactly one clause, and each of the four changes
+# what the expression returns at runtime: a wrapped array instead of a bare
 # value, unquoted output, an error instead of a NULL, and a truncating varchar.
-# Only the resolved default is dropped, so each of these still surfaces.
+# Every one of them has to surface.
+#
+# The desired side writes the path canonically and spells out every clause but
+# the one under test, so nothing else can account for the difference. Written
+# any other way the view would re-emit anyway, which is the cost of comparing
+# as written; see no_diff_json_query_functions for the settled form.
 min_pg: 17
 init: |
   CREATE TABLE public.t (
@@ -18,18 +21,20 @@ desired: |
   CREATE TABLE public.t (
       a jsonb
   );
-  CREATE VIEW public.v_wrapper AS SELECT JSON_QUERY(t.a, '$.x') AS c FROM public.t;
-  CREATE VIEW public.v_quotes AS SELECT JSON_QUERY(t.a, '$.x') AS c FROM public.t;
-  CREATE VIEW public.v_on_error AS SELECT JSON_VALUE(t.a, '$.x') AS c FROM public.t;
-  CREATE VIEW public.v_returning AS SELECT JSON_VALUE(t.a, '$.x') AS c FROM public.t;
-# The space before the comma is libpg_query's deparser for JsonFuncExpr. It is
-# valid SQL and only shows up in emitted DDL; recorded in TODO.md.
+  CREATE VIEW public.v_wrapper AS SELECT JSON_QUERY(t.a, '$."x"' RETURNING jsonb WITHOUT WRAPPER KEEP QUOTES) AS c FROM public.t;
+  CREATE VIEW public.v_quotes AS SELECT JSON_QUERY(t.a, '$."x"' RETURNING jsonb WITHOUT WRAPPER KEEP QUOTES) AS c FROM public.t;
+  CREATE VIEW public.v_on_error AS SELECT JSON_VALUE(t.a, '$."x"' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_returning AS SELECT JSON_VALUE(t.a, '$."x"' RETURNING text) AS c FROM public.t;
+# The stray spaces below, before the comma, before the closing parenthesis and
+# after the RETURNING type, are libpg_query's deparser for JsonFuncExpr. They
+# are valid SQL and only show up in emitted DDL; all three are recorded in
+# TODO.md.
 plan: |
   CREATE OR REPLACE VIEW public.v_on_error AS
-  SELECT JSON_VALUE(t.a , '$.x') AS c FROM public.t;
+  SELECT JSON_VALUE(t.a , '$."x"' RETURNING text ) AS c FROM public.t;
   CREATE OR REPLACE VIEW public.v_quotes AS
-  SELECT JSON_QUERY(t.a , '$.x') AS c FROM public.t;
+  SELECT JSON_QUERY(t.a , '$."x"' RETURNING jsonb  WITHOUT WRAPPER KEEP QUOTES) AS c FROM public.t;
   CREATE OR REPLACE VIEW public.v_returning AS
-  SELECT JSON_VALUE(t.a , '$.x') AS c FROM public.t;
+  SELECT JSON_VALUE(t.a , '$."x"' RETURNING text ) AS c FROM public.t;
   CREATE OR REPLACE VIEW public.v_wrapper AS
-  SELECT JSON_QUERY(t.a , '$.x') AS c FROM public.t;
+  SELECT JSON_QUERY(t.a , '$."x"' RETURNING jsonb  WITHOUT WRAPPER KEEP QUOTES) AS c FROM public.t;

@@ -1,0 +1,20 @@
+# The path also appears outside the query functions, as an ordinary argument
+# the catalog casts explicitly: `a @? '$."x"'::jsonpath`. That position works on
+# every supported server, where the query functions need 17, so the canonical
+# form is settled there for 15 and 16 as well.
+#
+# alter_json_path_spelling is the other direction, in the same two positions:
+# a file writing '$.x' re-emits its view.
+init: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_op AS SELECT t.a FROM public.t WHERE (t.a @? '$."x"'::jsonpath);
+  CREATE VIEW public.v_func AS SELECT jsonb_path_query_array(t.a, '$."x"'::jsonpath) AS c FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_op AS SELECT t.a FROM public.t WHERE (t.a @? '$."x"'::jsonpath);
+  CREATE VIEW public.v_func AS SELECT jsonb_path_query_array(t.a, '$."x"'::jsonpath) AS c FROM public.t;
+plan: ""

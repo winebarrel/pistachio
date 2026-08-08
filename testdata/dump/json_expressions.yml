@@ -1,0 +1,29 @@
+# The first half of the round trip. A SQL/JSON expression is compared as
+# written, so what makes the remaining drift low priority is that `pista dump`
+# emits the form the catalog holds: the RETURNING clause the server resolved
+# and the canonical jsonpath, neither of which the init schema writes.
+#
+# The second half, that this output feeds back clean, is testdata/plan/
+# no_diff_json_constructors and no_diff_json_path_argument.
+min_pg: 16
+init: |
+  CREATE TABLE public.t (
+      a jsonb,
+      b text,
+      CONSTRAINT t_a_check CHECK (JSON_OBJECT('k': a) IS NOT NULL)
+  );
+  CREATE VIEW public.v AS SELECT JSON_ARRAY(t.b) AS c, t.a FROM public.t WHERE t.a @? '$.x';
+dump: |
+  -- public.t
+  CREATE TABLE public.t (
+      a jsonb,
+      b text,
+      CONSTRAINT t_a_check CHECK (JSON_OBJECT('k' : a RETURNING jsonb) IS NOT NULL)
+  );
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT JSON_ARRAY(b RETURNING json) AS c,
+      a
+     FROM t
+    WHERE a @? '$."x"'::jsonpath;

@@ -8,10 +8,6 @@
 
 * Fix a view keeping its table qualification wherever `stripQualifications` did not reach. `pg_get_viewdef` returns a column reference unqualified where the file writes `table.column`, so a body holding `COALESCE`, `CASE`, `GREATEST`, a subscript, an array or row constructor, `IS TRUE`, `COLLATE`, an XML or SQL/JSON expression, an aggregate `ORDER BY` or `FILTER`, an `OVER` clause, `DISTINCT ON`, `GROUP BY ROLLUP` or a sub-query nested under any of them re-emitted `CREATE OR REPLACE VIEW` on every plan and kept `plan --check` at exit code 2 forever.
 
-* Read the SQL/JSON clauses the server resolves the way it prints them back. A definition written without a `RETURNING` clause comes back with the type PostgreSQL picked, `JSON_QUERY` always prints its wrapper and quote behaviour, and `ON EMPTY` / `ON ERROR` appear when they differ from the default. Those are no longer read as differences. A clause holding anything other than the resolved default still is: `WITH UNCONDITIONAL WRAPPER`, `OMIT QUOTES`, `ERROR ON ERROR` and `RETURNING character varying(10)` all surface, since each changes what the expression returns at runtime.
-
-* Canonicalise a jsonpath literal. PostgreSQL parses the path argument of `JSON_VALUE`, `JSON_QUERY` and `JSON_EXISTS` into a `jsonpath` value and stores its canonical form, so a written `'$.x'` came back as `'$."x"'` and the two never compared equal. The same applies to a path written as an ordinary argument, as in `a @? '$.x'` or `jsonb_path_query(a, '$.x')`, which the catalog spells out as `'$."x"'::jsonpath`. A path holding a filter, arithmetic or a comparison is left alone rather than guessed at, and is recorded in TODO.md.
-
 * The plan and apply test harnesses take a `min_pg` field, which skips a fixture on a server older than the syntax it needs.
 
 ## [1.25.0] - 2026-08-06

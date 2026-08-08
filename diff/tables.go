@@ -469,7 +469,6 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) {
 			return tc.Arg
 		}
-		return node
 	}
 	if ae := node.GetAExpr(); ae != nil && ae.Kind == pg_query.A_Expr_Kind_AEXPR_OP_ANY {
 		if arr := ae.Rexpr.GetAArrayExpr(); arr != nil {
@@ -480,9 +479,7 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 				},
 			}
 		}
-		return node
 	}
-	normalizeJsonClauses(node)
 	return node
 }
 
@@ -686,8 +683,6 @@ func alignCastNode(ctx pgast.Ctx, desired, current *pg_query.Node) *pg_query.Nod
 	if ctx.IsSelectTarget() && desired.GetTypeCast() == nil && current.GetTypeCast() != nil {
 		return current
 	}
-	alignJsonConstructorOutput(desired, current)
-	alignJsonPathCast(desired, current)
 	for {
 		ct := current.GetTypeCast()
 		if ct == nil || desired.GetTypeCast() != nil {

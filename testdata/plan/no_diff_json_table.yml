@@ -1,0 +1,32 @@
+# JSON_TABLE is a FROM item rather than an expression, and the server rewrites
+# it on the way in: it adds a LATERAL, names the row pattern json_table_path_0
+# and canonicalises every path. A file written the way `pista dump` emits that
+# feeds back clean; one written the short way re-emits the view on every plan.
+min_pg: 17
+init: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_table AS
+  SELECT jt.k
+     FROM t,
+      LATERAL JSON_TABLE(
+              t.a, '$."x"' AS json_table_path_0
+              COLUMNS (
+                  k text PATH '$."k"'
+              )
+          ) jt;
+desired: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_table AS
+  SELECT jt.k
+     FROM t,
+      LATERAL JSON_TABLE(
+              t.a, '$."x"' AS json_table_path_0
+              COLUMNS (
+                  k text PATH '$."k"'
+              )
+          ) jt;
+plan: ""

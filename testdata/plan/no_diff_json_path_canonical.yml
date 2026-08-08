@@ -1,0 +1,51 @@
+# PostgreSQL parses the path argument into a jsonpath value and prints its
+# canonical form back, so a file has to spell the path the way the server does.
+# The spellings below are what `pista dump` emitted for them on 17 and 18:
+#
+#   $."x"            a member name is always quoted
+#   $."x"."y"[0]     nested members and a subscript
+#   $."a"[*]."b"     a wildcard subscript
+#   strict $."x"     the mode keyword, printed only when it is strict
+#   $                the whole document
+#   $."x".size()     a method, printed unquoted
+#   $."x"?(@ > 1)    a filter, printed without the spaces around ?
+#   ($."x" + 1)      arithmetic, printed parenthesised
+#
+# The last two are why the file has to follow the server rather than the other
+# way round: reproducing that spelling from a written path would need a
+# jsonpath expression parser, and pg_query hands the path over as a plain
+# string constant.
+#
+# Both sides write the same spelling, so what each view pins is that the
+# canonical form parses and deparses stably. One view per form so a failure
+# names the one that drifted. A file writing the path any other way re-emits
+# its view; alter_json_path_spelling covers that.
+#
+# The query functions need 17. The path in an ordinary argument works on every
+# supported server and is no_diff_json_path_argument.
+min_pg: 17
+init: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_plain AS SELECT JSON_VALUE(t.a, '$."x"' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_nested AS SELECT JSON_VALUE(t.a, '$."x"."y"[0]' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_wildcard AS SELECT JSON_VALUE(t.a, '$."a"[*]."b"' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_strict AS SELECT JSON_VALUE(t.a, 'strict $."x"' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_root AS SELECT JSON_VALUE(t.a, '$' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_method AS SELECT JSON_VALUE(t.a, '$."x".size()' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_filter AS SELECT JSON_VALUE(t.a, '$."x"?(@ > 1)' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_arith AS SELECT JSON_VALUE(t.a, '($."x" + 1)' RETURNING text) AS c FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      a jsonb
+  );
+  CREATE VIEW public.v_plain AS SELECT JSON_VALUE(t.a, '$."x"' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_nested AS SELECT JSON_VALUE(t.a, '$."x"."y"[0]' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_wildcard AS SELECT JSON_VALUE(t.a, '$."a"[*]."b"' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_strict AS SELECT JSON_VALUE(t.a, 'strict $."x"' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_root AS SELECT JSON_VALUE(t.a, '$' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_method AS SELECT JSON_VALUE(t.a, '$."x".size()' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_filter AS SELECT JSON_VALUE(t.a, '$."x"?(@ > 1)' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_arith AS SELECT JSON_VALUE(t.a, '($."x" + 1)' RETURNING text) AS c FROM public.t;
+plan: ""
