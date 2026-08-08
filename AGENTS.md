@@ -4,6 +4,12 @@
 
 Pistachio is a declarative schema management tool for PostgreSQL, written in Go. It parses desired schema definitions from SQL files and generates DDL diffs to bring the current database in line with the desired state.
 
+## Design policy
+
+`pista dump` output fed back as the desired schema must plan clean. A break in that round trip is a bug.
+
+Drift that appears only with a desired schema written some other way is low priority, since matching what `dump` writes avoids it.
+
 ## Build & test
 
 ```sh
