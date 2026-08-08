@@ -532,17 +532,6 @@ Workaround: write the call unqualified.
 
 Origin: found while adding `-- pista:execute-first`, 2026-07-31.
 
-## `dump` drops `PARTITION BY` from a sub-partitioned partition
-
-`model.Table.SQL` returns right after the `PARTITION OF ... FOR VALUES`
-clause, so a partition that is itself partitioned loses its own
-`PARTITION BY`. The dump then defines it as a leaf, and reloading fails on
-the next level down, which still says `PARTITION OF` that table.
-`PartitionDef` is read from the catalog and available; it just is not
-emitted on that branch.
-
-Origin: bug audit, 2026-07-31.
-
 ## Perpetual drift on a serial column written as an explicit default
 
 Priority: low.
