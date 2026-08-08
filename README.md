@@ -383,12 +383,9 @@ echo $?  # 0: no changes, 2: changes, 1: error
 
 `plan` and `dump` open a read-only connection, so they cannot write to the database. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) to use a read-write connection.
 
-Every connection sets `search_path` to PostgreSQL's default, `"$user", public`. The catalog reports an object reachable through `search_path` without its schema, so a server-side `ALTER ROLE ... SET search_path` would otherwise decide how `dump` writes that object and how `plan` compares it.
+Every connection sets `search_path` to PostgreSQL's default, `"$user", public`, so a server-side `ALTER ROLE ... SET search_path` does not reach it. `--search-path` (env `$PISTA_SEARCH_PATH`) sets another value.
 
-Pass `--search-path` (env `$PISTA_SEARCH_PATH`) to change it. `--search-path=` qualifies everything, so the dump reloads the same way wherever it runs. `--search-path=myschema` drops `myschema` from the output. The default keeps `"$user"`, so a schema named after the connecting role is reported without its schema; `--search-path=public` covers that case.
-
-> [!NOTE]
-> Use the same `--search-path` for `dump` and for the `plan` or `apply` that reads its output. The two sides disagree on which objects carry a schema otherwise, and every plan re-emits the difference.
+The catalog reports an object reachable through `search_path` without its schema. `dump` writes the object as the catalog reports it, and `plan` compares that form against the desired schema, so a desired schema that qualifies an object the catalog reports bare differs on every run. Under `--search-path=` nothing is reachable and every object keeps its schema. Under `--search-path=myschema` the objects in `myschema` lose theirs, and under the default so do those in `public` and in a schema named after the connecting role.
 
 > [!NOTE]
 > `apply` sets `search_path` to the target schemas plus `public` so unqualified type and object references resolve. `plan` output does not include that `SET search_path`, so piping `pista plan -n <schema>` into `psql` for a non-public schema may fail on an unqualified reference. Qualify the reference or run `pista apply`.
