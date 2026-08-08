@@ -112,8 +112,8 @@ func (client *Client) connect(ctx context.Context, readOnly bool) (*pgx.Conn, er
 
 	// Set search_path so the catalog output follows this setting rather than a
 	// server-side one. See DefaultSearchPath for why the value matters. The
-	// default is PostgreSQL's own rather than the target schemas, which keeps an
-	// object outside public qualified in the dump and in the diff.
+	// default is public rather than the target schemas, which keeps an object
+	// outside public qualified in the dump and in the diff.
 	//
 	// apply issues its own SET later, so the DDL it runs still resolves an
 	// unqualified reference against the target schemas. Pre-SQL runs before that

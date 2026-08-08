@@ -677,26 +677,3 @@ PostgreSQL 17 query functions. The shapes are pinned by
 testdata/plan/alter_json_query_clauses.yml. The fix belongs upstream.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
-
-## A schema named after the connecting role reads without its schema
-
-The connection sets `search_path` to PostgreSQL's default, `"$user", public`,
-so a schema whose name matches the connecting role sits on the path. The
-catalog then reports its objects bare, and a `dump -n <role>` taken that way
-writes `m mood` and `FROM users` where another role gets `m myschema.mood`
-and `FROM myschema.users`. Reloading that dump elsewhere fails with
-`type "mood" does not exist`, and a desired schema that qualifies its own
-objects plans `SET DEFAULT` and `DROP CONSTRAINT` / `ADD CONSTRAINT` on every
-run for that role alone.
-
-`--search-path=public` drops the `"$user"` entry and settles all three, and
-`--search-path=` qualifies everything. The default keeps PostgreSQL's own
-value because pre-SQL runs under this setting and expects it. That is the
-only surface it covers: `apply` sets its own path before the DDL, and `plan`
-and `dump` run nothing else. Making the default `public` would settle the
-case outright at the cost of that, which is the open question here.
-
-The behaviour is pinned by TestDump_SchemaNamedAfterRole in
-search_path_test.go.
-
-Origin: review of [#378](https://github.com/winebarrel/pistachio/pull/378).

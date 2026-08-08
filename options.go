@@ -6,24 +6,25 @@ import (
 	"strings"
 )
 
-// DefaultSearchPath is PostgreSQL's own default, and the search_path every
-// connection is opened with unless --search-path says otherwise. The catalog
-// reads the schema through pg_get_viewdef, pg_get_constraintdef, pg_get_expr
-// and format_type, each of which drops the schema from an object the session
-// can reach unqualified, so this value decides what dump writes and what the
-// diff compares. Left to a server-side "ALTER ROLE ... SET search_path", one
-// database would read differently depending on who connected.
+// DefaultSearchPath is the search_path every connection is opened with unless
+// --search-path says otherwise. The catalog reads the schema through
+// pg_get_viewdef, pg_get_constraintdef, pg_get_expr and format_type, each of
+// which drops the schema from an object the session can reach unqualified, so
+// this value decides what dump writes and what the diff compares. Left to a
+// server-side "ALTER ROLE ... SET search_path", one database would read
+// differently depending on who connected.
 //
-// The "$user" entry keeps one case of that: a schema named after the
-// connecting role is reached unqualified, so a dump taken as that role writes
-// its objects without a schema and another role cannot reload it. The entry
-// stays because pre-SQL runs under this setting and PostgreSQL's own default
-// is what it expects; --search-path=public drops it.
+// PostgreSQL's own default, `"$user", public`, would leave the same gap: a
+// schema named after the connecting role sits on the path, so a dump taken as
+// that role writes its objects without a schema and another role cannot reload
+// it. The role that runs migrations is often not the role the application
+// connects as, so this drops the "$user" entry and keeps public alone. Pre-SQL
+// runs under this setting.
 //
 // kong defaults the Options field to this, and connect falls back to it, so a
 // library caller that builds Options directly connects the same way the CLI
 // does.
-const DefaultSearchPath = `"$user", public`
+const DefaultSearchPath = "public"
 
 type Options struct {
 	ConnString string            `short:"c" env:"PISTA_CONN_STR" default:"postgres://postgres@localhost/postgres" help:"PostgreSQL connection string. See https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING"`
@@ -34,7 +35,7 @@ type Options struct {
 	// SearchPath is a pointer so that an empty value is a path of its own,
 	// under which the catalog qualifies everything, rather than a request for
 	// the default. nil means the default.
-	SearchPath *string `env:"PISTA_SEARCH_PATH" default:"\"$user\", public" help:"search_path for the database connection. The catalog reports an object reachable through it without its schema, so this decides how dump writes that object. Pass an empty value to qualify everything."`
+	SearchPath *string `env:"PISTA_SEARCH_PATH" default:"public" help:"search_path for the database connection. The catalog reports an object reachable through it without its schema, so this decides how dump writes that object. Pass an empty value to qualify everything."`
 }
 
 type FilterOptions struct {

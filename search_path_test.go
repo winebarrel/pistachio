@@ -153,11 +153,10 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 }
 
 // A schema named after the connecting role is reached through the "$user"
-// entry of the default path, so the catalog reports its objects bare and the
-// dump is only reloadable by a role of that name. The default keeps
-// PostgreSQL's own value because pre-SQL runs under this setting and expects
-// it, so this is pinned as it stands rather than fixed here.
-// --search-path=public is the way out, and the second half checks it.
+// entry of PostgreSQL's own path, so the catalog reports its objects bare and
+// the dump is only reloadable by a role of that name. That is why the default
+// is public alone: the first half checks the dump keeps the schema, and the
+// second half asks for PostgreSQL's own value to show what the entry does.
 func TestDump_SchemaNamedAfterRole(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -180,9 +179,9 @@ CREATE VIEW `+model.Ident(role)+`.active_users AS SELECT id FROM `+model.Ident(r
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
-	assert.Contains(t, got.String(), "FROM users")
+	assert.Contains(t, got.String(), "FROM "+model.Ident(role)+".users")
 
-	searchPath := "public"
+	searchPath := `"$user", public`
 	client = pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{role},
@@ -191,5 +190,5 @@ CREATE VIEW `+model.Ident(role)+`.active_users AS SELECT id FROM `+model.Ident(r
 
 	got, err = client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
-	assert.Contains(t, got.String(), "FROM "+model.Ident(role)+".users")
+	assert.Contains(t, got.String(), "FROM users")
 }
