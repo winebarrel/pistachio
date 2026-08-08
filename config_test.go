@@ -66,15 +66,14 @@ schema-map:
 // The --search-path default lives in a struct tag, while connect falls back to
 // DefaultSearchPath for a library caller that builds Options directly. The two
 // have to name the same path, or the CLI and the library would open different
-// connections. The flag also has to survive kong's tag parsing intact: the
-// value carries a quoted identifier and a comma.
+// connections.
 func TestOptions_SearchPathDefault(t *testing.T) {
 	cli, err := parseWithConfig(t)
 	require.NoError(t, err)
 
 	require.NotNil(t, cli.SearchPath)
 	assert.Equal(t, pistachio.DefaultSearchPath, *cli.SearchPath)
-	assert.Equal(t, `"$user", public`, *cli.SearchPath)
+	assert.Equal(t, "public", *cli.SearchPath)
 }
 
 func TestOptions_SearchPathFromConfig(t *testing.T) {

@@ -77,7 +77,7 @@ func TestConnect_SearchPath(t *testing.T) {
 
 	var sp string
 	require.NoError(t, conn.QueryRow(ctx, "SHOW search_path").Scan(&sp))
-	assert.Equal(t, `"$user", public`, sp)
+	assert.Equal(t, "public", sp)
 }
 
 // TestConnect_SearchPathIgnoresServerSide guards the reason the parameter is
@@ -101,7 +101,7 @@ func TestConnect_SearchPathIgnoresServerSide(t *testing.T) {
 
 	var sp string
 	require.NoError(t, conn.QueryRow(ctx, "SHOW search_path").Scan(&sp))
-	assert.Equal(t, `"$user", public`, sp)
+	assert.Equal(t, "public", sp)
 }
 
 func TestConnect_SearchPathOption(t *testing.T) {
