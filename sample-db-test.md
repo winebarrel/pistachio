@@ -60,17 +60,17 @@ failed.
 
 ## Samples
 
-The sample list lives in the `SAMPLES` variable in the Makefile, one record per
-line: name, loader target, loader variables, the schemas passed to `pista -n`
-(blank means `public`), and any extra `pista plan` flags (only gitlab needs
-one). `make print-samples` prints it for shell consumers, so the Makefile stays
-the single source of the list.
+The sample list lives in the `SAMPLES` variable in `sample-db.mk`, which the
+Makefile includes, one record per line: name, loader target, loader variables,
+the schemas passed to `pista -n` (blank means `public`), and any extra
+`pista plan` flags (only gitlab needs one). `make print-samples` prints it for
+shell consumers, so `sample-db.mk` stays the single source of the list.
 
 Every GitHub source is fetched at a pinned commit rather than a branch, so an
 upstream schema change cannot turn CI red on its own and the object counts
 below stay accurate. To move a sample to a newer upstream schema, resolve the
 branch with `git ls-remote https://github.com/<owner>/<repo> <branch>`, replace
-the SHA in the Makefile, and re-run `make test-samples`.
+the SHA in `sample-db.mk`, and re-run `make test-samples`.
 
 | Sample | Schemas | Source |
 |---|---|---|
@@ -289,7 +289,7 @@ unvalidated constraint, so no other sample needs the flag.
 
 ## Adding a sample
 
-1. Add a line to `SAMPLES` in the Makefile: name, loader target, loader
+1. Add a line to `SAMPLES` in `sample-db.mk`: name, loader target, loader
    variables, and the schemas for `pista -n`.
 2. Reuse a loader target if the source fits one (`sample-db` for the Neon
    collection, `sample-db-tar` for a tarball, `sample-db-url` for a plain SQL
