@@ -19,7 +19,10 @@
 # The path also appears outside the query functions, as an ordinary argument
 # the catalog casts explicitly. v_op and v_func cover that position.
 #
-# One view per spelling so a failure names the one that drifted.
+# Both sides write the same spelling, so what each view pins is that the
+# canonical form parses and deparses stably. One view per form so a failure
+# names the one that drifted. A file writing the path any other way re-emits
+# its view; alter_json_path_spelling covers that.
 min_pg: 17
 init: |
   CREATE TABLE public.t (

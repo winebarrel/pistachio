@@ -606,26 +606,28 @@ expanded form.
 ## SQL/JSON forms that still drift
 
 Priority: low. A dump feeds back clean, so writing the file the way `pista
-dump` emits it avoids all of this. Observed on PostgreSQL 16, 17 and 18.
+dump` emits it avoids all of this.
 
 A SQL/JSON expression is compared as written, and the server rewrites most of
 what it is handed, so a file written any other way re-emits its view or
-constraint on every plan:
+constraint on every plan. Each form below was observed on every server that
+has the syntax:
 
 - The path is stored in canonical form. `'$.x'` comes back as `'$."x"'`,
   `'$.x ? (@ > 1)'` as `'$."x"?(@ > 1)'` and `'$.x + 1'` as `'($."x" + 1)'`.
+  Every supported server, since the jsonpath type predates 15.
 - `JSON_OBJECT`, `JSON_ARRAY`, `JSON_OBJECTAGG` and `JSON_ARRAYAGG` resolve
-  `RETURNING json` or `RETURNING jsonb` from their argument types, and the
-  query functions resolve one too: text for `JSON_VALUE` and
-  `JSON_SERIALIZE`, jsonb for `JSON_QUERY`. `pg_get_viewdef` prints whichever
-  the server picked.
-- `JSON_QUERY` prints its wrapper and quote behaviour whether or not they
-  hold the default, so a file leaving them off differs from
-  `WITHOUT WRAPPER KEEP QUOTES`.
+  `RETURNING json` or `RETURNING jsonb` from their argument types, and
+  `pg_get_viewdef` prints the one the server picked. 16 and later.
+- The query functions resolve a `RETURNING` type too, text for `JSON_VALUE`
+  and `JSON_SERIALIZE` and jsonb for `JSON_QUERY`, and `JSON_QUERY` prints
+  its wrapper and quote behaviour whether or not they hold the default, so a
+  file leaving them off differs from `WITHOUT WRAPPER KEEP QUOTES`. 17 and
+  later.
 - `JSON_TABLE` is a FROM item rather than an expression, and the server adds
   a `LATERAL` and names the row pattern: `JSON_TABLE(t.a, '$.x' COLUMNS (k
   text PATH '$.k'))` is stored as `LATERAL JSON_TABLE(t.a, '$."x"' AS
-  json_table_path_0 COLUMNS (k text PATH '$."k"'))`.
+  json_table_path_0 COLUMNS (k text PATH '$."k"'))`. 17 and later.
 
 Closing any of it means reproducing what the server resolved. The path needs
 a jsonpath expression parser, since pg_query hands the path over as a plain

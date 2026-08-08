@@ -16,8 +16,11 @@ import (
 )
 
 type dumpTestCase struct {
-	Init       string   `yaml:"init"`
-	Dump       string   `yaml:"dump"`
+	Init string `yaml:"init"`
+	Dump string `yaml:"dump"`
+	// MinPG skips the fixture on a server older than this major version, for
+	// syntax the server does not accept yet.
+	MinPG      int      `yaml:"min_pg,omitempty"`
 	DumpPG16   string   `yaml:"dump_pg16,omitempty"`
 	DumpPG17   string   `yaml:"dump_pg17,omitempty"`
 	DumpPG18   string   `yaml:"dump_pg18,omitempty"`
@@ -854,6 +857,9 @@ func TestDump(t *testing.T) {
 		name := strings.TrimSuffix(filepath.Base(file), ".yml")
 		t.Run(name, func(t *testing.T) {
 			tc := loadYAML[dumpTestCase](t, file)
+			if tc.MinPG > 0 && pgMajor < tc.MinPG {
+				t.Skipf("requires PostgreSQL %d or later", tc.MinPG)
+			}
 			testutil.SetupDB(t, ctx, conn, tc.Init)
 			client := pistachio.NewClient(&pistachio.Options{
 				ConnString: conn.Config().ConnString(),

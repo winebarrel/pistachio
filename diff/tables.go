@@ -469,7 +469,6 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) {
 			return tc.Arg
 		}
-		return node
 	}
 	if ae := node.GetAExpr(); ae != nil && ae.Kind == pg_query.A_Expr_Kind_AEXPR_OP_ANY {
 		if arr := ae.Rexpr.GetAArrayExpr(); arr != nil {
