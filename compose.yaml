@@ -6,9 +6,22 @@
 #   docker compose up -d              # 15 only
 #   docker compose up -d pg17         # 17 only
 #   docker compose --profile all up -d
+#
+# The discourse sample declares `CREATE EXTENSION vector`, which the official
+# image does not ship, so install pgvector from PGDG before starting the
+# server. The image's entrypoint runs as root and drops to postgres itself, so
+# apt runs first and hands over with exec. Starting a container therefore needs
+# network access; the samples CI job installs the same package into its service
+# container.
 x-postgres: &postgres
   environment:
     POSTGRES_HOST_AUTH_METHOD: trust
+  entrypoint:
+    - bash
+    - -c
+    - >-
+      apt-get update -qq && apt-get install -y -qq --no-install-recommends
+      postgresql-$${PG_MAJOR}-pgvector && exec docker-entrypoint.sh postgres
 
 services:
   pg15:

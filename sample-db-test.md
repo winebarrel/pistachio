@@ -16,6 +16,14 @@ check. It needs a running PostgreSQL instance (`PGHOST=localhost`,
 `PGUSER=postgres`, exported by the Makefile), plus `psql`, `curl`, and network
 access to the upstream hosts. The same target runs in CI as the `samples` job.
 
+The server also needs pgvector, which the discourse sample's `halfvec` columns
+are typed by and the official postgres image does not ship. compose.yaml
+installs `postgresql-<major>-pgvector` from PGDG when a container starts, and
+the samples CI job installs the same package into its service container, so
+both keep the official image and add the extension to it. The runner checks for
+it up front and says so if it is missing; recreate the container with
+`docker compose down && docker compose up -d`.
+
 To load every sample into one database for manual inspection instead of
 checking them one at a time, use `make schema`.
 
@@ -99,10 +107,16 @@ the SHA in the Makefile, and re-run `make test-samples`.
 | ambari | ambari | [apache/ambari](https://github.com/apache/ambari) |
 | ovirt | ovirt | [oVirt/ovirt-engine](https://github.com/oVirt/ovirt-engine) |
 | gitlab | gitlab, gitlab_partitions_static, gitlab_partitions_dynamic | [gitlabhq/gitlabhq](https://github.com/gitlabhq/gitlabhq) |
+| ledgersmb | ledgersmb | [ledgersmb/LedgerSMB](https://github.com/ledgersmb/LedgerSMB) |
+| koji | koji | [koji-project/koji](https://github.com/koji-project/koji) |
+| kea | kea | [isc-projects/kea](https://github.com/isc-projects/kea) |
+| dolphinscheduler | dolphinscheduler | [apache/dolphinscheduler](https://github.com/apache/dolphinscheduler) |
+| camunda | camunda | [camunda/camunda-bpm-platform](https://github.com/camunda/camunda-bpm-platform) |
+| discourse | discourse | [discourse/discourse](https://github.com/discourse/discourse) |
 
 ## Coverage
 
-Object counts of the loaded schemas, as of 2026-08-05 on PostgreSQL 15.18
+Object counts of the loaded schemas, as of 2026-08-08 on PostgreSQL 15.18
 (16.13 for icingadb, rt, znuny, gitlab, hive, ranger, ambari, and ovirt).
 "Constraints" excludes foreign keys;
 "Types" counts enums and domains. All counts are limited to the schemas the
@@ -145,11 +159,18 @@ and pistachio does not read them either.
 | ambari | 113 | 693 | 172 | 124 | 140 | 0 | 0 |
 | ovirt | 152 | 1,386 | 377 | 165 | 167 | 1 | 0 |
 | gitlab | 1,422 | 14,293 | 6,353 | 2,325 | 3,949 | 15 | 0 |
-| **Total** | **3,113** | **26,992** | **10,161** | **4,576** | **6,605** | **84** | **35** |
+| ledgersmb | 158 | 950 | 263 | 247 | 265 | 1 | 0 |
+| koji | 68 | 415 | 150 | 183 | 159 | 0 | 0 |
+| kea | 64 | 475 | 172 | 73 | 71 | 0 | 0 |
+| dolphinscheduler | 64 | 623 | 149 | 0 | 80 | 0 | 0 |
+| camunda | 49 | 681 | 281 | 42 | 56 | 0 | 0 |
+| discourse | 354 | 3,173 | 1,114 | 23 | 336 | 1 | 2 |
+| **Total** | **3,870** | **33,309** | **12,290** | **5,144** | **7,572** | **86** | **35** |
 
-The 33 dumps come to about 59,000 lines of SQL, and gitlab is 27,600 of them.
-It is over half of the tables, columns, indexes, foreign keys, and constraints,
-and musicbrainz is the largest of what remains. gitlab is also why
+The 39 dumps come to about 71,800 lines of SQL, and gitlab is 27,600 of them.
+It is still over half of the indexes and constraints and around 40% of the
+tables, columns, and foreign keys; musicbrainz and discourse are the largest of
+what remains. gitlab is also why
 `clean-schema` drops tables a batch at a time rather than cascading through
 `DROP SCHEMA`: a single statement takes locks on every object it reaches, and
 gitlab's 1,422 tables and their indexes run the server out of lock table space
@@ -172,7 +193,11 @@ columns (ranger, whose 85 tables come with 84 of them), a schema written
 entirely in quoted mixed-case identifiers, so every name is case-sensitive
 (hive's 84 tables, where chinook has 11), an index-heavy schema of 192 indexes
 over 64 tables (mediawiki), partitioned tables at scale (gitlab declares 100 of them and
-attaches 2,054 partitions, all of which live in schemas of their own), and
+attaches 2,054 partitions, all of which live in schemas of their own), table
+inheritance (ledgersmb attaches 21 children with INHERITS, the only sample that
+does), four unique indexes declared `NULLS NOT DISTINCT` and one index with an
+`INCLUDE` column (discourse), columns typed by an extension that is not contrib
+(discourse's three `halfvec` columns, which need pgvector), and
 foreign keys that cross a schema boundary: 20 of adventureworks' 90 span its
 five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into `mimiciv_hosp`,
 and every one of gitlab's partitions is attached across one.
@@ -185,19 +210,37 @@ strip only what is irrelevant to a schema round trip:
 - **adventureworks**: `\copy` lines are dropped (the data lives in CSVs that are
   not fetched), along with the inline `Production.ProductReview` INSERT, whose
   foreign key targets would be missing.
+- **camunda**: the schema ships as one file per engine component and none of
+  them create a schema, so `camunda` is created up front and the files are
+  concatenated in dependency order (process engine, history, identity, then the
+  case and decision engines with their history).
 - **clubdata**: the dump creates its own database and reconnects to it, which
   cannot be done mid-pipe. Those two lines are dropped; the rest creates the
   `cd` schema itself.
 - **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
   constraint, and the `\copy` lines are dropped.
+- **discourse**: the dump belongs in a schema of its own like the group below,
+  but it is `pg_dump` output that empties `search_path` and qualifies every
+  object with `public`, so neither `PGOPTIONS` nor hive's one-line rewrite
+  reaches it. The line that empties `search_path` is dropped and the `public.`
+  qualifier is stripped, which leaves every name unqualified for `search_path`
+  to place. The four `CREATE EXTENSION` lines say `WITH SCHEMA public` without a
+  dot, so they are untouched and the types they own still resolve from `public`,
+  which stays second in the search path. The tail of the file is Rails' own
+  `SET search_path` followed by the migration versions it inserts into
+  `schema_migrations`, which is data, so everything from that line on is
+  dropped.
 - **hive**: the dump belongs in a schema of its own like the group below, but
   it is `pg_dump` output that sets `search_path` to `public` itself, which
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
   the `hive` schema.
 - **imdb**: the schema and its foreign key indexes ship as two files, so
   `schema.sql` and `fkindexes.sql` are concatenated.
+- **kea**, **dolphinscheduler**: both dumps drop what they are about to create
+  with `IF EXISTS`, so `client_min_messages` is raised to `warning` for the load.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
-  **ranger**, **ambari**, **ovirt**, **gitlab**: these dumps name no schema at
+  **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
+  **kea**, **dolphinscheduler**: these dumps name no schema at
   all, so whichever schema comes first in `search_path` gets them. Each is
   loaded into a schema of its own instead of
   `public`, so that `make schema`, which puts every sample in one database, does

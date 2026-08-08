@@ -100,6 +100,12 @@ ranger|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/ranger/
 ambari|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/ambari/0347dc4503c09b0593d9cb12815e2f9784b6a86a/ambari-server/src/main/resources/Ambari-DDL-Postgres-CREATE.sql SCHEMA=ambari|ambari
 ovirt|sample-db-url-schema|URL=https://raw.githubusercontent.com/oVirt/ovirt-engine/be1f6647db1ebbf39186bbe4dd6b1a777376815b/packaging/dbscripts/create_tables.sql SCHEMA=ovirt|ovirt
 gitlab|sample-db-url-schema|URL=https://raw.githubusercontent.com/gitlabhq/gitlabhq/35e789d8f1173a11a7724ae360a80d1f19ec92dc/db/structure.sql SCHEMA=gitlab|gitlab,gitlab_partitions_static,gitlab_partitions_dynamic|--assume-validated
+ledgersmb|sample-db-url-schema|URL=https://raw.githubusercontent.com/ledgersmb/LedgerSMB/34a05e7b58c161e008561e36a74dbede860fe4d9/sql/Pg-database.sql SCHEMA=ledgersmb|ledgersmb
+koji|sample-db-url-schema|URL=https://raw.githubusercontent.com/koji-project/koji/c3239d46c1abdcbda509739eb0182031b71d9f01/schemas/schema.sql SCHEMA=koji|koji
+kea|sample-db-url-schema|URL=https://raw.githubusercontent.com/isc-projects/kea/82440eddc70089a55892a42ca96b78a92eb3e484/src/share/database/scripts/pgsql/dhcpdb_create.pgsql SCHEMA=kea CLIENT_MIN_MESSAGES=warning|kea
+dolphinscheduler|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/dolphinscheduler/51057477b815eef59c68f1b76563567814c72a93/dolphinscheduler-dao/src/main/resources/sql/dolphinscheduler_postgresql.sql SCHEMA=dolphinscheduler CLIENT_MIN_MESSAGES=warning|dolphinscheduler
+camunda|sample-db-camunda||camunda
+discourse|sample-db-discourse|URL=https://raw.githubusercontent.com/discourse/discourse/f3c568cfd26a427e9cae32063732a56bc7d334b9/db/structure.sql SCHEMA=discourse|discourse
 endef
 
 # Print the sample manifest, one record per line, for shell consumers.
@@ -259,6 +265,53 @@ sample-db-znuny:
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/znuny/Znuny/0b894348ebc458621545ccdab5f3d24d1b396a70/scripts/database/$$f || exit 1; \
 	  echo; \
 	done | PGOPTIONS='-c search_path=znuny' psql
+
+# Camunda 7 (camunda/camunda-bpm-platform, Apache-2.0). The schema ships as one
+# file per engine component and none of them create a schema, so create
+# `camunda` up front and concatenate the files in dependency order: the process
+# engine first, then history, identity, and the case and decision engines with
+# their history, each of which keys back into the tables the engine file
+# creates.
+CAMUNDA_SQL_FILES = \
+	activiti.postgres.create.engine.sql \
+	activiti.postgres.create.history.sql \
+	activiti.postgres.create.identity.sql \
+	activiti.postgres.create.case.engine.sql \
+	activiti.postgres.create.case.history.sql \
+	activiti.postgres.create.decision.engine.sql \
+	activiti.postgres.create.decision.history.sql
+
+.PHONY: sample-db-camunda
+sample-db-camunda:
+	psql -c 'CREATE SCHEMA IF NOT EXISTS camunda'
+	for f in $(CAMUNDA_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/camunda/camunda-bpm-platform/ee4826e5e76c2348a1510ef46a2f4ccd3b080e48/engine/src/main/resources/org/camunda/bpm/engine/db/create/$$f || exit 1; \
+	  echo; \
+	done | PGOPTIONS='-c search_path=camunda' psql
+
+# Discourse (discourse/discourse, GPL-2.0). Like the sample-db-url-schema dumps
+# this one belongs in a schema of its own, but it is pg_dump output: it empties
+# search_path and qualifies every object it creates with `public`, so neither
+# PGOPTIONS nor the hive-style search_path rewrite reaches it. Drop the line
+# that empties search_path and strip the `public.` qualifier instead, which
+# leaves every name unqualified and lets search_path place it. The four
+# CREATE EXTENSION lines say `WITH SCHEMA public` without a dot, so they are
+# untouched and the types they own (halfvec, hstore, the trgm operator classes)
+# still resolve from `public`, which stays second in the search path. Column
+# names that merely start with "public" (`public`, `public_version`) are not
+# qualifiers and are left alone. The tail of the file is Rails' own
+# `SET search_path TO "$user", public` followed by the migration versions it
+# inserts into schema_migrations, which is data and would land in the wrong
+# schema anyway, so everything from that line on is dropped.
+#
+# The vector extension is pgvector, which the official postgres image does not
+# ship; compose.yaml and the samples CI job install it. See sample-db-test.md.
+.PHONY: sample-db-discourse
+sample-db-discourse:
+	psql -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
+	  | PGOPTIONS='-c search_path=$(SCHEMA),public' psql
 
 .PHONY: test-scenario
 test-scenario:
