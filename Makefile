@@ -105,6 +105,7 @@ koji|sample-db-url-schema|URL=https://raw.githubusercontent.com/koji-project/koj
 kea|sample-db-url-schema|URL=https://raw.githubusercontent.com/isc-projects/kea/82440eddc70089a55892a42ca96b78a92eb3e484/src/share/database/scripts/pgsql/dhcpdb_create.pgsql SCHEMA=kea CLIENT_MIN_MESSAGES=warning|kea
 dolphinscheduler|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/dolphinscheduler/51057477b815eef59c68f1b76563567814c72a93/dolphinscheduler-dao/src/main/resources/sql/dolphinscheduler_postgresql.sql SCHEMA=dolphinscheduler CLIENT_MIN_MESSAGES=warning|dolphinscheduler
 camunda|sample-db-camunda||camunda
+wso2apim|sample-db-url-schema|URL=https://raw.githubusercontent.com/wso2/carbon-apimgt/5dd6e3084a35228b7542c4ff6a9071af1c7476fa/features/apimgt/org.wso2.carbon.apimgt.core.feature/src/main/resources/sql/postgresql.sql SCHEMA=wso2apim CLIENT_MIN_MESSAGES=warning|wso2apim
 discourse|sample-db-discourse|URL=https://raw.githubusercontent.com/discourse/discourse/f3c568cfd26a427e9cae32063732a56bc7d334b9/db/structure.sql SCHEMA=discourse|discourse
 endef
 
@@ -157,9 +158,10 @@ sample-db-mimiciv:
 # gets its own schema instead.
 #
 # CLIENT_MIN_MESSAGES defaults to notice, the server default; a sample whose
-# dump is noisy on a fresh database can raise it from its SAMPLES record. Only
-# ranger does, which drops every object with IF EXISTS and commits outside a
-# transaction before it creates anything.
+# dump is noisy on a fresh database can raise it from its SAMPLES record. kea,
+# dolphinscheduler, and wso2apim raise it to warning, since each drops what it
+# is about to create with IF EXISTS, and ranger to error, since it does the same
+# and commits outside a transaction, which adds a warning per statement.
 CLIENT_MIN_MESSAGES ?= notice
 
 .PHONY: sample-db-url-schema

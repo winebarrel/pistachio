@@ -112,6 +112,7 @@ the SHA in the Makefile, and re-run `make test-samples`.
 | kea | kea | [isc-projects/kea](https://github.com/isc-projects/kea) |
 | dolphinscheduler | dolphinscheduler | [apache/dolphinscheduler](https://github.com/apache/dolphinscheduler) |
 | camunda | camunda | [camunda/camunda-bpm-platform](https://github.com/camunda/camunda-bpm-platform) |
+| wso2apim | wso2apim | [wso2/carbon-apimgt](https://github.com/wso2/carbon-apimgt) |
 | discourse | discourse | [discourse/discourse](https://github.com/discourse/discourse) |
 
 ## Coverage
@@ -164,13 +165,14 @@ and pistachio does not read them either.
 | kea | 64 | 475 | 172 | 73 | 71 | 0 | 0 |
 | dolphinscheduler | 64 | 623 | 149 | 0 | 80 | 0 | 0 |
 | camunda | 49 | 681 | 281 | 42 | 56 | 0 | 0 |
+| wso2apim | 247 | 1,495 | 421 | 168 | 353 | 0 | 0 |
 | discourse | 354 | 3,173 | 1,114 | 23 | 336 | 1 | 2 |
-| **Total** | **3,870** | **33,309** | **12,290** | **5,144** | **7,572** | **86** | **35** |
+| **Total** | **4,117** | **34,804** | **12,711** | **5,312** | **7,925** | **86** | **35** |
 
-The 39 dumps come to about 71,800 lines of SQL, and gitlab is 27,600 of them.
-It is still over half of the indexes and constraints and around 40% of the
-tables, columns, and foreign keys; musicbrainz and discourse are the largest of
-what remains. gitlab is also why
+The 40 dumps come to about 75,900 lines of SQL, and gitlab is 27,600 of them.
+It is still half of the indexes and constraints and over a third of the tables,
+columns, and foreign keys; musicbrainz, discourse, and wso2apim are the largest
+of what remains. gitlab is also why
 `clean-schema` drops tables a batch at a time rather than cascading through
 `DROP SCHEMA`: a single statement takes locks on every object it reaches, and
 gitlab's 1,422 tables and their indexes run the server out of lock table space
@@ -189,7 +191,8 @@ installed at once), materialized views (adventureworks, pagila), tsvector
 columns (dvdrental, pagila), a non-default
 collation (musicbrainz), composite types (ovirt declares 10 of them, more than
 any other sample, and sourcegraph 2), standalone sequences rather than serial
-columns (ranger, whose 85 tables come with 84 of them), a schema written
+columns (ranger, whose 85 tables come with 84 of them, and wso2apim, which
+mixes 104 of them in with serial columns), a schema written
 entirely in quoted mixed-case identifiers, so every name is case-sensitive
 (hive's 84 tables, where chinook has 11), an index-heavy schema of 192 indexes
 over 64 tables (mediawiki), partitioned tables at scale (gitlab declares 100 of them and
@@ -236,11 +239,12 @@ strip only what is irrelevant to a schema round trip:
   the `hive` schema.
 - **imdb**: the schema and its foreign key indexes ship as two files, so
   `schema.sql` and `fkindexes.sql` are concatenated.
-- **kea**, **dolphinscheduler**: both dumps drop what they are about to create
-  with `IF EXISTS`, so `client_min_messages` is raised to `warning` for the load.
+- **kea**, **dolphinscheduler**, **wso2apim**: each dump drops what it is about
+  to create with `IF EXISTS`, so `client_min_messages` is raised to `warning`
+  for the load.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
-  **kea**, **dolphinscheduler**: these dumps name no schema at
+  **kea**, **dolphinscheduler**, **wso2apim**: these dumps name no schema at
   all, so whichever schema comes first in `search_path` gets them. Each is
   loaded into a schema of its own instead of
   `public`, so that `make schema`, which puts every sample in one database, does
