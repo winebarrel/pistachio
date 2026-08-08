@@ -3,6 +3,10 @@
 Items intentionally deferred from prior PRs. Each entry notes the originating
 PR for context.
 
+An entry marked `Priority: low` is drift that a `pista dump` output fed back
+as the desired schema does not hit. Only a desired schema written some other
+way reaches it, and writing it the way `dump` does avoids it.
+
 ## Auto-rewrite of column references in views and cross-table FKs
 
 When a column is renamed via `-- pista:renamed-from`, the rewriter only
@@ -100,6 +104,8 @@ extended to table-level renames.
 Origin: pre-existing NOTE in `diff/rename.go:detectTableRenames`.
 
 ## Policy USING / WITH CHECK normalization for subquery column refs
+
+Priority: low.
 
 `pg_get_expr` qualifies column references inside subqueries (e.g. emits
 `SELECT allowed.id FROM myschema.allowed` for a USING that the user wrote
@@ -420,6 +426,8 @@ Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
 
 ## Silent drift on cross-schema user-type references
 
+Priority: low.
+
 A table column, or a composite type attribute, whose type is a user-defined
 type (enum, domain, or composite) written schema-qualified in desired SQL
 drifts on every plan when the type's schema differs from the container's own
@@ -482,6 +490,8 @@ Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
 ## Perpetual drift on a schema-qualified function call in a CHECK constraint
 
+Priority: low.
+
 A CHECK constraint that calls a function schema-qualified, written as
 `CHECK (public.lower_v(v) <> 'x')`, is re-emitted as `DROP CONSTRAINT` +
 `ADD CONSTRAINT` on every plan. Applying it succeeds and changes nothing, so
@@ -527,6 +537,8 @@ Origin: bug audit, 2026-07-31.
 
 ## Perpetual drift on a serial column written as an explicit default
 
+Priority: low.
+
 A serial column written the way `pg_dump` writes it plans
 `ALTER COLUMN id SET DEFAULT nextval(...)` on every run. Applying it succeeds
 and changes nothing, so `plan --check` stays at exit code 2 forever. `pg_dump`
@@ -551,6 +563,10 @@ different sequence.
 Origin: bug audit, 2026-07-31.
 
 ## Perpetual drift on a view defined with `SELECT *`
+
+Priority: low, with the caveat that the consequence is heavier than the rest
+of the class: with the view drop allowed, every apply drops and recreates the
+view.
 
 A view whose desired definition uses `SELECT *` or `t.*` is re-emitted on
 every plan. `pg_get_viewdef` returns the star expanded into an explicit
@@ -589,6 +605,13 @@ expanded form.
 
 ## SQL/JSON forms that still drift
 
+Priority: low for the jsonpath spacing and for the `RETURNING` clause, both
+avoided by writing the file the way `pista dump` emits it. The `RETURNING`
+case is a different kind of harm from the rest: it reports no difference
+where the two sides return different types, so it fails silently instead of
+re-planning. `JSON_TABLE` is unclassified; whether a dump of a view using it
+feeds back clean has not been checked.
+
 Three forms remain, all observed on PostgreSQL 17 and 18.
 
 A jsonpath holding a filter, arithmetic or a comparison is printed back with
@@ -619,6 +642,8 @@ way to write. A view using it re-emits on every plan.
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 
 ## View drift on a target alias the catalog writes differently
+
+Priority: low.
 
 PostgreSQL names a sub-select's output column on its own and `pg_get_viewdef`
 prints the name it chose, so a view whose body holds
