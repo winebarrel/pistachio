@@ -1,0 +1,16 @@
+# A partition holds its own storage, so it takes the transition even though
+# the parent above it does not.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      region text NOT NULL
+  ) PARTITION BY RANGE (region);
+  CREATE UNLOGGED TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      region text NOT NULL
+  ) PARTITION BY RANGE (region);
+  CREATE TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m');
+plan: |
+  ALTER TABLE public.events_east SET LOGGED;

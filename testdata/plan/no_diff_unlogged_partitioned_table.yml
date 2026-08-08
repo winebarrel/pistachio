@@ -1,0 +1,21 @@
+# A partitioned table has no storage of its own, and PostgreSQL changes
+# persistence by rewriting the table. ALTER TABLE ... SET LOGGED on one
+# reports success and leaves relpersistence alone, on the parent and on its
+# partitions alike, so emitting it here would replan forever.
+#
+# PostgreSQL 18 rejects an unlogged partitioned table outright, so the shape
+# this pins cannot exist there.
+max_pg: 17
+init: |
+  CREATE UNLOGGED TABLE public.events (
+      id integer NOT NULL,
+      region text NOT NULL
+  ) PARTITION BY RANGE (region);
+  CREATE UNLOGGED TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      region text NOT NULL
+  ) PARTITION BY RANGE (region);
+  CREATE UNLOGGED TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m');
+plan: ""

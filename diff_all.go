@@ -441,6 +441,11 @@ func orderStatements(
 	for _, ts := range createStmts {
 		stmts = append(stmts, ts.sql)
 	}
+	// The logged <-> unlogged transitions carry their own order, so they are
+	// appended rather than tagged and sorted. They sit after the creates, which
+	// puts them after any rename, and before the FK adds, which together with
+	// the FK drops above leaves exactly the keys that stay in place.
+	stmts = append(stmts, tableDiff.PersistenceStmts...)
 	for _, ts := range postDropStmts {
 		stmts = append(stmts, ts.sql)
 	}
@@ -471,6 +476,7 @@ func fallbackOrder(
 	stmts = append(stmts, viewDiff.DropStmts...)
 	stmts = append(stmts, tableDiff.FKDropStmts...)
 	stmts = append(stmts, tableDiff.Stmts...)
+	stmts = append(stmts, tableDiff.PersistenceStmts...)
 	stmts = append(stmts, tableDiff.DropStmts...)
 	stmts = append(stmts, sequenceDiff.DropStmts...)
 	stmts = append(stmts, compositeTypeDiff.DropStmts...)

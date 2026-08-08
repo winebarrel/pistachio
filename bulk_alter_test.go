@@ -301,6 +301,8 @@ func TestParseMergeableAlterTable_Negatives(t *testing.T) {
 		"ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;",
 		"ALTER TABLE public.users FORCE ROW LEVEL SECURITY;",
 		"ALTER TABLE public.users NO FORCE ROW LEVEL SECURITY;",
+		"ALTER TABLE public.users SET LOGGED;",
+		"ALTER TABLE public.users SET UNLOGGED;",
 		"ALTER TABLE ONLY public.users ADD CONSTRAINT fk FOREIGN KEY (x) REFERENCES public.t(id);",
 		"ALTER TABLE IF EXISTS public.users ADD COLUMN x int;",
 	}
