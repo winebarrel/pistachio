@@ -49,6 +49,28 @@ shape end-to-end.
 
 Origin: [#125](https://github.com/winebarrel/pistachio/pull/125). Plan / apply fixtures were intentionally not added.
 
+## Silent drift on the partition shape
+
+`Table.PartitionOf`, `Table.PartitionBound` and `Table.PartitionDef` are read
+from the catalog and parsed from the desired schema, but the diff only tests
+`PartitionOf` and `PartitionBound` against nil to pick a branch and never
+compares a value. Each of these plans `-- No changes` on a table that already
+exists, verified on 15:
+
+- Turning `PARTITION BY RANGE (r)` into `PARTITION BY LIST (r)`.
+- Moving a partition's `FOR VALUES` bound.
+- Re-parenting a partition from one parent to another.
+- A plain table gaining `PARTITION OF`, or a partition losing it.
+
+None of it is a plain `ALTER` away. A partition key cannot be changed at all,
+so reaching the desired state means recreating the table and moving the data.
+The other three run through `ALTER TABLE ... DETACH PARTITION` and
+`ATTACH PARTITION ... FOR VALUES`: detaching is cheap, and attaching scans the
+table and fails on a row the bound does not cover. Erroring at plan time may
+fit better than emitting any of it.
+
+Origin: review of [#383](https://github.com/winebarrel/pistachio/pull/383).
+
 ## Silent drift on `Table.TableSpace` / `Index.TableSpace` changes
 
 The catalog and parser populate `Table.TableSpace` and `Index.TableSpace`,
@@ -531,17 +553,6 @@ diff cannot do today because it does not thread the schema list.
 Workaround: write the call unqualified.
 
 Origin: found while adding `-- pista:execute-first`, 2026-07-31.
-
-## `dump` drops `PARTITION BY` from a sub-partitioned partition
-
-`model.Table.SQL` returns right after the `PARTITION OF ... FOR VALUES`
-clause, so a partition that is itself partitioned loses its own
-`PARTITION BY`. The dump then defines it as a leaf, and reloading fails on
-the next level down, which still says `PARTITION OF` that table.
-`PartitionDef` is read from the catalog and available; it just is not
-emitted on that branch.
-
-Origin: bug audit, 2026-07-31.
 
 ## Perpetual drift on a serial column written as an explicit default
 
