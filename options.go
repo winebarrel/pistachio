@@ -16,9 +16,9 @@ import (
 //
 // The "$user" entry keeps one case of that: a schema named after the
 // connecting role is reached unqualified, so a dump taken as that role writes
-// its objects without a schema and another role cannot reload it. Keeping
-// PostgreSQL's own default is what pre-SQL and anything else on the connection
-// expect, so the entry stays; --search-path=public drops it.
+// its objects without a schema and another role cannot reload it. The entry
+// stays because pre-SQL runs under this setting and PostgreSQL's own default
+// is what it expects; --search-path=public drops it.
 //
 // kong defaults the Options field to this, and connect falls back to it, so a
 // library caller that builds Options directly connects the same way the CLI

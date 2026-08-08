@@ -155,8 +155,8 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 // A schema named after the connecting role is reached through the "$user"
 // entry of the default path, so the catalog reports its objects bare and the
 // dump is only reloadable by a role of that name. The default keeps
-// PostgreSQL's own value, which is what pre-SQL and anything else on the
-// connection expect, so this is pinned as it stands rather than fixed here.
+// PostgreSQL's own value because pre-SQL runs under this setting and expects
+// it, so this is pinned as it stands rather than fixed here.
 // --search-path=public is the way out, and the second half checks it.
 func TestDump_SchemaNamedAfterRole(t *testing.T) {
 	ctx := context.Background()

@@ -503,7 +503,15 @@ the desired side keeps what the user wrote.
 canonicalises `= ANY(ARRAY[...])` -> `IN (...)`, but never touches the
 `FuncCall` name, so the two forms deparse differently. Index expressions
 and index predicates run through `normalizeCheckExpr` as well
-(`normalizeIndexStmt`), so the same drift is expected there.
+(`normalizeIndexStmt`), so the same drift is expected there. A view body
+that calls a function qualified drifts the same way: `stripQualifications`
+(`diff/views.go`) clears `RangeVar.Schemaname` and never looks at the call.
+
+A column `DEFAULT nextval('public.counter'::regclass)` drifts too, but not
+through the same node. The schema sits inside a string literal argument
+rather than in a `FuncCall` name, so stripping the name symmetrically leaves
+it; reaching it means reading the regclass literal. `equalDefault` applies no
+schema normalization of any kind.
 
 The codebase already normalizes schema qualification three different ways.
 `stripQualifications` (`diff/views.go`) clears `RangeVar.Schemaname` and a
@@ -683,9 +691,10 @@ run for that role alone.
 
 `--search-path=public` drops the `"$user"` entry and settles all three, and
 `--search-path=` qualifies everything. The default keeps PostgreSQL's own
-value because that is what pre-SQL and anything else sharing the connection
-expect. Making the default `public` would settle the case outright at the
-cost of that, which is the open question here.
+value because pre-SQL runs under this setting and expects it. That is the
+only surface it covers: `apply` sets its own path before the DDL, and `plan`
+and `dump` run nothing else. Making the default `public` would settle the
+case outright at the cost of that, which is the open question here.
 
 The behaviour is pinned by TestDump_SchemaNamedAfterRole in
 search_path_test.go.
