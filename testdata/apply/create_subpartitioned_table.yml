@@ -1,0 +1,27 @@
+# The middle level is both a partition and partitioned, so it needs a
+# PARTITION BY of its own for the level below it to attach.
+init: ''
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      region text NOT NULL,
+      kind text NOT NULL
+  ) PARTITION BY RANGE (region);
+  CREATE TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m') PARTITION BY LIST (kind);
+  CREATE TABLE public.events_east_web PARTITION OF public.events_east FOR VALUES IN ('web');
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      region text NOT NULL,
+      kind text NOT NULL
+  )
+  PARTITION BY RANGE (region);
+
+  -- public.events_east
+  CREATE TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m')
+  PARTITION BY LIST (kind);
+
+  -- public.events_east_web
+  CREATE TABLE public.events_east_web PARTITION OF public.events_east FOR VALUES IN ('web');
+verify_no_drift: true

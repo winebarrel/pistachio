@@ -47,6 +47,9 @@ func (t Table) SQL() string {
 	if t.PartitionOf != nil {
 		if t.PartitionBound != nil {
 			sql += " PARTITION OF " + *t.PartitionOf + " " + *t.PartitionBound
+			if t.Partitioned && t.PartitionDef != nil {
+				sql += "\nPARTITION BY " + *t.PartitionDef
+			}
 			if t.TableSpace != nil {
 				sql += "\nTABLESPACE " + Ident(*t.TableSpace)
 			}

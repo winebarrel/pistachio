@@ -203,6 +203,39 @@ func TestTable_SQL_partitionOf_withBound_tablespace(t *testing.T) {
 	assert.Contains(t, sql, "TABLESPACE fast_ssd")
 }
 
+func TestTable_SQL_partitionOf_subpartitioned(t *testing.T) {
+	tbl := newTable("public", "events_east")
+	parent := "public.events"
+	bound := "FOR VALUES FROM ('a') TO ('m')"
+	partDef := "LIST (kind)"
+	tbl.PartitionOf = &parent
+	tbl.PartitionBound = &bound
+	tbl.Partitioned = true
+	tbl.PartitionDef = &partDef
+
+	assert.Equal(t,
+		"CREATE TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m')\nPARTITION BY LIST (kind);",
+		tbl.SQL())
+}
+
+func TestTable_SQL_partitionOf_subpartitioned_tablespace(t *testing.T) {
+	tbl := newTable("public", "events_east")
+	parent := "public.events"
+	bound := "FOR VALUES FROM ('a') TO ('m')"
+	partDef := "LIST (kind)"
+	ts := "fast_ssd"
+	tbl.PartitionOf = &parent
+	tbl.PartitionBound = &bound
+	tbl.Partitioned = true
+	tbl.PartitionDef = &partDef
+	tbl.TableSpace = &ts
+
+	// PARTITION BY comes before TABLESPACE, as the CREATE TABLE grammar has it.
+	assert.Equal(t,
+		"CREATE TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m')\nPARTITION BY LIST (kind)\nTABLESPACE fast_ssd;",
+		tbl.SQL())
+}
+
 func TestTable_SQL_partitionOf_inherits(t *testing.T) {
 	tbl := newTable("public", "child")
 	parent := "public.parent"
