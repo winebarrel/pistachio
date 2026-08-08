@@ -63,6 +63,28 @@ schema-map:
 	assert.Equal(t, map[string]string{"old": "new"}, cli.SchemaMap)
 }
 
+// The --search-path default lives in a struct tag, while connect falls back to
+// DefaultSearchPath for a library caller that builds Options directly. The two
+// have to name the same path, or the CLI and the library would open different
+// connections. The flag also has to survive kong's tag parsing intact: the
+// value carries a quoted identifier and a comma.
+func TestOptions_SearchPathDefault(t *testing.T) {
+	cli, err := parseWithConfig(t)
+	require.NoError(t, err)
+
+	assert.Equal(t, pistachio.DefaultSearchPath, cli.SearchPath)
+	assert.Equal(t, `"$user", public`, cli.SearchPath)
+}
+
+func TestOptions_SearchPathFromConfig(t *testing.T) {
+	path := writeConfig(t, "search-path: myschema, public\n")
+
+	cli, err := parseWithConfig(t, "--config", path)
+	require.NoError(t, err)
+
+	assert.Equal(t, "myschema, public", cli.SearchPath)
+}
+
 func TestYAMLConfig_CLIFlagWins(t *testing.T) {
 	path := writeConfig(t, "conn-string: postgres://config@db/app\n")
 

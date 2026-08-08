@@ -383,6 +383,8 @@ echo $?  # 0: no changes, 2: changes, 1: error
 
 `plan` and `dump` open a read-only connection, so they cannot write to the database. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) to use a read-write connection.
 
+Every connection sets `search_path` to PostgreSQL's default, `"$user", public`. The catalog reports an object reachable through `search_path` without its schema, so a server-side `ALTER ROLE ... SET search_path` would otherwise decide how `dump` writes it. Pass `--search-path` (env `$PISTA_SEARCH_PATH`) to change it: `--search-path=myschema` makes `dump -n myschema` write `FROM users` instead of `FROM myschema.users`.
+
 > [!NOTE]
 > `apply` sets `search_path` to the target schemas plus `public` so unqualified type and object references resolve. `plan` output does not include that `SET search_path`, so piping `pista plan -n <schema>` into `psql` for a non-public schema may fail on an unqualified reference. Qualify the reference or run `pista apply`.
 
