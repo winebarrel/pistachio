@@ -65,6 +65,16 @@ check() {
   fi
 }
 
+# The discourse sample needs pgvector, which the official postgres image does
+# not ship. Say so up front: without this the sample fails at load time and the
+# reason is buried in psql's output.
+if [ -z "$(psql -X -q -At -c "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'")" ]; then
+  echo "pgvector is not installed on this server, and the discourse sample needs it." >&2
+  echo "compose.yaml installs it at container start; recreate the container with" >&2
+  echo "  docker compose down && docker compose up -d" >&2
+  exit 1
+fi
+
 echo "Building pista..."
 go build -o pista ./cmd/pista
 PISTA="./pista"

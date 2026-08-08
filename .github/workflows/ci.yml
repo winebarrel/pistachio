@@ -162,4 +162,14 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      # The discourse sample declares `CREATE EXTENSION vector`, which the
+      # official image does not ship. Install pgvector from PGDG into the
+      # running service container; CREATE EXTENSION reads the control file when
+      # it is called, so the server does not need a restart. compose.yaml does
+      # the same for local runs.
+      - name: Install pgvector
+        run: |
+          cid=$(docker ps --filter ancestor=postgres:18 --format '{{.ID}}')
+          [ -n "$cid" ] || { echo "postgres service container not found" >&2; exit 1; }
+          docker exec -u root "$cid" bash -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends postgresql-18-pgvector'
       - run: make test-samples
