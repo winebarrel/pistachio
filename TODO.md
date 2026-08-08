@@ -605,39 +605,32 @@ expanded form.
 
 ## SQL/JSON forms that still drift
 
-Priority: low for the jsonpath spacing and for the `RETURNING` clause, both
-avoided by writing the file the way `pista dump` emits it. The `RETURNING`
-case is a different kind of harm from the rest: it reports no difference
-where the two sides return different types, so it fails silently instead of
-re-planning. `JSON_TABLE` is unclassified; whether a dump of a view using it
-feeds back clean has not been checked.
+Priority: low. A dump feeds back clean, so writing the file the way `pista
+dump` emits it avoids all of this. Observed on PostgreSQL 16, 17 and 18.
 
-Three forms remain, all observed on PostgreSQL 17 and 18.
+A SQL/JSON expression is compared as written, and the server rewrites most of
+what it is handed, so a file written any other way re-emits its view or
+constraint on every plan:
 
-A jsonpath holding a filter, arithmetic or a comparison is printed back with
-the server's own spacing and parentheses: `'$.x ? (@ > 1)'` is stored as
-`'$."x"?(@ > 1)'` and `'$.x + 1'` as `'($."x" + 1)'`. `CanonicalJSONPath`
-(`internal/pgast/jsonpath.go`) covers the accessor grammar and refuses the
-rest rather than guessing, so a view or constraint written with one of these
-re-emits on every plan. Closing it needs a jsonpath expression parser, since
-pg_query hands the path over as a plain string constant. Workaround: write
-the path the way `pista dump` emits it.
+- The path is stored in canonical form. `'$.x'` comes back as `'$."x"'`,
+  `'$.x ? (@ > 1)'` as `'$."x"?(@ > 1)'` and `'$.x + 1'` as `'($."x" + 1)'`.
+- `JSON_OBJECT`, `JSON_ARRAY`, `JSON_OBJECTAGG` and `JSON_ARRAYAGG` resolve
+  `RETURNING json` or `RETURNING jsonb` from their argument types, and the
+  query functions resolve one too: text for `JSON_VALUE` and
+  `JSON_SERIALIZE`, jsonb for `JSON_QUERY`. `pg_get_viewdef` prints whichever
+  the server picked.
+- `JSON_QUERY` prints its wrapper and quote behaviour whether or not they
+  hold the default, so a file leaving them off differs from
+  `WITHOUT WRAPPER KEEP QUOTES`.
+- `JSON_TABLE` is a FROM item rather than an expression, and the server adds
+  a `LATERAL` and names the row pattern: `JSON_TABLE(t.a, '$.x' COLUMNS (k
+  text PATH '$.k'))` is stored as `LATERAL JSON_TABLE(t.a, '$."x"' AS
+  json_table_path_0 COLUMNS (k text PATH '$."k"'))`.
 
-`JSON_OBJECT`, `JSON_ARRAY`, `JSON_OBJECTAGG` and `JSON_ARRAYAGG` resolve
-`RETURNING json` or `RETURNING jsonb` from their argument types, and
-pg_query does no type inference, so which one the server picked cannot be
-worked out here. The catalog's clause is dropped where the desired file
-wrote none, which is right whenever the stored definition wrote none either.
-It is wrong in one case: a database whose DDL spelled out the type that is
-not the default, say `JSON_OBJECT('k': 1 RETURNING jsonb)` against a file
-writing `JSON_OBJECT('k': 1)`, reports no difference where the two return
-different types. Workaround: write the `RETURNING` clause in the file too.
-
-`JSON_TABLE` is a FROM item rather than an expression, and the server
-rewrites it: `JSON_TABLE(t.a, '$.x' COLUMNS (k text PATH '$.k'))` is stored
-as `LATERAL JSON_TABLE(t.a, '$."x"' AS json_table_path_0 COLUMNS (k text
-PATH '$."k"'))`, with a `LATERAL` and a generated path name the file has no
-way to write. A view using it re-emits on every plan.
+Closing any of it means reproducing what the server resolved. The path needs
+a jsonpath expression parser, since pg_query hands the path over as a plain
+string constant. The `RETURNING` type needs type inference over the
+arguments, which pg_query does not do.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 

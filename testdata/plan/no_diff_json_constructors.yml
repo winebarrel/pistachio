@@ -1,39 +1,43 @@
-# PostgreSQL 16 added the SQL/JSON constructors. Three things have to line up
-# for a schema written with them to stay settled. The expression walker has to
-# reach the column inside the constructor, or an unnamed CHECK loses the column
-# from its generated name and drifts against the name the server picked.
-# pg_get_constraintdef and pg_get_viewdef spell out the RETURNING clause the
-# server resolved where the written form left it off. And pg_get_viewdef
-# returns a column reference unqualified where the file writes it qualified.
+# PostgreSQL 16 added the SQL/JSON constructors. Two things have to line up for
+# a schema written the way `pista dump` emits it to stay settled. The expression
+# walker has to reach the column inside the constructor, or an unnamed CHECK
+# loses the column from its generated name and drifts against the name the
+# server picked. And pg_get_viewdef returns a column reference unqualified where
+# the file writes it qualified.
+#
+# The RETURNING clause is written out because that is what the catalog holds:
+# the server resolves it from the argument types and prints it back. Leaving it
+# off is a real difference here, since pistachio does no type inference and
+# cannot tell which of json and jsonb the server would pick.
 #
 # The desired CHECK constraints are written without a name on purpose: that is
 # what exercises the naming path. PostgreSQL names them t_a_check and
-# t_b_check, verified on 17.
+# t_b_check, verified on 16, 17 and 18.
 min_pg: 16
 init: |
   CREATE TABLE public.t (
       a jsonb,
       b text,
       n integer,
-      CONSTRAINT t_a_check CHECK (JSON_OBJECT('k': a) IS NOT NULL),
-      CONSTRAINT t_b_check CHECK (JSON_ARRAY(b) IS NOT NULL)
+      CONSTRAINT t_a_check CHECK (JSON_OBJECT('k': a RETURNING jsonb) IS NOT NULL),
+      CONSTRAINT t_b_check CHECK (JSON_ARRAY(b RETURNING json) IS NOT NULL)
   );
-  CREATE VIEW public.v_object AS SELECT JSON_OBJECT('k': t.a) AS c FROM public.t;
-  CREATE VIEW public.v_array AS SELECT JSON_ARRAY(t.b) AS c FROM public.t;
-  CREATE VIEW public.v_objectagg AS SELECT JSON_OBJECTAGG(t.b: t.a) AS c FROM public.t;
-  CREATE VIEW public.v_arrayagg AS SELECT JSON_ARRAYAGG(t.a ORDER BY t.n) AS c FROM public.t;
+  CREATE VIEW public.v_object AS SELECT JSON_OBJECT('k': t.a RETURNING jsonb) AS c FROM public.t;
+  CREATE VIEW public.v_array AS SELECT JSON_ARRAY(t.b RETURNING json) AS c FROM public.t;
+  CREATE VIEW public.v_objectagg AS SELECT JSON_OBJECTAGG(t.b: t.a RETURNING jsonb) AS c FROM public.t;
+  CREATE VIEW public.v_arrayagg AS SELECT JSON_ARRAYAGG(t.a ORDER BY t.n RETURNING jsonb) AS c FROM public.t;
   CREATE VIEW public.v_isjson AS SELECT (t.b IS JSON) AS c FROM public.t;
 desired: |
   CREATE TABLE public.t (
       a jsonb,
       b text,
       n integer,
-      CHECK (JSON_OBJECT('k': a) IS NOT NULL),
-      CHECK (JSON_ARRAY(b) IS NOT NULL)
+      CHECK (JSON_OBJECT('k': a RETURNING jsonb) IS NOT NULL),
+      CHECK (JSON_ARRAY(b RETURNING json) IS NOT NULL)
   );
-  CREATE VIEW public.v_object AS SELECT JSON_OBJECT('k': t.a) AS c FROM public.t;
-  CREATE VIEW public.v_array AS SELECT JSON_ARRAY(t.b) AS c FROM public.t;
-  CREATE VIEW public.v_objectagg AS SELECT JSON_OBJECTAGG(t.b: t.a) AS c FROM public.t;
-  CREATE VIEW public.v_arrayagg AS SELECT JSON_ARRAYAGG(t.a ORDER BY t.n) AS c FROM public.t;
+  CREATE VIEW public.v_object AS SELECT JSON_OBJECT('k': t.a RETURNING jsonb) AS c FROM public.t;
+  CREATE VIEW public.v_array AS SELECT JSON_ARRAY(t.b RETURNING json) AS c FROM public.t;
+  CREATE VIEW public.v_objectagg AS SELECT JSON_OBJECTAGG(t.b: t.a RETURNING jsonb) AS c FROM public.t;
+  CREATE VIEW public.v_arrayagg AS SELECT JSON_ARRAYAGG(t.a ORDER BY t.n RETURNING jsonb) AS c FROM public.t;
   CREATE VIEW public.v_isjson AS SELECT (t.b IS JSON) AS c FROM public.t;
 plan: ""

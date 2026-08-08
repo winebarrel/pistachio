@@ -10,7 +10,7 @@ init: |
       id integer NOT NULL,
       qty integer NOT NULL,
       CONSTRAINT products_pkey PRIMARY KEY (id),
-      CONSTRAINT products_qty_check CHECK (JSON_ARRAY(qty) IS NOT NULL)
+      CONSTRAINT products_qty_check CHECK (JSON_ARRAY(qty RETURNING json) IS NOT NULL)
   );
 desired: |
   CREATE TABLE public.products (
@@ -18,7 +18,7 @@ desired: |
       -- pista:renamed-from qty
       quantity integer NOT NULL,
       CONSTRAINT products_pkey PRIMARY KEY (id),
-      CONSTRAINT products_qty_check CHECK (JSON_ARRAY(quantity) IS NOT NULL)
+      CONSTRAINT products_qty_check CHECK (JSON_ARRAY(quantity RETURNING json) IS NOT NULL)
   );
 plan: |
   ALTER TABLE public.products RENAME COLUMN qty TO quantity;

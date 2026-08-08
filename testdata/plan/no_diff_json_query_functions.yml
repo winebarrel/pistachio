@@ -1,11 +1,13 @@
 # The PostgreSQL 17 query functions each resolve a RETURNING type when the
 # clause is left off, and pg_get_viewdef prints the one the server resolved:
 # text for JSON_VALUE and JSON_SERIALIZE, jsonb for JSON_QUERY. JSON_QUERY also
-# always prints its wrapper and quote behaviour, WITHOUT WRAPPER KEEP QUOTES
-# being the defaults. JSON_EXISTS and JSON_SCALAR print nothing extra.
+# prints its wrapper and quote behaviour, WITHOUT WRAPPER KEEP QUOTES being the
+# defaults. JSON_EXISTS and JSON_SCALAR print nothing extra. The server stores
+# the jsonpath in canonical form as well.
 #
-# The server also stores the jsonpath in canonical form, so a written '$.x'
-# comes back as '$."x"'. All of that has to cancel out here.
+# The file below is written the way `pista dump` emits all of that, which is
+# what has to feed back clean. Each clause is compared as written, so a file
+# that leaves one off is a difference; see alter_json_query_clauses.
 #
 # One view per function, so a failure names the one that drifted. Views rather
 # than CHECK constraints so nothing depends on these functions being immutable.
@@ -14,18 +16,18 @@ init: |
   CREATE TABLE public.t (
       a jsonb
   );
-  CREATE VIEW public.v_value AS SELECT JSON_VALUE(t.a, '$.x') AS c FROM public.t;
-  CREATE VIEW public.v_query AS SELECT JSON_QUERY(t.a, '$.y') AS c FROM public.t;
-  CREATE VIEW public.v_exists AS SELECT JSON_EXISTS(t.a, '$.z') AS c FROM public.t;
+  CREATE VIEW public.v_value AS SELECT JSON_VALUE(t.a, '$."x"' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_query AS SELECT JSON_QUERY(t.a, '$."y"' RETURNING jsonb WITHOUT WRAPPER KEEP QUOTES) AS c FROM public.t;
+  CREATE VIEW public.v_exists AS SELECT JSON_EXISTS(t.a, '$."z"') AS c FROM public.t;
   CREATE VIEW public.v_scalar AS SELECT JSON_SCALAR(1) AS c FROM public.t;
-  CREATE VIEW public.v_serialize AS SELECT JSON_SERIALIZE(t.a) AS c FROM public.t;
+  CREATE VIEW public.v_serialize AS SELECT JSON_SERIALIZE(t.a RETURNING text) AS c FROM public.t;
 desired: |
   CREATE TABLE public.t (
       a jsonb
   );
-  CREATE VIEW public.v_value AS SELECT JSON_VALUE(t.a, '$.x') AS c FROM public.t;
-  CREATE VIEW public.v_query AS SELECT JSON_QUERY(t.a, '$.y') AS c FROM public.t;
-  CREATE VIEW public.v_exists AS SELECT JSON_EXISTS(t.a, '$.z') AS c FROM public.t;
+  CREATE VIEW public.v_value AS SELECT JSON_VALUE(t.a, '$."x"' RETURNING text) AS c FROM public.t;
+  CREATE VIEW public.v_query AS SELECT JSON_QUERY(t.a, '$."y"' RETURNING jsonb WITHOUT WRAPPER KEEP QUOTES) AS c FROM public.t;
+  CREATE VIEW public.v_exists AS SELECT JSON_EXISTS(t.a, '$."z"') AS c FROM public.t;
   CREATE VIEW public.v_scalar AS SELECT JSON_SCALAR(1) AS c FROM public.t;
-  CREATE VIEW public.v_serialize AS SELECT JSON_SERIALIZE(t.a) AS c FROM public.t;
+  CREATE VIEW public.v_serialize AS SELECT JSON_SERIALIZE(t.a RETURNING text) AS c FROM public.t;
 plan: ""

@@ -4,8 +4,8 @@
 # that misses the column would name it products_check, and the next plan would
 # drop and re-add the constraint forever. verify_no_drift is what pins that.
 #
-# The applied dump shows the constraint as the catalog holds it, with the
-# RETURNING clause the server resolved spelled out.
+# The RETURNING clause is written out, since that is what the catalog holds and
+# what the applied dump shows; verify_no_drift would fail without it.
 min_pg: 16
 verify_no_drift: true
 init: |
@@ -19,7 +19,7 @@ desired: |
       id integer NOT NULL,
       qty integer NOT NULL,
       CONSTRAINT products_pkey PRIMARY KEY (id),
-      CHECK (JSON_ARRAY(qty) IS NOT NULL)
+      CHECK (JSON_ARRAY(qty RETURNING json) IS NOT NULL)
   );
 applied: |
   -- public.products

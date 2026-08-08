@@ -1,7 +1,7 @@
 # A generated column is compared through equalSelectExpr rather than
-# equalConstraintDef or equalViewDef, so it reaches the SQL/JSON rules by a
-# third path. pg_get_expr spells out the RETURNING clause the server resolved
-# here too.
+# equalConstraintDef or equalViewDef, so it reaches the SQL/JSON expressions by
+# a third path. pg_get_expr prints the RETURNING clause the server resolved, so
+# the file writes it too.
 min_pg: 16
 init: |
   CREATE TABLE public.t (
@@ -12,7 +12,7 @@ init: |
 desired: |
   CREATE TABLE public.t (
       a jsonb,
-      obj jsonb GENERATED ALWAYS AS (JSON_OBJECT('k': a)) STORED,
-      arr jsonb GENERATED ALWAYS AS (JSON_ARRAY(a)) STORED
+      obj jsonb GENERATED ALWAYS AS (JSON_OBJECT('k': a RETURNING jsonb)) STORED,
+      arr jsonb GENERATED ALWAYS AS (JSON_ARRAY(a RETURNING jsonb)) STORED
   );
 plan: ""
