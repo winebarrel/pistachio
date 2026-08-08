@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -61,6 +62,24 @@ func TestOrderPersistenceChanges_UnqualifiedReference(t *testing.T) {
 	}, stmts)
 }
 
+// A bare name in a schema that holds no such table falls back to public, the
+// way toposort reads one, so the edge is still found.
+func TestOrderPersistenceChanges_UnqualifiedReferenceFallsBackToPublic(t *testing.T) {
+	parent := persistenceTable("public", "parent", true)
+	child := persistenceTable("app", "child", true)
+	refTable := "parent"
+	fk := &model.ForeignKey{Schema: "app", Table: "child", RefTable: &refTable}
+	fk.Name = "child_p_fkey"
+	child.ForeignKeys.Set(fk.Name, fk)
+
+	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(parent), changeFor(child)})
+
+	assert.Equal(t, []string{
+		"ALTER TABLE app.child SET UNLOGGED;",
+		"ALTER TABLE public.parent SET UNLOGGED;",
+	}, stmts)
+}
+
 // Both directions in one plan: the tables turning logged run first, each group
 // in its own order.
 func TestOrderPersistenceChanges_BothDirections(t *testing.T) {
@@ -77,6 +96,50 @@ func TestOrderPersistenceChanges_BothDirections(t *testing.T) {
 		"ALTER TABLE public.child SET UNLOGGED;",
 		"ALTER TABLE public.parent SET UNLOGGED;",
 	}, stmts)
+}
+
+// A foreign key the catalog left without a referenced table, and a reference
+// to a table outside the set, both drop out rather than reaching the index.
+func TestOrderPersistenceChanges_ReferencesOutsideTheSet(t *testing.T) {
+	a := persistenceTable("public", "a", true)
+	b := persistenceTable("public", "b", true)
+
+	nameless := &model.ForeignKey{Schema: "public", Table: "a"}
+	nameless.Name = "a_nil_fkey"
+	a.ForeignKeys.Set(nameless.Name, nameless)
+
+	outside := "elsewhere"
+	stray := &model.ForeignKey{Schema: "public", Table: "a", RefTable: &outside}
+	stray.Name = "a_stray_fkey"
+	a.ForeignKeys.Set(stray.Name, stray)
+
+	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(a), changeFor(b)})
+
+	assert.Equal(t, []string{
+		"ALTER TABLE public.b SET UNLOGGED;",
+		"ALTER TABLE public.a SET UNLOGGED;",
+	}, stmts)
+}
+
+// DiffTables carries the transitions in their own field, out of Stmts, which
+// the caller sorts by object dependency.
+func TestDiffTables_PersistenceStmts(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	cur := newTable("public", "sessions")
+	cur.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	current.Set("public.sessions", cur)
+
+	des := newTable("public", "sessions")
+	des.Unlogged = true
+	des.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	desired.Set("public.sessions", des)
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.sessions SET UNLOGGED;"}, result.PersistenceStmts)
+	assert.Empty(t, result.Stmts)
 }
 
 // A partitioned table is left alone: the statement would report success and

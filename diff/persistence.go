@@ -44,9 +44,13 @@ func diffPersistence(fqtn string, current, desired *model.Table) *persistenceCha
 //
 // Only the tables that change are ordered. One that keeps its persistence is
 // already on the right side of the rule, or the desired schema breaks it
-// regardless. The desired foreign keys are what the order is built from, since
-// those are the keys in force here: the drops have already run and the adds
-// come later.
+// regardless. The order is built from the desired foreign keys, which are a
+// superset of the ones in force at this point: the drops have already run, so
+// what exists here is the current keys intersected with the desired, and a key
+// that only the desired side has is added later. Every extra edge tightens an
+// order that was valid without it, so the superset is safe. It bites in one
+// place, which is that a key added in the same plan can close a cycle the keys
+// in force do not have, and the tables in a cycle keep their input order.
 func orderPersistenceChanges(changes []*persistenceChange) []string {
 	var toLogged, toUnlogged []*persistenceChange
 	for _, c := range changes {
@@ -71,9 +75,9 @@ func orderPersistenceChanges(changes []*persistenceChange) []string {
 
 // sortByRefs orders the changes so a table comes after the tables it
 // references, counting only references that reach another table in the same
-// set. An unqualified reference is read as the owning table's schema, the way
-// normalizeFKSchema reads it. Mutual foreign keys have no valid order at all,
-// and the tables in such a cycle keep the order they came in.
+// set. Mutual foreign keys have no valid order at all, and the tables in such
+// a cycle keep the order they came in, so a cycle is not an error here and
+// nothing has to detect one.
 func sortByRefs(changes []*persistenceChange) []*persistenceChange {
 	if len(changes) < 2 {
 		return changes
@@ -89,37 +93,47 @@ func sortByRefs(changes []*persistenceChange) []*persistenceChange {
 			if fk.RefTable == nil {
 				continue
 			}
-			schema := c.table.Schema
-			if fk.RefSchema != nil {
-				schema = *fk.RefSchema
-			}
-			if j, ok := index[model.Ident(schema, *fk.RefTable)]; ok && j != i {
+			if j, ok := resolveRef(fk, c.table.Schema, index); ok && j != i {
 				refs[i] = append(refs[i], j)
 			}
 		}
 	}
 
-	const (
-		unvisited = iota
-		open
-		done
-	)
-	state := make([]int, len(changes))
+	visited := make([]bool, len(changes))
 	ordered := make([]*persistenceChange, 0, len(changes))
 	var visit func(int)
 	visit = func(i int) {
-		if state[i] != unvisited {
+		if visited[i] {
 			return
 		}
-		state[i] = open
+		visited[i] = true
 		for _, j := range refs[i] {
 			visit(j)
 		}
-		state[i] = done
 		ordered = append(ordered, changes[i])
 	}
 	for i := range changes {
 		visit(i)
 	}
 	return ordered
+}
+
+// resolveRef finds the referenced table in index. A reference written without a
+// schema is looked up under the owning table's schema and then under public,
+// the way toposort.resolveUnqualified reads one, since public is on the
+// search_path by default and a bare name lands there when the owning schema
+// holds no such table.
+func resolveRef(fk *model.ForeignKey, ownSchema string, index map[string]int) (int, bool) {
+	if fk.RefSchema != nil {
+		i, ok := index[model.Ident(*fk.RefSchema, *fk.RefTable)]
+		return i, ok
+	}
+	if i, ok := index[model.Ident(ownSchema, *fk.RefTable)]; ok {
+		return i, true
+	}
+	if ownSchema == "public" {
+		return 0, false
+	}
+	i, ok := index[model.Ident("public", *fk.RefTable)]
+	return i, ok
 }

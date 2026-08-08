@@ -1,0 +1,45 @@
+# The mirror of alter_table_set_unlogged_fk_order. The two directions are
+# checked by different legs of ATPrepChangePersistence, so each one is handed
+# to a server: here the referenced table turns logged before the table that
+# references it.
+init: |
+  CREATE UNLOGGED TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+  CREATE UNLOGGED TABLE public.child (
+      id integer NOT NULL,
+      p integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_p_fkey FOREIGN KEY (p) REFERENCES public.parent(id)
+  );
+desired: |
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      p integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_p_fkey FOREIGN KEY (p) REFERENCES public.parent(id)
+  );
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER TABLE public.parent SET LOGGED;
+  ALTER TABLE public.child SET LOGGED;
+applied: |
+  -- public.child
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      p integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.child ADD CONSTRAINT child_p_fkey FOREIGN KEY (p) REFERENCES parent(id);
+
+  -- public.parent
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+verify_no_drift: true
