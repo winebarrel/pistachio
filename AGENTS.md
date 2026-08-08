@@ -12,6 +12,8 @@ Drift that appears only with a desired schema written some other way is low prio
 
 Avoid normalization that makes the diff complex.
 
+Do not chase corner cases. A rare input is not worth an implementation that is hard to follow, and the schemas people actually write come first.
+
 ## Build & test
 
 ```sh
