@@ -22,7 +22,11 @@ type planTestCase struct {
 	// MinPG skips the fixture on a server older than this major version, for
 	// syntax that does not exist there. PostgreSQL 16 added the SQL/JSON
 	// constructors, 17 the query functions.
-	MinPG                    int             `yaml:"min_pg,omitempty"`
+	MinPG int `yaml:"min_pg,omitempty"`
+	// MaxPG skips the fixture on a server newer than this major version, for
+	// syntax a later one dropped. PostgreSQL 18 rejects an unlogged
+	// partitioned table.
+	MaxPG                    int             `yaml:"max_pg,omitempty"`
 	Count                    *expectedCount  `yaml:"count,omitempty"`
 	DropPolicy               *planDropPolicy `yaml:"drop_policy,omitempty"`
 	DisallowedDrops          string          `yaml:"disallowed_drops,omitempty"`
@@ -344,6 +348,9 @@ func TestPlan(t *testing.T) {
 			tc := loadYAML[planTestCase](t, file)
 			if tc.MinPG > 0 && pgMajor < tc.MinPG {
 				t.Skipf("requires PostgreSQL %d or later", tc.MinPG)
+			}
+			if tc.MaxPG > 0 && pgMajor > tc.MaxPG {
+				t.Skipf("requires PostgreSQL %d or earlier", tc.MaxPG)
 			}
 			testutil.SetupDB(t, ctx, conn, tc.Init)
 

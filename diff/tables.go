@@ -17,7 +17,12 @@ import (
 // TableDiffResult separates FK operations from other statements to allow
 // correct ordering: FK drops first, then schema changes, then FK adds last.
 type TableDiffResult struct {
-	FKDropStmts         []string // FK drops (should run first)
+	FKDropStmts []string // FK drops (should run first)
+	// PersistenceStmts holds the logged <-> unlogged transitions, already in an
+	// order PostgreSQL accepts. They are kept out of Stmts because the caller
+	// sorts that by object dependency, which is the right order for one
+	// direction and the wrong one for the other.
+	PersistenceStmts    []string
 	Stmts               []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
 	FKAddStmts          []string // FK adds and renames (should run last)
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
@@ -52,9 +57,15 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 		}
 	}
 
-	// Modified tables
+	// Modified tables. The persistence changes are collected rather than
+	// emitted in place, since the order they run in is set by the foreign keys
+	// between them and no single table can decide it alone.
+	var persistence []*persistenceChange
 	for k, desiredTable := range desired.All() {
 		if currentTable, ok := current.GetOk(k); ok {
+			if pc := diffPersistence(desiredTable.FQTN(), currentTable, desiredTable); pc != nil {
+				persistence = append(persistence, pc)
+			}
 			tableResult, err := diffTable(currentTable, desiredTable, dc)
 			if err != nil {
 				return nil, err
@@ -68,6 +79,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			}
 		}
 	}
+	result.PersistenceStmts = orderPersistenceChanges(persistence)
 
 	// Dropped tables: drop FKs on dropped tables first to avoid dependency errors.
 	// When the table-drop policy disallows it, emit the same DROPs as comments
@@ -128,11 +140,6 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	dc = normalizeDropChecker(dc)
 	result := &tableDiffResult{}
 	fqtn := desired.FQTN()
-
-	// The persistence change goes first, so it lands after the FK drops and
-	// before the FK adds. A logged table may not reference an unlogged one,
-	// so a table turning unlogged needs the FK pointing at it gone first.
-	result.Stmts = append(result.Stmts, diffPersistence(fqtn, current, desired)...)
 
 	// Partition children inherit columns and constraints from the parent,
 	// so skip diffing them to avoid false DROP statements. RLS flags,

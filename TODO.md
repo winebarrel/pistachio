@@ -65,7 +65,8 @@ A partitioned table keeps its `relpersistence`, and the diff leaves it alone.
 PostgreSQL changes persistence by rewriting the table, and a partitioned one
 has nothing to rewrite, so `ALTER TABLE ... SET LOGGED` on it reports success
 and changes neither the parent nor the partitions under it (verified on 15 and
-17). Emitting it would replan forever, so `diffPersistence` skips a partitioned
+17; 18 rejects an unlogged partitioned table outright, so the shape cannot
+arise there). Emitting it would replan forever, so `diffPersistence` skips a partitioned
 table, and a desired schema that flips one there is silently ignored. The value
 only decides the default for partitions created later. Closing it means
 erroring at plan time, the way a domain base-type change does.

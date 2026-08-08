@@ -1,0 +1,28 @@
+# The logged direction runs the other way round: a table turning logged waits
+# for the tables it references. The desired file lists the referencing table
+# first, which is the order that fails.
+init: |
+  CREATE UNLOGGED TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+  CREATE UNLOGGED TABLE public.child (
+      id integer NOT NULL,
+      p integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_p_fkey FOREIGN KEY (p) REFERENCES public.parent(id)
+  );
+desired: |
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      p integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_p_fkey FOREIGN KEY (p) REFERENCES public.parent(id)
+  );
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.parent SET LOGGED;
+  ALTER TABLE public.child SET LOGGED;
