@@ -111,7 +111,8 @@ func TestConnect_SearchPathOption(t *testing.T) {
 	}
 	// Set on the server side too, to show the option wins over it.
 	t.Setenv("PGOPTIONS", "-c search_path=pg_catalog")
-	client := NewClient(&Options{ConnString: connStr, SearchPath: "public, pg_temp"})
+	searchPath := "public, pg_temp"
+	client := NewClient(&Options{ConnString: connStr, SearchPath: &searchPath})
 
 	ctx := context.Background()
 	conn, err := client.connect(ctx, true)

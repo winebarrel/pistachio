@@ -72,8 +72,9 @@ func TestOptions_SearchPathDefault(t *testing.T) {
 	cli, err := parseWithConfig(t)
 	require.NoError(t, err)
 
-	assert.Equal(t, pistachio.DefaultSearchPath, cli.SearchPath)
-	assert.Equal(t, `"$user", public`, cli.SearchPath)
+	require.NotNil(t, cli.SearchPath)
+	assert.Equal(t, pistachio.DefaultSearchPath, *cli.SearchPath)
+	assert.Equal(t, `"$user", public`, *cli.SearchPath)
 }
 
 func TestOptions_SearchPathFromConfig(t *testing.T) {
@@ -82,7 +83,18 @@ func TestOptions_SearchPathFromConfig(t *testing.T) {
 	cli, err := parseWithConfig(t, "--config", path)
 	require.NoError(t, err)
 
-	assert.Equal(t, "myschema, public", cli.SearchPath)
+	require.NotNil(t, cli.SearchPath)
+	assert.Equal(t, "myschema, public", *cli.SearchPath)
+}
+
+// An empty --search-path is a path of its own, one that reaches nothing, so it
+// has to arrive as a set-but-empty value rather than as a missing one.
+func TestOptions_SearchPathEmpty(t *testing.T) {
+	cli, err := parseWithConfig(t, "--search-path=")
+	require.NoError(t, err)
+
+	require.NotNil(t, cli.SearchPath)
+	assert.Empty(t, *cli.SearchPath)
 }
 
 func TestYAMLConfig_CLIFlagWins(t *testing.T) {

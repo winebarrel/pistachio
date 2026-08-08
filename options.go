@@ -14,6 +14,12 @@ import (
 // diff compares. Left to a server-side "ALTER ROLE ... SET search_path", one
 // database would read differently depending on who connected.
 //
+// The "$user" entry keeps one case of that: a schema named after the
+// connecting role is reached unqualified, so a dump taken as that role writes
+// its objects without a schema and another role cannot reload it. Keeping
+// PostgreSQL's own default is what pre-SQL and anything else on the connection
+// expect, so the entry stays; --search-path=public drops it.
+//
 // kong defaults the Options field to this, and connect falls back to it, so a
 // library caller that builds Options directly connects the same way the CLI
 // does.
@@ -25,7 +31,10 @@ type Options struct {
 	Password   string            `env:"PISTA_PASSWORD" help:"PostgreSQL password."`
 	Schemas    []string          `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schemas to inspect and modify."`
 	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
-	SearchPath string            `env:"PISTA_SEARCH_PATH" default:"\"$user\", public" help:"search_path for the database connection. The catalog reports an object reachable through it without its schema, so this decides how dump writes that object."`
+	// SearchPath is a pointer so that an empty value is a path of its own,
+	// under which the catalog qualifies everything, rather than a request for
+	// the default. nil means the default.
+	SearchPath *string `env:"PISTA_SEARCH_PATH" default:"\"$user\", public" help:"search_path for the database connection. The catalog reports an object reachable through it without its schema, so this decides how dump writes that object. Pass an empty value to qualify everything."`
 }
 
 type FilterOptions struct {

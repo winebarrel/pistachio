@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio"
+	"github.com/winebarrel/pistachio/internal/testutil"
+	"github.com/winebarrel/pistachio/model"
 )
 
 // searchPathDesiredSchema declares one object per catalog function that drops
@@ -96,10 +98,11 @@ func TestDump_SearchPathOption(t *testing.T) {
 	ctx := context.Background()
 	connString := setupSchemaDB(t, ctx, "myschema", searchPathInitSchema)
 
+	searchPath := "myschema"
 	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
-		SearchPath: "myschema",
+		SearchPath: &searchPath,
 	})
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
@@ -113,4 +116,80 @@ func TestDump_SearchPathOption(t *testing.T) {
 	assert.Contains(t, output, "nextval('counter'::regclass)")
 	assert.Contains(t, output, "CHECK (non_empty(name))")
 	assert.Contains(t, output, "CREATE TABLE myschema.users")
+}
+
+// An empty --search-path reaches nothing, so the catalog qualifies everything,
+// including what sits in public and comes out bare under any other path. That
+// is the one value whose dump reloads the same way wherever it runs.
+func TestDump_SearchPathEmpty(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.mood AS ENUM ('ok', 'ng');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    m public.mood,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
+
+	searchPath := ""
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+		SearchPath: &searchPath,
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "m public.mood")
+	assert.Contains(t, output, "FROM public.users")
+}
+
+// A schema named after the connecting role is reached through the "$user"
+// entry of the default path, so the catalog reports its objects bare and the
+// dump is only reloadable by a role of that name. The default keeps
+// PostgreSQL's own value, which is what pre-SQL and anything else on the
+// connection expect, so this is pinned as it stands rather than fixed here.
+// --search-path=public is the way out, and the second half checks it.
+func TestDump_SchemaNamedAfterRole(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	var role string
+	require.NoError(t, conn.QueryRow(ctx, "SELECT current_user").Scan(&role))
+
+	connString := setupSchemaDB(t, ctx, model.Ident(role), `
+CREATE TABLE `+model.Ident(role)+`.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW `+model.Ident(role)+`.active_users AS SELECT id FROM `+model.Ident(role)+`.users;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{role},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, got.String(), "FROM users")
+
+	searchPath := "public"
+	client = pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{role},
+		SearchPath: &searchPath,
+	})
+
+	got, err = client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, got.String(), "FROM "+model.Ident(role)+".users")
 }
