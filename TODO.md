@@ -49,6 +49,22 @@ shape end-to-end.
 
 Origin: [#125](https://github.com/winebarrel/pistachio/pull/125). Plan / apply fixtures were intentionally not added.
 
+## Silent drift on a partition key or a partition bound
+
+`Table.PartitionDef` and `Table.PartitionBound` are read from the catalog and
+parsed from the desired schema, but the diff only tests `PartitionBound`
+against nil to pick a branch and never compares either value. Turning
+`PARTITION BY RANGE (r)` into `PARTITION BY LIST (r)` on a table that already
+exists, or moving a partition's `FOR VALUES` bound, plans `-- No changes`.
+
+Neither is an `ALTER` away. A partition key cannot be changed at all, so
+reaching the desired state means recreating the table and moving the data. A
+bound is reachable through `ALTER TABLE ... DETACH PARTITION` followed by
+`ATTACH PARTITION ... FOR VALUES`, which fails when a row sits outside the new
+bound. Erroring at plan time may fit better than emitting either.
+
+Origin: review of [#383](https://github.com/winebarrel/pistachio/pull/383).
+
 ## Silent drift on `Table.TableSpace` / `Index.TableSpace` changes
 
 The catalog and parser populate `Table.TableSpace` and `Index.TableSpace`,
