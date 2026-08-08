@@ -45,14 +45,16 @@ func TestOrderPersistenceChanges_MutualForeignKeys(t *testing.T) {
 }
 
 // Both directions in one plan: the tables turning logged run first, each group
-// in its own order.
+// in its own order. The unlogged pair arrives referencing-table-first, which
+// the reversal would put the wrong way round on its own, so the group order is
+// pinned rather than reached by accident.
 func TestOrderPersistenceChanges_BothDirections(t *testing.T) {
 	toLogged := persistenceTable("public", "kept", false)
 	unloggedParent := persistenceTable("public", "parent", true)
 	unloggedChild := persistenceTable("public", "child", true, "parent")
 
 	stmts := orderPersistenceChanges([]*persistenceChange{
-		changeFor(unloggedParent), changeFor(toLogged), changeFor(unloggedChild),
+		changeFor(unloggedChild), changeFor(toLogged), changeFor(unloggedParent),
 	})
 
 	assert.Equal(t, []string{
@@ -79,19 +81,23 @@ func TestOrderPersistenceChanges_ReferenceOutsideTheSet(t *testing.T) {
 // The referenced table living in another schema is the shape the parser
 // produces for a bare reference under --schemas public,app, where it resolves
 // to the first target schema rather than the owning table's.
+//
+// The logged direction, with the referencing table first, is what makes this
+// pin the lookup: that group is not reversed, so reaching the expected order
+// needs the edge. The unlogged direction would hold without one.
 func TestOrderPersistenceChanges_CrossSchemaReference(t *testing.T) {
-	parent := persistenceTable("public", "parent", true)
-	child := persistenceTable("app", "child", true)
+	parent := persistenceTable("public", "parent", false)
+	child := persistenceTable("app", "child", false)
 	refSchema, refTable := "public", "parent"
 	fk := &model.ForeignKey{Schema: "app", Table: "child", RefSchema: &refSchema, RefTable: &refTable}
 	fk.Name = "child_p_fkey"
 	child.ForeignKeys.Set(fk.Name, fk)
 
-	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(parent), changeFor(child)})
+	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(child), changeFor(parent)})
 
 	assert.Equal(t, []string{
-		"ALTER TABLE app.child SET UNLOGGED;",
-		"ALTER TABLE public.parent SET UNLOGGED;",
+		"ALTER TABLE public.parent SET LOGGED;",
+		"ALTER TABLE app.child SET LOGGED;",
 	}, stmts)
 }
 
