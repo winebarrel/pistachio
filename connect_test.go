@@ -63,6 +63,67 @@ func TestConnect_Writable(t *testing.T) {
 	assert.Equal(t, "off", ro)
 }
 
+func TestConnect_SearchPath(t *testing.T) {
+	connStr := os.Getenv("TEST_PISTA_CONN_STR")
+	if connStr == "" {
+		connStr = "postgres://postgres@localhost/postgres"
+	}
+	client := NewClient(&Options{ConnString: connStr})
+
+	ctx := context.Background()
+	conn, err := client.connect(ctx, true)
+	require.NoError(t, err)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	var sp string
+	require.NoError(t, conn.QueryRow(ctx, "SHOW search_path").Scan(&sp))
+	assert.Equal(t, `"$user", public`, sp)
+}
+
+// TestConnect_SearchPathIgnoresServerSide guards the reason the parameter is
+// set at all: the catalog's pg_get_*def output drops the schema from every
+// object on search_path, so a server-side "ALTER ROLE ... SET search_path" (or
+// the database-level form) would otherwise decide what the diff compares.
+// PGOPTIONS reaches the backend the same way those settings do, and pgx maps
+// it to the "options" connection parameter, so it stands in for them here.
+func TestConnect_SearchPathIgnoresServerSide(t *testing.T) {
+	connStr := os.Getenv("TEST_PISTA_CONN_STR")
+	if connStr == "" {
+		connStr = "postgres://postgres@localhost/postgres"
+	}
+	t.Setenv("PGOPTIONS", "-c search_path=pg_catalog")
+	client := NewClient(&Options{ConnString: connStr})
+
+	ctx := context.Background()
+	conn, err := client.connect(ctx, true)
+	require.NoError(t, err)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	var sp string
+	require.NoError(t, conn.QueryRow(ctx, "SHOW search_path").Scan(&sp))
+	assert.Equal(t, `"$user", public`, sp)
+}
+
+func TestConnect_SearchPathOption(t *testing.T) {
+	connStr := os.Getenv("TEST_PISTA_CONN_STR")
+	if connStr == "" {
+		connStr = "postgres://postgres@localhost/postgres"
+	}
+	// Set on the server side too, to show the option wins over it.
+	t.Setenv("PGOPTIONS", "-c search_path=pg_catalog")
+	searchPath := "public, pg_temp"
+	client := NewClient(&Options{ConnString: connStr, SearchPath: &searchPath})
+
+	ctx := context.Background()
+	conn, err := client.connect(ctx, true)
+	require.NoError(t, err)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	var sp string
+	require.NoError(t, conn.QueryRow(ctx, "SHOW search_path").Scan(&sp))
+	assert.Equal(t, "public, pg_temp", sp)
+}
+
 func TestBuildConnConfig_DbnameOverridesConnString(t *testing.T) {
 	client := NewClient(&Options{
 		ConnString: "postgres://postgres@localhost/postgres",
