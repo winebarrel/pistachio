@@ -49,19 +49,25 @@ shape end-to-end.
 
 Origin: [#125](https://github.com/winebarrel/pistachio/pull/125). Plan / apply fixtures were intentionally not added.
 
-## Silent drift on a partition key or a partition bound
+## Silent drift on the partition shape
 
-`Table.PartitionDef` and `Table.PartitionBound` are read from the catalog and
-parsed from the desired schema, but the diff only tests `PartitionBound`
-against nil to pick a branch and never compares either value. Turning
-`PARTITION BY RANGE (r)` into `PARTITION BY LIST (r)` on a table that already
-exists, or moving a partition's `FOR VALUES` bound, plans `-- No changes`.
+`Table.PartitionOf`, `Table.PartitionBound` and `Table.PartitionDef` are read
+from the catalog and parsed from the desired schema, but the diff only tests
+`PartitionOf` and `PartitionBound` against nil to pick a branch and never
+compares a value. Each of these plans `-- No changes` on a table that already
+exists, verified on 15:
 
-Neither is an `ALTER` away. A partition key cannot be changed at all, so
-reaching the desired state means recreating the table and moving the data. A
-bound is reachable through `ALTER TABLE ... DETACH PARTITION` followed by
-`ATTACH PARTITION ... FOR VALUES`, which fails when a row sits outside the new
-bound. Erroring at plan time may fit better than emitting either.
+- Turning `PARTITION BY RANGE (r)` into `PARTITION BY LIST (r)`.
+- Moving a partition's `FOR VALUES` bound.
+- Re-parenting a partition from one parent to another.
+- A plain table gaining `PARTITION OF`, or a partition losing it.
+
+None of it is a plain `ALTER` away. A partition key cannot be changed at all,
+so reaching the desired state means recreating the table and moving the data.
+The other three run through `ALTER TABLE ... DETACH PARTITION` and
+`ATTACH PARTITION ... FOR VALUES`: detaching is cheap, and attaching scans the
+table and fails on a row the bound does not cover. Erroring at plan time may
+fit better than emitting any of it.
 
 Origin: review of [#383](https://github.com/winebarrel/pistachio/pull/383).
 
