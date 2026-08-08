@@ -59,6 +59,9 @@ jobs:
     # cross-built with mingw-w64 via goreleaser-cross (.goreleaser.yml).
     env:
       CGO_ENABLED: "1"
+      # The runner's PostgreSQL listens on the default port; the Makefile
+      # otherwise defaults to the port compose.yaml publishes locally.
+      PGPORT: "5432"
     steps:
       # Keep LF line endings; test fixtures are compared byte for byte.
       - run: git config --global core.autocrlf false
@@ -99,6 +102,10 @@ jobs:
       fail-fast: false
       matrix:
         postgres: [15, 16, 17, 18]
+    env:
+      # One version per job, so the service can keep the default port; the
+      # Makefile otherwise defaults to the port compose.yaml publishes locally.
+      PGPORT: "5432"
     services:
       postgres:
         image: postgres:${{ matrix.postgres }}
@@ -134,6 +141,10 @@ jobs:
     # external host, loads it into an isolated database, then verifies that
     # `pista dump` plans back to "No changes". A diff means the catalog reader
     # and parser disagree.
+    env:
+      # The service keeps the default port; the Makefile otherwise defaults to
+      # the port compose.yaml publishes locally.
+      PGPORT: "5432"
     services:
       postgres:
         image: postgres:18

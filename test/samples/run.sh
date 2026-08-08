@@ -13,6 +13,7 @@ cd "$(dirname "$0")/../.."
 
 export PGHOST="${PGHOST:-localhost}"
 export PGUSER="${PGUSER:-postgres}"
+export PGPORT="${PGPORT:-5415}"
 
 : "${PISTA:=./pista}"
 

@@ -13,7 +13,10 @@ func ConnectDB(t *testing.T) *pgx.Conn {
 	t.Helper()
 	connString := os.Getenv("TEST_PISTA_CONN_STR")
 	if connString == "" {
-		connString = "postgres://postgres@localhost/postgres"
+		// The port compose.yaml publishes PostgreSQL 15 on. `make test`
+		// exports TEST_PISTA_CONN_STR built from PGPORT, so this default
+		// only applies to a bare `go test`.
+		connString = "postgres://postgres@localhost:5415/postgres"
 	}
 	conn, err := pgx.Connect(context.Background(), connString)
 	require.NoError(t, err)
