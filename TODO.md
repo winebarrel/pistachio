@@ -59,14 +59,18 @@ emit `ALTER TABLE ... SET TABLESPACE <new>` and
 
 Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit.
 
-## Silent drift on `Table.Unlogged` toggle
+## Persistence of a partitioned table cannot be changed
 
-`model.Table.Unlogged` is set on parse and used to emit `CREATE UNLOGGED TABLE`,
-but transitions on existing tables (logged <-> unlogged) are not diffed.
-PostgreSQL has `ALTER TABLE ... SET LOGGED` / `SET UNLOGGED`. The current
-`no_diff_unlogged_table.yml` fixture only covers the unchanged case.
+A partitioned table keeps its `relpersistence`, and the diff leaves it alone.
+PostgreSQL changes persistence by rewriting the table, and a partitioned one
+has nothing to rewrite, so `ALTER TABLE ... SET LOGGED` on it reports success
+and changes neither the parent nor the partitions under it (verified on 15 and
+17). Emitting it would replan forever, so `diffPersistence` skips a partitioned
+table, and a desired schema that flips one there is silently ignored. The value
+only decides the default for partitions created later. Closing it means
+erroring at plan time, the way a domain base-type change does.
 
-Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit.
+Origin: [#384](https://github.com/winebarrel/pistachio/pull/384).
 
 ## `Column.StorageType` is dead code
 

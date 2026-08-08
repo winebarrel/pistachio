@@ -129,6 +129,11 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	result := &tableDiffResult{}
 	fqtn := desired.FQTN()
 
+	// The persistence change goes first, so it lands after the FK drops and
+	// before the FK adds. A logged table may not reference an unlogged one,
+	// so a table turning unlogged needs the FK pointing at it gone first.
+	result.Stmts = append(result.Stmts, diffPersistence(fqtn, current, desired)...)
+
 	// Partition children inherit columns and constraints from the parent,
 	// so skip diffing them to avoid false DROP statements. RLS flags,
 	// policies and comments are owned per-relation (children do not

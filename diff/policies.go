@@ -11,6 +11,23 @@ import (
 
 // diffRLS emits ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL
 // SECURITY statements for changes to the table-level RLS flags.
+// diffPersistence emits the logged <-> unlogged transition for a table that
+// holds storage. A partitioned table is skipped: PostgreSQL changes
+// persistence by rewriting the table, and a partitioned one has nothing to
+// rewrite, so ALTER TABLE ... SET LOGGED reports success and leaves
+// relpersistence alone, on the parent and on the partitions under it alike.
+// Emitting it there would replan forever. A partition holds its own storage
+// and takes the transition normally.
+func diffPersistence(fqtn string, current, desired *model.Table) []string {
+	if desired.Partitioned || current.Unlogged == desired.Unlogged {
+		return nil
+	}
+	if desired.Unlogged {
+		return []string{"ALTER TABLE " + fqtn + " SET UNLOGGED;"}
+	}
+	return []string{"ALTER TABLE " + fqtn + " SET LOGGED;"}
+}
+
 func diffRLS(fqtn string, current, desired *model.Table) []string {
 	var stmts []string
 	if current.RowSecurity != desired.RowSecurity {
