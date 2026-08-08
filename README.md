@@ -127,6 +127,11 @@ Flags:
   -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                               Schema name mapping (e.g. -m old=new).
+      --search-path=public    search_path for the database connection.
+                              The catalog reports an object reachable through
+                              it without its schema, so this decides how dump
+                              writes that object. Pass an empty value to qualify
+                              everything ($PISTA_SEARCH_PATH).
   -C, --config=FILE           Load options from a YAML file ($PISTA_CONFIG).
       --version
       --[no-]pager            Force paging via $PISTA_PAGER even when stdout is
@@ -173,6 +178,11 @@ Flags:
   -n, --schemas=public,...     Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                                Schema name mapping (e.g. -m old=new).
+      --search-path=public     search_path for the database connection.
+                               The catalog reports an object reachable through
+                               it without its schema, so this decides how
+                               dump writes that object. Pass an empty value to
+                               qualify everything ($PISTA_SEARCH_PATH).
   -C, --config=FILE            Load options from a YAML file ($PISTA_CONFIG).
       --version
       --[no-]pager             Force paging via $PISTA_PAGER even when stdout is
@@ -251,6 +261,11 @@ Flags:
   -n, --schemas=public,...     Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                                Schema name mapping (e.g. -m old=new).
+      --search-path=public     search_path for the database connection.
+                               The catalog reports an object reachable through
+                               it without its schema, so this decides how
+                               dump writes that object. Pass an empty value to
+                               qualify everything ($PISTA_SEARCH_PATH).
   -C, --config=FILE            Load options from a YAML file ($PISTA_CONFIG).
       --version
       --[no-]pager             Force paging via $PISTA_PAGER even when stdout is
@@ -328,6 +343,11 @@ Flags:
   -n, --schemas=public,...     Schemas to inspect and modify ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
                                Schema name mapping (e.g. -m old=new).
+      --search-path=public     search_path for the database connection.
+                               The catalog reports an object reachable through
+                               it without its schema, so this decides how
+                               dump writes that object. Pass an empty value to
+                               qualify everything ($PISTA_SEARCH_PATH).
   -C, --config=FILE            Load options from a YAML file ($PISTA_CONFIG).
       --version
       --[no-]pager             Force paging via $PISTA_PAGER even when stdout is
@@ -383,7 +403,7 @@ echo $?  # 0: no changes, 2: changes, 1: error
 
 `plan` and `dump` open a read-only connection, so they cannot write to the database. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) to use a read-write connection.
 
-Every connection sets `search_path` to `public`, so a server-side `ALTER ROLE ... SET search_path` does not reach it. `--search-path` (env `$PISTA_SEARCH_PATH`) sets another value. PostgreSQL's own default, `"$user", public`, is not used: it would read a schema named after the connecting role without its schema, and the role that runs migrations is often not the role the application connects as.
+Every connection sets `search_path` to `public`, so a server-side `ALTER ROLE ... SET search_path` does not reach it. `--search-path` (env `$PISTA_SEARCH_PATH`) sets another value. PostgreSQL's own default, `"$user", public`, is not used: it would read the objects of a schema named after the connecting role without their schema, and the role that runs migrations is often not the role the application connects as.
 
 The catalog reports an object reachable through `search_path` without its schema. `dump` writes the object as the catalog reports it, and `plan` compares that form against the desired schema, so a desired schema that qualifies an object the catalog reports bare differs on every run. Under `--search-path=` the objects pistachio manages keep their schema. Under `--search-path=myschema` the objects in `myschema` lose theirs, and under the default so do those in `public`.
 

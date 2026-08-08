@@ -19,8 +19,7 @@ import (
 // that role writes its objects without a schema and another role cannot reload
 // it. The role that runs migrations is often not the role the application
 // connects as, so this drops the "$user" entry and keeps public alone. Pre-SQL
-// runs under this setting; --search-path restores "$user" for a pre-SQL that
-// wants it.
+// runs under this setting.
 //
 // kong defaults the Options field to this, and connect falls back to it, so a
 // library caller that builds Options directly connects the same way the CLI
