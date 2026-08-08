@@ -652,11 +652,20 @@ Workaround: write the alias the way `pista dump` emits it.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 
-## Deparsed SQL/JSON query functions carry a stray space
+## Deparsed SQL/JSON query functions carry stray spaces
 
-libpg_query's deparser writes `JSON_VALUE(t.a , '$.x')`, with a space before
-the comma, for a `JsonFuncExpr`. It is valid SQL and only shows up in emitted
-DDL, so it costs nothing beyond looking wrong in a plan that re-emits a view
-holding one of the PostgreSQL 17 query functions. The fix belongs upstream.
+libpg_query's deparser puts a space where a `JsonFuncExpr` needs none, in
+three places:
+
+- before the comma, `JSON_VALUE(t.a , '$."x"')`
+- before the closing parenthesis of a `RETURNING` clause with nothing after
+  it, `JSON_VALUE(t.a , '$."x"' RETURNING text )`
+- twice between a `RETURNING` type and what follows it, `JSON_QUERY(t.a ,
+  '$."x"' RETURNING jsonb  WITHOUT WRAPPER KEEP QUOTES)`
+
+All of it is valid SQL and only shows up in emitted DDL, so it costs nothing
+beyond looking wrong in a plan that re-emits a view holding one of the
+PostgreSQL 17 query functions. The shapes are pinned by
+testdata/plan/alter_json_query_clauses.yml. The fix belongs upstream.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).

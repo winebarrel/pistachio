@@ -16,13 +16,13 @@
 # jsonpath expression parser, and pg_query hands the path over as a plain
 # string constant.
 #
-# The path also appears outside the query functions, as an ordinary argument
-# the catalog casts explicitly. v_op and v_func cover that position.
-#
 # Both sides write the same spelling, so what each view pins is that the
 # canonical form parses and deparses stably. One view per form so a failure
 # names the one that drifted. A file writing the path any other way re-emits
 # its view; alter_json_path_spelling covers that.
+#
+# The query functions need 17. The path in an ordinary argument works on every
+# supported server and is no_diff_json_path_argument.
 min_pg: 17
 init: |
   CREATE TABLE public.t (
@@ -36,8 +36,6 @@ init: |
   CREATE VIEW public.v_method AS SELECT JSON_VALUE(t.a, '$."x".size()' RETURNING text) AS c FROM public.t;
   CREATE VIEW public.v_filter AS SELECT JSON_VALUE(t.a, '$."x"?(@ > 1)' RETURNING text) AS c FROM public.t;
   CREATE VIEW public.v_arith AS SELECT JSON_VALUE(t.a, '($."x" + 1)' RETURNING text) AS c FROM public.t;
-  CREATE VIEW public.v_op AS SELECT t.a FROM public.t WHERE (t.a @? '$."x"'::jsonpath);
-  CREATE VIEW public.v_func AS SELECT jsonb_path_query_array(t.a, '$."x"'::jsonpath) AS c FROM public.t;
 desired: |
   CREATE TABLE public.t (
       a jsonb
@@ -50,6 +48,4 @@ desired: |
   CREATE VIEW public.v_method AS SELECT JSON_VALUE(t.a, '$."x".size()' RETURNING text) AS c FROM public.t;
   CREATE VIEW public.v_filter AS SELECT JSON_VALUE(t.a, '$."x"?(@ > 1)' RETURNING text) AS c FROM public.t;
   CREATE VIEW public.v_arith AS SELECT JSON_VALUE(t.a, '($."x" + 1)' RETURNING text) AS c FROM public.t;
-  CREATE VIEW public.v_op AS SELECT t.a FROM public.t WHERE (t.a @? '$."x"'::jsonpath);
-  CREATE VIEW public.v_func AS SELECT jsonb_path_query_array(t.a, '$."x"'::jsonpath) AS c FROM public.t;
 plan: ""

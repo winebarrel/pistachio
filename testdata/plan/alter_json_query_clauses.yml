@@ -25,9 +25,10 @@ desired: |
   CREATE VIEW public.v_quotes AS SELECT JSON_QUERY(t.a, '$."x"' RETURNING jsonb WITHOUT WRAPPER KEEP QUOTES) AS c FROM public.t;
   CREATE VIEW public.v_on_error AS SELECT JSON_VALUE(t.a, '$."x"' RETURNING text) AS c FROM public.t;
   CREATE VIEW public.v_returning AS SELECT JSON_VALUE(t.a, '$."x"' RETURNING text) AS c FROM public.t;
-# The stray spaces below, before the comma and around the RETURNING type, are
-# libpg_query's deparser for JsonFuncExpr. They are valid SQL and only show up
-# in emitted DDL; recorded in TODO.md.
+# The stray spaces below, before the comma, before the closing parenthesis and
+# after the RETURNING type, are libpg_query's deparser for JsonFuncExpr. They
+# are valid SQL and only show up in emitted DDL; all three are recorded in
+# TODO.md.
 plan: |
   CREATE OR REPLACE VIEW public.v_on_error AS
   SELECT JSON_VALUE(t.a , '$."x"' RETURNING text ) AS c FROM public.t;
