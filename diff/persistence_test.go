@@ -44,42 +44,6 @@ func TestOrderPersistenceChanges_MutualForeignKeys(t *testing.T) {
 	}, stmts)
 }
 
-// A reference written without a schema is read as the owning table's, the way
-// normalizeFKSchema reads it, so the edge is still found.
-func TestOrderPersistenceChanges_UnqualifiedReference(t *testing.T) {
-	parent := persistenceTable("public", "parent", true)
-	child := persistenceTable("public", "child", true)
-	refTable := "parent"
-	fk := &model.ForeignKey{Schema: "public", Table: "child", RefTable: &refTable}
-	fk.Name = "child_p_fkey"
-	child.ForeignKeys.Set(fk.Name, fk)
-
-	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(parent), changeFor(child)})
-
-	assert.Equal(t, []string{
-		"ALTER TABLE public.child SET UNLOGGED;",
-		"ALTER TABLE public.parent SET UNLOGGED;",
-	}, stmts)
-}
-
-// A bare name in a schema that holds no such table falls back to public, the
-// way toposort reads one, so the edge is still found.
-func TestOrderPersistenceChanges_UnqualifiedReferenceFallsBackToPublic(t *testing.T) {
-	parent := persistenceTable("public", "parent", true)
-	child := persistenceTable("app", "child", true)
-	refTable := "parent"
-	fk := &model.ForeignKey{Schema: "app", Table: "child", RefTable: &refTable}
-	fk.Name = "child_p_fkey"
-	child.ForeignKeys.Set(fk.Name, fk)
-
-	stmts := orderPersistenceChanges([]*persistenceChange{changeFor(parent), changeFor(child)})
-
-	assert.Equal(t, []string{
-		"ALTER TABLE app.child SET UNLOGGED;",
-		"ALTER TABLE public.parent SET UNLOGGED;",
-	}, stmts)
-}
-
 // Both directions in one plan: the tables turning logged run first, each group
 // in its own order.
 func TestOrderPersistenceChanges_BothDirections(t *testing.T) {
@@ -98,8 +62,8 @@ func TestOrderPersistenceChanges_BothDirections(t *testing.T) {
 	}, stmts)
 }
 
-// A foreign key the catalog left without a referenced table, and a reference
-// to a table outside the set, both drop out rather than reaching the index.
+// A key missing either half of its target, and one pointing outside the set,
+// both drop out rather than constraining the order.
 func TestOrderPersistenceChanges_ReferencesOutsideTheSet(t *testing.T) {
 	a := persistenceTable("public", "a", true)
 	b := persistenceTable("public", "b", true)

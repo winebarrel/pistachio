@@ -24,7 +24,7 @@ type planTestCase struct {
 	// constructors, 17 the query functions.
 	MinPG int `yaml:"min_pg,omitempty"`
 	// MaxPG skips the fixture on a server newer than this major version, for
-	// syntax a later one dropped. PostgreSQL 18 rejects an unlogged
+	// a shape a later one no longer allows. PostgreSQL 18 rejects an unlogged
 	// partitioned table.
 	MaxPG                    int             `yaml:"max_pg,omitempty"`
 	Count                    *expectedCount  `yaml:"count,omitempty"`

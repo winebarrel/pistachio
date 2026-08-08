@@ -39,8 +39,12 @@ func diffPersistence(fqtn string, current, desired *model.Table) *persistenceCha
 // on every ALTER, so a table turning unlogged waits for the tables that
 // reference it, and a table turning logged waits for the tables it references.
 // The two directions therefore run in opposite orders, and the tables turning
-// logged go first; a cross-direction pair either has no constraint between it
-// or describes a desired schema PostgreSQL rejects whichever order this picks.
+// logged go first. Nothing is owed to a cross-direction pair. Take X
+// referencing Y: X turning unlogged next to Y turning logged would need a
+// logged X already referencing an unlogged Y, which is the state the rule
+// forbids, so it never reaches here. The mirror, X turning logged next to Y
+// turning unlogged, does reach here and asks for a logged X referencing an
+// unlogged Y, which PostgreSQL rejects whichever order this picks.
 //
 // Only the tables that change are ordered. One that keeps its persistence is
 // already on the right side of the rule, or the desired schema breaks it
@@ -90,10 +94,15 @@ func sortByRefs(changes []*persistenceChange) []*persistenceChange {
 	refs := make([][]int, len(changes))
 	for i, c := range changes {
 		for _, fk := range c.table.ForeignKeys.CollectValues() {
-			if fk.RefTable == nil {
+			// A reference written without a schema does not arrive here
+			// without one: the parser fills RefSchema from the owning table's
+			// schema, and the catalog reads it from pg_namespace. So there is
+			// no bare name to resolve, and nothing like
+			// toposort.resolveUnqualified is needed.
+			if fk.RefSchema == nil || fk.RefTable == nil {
 				continue
 			}
-			if j, ok := resolveRef(fk, c.table.Schema, index); ok && j != i {
+			if j, ok := index[model.Ident(*fk.RefSchema, *fk.RefTable)]; ok && j != i {
 				refs[i] = append(refs[i], j)
 			}
 		}
@@ -116,24 +125,4 @@ func sortByRefs(changes []*persistenceChange) []*persistenceChange {
 		visit(i)
 	}
 	return ordered
-}
-
-// resolveRef finds the referenced table in index. A reference written without a
-// schema is looked up under the owning table's schema and then under public,
-// the way toposort.resolveUnqualified reads one, since public is on the
-// search_path by default and a bare name lands there when the owning schema
-// holds no such table.
-func resolveRef(fk *model.ForeignKey, ownSchema string, index map[string]int) (int, bool) {
-	if fk.RefSchema != nil {
-		i, ok := index[model.Ident(*fk.RefSchema, *fk.RefTable)]
-		return i, ok
-	}
-	if i, ok := index[model.Ident(ownSchema, *fk.RefTable)]; ok {
-		return i, true
-	}
-	if ownSchema == "public" {
-		return 0, false
-	}
-	i, ok := index[model.Ident("public", *fk.RefTable)]
-	return i, ok
 }

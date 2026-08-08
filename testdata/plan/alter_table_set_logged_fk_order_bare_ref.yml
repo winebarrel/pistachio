@@ -1,0 +1,35 @@
+# The same ordering as alter_table_set_logged_fk_order, with the foreign key
+# written the way `pista dump` writes one, without a schema on the referenced
+# table. That is the form a round trip hands back, and it reaches the ordering
+# already qualified, since the parser fills the reference from the owning
+# table's schema.
+#
+# The logged direction is the one that pins an edge at all: the desired file
+# lists the referencing table first, so the right order needs it. In the
+# unlogged direction reversing the file order lands on the right answer
+# whether or not any edge was found.
+init: |
+  CREATE UNLOGGED TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+  CREATE UNLOGGED TABLE public.child (
+      id integer NOT NULL,
+      p integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_p_fkey FOREIGN KEY (p) REFERENCES public.parent(id)
+  );
+desired: |
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      p integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_p_fkey FOREIGN KEY (p) REFERENCES parent(id)
+  );
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.parent SET LOGGED;
+  ALTER TABLE public.child SET LOGGED;
