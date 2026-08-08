@@ -14,6 +14,8 @@ Avoid normalization that makes the diff complex.
 
 Do not chase corner cases. A rare input is not worth an implementation that is hard to follow, and the schemas people actually write come first.
 
+Do not coddle the user. Assume they know PostgreSQL and their own schema.
+
 ## Build & test
 
 ```sh
