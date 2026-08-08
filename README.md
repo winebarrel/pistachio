@@ -831,6 +831,21 @@ docker compose up -d
 make test
 ```
 
+`compose.yaml` carries one service per PostgreSQL version in the CI matrix,
+each published on its own port, so several versions can run side by side:
+
+```bash
+docker compose up -d               # 15 only, on port 5415
+docker compose up -d pg17          # 17 only, on port 5417
+docker compose --profile all up -d # 15, 16, 17 and 18
+```
+
+`PGPORT` selects the one the tests use, and defaults to 5415:
+
+```bash
+make PGPORT=5417 test
+```
+
 ## Related projects
 
 - [ridgepole](https://github.com/ridgepole/ridgepole): DB schema

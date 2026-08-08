@@ -1,7 +1,36 @@
+# One service per PostgreSQL version in the CI matrix, each on its own port
+# 54<version>, so several versions can run side by side and a test run picks
+# one by port. pg15 is the default and starts with a bare `up`; the others are
+# held back by a profile, which naming one on the command line also enables.
+#
+#   docker compose up -d              # 15 only
+#   docker compose up -d pg17         # 17 only
+#   docker compose --profile all up -d
+x-postgres: &postgres
+  environment:
+    POSTGRES_HOST_AUTH_METHOD: trust
+
 services:
-  postgresql:
-    image: postgres:${PG_VERSION:-15}
+  pg15:
+    <<: *postgres
+    image: postgres:15
     ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_HOST_AUTH_METHOD: trust
+      - "5415:5432"
+  pg16:
+    <<: *postgres
+    image: postgres:16
+    profiles: ["all"]
+    ports:
+      - "5416:5432"
+  pg17:
+    <<: *postgres
+    image: postgres:17
+    profiles: ["all"]
+    ports:
+      - "5417:5432"
+  pg18:
+    <<: *postgres
+    image: postgres:18
+    profiles: ["all"]
+    ports:
+      - "5418:5432"

@@ -1,5 +1,14 @@
+# The server every psql- and test-based target talks to. compose.yaml
+# publishes each PostgreSQL version of the CI matrix on its own port, so all
+# four can run side by side and PGPORT picks which one is used: 5415 for 15,
+# 5416 for 16, 5417 for 17, 5418 for 18. Any other port works too (e.g.
+# PGPORT=5432 for a local install), and TEST_PISTA_CONN_STR bypasses both.
 export PGHOST := localhost
 export PGUSER := postgres
+export PGPORT ?= 5415
+
+TEST_PISTA_CONN_STR ?= postgres://postgres@localhost:$(PGPORT)/postgres
+export TEST_PISTA_CONN_STR
 
 # Ensure failures in any stage of a piped recipe (e.g. curl | awk | psql)
 # fail the target. Default /bin/sh on most systems lacks pipefail, so a

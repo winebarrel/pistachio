@@ -23,9 +23,9 @@ make lint           # golangci-lint run
 make fix            # golangci-lint run --fix (auto-fix lint errors)
 ```
 
-- Tests require a running PostgreSQL instance (default: `postgres://postgres@localhost/postgres`, override with `TEST_PISTA_CONN_STR`).
+- Tests require a running PostgreSQL instance. `compose.yaml` publishes each version of the CI matrix on its own port (15 -> 5415, 16 -> 5416, 17 -> 5417, 18 -> 5418), so several can run side by side; `PGPORT` (default 5415) selects which one every `psql`- and test-based target uses. The Makefile builds `TEST_PISTA_CONN_STR` from it; set that variable to point somewhere else entirely.
 - Tests run with `-p 1` (sequential packages) because integration tests share a single database.
-- `make schema` and other `psql`-based targets rely on `PGHOST=localhost` / `PGUSER=postgres` (exported from the Makefile).
+- `make schema` and other `psql`-based targets rely on `PGHOST=localhost` / `PGUSER=postgres` / `PGPORT` (exported from the Makefile).
 
 ## Project structure
 
