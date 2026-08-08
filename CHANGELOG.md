@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.26.0] - 2026-08-08
 
 * Fix `dump` dropping the `PARTITION BY` of a partition that is itself partitioned. The `CREATE TABLE` was finished right after the `PARTITION OF ... FOR VALUES` clause, so the middle level of a multi-level partitioned table was written as a leaf, and reloading that dump failed at the level below it, which still said `PARTITION OF` that table. The same code builds the `CREATE TABLE` a plan emits, so adding such a partition through `apply` created it unpartitioned and the partition under it failed with `is not partitioned`. The partition key is read from the catalog and parsed from the desired schema either way; it was only left out of the output.
 
