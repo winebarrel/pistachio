@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -711,6 +712,134 @@ func autoNameConstraint(tableName string, cols []string, contype pg_query.Constr
 	}
 }
 
+// figureIndexColname picks the name PostgreSQL gives an index element written
+// as an expression, following FigureIndexColname and FigureColnameInternal
+// (src/backend/parser/parse_target.c). The second return is PostgreSQL's
+// strength: a name found deeper in the tree wins over one an enclosing cast or
+// CASE falls back to, so `(a + b)::text` is named after the type while
+// `coalesce(a, b)::text` keeps the function name. An empty name means
+// PostgreSQL finds none and the element is called "expr".
+//
+// The node kinds below are the ones an index expression realistically holds.
+// Anything else takes "expr", which is also what PostgreSQL does for every
+// kind it has no name for.
+func figureIndexColname(node *pg_query.Node) (string, int) {
+	if node == nil {
+		return "", 0
+	}
+
+	switch n := node.Node.(type) {
+	case *pg_query.Node_ColumnRef:
+		return lastNodeName(n.ColumnRef.Fields), 2
+	case *pg_query.Node_FuncCall:
+		return lastNodeName(n.FuncCall.Funcname), 2
+	case *pg_query.Node_AExpr:
+		// NULLIF is written like a function and named like one.
+		if n.AExpr.Kind == pg_query.A_Expr_Kind_AEXPR_NULLIF {
+			return "nullif", 2
+		}
+	case *pg_query.Node_CoalesceExpr:
+		return "coalesce", 2
+	case *pg_query.Node_MinMaxExpr:
+		if n.MinMaxExpr.Op == pg_query.MinMaxOp_IS_LEAST {
+			return "least", 2
+		}
+		return "greatest", 2
+	case *pg_query.Node_AArrayExpr:
+		return "array", 2
+	case *pg_query.Node_CaseExpr:
+		if name, strength := figureIndexColname(n.CaseExpr.Defresult); strength > 1 {
+			return name, strength
+		}
+		return "case", 1
+	case *pg_query.Node_TypeCast:
+		if name, strength := figureIndexColname(n.TypeCast.Arg); strength > 1 {
+			return name, strength
+		}
+		if n.TypeCast.TypeName != nil {
+			if name := lastNodeName(n.TypeCast.TypeName.Names); name != "" {
+				return name, 1
+			}
+		}
+	case *pg_query.Node_CollateClause:
+		return figureIndexColname(n.CollateClause.Arg)
+	case *pg_query.Node_AIndirection:
+		// A field selection is named after the field. A subscript carries no
+		// name of its own, so the argument is named instead.
+		if name := lastNodeName(n.AIndirection.Indirection); name != "" {
+			return name, 2
+		}
+		return figureIndexColname(n.AIndirection.Arg)
+	}
+
+	return "", 0
+}
+
+// lastNodeName returns the last name in a dotted or subscripted list, skipping
+// subscripts and `*` the way FigureColnameInternal does. A list holding no name
+// at all, such as a bare subscript, gives the empty string, which is what lets
+// the A_Indirection case fall back to the argument.
+func lastNodeName(nodes []*pg_query.Node) string {
+	var name string
+	for _, node := range nodes {
+		if s := node.GetString_(); s != nil {
+			name = s.Sval
+		}
+	}
+	return name
+}
+
+// chooseIndexColumnNames returns one name per index element, the key columns
+// first and then the INCLUDE list, following ChooseIndexColumnNames
+// (src/backend/commands/indexcmds.c). A name repeated within one index takes a
+// number, so (lower(a), lower(b)) reads lower_lower1.
+func chooseIndexColumnNames(is *pg_query.IndexStmt) []string {
+	var names []string
+
+	taken := func(name string) bool {
+		return slices.Contains(names, name)
+	}
+
+	for _, params := range [][]*pg_query.Node{is.IndexParams, is.IndexIncludingParams} {
+		for _, node := range params {
+			ie := node.GetIndexElem()
+
+			origname := ie.GetName()
+			if origname == "" {
+				origname, _ = figureIndexColname(ie.GetExpr())
+				if origname == "" {
+					origname = "expr"
+				}
+			}
+
+			curname := origname
+			for i := 1; taken(curname); i++ {
+				curname = origname + strconv.Itoa(i)
+			}
+			names = append(names, curname)
+		}
+	}
+
+	return names
+}
+
+// autoNameIndex generates a PostgreSQL-style name for an index written without
+// one, following ChooseRelationName (src/backend/commands/indexcmds.c):
+//
+//	{table}_{col}..._idx
+//
+// Without this the index reaches the diff with an empty name, which matches no
+// index in the database, so every run creates the index again and PostgreSQL
+// numbers each copy.
+//
+// Duplicate name resolution is NOT handled, as for constraints: PostgreSQL
+// appends a number when the name is already taken in the schema, which cannot
+// be predicted from the desired schema alone, so a file that generates one
+// name twice is rejected as a duplicate index name.
+func autoNameIndex(is *pg_query.IndexStmt) string {
+	return makeObjectName(is.Relation.Relname, strings.Join(chooseIndexColumnNames(is), "_"), "idx")
+}
+
 // constraintKeyCols returns the columns a constraint keys on, in order. Keys
 // holds them for PRIMARY KEY and UNIQUE; EXCLUDE keeps its elements in
 // Exclusions instead, where PostgreSQL stands "expr" in for an element that is
@@ -915,6 +1044,12 @@ func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt, defaultSc
 	// accurate even when input SQL uses CREATE INDEX CONCURRENTLY directly.
 	concurrent := is.Concurrent
 	is.Concurrent = false
+
+	// Name the index before deparsing so the stored Definition carries the
+	// name PostgreSQL would have picked.
+	if is.Idxname == "" {
+		is.Idxname = autoNameIndex(is)
+	}
 
 	result := &pg_query.ParseResult{
 		Stmts: []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},

@@ -1,0 +1,39 @@
+# init lets PostgreSQL name the indexes, and desired repeats the same
+# statements, so an empty plan means the name the parser picks is the name the
+# server picked. Every other index-naming test compares against a name written
+# by hand.
+init: |
+  CREATE TYPE public.ct AS (
+      x integer,
+      y integer
+  );
+  CREATE TABLE public.items (
+      qty integer,
+      name text,
+      arr integer[],
+      comp public.ct
+  );
+  CREATE INDEX ON public.items (qty);
+  CREATE INDEX ON public.items ((lower(name)));
+  CREATE UNIQUE INDEX ON public.items (name, qty);
+  CREATE INDEX ON public.items (qty) INCLUDE (name);
+  CREATE INDEX ON public.items ((arr[1]));
+  CREATE INDEX ON public.items (((comp).x));
+desired: |
+  CREATE TYPE public.ct AS (
+      x integer,
+      y integer
+  );
+  CREATE TABLE public.items (
+      qty integer,
+      name text,
+      arr integer[],
+      comp public.ct
+  );
+  CREATE INDEX ON public.items (qty);
+  CREATE INDEX ON public.items ((lower(name)));
+  CREATE UNIQUE INDEX ON public.items (name, qty);
+  CREATE INDEX ON public.items (qty) INCLUDE (name);
+  CREATE INDEX ON public.items ((arr[1]));
+  CREATE INDEX ON public.items (((comp).x));
+plan: ""
