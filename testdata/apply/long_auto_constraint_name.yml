@@ -2,27 +2,59 @@
 # and column parts and keeping the trailing label, so the name the parser
 # predicts has to be shortened the same way. Predicting the full-length name
 # made the server truncate it to something else, and the next run then planned
-# the constraint again forever.
+# the constraint again forever. The unnamed PRIMARY KEY, CHECK, UNIQUE and
+# FOREIGN KEY here all produce a name too long to fit, so verify_no_drift
+# checks every label against what the server actually stored.
 init: |
   CREATE TABLE public.customer_subscription_billing_history_archive_2024_snapshot (
       id integer NOT NULL,
       quantity integer,
+      region_code text NOT NULL,
+      channel_code text NOT NULL,
+      PRIMARY KEY (id)
+  );
+  CREATE TABLE public.customer_subscription_billing_history_archive_2024_event (
+      id integer NOT NULL,
+      snapshot_id integer,
       PRIMARY KEY (id)
   );
 desired: |
   CREATE TABLE public.customer_subscription_billing_history_archive_2024_snapshot (
       id integer NOT NULL,
       quantity integer CHECK (quantity > 0),
-      PRIMARY KEY (id)
+      region_code text NOT NULL,
+      channel_code text NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE (region_code, channel_code)
+  );
+  CREATE TABLE public.customer_subscription_billing_history_archive_2024_event (
+      id integer NOT NULL,
+      snapshot_id integer,
+      PRIMARY KEY (id),
+      FOREIGN KEY (snapshot_id) REFERENCES public.customer_subscription_billing_history_archive_2024_snapshot (id)
   );
 applied_sql: |
   ALTER TABLE public.customer_subscription_billing_history_archive_2024_snapshot ADD CONSTRAINT customer_subscription_billing_history_archive_20_quantity_check CHECK (quantity > 0);
+  ALTER TABLE public.customer_subscription_billing_history_archive_2024_snapshot ADD CONSTRAINT customer_subscription_billing_hist_region_code_channel_code_key UNIQUE (region_code, channel_code);
+  ALTER TABLE ONLY public.customer_subscription_billing_history_archive_2024_event ADD CONSTRAINT customer_subscription_billing_history_archive__snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES public.customer_subscription_billing_history_archive_2024_snapshot (id);
 applied: |
+  -- public.customer_subscription_billing_history_archive_2024_event
+  CREATE TABLE public.customer_subscription_billing_history_archive_2024_event (
+      id integer NOT NULL,
+      snapshot_id integer,
+      CONSTRAINT customer_subscription_billing_history_archive_2024_event_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.customer_subscription_billing_history_archive_2024_event ADD CONSTRAINT customer_subscription_billing_history_archive__snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES customer_subscription_billing_history_archive_2024_snapshot(id);
+
   -- public.customer_subscription_billing_history_archive_2024_snapshot
   CREATE TABLE public.customer_subscription_billing_history_archive_2024_snapshot (
       id integer NOT NULL,
       quantity integer,
+      region_code text NOT NULL,
+      channel_code text NOT NULL,
       CONSTRAINT customer_subscription_billing_history_archive_2024_snapsho_pkey PRIMARY KEY (id),
+      CONSTRAINT customer_subscription_billing_hist_region_code_channel_code_key UNIQUE (region_code, channel_code),
       CONSTRAINT customer_subscription_billing_history_archive_20_quantity_check CHECK (quantity > 0)
   );
 verify_no_drift: true

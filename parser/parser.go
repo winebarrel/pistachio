@@ -641,7 +641,9 @@ func clipIdent(s string, n int) string {
 // whole name fits in nameDataLen-1 bytes. The label is never shortened, so a
 // long name keeps its _pkey / _check / ... suffix instead of losing it to a
 // plain truncation of the joined string. An empty name2 stands for the NULL
-// PostgreSQL passes when the name has no column part; label is always given.
+// PostgreSQL passes when the name has no column part; label is always given,
+// and is short enough to leave room for the rest, which is what PostgreSQL
+// asserts there.
 func makeObjectName(name1, name2, label string) string {
 	overhead := len(label) + 1
 	if name2 != "" {
