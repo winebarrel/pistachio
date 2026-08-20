@@ -775,8 +775,10 @@ func figureIndexColname(node *pg_query.Node) (string, int) {
 	return "", 0
 }
 
-// lastNodeName returns the last element of a dotted name, which is the part
-// PostgreSQL names a column after.
+// lastNodeName returns the last name in a dotted or subscripted list, skipping
+// subscripts and `*` the way FigureColnameInternal does. A list holding no name
+// at all, such as a bare subscript, gives the empty string, which is what lets
+// the A_Indirection case fall back to the argument.
 func lastNodeName(nodes []*pg_query.Node) string {
 	var name string
 	for _, node := range nodes {
