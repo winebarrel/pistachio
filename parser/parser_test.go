@@ -1107,6 +1107,30 @@ func TestParseSQL_AutoNameConstraintTruncation(t *testing.T) {
 			expected: strings.Repeat("b", 29) + "_" + strings.Repeat("c", 29) + "_key",
 		},
 		{
+			name:     "long column name is shortened instead of the table name",
+			table:    "t1",
+			body:     strings.Repeat("c", 60) + " integer, UNIQUE (" + strings.Repeat("c", 60) + ")",
+			expected: "t1_" + strings.Repeat("c", 56) + "_key",
+		},
+		{
+			name:     "multibyte column name is cut on a character boundary",
+			table:    "t2",
+			body:     `"` + strings.Repeat("\u3042", 20) + `" integer, UNIQUE ("` + strings.Repeat("\u3042", 20) + `")`,
+			expected: "t2_" + strings.Repeat("\u3042", 18) + "_key",
+		},
+		{
+			name:     "cut landing inside a character backs up to its start",
+			table:    "ab" + strings.Repeat("\u3042", 20),
+			body:     "quantity integer CHECK (quantity > 0)",
+			expected: "ab" + strings.Repeat("\u3042", 15) + "_quantity_check",
+		},
+		{
+			name:     "every key column joins into the name before it is shortened",
+			table:    "tbl",
+			body:     strings.Repeat("c", 20) + " integer, " + strings.Repeat("d", 20) + " integer, " + strings.Repeat("e", 20) + " integer, " + strings.Repeat("f", 20) + " integer, UNIQUE (" + strings.Repeat("c", 20) + ", " + strings.Repeat("d", 20) + ", " + strings.Repeat("e", 20) + ", " + strings.Repeat("f", 20) + ")",
+			expected: "tbl_" + strings.Repeat("c", 20) + "_" + strings.Repeat("d", 20) + "_" + strings.Repeat("e", 13) + "_key",
+		},
+		{
 			name:     "exclusion",
 			table:    strings.Repeat("e", 40),
 			body:     strings.Repeat("c", 30) + " integer, EXCLUDE (" + strings.Repeat("c", 30) + " WITH =)",
@@ -1144,6 +1168,18 @@ func TestParseSQL_AutoNameConstraintTruncation(t *testing.T) {
 			assert.LessOrEqual(t, len(tt.expected), 63)
 		})
 	}
+}
+
+func TestParseSQL_NullColumnConstraintIsNotAConstraint(t *testing.T) {
+	// NULL is a column attribute, not something PostgreSQL records in
+	// pg_constraint, so it takes no auto-generated name and adds no
+	// constraint to the table.
+	sql := `CREATE TABLE public.items (id integer NULL);`
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+	tbl := result.Tables.Get("public.items")
+	require.NotNil(t, tbl)
+	assert.Equal(t, 0, tbl.Constraints.Len())
 }
 
 func TestParseSQL_AutoNameForeignKeyTruncation(t *testing.T) {
