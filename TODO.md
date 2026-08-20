@@ -194,6 +194,16 @@ heuristic would need to compare against the auto-name pattern at the
 time of the most recent rename, which is not available from the
 catalog alone.
 
+The same suffix test misses every name PostgreSQL disambiguated.
+`ChooseConstraintName` checks the name against the whole schema, so two
+tables whose names survive the cut identically give the second one a
+`_not_null1` name, which the suffix test does not match. `dump` then
+writes an explicit `CONSTRAINT ..._not_null1 NOT NULL` for a column the
+file declared as a plain `NOT NULL`. The round trip holds, since the
+parser reads the name back and the diff emits a rename only when both
+sides are named, so this is drift in the output rather than a plan that
+repeats.
+
 A third limitation: on PG<18 the parser still captures the inline name,
 but PostgreSQL silently drops it at apply time. The diff layer treats
 the resulting "current has no name, desired has a name" mismatch as a
