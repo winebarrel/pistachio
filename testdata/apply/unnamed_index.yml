@@ -1,0 +1,35 @@
+# An index written without a name takes the name PostgreSQL would choose.
+# Without one it reached the diff with an empty name, matched no index in the
+# database, and every run created the index again, which PostgreSQL numbered
+# (items_qty_idx1, items_qty_idx2, ...) instead of refusing. verify_no_drift
+# holds the plan to a single create.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      name text,
+      qty integer,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      name text,
+      qty integer,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX ON public.items (qty);
+  CREATE INDEX ON public.items ((lower(name)));
+applied_sql: |
+  CREATE INDEX items_qty_idx ON public.items USING btree (qty);
+  CREATE INDEX items_lower_idx ON public.items USING btree (lower(name));
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      name text,
+      qty integer,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX items_lower_idx ON public.items USING btree (lower(name));
+  CREATE INDEX items_qty_idx ON public.items USING btree (qty);
+verify_no_drift: true

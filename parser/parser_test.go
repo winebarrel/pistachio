@@ -1170,6 +1170,76 @@ func TestParseSQL_AutoNameConstraintTruncation(t *testing.T) {
 	}
 }
 
+func TestParseSQL_AutoNameIndex(t *testing.T) {
+	// An index written without a name takes the name PostgreSQL would choose.
+	// The expected names come from PostgreSQL 16.
+	tests := []struct {
+		name     string
+		index    string
+		expected string
+	}{
+		{name: "single column", index: "(a)", expected: "t_a_idx"},
+		{name: "two columns", index: "(a, b)", expected: "t_a_b_idx"},
+		{name: "included column joins the name", index: "(b) INCLUDE (c)", expected: "t_b_c_idx"},
+		{name: "access method does not", index: "USING hash (b)", expected: "t_b_idx"},
+		{name: "function call takes the function name", index: "((lower(c)))", expected: "t_lower_idx"},
+		{name: "operator takes expr", index: "((a + b), c)", expected: "t_expr_c_idx"},
+		{name: "repeated name is numbered", index: "((lower(c)), (lower(substr(c, 1, 1))))", expected: "t_lower_lower1_idx"},
+		{name: "cast keeps the name under it", index: "((a::text))", expected: "t_a_idx"},
+		{name: "cast over an expression takes the type", index: "(((a + b)::text::varchar))", expected: "t_varchar_idx"},
+		{name: "cast does not override a function name", index: "((coalesce(a, b)::text))", expected: "t_coalesce_idx"},
+		{name: "case takes its else branch", index: "((CASE WHEN a > 0 THEN 1 ELSE b END))", expected: "t_b_idx"},
+		{name: "case with no name of its own", index: "((CASE WHEN a > 0 THEN 1 ELSE 2 END))", expected: "t_case_idx"},
+		{name: "case with no else branch", index: "((CASE WHEN a > 0 THEN 1 END))", expected: "t_case_idx"},
+		{name: "greatest", index: "((greatest(a, b)))", expected: "t_greatest_idx"},
+		{name: "least", index: "((least(a, b)))", expected: "t_least_idx"},
+		{name: "nullif", index: "((nullif(a, b)))", expected: "t_nullif_idx"},
+		{name: "array", index: "((ARRAY[a, b]::bigint[]))", expected: "t_array_idx"},
+		{name: "collate keeps the name under it", index: `((c COLLATE "C"))`, expected: "t_c_idx"},
+		{name: "collate over a function call", index: `((upper(c) COLLATE "C"))`, expected: "t_upper_idx"},
+		{name: "unknown expression takes expr", index: "((j ->> 'k'))", expected: "t_expr_idx"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sql := "CREATE TABLE public.t (a integer, b integer, c text, j jsonb);\n" +
+				"CREATE INDEX ON public.t " + tt.index + ";"
+			result, err := parseSQLWithPublicSchema(sql)
+			require.NoError(t, err)
+			tbl := result.Tables.Get("public.t")
+			require.NotNil(t, tbl)
+			idx, ok := tbl.Indexes.GetOk(tt.expected)
+			require.True(t, ok, "index names: %v", tbl.Indexes.CollectKeys())
+			assert.Contains(t, idx.Definition, tt.expected)
+		})
+	}
+}
+
+func TestParseSQL_AutoNameIndexTruncation(t *testing.T) {
+	// The name goes through makeObjectName, so an over-long one is shortened
+	// the way PostgreSQL shortens it rather than cut from the right.
+	table := strings.Repeat("a", 55)
+	sql := "CREATE TABLE public." + table + " (quantity integer);\n" +
+		"CREATE INDEX ON public." + table + " (quantity);"
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+	tbl := result.Tables.Get("public." + table)
+	require.NotNil(t, tbl)
+	_, ok := tbl.Indexes.GetOk(strings.Repeat("a", 50) + "_quantity_idx")
+	assert.True(t, ok, "index names: %v", tbl.Indexes.CollectKeys())
+}
+
+func TestParseSQL_AutoNameIndexDuplicate(t *testing.T) {
+	// Two unnamed indexes that shorten to one name are rejected, the way two
+	// unnamed constraints are. PostgreSQL would number the second one.
+	sql := `CREATE TABLE public.t (a integer, b integer);
+CREATE INDEX ON public.t (a);
+CREATE INDEX ON public.t (a) WHERE b > 0;`
+	_, err := parseSQLWithPublicSchema(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate index: t_a_idx")
+}
+
 func TestParseSQL_NullColumnConstraintIsNotAConstraint(t *testing.T) {
 	// NULL is a column attribute, not something PostgreSQL records in
 	// pg_constraint, so it takes no auto-generated name and adds no

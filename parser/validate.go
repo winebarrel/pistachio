@@ -261,9 +261,6 @@ func (ns *namespace) add(name, kind string) error {
 // and Domain.Constraints, CompositeType.Attributes and Enum.Values are plain
 // slices with no uniqueness check at all.
 //
-// An index written without a name is skipped: PostgreSQL picks the name at
-// create time and pistachio cannot know it.
-//
 // Ignored objects are checked as well, since an unmanaged relation still
 // occupies its name in the database. All violations are aggregated via
 // errors.Join, one line per object.
@@ -285,9 +282,6 @@ func validateNamespaces(r *ParseResult) error {
 
 	addIndexes := func(indexes *orderedmap.Map[string, *model.Index]) {
 		for _, idx := range indexes.CollectValues() {
-			if idx.Name == "" {
-				continue
-			}
 			add(model.Ident(idx.Schema, idx.Name), "index", relations)
 		}
 	}
