@@ -1198,6 +1198,9 @@ func TestParseSQL_AutoNameIndex(t *testing.T) {
 		{name: "collate keeps the name under it", index: `((c COLLATE "C"))`, expected: "t_c_idx"},
 		{name: "collate over a function call", index: `((upper(c) COLLATE "C"))`, expected: "t_upper_idx"},
 		{name: "unknown expression takes expr", index: "((j ->> 'k'))", expected: "t_expr_idx"},
+		{name: "sort order is not part of the name", index: "(b DESC NULLS FIRST)", expected: "t_b_idx"},
+		{name: "operator class is not either", index: "(c text_pattern_ops)", expected: "t_c_idx"},
+		{name: "partial index is named after its columns", index: "(a) WHERE b > 0", expected: "t_a_idx"},
 	}
 
 	for _, tt := range tests {
@@ -1213,6 +1216,24 @@ func TestParseSQL_AutoNameIndex(t *testing.T) {
 			assert.Contains(t, idx.Definition, tt.expected)
 		})
 	}
+}
+
+func TestParseSQL_AutoNameIndexConcurrently(t *testing.T) {
+	// The name is chosen with CONCURRENTLY already stripped, so the stored
+	// definition stays canonical and Concurrently remains the only record.
+	sql := `CREATE TABLE public.t (
+    a integer
+);
+CREATE INDEX CONCURRENTLY ON public.t (a);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+	tbl := result.Tables.Get("public.t")
+	require.NotNil(t, tbl)
+	idx, ok := tbl.Indexes.GetOk("t_a_idx")
+	require.True(t, ok, "index names: %v", tbl.Indexes.CollectKeys())
+	assert.True(t, idx.Concurrently)
+	assert.NotContains(t, idx.Definition, "CONCURRENTLY")
 }
 
 func TestParseSQL_AutoNameIndexTruncation(t *testing.T) {

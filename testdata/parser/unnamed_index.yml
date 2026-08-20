@@ -1,0 +1,19 @@
+input: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      name text,
+      qty integer,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX ON public.items (qty);
+  CREATE UNIQUE INDEX ON public.items (name);
+expected: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      name text,
+      qty integer,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX items_qty_idx ON public.items USING btree (qty);
+  CREATE UNIQUE INDEX items_name_idx ON public.items USING btree (name);
