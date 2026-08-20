@@ -763,6 +763,13 @@ func figureIndexColname(node *pg_query.Node) (string, int) {
 		}
 	case *pg_query.Node_CollateClause:
 		return figureIndexColname(n.CollateClause.Arg)
+	case *pg_query.Node_AIndirection:
+		// A field selection is named after the field. A subscript carries no
+		// name of its own, so the argument is named instead.
+		if name := lastNodeName(n.AIndirection.Indirection); name != "" {
+			return name, 2
+		}
+		return figureIndexColname(n.AIndirection.Arg)
 	}
 
 	return "", 0

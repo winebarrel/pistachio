@@ -1201,11 +1201,15 @@ func TestParseSQL_AutoNameIndex(t *testing.T) {
 		{name: "sort order is not part of the name", index: "(b DESC NULLS FIRST)", expected: "t_b_idx"},
 		{name: "operator class is not either", index: "(c text_pattern_ops)", expected: "t_c_idx"},
 		{name: "partial index is named after its columns", index: "(a) WHERE b > 0", expected: "t_a_idx"},
+		{name: "subscript takes the column under it", index: "((arr[1]))", expected: "t_arr_idx"},
+		{name: "slice takes it too", index: "((arr[1:2]))", expected: "t_arr_idx"},
+		{name: "field selection takes the field", index: "(((comp).x))", expected: "t_x_idx"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sql := "CREATE TABLE public.t (a integer, b integer, c text, j jsonb);\n" +
+			sql := "CREATE TYPE public.ct AS (x integer, y integer);\n" +
+				"CREATE TABLE public.t (a integer, b integer, c text, j jsonb, arr integer[], comp public.ct);\n" +
 				"CREATE INDEX ON public.t " + tt.index + ";"
 			result, err := parseSQLWithPublicSchema(sql)
 			require.NoError(t, err)
