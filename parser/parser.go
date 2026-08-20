@@ -771,10 +771,13 @@ func figureIndexColname(node *pg_query.Node) (string, int) {
 // lastNodeName returns the last element of a dotted name, which is the part
 // PostgreSQL names a column after.
 func lastNodeName(nodes []*pg_query.Node) string {
-	if len(nodes) == 0 {
-		return ""
+	var name string
+	for _, node := range nodes {
+		if s := node.GetString_(); s != nil {
+			name = s.Sval
+		}
 	}
-	return nodes[len(nodes)-1].GetString_().GetSval()
+	return name
 }
 
 // chooseIndexColumnNames returns one name per index element, the key columns
@@ -791,13 +794,10 @@ func chooseIndexColumnNames(is *pg_query.IndexStmt) []string {
 	for _, params := range [][]*pg_query.Node{is.IndexParams, is.IndexIncludingParams} {
 		for _, node := range params {
 			ie := node.GetIndexElem()
-			if ie == nil {
-				continue
-			}
 
-			origname := ie.Name
+			origname := ie.GetName()
 			if origname == "" {
-				origname, _ = figureIndexColname(ie.Expr)
+				origname, _ = figureIndexColname(ie.GetExpr())
 				if origname == "" {
 					origname = "expr"
 				}
