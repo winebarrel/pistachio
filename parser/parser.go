@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap"
@@ -618,6 +619,57 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 	return col, nil
 }
 
+// nameDataLen mirrors PostgreSQL's NAMEDATALEN. An identifier holds at most
+// nameDataLen-1 bytes.
+const nameDataLen = 64
+
+// clipIdent returns the longest prefix of s that is at most n bytes long and
+// does not split a character, the way PostgreSQL's pg_mbcliplen does.
+func clipIdent(s string, n int) string {
+	if n >= len(s) {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
+
+// makeObjectName mirrors PostgreSQL's makeObjectName
+// (src/backend/catalog/catalog.c). It joins name1, name2 and label with
+// underscores, shortening name1 and name2 - the longer one first - until the
+// whole name fits in nameDataLen-1 bytes. The label is never shortened, so a
+// long name keeps its _pkey / _check / ... suffix instead of losing it to a
+// plain truncation of the joined string. An empty name2 stands for the NULL
+// PostgreSQL passes when the name has no column part; label is always given,
+// and is short enough to leave room for the rest, which is what PostgreSQL
+// asserts there.
+func makeObjectName(name1, name2, label string) string {
+	overhead := len(label) + 1
+	if name2 != "" {
+		overhead++ // separating underscore
+	}
+
+	name1chars := len(name1)
+	name2chars := len(name2)
+	availchars := nameDataLen - 1 - overhead
+
+	for name1chars+name2chars > availchars {
+		if name1chars > name2chars {
+			name1chars--
+		} else {
+			name2chars--
+		}
+	}
+
+	name := clipIdent(name1, name1chars)
+	if name2 != "" {
+		name += "_" + clipIdent(name2, name2chars)
+	}
+
+	return name + "_" + label
+}
+
 // autoNameConstraint generates a PostgreSQL-style constraint name for unnamed
 // constraints, following the naming convention from PostgreSQL's
 // ChooseConstraintName (src/backend/catalog/pg_constraint.c):
@@ -633,26 +685,27 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 // a CHECK carries one only when its expression references exactly one, so both
 // take an empty list in the other cases.
 //
+// A name that does not fit in an identifier is shortened by makeObjectName the
+// way PostgreSQL shortens it. Without that the server would truncate the name
+// it is handed instead, to something the next run no longer recognises.
+//
 // Duplicate name resolution is NOT handled: PostgreSQL appends a number to the
 // second name (e.g. users_id_check1), which cannot be predicted from the
 // desired schema alone, so a file that generates one name twice is rejected as
 // a duplicate constraint name.
 func autoNameConstraint(tableName string, cols []string, contype pg_query.ConstrType) string {
-	base := tableName
-	if len(cols) > 0 {
-		base += "_" + strings.Join(cols, "_")
-	}
+	colPart := strings.Join(cols, "_")
 	switch contype {
 	case pg_query.ConstrType_CONSTR_PRIMARY:
-		return tableName + "_pkey"
+		return makeObjectName(tableName, "", "pkey")
 	case pg_query.ConstrType_CONSTR_UNIQUE:
-		return base + "_key"
+		return makeObjectName(tableName, colPart, "key")
 	case pg_query.ConstrType_CONSTR_CHECK:
-		return base + "_check"
+		return makeObjectName(tableName, colPart, "check")
 	case pg_query.ConstrType_CONSTR_EXCLUSION:
-		return base + "_excl"
+		return makeObjectName(tableName, colPart, "excl")
 	case pg_query.ConstrType_CONSTR_FOREIGN:
-		return base + "_fkey"
+		return makeObjectName(tableName, colPart, "fkey")
 	default:
 		return ""
 	}
@@ -996,7 +1049,7 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawS
 			}
 		case pg_query.ConstrType_CONSTR_CHECK:
 			if con.Conname == "" {
-				con.Conname = name + "_check"
+				con.Conname = makeObjectName(name, "", "check")
 			}
 			def := ""
 			if con.RawExpr != nil {

@@ -25,8 +25,10 @@ func newPolicy(name string, command model.PolicyCommand, opts ...func(*model.Pol
 
 func withUsing(s string) func(*model.Policy)     { return func(p *model.Policy) { p.Using = &s } }
 func withWithCheck(s string) func(*model.Policy) { return func(p *model.Policy) { p.WithCheck = &s } }
-func restrictive() func(*model.Policy)           { return func(p *model.Policy) { p.Permissive = false } }
-func renameFrom(s string) func(*model.Policy)    { return func(p *model.Policy) { p.RenameFrom = &s } }
+
+func restrictive() func(*model.Policy) { return func(p *model.Policy) { p.Permissive = false } }
+
+func renameFrom(s string) func(*model.Policy) { return func(p *model.Policy) { p.RenameFrom = &s } }
 
 func TestDiffRLS_NoChange(t *testing.T) {
 	cur := &model.Table{RowSecurity: true, ForceRowSecurity: true}

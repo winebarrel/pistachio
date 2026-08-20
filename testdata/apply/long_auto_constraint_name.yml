@@ -1,0 +1,65 @@
+# PostgreSQL shortens an auto-generated constraint name by trimming the table
+# and column parts and keeping the trailing label, so the name the parser
+# predicts has to be shortened the same way. Predicting the full-length name
+# made the server truncate it to something else, and the next run then planned
+# the constraint again forever. The unnamed PRIMARY KEY, CHECK, UNIQUE and
+# FOREIGN KEY here all produce a name too long to fit, so verify_no_drift
+# checks every label against what the server actually stored.
+#
+# The two table names diverge well before the 51st byte, which is where the
+# table part of a NOT NULL name is cut. PG18 names those constraints, and
+# ChooseConstraintName resolves a clash within the schema by retrying with a
+# numbered label, which catalog/columns.go does not recognise as an auto-name.
+init: |
+  CREATE TABLE public.customer_subscription_billing_history_archive_2024_snapshot (
+      id integer NOT NULL,
+      quantity integer,
+      region_code text NOT NULL,
+      channel_code text NOT NULL,
+      PRIMARY KEY (id)
+  );
+  CREATE TABLE public.customer_subscription_billing_event_archive_2024_registry (
+      id integer NOT NULL,
+      snapshot_id integer,
+      PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.customer_subscription_billing_history_archive_2024_snapshot (
+      id integer NOT NULL,
+      quantity integer CHECK (quantity > 0),
+      region_code text NOT NULL,
+      channel_code text NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE (region_code, channel_code)
+  );
+  CREATE TABLE public.customer_subscription_billing_event_archive_2024_registry (
+      id integer NOT NULL,
+      snapshot_id integer,
+      PRIMARY KEY (id),
+      FOREIGN KEY (snapshot_id) REFERENCES public.customer_subscription_billing_history_archive_2024_snapshot (id)
+  );
+applied_sql: |
+  ALTER TABLE public.customer_subscription_billing_history_archive_2024_snapshot ADD CONSTRAINT customer_subscription_billing_history_archive_20_quantity_check CHECK (quantity > 0);
+  ALTER TABLE public.customer_subscription_billing_history_archive_2024_snapshot ADD CONSTRAINT customer_subscription_billing_hist_region_code_channel_code_key UNIQUE (region_code, channel_code);
+  ALTER TABLE ONLY public.customer_subscription_billing_event_archive_2024_registry ADD CONSTRAINT customer_subscription_billing_event_archive_20_snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES public.customer_subscription_billing_history_archive_2024_snapshot (id);
+applied: |
+  -- public.customer_subscription_billing_event_archive_2024_registry
+  CREATE TABLE public.customer_subscription_billing_event_archive_2024_registry (
+      id integer NOT NULL,
+      snapshot_id integer,
+      CONSTRAINT customer_subscription_billing_event_archive_2024_registry_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.customer_subscription_billing_event_archive_2024_registry ADD CONSTRAINT customer_subscription_billing_event_archive_20_snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES customer_subscription_billing_history_archive_2024_snapshot(id);
+
+  -- public.customer_subscription_billing_history_archive_2024_snapshot
+  CREATE TABLE public.customer_subscription_billing_history_archive_2024_snapshot (
+      id integer NOT NULL,
+      quantity integer,
+      region_code text NOT NULL,
+      channel_code text NOT NULL,
+      CONSTRAINT customer_subscription_billing_history_archive_2024_snapsho_pkey PRIMARY KEY (id),
+      CONSTRAINT customer_subscription_billing_hist_region_code_channel_code_key UNIQUE (region_code, channel_code),
+      CONSTRAINT customer_subscription_billing_history_archive_20_quantity_check CHECK (quantity > 0)
+  );
+verify_no_drift: true
