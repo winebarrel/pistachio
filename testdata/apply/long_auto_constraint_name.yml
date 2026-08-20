@@ -1,0 +1,28 @@
+# PostgreSQL shortens an auto-generated constraint name by trimming the table
+# and column parts and keeping the trailing label, so the name the parser
+# predicts has to be shortened the same way. Predicting the full-length name
+# made the server truncate it to something else, and the next run then planned
+# the constraint again forever.
+init: |
+  CREATE TABLE public.customer_subscription_billing_history_archive_2024_snapshot (
+      id integer NOT NULL,
+      quantity integer,
+      PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.customer_subscription_billing_history_archive_2024_snapshot (
+      id integer NOT NULL,
+      quantity integer CHECK (quantity > 0),
+      PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER TABLE public.customer_subscription_billing_history_archive_2024_snapshot ADD CONSTRAINT customer_subscription_billing_history_archive_20_quantity_check CHECK (quantity > 0);
+applied: |
+  -- public.customer_subscription_billing_history_archive_2024_snapshot
+  CREATE TABLE public.customer_subscription_billing_history_archive_2024_snapshot (
+      id integer NOT NULL,
+      quantity integer,
+      CONSTRAINT customer_subscription_billing_history_archive_2024_snapsho_pkey PRIMARY KEY (id),
+      CONSTRAINT customer_subscription_billing_history_archive_20_quantity_check CHECK (quantity > 0)
+  );
+verify_no_drift: true

@@ -1071,6 +1071,97 @@ func TestParseSQL_UnnamedTableConstraintAutoNamed(t *testing.T) {
 	assert.True(t, ok)
 }
 
+func TestParseSQL_AutoNameConstraintTruncation(t *testing.T) {
+	// PostgreSQL builds an auto-generated constraint name with makeObjectName:
+	// it shortens the table and column parts until the whole name fits in 63
+	// bytes and always keeps the trailing label. The expected names below come
+	// from PostgreSQL 16.
+	tests := []struct {
+		name     string
+		table    string
+		body     string
+		expected string
+	}{
+		{
+			name:     "column check",
+			table:    strings.Repeat("a", 55),
+			body:     "quantity integer CHECK (quantity > 0)",
+			expected: strings.Repeat("a", 48) + "_quantity_check",
+		},
+		{
+			name:     "column check with multibyte table name",
+			table:    strings.Repeat("\u3042", 20),
+			body:     "quantity integer CHECK (quantity > 0)",
+			expected: strings.Repeat("\u3042", 16) + "_quantity_check",
+		},
+		{
+			name:     "primary key keeps the whole table name",
+			table:    strings.Repeat("p", 55),
+			body:     "id integer PRIMARY KEY",
+			expected: strings.Repeat("p", 55) + "_pkey",
+		},
+		{
+			name:     "unique over two long columns",
+			table:    strings.Repeat("b", 40),
+			body:     strings.Repeat("c", 30) + " integer, " + strings.Repeat("d", 30) + " integer, UNIQUE (" + strings.Repeat("c", 30) + ", " + strings.Repeat("d", 30) + ")",
+			expected: strings.Repeat("b", 29) + "_" + strings.Repeat("c", 29) + "_key",
+		},
+		{
+			name:     "exclusion",
+			table:    strings.Repeat("e", 40),
+			body:     strings.Repeat("c", 30) + " integer, EXCLUDE (" + strings.Repeat("c", 30) + " WITH =)",
+			expected: strings.Repeat("e", 29) + "_" + strings.Repeat("c", 28) + "_excl",
+		},
+		{
+			name:     "table check over two columns has no column part",
+			table:    strings.Repeat("g", 58),
+			body:     "x integer, y integer, CHECK (x > y)",
+			expected: strings.Repeat("g", 57) + "_check",
+		},
+		{
+			name:     "table check that already fits is left alone",
+			table:    strings.Repeat("g", 57),
+			body:     "x integer, y integer, CHECK (x > y)",
+			expected: strings.Repeat("g", 57) + "_check",
+		},
+		{
+			name:     "table check with multibyte table name",
+			table:    strings.Repeat("\u3044", 20),
+			body:     "x integer, y integer, CHECK (x > y)",
+			expected: strings.Repeat("\u3044", 19) + "_check",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sql := `CREATE TABLE public."` + tt.table + `" (` + tt.body + `);`
+			result, err := parseSQLWithPublicSchema(sql)
+			require.NoError(t, err)
+			tbl := result.Tables.Get(model.Ident("public", tt.table))
+			require.NotNil(t, tbl)
+			_, ok := tbl.Constraints.GetOk(tt.expected)
+			assert.True(t, ok, "constraint names: %v", tbl.Constraints.CollectKeys())
+			assert.LessOrEqual(t, len(tt.expected), 63)
+		})
+	}
+}
+
+func TestParseSQL_AutoNameForeignKeyTruncation(t *testing.T) {
+	// The foreign key path names the constraint separately from the other
+	// table constraints, so it needs its own coverage.
+	table := strings.Repeat("f", 40)
+	col := strings.Repeat("c", 30)
+	sql := `CREATE TABLE public.ref_t (x integer NOT NULL, CONSTRAINT ref_t_pkey PRIMARY KEY (x));
+CREATE TABLE public.` + table + ` (` + col + ` integer REFERENCES public.ref_t(x));`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+	tbl := result.Tables.Get("public." + table)
+	require.NotNil(t, tbl)
+	_, ok := tbl.ForeignKeys.GetOk(strings.Repeat("f", 29) + "_" + strings.Repeat("c", 28) + "_fkey")
+	assert.True(t, ok, "foreign key names: %v", tbl.ForeignKeys.CollectKeys())
+}
+
 func TestParseSQL_CommentRemove(t *testing.T) {
 	// When COMMENT ON ... IS '' (empty string), the comment is set to nil
 	sql := `CREATE TABLE public.users (
@@ -2339,6 +2430,17 @@ func TestParseSQL_DomainUnnamedConstraintAutoNamed(t *testing.T) {
 	require.NotNil(t, d)
 	require.Len(t, d.Constraints, 1)
 	assert.Equal(t, "pos_int_check", d.Constraints[0].Name)
+}
+
+func TestParseSQL_DomainUnnamedConstraintAutoNameTruncated(t *testing.T) {
+	domain := strings.Repeat("d", 60)
+	sql := `CREATE DOMAIN public.` + domain + ` AS integer CHECK (VALUE > 0);`
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+	d := result.Domains.Get("public." + domain)
+	require.NotNil(t, d)
+	require.Len(t, d.Constraints, 1)
+	assert.Equal(t, strings.Repeat("d", 57)+"_check", d.Constraints[0].Name)
 }
 
 func TestParseSQL_DuplicateDomain(t *testing.T) {
