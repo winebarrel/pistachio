@@ -7,6 +7,8 @@ Declarative schema management tool for PostgreSQL with a Terraform-like plan/app
 
 See also: [Getting Started Guide](getting-started.md) / [Directives](directives.md) / [Performance](performance.md) / [Sample Database Tests](sample-db-test.md)
 
+## Workflow
+
 ![pistachio workflow](docs/workflow.svg)
 
 ![](https://github.com/user-attachments/assets/8ceaef33-7d4e-4bd8-bf94-1a79342cf1e1)
