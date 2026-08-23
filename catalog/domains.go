@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
 

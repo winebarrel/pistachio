@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/orderedmap/v2"
 )
 
 type Table struct {

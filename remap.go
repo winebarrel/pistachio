@@ -3,7 +3,7 @@ package pistachio
 import (
 	"strings"
 
-	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
 

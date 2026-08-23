@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
 	"github.com/winebarrel/pistachio/model"
