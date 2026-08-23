@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.28.0] - 2026-08-23
 
 * Require Go 1.27 to build.
 
