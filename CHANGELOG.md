@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+* Require Go 1.27 to build.
+
+* Move to `orderedmap/v2`. The API is unchanged, so the CLI behaves the same, but the exported models hold `orderedmap.Map` and code that imports pistachio as a library has to switch import paths too.
+
 ## [1.27.0] - 2026-08-23
 
 * Name an index written without one, the way PostgreSQL names it. `CREATE INDEX ON public.items (qty)` reached the diff with an empty name, which matched no index in the database, so every run planned the index again and PostgreSQL numbered each copy: three `apply` runs left `items_qty_idx`, `items_qty_idx1` and `items_qty_idx2` behind, and the plan never came back empty. The name follows `ChooseRelationName`: the table, then one name per index element joined with underscores, then `_idx`, shortened by `makeObjectName` when it does not fit. An element is named after its column, and an expression after the function it calls (`(lower(c))` gives `t_lower_idx`), a field selection's field, the column under a subscript, a cast's type, or `CASE`, falling back to `expr` for anything with no name of its own; the `INCLUDE` list joins the name too, and a name repeated within one index takes a number. Two unnamed indexes that produce one name are now rejected as a duplicate index name, which PostgreSQL would have resolved by numbering the second.
