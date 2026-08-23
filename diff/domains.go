@@ -67,8 +67,10 @@ func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc Dro
 func diffDomain(fqdn string, current, desired *model.Domain) ([]string, error) {
 	var stmts []string
 
-	// Base type change is not supported by PostgreSQL ALTER DOMAIN
-	if current.BaseType != desired.BaseType {
+	// Base type change is not supported by PostgreSQL ALTER DOMAIN. The
+	// modifier is folded first, so a base type the catalog reports in mixed
+	// case (geometry(Polygon,4326)) matches the declaration it was read from.
+	if foldTypeMod(current.BaseType) != foldTypeMod(desired.BaseType) {
 		return nil, fmt.Errorf("cannot change base type of domain %s from %s to %s: PostgreSQL does not support this", fqdn, current.BaseType, desired.BaseType)
 	}
 

@@ -171,6 +171,16 @@ func TestDiffDomains_BaseTypeChange_Error(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot change base type")
 }
 
+func TestDiffDomains_BaseTypeModCaseOnly_NoChange(t *testing.T) {
+	// The catalog reports the modifier the way the type writes it back, the
+	// desired schema the way PostgreSQL parsed it. The base type is the same.
+	current := newDomainMap(&model.Domain{Schema: "public", Name: "zone", BaseType: "geometry(Polygon,4326)"})
+	desired := newDomainMap(&model.Domain{Schema: "public", Name: "zone", BaseType: "geometry(polygon,4326)"})
+	result, err := diff.DiffDomains(current, desired, diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+}
+
 func TestDiffDomains_AddComment(t *testing.T) {
 	comment := "Positive int"
 	current := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", BaseType: "integer"})

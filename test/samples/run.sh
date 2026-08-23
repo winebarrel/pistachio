@@ -65,15 +65,22 @@ check() {
   fi
 }
 
-# The discourse sample needs pgvector, which the official postgres image does
-# not ship. Say so up front: without this the sample fails at load time and the
-# reason is buried in psql's output.
-if [ -z "$(psql -X -q -At -c "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'")" ]; then
-  echo "pgvector is not installed on this server, and the discourse sample needs it." >&2
-  echo "compose.yaml installs it at container start; recreate the container with" >&2
-  echo "  docker compose down && docker compose up -d" >&2
-  exit 1
-fi
+# require_extension <extension> <package> <sample>
+# The discourse sample needs pgvector and the osm sample needs PostGIS, neither
+# of which the official postgres image ships. Say so up front: without them the
+# sample fails at load time and the reason is buried in psql's output.
+require_extension() {
+  local ext="$1" pkg="$2" sample="$3"
+  if [ -z "$(psql -X -q -At -c "SELECT 1 FROM pg_available_extensions WHERE name = '$ext'")" ]; then
+    echo "$pkg is not installed on this server, and the $sample sample needs it." >&2
+    echo "compose.yaml installs it at container start; recreate the container with" >&2
+    echo "  docker compose down && docker compose up -d" >&2
+    exit 1
+  fi
+}
+
+require_extension vector pgvector discourse
+require_extension postgis PostGIS osm
 
 echo "Building pista..."
 go build -o pista ./cmd/pista

@@ -56,11 +56,13 @@ kea|sample-db-url-schema|URL=https://raw.githubusercontent.com/isc-projects/kea/
 dolphinscheduler|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/dolphinscheduler/51057477b815eef59c68f1b76563567814c72a93/dolphinscheduler-dao/src/main/resources/sql/dolphinscheduler_postgresql.sql SCHEMA=dolphinscheduler CLIENT_MIN_MESSAGES=warning|dolphinscheduler
 camunda|sample-db-camunda||camunda
 wso2apim|sample-db-url-schema|URL=https://raw.githubusercontent.com/wso2/carbon-apimgt/5dd6e3084a35228b7542c4ff6a9071af1c7476fa/features/apimgt/org.wso2.carbon.apimgt.core.feature/src/main/resources/sql/postgresql.sql SCHEMA=wso2apim CLIENT_MIN_MESSAGES=warning|wso2apim
-discourse|sample-db-discourse|URL=https://raw.githubusercontent.com/discourse/discourse/f3c568cfd26a427e9cae32063732a56bc7d334b9/db/structure.sql SCHEMA=discourse|discourse
+discourse|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/discourse/discourse/f3c568cfd26a427e9cae32063732a56bc7d334b9/db/structure.sql SCHEMA=discourse|discourse
 icinga_director|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icingaweb2-module-director/b2e4a4e4180b0a160461a773ca8b8b5874e0fba7/schema/pgsql.sql SCHEMA=icinga_director|icinga_director
 flowable|sample-db-url-schema|URL=https://raw.githubusercontent.com/flowable/flowable-engine/53e93b6681e86dccea720efaa3c0fc2a96f57366/distro/sql/create/all/flowable.postgres.all.create.sql SCHEMA=flowable|flowable
 ejabberd|sample-db-url-schema|URL=https://raw.githubusercontent.com/processone/ejabberd/f42a49c1e83ad2399743dd46c6cf1e43d39d303b/sql/pg.new.sql SCHEMA=ejabberd|ejabberd
 guacamole|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/guacamole-client/5be18be1eeadc4cc544c737c54bd761261d2ad65/extensions/guacamole-auth-jdbc/modules/guacamole-auth-jdbc-postgresql/schema/001-create-schema.sql SCHEMA=guacamole|guacamole
+dotcms|sample-db-url-schema|URL=https://raw.githubusercontent.com/dotCMS/core/b0095c0c3920e236efcc16ceb136cd5dd88804b7/dotCMS/src/main/resources/postgres.sql SCHEMA=dotcms|dotcms
+osm|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/openstreetmap/openstreetmap-website/9da0fa5ecbff8adc5e6e91c7cf22546755a91f77/db/structure.sql SCHEMA=osm|osm
 endef
 
 # Print the sample manifest, one record per line, for shell consumers.
@@ -245,25 +247,27 @@ sample-db-camunda:
 	  echo; \
 	done | PGOPTIONS='-c search_path=camunda' psql
 
-# Discourse (discourse/discourse, GPL-2.0). Like the sample-db-url-schema dumps
-# this one belongs in a schema of its own, but it is pg_dump output: it empties
+# A pg_dump-style dump loaded into a schema of its own. discourse and osm ship
+# their schema as Rails' db/structure.sql, which belongs in a schema of its own
+# like the sample-db-url-schema dumps but is pg_dump output: it empties
 # search_path and qualifies every object it creates with `public`, so neither
 # PGOPTIONS nor the hive-style search_path rewrite reaches it. Drop the line
 # that empties search_path and strip the `public.` qualifier instead, which
-# leaves every name unqualified and lets search_path place it. The four
-# CREATE EXTENSION lines say `WITH SCHEMA public` without a dot, so they are
-# untouched and the types they own (halfvec, hstore, the trgm operator classes)
-# still resolve from `public`, which stays second in the search path. Column
-# names that merely start with "public" (`public`, `public_version`) are not
-# qualifiers and are left alone. The tail of the file is Rails' own
-# `SET search_path TO "$user", public` followed by the migration versions it
-# inserts into schema_migrations, which is data and would land in the wrong
-# schema anyway, so everything from that line on is dropped.
+# leaves every name unqualified and lets search_path place it. The CREATE
+# EXTENSION lines say `WITH SCHEMA public` without a dot, so they are untouched
+# and the types they own (discourse's halfvec, hstore, and trgm operator
+# classes, osm's geometry) still resolve from `public`, which stays second in
+# the search path. Column names that merely start with "public" (`public`,
+# `public_version`) are not qualifiers and are left alone. The tail of the file
+# is Rails' own `SET search_path TO "$user", public` followed by the migration
+# versions it inserts into schema_migrations, which is data and would land in
+# the wrong schema anyway, so everything from that line on is dropped.
 #
-# The vector extension is pgvector, which the official postgres image does not
-# ship; compose.yaml and the samples CI job install it. See sample-db-test.md.
-.PHONY: sample-db-discourse
-sample-db-discourse:
+# discourse needs pgvector and osm needs PostGIS, neither of which the official
+# postgres image ships; compose.yaml and the samples CI job install both. See
+# sample-db-test.md.
+.PHONY: sample-db-pgdump-schema
+sample-db-pgdump-schema:
 	psql -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \

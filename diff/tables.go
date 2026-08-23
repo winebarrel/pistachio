@@ -1278,8 +1278,8 @@ var serialBaseTypes = map[string]string{
 
 // equalTypeName compares two type names, treating serial types as equal to their base types.
 func equalTypeName(a, b, schema string) bool {
-	a = stripTypeSchema(a, schema)
-	b = stripTypeSchema(b, schema)
+	a = foldTypeMod(stripTypeSchema(a, schema))
+	b = foldTypeMod(stripTypeSchema(b, schema))
 	if a == b {
 		return true
 	}
@@ -1290,6 +1290,22 @@ func equalTypeName(a, b, schema string) bool {
 		return t
 	}
 	return normalize(a) == normalize(b)
+}
+
+// foldTypeMod lowercases a type name's modifier, leaving the type name itself
+// alone. PostgreSQL downcases an unquoted keyword in a modifier as it parses
+// the DDL, while format_type prints the modifier the way the type writes it
+// back, which need not be lower case: a column declared
+// `geometry(Polygon,4326)` reads back from the catalog with the capital P that
+// PostGIS gives it, and the desired side of the same declaration reaches the
+// diff as `geometry(polygon,4326)`. The type name is left as it is, since it
+// is case-sensitive when quoted.
+func foldTypeMod(typeName string) string {
+	i := strings.Index(typeName, "(")
+	if i < 0 {
+		return typeName
+	}
+	return typeName[:i] + strings.ToLower(typeName[i:])
 }
 
 // stripTypeSchema removes a redundant "<schema>." qualifier from a column type

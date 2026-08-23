@@ -16,12 +16,13 @@ check. It needs a running PostgreSQL instance (`PGHOST=localhost`,
 `PGUSER=postgres`, exported by the Makefile), plus `psql`, `curl`, and network
 access to the upstream hosts. The same target runs in CI as the `samples` job.
 
-The server also needs pgvector, which the discourse sample's `halfvec` columns
-are typed by and the official postgres image does not ship. compose.yaml
-installs `postgresql-<major>-pgvector` from PGDG when a container starts, and
-the samples CI job installs the same package into its service container, so
-both keep the official image and add the extension to it. The runner checks for
-it up front and says so if it is missing; recreate the container with
+The server also needs pgvector for the discourse sample's `halfvec` columns and
+PostGIS for the osm sample's `geometry` column. The official postgres image
+ships neither. compose.yaml installs `postgresql-<major>-pgvector` and
+`postgresql-<major>-postgis-3` from PGDG when a container starts, and the
+samples CI job installs the same packages into its service container, so both
+keep the official image and add the extensions to it. The runner checks for them
+up front and says so if one is missing; recreate the container with
 `docker compose down && docker compose up -d`.
 
 To load every sample into one database for manual inspection instead of
@@ -118,6 +119,8 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | flowable | flowable | [flowable/flowable-engine](https://github.com/flowable/flowable-engine) |
 | ejabberd | ejabberd | [processone/ejabberd](https://github.com/processone/ejabberd) |
 | guacamole | guacamole | [apache/guacamole-client](https://github.com/apache/guacamole-client) |
+| dotcms | dotcms | [dotCMS/core](https://github.com/dotCMS/core) |
+| osm | osm | [openstreetmap/openstreetmap-website](https://github.com/openstreetmap/openstreetmap-website) |
 
 ## Coverage
 
@@ -178,9 +181,11 @@ are not sourcegraph's schema and pistachio does not read them either.
 | flowable | 62 | 844 | 222 | 60 | 66 | 0 | 0 | 0 |
 | ejabberd | 42 | 258 | 78 | 5 | 15 | 0 | 0 | 0 |
 | guacamole | 23 | 104 | 61 | 30 | 29 | 0 | 5 | 0 |
-| **Total** | **4,365** | **36,882** | **13,453** | **5,578** | **8,271** | **86** | **61** | **306** |
+| dotcms | 167 | 1,373 | 346 | 113 | 190 | 0 | 0 | 22 |
+| osm | 57 | 391 | 155 | 71 | 55 | 0 | 8 | 0 |
+| **Total** | **4,589** | **38,646** | **13,954** | **5,762** | **8,516** | **86** | **69** | **328** |
 
-The 44 dumps come to about 81,100 lines of SQL, and gitlab is 27,600 of them.
+The 46 dumps come to about 87,600 lines of SQL, and gitlab is 27,600 of them.
 It is still nearly half of the indexes and constraints, a third of the tables,
 and about 40 percent of the columns and foreign keys; musicbrainz, discourse,
 and wso2apim are the largest of what remains. gitlab is also why
@@ -202,7 +207,9 @@ that all declare their referential actions (all 171 of icinga_director's name
 both ON UPDATE and ON DELETE, in six combinations), unique indexes
 over an expression and a gin index over `to_tsvector` (rt), columns typed by a
 contrib extension (sourcegraph, with 49 `citext` columns, and six extensions
-installed at once), materialized views (adventureworks, pagila), tsvector
+installed at once), two gist indexes that name an `inet_ops` operator class and
+one over four columns, which needs `btree_gist` (osm), materialized
+views (adventureworks, pagila), tsvector
 columns (dvdrental, pagila), a non-default
 collation (musicbrainz), composite types (ovirt declares 10 of them, more than
 any other sample, and sourcegraph 2), standalone sequences rather than serial
@@ -215,7 +222,9 @@ attaches 2,054 partitions, all of which live in schemas of their own), table
 inheritance (ledgersmb attaches 21 children with INHERITS, the only sample that
 does), four unique indexes declared `NULLS NOT DISTINCT` and one index with an
 `INCLUDE` column (discourse), columns typed by an extension that is not contrib
-(discourse's three `halfvec` columns, which need pgvector), and
+(discourse's three `halfvec` columns, which need pgvector, and osm's one
+`geometry(Polygon,4326)` column, which needs PostGIS and is the only type
+modifier any sample reports in mixed case), and
 foreign keys that cross a schema boundary: 20 of adventureworks' 90 span its
 five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into `mimiciv_hosp`,
 and every one of gitlab's partitions is attached across one.
@@ -237,17 +246,17 @@ strip only what is irrelevant to a schema round trip:
   `cd` schema itself.
 - **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
   constraint, and the `\copy` lines are dropped.
-- **discourse**: the dump belongs in a schema of its own like the group below,
-  but it is `pg_dump` output that empties `search_path` and qualifies every
-  object with `public`, so neither `PGOPTIONS` nor hive's one-line rewrite
-  reaches it. The line that empties `search_path` is dropped and the `public.`
-  qualifier is stripped, which leaves every name unqualified for `search_path`
-  to place. The four `CREATE EXTENSION` lines say `WITH SCHEMA public` without a
-  dot, so they are untouched and the types they own still resolve from `public`,
-  which stays second in the search path. The tail of the file is Rails' own
-  `SET search_path` followed by the migration versions it inserts into
-  `schema_migrations`, which is data, so everything from that line on is
-  dropped.
+- **discourse**, **osm**: both ship their schema as Rails' `db/structure.sql`,
+  which belongs in a schema of its own like the group below but is `pg_dump`
+  output that empties `search_path` and qualifies every object with `public`, so
+  neither `PGOPTIONS` nor hive's one-line rewrite reaches it. The line that
+  empties `search_path` is dropped and the `public.` qualifier is stripped,
+  which leaves every name unqualified for `search_path` to place. The `CREATE
+  EXTENSION` lines say `WITH SCHEMA public` without a dot, so they are untouched
+  and the types they own still resolve from `public`, which stays second in the
+  search path. The tail of the file is Rails' own `SET search_path` followed by
+  the migration versions it inserts into `schema_migrations`, which is data, so
+  everything from that line on is dropped.
 - **hive**: the dump belongs in a schema of its own like the group below, but
   it is `pg_dump` output that sets `search_path` to `public` itself, which
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
@@ -260,9 +269,9 @@ strip only what is irrelevant to a schema round trip:
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
   **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,
-  **flowable**, **ejabberd**, **guacamole**: these dumps name no schema at
-  all, so whichever schema comes first in `search_path` gets them. Each is
-  loaded into a schema of its own instead of
+  **flowable**, **ejabberd**, **guacamole**, **dotcms**: these dumps name no
+  schema at all, so whichever schema comes first in `search_path` gets them.
+  Each is loaded into a schema of its own instead of
   `public`, so that `make schema`, which puts every sample in one database, does
   not stack them on top of the other public samples (mediawiki and pagila both
   define `actor` and `category`). gitlab creates `gitlab_partitions_static` and
