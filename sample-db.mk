@@ -57,6 +57,10 @@ dolphinscheduler|sample-db-url-schema|URL=https://raw.githubusercontent.com/apac
 camunda|sample-db-camunda||camunda
 wso2apim|sample-db-url-schema|URL=https://raw.githubusercontent.com/wso2/carbon-apimgt/5dd6e3084a35228b7542c4ff6a9071af1c7476fa/features/apimgt/org.wso2.carbon.apimgt.core.feature/src/main/resources/sql/postgresql.sql SCHEMA=wso2apim CLIENT_MIN_MESSAGES=warning|wso2apim
 discourse|sample-db-discourse|URL=https://raw.githubusercontent.com/discourse/discourse/f3c568cfd26a427e9cae32063732a56bc7d334b9/db/structure.sql SCHEMA=discourse|discourse
+icinga_director|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icingaweb2-module-director/b2e4a4e4180b0a160461a773ca8b8b5874e0fba7/schema/pgsql.sql SCHEMA=icinga_director|icinga_director
+flowable|sample-db-url-schema|URL=https://raw.githubusercontent.com/flowable/flowable-engine/53e93b6681e86dccea720efaa3c0fc2a96f57366/distro/sql/create/all/flowable.postgres.all.create.sql SCHEMA=flowable|flowable
+ejabberd|sample-db-url-schema|URL=https://raw.githubusercontent.com/processone/ejabberd/f42a49c1e83ad2399743dd46c6cf1e43d39d303b/sql/pg.new.sql SCHEMA=ejabberd|ejabberd
+guacamole|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/guacamole-client/5be18be1eeadc4cc544c737c54bd761261d2ad65/extensions/guacamole-auth-jdbc/modules/guacamole-auth-jdbc-postgresql/schema/001-create-schema.sql SCHEMA=guacamole|guacamole
 endef
 
 # Print the sample manifest, one record per line, for shell consumers.

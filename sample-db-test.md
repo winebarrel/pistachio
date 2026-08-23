@@ -114,6 +114,10 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | camunda | camunda | [camunda/camunda-bpm-platform](https://github.com/camunda/camunda-bpm-platform) |
 | wso2apim | wso2apim | [wso2/carbon-apimgt](https://github.com/wso2/carbon-apimgt) |
 | discourse | discourse | [discourse/discourse](https://github.com/discourse/discourse) |
+| icinga_director | icinga_director | [Icinga/icingaweb2-module-director](https://github.com/Icinga/icingaweb2-module-director) |
+| flowable | flowable | [flowable/flowable-engine](https://github.com/flowable/flowable-engine) |
+| ejabberd | ejabberd | [processone/ejabberd](https://github.com/processone/ejabberd) |
+| guacamole | guacamole | [apache/guacamole-client](https://github.com/apache/guacamole-client) |
 
 ## Coverage
 
@@ -167,12 +171,16 @@ and pistachio does not read them either.
 | camunda | 49 | 681 | 281 | 42 | 56 | 0 | 0 |
 | wso2apim | 247 | 1,495 | 421 | 168 | 353 | 0 | 0 |
 | discourse | 354 | 3,173 | 1,114 | 23 | 336 | 1 | 2 |
-| **Total** | **4,117** | **34,804** | **12,711** | **5,312** | **7,925** | **86** | **35** |
+| icinga_director | 121 | 872 | 381 | 171 | 236 | 0 | 21 |
+| flowable | 62 | 844 | 222 | 60 | 66 | 0 | 0 |
+| ejabberd | 42 | 258 | 78 | 5 | 15 | 0 | 0 |
+| guacamole | 23 | 104 | 61 | 30 | 29 | 0 | 5 |
+| **Total** | **4,365** | **36,882** | **13,453** | **5,578** | **8,271** | **86** | **61** |
 
-The 40 dumps come to about 75,900 lines of SQL, and gitlab is 27,600 of them.
-It is still half of the indexes and constraints and over a third of the tables,
-columns, and foreign keys; musicbrainz, discourse, and wso2apim are the largest
-of what remains. gitlab is also why
+The 44 dumps come to about 81,100 lines of SQL, and gitlab is 27,600 of them.
+It is still nearly half of the indexes and constraints, a third of the tables,
+and about 40 percent of the columns and foreign keys; musicbrainz, discourse,
+and wso2apim are the largest of what remains. gitlab is also why
 `clean-schema` drops tables a batch at a time rather than cascading through
 `DROP SCHEMA`: a single statement takes locks on every object it reaches, and
 gitlab's 1,422 tables and their indexes run the server out of lock table space
@@ -184,7 +192,11 @@ always reach: partial and expression indexes and gin, gist, hash, and brin
 methods (musicbrainz, plus 12 partial and 2 gin indexes in synapse), exclusion
 constraints and unlogged tables (demodb, which needs `btree_gist`), enums and
 domains (dvdrental, pagila, employees, mediawiki, and icingadb, whose 13 types
-are 6 enums and 7 domains, each domain carrying a named CHECK), unique indexes
+are 6 enums and 7 domains, each domain carrying a named CHECK, plus
+icinga_director, whose 20 enums are more than any other sample and whose one
+domain carries two anonymous CHECKs, and guacamole's 5 enums), foreign keys
+that all declare their referential actions (all 171 of icinga_director's name
+both ON UPDATE and ON DELETE, in six combinations), unique indexes
 over an expression and a gin index over `to_tsvector` (rt), columns typed by a
 contrib extension (sourcegraph, with 49 `citext` columns, and six extensions
 installed at once), materialized views (adventureworks, pagila), tsvector
@@ -244,7 +256,8 @@ strip only what is irrelevant to a schema round trip:
   for the load.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
-  **kea**, **dolphinscheduler**, **wso2apim**: these dumps name no schema at
+  **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,
+  **flowable**, **ejabberd**, **guacamole**: these dumps name no schema at
   all, so whichever schema comes first in `search_path` gets them. Each is
   loaded into a schema of its own instead of
   `public`, so that `make schema`, which puts every sample in one database, does
