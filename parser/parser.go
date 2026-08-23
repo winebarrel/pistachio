@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
-	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
 

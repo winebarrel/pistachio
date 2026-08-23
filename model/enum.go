@@ -3,7 +3,7 @@ package model
 import (
 	"strings"
 
-	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/orderedmap/v2"
 )
 
 type Enum struct {

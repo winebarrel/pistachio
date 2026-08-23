@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/orderedmap/v2"
 )
 
 // Sequence holds metadata for a standalone PostgreSQL sequence (one created by

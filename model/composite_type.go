@@ -3,7 +3,7 @@ package model
 import (
 	"strings"
 
-	"github.com/winebarrel/orderedmap"
+	"github.com/winebarrel/orderedmap/v2"
 )
 
 // CompositeAttribute is one field of a composite type (CREATE TYPE ... AS (...)).
