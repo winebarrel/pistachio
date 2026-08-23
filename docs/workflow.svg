@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-labelledby="t d">
+  <title id="t">pistachio workflow</title>
+  <desc id="d">pista dump writes schema.sql from the database, pista plan compares schema.sql against pg_catalog and prints a DDL diff, and pista apply runs that DDL against the database.</desc>
+
+  <style>
+    svg {
+      --ground: #f6f7f1;
+      --panel: #ffffff;
+      --code: #eef0e6;
+      --line: #d2d8c4;
+      --ink: #1b2016;
+      --stroke: #454d3c;
+      --muted: #676e5f;
+      --accent: #4f7d24;
+      --write: #a4620f;
+      color: var(--ink);
+    }
+
+    .ground { fill: var(--ground); stroke: var(--line); stroke-width: 1.5; }
+    .node { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+    .code { fill: var(--code); stroke: var(--line); stroke-width: 1; }
+    .flow { fill: none; stroke: var(--stroke); stroke-width: 1.6; }
+    .ghost { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 5 4; }
+    .writepath { fill: none; stroke: var(--write); stroke-width: 2; }
+    .t { fill: currentColor; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+    .t-name { font-size: 14px; font-weight: 600; }
+    .t-tag { font-size: 10px; letter-spacing: 1.4px; fill: var(--muted); }
+    .t-code { font-size: 11.5px; fill: var(--muted); }
+    .t-edge { font-size: 11.5px; fill: var(--muted); }
+    .t-cmd { font-size: 12.5px; font-weight: 600; }
+    .t-write { fill: var(--write); }
+    .t-accent { fill: var(--accent); }
+  </style>
+
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--stroke)" />
+    </marker>
+    <marker id="ah-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)" />
+    </marker>
+    <marker id="ah-write" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--write)" />
+    </marker>
+  </defs>
+
+  <rect class="ground" x="0.75" y="0.75" width="958.5" height="418.5" rx="12" />
+
+  <!-- dump: database -> file -->
+  <polyline class="ghost" points="830,82 830,36 180,36 180,86" marker-end="url(#ah-muted)" />
+  <text class="t t-cmd" x="505" y="26" text-anchor="middle">pista dump</text>
+  <text class="t t-edge" x="505" y="52" text-anchor="middle">writes the current schema out as SQL, once to start</text>
+
+  <!-- edit loop -->
+  <path class="ghost" d="M70,196 C26,196 26,142 70,142" marker-end="url(#ah-muted)" />
+  <text class="t t-edge" x="44" y="126" text-anchor="middle">edit</text>
+
+  <!-- schema.sql -->
+  <rect class="node" x="70" y="90" width="220" height="152" rx="7" />
+  <text class="t t-name" x="88" y="118">schema.sql</text>
+  <text class="t t-tag" x="88" y="136">DESIRED SCHEMA</text>
+  <rect class="code" x="80" y="148" width="200" height="84" rx="4" />
+  <text class="t t-code" x="88" y="166">CREATE TABLE users (</text>
+  <text class="t t-code" x="88" y="184" xml:space="preserve">  id    integer,</text>
+  <text class="t t-code" x="88" y="202" xml:space="preserve">  email text</text>
+  <text class="t t-code" x="88" y="220">);</text>
+
+  <!-- parse -->
+  <line class="flow" x1="292" y1="166" x2="384" y2="156" marker-end="url(#ah)" />
+  <text class="t t-edge" x="338" y="146" text-anchor="middle">parse</text>
+
+  <!-- plan -->
+  <rect class="node" x="390" y="110" width="190" height="92" rx="7" />
+  <text class="t t-cmd" x="485" y="148" text-anchor="middle">pista plan</text>
+  <text class="t t-edge" x="485" y="170" text-anchor="middle">compares the two sides</text>
+
+  <!-- read catalog -->
+  <line class="flow" x1="738" y1="156" x2="586" y2="156" marker-end="url(#ah)" />
+  <text class="t t-edge" x="662" y="146" text-anchor="middle">read catalog</text>
+
+  <!-- database -->
+  <path class="node" d="M740,100 L740,210 A90,18 0 0 0 920,210 L920,100 z" />
+  <ellipse class="node" cx="830" cy="100" rx="90" ry="18" />
+  <text class="t t-name" x="830" y="148" text-anchor="middle">PostgreSQL</text>
+  <text class="t t-tag" x="830" y="166" text-anchor="middle">CURRENT SCHEMA</text>
+  <text class="t t-code" x="830" y="192" text-anchor="middle">pg_catalog</text>
+
+  <!-- plan -> diff -->
+  <line class="flow" x1="485" y1="204" x2="485" y2="272" marker-end="url(#ah)" />
+  <text class="t t-edge" x="497" y="248">prints, nothing more</text>
+
+  <!-- DDL diff -->
+  <rect class="node" x="330" y="278" width="310" height="112" rx="7" />
+  <text class="t t-tag" x="348" y="302">DDL DIFF</text>
+  <rect class="code" x="340" y="312" width="290" height="66" rx="4" />
+  <text class="t t-code" x="348" y="330">ALTER TABLE public.users</text>
+  <text class="t t-code" x="348" y="348" xml:space="preserve">  ADD COLUMN email text;</text>
+  <text class="t t-code" x="348" y="366">CREATE INDEX idx_users_email ...</text>
+
+  <!-- apply -->
+  <polyline class="writepath" points="642,344 830,344 830,234" marker-end="url(#ah-write)" />
+  <text class="t t-cmd t-write" x="742" y="332" text-anchor="middle">pista apply</text>
+  <text class="t t-edge" x="742" y="366" text-anchor="middle">runs this DDL</text>
+
+  <!-- after apply -->
+  <rect class="node" x="70" y="290" width="228" height="88" rx="7" stroke-dasharray="5 4" />
+  <text class="t t-tag" x="88" y="314">AFTER APPLY</text>
+  <text class="t t-code t-accent" x="88" y="340">pista plan -&gt; -- No changes</text>
+  <text class="t t-edge" x="88" y="360">file and database agree</text>
+</svg>
