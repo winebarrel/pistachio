@@ -347,6 +347,18 @@ func TestDiffColumns_alterType(t *testing.T) {
 	assert.Equal(t, "ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE text;", stmts[0])
 }
 
+func TestDiffColumns_typeModCaseOnly_noChange(t *testing.T) {
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("zone", &model.Column{Name: "zone", TypeName: "geometry(Polygon,4326)"})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("zone", &model.Column{Name: "zone", TypeName: "geometry(polygon,4326)"})
+
+	stmts, _, _, err := diffColumns("public.moderation_zones", current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
 func TestDiffColumns_alterType_withCollation(t *testing.T) {
 	current := orderedmap.New[string, *model.Column]()
 	current.Set("name", &model.Column{Name: "name", TypeName: "varchar(100)"})
@@ -1228,6 +1240,26 @@ func TestEqualTypeName(t *testing.T) {
 	assert.False(t, equalTypeName("public.addr", "public.other", "public"))
 	// A quoted schema qualifier is stripped too.
 	assert.True(t, equalTypeName(`"My Schema".addr`, "addr", `"My Schema"`))
+	// The catalog reports a modifier the way the type writes it back, which
+	// need not match the case PostgreSQL parsed the declaration with.
+	assert.True(t, equalTypeName("geometry(Polygon,4326)", "geometry(polygon,4326)", "public"))
+	assert.True(t, equalTypeName("geometry(Polygon,4326)[]", "geometry(polygon,4326)[]", "public"))
+	assert.True(t, equalTypeName("public.geometry(Polygon,4326)", "geometry(polygon,4326)", "public"))
+	assert.False(t, equalTypeName("geometry(Polygon,4326)", "geometry(point,4326)", "public"))
+	// The type name is not folded, so two quoted names differing in case are
+	// still two types.
+	assert.False(t, equalTypeName(`"Addr"`, `"addr"`, "public"))
+}
+
+func TestFoldTypeMod(t *testing.T) {
+	assert.Equal(t, "geometry(polygon,4326)", foldTypeMod("geometry(Polygon,4326)"))
+	// A type name without a modifier is untouched, quoted or not.
+	assert.Equal(t, "integer", foldTypeMod("integer"))
+	assert.Equal(t, `"MyType"`, foldTypeMod(`"MyType"`))
+	// Only the modifier is folded; the type name keeps its case.
+	assert.Equal(t, `"MyType"(3)`, foldTypeMod(`"MyType"(3)`))
+	// An array bound follows the modifier and is folded with it.
+	assert.Equal(t, "geometry(polygon,4326)[]", foldTypeMod("geometry(Polygon,4326)[]"))
 }
 
 func TestSchemaOf(t *testing.T) {

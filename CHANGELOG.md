@@ -10,6 +10,8 @@
 
 * Drop `ca-certificates` from the Docker image. `alpine:3` already ships the bundle Go reads its roots from. `update-ca-certificates` goes with it.
 
+* Compare a type modifier without regard to case. PostgreSQL downcases an unquoted keyword in a modifier as it parses the DDL, while `format_type` prints it the way the type writes it back, so a PostGIS `geometry(Polygon,4326)` column planned `SET DATA TYPE geometry(polygon,4326)` on every run, and a domain over the same type failed with `cannot change base type`.
+
 ## [1.27.0] - 2026-08-23
 
 * Name an index written without one, the way PostgreSQL names it. `CREATE INDEX ON public.items (qty)` reached the diff with an empty name, which matched no index in the database, so every run planned the index again and PostgreSQL numbered each copy: three `apply` runs left `items_qty_idx`, `items_qty_idx1` and `items_qty_idx2` behind, and the plan never came back empty. The name follows `ChooseRelationName`: the table, then one name per index element joined with underscores, then `_idx`, shortened by `makeObjectName` when it does not fit. An element is named after its column, and an expression after the function it calls (`(lower(c))` gives `t_lower_idx`), a field selection's field, the column under a subscript, a cast's type, or `CASE`, falling back to `expr` for anything with no name of its own; the `INCLUDE` list joins the name too, and a name repeated within one index takes a number. Two unnamed indexes that produce one name are now rejected as a duplicate index name, which PostgreSQL would have resolved by numbering the second.
