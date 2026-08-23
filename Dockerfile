@@ -15,8 +15,8 @@ FROM alpine:3
 RUN apk add --no-cache ca-certificates
 
 COPY --from=build /src/pista /usr/local/bin/
-RUN adduser -D -u 1000 app
-USER app
-WORKDIR /home/app
+RUN adduser -D -u 1000 pistachio
+USER pistachio
+WORKDIR /home/pistachio
 
 ENTRYPOINT ["pista"]
