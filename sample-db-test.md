@@ -42,7 +42,13 @@ each sample, it:
    sit in, and a dump that says `CREATE EXTENSION IF NOT EXISTS` does nothing
    when an earlier sample already installed that extension somewhere else,
    leaving its types and operator classes unresolvable.
-2. Runs the sample's loader target to download and load the schema.
+2. Runs the sample's loader target to download and load the schema. Every
+   loader pipes into `psql -v ON_ERROR_STOP=1`, so a statement that fails
+   stops the load and the sample reports `FAIL (load)`. Without it psql
+   prints the error, carries on, and exits 0, and the check then runs on a
+   schema quietly missing whatever the failed statement was going to create;
+   `dump` and `plan` agree about what is there, so the sample passes and the
+   loss goes unnoticed.
 3. Runs `pista dump -n <schemas>` to capture pistachio's model of the loaded
    schema as SQL.
 4. Runs `pista plan -n <schemas> <dump>` and requires the output to be
@@ -291,6 +297,9 @@ strip only what is irrelevant to a schema round trip:
   search path. The tail of the file is Rails' own `SET search_path` followed by
   the migration versions it inserts into `schema_migrations`, which is data, so
   everything from that line on is dropped.
+- **dvdrental**: the dump was taken by a `pg_dump` new enough to set
+  `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
+  one line is dropped. It sets nothing the schema depends on.
 - **hive**: the dump belongs in a schema of its own like the group below, but
   it is `pg_dump` output that sets `search_path` to `public` itself, which
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
