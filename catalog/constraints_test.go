@@ -369,18 +369,24 @@ func TestListConstraintsByTable(t *testing.T) {
 	})
 
 	// Regression: CREATE CONSTRAINT TRIGGER adds a pg_constraint row with
-	// contype='t' whose pg_get_constraintdef is the bare word TRIGGER. Reading
-	// it as a table constraint made dump write invalid SQL and plan propose a
-	// DROP CONSTRAINT for the trigger.
+	// contype='t', which pg_get_constraintdef renders as the bare word
+	// TRIGGER, followed by the deferral clause when it has one. Reading that
+	// as a table constraint made dump write invalid SQL and plan propose a
+	// DROP CONSTRAINT for the trigger. Both shapes sit next to a primary key
+	// and a foreign key, which must still come through.
 	t.Run("constraint trigger excluded", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE FUNCTION public.noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
 			CREATE TABLE public.events (
 				id integer NOT NULL,
-				CONSTRAINT events_pkey PRIMARY KEY (id)
+				parent_id integer,
+				CONSTRAINT events_pkey PRIMARY KEY (id),
+				CONSTRAINT events_parent_fkey FOREIGN KEY (parent_id) REFERENCES public.events(id)
 			);
-			CREATE CONSTRAINT TRIGGER events_check AFTER INSERT ON public.events
+			CREATE CONSTRAINT TRIGGER events_deferred AFTER INSERT ON public.events
 				DEFERRABLE INITIALLY DEFERRED
+				FOR EACH ROW EXECUTE FUNCTION public.noop();
+			CREATE CONSTRAINT TRIGGER events_immediate AFTER INSERT ON public.events
 				FOR EACH ROW EXECUTE FUNCTION public.noop();
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
@@ -389,9 +395,8 @@ func TestListConstraintsByTable(t *testing.T) {
 		require.NoError(t, err)
 
 		tbl := tables.Get("public.events")
-		assert.Equal(t, 1, tbl.Constraints.Len())
 
-		_, ok := tbl.Constraints.GetOk("events_check")
-		assert.False(t, ok)
+		assert.Equal(t, []string{"events_pkey"}, tbl.Constraints.CollectKeys())
+		assert.Equal(t, []string{"events_parent_fkey"}, tbl.ForeignKeys.CollectKeys())
 	})
 }

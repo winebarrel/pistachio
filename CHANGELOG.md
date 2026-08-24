@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Keep a constraint trigger out of the table's constraints. `CREATE CONSTRAINT TRIGGER` also writes a `pg_constraint` row, which the catalog read as a table constraint, so `dump` emitted `CONSTRAINT x TRIGGER ...`, which does not parse, and `plan` proposed dropping the trigger. Triggers stay unmanaged.
+* Keep a constraint trigger out of the table's constraints. `CREATE CONSTRAINT TRIGGER` also writes a `pg_constraint` row, and the catalog read it as a table constraint. `dump` then emitted `CONSTRAINT x TRIGGER ...`, which does not parse, and `plan` proposed dropping the trigger. Triggers remain unmanaged.
 
 ## [1.28.0] - 2026-08-23
 

@@ -59,10 +59,12 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 			-- query only returns table-level constraints.
 			AND con.contype <> 'n'
 			-- CREATE CONSTRAINT TRIGGER records the trigger in pg_constraint
-			-- too (contype='t'), and pg_get_constraintdef renders it as the
-			-- bare word TRIGGER. It is a trigger, not a table constraint, so
-			-- reading it here made dump write invalid SQL and plan propose a
-			-- DROP CONSTRAINT for it. Triggers are not managed.
+			-- too (contype='t'), where pg_get_constraintdef renders it as the
+			-- bare word TRIGGER, followed by the deferral clause when it has
+			-- one. Reading that as a table constraint made dump write a
+			-- CREATE TABLE that does not parse, and plan propose a DROP
+			-- CONSTRAINT for the trigger. Triggers are unmanaged, so this
+			-- query skips the row.
 			AND con.contype <> 't'
 		ORDER BY
 			array_position('{p,u,c,x,f}'::"char"[], con.contype),
