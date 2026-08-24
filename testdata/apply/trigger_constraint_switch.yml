@@ -1,0 +1,20 @@
+# A plain trigger becoming a constraint trigger, which PostgreSQL will not do
+# in place.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_check AFTER INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE CONSTRAINT TRIGGER events_check AFTER INSERT ON public.events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp();
+drop_policy:
+  allow_drop:
+    - trigger
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL
+  );
+
+  CREATE CONSTRAINT TRIGGER events_check AFTER INSERT ON events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp();
+verify_no_drift: true

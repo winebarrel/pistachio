@@ -30,6 +30,7 @@ type Table struct {
 	ForeignKeys      *orderedmap.Map[string, *ForeignKey]
 	Indexes          *orderedmap.Map[string, *Index]
 	Policies         *orderedmap.Map[string, *Policy]
+	Triggers         *orderedmap.Map[string, *Trigger]
 	Comment          *string
 }
 
@@ -144,6 +145,21 @@ func (t Table) RLSSQL() string {
 	return strings.Join(stmts, "\n")
 }
 
+// TrigSQL renders the table's triggers, each followed by the ALTER TABLE that
+// puts it in a non-default enable state.
+func (t Table) TrigSQL() string {
+	var stmts []string
+	if t.Triggers != nil {
+		for _, trg := range t.Triggers.CollectValues() {
+			stmts = append(stmts, trg.SQL())
+			if s := trg.StateSQL(); s != "" {
+				stmts = append(stmts, s)
+			}
+		}
+	}
+	return strings.Join(stmts, "\n")
+}
+
 func (t Table) CommentSQL() string {
 	var stmts []string
 	if t.Comment != nil {
@@ -166,6 +182,9 @@ func TableToSQL(t *Table) string {
 		parts = append(parts, "\n"+s)
 	}
 	if s := t.RLSSQL(); s != "" {
+		parts = append(parts, "\n"+s)
+	}
+	if s := t.TrigSQL(); s != "" {
 		parts = append(parts, "\n"+s)
 	}
 	if s := t.CommentSQL(); s != "" {

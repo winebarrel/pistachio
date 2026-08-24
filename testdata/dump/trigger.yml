@@ -1,0 +1,27 @@
+# The trigger function is not managed, so the dump writes the trigger without
+# it. pg_get_triggerdef drops the schema from names the search_path reaches,
+# which under the default path is both the table and the function.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER events_audit AFTER UPDATE OF name ON public.events
+      FOR EACH ROW WHEN (old.name IS DISTINCT FROM new.name)
+      EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events
+      FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;
+dump: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+
+  CREATE TRIGGER events_audit AFTER UPDATE OF name ON events FOR EACH ROW WHEN (old.name IS DISTINCT FROM new.name) EXECUTE FUNCTION stamp();
+  CREATE TRIGGER events_stamp BEFORE INSERT ON events FOR EACH ROW EXECUTE FUNCTION stamp();
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;

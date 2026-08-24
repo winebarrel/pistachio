@@ -1,0 +1,12 @@
+# CREATE TRIGGER has no syntax for a disabled trigger, so the desired schema
+# asks for one with the ALTER TABLE that dump writes.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;
+plan: |
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;

@@ -347,11 +347,12 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				continue
 			}
 
-			// RLS toggles and constraint subcommands can coexist in one
-			// ALTER TABLE statement. applyAlterTableRLS picks up only the RLS
-			// subtypes; parseAlterTableConstraints picks up AT_AddConstraint.
-			// They walk the same cmd list independently, so run both.
+			// RLS toggles, trigger states and constraint subcommands can
+			// coexist in one ALTER TABLE statement. Each helper picks up only
+			// its own subtypes and walks the cmd list independently, so run
+			// all three.
 			applyAlterTableRLS(as, t)
+			applyAlterTableTriggerState(as, t)
 
 			cons, fks, err := parseAlterTableConstraints(as, defaultSchema)
 			if err != nil {
@@ -389,6 +390,19 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if renameFrom != "" {
 				unquoted := normalizeUnqualifiedDirective(renameFrom)
 				policy.RenameFrom = &unquoted
+			}
+
+		case node.GetCreateTrigStmt() != nil:
+			trg, err := parseCreateTrigStmt(node.GetCreateTrigStmt(), defaultSchema)
+			if err != nil {
+				return nil, err
+			}
+			if renameFrom != "" {
+				unquoted := normalizeUnqualifiedDirective(renameFrom)
+				trg.RenameFrom = &unquoted
+			}
+			if err := attachTrigger(trg, tables, views); err != nil {
+				return nil, err
 			}
 
 		case node.GetCreateSeqStmt() != nil:
@@ -448,6 +462,7 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
 		Indexes:     orderedmap.New[string, *model.Index](),
 		Policies:    orderedmap.New[string, *model.Policy](),
+		Triggers:    orderedmap.New[string, *model.Trigger](),
 	}
 
 	if cs.Tablespacename != "" {
@@ -1097,6 +1112,7 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 		Name:       vs.View.Relname,
 		Definition: def,
 		Indexes:    orderedmap.New[string, *model.Index](),
+		Triggers:   orderedmap.New[string, *model.Trigger](),
 	}, nil
 }
 
@@ -1128,6 +1144,7 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 		Definition:   def,
 		Materialized: true,
 		Indexes:      orderedmap.New[string, *model.Index](),
+		Triggers:     orderedmap.New[string, *model.Trigger](),
 	}, nil
 }
 

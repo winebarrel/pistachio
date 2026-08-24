@@ -1,0 +1,23 @@
+# What dump writes, fed back. pg_get_triggerdef spells out FOR EACH STATEMENT
+# and the AS in REFERENCING, and adds a cast in the WHEN expression, none of
+# which the deparser writes, so the comparison runs on the parse trees.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER events_audit AFTER UPDATE OF name ON public.events
+      FOR EACH ROW WHEN (new.name <> 'skip') EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER events_batch AFTER INSERT ON public.events
+      REFERENCING NEW TABLE AS added FOR EACH STATEMENT EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER events_audit AFTER UPDATE OF name ON events FOR EACH ROW WHEN (new.name <> 'skip'::text) EXECUTE FUNCTION stamp();
+  CREATE TRIGGER events_batch AFTER INSERT ON events REFERENCING NEW TABLE AS added FOR EACH STATEMENT EXECUTE FUNCTION stamp();
+plan: ""

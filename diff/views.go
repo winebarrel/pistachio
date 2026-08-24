@@ -268,6 +268,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		if !ok {
 			// New view
 			result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
+			result.CreateStmts = append(result.CreateStmts, viewTriggerStmts(desiredView)...)
 			// Add indexes for new materialized views
 			if desiredView.Materialized && desiredView.Indexes != nil {
 				for _, idx := range desiredView.Indexes.CollectValues() {
@@ -312,6 +313,9 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 						result.DropStmts = append(result.DropStmts, "DROP VIEW "+dropName+";")
 					}
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
+					// DROP VIEW takes the view's triggers with it, so the
+					// recreate has to put them back.
+					result.CreateStmts = append(result.CreateStmts, viewTriggerStmts(desiredView)...)
 					if desiredView.Materialized && desiredView.Indexes != nil {
 						for _, idx := range desiredView.Indexes.CollectValues() {
 							stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)
@@ -348,6 +352,19 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			if viewIdxHasConcurrently {
 				result.HasConcurrently = true
 			}
+		}
+
+		// A view that stayed in place, whether its definition was replaced or
+		// left alone, kept its triggers, so they are diffed. The branches that
+		// created the view already emitted them, and a denied recreate left
+		// the view as it was.
+		if ok && !recreated[k] && !recreateDenied[k] {
+			trgStmts, trgDisallowed, err := diffTriggers(k, currentView.Triggers, desiredView.Triggers, dc)
+			if err != nil {
+				return nil, err
+			}
+			result.CreateStmts = append(result.CreateStmts, trgStmts...)
+			result.DisallowedDropStmts = append(result.DisallowedDropStmts, trgDisallowed...)
 		}
 	}
 
@@ -409,6 +426,20 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	}
 
 	return result, nil
+}
+
+// viewTriggerStmts renders the CREATE TRIGGER statements for a view that is
+// about to be created. A materialized view cannot carry a trigger, so the map
+// is empty there.
+func viewTriggerStmts(v *model.View) []string {
+	if v.Triggers == nil {
+		return nil
+	}
+	var stmts []string
+	for _, trg := range v.Triggers.CollectValues() {
+		stmts = append(stmts, trg.SQL())
+	}
+	return stmts
 }
 
 // diffViewIndexes generates DDL for index changes on materialized views.

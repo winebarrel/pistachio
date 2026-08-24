@@ -1,0 +1,20 @@
+# A trigger on a partitioned table is cloned onto each partition. Only the
+# parent's row belongs to the dump; the clone cannot be dropped on its own and
+# PostgreSQL recreates it from the parent.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.logs (id integer NOT NULL, at date NOT NULL) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE TRIGGER logs_stamp BEFORE INSERT ON public.logs FOR EACH ROW EXECUTE FUNCTION public.stamp();
+dump: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+
+  CREATE TRIGGER logs_stamp BEFORE INSERT ON logs FOR EACH ROW EXECUTE FUNCTION stamp();
+
+  -- public.logs_2026
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');

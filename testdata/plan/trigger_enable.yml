@@ -1,0 +1,12 @@
+# A disabled trigger the desired schema no longer holds down goes back to the
+# state CREATE TRIGGER leaves behind.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  ALTER TABLE public.events ENABLE ALWAYS TRIGGER events_stamp;
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+plan: |
+  ALTER TABLE public.events ENABLE TRIGGER events_stamp;

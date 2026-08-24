@@ -1,0 +1,40 @@
+# An INSTEAD OF trigger belongs to the view, so it follows the view's
+# definition rather than the table's. PostgreSQL 16 stopped qualifying a view's
+# output column with its table, hence the second expected dump.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.recent_events AS SELECT id FROM public.events;
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON public.recent_events
+      FOR EACH ROW EXECUTE FUNCTION public.stamp();
+dump: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+
+  -- public.recent_events
+  CREATE OR REPLACE VIEW public.recent_events AS
+  SELECT events.id
+     FROM events;
+
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON recent_events FOR EACH ROW EXECUTE FUNCTION stamp();
+dump_pg16: &dump_pg16plus |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+
+  -- public.recent_events
+  CREATE OR REPLACE VIEW public.recent_events AS
+  SELECT id
+     FROM events;
+
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON recent_events FOR EACH ROW EXECUTE FUNCTION stamp();
+dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus

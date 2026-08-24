@@ -1,0 +1,11 @@
+# pg_get_triggerdef renders every trigger argument as a string literal, so an
+# integer written in the file is not a change.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events
+      FOR EACH ROW EXECUTE FUNCTION public.stamp('kind', 1, 'it''s');
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp('kind', 1, 'it''s');
+plan: ""

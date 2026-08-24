@@ -23,6 +23,22 @@ Resolving these requires cross-object awareness in the diff phase.
 
 Origin: [#123](https://github.com/winebarrel/pistachio/pull/123).
 
+## Trigger definitions are not rewritten on a column rename
+
+When a column is renamed via `-- pista:renamed-from`, the rewriter updates the
+same-table dependents it knows about (indexes, constraints, FKs). A trigger on
+the same table is not among them, so a `UPDATE OF <col>` list or a `WHEN`
+expression naming the old column reads as a definition change and the first
+plan emits a redundant `CREATE OR REPLACE TRIGGER`. PostgreSQL applies
+`RENAME COLUMN` to the trigger itself, so the second run after the rename is
+clean.
+
+Same class as the view and cross-table FK entry above, and the fix is the same
+shape: run the column-rename rewriter over `Table.Triggers` and
+`View.Triggers`.
+
+Origin: trigger support.
+
 ## Validation of column refs in GENERATED / DEFAULT expressions
 
 `ValidateColumnRefs` checks index / constraint / FK definitions against

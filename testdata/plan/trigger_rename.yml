@@ -1,0 +1,10 @@
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_old BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL);
+  -- pista:renamed-from events_old
+  CREATE TRIGGER events_new BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+plan: |
+  ALTER TRIGGER events_old ON public.events RENAME TO events_new;

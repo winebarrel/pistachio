@@ -1,0 +1,24 @@
+# PostgreSQL refuses to replace a constraint trigger with a plain one, so the
+# change goes through DROP and CREATE, gated by the trigger drop policy like
+# any other trigger drop.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE CONSTRAINT TRIGGER events_check AFTER INSERT ON public.events
+      DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER events_check AFTER INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+drop_policy:
+  allow_drop:
+    - trigger
+plan: |
+  DROP TRIGGER events_check ON public.events;
+  CREATE TRIGGER events_check AFTER INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();

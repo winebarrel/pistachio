@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Manage triggers. `CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER` and `INSTEAD OF` triggers on views are read from `pg_trigger`, written by `dump`, and diffed. A definition change uses `CREATE OR REPLACE TRIGGER`; switching a trigger to or from a constraint trigger runs as `DROP` and `CREATE`, gated by `--allow-drop trigger`. The enable state is carried as `ALTER TABLE ... ENABLE/DISABLE TRIGGER`, and `-- pista:renamed-from` renames a trigger. The function a trigger calls stays unmanaged, so it belongs in a `-- pista:execute-first` statement.
+
 * Keep a constraint trigger out of the table's constraints. `CREATE CONSTRAINT TRIGGER` also writes a `pg_constraint` row, and the catalog read it as a table constraint. `dump` then emitted `CONSTRAINT x TRIGGER ...`, which does not parse, and `plan` proposed dropping the trigger. Triggers remain unmanaged.
 
 ## [1.28.0] - 2026-08-23

@@ -1,0 +1,17 @@
+# Dropping a column from a view's output forces DROP and CREATE, which takes
+# the view's triggers with it, so the recreate has to put them back.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL, name text);
+  CREATE VIEW public.recent_events AS SELECT id, name FROM public.events;
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON public.recent_events
+      FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL, name text);
+  CREATE VIEW public.recent_events AS SELECT id FROM public.events;
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON public.recent_events FOR EACH ROW EXECUTE FUNCTION stamp();
+plan: |
+  DROP VIEW public.recent_events;
+  CREATE OR REPLACE VIEW public.recent_events AS
+  SELECT id FROM public.events;
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON public.recent_events FOR EACH ROW EXECUTE FUNCTION stamp();

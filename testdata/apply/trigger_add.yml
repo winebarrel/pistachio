@@ -1,0 +1,23 @@
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+
+  CREATE TRIGGER events_stamp BEFORE INSERT ON events FOR EACH ROW EXECUTE FUNCTION stamp();
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;
+verify_no_drift: true
