@@ -1,6 +1,6 @@
-# PostgreSQL refuses to replace a constraint trigger with a plain one, so the
-# change goes through DROP and CREATE, gated by the trigger drop policy like
-# any other trigger drop.
+# With the default drop policy (nothing allowed), the constraint switch is
+# denied entirely: no DROP, and no CREATE either, since that would apply the
+# change the DROP was meant to clear the way for.
 init: |
   CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
   CREATE TABLE public.events (
@@ -17,8 +17,7 @@ desired: |
   );
   CREATE TRIGGER events_check AFTER INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
 drop_policy:
-  allow_drop:
-    - trigger
-plan: |
-  DROP TRIGGER events_check ON public.events;
-  CREATE TRIGGER events_check AFTER INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+  allow_drop: []
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP TRIGGER events_check ON public.events;

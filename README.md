@@ -869,7 +869,7 @@ CREATE TRIGGER events_stamp BEFORE UPDATE ON public.events
 
 A trigger names the table or view it sits on, so that relation has to be declared earlier in the file, or in an earlier file when the schema is split across several.
 
-A definition change is applied with `CREATE OR REPLACE TRIGGER`, which takes a lighter lock than dropping and recreating. Turning a trigger into a constraint trigger, or back, is the one change PostgreSQL rejects in place; it runs as `DROP TRIGGER` and `CREATE TRIGGER` and needs `--allow-drop trigger`.
+A definition change is applied with `CREATE OR REPLACE TRIGGER`, which takes a lighter lock than dropping and recreating. Turning a trigger into a constraint trigger, or back, is the one change PostgreSQL rejects in place; it runs as `DROP TRIGGER` and `CREATE TRIGGER` and needs `--allow-drop trigger`, the same as any other trigger drop. Without it the trigger keeps its current definition.
 
 `CREATE TRIGGER` has no syntax for a disabled trigger, so a desired schema asks for one the way `dump` writes it:
 

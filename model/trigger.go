@@ -40,7 +40,8 @@ type Trigger struct {
 	// Definition is the whole CREATE TRIGGER statement without its
 	// terminator: what pg_get_triggerdef writes on the catalog side, and what
 	// pg_query deparses on the desired side. The two renderings differ in
-	// places, so the diff compares parse trees rather than this text.
+	// places, so the diff cannot compare this text directly; see
+	// diff.equalTriggerDef.
 	Definition string
 	State      TriggerState
 }
@@ -64,5 +65,13 @@ func (trg Trigger) StateSQL() string {
 	if trg.State.IsDefault() {
 		return ""
 	}
-	return "ALTER TABLE " + trg.FQTN() + " " + trg.State.Action() + " TRIGGER " + Ident(trg.Name) + ";"
+	return TriggerStateSQL(trg.FQTN(), trg.Name, trg.State)
+}
+
+// TriggerStateSQL renders the ALTER TABLE that puts a trigger in the given
+// state. Exported so diff can reuse it for the case StateSQL suppresses: a
+// trigger going back to the default state after CREATE OR REPLACE TRIGGER
+// reset it, which still needs the statement CREATE TRIGGER alone would not.
+func TriggerStateSQL(fqtn, name string, state TriggerState) string {
+	return "ALTER TABLE " + fqtn + " " + state.Action() + " TRIGGER " + Ident(name) + ";"
 }

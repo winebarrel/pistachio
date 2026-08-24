@@ -224,6 +224,31 @@ func TestDiffTriggers_ConstraintSwitch(t *testing.T) {
 	}, stmts)
 }
 
+// A denied recreate leaves the trigger exactly as it was: no DROP, no
+// CREATE, nothing else touches it either.
+func TestDiffTriggers_ConstraintSwitchDenied(t *testing.T) {
+	cur := triggers(newTrigger("events_stamp", conDef))
+	des := triggers(newTrigger("events_stamp", insertDef))
+	stmts, disallowed, err := diffTriggers("public.events", cur, des, nil)
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+	assert.Equal(t, []string{"-- skipped: DROP TRIGGER events_stamp ON public.events;"}, disallowed)
+}
+
+// A rename bundled with a denied constraint switch keeps the old name too:
+// the RENAME is suppressed the same way it is for a recreate that goes
+// through, and nothing steps in to run it on its own.
+func TestDiffTriggers_RenameWithRecreateDenied(t *testing.T) {
+	cur := triggers(newTrigger("events_old", conDef))
+	des := triggers(newTrigger("events_new",
+		"CREATE TRIGGER events_new AFTER INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp()",
+		withTriggerRenameFrom("events_old")))
+	stmts, disallowed, err := diffTriggers("public.events", cur, des, nil)
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+	assert.Equal(t, []string{"-- skipped: DROP TRIGGER events_old ON public.events;"}, disallowed)
+}
+
 func TestDiffTriggers_Rename(t *testing.T) {
 	cur := triggers(newTrigger("events_old",
 		"CREATE TRIGGER events_old BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp()"))
@@ -345,6 +370,10 @@ func TestReplaceTriggerSQL_Unparseable(t *testing.T) {
 	_, err = replaceTriggerSQL("SELECT 1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
+
+	_, err = replaceTriggerSQL(insertDef + "; " + insertDef)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected parse result")
 }
 
 func TestRenameTriggerDef_Unparseable(t *testing.T) {
@@ -352,6 +381,10 @@ func TestRenameTriggerDef_Unparseable(t *testing.T) {
 	require.Error(t, err)
 
 	_, err = renameTriggerDef("SELECT 1", "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected parse result")
+
+	_, err = renameTriggerDef(insertDef+"; "+insertDef, "x")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }

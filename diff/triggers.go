@@ -14,11 +14,11 @@ import (
 // A definition change goes through CREATE OR REPLACE TRIGGER, which PostgreSQL
 // has carried since 14 and which takes a lighter lock than DROP TRIGGER. It
 // refuses to turn a constraint trigger into a plain one or back, so that pair
-// falls back to DROP and CREATE. Either way PostgreSQL leaves the new trigger
-// enabled, so a desired state other than the default is re-applied after the
-// statement that reset it.
-//
-// Pure removals honor the trigger-drop policy via dc.
+// falls back to DROP and CREATE, honoring the trigger-drop policy via dc the
+// same as a removal: with the drop denied, the trigger keeps its current
+// definition rather than running the CREATE half alone. Either way PostgreSQL
+// leaves the new trigger enabled, so a desired state other than the default is
+// re-applied after the statement that reset it.
 func diffTriggers(
 	fqtn string,
 	current, desired *orderedmap.Map[string, *model.Trigger],
@@ -58,8 +58,23 @@ func diffTriggers(
 		}
 	}
 
+	triggerAllowed := dc.IsDropAllowed("trigger")
+
+	// A recreate crossing the constraint-trigger line needs the same drop the
+	// removal branch below honors: nothing else about the trigger can change
+	// while the drop that clears the way for it is denied, so it stays
+	// exactly as it is, the way DiffViews leaves a view alone when its own
+	// recreate is denied.
+	recreateDenied := map[string]bool{}
+	if !triggerAllowed {
+		for name := range recreated {
+			recreateDenied[name] = true
+		}
+	}
+
 	// A trigger that is both renamed and recreated skips the RENAME, since the
-	// CREATE below already puts the new name in place.
+	// CREATE below already puts the new name in place. One whose recreate is
+	// denied keeps its old name too, recreated[name] being true either way.
 	for name := range desired.Keys() {
 		oldName, renamed := renamedFrom[name]
 		if !renamed || recreated[name] {
@@ -67,8 +82,6 @@ func diffTriggers(
 		}
 		stmts = append(stmts, renameTriggerSQL(fqtn, oldName, name))
 	}
-
-	triggerAllowed := dc.IsDropAllowed("trigger")
 
 	// Drop the triggers the desired schema no longer declares, then the ones
 	// the recreate needs out of the way. A recreate whose RENAME was skipped
@@ -88,11 +101,20 @@ func diffTriggers(
 			if oldName, ok := renamedFrom[name]; ok {
 				dropName = oldName
 			}
-			stmts = append(stmts, dropTriggerSQL(fqtn, dropName))
+			drop := dropTriggerSQL(fqtn, dropName)
+			if recreateDenied[name] {
+				disallowed = append(disallowed, "-- skipped: "+drop)
+				continue
+			}
+			stmts = append(stmts, drop)
 		}
 	}
 
 	for name, des := range desired.All() {
+		if recreateDenied[name] {
+			continue
+		}
+
 		cur, ok := current.GetOk(name)
 		if !ok || recreated[name] {
 			stmts = append(stmts, des.SQL())
@@ -192,7 +214,7 @@ func renameTriggerSQL(fqtn, oldName, newName string) string {
 }
 
 func alterTriggerStateSQL(fqtn string, trg *model.Trigger) string {
-	return "ALTER TABLE " + fqtn + " " + trg.State.Action() + " TRIGGER " + model.Ident(trg.Name) + ";"
+	return model.TriggerStateSQL(fqtn, trg.Name, trg.State)
 }
 
 // parseTriggerDef parses a CREATE TRIGGER statement and takes out the wording
@@ -271,6 +293,9 @@ func renameTriggerDef(def, newName string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to parse the current trigger definition: %w", err)
 	}
+	if len(result.Stmts) != 1 {
+		return "", fmt.Errorf("unexpected parse result for trigger definition: %s", def)
+	}
 	ct := result.Stmts[0].Stmt.GetCreateTrigStmt()
 	if ct == nil {
 		return "", fmt.Errorf("unexpected parse result for trigger definition: %s", def)
@@ -289,6 +314,9 @@ func replaceTriggerSQL(def string) (string, error) {
 	result, err := pg_query.Parse(def)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse the desired trigger definition: %w", err)
+	}
+	if len(result.Stmts) != 1 {
+		return "", fmt.Errorf("unexpected parse result for trigger definition: %s", def)
 	}
 	ct := result.Stmts[0].Stmt.GetCreateTrigStmt()
 	if ct == nil {
