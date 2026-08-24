@@ -233,13 +233,14 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		if !dok || !cok {
 			continue
 		}
-		// TODO: dead code. detectViewRenames already rejects a rename that
-		// switches between VIEW and MATERIALIZED VIEW, so this condition is
-		// never true here. Consider removing.
-		if currentView.Materialized != desiredView.Materialized {
-			needsRecreateRenamed[newKey] = true
-			continue
-		}
+		// detectViewRenames rejects a rename that switches between VIEW and
+		// MATERIALIZED VIEW, so this cannot be reached. Kept for the day that
+		// rename is allowed, when a type switch has to take the recreate path
+		// rather than ALTER ... RENAME.
+		// if currentView.Materialized != desiredView.Materialized {
+		// 	needsRecreateRenamed[newKey] = true
+		// 	continue
+		// }
 		if !equalViewDef(currentView.Definition, desiredView.Definition) {
 			if desiredView.Materialized || !canCreateOrReplaceView(currentView.Definition, desiredView.Definition) {
 				needsRecreateRenamed[newKey] = true
@@ -393,15 +394,6 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		// pre-recreation shape, so skip comment diff to keep the output
 		// consistent with "nothing executable was emitted for this view".
 		if recreateDenied[k] {
-			continue
-		}
-
-		// If the type changed (VIEW <-> MATERIALIZED VIEW) but drop was denied,
-		// the object type hasn't changed yet; skip comment diff.
-		// TODO: dead code. A denied type change always sets recreateDenied[k],
-		// so the check above already continues before reaching this. Consider
-		// removing.
-		if ok && currentView.Materialized != desiredView.Materialized && !dc.IsDropAllowed("view") {
 			continue
 		}
 
