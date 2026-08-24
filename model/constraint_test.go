@@ -13,7 +13,6 @@ func TestConstraintType(t *testing.T) {
 	assert.True(t, model.ConstraintType('n').IsNotNullConstraint())
 	assert.True(t, model.ConstraintType('p').IsPrimaryKeyConstraint())
 	assert.True(t, model.ConstraintType('u').IsUniqueConstraint())
-	assert.True(t, model.ConstraintType('t').IsConstraintTrigger())
 	assert.True(t, model.ConstraintType('x').IsExclusionConstraint())
 
 	assert.False(t, model.ConstraintType('c').IsPrimaryKeyConstraint())

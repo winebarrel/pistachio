@@ -1,0 +1,17 @@
+# A CREATE CONSTRAINT TRIGGER leaves a pg_constraint row with contype='t'.
+# The trigger is unmanaged, so the dump must leave it out.
+init: |
+  CREATE FUNCTION public.noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE CONSTRAINT TRIGGER events_check AFTER INSERT ON public.events
+      DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW EXECUTE FUNCTION public.noop();
+dump: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );

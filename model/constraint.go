@@ -26,10 +26,6 @@ func (b ConstraintType) IsUniqueConstraint() bool {
 	return b == 'u'
 }
 
-func (b ConstraintType) IsConstraintTrigger() bool {
-	return b == 't'
-}
-
 func (b ConstraintType) IsExclusionConstraint() bool {
 	return b == 'x'
 }

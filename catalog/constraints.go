@@ -54,10 +54,19 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 			LEFT JOIN column_t col ON col.con_oid = con.oid
 		WHERE
 			con.conrelid = @table_oid
-			-- PG18's per-column NOT NULL rows (contype='n') are read into
-			-- Column.NotNull / Column.NotNullName by ListColumnsByTable; this
-			-- query only returns table-level constraints.
-			AND con.contype <> 'n'
+			-- The table-level constraint types, listed the way the ORDER BY
+			-- below lists them. Two other types share the catalog and belong
+			-- elsewhere. PG18's per-column NOT NULL rows (contype='n') are
+			-- read into Column.NotNull / Column.NotNullName by
+			-- ListColumnsByTable. CREATE CONSTRAINT TRIGGER records the
+			-- trigger here too (contype='t'), where pg_get_constraintdef
+			-- renders it as the bare word TRIGGER, followed by the deferral
+			-- clause when it has one; reading that as a table constraint made
+			-- dump write a CREATE TABLE that does not parse, and plan propose
+			-- a DROP CONSTRAINT for the trigger. Naming the types pistachio
+			-- manages also keeps a type a later major version adds out until
+			-- the model has somewhere to put it.
+			AND con.contype = ANY ('{p,u,c,x,f}'::"char"[])
 		ORDER BY
 			array_position('{p,u,c,x,f}'::"char"[], con.contype),
 			con.conname
