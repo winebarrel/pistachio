@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.29.0] - 2026-08-24
 
 * Manage triggers. `CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER` and `INSTEAD OF` triggers on views are read from `pg_trigger`, written by `dump`, and diffed. A definition change uses `CREATE OR REPLACE TRIGGER`; switching a trigger to or from a constraint trigger runs as `DROP` and `CREATE`, gated by `--allow-drop trigger`. The enable state is carried as `ALTER TABLE ... ENABLE/DISABLE TRIGGER`, and `-- pista:renamed-from` renames a trigger. The function a trigger calls stays unmanaged, so it belongs in a `-- pista:execute-first` statement.
 
