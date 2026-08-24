@@ -867,7 +867,9 @@ CREATE TRIGGER events_stamp BEFORE UPDATE ON public.events
     FOR EACH ROW EXECUTE FUNCTION public.stamp();
 ```
 
-A definition change is applied with `CREATE OR REPLACE TRIGGER`, which takes a lighter lock than dropping and recreating. Turning a trigger into a constraint trigger, or back, is the one change PostgreSQL rejects in place, so that one runs as `DROP TRIGGER` and `CREATE TRIGGER` and needs `--allow-drop trigger`.
+A trigger names the table or view it sits on, so that relation has to be declared earlier in the file, or in an earlier file when the schema is split across several.
+
+A definition change is applied with `CREATE OR REPLACE TRIGGER`, which takes a lighter lock than dropping and recreating. Turning a trigger into a constraint trigger, or back, is the one change PostgreSQL rejects in place; it runs as `DROP TRIGGER` and `CREATE TRIGGER` and needs `--allow-drop trigger`.
 
 `CREATE TRIGGER` has no syntax for a disabled trigger, so a desired schema asks for one the way `dump` writes it:
 
@@ -875,7 +877,9 @@ A definition change is applied with `CREATE OR REPLACE TRIGGER`, which takes a l
 ALTER TABLE public.events DISABLE TRIGGER events_stamp;
 ```
 
-`ENABLE ALWAYS` and `ENABLE REPLICA` work the same way. PostgreSQL rejects the statement on a view, so a view's triggers have no state to set. `CREATE OR REPLACE TRIGGER` leaves a trigger enabled, so a definition change on a trigger that is held in another state is followed by the `ALTER TABLE` that puts it back.
+`ENABLE ALWAYS` and `ENABLE REPLICA` work the same way. PostgreSQL rejects the statement on a view, so a view's triggers have no state to set. Both `CREATE OR REPLACE TRIGGER` and a recreate leave a trigger enabled, so pistachio re-applies any other state right after.
+
+The catalog reports a trigger's function without its schema when `search_path` reaches it, the same as any other name pistachio reads back. A desired schema that writes `public.stamp()` while the default `--search-path=public` is in effect therefore differs on every run; `--search-path=` keeps every schema and matches a `pg_dump`-style file.
 
 A trigger on a partitioned table is cloned onto every partition. pistachio reads and writes the parent's trigger alone, and PostgreSQL keeps the clones in step.
 

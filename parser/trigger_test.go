@@ -65,6 +65,21 @@ CREATE OR REPLACE TRIGGER t_ins BEFORE INSERT ON public.t FOR EACH ROW EXECUTE F
 		trg.Definition)
 }
 
+// EXECUTE PROCEDURE is the spelling PostgreSQL kept for compatibility, and
+// several real schemas still use it. The catalog always writes EXECUTE
+// FUNCTION, and so does the deparser, so the two meet.
+func TestParseSQL_Trigger_ExecuteProcedure(t *testing.T) {
+	sql := `CREATE TABLE public.t (id int);
+CREATE TRIGGER t_ins BEFORE INSERT ON public.t FOR EACH ROW EXECUTE PROCEDURE stamp();`
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	trg := result.Tables.Get("public.t").Triggers.Get("t_ins")
+	assert.Equal(t,
+		"CREATE TRIGGER t_ins BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION stamp()",
+		trg.Definition)
+}
+
 func TestParseSQL_Trigger_OnView(t *testing.T) {
 	sql := `CREATE TABLE public.t (id int);
 CREATE VIEW public.v AS SELECT id FROM public.t;

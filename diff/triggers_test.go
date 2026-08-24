@@ -76,6 +76,62 @@ func TestDiffTriggers_NoChangeAcrossRenderings(t *testing.T) {
 	assert.Empty(t, stmts)
 }
 
+// pg_get_triggerdef casts a string literal in the WHEN expression the way
+// pg_get_constraintdef casts one in a CHECK body, and writes = ANY (ARRAY[...])
+// where the file says IN. Neither is a change.
+func TestDiffTriggers_NoChangeAcrossWhenRenderings(t *testing.T) {
+	cases := []struct {
+		name string
+		cur  string
+		des  string
+	}{
+		{
+			"text cast",
+			"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.name <> 'skip'::text) EXECUTE FUNCTION stamp()",
+			"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.name <> 'skip') EXECUTE FUNCTION stamp()",
+		},
+		{
+			"any array",
+			"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.kind = ANY (ARRAY[1, 2])) EXECUTE FUNCTION stamp()",
+			"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.kind IN (1, 2)) EXECUTE FUNCTION stamp()",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cur := triggers(newTrigger("events_audit", tc.cur))
+			des := triggers(newTrigger("events_audit", tc.des))
+			stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+			require.NoError(t, err)
+			assert.Empty(t, stmts)
+		})
+	}
+}
+
+// A WHEN expression that really differs is a definition change.
+func TestDiffTriggers_WhenChanged(t *testing.T) {
+	cur := triggers(newTrigger("events_audit",
+		"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.name <> 'skip'::text) EXECUTE FUNCTION stamp()"))
+	des := triggers(newTrigger("events_audit",
+		"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.name <> 'keep') EXECUTE FUNCTION stamp()"))
+	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"CREATE OR REPLACE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW WHEN (new.name <> 'keep') EXECUTE FUNCTION stamp();",
+	}, stmts)
+}
+
+// The catalog renders every trigger argument as a string, so an integer in the
+// file is not a change.
+func TestDiffTriggers_NoChangeAcrossArgumentRenderings(t *testing.T) {
+	cur := triggers(newTrigger("events_audit",
+		"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp('a', '1')"))
+	des := triggers(newTrigger("events_audit",
+		"CREATE TRIGGER events_audit AFTER UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp('a', 1)"))
+	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
 func TestDiffTriggers_Add(t *testing.T) {
 	stmts, _, err := diffTriggers("public.events", triggers(), triggers(newTrigger("events_stamp", insertDef)), allowTriggerDrops())
 	require.NoError(t, err)

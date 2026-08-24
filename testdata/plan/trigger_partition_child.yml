@@ -1,0 +1,15 @@
+# A partition carries its own triggers, so the partition-child branch of the
+# table diff has to reach them. The parent's trigger is cloned onto the child
+# and stays out of the model on both sides.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.logs (id integer NOT NULL, at date NOT NULL) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE TRIGGER logs_stamp BEFORE INSERT ON public.logs FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.logs (id integer NOT NULL, at date NOT NULL) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE TRIGGER logs_stamp BEFORE INSERT ON public.logs FOR EACH ROW EXECUTE FUNCTION stamp();
+  CREATE TRIGGER logs_2026_only AFTER INSERT ON public.logs_2026 FOR EACH ROW EXECUTE FUNCTION stamp();
+plan: |
+  CREATE TRIGGER logs_2026_only AFTER INSERT ON public.logs_2026 FOR EACH ROW EXECUTE FUNCTION stamp();
