@@ -62,11 +62,11 @@
   <text class="t t-name" x="88" y="118">schema.sql</text>
   <text class="t t-tag" x="88" y="136">DESIRED SCHEMA</text>
   <rect class="code" x="80" y="148" width="210" height="102" rx="4" />
-  <rect class="addline" x="81" y="190" width="208" height="18" />
+  <rect class="addline" x="81" y="208" width="208" height="18" />
   <text class="t t-code" x="88" y="166" xml:space="preserve"> CREATE TABLE users (</text>
   <text class="t t-code" x="88" y="184" xml:space="preserve">   id    integer,</text>
-  <text class="t t-code t-accent" x="88" y="202" xml:space="preserve">+  email text,</text>
-  <text class="t t-code" x="88" y="220" xml:space="preserve">   name  text</text>
+  <text class="t t-code" x="88" y="202" xml:space="preserve">   name  text,</text>
+  <text class="t t-code t-accent" x="88" y="220" xml:space="preserve">+  email text</text>
   <text class="t t-code" x="88" y="238" xml:space="preserve"> );</text>
 
   <!-- parse -->
