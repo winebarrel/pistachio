@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Keep a constraint trigger out of the table's constraints. `CREATE CONSTRAINT TRIGGER` also writes a `pg_constraint` row, which the catalog read as a table constraint, so `dump` emitted `CONSTRAINT x TRIGGER ...`, which does not parse, and `plan` proposed dropping the trigger. Triggers stay unmanaged.
+
 ## [1.28.0] - 2026-08-23
 
 * Require Go 1.27 to build.

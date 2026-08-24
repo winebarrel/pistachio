@@ -58,6 +58,12 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 			-- Column.NotNull / Column.NotNullName by ListColumnsByTable; this
 			-- query only returns table-level constraints.
 			AND con.contype <> 'n'
+			-- CREATE CONSTRAINT TRIGGER records the trigger in pg_constraint
+			-- too (contype='t'), and pg_get_constraintdef renders it as the
+			-- bare word TRIGGER. It is a trigger, not a table constraint, so
+			-- reading it here made dump write invalid SQL and plan propose a
+			-- DROP CONSTRAINT for it. Triggers are not managed.
+			AND con.contype <> 't'
 		ORDER BY
 			array_position('{p,u,c,x,f}'::"char"[], con.contype),
 			con.conname

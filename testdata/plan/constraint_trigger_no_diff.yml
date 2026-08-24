@@ -1,0 +1,21 @@
+# The constraint trigger is not a table constraint, so a desired schema that
+# does not mention it must not plan a DROP CONSTRAINT. Drops are allowed here
+# so the statement would show up in the plan rather than as a skipped drop.
+init: |
+  CREATE FUNCTION public.noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE CONSTRAINT TRIGGER events_check AFTER INSERT ON public.events
+      DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW EXECUTE FUNCTION public.noop();
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+drop_policy:
+  allow_drop:
+    - all
+plan: ""
