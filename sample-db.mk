@@ -330,7 +330,8 @@ test-samples:
 	bash test/samples/run.sh
 
 # Wipe every user schema. Used by `schema` and `demo` to start from an empty
-# database, and by test-samples once before its first sample.
+# database, by test-samples once before its first sample, and by `test` and
+# `test-scenario`, which reset only `public` on their own.
 #
 # The tables go first, a batch at a time, and only then the schemas. A single
 # DROP SCHEMA ... CASCADE takes locks on every object it reaches, and the
