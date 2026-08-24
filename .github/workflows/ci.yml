@@ -86,6 +86,9 @@ jobs:
           Set-Content -Path "$env:PGDATA\pg_hba.conf" -Value "host all all 127.0.0.1/32 trust`nhost all all ::1/128 trust"
           Get-Service -Name postgresql* | Set-Service -StartupType Manual -PassThru | Start-Service
           & "$env:PGBIN\pg_isready" -h localhost -t 30
+          # `make test` wipes the database through psql first, and the image
+          # leaves PGBIN off PATH, so put it on.
+          Add-Content -Path $env:GITHUB_PATH -Value $env:PGBIN
       - name: Build
         run: go build -o pista.exe ./cmd/pista
       - name: Smoke test

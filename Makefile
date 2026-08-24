@@ -36,8 +36,17 @@ install:
 vet:
 	go vet ./...
 
+# The Go tests reset `public` and nothing else, so whatever `make schema`
+# loaded into the other schemas is still there while they run. A test that
+# looks something up without naming its schema then finds a sample's object
+# instead of its own. CI runs against an empty database and never sees it, so
+# wipe first and let a local run start from the same place.
+#
+# clean-schema goes through PGHOST/PGUSER/PGPORT, so overriding
+# TEST_PISTA_CONN_STR alone points the tests at one server and the wipe at
+# another. Override PGPORT, or wipe the other server yourself.
 .PHONY: test
-test:
+test: clean-schema
 	go test -p 1 -v ./... $(TEST_OPTS)
 
 .PHONY: lint
@@ -56,8 +65,10 @@ deadcode:
 keywords:
 	bash scripts/gen-keywords.sh
 
+# Cleaned for the same reason as `test`: run.sh resets `public` per scenario
+# and leaves every other schema alone.
 .PHONY: test-scenario
-test-scenario:
+test-scenario: clean-schema
 	bash test/scenario/run.sh
 
 .PHONY: demo
