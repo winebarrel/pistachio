@@ -148,6 +148,14 @@ sample-db-hive:
 # them, so the sample is checked with all four. `so` is where its 1,832
 # Sequence Ontology views land, more views than every other sample together.
 #
+# The same sed qualifies the create_point calls in the bodies of boxrange and
+# boxquery. PostgreSQL 17 runs CREATE INDEX with search_path set to
+# pg_catalog, pg_temp, and the three gist indexes over boxrange inline it,
+# which re-resolves the unqualified create_point under that search_path and
+# does not find it. Qualifying the calls keeps all three indexes on 17 and 18
+# and changes nothing on 15 and 16. The CREATE line for create_point itself is
+# left alone, so search_path still decides where the function lands.
+#
 # Nine of the file's SQL functions are written against the `@` box operator,
 # which PostgreSQL 14 removed, so they error out on every version in the CI
 # matrix. The awk drops them: it buffers each CREATE OR REPLACE FUNCTION
@@ -159,7 +167,7 @@ sample-db-hive:
 sample-db-chado:
 	psql -c 'CREATE SCHEMA IF NOT EXISTS chado'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
-	  | sed -E 's/^(SET search_path ?=[^;]*)public/\1chado/' \
+	  | sed -E 's/^(SET search_path ?=[^;]*)public/\1chado/; /^CREATE/! s/create_point\(/chado.create_point(/g' \
 	  | awk '/^CREATE OR REPLACE FUNCTION/ && !hold { buf = $$0; hold = 1; next } \
 	         hold { buf = buf ORS $$0; \
 	                if (tolower($$0) ~ /language/) { hold = 0; \

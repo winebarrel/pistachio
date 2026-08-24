@@ -267,8 +267,13 @@ strip only what is irrelevant to a schema round trip:
   implicit-sequence NOTICEs. Nine of its SQL functions are dropped, the six
   written against the `@` box operator that PostgreSQL 14 removed and the three
   that call one of those six; they error out on every version in the CI matrix,
-  and pistachio does not manage functions in any case. Every table, index,
-  constraint, and view still loads, the three gist indexes over `boxrange`
+  and pistachio does not manage functions in any case. The `create_point` calls
+  in the bodies of `boxrange` and `boxquery` are qualified with `chado.`,
+  because PostgreSQL 17 runs `CREATE INDEX` with `search_path` set to
+  `pg_catalog, pg_temp`: the three gist indexes over `boxrange` inline it,
+  which re-resolves an unqualified `create_point` under that `search_path` and
+  does not find it. With the calls qualified, every table, index, constraint,
+  and view loads on all four versions of the CI matrix, the three gist indexes
   among them.
 - **clubdata**: the dump creates its own database and reconnects to it, which
   cannot be done mid-pipe. Those two lines are dropped; the rest creates the
