@@ -42,7 +42,13 @@ each sample, it:
    sit in, and a dump that says `CREATE EXTENSION IF NOT EXISTS` does nothing
    when an earlier sample already installed that extension somewhere else,
    leaving its types and operator classes unresolvable.
-2. Runs the sample's loader target to download and load the schema.
+2. Runs the sample's loader target to download and load the schema. Every
+   loader pipes into `psql -v ON_ERROR_STOP=1`, so a statement that fails
+   stops the load and the sample reports `FAIL (load)`. Without it psql
+   prints the error, carries on, and exits 0, and the check then runs on a
+   schema quietly missing whatever the failed statement was going to create;
+   `dump` and `plan` agree about what is there, so the sample passes and the
+   loss goes unnoticed.
 3. Runs `pista dump -n <schemas>` to capture pistachio's model of the loaded
    schema as SQL.
 4. Runs `pista plan -n <schemas> <dump>` and requires the output to be
@@ -121,21 +127,23 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | guacamole | guacamole | [apache/guacamole-client](https://github.com/apache/guacamole-client) |
 | dotcms | dotcms | [dotCMS/core](https://github.com/dotCMS/core) |
 | osm | osm | [openstreetmap/openstreetmap-website](https://github.com/openstreetmap/openstreetmap-website) |
+| chado | chado, genetic_code, so, frange | [GMOD/Chado](https://github.com/GMOD/Chado) |
 
 ## Coverage
 
 Object counts of the loaded schemas, as of 2026-08-08 on PostgreSQL 15.18
-(16.13 for icingadb, rt, znuny, gitlab, hive, ranger, ambari, and ovirt; the
-Sequences column was counted on 15.18 throughout, and Triggers, added
-2026-08-24, on 15.18 for every sample). "Constraints" excludes foreign keys;
-"Types" counts enums and domains; "Sequences" counts standalone sequences
-only, since pistachio manages the sequence behind a serial or identity column
-as an attribute of that column rather than as an object of its own. Counting
-those too would add 1,996 more, 886 of them gitlab's. "Triggers" excludes the
-internal triggers a foreign key installs and the clones PostgreSQL puts on
-each partition of a partitioned table's trigger, the same as what pistachio
-reads and dump writes. All counts are limited to the schemas the sample is
-checked with, and exclude what an extension owns: the two views
+(16.13 for icingadb, rt, znuny, gitlab, hive, ranger, ambari, ovirt, and chado,
+the last counted 2026-08-24; the Sequences column was counted on 15.18
+throughout, and Triggers, added 2026-08-24, on 15.18 for every sample).
+"Constraints" excludes foreign keys; "Types" counts enums and domains;
+"Sequences" counts standalone sequences only, since pistachio manages the
+sequence behind a serial or identity column as an attribute of that column
+rather than as an object of its own. Counting those too would add 2,206 more,
+886 of them gitlab's and 210 chado's. "Triggers" excludes the internal triggers
+a foreign key installs and the clones PostgreSQL puts on each partition of a
+partitioned table's trigger, the same as what pistachio reads and dump writes.
+All counts are limited to the schemas the sample is checked with, and exclude
+what an extension owns: the two views
 `pg_stat_statements` adds to sourcegraph's schema are not sourcegraph's schema
 and pistachio does not read them either.
 
@@ -187,12 +195,14 @@ and pistachio does not read them either.
 | guacamole | 23 | 104 | 61 | 30 | 29 | 0 | 5 | 0 | 0 |
 | dotcms | 167 | 1,373 | 346 | 113 | 190 | 0 | 0 | 22 | 10 |
 | osm | 57 | 391 | 155 | 71 | 55 | 0 | 8 | 0 | 0 |
-| **Total** | **4,589** | **38,646** | **13,954** | **5,762** | **8,516** | **86** | **69** | **328** | **555** |
+| chado | 213 | 1,017 | 837 | 472 | 399 | 1,864 | 0 | 1 | 0 |
+| **Total** | **4,802** | **39,663** | **14,791** | **6,234** | **8,915** | **1,950** | **69** | **329** | **555** |
 
-The 46 dumps come to about 87,600 lines of SQL, and gitlab is 27,600 of them.
-It is still nearly half of the indexes and constraints, a third of the tables,
-and about 40 percent of the columns and foreign keys; musicbrainz, discourse,
-and wso2apim are the largest of what remains. gitlab is also why
+The 47 dumps come to about 129,000 lines of SQL. chado is 41,400 of them, the
+longest dump of any sample, and gitlab 27,600. gitlab is still nearly half of
+the indexes and constraints, a third of the tables, and about 40 percent of the
+columns and foreign keys; musicbrainz, discourse, and wso2apim are the largest
+of what remains, and chado is nearly all of the views. gitlab is also why
 `clean-schema` drops tables a batch at a time rather than cascading through
 `DROP SCHEMA`: a single statement takes locks on every object it reaches, and
 gitlab's 1,422 tables and their indexes run the server out of lock table space
@@ -216,22 +226,27 @@ one over four columns, which needs `btree_gist` (osm), materialized
 views (adventureworks, pagila), tsvector
 columns (dvdrental, pagila), a non-default
 collation (musicbrainz), composite types (ovirt declares 10 of them, more than
-any other sample, and sourcegraph 2), standalone sequences rather than serial
-columns (ranger, whose 85 tables come with 84 of them, and wso2apim, which
-mixes 104 of them in with serial columns), a schema written
+any other sample, and sourcegraph and chado 2 each), standalone sequences
+rather than serial columns (ranger, whose 85 tables come with 84 of them, and
+wso2apim, which mixes 104 of them in with serial columns), a schema written
 entirely in quoted mixed-case identifiers, so every name is case-sensitive
 (hive's 84 tables, where chinook has 11), an index-heavy schema of 192 indexes
 over 64 tables (mediawiki), partitioned tables at scale (gitlab declares 100 of them and
 attaches 2,054 partitions, all of which live in schemas of their own), table
 inheritance (ledgersmb attaches 21 children with INHERITS, the only sample that
 does), four unique indexes declared `NULLS NOT DISTINCT` and one index with an
-`INCLUDE` column (discourse), columns typed by an extension that is not contrib
-(discourse's three `halfvec` columns, which need pgvector, and osm's one
-`geometry(Polygon,4326)` column, which needs PostGIS and is the only type
-modifier any sample reports in mixed case), and
+`INCLUDE` column (discourse), views at scale (chado's 1,864 are more than
+twenty times every other sample put together, and 1,832 of them are the
+Sequence Ontology views in its `so` schema, each selecting from tables in
+`chado`), gist indexes over a function the schema defines itself (chado's three
+name `boxrange`, one of them partial and declared from another schema), columns
+typed by an extension that is not contrib (discourse's three `halfvec` columns,
+which need pgvector, and osm's one `geometry(Polygon,4326)` column, which needs
+PostGIS and is the only type modifier any sample reports in mixed case), and
 foreign keys that cross a schema boundary: 20 of adventureworks' 90 span its
 five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into `mimiciv_hosp`,
-and every one of gitlab's partitions is attached across one; and triggers
+4 of chado's 472 point from `frange` into `chado`, and every one of gitlab's
+partitions is attached across one; and triggers
 (gitlab's 388, more than any other sample, one of them held in `ENABLE ALWAYS`
 state; kea's 81 outnumber its 64 tables; ledgersmb's 11 and dotcms's 10 come
 next).
@@ -248,6 +263,24 @@ strip only what is irrelevant to a schema round trip:
   them create a schema, so `camunda` is created up front and the files are
   concatenated in dependency order (process engine, history, identity, then the
   case and decision engines with their history).
+- **chado**: the file names no schema for the objects it creates, but four
+  times partway through it sets `search_path` itself with `public` in it, which
+  overrides anything `PGOPTIONS` passes in. The `public` in those four lines is
+  rewritten to `chado`, the way hive's one line is. The lines that name
+  `genetic_code`, `so`, and `frange` keep them: the file creates those three
+  schemas itself, so the sample is checked with all four. Its tables are all
+  `bigserial`, so `client_min_messages` is raised to `warning` to quiet the
+  implicit-sequence NOTICEs. Nine of its SQL functions are dropped, the six
+  written against the `@` box operator that PostgreSQL 14 removed and the three
+  that call one of those six; they error out on every version in the CI matrix,
+  and pistachio does not manage functions in any case. The `create_point` calls
+  in the bodies of `boxrange` and `boxquery` are qualified with `chado.`,
+  because PostgreSQL 17 runs `CREATE INDEX` with `search_path` set to
+  `pg_catalog, pg_temp`: the three gist indexes over `boxrange` inline it,
+  which re-resolves an unqualified `create_point` under that `search_path` and
+  does not find it. With the calls qualified, every table, index, constraint,
+  and view loads on all four versions of the CI matrix, the three gist indexes
+  among them.
 - **clubdata**: the dump creates its own database and reconnects to it, which
   cannot be done mid-pipe. Those two lines are dropped; the rest creates the
   `cd` schema itself.
@@ -264,6 +297,9 @@ strip only what is irrelevant to a schema round trip:
   search path. The tail of the file is Rails' own `SET search_path` followed by
   the migration versions it inserts into `schema_migrations`, which is data, so
   everything from that line on is dropped.
+- **dvdrental**: the dump was taken by a `pg_dump` new enough to set
+  `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
+  one line is dropped. It sets nothing the schema depends on.
 - **hive**: the dump belongs in a schema of its own like the group below, but
   it is `pg_dump` output that sets `search_path` to `public` itself, which
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name

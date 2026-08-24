@@ -63,7 +63,15 @@ ejabberd|sample-db-url-schema|URL=https://raw.githubusercontent.com/processone/e
 guacamole|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/guacamole-client/5be18be1eeadc4cc544c737c54bd761261d2ad65/extensions/guacamole-auth-jdbc/modules/guacamole-auth-jdbc-postgresql/schema/001-create-schema.sql SCHEMA=guacamole|guacamole
 dotcms|sample-db-url-schema|URL=https://raw.githubusercontent.com/dotCMS/core/b0095c0c3920e236efcc16ceb136cd5dd88804b7/dotCMS/src/main/resources/postgres.sql SCHEMA=dotcms|dotcms
 osm|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/openstreetmap/openstreetmap-website/9da0fa5ecbff8adc5e6e91c7cf22546755a91f77/db/structure.sql SCHEMA=osm|osm
+chado|sample-db-chado|URL=https://raw.githubusercontent.com/GMOD/Chado/31c2407716e3d0fe4e837b6effad0a510af22238/chado/schemas/1.31/default_schema.sql|chado,genetic_code,so,frange
 endef
+
+# Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
+# statement stop the load and fail the target, which the runner reports as
+# FAIL (load). Without it psql prints the error, carries on, and exits 0, and
+# the check runs against a schema quietly missing whatever the statement was
+# going to create -- which dump and plan then agree about, so the sample passes.
+PSQL = psql -v ON_ERROR_STOP=1
 
 # Print the sample manifest, one record per line, for shell consumers.
 .PHONY: print-samples
@@ -78,17 +86,23 @@ schema: clean-schema
 	  $(MAKE) $$target $$args; \
 	done
 
+# The Neon sample collection. dvdrental was dumped by a pg_dump new enough to
+# set transaction_timeout in its preamble, a parameter 15 and 16 do not have,
+# so the line is dropped rather than let it stop the load on those versions. It
+# sets nothing the schema depends on.
 .PHONY: sample-db
 sample-db:
-	curl -sSf --retry 3 --retry-delay 2 https://raw.githubusercontent.com/neondatabase/postgres-sample-dbs/b54cb67534bf20775803b181b7a1c6f573422161/$(SQL_FILE) | psql
+	curl -sSf --retry 3 --retry-delay 2 https://raw.githubusercontent.com/neondatabase/postgres-sample-dbs/b54cb67534bf20775803b181b7a1c6f573422161/$(SQL_FILE) \
+	  | sed '/^SET transaction_timeout = /d' \
+	  | $(PSQL)
 
 .PHONY: sample-db-tar
 sample-db-tar:
-	curl -sSfL --retry 3 --retry-delay 2 $(TAR_URL) | tar xzO $(TAR_SQL_PATH) | psql
+	curl -sSfL --retry 3 --retry-delay 2 $(TAR_URL) | tar xzO $(TAR_SQL_PATH) | $(PSQL)
 
 .PHONY: sample-db-url
 sample-db-url:
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) | psql
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) | $(PSQL)
 
 # MIMIC-IV (MIT-LCP/mimic-code, MIT). The schema ships as three files, so
 # concatenate them in dependency order: create.sql (which creates the mimiciv_*
@@ -104,7 +118,7 @@ sample-db-mimiciv:
 	for f in $(MIMICIV_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/MIT-LCP/mimic-code/3a914fce11e05888a4b659c7788e207bc34d1728/mimic-iv/buildmimic/postgres/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c client_min_messages=warning' psql
+	done | PGOPTIONS='-c client_min_messages=warning' $(PSQL)
 
 # A plain SQL URL loaded into a schema of its own. These dumps name no schema at
 # all, so search_path decides where they land, and upstream expects them in the
@@ -122,8 +136,8 @@ CLIENT_MIN_MESSAGES ?= notice
 
 .PHONY: sample-db-url-schema
 sample-db-url-schema:
-	psql -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) | PGOPTIONS='-c search_path=$(SCHEMA) -c client_min_messages=$(CLIENT_MIN_MESSAGES)' psql
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) | PGOPTIONS='-c search_path=$(SCHEMA) -c client_min_messages=$(CLIENT_MIN_MESSAGES)' $(PSQL)
 
 # Hive metastore (apache/hive, Apache-2.0). Like the sample-db-url-schema
 # dumps this one belongs in a schema of its own, but it is a pg_dump-style
@@ -132,10 +146,48 @@ sample-db-url-schema:
 # search_path from outside.
 .PHONY: sample-db-hive
 sample-db-hive:
-	psql -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | awk '/^SET search_path = / { print "SET search_path = $(SCHEMA), pg_catalog;"; next } { print }' \
-	  | psql
+	  | $(PSQL)
+
+# GMOD Chado (GMOD/Chado), the schema behind FlyBase and the other model
+# organism databases. It names no schema for the objects it creates, so
+# search_path decides where they land, but four times partway through the file
+# it sets search_path itself with `public` in it, which overrides anything
+# PGOPTIONS passes in. So rewrite `public` in those four lines to `chado`, as
+# sample-db-hive rewrites its one line. The lines that name genetic_code, so,
+# and frange keep them: the file creates those three schemas itself and fills
+# them, so the sample is checked with all four. `so` is where its 1,832
+# Sequence Ontology views land, more views than every other sample together.
+#
+# The same sed qualifies the create_point calls in the bodies of boxrange and
+# boxquery. PostgreSQL 17 runs CREATE INDEX with search_path set to
+# pg_catalog, pg_temp, and the three gist indexes over boxrange inline it,
+# which re-resolves the unqualified create_point under that search_path and
+# does not find it. Qualifying the calls keeps all three indexes on 17 and 18
+# and changes nothing on 15 and 16. The CREATE line for create_point itself is
+# left alone, so search_path still decides where the function lands.
+#
+# Nine of the file's SQL functions are written against the `@` box operator,
+# which PostgreSQL 14 removed, so they error out on every version in the CI
+# matrix. The awk drops them: it buffers each CREATE OR REPLACE FUNCTION
+# through the LANGUAGE line that ends it, and skips the six whose body uses the
+# operator plus the three that call the three-argument groupoverlaps, which is
+# one of the six. Nothing else is dropped, and pistachio does not manage
+# functions in any case, so what the check sees is the same schema.
+.PHONY: sample-db-chado
+sample-db-chado:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS chado'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | sed -E 's/^(SET search_path ?=[^;]*)public/\1chado/; /^CREATE/! s/create_point\(/chado.create_point(/g' \
+	  | awk '/^CREATE OR REPLACE FUNCTION/ && !hold { buf = $$0; hold = 1; next } \
+	         hold { buf = buf ORS $$0; \
+	                if (tolower($$0) ~ /language/) { hold = 0; \
+	                  if (buf !~ /@ boxrange|FROM groupoverlaps\(\$$1,\$$2,\$$3\)/) print buf } \
+	                next } \
+	         { print }' \
+	  | PGOPTIONS='-c search_path=chado -c client_min_messages=warning' $(PSQL)
 
 # Join Order Benchmark (gregrahn/join-order-benchmark), the IMDB schema used by
 # the JOB query set. The tables and their indexes ship as two separate files, so
@@ -145,7 +197,7 @@ sample-db-imdb:
 	for f in schema.sql fkindexes.sql; do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/gregrahn/join-order-benchmark/a39603662e023e449cb2121997a5034df9e02ebf/$$f || exit 1; \
 	  echo; \
-	done | psql
+	done | $(PSQL)
 
 # AdventureWorks (lorint/AdventureWorks-for-Postgres, MIT). Schema-only load:
 # strip \copy lines (data lives in CSVs we don't fetch) and the inline
@@ -154,7 +206,7 @@ sample-db-imdb:
 sample-db-adventureworks:
 	curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/b474991f0df1c4bf55ca4735eb0254ca0709eed2/install.sql \
 	  | awk '/^\\copy/ { next } /^INSERT INTO Production.ProductReview/ { skip=1 } skip { if (/\);[[:space:]]*$$/) skip=0; next } { print }' \
-	  | psql
+	  | $(PSQL)
 
 # PostgreSQL Exercises club data (pgexercises.com). The dump creates its own
 # database and reconnects to it, which we cannot do mid-pipe; strip those two
@@ -164,7 +216,7 @@ sample-db-adventureworks:
 sample-db-clubdata:
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | awk '/^CREATE DATABASE exercises;/ { next } /^\\c exercises/ { next } { print }' \
-	  | psql
+	  | $(PSQL)
 
 # Postgres Pro demo database (postgrespro/demodb, PostgreSQL License). The repo
 # ships a schema-generation script, not a plain dump: tables.sql defines the
@@ -174,10 +226,10 @@ sample-db-clubdata:
 # bookings.routes exclusion constraint requires.
 .PHONY: sample-db-demodb
 sample-db-demodb:
-	psql -c 'CREATE EXTENSION IF NOT EXISTS btree_gist'
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS btree_gist'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | awk '/^[[:space:]]*\\copy/ { next } { print }' \
-	  | psql
+	  | $(PSQL)
 
 # MusicBrainz (metabrainz/musicbrainz-server, GPL-2.0). The schema ships as one
 # file per object kind and none of them create the schema, so create
@@ -201,11 +253,11 @@ MUSICBRAINZ_SQL_FILES = \
 
 .PHONY: sample-db-musicbrainz
 sample-db-musicbrainz:
-	psql -c 'CREATE SCHEMA IF NOT EXISTS musicbrainz'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS musicbrainz'
 	for f in $(MUSICBRAINZ_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/metabrainz/musicbrainz-server/424c5fad44da2b3ad55d08286fe8ad07c11ec471/admin/sql/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c search_path=musicbrainz,public -c client_min_messages=warning' psql
+	done | PGOPTIONS='-c search_path=musicbrainz,public -c client_min_messages=warning' $(PSQL)
 
 # Znuny (znuny/Znuny, GPL-3.0). The schema ships as two files, so concatenate
 # them: schema.postgresql.sql (tables and indexes) and then
@@ -218,11 +270,11 @@ ZNUNY_SQL_FILES = schema.postgresql.sql schema-post.postgresql.sql
 
 .PHONY: sample-db-znuny
 sample-db-znuny:
-	psql -c 'CREATE SCHEMA IF NOT EXISTS znuny'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS znuny'
 	for f in $(ZNUNY_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/znuny/Znuny/0b894348ebc458621545ccdab5f3d24d1b396a70/scripts/database/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c search_path=znuny' psql
+	done | PGOPTIONS='-c search_path=znuny' $(PSQL)
 
 # Camunda 7 (camunda/camunda-bpm-platform, Apache-2.0). The schema ships as one
 # file per engine component and none of them create a schema, so create
@@ -241,11 +293,11 @@ CAMUNDA_SQL_FILES = \
 
 .PHONY: sample-db-camunda
 sample-db-camunda:
-	psql -c 'CREATE SCHEMA IF NOT EXISTS camunda'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS camunda'
 	for f in $(CAMUNDA_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/camunda/camunda-bpm-platform/ee4826e5e76c2348a1510ef46a2f4ccd3b080e48/engine/src/main/resources/org/camunda/bpm/engine/db/create/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c search_path=camunda' psql
+	done | PGOPTIONS='-c search_path=camunda' $(PSQL)
 
 # A pg_dump-style dump loaded into a schema of its own. discourse and osm ship
 # their schema as Rails' db/structure.sql, which belongs in a schema of its own
@@ -268,10 +320,10 @@ sample-db-camunda:
 # sample-db-test.md.
 .PHONY: sample-db-pgdump-schema
 sample-db-pgdump-schema:
-	psql -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
-	  | PGOPTIONS='-c search_path=$(SCHEMA),public' psql
+	  | PGOPTIONS='-c search_path=$(SCHEMA),public' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
