@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -217,6 +218,37 @@ CREATE SEQUENCE myschema.order_seq;
 	// The sequence schema is remapped to "public" (exercises remapSequenceSchemas).
 	assert.Contains(t, got.String(), "CREATE SEQUENCE public.order_seq")
 	assert.NotContains(t, got.String(), "myschema.order_seq")
+}
+
+// TestPlan_WithSchemaMap_Trigger covers the trigger arm of the table remap.
+// The desired trigger is written against public, so both its Schema field and
+// the relation inside its definition have to come back as myschema before the
+// diff sees them.
+func TestPlan_WithSchemaMap_Trigger(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE FUNCTION myschema.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+CREATE TABLE myschema.events (id integer);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(
+		"CREATE TABLE public.events (id integer);\n"+
+			"CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();\n"), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Equal(t,
+		"CREATE TRIGGER events_stamp BEFORE INSERT ON myschema.events FOR EACH ROW EXECUTE FUNCTION myschema.stamp();",
+		strings.TrimSpace(got.SQL))
 }
 
 func TestPlan_WithSchemaMap_Sequence(t *testing.T) {

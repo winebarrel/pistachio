@@ -108,7 +108,8 @@ pista apply ./schema/*.sql         # apply it
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types, domains, composite types, composite attributes, sequences)
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
-- Renaming (tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies via `-- pista:renamed-from` directive)
+- Triggers (`CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER`, `INSTEAD OF` triggers on views, and the enable state via `ALTER TABLE ... ENABLE/DISABLE TRIGGER`). The function a trigger calls is not managed; see [Triggers](#triggers).
+- Renaming (tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies, triggers via `-- pista:renamed-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 
@@ -518,7 +519,7 @@ pista plan --assume-validated schema.sql
 pista apply --assume-validated schema.sql
 ```
 
-By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `column`, `constraint`, `foreign_key`, `index`, `policy`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type.
+By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type.
 
 ```bash
 # Allow all drops
@@ -842,6 +843,43 @@ pista dump --split ./schema/
 # -- Wrote 4 file(s) to ./schema/
 # (writes ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...)
 ```
+
+## Triggers
+
+pistachio manages triggers, not the functions they call. Write the function with `-- pista:execute-first` so it exists before the `CREATE TRIGGER` that references it runs:
+
+```sql
+-- pista:execute-first
+CREATE OR REPLACE FUNCTION public.stamp() RETURNS trigger AS $$
+BEGIN
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TABLE public.events (
+    id integer NOT NULL,
+    updated_at timestamptz,
+    CONSTRAINT events_pkey PRIMARY KEY (id)
+);
+
+CREATE TRIGGER events_stamp BEFORE UPDATE ON public.events
+    FOR EACH ROW EXECUTE FUNCTION public.stamp();
+```
+
+A definition change is applied with `CREATE OR REPLACE TRIGGER`, which takes a lighter lock than dropping and recreating. Turning a trigger into a constraint trigger, or back, is the one change PostgreSQL rejects in place, so that one runs as `DROP TRIGGER` and `CREATE TRIGGER` and needs `--allow-drop trigger`.
+
+`CREATE TRIGGER` has no syntax for a disabled trigger, so a desired schema asks for one the way `dump` writes it:
+
+```sql
+ALTER TABLE public.events DISABLE TRIGGER events_stamp;
+```
+
+`ENABLE ALWAYS` and `ENABLE REPLICA` work the same way. PostgreSQL rejects the statement on a view, so a view's triggers have no state to set. `CREATE OR REPLACE TRIGGER` leaves a trigger enabled, so a definition change on a trigger that is held in another state is followed by the `ALTER TABLE` that puts it back.
+
+A trigger on a partitioned table is cloned onto every partition. pistachio reads and writes the parent's trigger alone, and PostgreSQL keeps the clones in step.
+
+The `ALL` and `USER` forms of `ENABLE TRIGGER` name no single trigger and are ignored, as are event triggers, which belong to the database rather than to a schema.
 
 ## Constraint and index naming
 

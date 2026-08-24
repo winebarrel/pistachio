@@ -122,6 +122,9 @@ func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcur
 	if rlsSQL := t.RLSSQL(); rlsSQL != "" {
 		stmts = append(stmts, strings.Split(rlsSQL, "\n")...)
 	}
+	if trigSQL := t.TrigSQL(); trigSQL != "" {
+		stmts = append(stmts, strings.Split(trigSQL, "\n")...)
+	}
 	if commentSQL := t.CommentSQL(); commentSQL != "" {
 		stmts = append(stmts, strings.Split(commentSQL, "\n")...)
 	}
@@ -171,6 +174,13 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		}
 		result.Stmts = append(result.Stmts, polStmts...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
+
+		trgStmts, trgDisallowed, err := diffTriggers(fqtn, current.Triggers, desired.Triggers, dc)
+		if err != nil {
+			return nil, err
+		}
+		result.Stmts = append(result.Stmts, trgStmts...)
+		result.DisallowedDropStmts = append(result.DisallowedDropStmts, trgDisallowed...)
 
 		result.Stmts = append(result.Stmts, diffComments(current, withInheritedColumns(current, desired))...)
 
@@ -234,6 +244,13 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	}
 	result.Stmts = append(result.Stmts, polStmts...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
+
+	trgStmts, trgDisallowed, err := diffTriggers(fqtn, current.Triggers, desired.Triggers, dc)
+	if err != nil {
+		return nil, err
+	}
+	result.Stmts = append(result.Stmts, trgStmts...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, trgDisallowed...)
 
 	result.Stmts = append(result.Stmts, diffComments(current, desired)...)
 

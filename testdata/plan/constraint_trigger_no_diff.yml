@@ -1,6 +1,6 @@
-# A desired schema that does not mention the constraint trigger must not plan
-# a DROP CONSTRAINT for it. Drops are allowed so the statement would reach the
-# plan instead of the skipped list.
+# The pg_constraint row a constraint trigger leaves behind must not reach the
+# table's constraints. Drops are allowed, so a DROP CONSTRAINT would show up in
+# the plan rather than in the skipped list.
 init: |
   CREATE FUNCTION public.noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
   CREATE TABLE public.events (
@@ -15,6 +15,7 @@ desired: |
       id integer NOT NULL,
       CONSTRAINT events_pkey PRIMARY KEY (id)
   );
+  CREATE CONSTRAINT TRIGGER events_check AFTER INSERT ON public.events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION noop();
 drop_policy:
   allow_drop:
     - all

@@ -1,0 +1,19 @@
+# A definition change goes through CREATE OR REPLACE TRIGGER, which needs no
+# DROP and takes a lighter lock.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER events_stamp BEFORE INSERT OR UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+plan: |
+  CREATE OR REPLACE TRIGGER events_stamp BEFORE INSERT OR UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();

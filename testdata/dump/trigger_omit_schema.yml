@@ -1,0 +1,17 @@
+# --omit-schema drops the schema from the relation the trigger is on and from
+# the ALTER TABLE that holds its state. The function keeps whatever the catalog
+# gave it, since it may sit outside the schema being dumped.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;
+omit_schema: true
+dump: |
+  -- events
+  CREATE TABLE events (
+      id integer NOT NULL
+  );
+
+  CREATE TRIGGER events_stamp BEFORE INSERT ON events FOR EACH ROW EXECUTE FUNCTION stamp();
+  ALTER TABLE events DISABLE TRIGGER events_stamp;

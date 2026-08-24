@@ -32,14 +32,15 @@ type DumpResult struct {
 	Count          ObjectCount
 }
 
-// stripIndexSchemaPrefix removes the schema qualification from the relation an
-// index targets, for --omit-schema. pg_get_indexdef emits
+// stripRelationSchemaPrefix removes the schema qualification from the relation
+// an index or a trigger targets, for --omit-schema. pg_get_indexdef emits
 // "... ON <schema>.<rel> ..." for ordinary indexes and
 // "... ON ONLY <schema>.<rel> ..." for indexes on partitioned-table parents,
 // so both forms are rewritten. The two patterns are mutually exclusive per
 // occurrence (the ONLY form has "ONLY " between "ON " and the relation), so
 // applying both replacers never double-processes a match.
-func stripIndexSchemaPrefix(definition, fqrn, relName string) string {
+// pg_get_triggerdef writes the same "... ON <schema>.<rel> ..." shape.
+func stripRelationSchemaPrefix(definition, fqrn, relName string) string {
 	definition = strings.ReplaceAll(definition, " ON ONLY "+fqrn+" ", " ON ONLY "+relName+" ")
 	return strings.ReplaceAll(definition, " ON "+fqrn+" ", " ON "+relName+" ")
 }
@@ -78,7 +79,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			for _, idx := range copied.Indexes.CollectValues() {
 				idxCopied := *idx
 				idxCopied.Schema = ""
-				idxCopied.Definition = stripIndexSchemaPrefix(idx.Definition, fqtn, tableName)
+				idxCopied.Definition = stripRelationSchemaPrefix(idx.Definition, fqtn, tableName)
 				idxs.Set(idx.Name, &idxCopied)
 			}
 			copied.Indexes = idxs
@@ -92,6 +93,7 @@ func (r *DumpResult) tables() *orderedmap.Map[string, *model.Table] {
 			}
 			copied.Policies = policies
 		}
+		copied.Triggers = stripTriggerSchemas(copied.Triggers, fqtn, tableName)
 		tables.Set(tableName, &copied)
 	}
 	return tables
@@ -115,14 +117,35 @@ func (r *DumpResult) views() *orderedmap.Map[string, *model.View] {
 			for _, idx := range copied.Indexes.CollectValues() {
 				idxCopied := *idx
 				idxCopied.Schema = ""
-				idxCopied.Definition = stripIndexSchemaPrefix(idx.Definition, fqvn, viewName)
+				idxCopied.Definition = stripRelationSchemaPrefix(idx.Definition, fqvn, viewName)
 				idxs.Set(idx.Name, &idxCopied)
 			}
 			copied.Indexes = idxs
 		}
+		copied.Triggers = stripTriggerSchemas(copied.Triggers, fqvn, viewName)
 		views.Set(viewName, &copied)
 	}
 	return views
+}
+
+// stripTriggerSchemas drops the schema from a relation's triggers, for
+// --omit-schema. The trigger keeps whatever schema the definition gives the
+// function it calls, which may sit outside the schema being dumped.
+func stripTriggerSchemas(
+	triggers *orderedmap.Map[string, *model.Trigger],
+	fqrn, relName string,
+) *orderedmap.Map[string, *model.Trigger] {
+	if triggers == nil || triggers.Len() == 0 {
+		return triggers
+	}
+	out := orderedmap.New[string, *model.Trigger]()
+	for _, trg := range triggers.CollectValues() {
+		copied := *trg
+		copied.Schema = ""
+		copied.Definition = stripRelationSchemaPrefix(trg.Definition, fqrn, relName)
+		out.Set(trg.Name, &copied)
+	}
+	return out
 }
 
 func (r *DumpResult) enums() *orderedmap.Map[string, *model.Enum] {

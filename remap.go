@@ -59,6 +59,7 @@ func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Ta
 		}
 
 		remapPolicies(t.Policies, client.RemapSchema, replacer)
+		remapTriggers(t.Triggers, client.RemapSchema, replacer)
 
 		remapped.Set(t.FQTN(), t)
 	}
@@ -89,6 +90,21 @@ func remapPolicies(
 	}
 }
 
+// remapTriggers rewrites the Schema field on each trigger and applies the
+// schema replacer to the definition, which names the relation the trigger is
+// on and may name a function in another schema. `triggers` is always non-nil
+// because both parser and catalog initialize the map.
+func remapTriggers(
+	triggers *orderedmap.Map[string, *model.Trigger],
+	mapSchema func(string) string,
+	replacer *strings.Replacer,
+) {
+	for _, trg := range triggers.CollectValues() {
+		trg.Schema = mapSchema(trg.Schema)
+		trg.Definition = replacer.Replace(trg.Definition)
+	}
+}
+
 func (client *Client) remapViewSchemas(views *orderedmap.Map[string, *model.View]) *orderedmap.Map[string, *model.View] {
 	if len(client.SchemaMap) == 0 {
 		return views
@@ -100,6 +116,7 @@ func (client *Client) remapViewSchemas(views *orderedmap.Map[string, *model.View
 	for _, v := range views.CollectValues() {
 		v.Schema = client.RemapSchema(v.Schema)
 		v.Definition = replacer.Replace(v.Definition)
+		remapTriggers(v.Triggers, client.RemapSchema, replacer)
 		remapped.Set(v.FQVN(), v)
 	}
 
@@ -132,6 +149,7 @@ func (client *Client) reverseRemapTableSchemas(tables *orderedmap.Map[string, *m
 		}
 
 		remapPolicies(t.Policies, client.ReverseRemapSchema, replacer)
+		remapTriggers(t.Triggers, client.ReverseRemapSchema, replacer)
 
 		remapped.Set(t.FQTN(), t)
 	}
@@ -150,6 +168,7 @@ func (client *Client) reverseRemapViewSchemas(views *orderedmap.Map[string, *mod
 	for _, v := range views.CollectValues() {
 		v.Schema = client.ReverseRemapSchema(v.Schema)
 		v.Definition = replacer.Replace(v.Definition)
+		remapTriggers(v.Triggers, client.ReverseRemapSchema, replacer)
 		remapped.Set(v.FQVN(), v)
 	}
 

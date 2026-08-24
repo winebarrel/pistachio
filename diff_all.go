@@ -560,6 +560,11 @@ func extractObjectName(sql string) string {
 		{"CREATE POLICY "},
 		{"ALTER POLICY "},
 		{"DROP POLICY "},
+		{"CREATE OR REPLACE TRIGGER "},
+		{"CREATE CONSTRAINT TRIGGER "},
+		{"CREATE TRIGGER "},
+		{"DROP TRIGGER "},
+		{"ALTER TRIGGER "},
 		{"ALTER TABLE ONLY "},
 		{"ALTER TABLE "},
 		{"ALTER TYPE "},
@@ -611,6 +616,12 @@ func extractObjectName(sql string) string {
 			strings.HasPrefix(upper, "ALTER POLICY ") ||
 			strings.HasPrefix(upper, "DROP POLICY ") {
 			// {CREATE,ALTER,DROP} POLICY name ON schema.table ...
+			return extractIndexTable(sql)
+		}
+
+		if strings.HasSuffix(strings.TrimSpace(p.prefix), "TRIGGER") {
+			// CREATE [OR REPLACE|CONSTRAINT] TRIGGER name <events> ON
+			// schema.table ..., and {DROP,ALTER} TRIGGER name ON schema.table.
 			return extractIndexTable(sql)
 		}
 

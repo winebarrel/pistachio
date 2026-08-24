@@ -14,6 +14,7 @@ type View struct {
 	Definition   string
 	Materialized bool
 	Indexes      *orderedmap.Map[string, *Index]
+	Triggers     *orderedmap.Map[string, *Trigger]
 	Comment      *string
 	// Ignore marks the view as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the
@@ -34,6 +35,18 @@ func (v View) SQL() string {
 	return "CREATE OR REPLACE VIEW " + Ident(v.Schema, v.Name) + " AS\n" + def + ";"
 }
 
+// TrigSQL renders the view's INSTEAD OF triggers. PostgreSQL rejects
+// ALTER TABLE ... DISABLE TRIGGER on a view, so there is no state to write.
+func (v View) TrigSQL() string {
+	var stmts []string
+	if v.Triggers != nil {
+		for _, trg := range v.Triggers.CollectValues() {
+			stmts = append(stmts, trg.SQL())
+		}
+	}
+	return strings.Join(stmts, "\n")
+}
+
 func (v View) CommentSQL() string {
 	objType := "VIEW"
 	if v.Materialized {
@@ -51,6 +64,9 @@ func ViewToSQL(v *View) string {
 		for _, idx := range v.Indexes.CollectValues() {
 			parts = append(parts, idx.SQL())
 		}
+	}
+	if s := v.TrigSQL(); s != "" {
+		parts = append(parts, "\n"+s)
 	}
 	if s := v.CommentSQL(); s != "" {
 		parts = append(parts, s)

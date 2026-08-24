@@ -4,7 +4,7 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 
 | Directive | Arguments | Applies to | Purpose |
 |---|---|---|---|
-| `renamed-from` | old name (required) | tables, views, enums, enum values, domains, composite types, composite attributes, columns, constraints, foreign keys, indexes, policies | Rename instead of drop and create |
+| `renamed-from` | old name (required) | tables, views, enums, enum values, domains, composite types, composite attributes, columns, constraints, foreign keys, indexes, policies, triggers | Rename instead of drop and create |
 | `execute` | check SQL (optional) | any statement | Run non-managed SQL after the managed DDL |
 | `execute-first` | check SQL (optional) | any statement | Run non-managed SQL before the managed DDL |
 | `concurrently` | none | `CREATE INDEX` | Create and drop the index with `CONCURRENTLY` |
@@ -13,7 +13,7 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 
 ## -- pista:renamed-from
 
-Renames an object instead of dropping and recreating it. The argument is the old name. For tables, views, enums, domains, and composite types, the old name may be schema-qualified; without a schema it defaults to the default schema. For composite attributes, columns, constraints, foreign keys, indexes, and policies, the old name is unqualified.
+Renames an object instead of dropping and recreating it. The argument is the old name. For tables, views, enums, domains, and composite types, the old name may be schema-qualified; without a schema it defaults to the default schema. For composite attributes, columns, constraints, foreign keys, indexes, policies, and triggers, the old name is unqualified.
 
 ```sql
 -- pista:renamed-from public.old_users

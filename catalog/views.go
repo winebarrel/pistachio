@@ -33,6 +33,19 @@ func (c *Catalog) Views(ctx context.Context) (*orderedmap.Map[string, *model.Vie
 		}
 	}
 
+	// INSTEAD OF triggers sit on plain views. A materialized view cannot carry
+	// a trigger at all, so the lookup covers both without a kind check.
+	triggers, err := c.ListTriggers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, trg := range triggers {
+		if v, ok := viewByKey.GetOk(trg.FQTN()); ok {
+			v.Triggers.Set(trg.Name, trg)
+		}
+	}
+
 	return viewByKey, nil
 }
 
@@ -94,6 +107,7 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			return nil, fmt.Errorf("catalog: failed to scan view info: %w", err)
 		}
 		v.Indexes = orderedmap.New[string, *model.Index]()
+		v.Triggers = orderedmap.New[string, *model.Trigger]()
 		views = append(views, &v)
 	}
 

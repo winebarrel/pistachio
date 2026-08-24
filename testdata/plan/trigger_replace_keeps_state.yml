@@ -1,0 +1,14 @@
+# CREATE OR REPLACE TRIGGER puts the trigger back in the default state, so a
+# definition change on a disabled trigger has to disable it again.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_stamp BEFORE INSERT OR DELETE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;
+plan: |
+  CREATE OR REPLACE TRIGGER events_stamp BEFORE INSERT OR DELETE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+  ALTER TABLE public.events DISABLE TRIGGER events_stamp;

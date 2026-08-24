@@ -32,6 +32,17 @@ func (c *Catalog) Tables(ctx context.Context) (*orderedmap.Map[string, *model.Ta
 		}
 	}
 
+	triggers, err := c.ListTriggers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, trg := range triggers {
+		if t, ok := tableByKey.GetOk(trg.FQTN()); ok {
+			t.Triggers.Set(trg.Name, trg)
+		}
+	}
+
 	return tableByKey, nil
 }
 
@@ -142,6 +153,7 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 		t.Constraints = orderedmap.New[string, *model.Constraint]()
 		t.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 		t.Policies = orderedmap.New[string, *model.Policy]()
+		t.Triggers = orderedmap.New[string, *model.Trigger]()
 		tables = append(tables, &t)
 	}
 	if err := rows.Err(); err != nil {
