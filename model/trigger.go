@@ -70,8 +70,7 @@ func (trg Trigger) StateSQL() string {
 
 // TriggerStateSQL renders the ALTER TABLE that puts a trigger in the given
 // state. Exported so diff can reuse it for the case StateSQL suppresses: a
-// trigger going back to the default state after CREATE OR REPLACE TRIGGER
-// reset it, which still needs the statement CREATE TRIGGER alone would not.
+// trigger whose definition did not change going back to the default state.
 func TriggerStateSQL(fqtn, name string, state TriggerState) string {
 	return "ALTER TABLE " + fqtn + " " + state.Action() + " TRIGGER " + Ident(name) + ";"
 }
