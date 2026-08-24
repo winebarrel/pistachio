@@ -63,6 +63,7 @@ ejabberd|sample-db-url-schema|URL=https://raw.githubusercontent.com/processone/e
 guacamole|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/guacamole-client/5be18be1eeadc4cc544c737c54bd761261d2ad65/extensions/guacamole-auth-jdbc/modules/guacamole-auth-jdbc-postgresql/schema/001-create-schema.sql SCHEMA=guacamole|guacamole
 dotcms|sample-db-url-schema|URL=https://raw.githubusercontent.com/dotCMS/core/b0095c0c3920e236efcc16ceb136cd5dd88804b7/dotCMS/src/main/resources/postgres.sql SCHEMA=dotcms|dotcms
 osm|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/openstreetmap/openstreetmap-website/9da0fa5ecbff8adc5e6e91c7cf22546755a91f77/db/structure.sql SCHEMA=osm|osm
+chado|sample-db-chado|URL=https://raw.githubusercontent.com/GMOD/Chado/31c2407716e3d0fe4e837b6effad0a510af22238/chado/schemas/1.31/default_schema.sql|chado,genetic_code,so,frange
 endef
 
 # Print the sample manifest, one record per line, for shell consumers.
@@ -136,6 +137,36 @@ sample-db-hive:
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | awk '/^SET search_path = / { print "SET search_path = $(SCHEMA), pg_catalog;"; next } { print }' \
 	  | psql
+
+# GMOD Chado (GMOD/Chado), the schema behind FlyBase and the other model
+# organism databases. It names no schema for the objects it creates, so
+# search_path decides where they land, but four times partway through the file
+# it sets search_path itself with `public` in it, which overrides anything
+# PGOPTIONS passes in. So rewrite `public` in those four lines to `chado`, as
+# sample-db-hive rewrites its one line. The lines that name genetic_code, so,
+# and frange keep them: the file creates those three schemas itself and fills
+# them, so the sample is checked with all four. `so` is where its 1,832
+# Sequence Ontology views land, more views than every other sample together.
+#
+# Nine of the file's SQL functions are written against the `@` box operator,
+# which PostgreSQL 14 removed, so they error out on every version in the CI
+# matrix. The awk drops them: it buffers each CREATE OR REPLACE FUNCTION
+# through the LANGUAGE line that ends it, and skips the six whose body uses the
+# operator plus the three that call the three-argument groupoverlaps, which is
+# one of the six. Nothing else is dropped, and pistachio does not manage
+# functions in any case, so what the check sees is the same schema.
+.PHONY: sample-db-chado
+sample-db-chado:
+	psql -c 'CREATE SCHEMA IF NOT EXISTS chado'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | sed -E 's/^(SET search_path ?=[^;]*)public/\1chado/' \
+	  | awk '/^CREATE OR REPLACE FUNCTION/ && !hold { buf = $$0; hold = 1; next } \
+	         hold { buf = buf ORS $$0; \
+	                if (tolower($$0) ~ /language/) { hold = 0; \
+	                  if (buf !~ /@ boxrange|FROM groupoverlaps\(\$$1,\$$2,\$$3\)/) print buf } \
+	                next } \
+	         { print }' \
+	  | PGOPTIONS='-c search_path=chado -c client_min_messages=warning' psql
 
 # Join Order Benchmark (gregrahn/join-order-benchmark), the IMDB schema used by
 # the JOB query set. The tables and their indexes ship as two separate files, so
