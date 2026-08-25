@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      tenant_id integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE NULLS NOT DISTINCT (email)
+  );
+  CREATE UNIQUE INDEX users_tenant_idx ON public.users USING btree (tenant_id) NULLS NOT DISTINCT;
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      tenant_id integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE NULLS NOT DISTINCT (email)
+  );
+  CREATE UNIQUE INDEX users_tenant_idx ON public.users USING btree (tenant_id) NULLS NOT DISTINCT;

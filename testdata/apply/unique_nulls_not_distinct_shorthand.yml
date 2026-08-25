@@ -1,0 +1,27 @@
+# A column constraint, an unnamed table constraint and a separate ALTER TABLE
+# all reach the catalog as named table constraints, so the applied schema is the
+# form `pista dump` writes and the file plans clean afterwards.
+init: ""
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text UNIQUE NULLS NOT DISTINCT,
+      login text,
+      tenant_id integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      UNIQUE NULLS NOT DISTINCT (login)
+  );
+  ALTER TABLE public.users ADD CONSTRAINT users_tenant_key UNIQUE NULLS NOT DISTINCT (tenant_id);
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      login text,
+      tenant_id integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE NULLS NOT DISTINCT (email),
+      CONSTRAINT users_login_key UNIQUE NULLS NOT DISTINCT (login),
+      CONSTRAINT users_tenant_key UNIQUE NULLS NOT DISTINCT (tenant_id)
+  );
+verify_no_drift: true

@@ -1,0 +1,25 @@
+# NULLS NOT DISTINCT is not something ALTER can turn on, so both the constraint
+# and the index have to be dropped and recreated.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      tenant_id integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email)
+  );
+  CREATE UNIQUE INDEX users_tenant_idx ON public.users USING btree (tenant_id);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      tenant_id integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE NULLS NOT DISTINCT (email)
+  );
+  CREATE UNIQUE INDEX users_tenant_idx ON public.users USING btree (tenant_id) NULLS NOT DISTINCT;
+plan: |
+  DROP INDEX public.users_tenant_idx;
+  ALTER TABLE public.users DROP CONSTRAINT users_email_key;
+  ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE NULLS NOT DISTINCT (email);
+  CREATE UNIQUE INDEX users_tenant_idx ON public.users USING btree (tenant_id) NULLS NOT DISTINCT;
