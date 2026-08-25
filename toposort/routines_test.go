@@ -110,3 +110,16 @@ func TestRoutineNode(t *testing.T) {
 	assert.Equal(t, "routine:public.f", toposort.RoutineNode("public.f"))
 	assert.Empty(t, toposort.RoutineNode(""))
 }
+
+// A routine's return type is an edge too, not only its parameters.
+func TestOrderFromSchema_RoutineDependsOnReturnType(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	enums.Set("public.zzz_status", &model.Enum{Schema: "public", Name: "zzz_status", Values: []string{"active"}})
+
+	routines := routineMap(&model.Routine{
+		Schema: "public", Name: "aaa_f", ReturnType: "public.zzz_status", Language: "sql",
+	})
+
+	order := orderWithRoutines(t, enums, orderedmap.New[string, *model.Table](), orderedmap.New[string, *model.View](), routines)
+	assert.Less(t, indexOf(t, order, "public.zzz_status"), indexOf(t, order, "routine:public.aaa_f"))
+}

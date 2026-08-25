@@ -1149,3 +1149,37 @@ CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = session
 	assert.Contains(t, got.SQL, "ALTER POLICY owner_select ON myschema.documents")
 	assert.NotContains(t, got.SQL, "ALTER POLICY owner_select ON public.documents")
 }
+
+// TestDump_WithSchemaMap_Routine covers the routine arm of the remap. The
+// routine's own schema and the schema-qualified type names in its signature
+// both have to come back as the mapped name. The body is left alone: it is
+// opaque text in whatever language the routine is written in.
+func TestDump_WithSchemaMap_Routine(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('active');
+CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
+    LANGUAGE sql AS $$ SELECT s::text $$;
+`)
+
+	// An empty search_path keeps every schema qualified, so the type name in
+	// the signature is remapped rather than reported bare.
+	searchPath := ""
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+		SearchPath: &searchPath,
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{ManageRoutine: true},
+	})
+	require.NoError(t, err)
+
+	out := got.String()
+	assert.Contains(t, out, "CREATE OR REPLACE FUNCTION public.label(s public.status)")
+	assert.NotContains(t, out, "myschema.label")
+	assert.NotContains(t, out, "s myschema.status")
+}

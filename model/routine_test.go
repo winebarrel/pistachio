@@ -146,3 +146,15 @@ func TestRoutineToSQL(t *testing.T) {
 	assert.True(t, strings.HasPrefix(out, "-- public.f()\n"))
 	assert.Contains(t, out, "COMMENT ON FUNCTION public.f() IS 'v1';")
 }
+
+// A procedure has no result, and neither does a routine whose model carries
+// no return type.
+func TestRoutine_SQLWithoutReturnType(t *testing.T) {
+	r := model.Routine{Schema: "public", Name: "f", Language: "sql", Body: " SELECT 1 "}
+	assert.NotContains(t, r.SQL(), "RETURNS")
+}
+
+func TestRoutine_String(t *testing.T) {
+	r := model.Routine{Schema: "public", Name: "f", ReturnType: "integer"}
+	assert.Contains(t, r.String(), `Name:"f"`)
+}

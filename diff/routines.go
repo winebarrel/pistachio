@@ -131,11 +131,9 @@ func argShape(a *model.RoutineArg) string {
 
 // defaultRemoved reports whether a parameter that had a default no longer has
 // one. PostgreSQL allows adding or changing a default in place but not
-// dropping one.
+// dropping one. The caller has already established that the two lists have the
+// same shape, so they are the same length here.
 func defaultRemoved(current, desired []*model.RoutineArg) bool {
-	if len(current) != len(desired) {
-		return true
-	}
 	for i, c := range current {
 		if c.Default != "" && desired[i].Default == "" {
 			return true

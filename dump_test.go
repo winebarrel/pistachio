@@ -882,3 +882,56 @@ func TestDump(t *testing.T) {
 		})
 	}
 }
+
+// --split writes one file per routine. Two overloads share a schema-qualified
+// name, so the second one takes the same _2 suffix any other collision does.
+func TestDumpResult_Files_Routines(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
+CREATE FUNCTION public.f(a text) RETURNS text LANGUAGE sql AS $$ SELECT a $$;
+CREATE PROCEDURE public.p() LANGUAGE sql AS $$ SELECT $$;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{ManageRoutine: true},
+	})
+	require.NoError(t, err)
+
+	files := got.Files()
+	assert.Len(t, files, 3)
+	assert.Contains(t, files["public.f.sql"], "CREATE OR REPLACE FUNCTION public.f(a integer)")
+	assert.Contains(t, files["public.f_2.sql"], "CREATE OR REPLACE FUNCTION public.f(a text)")
+	assert.Contains(t, files["public.p.sql"], "CREATE OR REPLACE PROCEDURE public.p()")
+}
+
+// Without --manage-routine the dump holds no routines, so --split writes no
+// file for one.
+func TestDumpResult_Files_RoutinesUnmanaged(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+CREATE TABLE public.users (id integer);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	files := got.Files()
+	assert.Len(t, files, 1)
+	assert.Contains(t, files, "public.users.sql")
+}

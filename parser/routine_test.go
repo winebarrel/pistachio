@@ -298,3 +298,100 @@ func TestParseRoutineDef_Errors(t *testing.T) {
 		})
 	}
 }
+
+// PostgreSQL rejects a function with neither a RETURNS clause nor an OUT
+// parameter, but pg_query parses it, so the parser has to say so itself.
+func TestParseSQL_FunctionWithoutReturnType(t *testing.T) {
+	_, err := parseSQLWithPublicSchema(`CREATE FUNCTION public.f() LANGUAGE sql AS $$ SELECT $$;`)
+	assert.ErrorContains(t, err, "has no RETURNS clause and no OUT parameter")
+}
+
+func TestParseSQL_FunctionUnsupportedOption(t *testing.T) {
+	_, err := parseSQLWithPublicSchema(`
+		CREATE FUNCTION public.f(a integer) RETURNS integer
+		    LANGUAGE c TRANSFORM FOR TYPE integer AS 'obj', 'sym';
+	`)
+	assert.ErrorContains(t, err, "unsupported routine option: transform")
+}
+
+func TestParseSQL_FunctionNameTooManyParts(t *testing.T) {
+	_, err := parseSQLWithPublicSchema(`CREATE FUNCTION a.b.c() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;`)
+	assert.ErrorContains(t, err, "unexpected routine name: a.b.c")
+}
+
+// A SET value can be a number as well as a string, and COST can be
+// fractional. Each lands in a different node type.
+func TestParseSQL_FunctionNumericValues(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE FUNCTION public.f() RETURNS integer
+		    LANGUAGE sql
+		    COST 1.5
+		    SET statement_timeout TO 100
+		    SET seq_page_cost TO 1.5
+		    AS $$ SELECT 1 $$;
+	`)
+	require.NoError(t, err)
+
+	r, _ := result.Routines.GetOk("public.f()")
+	require.NotNil(t, r.Cost)
+	assert.InDelta(t, 1.5, *r.Cost, 0)
+	assert.Equal(t, []*model.RoutineConfig{
+		{Name: "statement_timeout", Args: []string{"100"}},
+		{Name: "seq_page_cost", Args: []string{"1.5"}},
+	}, r.Config)
+}
+
+// LANGUAGE c defaults to COST 1 rather than 100, so spelling that out is not
+// a change.
+func TestParseSQL_FunctionLanguageCDefaultCost(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE FUNCTION public.f() RETURNS integer LANGUAGE c COST 1 AS 'obj', 'sym';
+	`)
+	require.NoError(t, err)
+
+	r, _ := result.Routines.GetOk("public.f()")
+	assert.Nil(t, r.Cost)
+}
+
+func TestParseSQL_CommentOnRoutineIsNull(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+		COMMENT ON FUNCTION public.f() IS 'v1';
+		COMMENT ON FUNCTION public.f() IS NULL;
+	`)
+	require.NoError(t, err)
+
+	r, _ := result.Routines.GetOk("public.f()")
+	assert.Nil(t, r.Comment)
+}
+
+// A bare name has to skip the routines it does not name before it can tell
+// whether the one it does name is unique.
+func TestParseSQL_CommentOnRoutineWithoutArgsAmongOthers(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE FUNCTION public.other(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
+		CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
+		COMMENT ON FUNCTION public.f IS 'only one';
+	`)
+	require.NoError(t, err)
+
+	r, _ := result.Routines.GetOk("public.f(integer)")
+	require.NotNil(t, r.Comment)
+	assert.Equal(t, "only one", *r.Comment)
+
+	other, _ := result.Routines.GetOk("public.other(integer)")
+	assert.Nil(t, other.Comment)
+}
+
+func TestParseSQL_CommentOnRoutineWithBadName(t *testing.T) {
+	// The comment names no routine the parse result holds, so it is dropped
+	// rather than failing the parse.
+	result, err := parseSQLWithPublicSchema(`
+		CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+		COMMENT ON FUNCTION a.b.c() IS 'nope';
+	`)
+	require.NoError(t, err)
+
+	r, _ := result.Routines.GetOk("public.f()")
+	assert.Nil(t, r.Comment)
+}
