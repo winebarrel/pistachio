@@ -16,6 +16,12 @@ check. It needs a running PostgreSQL instance (`PGHOST=localhost`,
 `PGUSER=postgres`, exported by the Makefile), plus `psql`, `curl`, and network
 access to the upstream hosts. The same target runs in CI as the `samples` job.
 
+The runner exports `PISTA_MANAGE_ROUTINE=1`, so functions and procedures are
+part of the round trip even though they are opt-in on the command line. It is
+set as an environment variable rather than as a per-sample flag because it has
+to reach both the dump and the plan, and the manifest's flags column only
+reaches the plan.
+
 The server also needs pgvector for the discourse sample's `halfvec` columns and
 PostGIS for the osm sample's `geometry` column. The official postgres image
 ships neither. compose.yaml installs `postgresql-<major>-pgvector` and
@@ -143,7 +149,7 @@ rather than as an object of its own. Counting those too would add 2,206 more,
 a foreign key installs and the clones PostgreSQL puts on each partition of a
 partitioned table's trigger, the same as what pistachio reads and dump writes.
 Routines have no column yet: the counts predate `--manage-routine` and have not
-been recounted since. All counts are limited to the schemas the sample is
+been recounted since, though the round-trip check does cover them. All counts are limited to the schemas the sample is
 checked with, and exclude what an extension owns: the two views
 `pg_stat_statements` adds to sourcegraph's schema are not sourcegraph's schema
 and pistachio does not read them either.
