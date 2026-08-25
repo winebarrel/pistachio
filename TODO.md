@@ -726,10 +726,10 @@ triggers. It does not work on a function or a procedure: the directive on a
 `CREATE FUNCTION` or `CREATE PROCEDURE` is an error rather than an
 `ALTER FUNCTION ... RENAME TO`.
 
-Renaming a routine is cheap in a way renaming a table is not, since dropping
-and recreating one loses no data, so the value is mostly in keeping the plan
-readable. The identity carries the argument types, so the directive would take
-a full signature (`-- pista:renamed-from public.old_name(integer)`).
+Dropping and recreating a routine loses no data, so a rename would mostly keep
+the plan readable rather than protect anything. The identity carries the
+argument types, so the directive would take a full signature
+(`-- pista:renamed-from public.old_name(integer)`).
 
 Origin: routine support.
 
@@ -747,11 +747,10 @@ parses a SQL body at creation time; so does one that calls another routine
 defined later in the file. `plpgsql` is unaffected. The workaround is
 `-- pista:ignore` plus `-- pista:execute`.
 
-Fixing it means parsing the body for the relations and routines it names and
-ordering on that, which puts "routine before table" and "routine after table"
-in the same graph. The two can hold at once only per pair, so the graph would
-have to drop the wholesale edge and read every CHECK / GENERATED / index /
-policy / trigger expression instead.
+Fixing it means reading the body for the relations and routines it names and
+ordering on that. Both directions would then live in one graph, which holds
+only per pair, so the wholesale edge would have to go and every CHECK,
+GENERATED, index, policy and trigger expression would have to be read instead.
 
 Origin: routine support.
 
@@ -762,9 +761,8 @@ signature, including a parameter default. It does not touch the body, which is
 opaque text in whatever language the routine is written in. A body that
 qualifies a table or a function with the old schema keeps the old name.
 
-Views get the same replacer applied to their definition because a view
-definition is always SQL. A routine body is not, so a blind prefix
-substitution over it would be a guess.
+A view definition gets the same replacer because it is always SQL. A routine
+body is not, so substituting a prefix in it would be a guess.
 
 Priority: low.
 
@@ -777,32 +775,30 @@ sides of the diff: the catalog query filters on `prosqlbody IS NULL` and the
 parser warns and drops it. So neither `dump` writes one nor `plan` proposes
 dropping one.
 
-pg_query parses and deparses the form fine. The obstacle is that PostgreSQL
-resolves such a body at creation time and records real `pg_depend` entries on
-whatever it reads, so the routine cannot be created before the tables the way
-every other routine is, and a referenced table cannot be dropped while it
-exists. Supporting it needs the body-dependency work in the entry above.
+pg_query parses and deparses the form. The obstacle is that PostgreSQL resolves
+such a body at creation time and records real `pg_depend` entries on whatever it
+reads, so the routine cannot be created ahead of the tables the way every other
+routine is, and a referenced table cannot be dropped while it exists. Supporting
+it needs the body-dependency work in the entry above.
 
-A second obstacle: `pg_get_functiondef` re-deparses the stored parse tree, so
-the body comes back with names resolved (`SELECT a FROM t` reads back as
-`SELECT t.a FROM t`), the same drift views handle with `stripQualifications`.
+`pg_get_functiondef` also re-deparses the stored parse tree, so the body comes
+back with names resolved (`SELECT a FROM t` reads back as `SELECT t.a FROM t`),
+the same drift views handle with `stripQualifications`.
 
 Origin: routine support.
 
 ## Aggregates and window functions are not managed
 
-`prokind` `'a'` and `'w'` are filtered out of the catalog query, and a
-`CREATE FUNCTION ... WINDOW` is warned about and dropped by the parser, so the
-two sides stay symmetric. `CREATE AGGREGATE` has a shape of its own that the
-`model.Routine` signature does not cover.
+`prokind` `'a'` and `'w'` are filtered out of the catalog query, and the parser
+warns about a `CREATE FUNCTION ... WINDOW` and drops it, so the two sides stay
+symmetric. `CREATE AGGREGATE` has a shape `model.Routine` does not cover.
 
 Origin: routine support.
 
 ## Sample database coverage has no Routines column
 
 The table in `sample-db-test.md` counts tables, columns, indexes, FKs,
-constraints, views, types, sequences and triggers per sample. The counts
-predate `--manage-routine` and have not been recounted, so routines have no
-column yet.
+constraints, views, types, sequences and triggers per sample. The counts predate
+`--manage-routine`, so routines have no column yet.
 
 Origin: routine support.

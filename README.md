@@ -109,7 +109,7 @@ pista apply ./schema/*.sql         # apply it
 - Comments (on tables, columns, views, types, domains, composite types, composite attributes, sequences)
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
 - Triggers (`CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER`, `INSTEAD OF` triggers on views, and the enable state via `ALTER TABLE ... ENABLE/DISABLE TRIGGER`); see [Triggers](#triggers)
-- Routines (`CREATE FUNCTION`, `CREATE PROCEDURE`), opt-in with `--manage-routine`. Overloads are told apart by their argument types. Aggregates, window functions, a routine whose body is written as `BEGIN ATOMIC`, and a routine an extension owns are not managed; neither is renaming one. See [Routines](#routines).
+- Routines (`CREATE FUNCTION`, `CREATE PROCEDURE`), opt-in with `--manage-routine`. An overload set is several objects, keyed by argument type. See [Routines](#routines).
 - Renaming (tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies, triggers via `-- pista:renamed-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
@@ -529,7 +529,7 @@ pista plan --assume-validated schema.sql
 pista apply --assume-validated schema.sql
 ```
 
-By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type. `routine` covers functions and procedures alike, and also gates the recreate a change PostgreSQL cannot apply in place needs.
+By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type. `routine` covers functions and procedures, and also gates the drop half of a recreate.
 
 ```bash
 # Allow all drops
@@ -554,7 +554,7 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. T
 
 ### Executing arbitrary SQL
 
-Use `-- pista:execute` to include non-managed SQL (grants, extensions, routines you would rather keep out of the diff) in your schema files. Functions and procedures can be managed declaratively instead; see [Routines](#routines). The check SQL after the directive is evaluated by both `plan` and `apply`. When it returns `true` the statement is executed, otherwise skipped, and `plan` leaves out the statements `apply` would skip. A common pattern skips when an object already exists:
+Use `-- pista:execute` to include non-managed SQL (grants, extensions) in your schema files. Functions and procedures can be managed declaratively instead; see [Routines](#routines). The check SQL after the directive is evaluated by both `plan` and `apply`. When it returns `true` the statement is executed, otherwise skipped, and `plan` leaves out the statements `apply` would skip. A common pattern skips when an object already exists:
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
@@ -859,7 +859,7 @@ pista dump --split ./schema/
 
 ## Routines
 
-Functions and procedures are managed only when `--manage-routine` is passed (also `$PISTA_MANAGE_ROUTINE`). Without it `pg_proc` is never read, so a schema maintained with `-- pista:execute` keeps working and `plan` reads exactly as it did before.
+Functions and procedures are managed only when `--manage-routine` is passed (also `$PISTA_MANAGE_ROUTINE`). Without it `pg_proc` is never read, so a schema maintained with `-- pista:execute` keeps working and plan output is unchanged.
 
 ```bash
 pista dump --manage-routine
@@ -867,7 +867,7 @@ pista plan --manage-routine schema.sql
 pista apply --manage-routine schema.sql
 ```
 
-A routine is identified by its name **and its argument types**, so an overload set is several independent objects:
+A routine is identified by its name and its argument types, so an overload set is several independent objects:
 
 ```sql
 CREATE FUNCTION public.normalize(e text) RETURNS text
@@ -886,14 +886,14 @@ The body, the language, and the attributes (`IMMUTABLE` / `STABLE` / `VOLATILE`,
 - removing a parameter default
 - turning a function into a procedure, or back
 
-**Adding or removing a parameter is not a modification.** The argument types are part of the identity, so the new signature is a new routine and the old one is dropped. That drop needs `--allow-drop routine` too.
+Adding or removing a parameter is not a modification either. The argument types are the identity, so the new signature is a new routine and the old one is dropped, which needs `--allow-drop routine` as well.
 
-An attribute left at its default is not written back: PostgreSQL reports `VOLATILE`, `PARALLEL UNSAFE` and the default `COST` as absent, so a desired schema is free to spell them out or leave them off.
+An attribute left at its default is not written back. PostgreSQL reports `VOLATILE`, `PARALLEL UNSAFE` and the default `COST` as absent, so a desired schema may spell them out or leave them off.
 
 A routine is created after the types its signature names and before every table, because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call one. Dropping runs the other way: views, then tables, then routines, then types.
 
 > [!IMPORTANT]
-> That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. A `plpgsql` body is not parsed that way and is unaffected. The same holds for a `LANGUAGE sql` routine that calls another routine defined later. Mark such a routine `-- pista:ignore` and create it with `-- pista:execute` instead.
+> That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later. `plpgsql` is unaffected. Mark such a routine `-- pista:ignore` and create it with `-- pista:execute` instead.
 
 Argument and return types are reported without their schema when `search_path` reaches them, the same as any other name pistachio reads back, so write them the way `dump` does. A comment goes on the full signature:
 
@@ -901,10 +901,10 @@ Argument and return types are reported without their schema when `search_path` r
 COMMENT ON FUNCTION public.normalize(text) IS 'v1';
 ```
 
-The following are not managed, on either side of the diff, so neither `dump` writes them nor `plan` proposes dropping them:
+The following are not managed. Both sides of the diff leave them out, so `dump` does not write them and `plan` does not propose dropping them:
 
 - aggregates and window functions
-- a routine whose body is written in the SQL-standard `BEGIN ATOMIC` form. Such a body records real dependencies on the tables it reads, which cannot hold together with creating routines before tables
+- a routine whose body is written in the SQL-standard `BEGIN ATOMIC` form. Such a body records real dependencies on the tables it reads, so it cannot be created ahead of them
 - a routine an extension owns
 - renaming, via `-- pista:renamed-from`
 
