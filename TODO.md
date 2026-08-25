@@ -802,3 +802,27 @@ constraints, views, types, sequences and triggers per sample. The counts predate
 `--manage-routine`, so routines have no column yet.
 
 Origin: routine support.
+
+## `COMMENT ON INDEX` is not managed
+
+Priority: low.
+
+Comments are managed for tables, columns, views, materialized views, sequences,
+enums, composite types, domains and routines. Indexes, constraints, triggers and
+policies have no `Comment` field and no case in `parseCommentStmt`, so a
+`COMMENT ON INDEX` in the desired schema is dropped without an error or a diff.
+`pista dump` does not emit one either, so a dump feeds back clean. `pg_dump`
+does emit them, and those lines are lost.
+
+The work is a `Comment` field on `model.Index`, a `pg_description` join in
+`catalog.ListIndexes`, an `OBJECT_INDEX` case in the parser, and emission from
+`diffIndexes` and the create path, since recreating an index drops its comment.
+`COMMENT ON INDEX` names only the schema and the index, so the parser has to
+scan `Table.Indexes` and `View.Indexes` by name. Index names are unique per
+schema, and constraint-backed indexes are already excluded from `ListIndexes`.
+
+Better done together with constraint, trigger and policy comments. Shipping it
+makes `dump` emit index comments, so a database that has one where the desired
+schema does not will plan `COMMENT ON INDEX ... IS NULL;`.
+
+Origin: discussion, 2026-08-25.
