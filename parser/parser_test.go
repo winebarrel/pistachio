@@ -234,6 +234,24 @@ func TestParseSQL_WarnsIgnoredAlterTableAction_KeepsSupportedAction(t *testing.T
 	assert.NotContains(t, out, "t_id_check", "the parsed action must not be reported as ignored")
 }
 
+// Several dropped actions in one statement are reported together, on one line.
+func TestParseSQL_WarnsIgnoredAlterTableAction_MultipleActions(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer);
+		ALTER TABLE public.t ADD COLUMN x text, ALTER COLUMN id TYPE bigint;
+	`)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ADD COLUMN x text")
+	assert.Contains(t, out, "ALTER COLUMN id TYPE bigint")
+	assert.Equal(t, 1, strings.Count(out, "\n"), "the warning must be a single line")
+}
+
 // The actions the parser does read must stay silent.
 func TestParseSQL_NoWarnForSupportedAlterTableActions(t *testing.T) {
 	var buf bytes.Buffer
@@ -250,6 +268,37 @@ func TestParseSQL_NoWarnForSupportedAlterTableActions(t *testing.T) {
 		ALTER TABLE public.t DISABLE TRIGGER trg;
 	`)
 	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// IF EXISTS is part of the statement, so it survives into the warning.
+func TestParseSQL_WarnsIgnoredAlterTableAction_IfExists(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer);
+		ALTER TABLE IF EXISTS public.t ADD COLUMN x text;
+	`)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "ALTER TABLE IF EXISTS public.t ADD COLUMN x text")
+}
+
+// A statement marked -- pista:execute is run as written instead of being
+// diffed, so it must not warn.
+func TestParseSQL_ExecuteDirectiveSilencesAlterTableWarning(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer);
+		-- pista:execute
+		ALTER TABLE public.t ADD COLUMN x text;
+	`)
+	require.NoError(t, err)
+	assert.Len(t, result.ExecuteStmts, 1)
 	assert.Empty(t, buf.String())
 }
 
@@ -299,15 +348,52 @@ func TestParseSQL_NoWarnForSupportedCommentTargets(t *testing.T) {
 		CREATE SEQUENCE public.s;
 		CREATE TABLE public.t (id integer);
 		CREATE VIEW public.v AS SELECT id FROM public.t;
+		CREATE MATERIALIZED VIEW public.mv AS SELECT id FROM public.t;
+		CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+		CREATE PROCEDURE public.p() LANGUAGE sql AS $$ SELECT 1 $$;
 		COMMENT ON TABLE public.t IS 't';
 		COMMENT ON COLUMN public.t.id IS 'c';
 		COMMENT ON VIEW public.v IS 'v';
+		COMMENT ON MATERIALIZED VIEW public.mv IS 'mv';
 		COMMENT ON SEQUENCE public.s IS 's';
 		COMMENT ON TYPE public.e IS 'e';
 		COMMENT ON DOMAIN public.d IS 'd';
+		COMMENT ON FUNCTION public.f() IS 'f';
+		COMMENT ON PROCEDURE public.p() IS 'p';
 	`)
 	require.NoError(t, err)
 	assert.Empty(t, buf.String())
+}
+
+// COMMENT ON COLUMN names a composite type attribute as well as a table
+// column, and the type is found by the same schema-qualified name.
+func TestParseSQL_CommentOnCompositeAttribute(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TYPE public.addr AS (street text, city text);
+		COMMENT ON COLUMN public.addr.city IS 'city name';
+	`)
+	require.NoError(t, err)
+
+	ct, ok := result.CompositeTypes.GetOk("public.addr")
+	require.True(t, ok)
+	require.Len(t, ct.Attributes, 2)
+	assert.Nil(t, ct.Attributes[0].Comment)
+	require.NotNil(t, ct.Attributes[1].Comment)
+	assert.Equal(t, "city name", *ct.Attributes[1].Comment)
+}
+
+// An explicit NULL comment clears one the same file set earlier.
+func TestParseSQL_CommentIsNullClearsComment(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE SEQUENCE public.s;
+		COMMENT ON SEQUENCE public.s IS 's';
+		COMMENT ON SEQUENCE public.s IS NULL;
+	`)
+	require.NoError(t, err)
+
+	seq, ok := result.Sequences.GetOk("public.s")
+	require.True(t, ok)
+	assert.Nil(t, seq.Comment)
 }
 
 func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {

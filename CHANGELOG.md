@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Warn about an `ALTER TABLE` action or a `COMMENT ON` target the parser drops. Both statements are supported as a whole, so neither reached the `ignored unsupported statement` warning, and the parts pistachio does not read were dropped in silence: `ALTER TABLE ... ADD COLUMN` left the column out of the desired schema, so the plan proposed dropping it from the database, and `ALTER COLUMN ... SET DEFAULT` / `SET NOT NULL` / `TYPE` went the same way. The actions the parser reads (`ADD CONSTRAINT`, the row-level security toggles, the trigger states) and the comment targets it models (table, column, view, materialized view, sequence, type, domain, function, procedure) are now listed explicitly, so an action or target added later warns instead of vanishing. A statement that mixes a read action with a dropped one reports only the dropped one. An `ALTER TABLE` naming a relation the file does not declare is still skipped in silence, the same as a `CREATE INDEX` on such a relation.
+* Warn about an `ALTER TABLE` action or a `COMMENT ON` target the parser drops. Both have a parser case of their own, so neither reached the `ignored unsupported statement` warning: a column added by `ALTER TABLE ... ADD COLUMN` was absent from the desired schema and the plan proposed dropping it from the database, and `ALTER COLUMN ... SET DEFAULT` / `SET NOT NULL` / `TYPE` went the same way. The warning follows what the parser reads, so an action or target added later warns instead of vanishing. An `ALTER TABLE` naming a relation the file does not declare is still skipped without one.
 
 ## [1.30.0] - 2026-08-25
 
