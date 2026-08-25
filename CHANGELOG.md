@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.30.0] - 2026-08-25
 
 * Manage functions and procedures, behind `--manage-routine` (`$PISTA_MANAGE_ROUTINE`). Routines are off by default, so a schema maintained with `-- pista:execute` keeps working and plan output is unchanged. With the flag, `pg_proc` is read, `dump` writes each routine, and the diff compares the body, the language and the attributes (volatility, `STRICT`, `SECURITY DEFINER`, `LEAKPROOF`, `PARALLEL`, `COST`, `ROWS`, `SET`). A routine is identified by its name and its argument types, so an overload set is several objects. Changes apply with `CREATE OR REPLACE`; the ones PostgreSQL refuses in place run as `DROP` and `CREATE`, gated by `--allow-drop routine`. `routine` also joins the `--enable` / `--disable` type list, and `-- pista:ignore` works on a `CREATE FUNCTION` or `CREATE PROCEDURE`.
 
