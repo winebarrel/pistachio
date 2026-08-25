@@ -1,0 +1,20 @@
+# Drops run in reverse dependency order. Every table depends on every routine,
+# so the table goes first and the routine after it, which is what lets a CHECK
+# constraint or a trigger that calls the routine go away before the routine
+# does. The types the routine names go last.
+manage_routine: true
+init: |
+  CREATE TYPE public.status AS ENUM ('active');
+  CREATE FUNCTION public.label(s status) RETURNS text
+      LANGUAGE sql AS $$ SELECT s::text $$;
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      st status,
+      CONSTRAINT events_pkey PRIMARY KEY (id),
+      CONSTRAINT events_label CHECK (label(st) <> '')
+  );
+desired: ""
+plan: |
+  DROP TABLE public.events;
+  DROP FUNCTION public.label(status);
+  DROP TYPE public.status;

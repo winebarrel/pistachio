@@ -1,0 +1,16 @@
+# The argument types are the identity, so dropping one is a different routine
+# rather than a modification: the new signature is created and the old one
+# dropped.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer, b integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a + b $$;
+desired: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a $$;
+plan: |
+  CREATE OR REPLACE FUNCTION public.f(a integer)
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+  DROP FUNCTION public.f(integer, integer);
