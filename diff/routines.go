@@ -102,7 +102,7 @@ func diffRoutine(current, desired *model.Routine, dropAllowed bool) (stmts, disa
 		if desired.Comment != nil {
 			stmts = append(stmts, desired.CommentSQL())
 		} else {
-			stmts = append(stmts, "COMMENT ON "+desired.Kind()+" "+desired.FQRN()+" IS NULL;")
+			stmts = append(stmts, "COMMENT ON "+desired.Kind()+" "+desired.Signature()+" IS NULL;")
 		}
 	}
 

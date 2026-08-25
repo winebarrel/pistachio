@@ -431,3 +431,19 @@ func TestParseSQL_CommentOnRoutineWithBadName(t *testing.T) {
 	r, _ := result.Routines.GetOk("public.f()")
 	assert.Nil(t, r.Comment)
 }
+
+// A comment naming a type in the routine's own schema has to key the way FQRN
+// does. Without that it silently fails to attach, and the plan then proposes
+// COMMENT ... IS NULL on a routine that has one.
+func TestParseSQL_CommentOnRoutineWithQualifiedArgType(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE FUNCTION public.f(x public.rowtype) RETURNS text LANGUAGE sql AS $$ SELECT 'x' $$;
+		COMMENT ON FUNCTION public.f(public.rowtype) IS 'v1';
+	`)
+	require.NoError(t, err)
+
+	r, ok := result.Routines.GetOk("public.f(rowtype)")
+	require.True(t, ok)
+	require.NotNil(t, r.Comment)
+	assert.Equal(t, "v1", *r.Comment)
+}
