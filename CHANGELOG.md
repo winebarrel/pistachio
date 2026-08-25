@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.31.0] - 2026-08-25
 
 * Accept a regular expression in `--include` / `--exclude`. A pattern wrapped in slashes is one, so `-E '/^posts_\d+$/'` reaches a numbered partition set that a wildcard cannot; anything else stays a wildcard, and the two forms mix in one invocation. A regular expression matches anywhere in the name unless it is anchored; a wildcard still has to match the whole name. An invalid expression is rejected before the database is read. The flags did not change, so `$PISTA_INCLUDE` / `$PISTA_EXCLUDE` and the config file carry both forms.
 
