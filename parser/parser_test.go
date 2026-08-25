@@ -183,6 +183,235 @@ func TestParseSQL_WarnsUnsupportedStmt_CollapsesMultiline(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(out, "\n"), "the warning must be a single line")
 }
 
+// An ALTER TABLE action the parser does not read is dropped from the desired
+// schema. The statement type itself is supported, so it never reaches the
+// unsupported-statement warning; without a warning of its own the column would
+// silently read as absent and the plan would propose dropping it.
+func TestParseSQL_WarnsIgnoredAlterTableAction(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer);
+		ALTER TABLE public.t ADD COLUMN x text;
+	`)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.t")
+	require.True(t, ok)
+	_, hasCol := tbl.Columns.GetOk("x")
+	assert.False(t, hasCol, "the action is still dropped; only the warning is new")
+
+	out := buf.String()
+	assert.Contains(t, out, "ignored unsupported statement")
+	assert.Contains(t, out, "ADD COLUMN x text")
+}
+
+// A statement may mix an action the parser reads with one it does not. The
+// supported action still lands in the model, and the warning names only the
+// dropped one.
+func TestParseSQL_WarnsIgnoredAlterTableAction_KeepsSupportedAction(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer);
+		ALTER TABLE public.t
+		    ADD CONSTRAINT t_id_check CHECK (id > 0),
+		    ADD COLUMN x text;
+	`)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.t")
+	require.True(t, ok)
+	_, hasCon := tbl.Constraints.GetOk("t_id_check")
+	assert.True(t, hasCon, "the supported action must still be parsed")
+
+	out := buf.String()
+	assert.Contains(t, out, "ADD COLUMN x text")
+	assert.NotContains(t, out, "t_id_check", "the parsed action must not be reported as ignored")
+}
+
+// Several dropped actions in one statement are reported together, on one line.
+func TestParseSQL_WarnsIgnoredAlterTableAction_MultipleActions(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer);
+		ALTER TABLE public.t ADD COLUMN x text, ALTER COLUMN id TYPE bigint;
+	`)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "ADD COLUMN x text")
+	assert.Contains(t, out, "ALTER COLUMN id TYPE bigint")
+	assert.Equal(t, 1, strings.Count(out, "\n"), "the warning must be a single line")
+}
+
+// The actions the parser does read must stay silent.
+func TestParseSQL_NoWarnForSupportedAlterTableActions(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer);
+		ALTER TABLE public.t ADD CONSTRAINT t_id_check CHECK (id > 0);
+		ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+		ALTER TABLE public.t FORCE ROW LEVEL SECURITY;
+		CREATE TRIGGER trg BEFORE INSERT ON public.t
+		    FOR EACH ROW EXECUTE FUNCTION public.f();
+		ALTER TABLE public.t DISABLE TRIGGER trg;
+	`)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// IF EXISTS is part of the statement, so it survives into the warning.
+func TestParseSQL_WarnsIgnoredAlterTableAction_IfExists(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer);
+		ALTER TABLE IF EXISTS public.t ADD COLUMN x text;
+	`)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "ALTER TABLE IF EXISTS public.t ADD COLUMN x text")
+}
+
+// A statement marked -- pista:execute is run as written instead of being
+// diffed, so it must not warn.
+func TestParseSQL_ExecuteDirectiveSilencesAlterTableWarning(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer);
+		-- pista:execute
+		ALTER TABLE public.t ADD COLUMN x text;
+	`)
+	require.NoError(t, err)
+	assert.Len(t, result.ExecuteStmts, 1)
+	assert.Empty(t, buf.String())
+}
+
+// An ALTER TABLE naming a relation the file does not declare is skipped whole,
+// the same as a CREATE INDEX on such a relation. That is deliberate, so it
+// stays silent.
+func TestParseSQL_NoWarnForAlterTableOnUndeclaredRelation(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parseSQLWithPublicSchema(`ALTER TABLE public.nosuch ADD COLUMN x text;`)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// A table marked -- pista:ignore is out of the diff, so an action dropped
+// from it cannot mislead the plan and the warning would be noise.
+func TestParseSQL_NoWarnForAlterTableOnIgnoredTable(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parseSQLWithPublicSchema(`
+		-- pista:ignore
+		CREATE TABLE public.t (id integer);
+		ALTER TABLE public.t ADD COLUMN x text;
+	`)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// COMMENT ON is dispatched by target. A target the parser does not model is
+// dropped, so it warns like any other unsupported statement.
+func TestParseSQL_WarnsUnsupportedCommentTarget(t *testing.T) {
+	for _, stmt := range []string{
+		`COMMENT ON INDEX public.t_idx IS 'i';`,
+		`COMMENT ON CONSTRAINT t_id_check ON public.t IS 'c';`,
+		`COMMENT ON SCHEMA public IS 's';`,
+		`COMMENT ON TRIGGER trg ON public.t IS 'g';`,
+	} {
+		t.Run(stmt, func(t *testing.T) {
+			var buf bytes.Buffer
+			restore := parser.SetWarnWriter(&buf)
+			defer restore()
+
+			_, err := parseSQLWithPublicSchema("CREATE TABLE public.t (id integer);\n" + stmt)
+			require.NoError(t, err)
+			assert.Contains(t, buf.String(), "ignored unsupported statement")
+		})
+	}
+}
+
+// The comment targets the parser does model must stay silent.
+func TestParseSQL_NoWarnForSupportedCommentTargets(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parseSQLWithPublicSchema(`
+		CREATE TYPE public.e AS ENUM ('a');
+		CREATE DOMAIN public.d AS text;
+		CREATE SEQUENCE public.s;
+		CREATE TABLE public.t (id integer);
+		CREATE VIEW public.v AS SELECT id FROM public.t;
+		CREATE MATERIALIZED VIEW public.mv AS SELECT id FROM public.t;
+		CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+		CREATE PROCEDURE public.p() LANGUAGE sql AS $$ SELECT 1 $$;
+		COMMENT ON TABLE public.t IS 't';
+		COMMENT ON COLUMN public.t.id IS 'c';
+		COMMENT ON VIEW public.v IS 'v';
+		COMMENT ON MATERIALIZED VIEW public.mv IS 'mv';
+		COMMENT ON SEQUENCE public.s IS 's';
+		COMMENT ON TYPE public.e IS 'e';
+		COMMENT ON DOMAIN public.d IS 'd';
+		COMMENT ON FUNCTION public.f() IS 'f';
+		COMMENT ON PROCEDURE public.p() IS 'p';
+	`)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// COMMENT ON COLUMN names a composite type attribute as well as a table
+// column, and the type is found by the same schema-qualified name.
+func TestParseSQL_CommentOnCompositeAttribute(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TYPE public.addr AS (street text, city text);
+		COMMENT ON COLUMN public.addr.city IS 'city name';
+	`)
+	require.NoError(t, err)
+
+	ct, ok := result.CompositeTypes.GetOk("public.addr")
+	require.True(t, ok)
+	require.Len(t, ct.Attributes, 2)
+	assert.Nil(t, ct.Attributes[0].Comment)
+	require.NotNil(t, ct.Attributes[1].Comment)
+	assert.Equal(t, "city name", *ct.Attributes[1].Comment)
+}
+
+// An explicit NULL comment clears one the same file set earlier.
+func TestParseSQL_CommentIsNullClearsComment(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE SEQUENCE public.s;
+		COMMENT ON SEQUENCE public.s IS 's';
+		COMMENT ON SEQUENCE public.s IS NULL;
+	`)
+	require.NoError(t, err)
+
+	seq, ok := result.Sequences.GetOk("public.s")
+	require.True(t, ok)
+	assert.Nil(t, seq.Comment)
+}
+
 func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
 	var buf bytes.Buffer
 	restore := parser.SetWarnWriter(&buf)
@@ -1734,7 +1963,11 @@ CREATE INDEX idx_users_name ON public.users USING btree (name) TABLESPACE fast_s
 }
 
 func TestParseSQL_AlterTableNonAddConstraint(t *testing.T) {
-	// ALTER TABLE with non-ADD CONSTRAINT commands should be silently skipped
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	// ALTER TABLE with non-ADD CONSTRAINT commands is skipped, with a warning
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,
     name text,
@@ -1750,6 +1983,7 @@ ALTER TABLE public.users DROP COLUMN name;`
 	// The parser does not apply DDL changes; the column should still be present
 	_, ok = tbl.Columns.GetOk("name")
 	assert.True(t, ok)
+	assert.Contains(t, buf.String(), "ignored unsupported statement")
 }
 
 func TestParseSQL_TableLevelExclusionConstraint(t *testing.T) {

@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Warn about an `ALTER TABLE` action or a `COMMENT ON` target the parser drops. Both have a parser case of their own, so neither reached the `ignored unsupported statement` warning: a column added by `ALTER TABLE ... ADD COLUMN` was absent from the desired schema and the plan proposed dropping it from the database, and `ALTER COLUMN ... SET DEFAULT` / `SET NOT NULL` / `TYPE` went the same way. The warning follows what the parser reads, so an action or target added later warns instead of vanishing. An `ALTER TABLE` naming a relation the file does not declare, or one marked `-- pista:ignore`, is still skipped without one.
+
 ## [1.30.0] - 2026-08-25
 
 * Manage functions and procedures, behind `--manage-routine` (`$PISTA_MANAGE_ROUTINE`). Routines are off by default, so a schema maintained with `-- pista:execute` keeps working and plan output is unchanged. With the flag, `pg_proc` is read, `dump` writes each routine, and the diff compares the body, the language and the attributes (volatility, `STRICT`, `SECURITY DEFINER`, `LEAKPROOF`, `PARALLEL`, `COST`, `ROWS`, `SET`). A routine is identified by its name and its argument types, so an overload set is several objects. Changes apply with `CREATE OR REPLACE`; the ones PostgreSQL refuses in place run as `DROP` and `CREATE`, gated by `--allow-drop routine`. `routine` also joins the `--enable` / `--disable` type list, and `-- pista:ignore` works on a `CREATE FUNCTION` or `CREATE PROCEDURE`.

@@ -85,6 +85,79 @@ func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
 	fmt.Fprintf(warnWriter, "pistachio: ignored unsupported statement: %s%s\n", snippet, txHint(rawStmt)) //nolint:errcheck
 }
 
+// alterTableSupportedCmds lists the ALTER TABLE actions the parser reads into
+// the model: constraints (parseAlterTableConstraints), the row-level security
+// toggles (applyAlterTableRLS) and the trigger states
+// (applyAlterTableTriggerState). Anything else is dropped, so warning is
+// driven off this list rather than off a list of the actions to reject: an
+// action PostgreSQL adds later warns instead of vanishing.
+var alterTableSupportedCmds = map[pg_query.AlterTableType]bool{
+	pg_query.AlterTableType_AT_AddConstraint:      true,
+	pg_query.AlterTableType_AT_EnableRowSecurity:  true,
+	pg_query.AlterTableType_AT_DisableRowSecurity: true,
+	pg_query.AlterTableType_AT_ForceRowSecurity:   true,
+	pg_query.AlterTableType_AT_NoForceRowSecurity: true,
+	pg_query.AlterTableType_AT_EnableTrig:         true,
+	pg_query.AlterTableType_AT_DisableTrig:        true,
+	pg_query.AlterTableType_AT_EnableAlwaysTrig:   true,
+	pg_query.AlterTableType_AT_EnableReplicaTrig:  true,
+}
+
+// commentTargetSupported lists the COMMENT ON targets parseCommentStmt reads
+// into the model. A comment on any other object is dropped, and warns.
+var commentTargetSupported = map[pg_query.ObjectType]bool{
+	pg_query.ObjectType_OBJECT_TABLE:     true,
+	pg_query.ObjectType_OBJECT_VIEW:      true,
+	pg_query.ObjectType_OBJECT_MATVIEW:   true,
+	pg_query.ObjectType_OBJECT_COLUMN:    true,
+	pg_query.ObjectType_OBJECT_SEQUENCE:  true,
+	pg_query.ObjectType_OBJECT_TYPE:      true,
+	pg_query.ObjectType_OBJECT_DOMAIN:    true,
+	pg_query.ObjectType_OBJECT_FUNCTION:  true,
+	pg_query.ObjectType_OBJECT_PROCEDURE: true,
+}
+
+// warnIgnoredAlterTableCmds warns about the ALTER TABLE actions no handler
+// reads. ALTER TABLE as a statement is supported, so such an action never
+// reaches the unsupported-statement warning; dropping it in silence would let
+// a column added this way read as absent from the desired schema and plan as
+// a DROP COLUMN.
+//
+// The warning carries a statement rebuilt from the ignored actions alone, so
+// one that mixes a supported action with an unsupported one reports only the
+// latter. The rebuilt statement keeps the original location, which is what
+// the snippet falls back to when deparse fails.
+func warnIgnoredAlterTableCmds(sql string, rawStmt *pg_query.RawStmt, as *pg_query.AlterTableStmt) {
+	var ignored []*pg_query.Node
+
+	for _, cmdNode := range as.Cmds {
+		cmd := cmdNode.GetAlterTableCmd()
+		if cmd == nil || alterTableSupportedCmds[cmd.Subtype] {
+			continue
+		}
+		ignored = append(ignored, cmdNode)
+	}
+
+	if len(ignored) == 0 {
+		return
+	}
+
+	warnIgnoredStmt(sql, &pg_query.RawStmt{
+		Stmt: &pg_query.Node{
+			Node: &pg_query.Node_AlterTableStmt{
+				AlterTableStmt: &pg_query.AlterTableStmt{
+					Relation:  as.Relation,
+					Objtype:   as.Objtype,
+					MissingOk: as.MissingOk,
+					Cmds:      ignored,
+				},
+			},
+		},
+		StmtLocation: rawStmt.StmtLocation,
+		StmtLen:      rawStmt.StmtLen,
+	})
+}
+
 func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
 	if _, ok := m.GetOk(key); ok {
 		return fmt.Errorf("duplicate %s: %s", kind, key)
@@ -350,6 +423,12 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				continue
 			}
 
+			// A table marked -- pista:ignore is out of the diff, so an
+			// action dropped from it cannot mislead the plan.
+			if !t.Ignore {
+				warnIgnoredAlterTableCmds(sql, rawStmt, as)
+			}
+
 			// RLS toggles, trigger states and constraint subcommands can
 			// coexist in one ALTER TABLE statement. Each helper picks up only
 			// its own subtypes and walks the cmd list independently, so run
@@ -449,6 +528,10 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
+			if !commentTargetSupported[cs.Objtype] {
+				warnIgnoredStmt(sql, rawStmt)
+				break
+			}
 			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, compositeTypes, sequences, routines)
 
 		default:
