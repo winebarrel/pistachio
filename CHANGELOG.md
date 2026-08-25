@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Warn about an `ALTER TABLE` action or a `COMMENT ON` target the parser drops. Both statements are supported as a whole, so neither reached the `ignored unsupported statement` warning, and the parts pistachio does not read were dropped in silence: `ALTER TABLE ... ADD COLUMN` left the column out of the desired schema, so the plan proposed dropping it from the database, and `ALTER COLUMN ... SET DEFAULT` / `SET NOT NULL` / `TYPE` went the same way. The actions the parser reads (`ADD CONSTRAINT`, the row-level security toggles, the trigger states) and the comment targets it models (table, column, view, materialized view, sequence, type, domain, function, procedure) are now listed explicitly, so an action or target added later warns instead of vanishing. A statement that mixes a read action with a dropped one reports only the dropped one. An `ALTER TABLE` naming a relation the file does not declare is still skipped in silence, the same as a `CREATE INDEX` on such a relation.
+
 ## [1.30.0] - 2026-08-25
 
 * Manage functions and procedures, behind `--manage-routine` (`$PISTA_MANAGE_ROUTINE`). Routines are off by default, so a schema maintained with `-- pista:execute` keeps working and plan output is unchanged. With the flag, `pg_proc` is read, `dump` writes each routine, and the diff compares the body, the language and the attributes (volatility, `STRICT`, `SECURITY DEFINER`, `LEAKPROOF`, `PARALLEL`, `COST`, `ROWS`, `SET`). A routine is identified by its name and its argument types, so an overload set is several objects. Changes apply with `CREATE OR REPLACE`; the ones PostgreSQL refuses in place run as `DROP` and `CREATE`, gated by `--allow-drop routine`. `routine` also joins the `--enable` / `--disable` type list, and `-- pista:ignore` works on a `CREATE FUNCTION` or `CREATE PROCEDURE`.
