@@ -32,6 +32,25 @@ func TestValidatePatterns(t *testing.T) {
 		o := &pistachio.FilterOptions{}
 		assert.NoError(t, o.ValidatePatterns())
 	})
+
+	t.Run("valid regexp patterns", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Include: []string{`/^posts_\d+$/`}, Exclude: []string{"//"}}
+		assert.NoError(t, o.ValidatePatterns())
+	})
+
+	t.Run("invalid include regexp", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Include: []string{"/[invalid/"}}
+		err := o.ValidatePatterns()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--include")
+	})
+
+	t.Run("invalid exclude regexp", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Exclude: []string{"/*bad/"}}
+		err := o.ValidatePatterns()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--exclude")
+	})
 }
 
 func TestFilterOptions_AfterApply_Valid(t *testing.T) {
@@ -106,6 +125,54 @@ func TestMatchName(t *testing.T) {
 		o := &pistachio.FilterOptions{Include: []string{"user?"}}
 		assert.True(t, o.MatchName("users"))
 		assert.False(t, o.MatchName("user_roles"))
+	})
+
+	t.Run("include regexp", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Include: []string{`/^posts_\d+$/`}}
+		assert.True(t, o.MatchName("posts_1"))
+		assert.True(t, o.MatchName("posts_2026"))
+		assert.False(t, o.MatchName("posts_old"))
+		assert.False(t, o.MatchName("users"))
+	})
+
+	t.Run("exclude regexp", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Exclude: []string{`/^(tmp|scratch)_/`}}
+		assert.True(t, o.MatchName("users"))
+		assert.False(t, o.MatchName("tmp_backup"))
+		assert.False(t, o.MatchName("scratch_1"))
+	})
+
+	t.Run("regexp is not anchored", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Include: []string{"/user/"}}
+		assert.True(t, o.MatchName("users"))
+		assert.True(t, o.MatchName("superuser"))
+		assert.False(t, o.MatchName("posts"))
+	})
+
+	t.Run("regexp and wildcard together", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Include: []string{"user*", `/^audit_(log|trail)$/`}}
+		assert.True(t, o.MatchName("users"))
+		assert.True(t, o.MatchName("audit_log"))
+		assert.True(t, o.MatchName("audit_trail"))
+		assert.False(t, o.MatchName("audit_other"))
+		assert.False(t, o.MatchName("posts"))
+	})
+
+	t.Run("empty regexp matches everything", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Exclude: []string{"//"}}
+		assert.False(t, o.MatchName("users"))
+	})
+
+	t.Run("one slash is a wildcard, not a regexp", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Include: []string{"/user"}}
+		assert.False(t, o.MatchName("users"))
+		assert.True(t, o.MatchName("/user"))
+	})
+
+	t.Run("regexp metacharacter in a wildcard is literal", func(t *testing.T) {
+		o := &pistachio.FilterOptions{Include: []string{"users+"}}
+		assert.False(t, o.MatchName("users"))
+		assert.True(t, o.MatchName("users+"))
 	})
 }
 

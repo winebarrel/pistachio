@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Accept a regular expression in `--include` / `--exclude`. A pattern wrapped in slashes is one, so `-E '/^posts_\d+$/'` excludes numbered partitions that a wildcard cannot reach; anything else stays a wildcard, and the two forms mix in one invocation. A regular expression matches the way Go matches one, anywhere in the name unless it anchors itself, while a wildcard still has to match the whole name. An invalid expression is rejected before the database is read, alongside the existing wildcard error. The pattern travels through `$PISTA_INCLUDE` / `$PISTA_EXCLUDE` and the config file unchanged, so nothing new was added there. An unquoted identifier cannot hold a slash, so the delimiters do not collide with the names people write.
+
 * Warn about an `ALTER TABLE` action or a `COMMENT ON` target the parser drops. Both have a parser case of their own, so neither reached the `ignored unsupported statement` warning: a column added by `ALTER TABLE ... ADD COLUMN` was absent from the desired schema and the plan proposed dropping it from the database, and `ALTER COLUMN ... SET DEFAULT` / `SET NOT NULL` / `TYPE` went the same way. The warning follows what the parser reads, so an action or target added later warns instead of vanishing. An `ALTER TABLE` naming a relation the file does not declare, or one marked `-- pista:ignore`, is still skipped without one.
 
 ## [1.30.0] - 2026-08-25
