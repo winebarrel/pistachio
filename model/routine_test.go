@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -157,4 +158,38 @@ func TestRoutine_SQLWithoutReturnType(t *testing.T) {
 func TestRoutine_String(t *testing.T) {
 	r := model.Routine{Schema: "public", Name: "f", ReturnType: "integer"}
 	assert.Contains(t, r.String(), `Name:"f"`)
+}
+
+// A routine with no comment renders none, so the header and the CREATE are
+// all RoutineToSQL writes.
+func TestRoutineToSQL_NoComment(t *testing.T) {
+	r := &model.Routine{
+		Schema: "public", Name: "f", ReturnType: "integer", Language: "sql", Body: " SELECT 1 ",
+	}
+	assert.Empty(t, r.CommentSQL())
+	assert.NotContains(t, model.RoutineToSQL(r), "COMMENT ON")
+}
+
+func TestRoutinesToSQL(t *testing.T) {
+	routines := orderedmap.New[string, *model.Routine]()
+	for _, r := range []*model.Routine{
+		{
+			Schema: "public", Name: "f", ReturnType: "integer", Language: "sql", Body: " SELECT a ",
+			Args: []*model.RoutineArg{{Name: "a", Type: "integer"}},
+		},
+		{
+			Schema: "public", Name: "f", ReturnType: "text", Language: "sql", Body: " SELECT a ",
+			Args: []*model.RoutineArg{{Name: "a", Type: "text"}},
+		},
+		{Schema: "public", Name: "p", Procedure: true, Language: "sql", Body: " SELECT "},
+	} {
+		routines.Set(r.FQRN(), r)
+	}
+
+	got := model.RoutinesToSQL(routines)
+	// Overloads are separate objects, each with its own header.
+	assert.Contains(t, got, "-- public.f(integer)\nCREATE OR REPLACE FUNCTION public.f(a integer)")
+	assert.Contains(t, got, "-- public.f(text)\nCREATE OR REPLACE FUNCTION public.f(a text)")
+	assert.Contains(t, got, "-- public.p()\nCREATE OR REPLACE PROCEDURE public.p()")
+	assert.Equal(t, 2, strings.Count(got, "\n\n"), "objects are separated by a blank line")
 }
