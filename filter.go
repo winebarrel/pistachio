@@ -106,3 +106,23 @@ func (f *FilterOptions) filterDomains(domains *orderedmap.Map[string, *model.Dom
 	}
 	return filtered
 }
+
+// filterRoutines returns the routines to manage. Routines are opt-in: without
+// --manage-routine the map is empty, which keeps pg_proc out of the diff and
+// leaves the output of every existing schema unchanged.
+func (f *FilterOptions) filterRoutines(routines *orderedmap.Map[string, *model.Routine]) *orderedmap.Map[string, *model.Routine] {
+	if !f.ManageRoutine || !f.IsTypeEnabled("routine") {
+		return orderedmap.New[string, *model.Routine]()
+	}
+	if len(f.Include) == 0 && len(f.Exclude) == 0 {
+		return routines
+	}
+
+	filtered := orderedmap.New[string, *model.Routine]()
+	for k, r := range routines.All() {
+		if f.MatchName(r.Name) {
+			filtered.Set(k, r)
+		}
+	}
+	return filtered
+}

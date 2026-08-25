@@ -32,6 +32,10 @@ type ObjectCount struct {
 	Domains        int
 	CompositeTypes int
 	Sequences      int
+	// Routines is nil unless --manage-routine is set. A nil value leaves the
+	// slot out of Summary entirely, so the line reads exactly as it did
+	// before routines were managed.
+	Routines *int
 }
 
 func (c ObjectCount) SchemaLabel() string {
@@ -42,14 +46,18 @@ func (c ObjectCount) SchemaLabel() string {
 }
 
 func (c ObjectCount) Summary() string {
-	return fmt.Sprintf("%s, %s, %s, %s, %s, %s",
+	parts := []string{
 		pluralize(c.Tables, "table"),
 		pluralize(c.Views, "view"),
 		pluralize(c.Enums, "enum"),
 		pluralize(c.Domains, "domain"),
 		pluralize(c.CompositeTypes, "composite type"),
 		pluralize(c.Sequences, "sequence"),
-	)
+	}
+	if c.Routines != nil {
+		parts = append(parts, pluralize(*c.Routines, "routine"))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func pluralize(n int, singular string) string {

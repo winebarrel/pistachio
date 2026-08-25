@@ -98,3 +98,20 @@ func quote(name string) string {
 func QuoteLiteral(s string) string {
 	return `'` + strings.ReplaceAll(s, `'`, `''`) + `'`
 }
+
+// StripTypeSchema removes a redundant "<schema>." qualifier from a type name,
+// preserving any trailing "[]". The catalog reports a type in the search path
+// unqualified (via format_type), while desired SQL may write it schema-
+// qualified. Stripping the owning object's schema makes the two forms compare
+// equal. A type in a different search-path schema than its owner is not
+// covered.
+func StripTypeSchema(typeName, schema string) string {
+	if schema == "" {
+		return typeName
+	}
+	prefix := schema + "."
+	if strings.HasPrefix(typeName, prefix) {
+		return typeName[len(prefix):]
+	}
+	return typeName
+}

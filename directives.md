@@ -13,7 +13,7 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 
 ## -- pista:renamed-from
 
-Renames an object instead of dropping and recreating it. The argument is the old name. For tables, views, enums, domains, and composite types, the old name may be schema-qualified; without a schema it defaults to the default schema. For composite attributes, columns, constraints, foreign keys, indexes, policies, and triggers, the old name is unqualified.
+Renames an object instead of dropping and recreating it. The argument is the old name. For tables, views, enums, domains, and composite types, the old name may be schema-qualified; without a schema it defaults to the default schema. For composite attributes, columns, constraints, foreign keys, indexes, policies, and triggers, the old name is unqualified. Routines cannot be renamed; the directive on a `CREATE FUNCTION` or `CREATE PROCEDURE` is an error.
 
 ```sql
 -- pista:renamed-from public.old_users
@@ -136,7 +136,7 @@ Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs st
 
 ## -- pista:ignore
 
-Marks a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE TYPE ... AS (...)` / `CREATE DOMAIN` / `CREATE VIEW` (including materialized views) as unmanaged. pistachio does not create, alter, or drop the object: it is dropped from both the desired and current state before diffing. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
+Marks a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE TYPE ... AS (...)` / `CREATE DOMAIN` / `CREATE VIEW` (including materialized views) / `CREATE FUNCTION` / `CREATE PROCEDURE` as unmanaged. pistachio does not create, alter, or drop the object: it is dropped from both the desired and current state before diffing. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
 
 ```sql
 -- pista:ignore

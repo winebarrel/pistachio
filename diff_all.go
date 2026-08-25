@@ -80,6 +80,16 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to fetch sequences: %w", err)
 	}
 
+	// pg_proc is read only when --manage-routine asked for it. Skipping the
+	// query keeps the extra round trip off every other run.
+	currentRoutines := orderedmap.New[string, *model.Routine]()
+	if options.ManageRoutine {
+		currentRoutines, err = cat.Routines(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch routines: %w", err)
+		}
+	}
+
 	desired, err := parser.ParseSQLFilesWithSchema(options.Files, client.Schemas[0])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL file: %w", err)
@@ -93,6 +103,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	filteredDomains := options.filterDomains(currentDomains)
 	filteredCompositeTypes := options.filterCompositeTypes(currentCompositeTypes)
 	filteredSequences := options.filterSequences(currentSequences)
+	filteredRoutines := options.filterRoutines(currentRoutines)
 
 	desiredEnums := options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums))
 	desiredDomains := options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains))
@@ -103,6 +114,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	// SEQUENCE ties to a column via OWNED BY are excluded, matching the
 	// catalog side (which already drops serial/identity-owned sequences).
 	desiredSequences := options.filterSequences(standaloneSequences(client.reverseRemapSequenceSchemas(desired.Sequences)))
+	desiredRoutines := options.filterRoutines(client.reverseRemapRoutineSchemas(desired.Routines))
 
 	// Objects marked -- pista:ignore are unmanaged: drop them from both the
 	// desired and current sides so no create, alter, or drop is generated.
@@ -114,6 +126,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	ignored = append(ignored, removeIgnored(desiredDomains, filteredDomains, func(d *model.Domain) bool { return d.Ignore })...)
 	ignored = append(ignored, removeIgnored(desiredCompositeTypes, filteredCompositeTypes, func(ct *model.CompositeType) bool { return ct.Ignore })...)
 	ignored = append(ignored, removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore })...)
+	ignored = append(ignored, removeIgnored(desiredRoutines, filteredRoutines, func(r *model.Routine) bool { return r.Ignore })...)
 	sort.Strings(ignored)
 	ignoredComments := make([]string, len(ignored))
 	for i, fqn := range ignored {
@@ -128,6 +141,10 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		Domains:        filteredDomains.Len(),
 		CompositeTypes: filteredCompositeTypes.Len(),
 		Sequences:      filteredSequences.Len(),
+	}
+	if options.ManageRoutine {
+		n := filteredRoutines.Len()
+		count.Routines = &n
 	}
 
 	switch {
@@ -185,10 +202,15 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to diff views: %w", err)
 	}
 
+	routineDiff, err := diff.DiffRoutines(filteredRoutines, desiredRoutines, &options.DropPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to diff routines: %w", err)
+	}
+
 	stmts := orderStatements(
-		filteredEnums, filteredDomains, filteredCompositeTypes, filteredTables, filteredViews, filteredSequences,
-		desiredEnums, desiredDomains, desiredCompositeTypes, desiredTables, desiredViews, desiredSequences,
-		enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff,
+		filteredEnums, filteredDomains, filteredCompositeTypes, filteredTables, filteredViews, filteredSequences, filteredRoutines,
+		desiredEnums, desiredDomains, desiredCompositeTypes, desiredTables, desiredViews, desiredSequences, desiredRoutines,
+		enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff,
 	)
 
 	preSQL, err := resolvePreSQL(options.PreSQL, options.PreSQLFile)
@@ -208,6 +230,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	disallowed = append(disallowed, compositeTypeDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, enumDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, sequenceDiff.DisallowedDropStmts...)
+	disallowed = append(disallowed, routineDiff.DisallowedDropStmts...)
 
 	return &diffAllResult{
 		Stmts:                stmts,
@@ -345,25 +368,28 @@ func orderStatements(
 	currentTables *orderedmap.Map[string, *model.Table],
 	currentViews *orderedmap.Map[string, *model.View],
 	currentSequences *orderedmap.Map[string, *model.Sequence],
+	currentRoutines *orderedmap.Map[string, *model.Routine],
 	desiredEnums *orderedmap.Map[string, *model.Enum],
 	desiredDomains *orderedmap.Map[string, *model.Domain],
 	desiredCompositeTypes *orderedmap.Map[string, *model.CompositeType],
 	desiredTables *orderedmap.Map[string, *model.Table],
 	desiredViews *orderedmap.Map[string, *model.View],
 	desiredSequences *orderedmap.Map[string, *model.Sequence],
+	desiredRoutines *orderedmap.Map[string, *model.Routine],
 	enumDiff *diff.EnumDiffResult,
 	domainDiff *diff.DomainDiffResult,
 	compositeTypeDiff *diff.CompositeTypeDiffResult,
 	tableDiff *diff.TableDiffResult,
 	viewDiff *diff.ViewDiffResult,
 	sequenceDiff *diff.SequenceDiffResult,
+	routineDiff *diff.RoutineDiffResult,
 ) []string {
 	// Build topological order from desired schema for creates
 	createOrder, err := toposort.OrderFromSchema(
-		desiredEnums, desiredDomains, desiredCompositeTypes, desiredTables, desiredViews, desiredSequences,
+		desiredEnums, desiredDomains, desiredCompositeTypes, desiredTables, desiredViews, desiredSequences, desiredRoutines,
 	)
 	if err != nil {
-		return fallbackOrder(enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff)
+		return fallbackOrder(enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff)
 	}
 
 	createPosMap := make(map[string]int, len(createOrder))
@@ -375,10 +401,10 @@ func orderStatements(
 	// Dropped objects are not in the desired schema, so we need the current
 	// schema's dependency graph to determine correct drop order.
 	dropOrder, err := toposort.OrderFromSchema(
-		currentEnums, currentDomains, currentCompositeTypes, currentTables, currentViews, currentSequences,
+		currentEnums, currentDomains, currentCompositeTypes, currentTables, currentViews, currentSequences, currentRoutines,
 	)
 	if err != nil {
-		return fallbackOrder(enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff)
+		return fallbackOrder(enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff)
 	}
 
 	dropPosMap := make(map[string]int, len(dropOrder))
@@ -394,6 +420,7 @@ func orderStatements(
 	createStmts = append(createStmts, tagStatements(domainDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(compositeTypeDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(sequenceDiff.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(routineDiff.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(tableDiff.Stmts, createPosMap)...)
 	sort.SliceStable(createStmts, func(i, j int) bool {
 		return compareTaggedPos(createStmts[i].pos, createStmts[j].pos, false)
@@ -415,6 +442,7 @@ func orderStatements(
 	var postDropStmts []taggedStmt
 	postDropStmts = append(postDropStmts, tagStatements(tableDiff.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(sequenceDiff.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(routineDiff.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(compositeTypeDiff.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(domainDiff.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(enumDiff.DropStmts, dropPosMap)...)
@@ -467,18 +495,21 @@ func fallbackOrder(
 	tableDiff *diff.TableDiffResult,
 	viewDiff *diff.ViewDiffResult,
 	sequenceDiff *diff.SequenceDiffResult,
+	routineDiff *diff.RoutineDiffResult,
 ) []string {
 	var stmts []string
 	stmts = append(stmts, enumDiff.Stmts...)
 	stmts = append(stmts, domainDiff.Stmts...)
 	stmts = append(stmts, compositeTypeDiff.Stmts...)
 	stmts = append(stmts, sequenceDiff.Stmts...)
+	stmts = append(stmts, routineDiff.Stmts...)
 	stmts = append(stmts, viewDiff.DropStmts...)
 	stmts = append(stmts, tableDiff.FKDropStmts...)
 	stmts = append(stmts, tableDiff.Stmts...)
 	stmts = append(stmts, tableDiff.PersistenceStmts...)
 	stmts = append(stmts, tableDiff.DropStmts...)
 	stmts = append(stmts, sequenceDiff.DropStmts...)
+	stmts = append(stmts, routineDiff.DropStmts...)
 	stmts = append(stmts, compositeTypeDiff.DropStmts...)
 	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
@@ -560,6 +591,12 @@ func extractObjectName(sql string) string {
 		{"CREATE POLICY "},
 		{"ALTER POLICY "},
 		{"DROP POLICY "},
+		{"CREATE OR REPLACE FUNCTION "},
+		{"CREATE OR REPLACE PROCEDURE "},
+		{"DROP FUNCTION "},
+		{"DROP PROCEDURE "},
+		{"COMMENT ON FUNCTION "},
+		{"COMMENT ON PROCEDURE "},
 		{"CREATE OR REPLACE TRIGGER "},
 		{"CREATE CONSTRAINT TRIGGER "},
 		{"CREATE TRIGGER "},
@@ -617,6 +654,15 @@ func extractObjectName(sql string) string {
 			strings.HasPrefix(upper, "DROP POLICY ") {
 			// {CREATE,ALTER,DROP} POLICY name ON schema.table ...
 			return extractIndexTable(sql)
+		}
+
+		if strings.HasSuffix(strings.TrimSpace(p.prefix), "FUNCTION") ||
+			strings.HasSuffix(strings.TrimSpace(p.prefix), "PROCEDURE") {
+			// The graph keys a routine by name alone, without the argument
+			// list: extractFirstIdentifier stops at the opening paren, and a
+			// CREATE statement spells its parameters with names and defaults
+			// rather than the identity types an FQRN carries.
+			return toposort.RoutineNode(extractFirstIdentifier(sql[len(p.prefix):]))
 		}
 
 		if strings.HasSuffix(strings.TrimSpace(p.prefix), "TRIGGER") {

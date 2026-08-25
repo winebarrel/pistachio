@@ -1,0 +1,25 @@
+# A routine declared with SET x FROM CURRENT is left alone on both sides, so
+# apply makes no change to it and the next plan is clean.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.g() RETURNS text
+      LANGUAGE sql
+      SECURITY DEFINER
+      SET search_path TO public
+      AS $$ SELECT 'x' $$;
+desired: |
+  CREATE FUNCTION public.g() RETURNS text
+      LANGUAGE sql
+      SECURITY DEFINER
+      SET search_path FROM CURRENT
+      AS $$ SELECT 'x' $$;
+applied_sql: ""
+applied: |
+  -- public.g()
+  CREATE OR REPLACE FUNCTION public.g()
+      RETURNS text
+      LANGUAGE sql
+      SECURITY DEFINER
+      SET search_path TO public
+      AS $$ SELECT 'x' $$;
+verify_no_drift: true

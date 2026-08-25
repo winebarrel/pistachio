@@ -15,6 +15,13 @@ export PGHOST="${PGHOST:-localhost}"
 export PGUSER="${PGUSER:-postgres}"
 export PGPORT="${PGPORT:-5415}"
 
+# Routines are opt-in, and the round trip this script checks is exactly what
+# they have to hold up: dump writes them, plan reads them back. Set as an
+# environment variable rather than as a per-sample flag because it has to reach
+# both the dump and the plan, and the manifest's flags column only reaches the
+# plan.
+export PISTA_MANAGE_ROUTINE=1
+
 : "${PISTA:=./pista}"
 
 _pass=0

@@ -1,0 +1,9 @@
+# --include narrows routines by unqualified name, the same as any other type.
+manage_routine: true
+include: [keep*]
+init: |
+  CREATE FUNCTION public.keep_me() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+  CREATE FUNCTION public.drop_me() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+desired: ""
+plan: |
+  DROP FUNCTION public.keep_me();

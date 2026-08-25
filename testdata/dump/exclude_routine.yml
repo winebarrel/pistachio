@@ -1,0 +1,11 @@
+manage_routine: true
+exclude: [hidden*]
+init: |
+  CREATE FUNCTION public.shown() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+  CREATE FUNCTION public.hidden_one() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+dump: |
+  -- public.shown()
+  CREATE OR REPLACE FUNCTION public.shown()
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;

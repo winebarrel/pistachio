@@ -1,0 +1,15 @@
+# An option pistachio does not handle leaves the routine unmanaged rather than
+# failing the parse, the same as any other statement it does not support. The
+# desired schema is read whether or not --manage-routine is set, so an error
+# here would reach someone who never asked for routines.
+init: ""
+desired: |
+  CREATE TABLE public.t1 (
+      id integer
+  );
+  CREATE FUNCTION public.f_support(a integer) RETURNS integer
+      LANGUAGE sql SUPPORT public.f_supp AS $$ SELECT a $$;
+plan: |
+  CREATE TABLE public.t1 (
+      id integer
+  );

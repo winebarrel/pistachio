@@ -1,0 +1,31 @@
+# A routine whose signature names an enum is created after the type. The type
+# is written unqualified, the way format_type reports it back and the way dump
+# writes it, the same convention the other object types follow.
+manage_routine: true
+init: ""
+desired: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE FUNCTION public.label(s status) RETURNS text
+      LANGUAGE sql AS $$ SELECT s::text $$;
+applied_sql: |
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );
+  CREATE OR REPLACE FUNCTION public.label(s status)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT s::text $$;
+applied: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.label(status)
+  CREATE OR REPLACE FUNCTION public.label(s status)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT s::text $$;
+verify_no_drift: true

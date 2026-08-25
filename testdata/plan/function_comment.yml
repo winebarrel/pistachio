@@ -1,0 +1,10 @@
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql AS $$ SELECT 1 $$;
+desired: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql AS $$ SELECT 1 $$;
+  COMMENT ON FUNCTION public.f() IS 'v1';
+plan: |
+  COMMENT ON FUNCTION public.f() IS 'v1';

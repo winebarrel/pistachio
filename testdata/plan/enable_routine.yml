@@ -1,0 +1,17 @@
+# --enable routine narrows the plan to routines even with --manage-routine on.
+manage_routine: true
+enable: [routine]
+init: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql AS $$ SELECT 1 $$;
+  CREATE TABLE public.users (id integer);
+desired: |
+  CREATE FUNCTION public.f() RETURNS bigint
+      LANGUAGE sql AS $$ SELECT 1 $$;
+  CREATE TABLE public.users (id integer, name text);
+plan: |
+  DROP FUNCTION public.f();
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;

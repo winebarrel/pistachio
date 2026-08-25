@@ -1,0 +1,31 @@
+# A routine in a schema the search_path does not reach has its argument types
+# reported qualified, and a comment names the same signature. The comment
+# lookup has to key the way FQRN does or it silently fails to attach, and the
+# plan then proposes COMMENT ... IS NULL on a routine that has one. This is
+# what the sourcegraph sample caught.
+manage_routine: true
+init: ""
+desired: |
+  CREATE TABLE public.rowtype (
+      a integer,
+      b text
+  );
+  CREATE OR REPLACE FUNCTION public.f(x public.rowtype)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT x.b $$;
+  COMMENT ON FUNCTION public.f(public.rowtype) IS 'v1';
+applied: |
+  -- public.f(rowtype)
+  CREATE OR REPLACE FUNCTION public.f(x rowtype)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT x.b $$;
+  COMMENT ON FUNCTION public.f(rowtype) IS 'v1';
+
+  -- public.rowtype
+  CREATE TABLE public.rowtype (
+      a integer,
+      b text
+  );
+verify_no_drift: true

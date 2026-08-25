@@ -20,16 +20,17 @@ type dumpTestCase struct {
 	Dump string `yaml:"dump"`
 	// MinPG skips the fixture on a server older than this major version, for
 	// syntax the server does not accept yet.
-	MinPG      int      `yaml:"min_pg,omitempty"`
-	DumpPG16   string   `yaml:"dump_pg16,omitempty"`
-	DumpPG17   string   `yaml:"dump_pg17,omitempty"`
-	DumpPG18   string   `yaml:"dump_pg18,omitempty"`
-	OmitSchema bool     `yaml:"omit_schema"`
-	SortByDeps bool     `yaml:"sort_by_deps"`
-	Include    []string `yaml:"include,omitempty"`
-	Exclude    []string `yaml:"exclude,omitempty"`
-	Enable     []string `yaml:"enable,omitempty"`
-	Disable    []string `yaml:"disable,omitempty"`
+	MinPG         int      `yaml:"min_pg,omitempty"`
+	DumpPG16      string   `yaml:"dump_pg16,omitempty"`
+	DumpPG17      string   `yaml:"dump_pg17,omitempty"`
+	DumpPG18      string   `yaml:"dump_pg18,omitempty"`
+	OmitSchema    bool     `yaml:"omit_schema"`
+	SortByDeps    bool     `yaml:"sort_by_deps"`
+	Include       []string `yaml:"include,omitempty"`
+	Exclude       []string `yaml:"exclude,omitempty"`
+	Enable        []string `yaml:"enable,omitempty"`
+	Disable       []string `yaml:"disable,omitempty"`
+	ManageRoutine bool     `yaml:"manage_routine,omitempty"`
 }
 
 func (tc *dumpTestCase) expectedDump(major int) string {
@@ -869,14 +870,68 @@ func TestDump(t *testing.T) {
 				OmitSchema: tc.OmitSchema,
 				SortByDeps: tc.SortByDeps,
 				FilterOptions: pistachio.FilterOptions{
-					Include: tc.Include,
-					Exclude: tc.Exclude,
-					Enable:  tc.Enable,
-					Disable: tc.Disable,
+					Include:       tc.Include,
+					Exclude:       tc.Exclude,
+					Enable:        tc.Enable,
+					Disable:       tc.Disable,
+					ManageRoutine: tc.ManageRoutine,
 				},
 			})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.expectedDump(pgMajor)), strings.TrimSpace(got.String()))
 		})
 	}
+}
+
+// --split writes one file per routine. Two overloads share a schema-qualified
+// name, so the second one takes the same _2 suffix any other collision does.
+func TestDumpResult_Files_Routines(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
+CREATE FUNCTION public.f(a text) RETURNS text LANGUAGE sql AS $$ SELECT a $$;
+CREATE PROCEDURE public.p() LANGUAGE sql AS $$ SELECT $$;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{ManageRoutine: true},
+	})
+	require.NoError(t, err)
+
+	files := got.Files()
+	assert.Len(t, files, 3)
+	assert.Contains(t, files["public.f.sql"], "CREATE OR REPLACE FUNCTION public.f(a integer)")
+	assert.Contains(t, files["public.f_2.sql"], "CREATE OR REPLACE FUNCTION public.f(a text)")
+	assert.Contains(t, files["public.p.sql"], "CREATE OR REPLACE PROCEDURE public.p()")
+}
+
+// Without --manage-routine the dump holds no routines, so --split writes no
+// file for one.
+func TestDumpResult_Files_RoutinesUnmanaged(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+CREATE TABLE public.users (id integer);`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	files := got.Files()
+	assert.Len(t, files, 1)
+	assert.Contains(t, files, "public.users.sql")
 }

@@ -1295,8 +1295,8 @@ var serialBaseTypes = map[string]string{
 
 // equalTypeName compares two type names, treating serial types as equal to their base types.
 func equalTypeName(a, b, schema string) bool {
-	a = foldTypeMod(stripTypeSchema(a, schema))
-	b = foldTypeMod(stripTypeSchema(b, schema))
+	a = foldTypeMod(model.StripTypeSchema(a, schema))
+	b = foldTypeMod(model.StripTypeSchema(b, schema))
 	if a == b {
 		return true
 	}
@@ -1323,23 +1323,6 @@ func foldTypeMod(typeName string) string {
 		return typeName
 	}
 	return typeName[:i] + strings.ToLower(typeName[i:])
-}
-
-// stripTypeSchema removes a redundant "<schema>." qualifier from a column type
-// name, preserving any trailing "[]". The catalog reports a type in the search
-// path unqualified (via format_type), while desired SQL may write it schema-
-// qualified. Stripping the table's own schema makes the two forms compare
-// equal instead of emitting a no-op SET DATA TYPE on every plan. A type in a
-// different search-path schema than its table is not covered.
-func stripTypeSchema(typeName, schema string) string {
-	if schema == "" {
-		return typeName
-	}
-	prefix := schema + "."
-	if strings.HasPrefix(typeName, prefix) {
-		return typeName[len(prefix):]
-	}
-	return typeName
 }
 
 // schemaOf returns the schema component of a canonical "schema.name"

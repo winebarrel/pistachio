@@ -1,0 +1,12 @@
+manage_routine: true
+init: |
+  CREATE FUNCTION public.add(a integer, b integer) RETURNS integer
+      LANGUAGE sql IMMUTABLE STRICT
+      AS $$ SELECT a + b $$;
+dump: |
+  -- public.add(integer, integer)
+  CREATE OR REPLACE FUNCTION public.add(a integer, b integer)
+      RETURNS integer
+      LANGUAGE sql
+      IMMUTABLE STRICT
+      AS $$ SELECT a + b $$;

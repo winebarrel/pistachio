@@ -1149,3 +1149,78 @@ CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = session
 	assert.Contains(t, got.SQL, "ALTER POLICY owner_select ON myschema.documents")
 	assert.NotContains(t, got.SQL, "ALTER POLICY owner_select ON public.documents")
 }
+
+// TestDump_WithSchemaMap_Routine covers the routine arm of the remap. The
+// routine's own schema and the schema-qualified type names in its signature
+// both have to come back as the mapped name. The body is left alone: it is
+// opaque text in whatever language the routine is written in.
+func TestDump_WithSchemaMap_Routine(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('active');
+CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
+    LANGUAGE sql AS $$ SELECT s::text $$;
+`)
+
+	// An empty search_path keeps every schema qualified, so the type name in
+	// the signature is remapped rather than reported bare.
+	searchPath := ""
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+		SearchPath: &searchPath,
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{
+		FilterOptions: pistachio.FilterOptions{ManageRoutine: true},
+	})
+	require.NoError(t, err)
+
+	out := got.String()
+	assert.Contains(t, out, "CREATE OR REPLACE FUNCTION public.label(s public.status)")
+	assert.NotContains(t, out, "myschema.label")
+	assert.NotContains(t, out, "s myschema.status")
+}
+
+// TestPlan_WithSchemaMap_Routine covers the reverse arm of the routine remap.
+// The desired schema is written against public, so the routine's own schema
+// and the schema-qualified type names in its signature both have to come back
+// as myschema before the diff sees them. Line coverage alone does not reach
+// this: every plan calls reverseRemapRoutineSchemas, but with no routines in
+// the desired schema the loop body never runs.
+func TestPlan_WithSchemaMap_Routine(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('active');
+CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
+    LANGUAGE sql AS $$ SELECT s::text $$;
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(
+		"CREATE TYPE public.status AS ENUM ('active');\n"+
+			"CREATE FUNCTION public.label(s public.status) RETURNS text\n"+
+			"    LANGUAGE sql AS $$ SELECT s::text $$;\n"), 0o644))
+
+	searchPath := ""
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+		SearchPath: &searchPath,
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{
+		DropPolicy:    pistachio.DropPolicy{AllowDrop: []string{"all"}},
+		FilterOptions: pistachio.FilterOptions{ManageRoutine: true},
+		Files:         []string{desiredFile},
+	})
+	require.NoError(t, err)
+
+	// The desired routine matches the one in myschema once it is mapped back,
+	// so there is nothing to do.
+	assert.Empty(t, strings.TrimSpace(got.SQL))
+}

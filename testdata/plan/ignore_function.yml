@@ -1,0 +1,11 @@
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql AS $$ SELECT 1 $$;
+desired: |
+  -- pista:ignore
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql AS $$ SELECT 2 $$;
+plan: ""
+ignored: |
+  -- ignored: public.f()

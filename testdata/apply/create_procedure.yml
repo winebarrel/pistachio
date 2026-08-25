@@ -1,0 +1,12 @@
+manage_routine: true
+init: ""
+desired: |
+  CREATE PROCEDURE public.bump(INOUT x integer)
+      LANGUAGE plpgsql
+      AS $$ BEGIN x := x + 1; END $$;
+applied: |
+  -- public.bump(integer)
+  CREATE OR REPLACE PROCEDURE public.bump(INOUT x integer)
+      LANGUAGE plpgsql
+      AS $$ BEGIN x := x + 1; END $$;
+verify_no_drift: true

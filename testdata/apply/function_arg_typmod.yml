@@ -1,0 +1,14 @@
+# PostgreSQL discards a type modifier on a parameter, so the desired schema
+# has to drop it too or varchar(10) would differ from the catalog's varchar.
+manage_routine: true
+init: ""
+desired: |
+  CREATE FUNCTION public.f(a varchar(10), b numeric(10,2) DEFAULT 1.5)
+      RETURNS void LANGUAGE sql AS $$ SELECT $$;
+applied: |
+  -- public.f(character varying, numeric)
+  CREATE OR REPLACE FUNCTION public.f(a character varying, b numeric DEFAULT 1.5)
+      RETURNS void
+      LANGUAGE sql
+      AS $$ SELECT $$;
+verify_no_drift: true

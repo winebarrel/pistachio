@@ -1,0 +1,13 @@
+# RETURNS TABLE is stored as OUT columns; the dump writes the TABLE form back.
+manage_routine: true
+init: ""
+desired: |
+  CREATE FUNCTION public.rows_of() RETURNS TABLE(id integer, name text)
+      LANGUAGE sql AS $$ SELECT 1, 'x' $$;
+applied: |
+  -- public.rows_of()
+  CREATE OR REPLACE FUNCTION public.rows_of()
+      RETURNS TABLE(id integer, name text)
+      LANGUAGE sql
+      AS $$ SELECT 1, 'x' $$;
+verify_no_drift: true

@@ -717,3 +717,88 @@ PostgreSQL 17 query functions. The shapes are pinned by
 testdata/plan/alter_json_query_clauses.yml. The fix belongs upstream.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
+
+## Routine renaming is not supported
+
+`-- pista:renamed-from` works on tables, views, enums, domains, composite
+types, sequences, columns, constraints, foreign keys, indexes, policies and
+triggers. It does not work on a function or a procedure: the directive on a
+`CREATE FUNCTION` or `CREATE PROCEDURE` is an error rather than an
+`ALTER FUNCTION ... RENAME TO`.
+
+Dropping and recreating a routine loses no data, so a rename would mostly keep
+the plan readable rather than protect anything. The identity carries the
+argument types, so the directive would take a full signature
+(`-- pista:renamed-from public.old_name(integer)`).
+
+Origin: routine support.
+
+## Routine create order ignores what the body reads
+
+Routines are created after the types their signature names and before every
+table, because a `CHECK` constraint, a `GENERATED` expression, an index
+expression, a policy or a trigger can call one. The edge from a table to a
+routine is drawn wholesale in `addRoutineDeps` rather than by reading the
+expressions, since the answer is the same "routine first" either way.
+
+The reverse direction is not modelled at all. A `LANGUAGE sql` routine whose
+body reads a table created in the same run fails to apply, because PostgreSQL
+parses a SQL body at creation time; so does one that calls another routine
+defined later in the file. `plpgsql` is unaffected. The workaround is
+`-- pista:ignore` plus `-- pista:execute`.
+
+Fixing it means reading the body for the relations and routines it names and
+ordering on that. Both directions would then live in one graph, which holds
+only per pair, so the wholesale edge would have to go and every CHECK,
+GENERATED, index, policy and trigger expression would have to be read instead.
+
+Origin: routine support.
+
+## Schema mapping does not rewrite a routine body
+
+`-m old=new` rewrites the schema of a routine and the type names in its
+signature, including a parameter default. It does not touch the body, which is
+opaque text in whatever language the routine is written in. A body that
+qualifies a table or a function with the old schema keeps the old name.
+
+A view definition gets the same replacer because it is always SQL. A routine
+body is not, so substituting a prefix in it would be a guess.
+
+Priority: low.
+
+Origin: routine support.
+
+## SQL-standard routine bodies (BEGIN ATOMIC) are not managed
+
+A routine written as `LANGUAGE sql BEGIN ATOMIC ... END` is skipped on both
+sides of the diff: the catalog query filters on `prosqlbody IS NULL` and the
+parser warns and drops it. So neither `dump` writes one nor `plan` proposes
+dropping one.
+
+pg_query parses and deparses the form. The obstacle is that PostgreSQL resolves
+such a body at creation time and records real `pg_depend` entries on whatever it
+reads, so the routine cannot be created ahead of the tables the way every other
+routine is, and a referenced table cannot be dropped while it exists. Supporting
+it needs the body-dependency work in the entry above.
+
+`pg_get_functiondef` also re-deparses the stored parse tree, so the body comes
+back with names resolved (`SELECT a FROM t` reads back as `SELECT t.a FROM t`),
+the same drift views handle with `stripQualifications`.
+
+Origin: routine support.
+
+## Aggregates and window functions are not managed
+
+`prokind` `'a'` and `'w'` are filtered out of the catalog query, and the parser
+warns about a `CREATE FUNCTION ... WINDOW` and drops it, so the two sides stay
+symmetric. `CREATE AGGREGATE` has a shape `model.Routine` does not cover.
+
+Origin: routine support.
+
+## Sample database coverage has no Routines column
+
+The table in `sample-db-test.md` counts tables, columns, indexes, FKs,
+constraints, views, types, sequences and triggers per sample. The counts predate
+`--manage-routine`, so routines have no column yet.
+
+Origin: routine support.

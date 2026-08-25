@@ -306,3 +306,41 @@ func (client *Client) reverseRemapCompositeTypeSchemas(compositeTypes *orderedma
 
 	return remapped
 }
+
+// remapRoutineSchemas rewrites the schema of each routine and of the type
+// names in its signature. The body is left untouched: it is opaque text in
+// whatever language the routine is written in, and a blind prefix substitution
+// over it would be a guess.
+func (client *Client) remapRoutineSchemas(routines *orderedmap.Map[string, *model.Routine]) *orderedmap.Map[string, *model.Routine] {
+	if len(client.SchemaMap) == 0 {
+		return routines
+	}
+	return remapRoutines(routines, client.RemapSchema, buildDefReplacer(client.SchemaMap))
+}
+
+func (client *Client) reverseRemapRoutineSchemas(routines *orderedmap.Map[string, *model.Routine]) *orderedmap.Map[string, *model.Routine] {
+	if len(client.SchemaMap) == 0 {
+		return routines
+	}
+	return remapRoutines(routines, client.ReverseRemapSchema, buildReverseDefReplacer(client.SchemaMap))
+}
+
+func remapRoutines(
+	routines *orderedmap.Map[string, *model.Routine],
+	remapSchema func(string) string,
+	replacer *strings.Replacer,
+) *orderedmap.Map[string, *model.Routine] {
+	remapped := orderedmap.New[string, *model.Routine]()
+
+	for _, r := range routines.CollectValues() {
+		r.Schema = remapSchema(r.Schema)
+		r.ReturnType = replacer.Replace(r.ReturnType)
+		for _, a := range r.Args {
+			a.Type = replacer.Replace(a.Type)
+			a.Default = replacer.Replace(a.Default)
+		}
+		remapped.Set(r.FQRN(), r)
+	}
+
+	return remapped
+}

@@ -21,6 +21,7 @@ func OrderFromSchema(
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 	sequences *orderedmap.Map[string, *model.Sequence],
+	routines *orderedmap.Map[string, *model.Routine],
 ) ([]string, error) {
 	g := newGraph()
 	defined := collectDefined(enums, domains, compositeTypes, tables, views, sequences)
@@ -110,6 +111,8 @@ func OrderFromSchema(
 			}
 		}
 	}
+
+	addRoutineDeps(g, routines, tables, views, defined)
 
 	order, err := g.Sort()
 	if err != nil {
@@ -432,4 +435,92 @@ func extractViewDepsFallback(definition, defaultSchema string, defined map[strin
 	}
 	sort.Strings(deps)
 	return deps
+}
+
+// RoutineNode returns the graph node name for a routine, given its
+// schema-qualified name. The identity argument list is left out, so an overload
+// set shares one node: the ordering rules below hold for every overload alike,
+// and a CREATE statement spells its parameters with names and defaults, which
+// no FQRN could be recovered from.
+//
+// The "routine:" prefix keeps the node out of the relation and type namespace.
+// A schema may hold a table and a function of the same name, and without the
+// prefix the two would collapse into one node and read as a cycle.
+func RoutineNode(qualifiedName string) string {
+	if qualifiedName == "" {
+		return ""
+	}
+	return "routine:" + qualifiedName
+}
+
+// addRoutineDeps places routines between the types they name and the tables
+// that call them.
+//
+// A routine depends on the types in its signature, so it is created after
+// them. Every table and view is then made to depend on every routine, so
+// routines come first: a CHECK constraint, a GENERATED expression, an index
+// expression, a policy or a trigger can call one, and those run as part of the
+// table DDL. The edge is drawn wholesale rather than by reading each
+// expression, since the answer is the same "routine first" either way.
+//
+// A signature can name a relation as well as a type: RETURNS SETOF <table>, or
+// a table row type as a parameter. That relation is skipped when the wholesale
+// edge is drawn, or the pair would close a cycle and the sort would fail. Such
+// a routine lands after its own relation and before every other one.
+//
+// The reverse direction is otherwise absent. A LANGUAGE sql body that reads a
+// table would want the table first, which cannot hold at the same time as the
+// rule above, so that case is a documented limitation rather than an edge.
+func addRoutineDeps(
+	g *graph,
+	routines *orderedmap.Map[string, *model.Routine],
+	tables *orderedmap.Map[string, *model.Table],
+	views *orderedmap.Map[string, *model.View],
+	defined map[string]bool,
+) {
+	if routines.Len() == 0 {
+		return
+	}
+
+	nodes := make([]string, 0, routines.Len())
+	seen := make(map[string]bool, routines.Len())
+	// What each routine's own signature names, so the wholesale edge can skip
+	// those pairs. Overloads share a node, so the sets merge per node.
+	named := make(map[string]map[string]bool, routines.Len())
+
+	for _, r := range routines.All() {
+		node := RoutineNode(model.Ident(r.Schema, r.Name))
+		if !seen[node] {
+			seen[node] = true
+			nodes = append(nodes, node)
+			named[node] = map[string]bool{}
+		}
+		g.AddNode(node)
+
+		// No self-edge is possible: resolveTypeDep returns a key from defined,
+		// and nothing there carries the routine: prefix.
+		for _, a := range r.Args {
+			if dep := resolveTypeDep(a.Type, r.Schema, defined); dep != "" {
+				g.AddEdge(node, dep)
+				named[node][dep] = true
+			}
+		}
+		if dep := resolveTypeDep(r.ReturnType, r.Schema, defined); dep != "" {
+			g.AddEdge(node, dep)
+			named[node][dep] = true
+		}
+	}
+
+	addDependents := func(keys func(func(string) bool)) {
+		for k := range keys {
+			for _, node := range nodes {
+				if named[node][k] {
+					continue
+				}
+				g.AddEdge(k, node)
+			}
+		}
+	}
+	addDependents(tables.Keys())
+	addDependents(views.Keys())
 }

@@ -1,0 +1,14 @@
+# No RETURNS clause: PostgreSQL derives the result from the OUT parameters and
+# pg_get_functiondef writes it back, so the parser derives the same type.
+manage_routine: true
+init: ""
+desired: |
+  CREATE FUNCTION public.pair(OUT a integer, OUT b integer)
+      LANGUAGE sql AS $$ SELECT 1, 2 $$;
+applied: |
+  -- public.pair()
+  CREATE OR REPLACE FUNCTION public.pair(OUT a integer, OUT b integer)
+      RETURNS record
+      LANGUAGE sql
+      AS $$ SELECT 1, 2 $$;
+verify_no_drift: true

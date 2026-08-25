@@ -1,0 +1,9 @@
+manage_routine: true
+init: |
+  CREATE PROCEDURE public.bump(INOUT x integer)
+      LANGUAGE plpgsql AS $$ BEGIN x := x + 1; END $$;
+dump: |
+  -- public.bump(integer)
+  CREATE OR REPLACE PROCEDURE public.bump(INOUT x integer)
+      LANGUAGE plpgsql
+      AS $$ BEGIN x := x + 1; END $$;

@@ -1,0 +1,10 @@
+manage_routine: true
+omit_schema: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
+dump: |
+  -- f(integer)
+  CREATE OR REPLACE FUNCTION f(a integer)
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT a $$;

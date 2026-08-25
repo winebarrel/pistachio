@@ -1,0 +1,17 @@
+# Two routines sharing a name are independent objects, keyed by argument type.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a $$;
+desired: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a $$;
+  CREATE FUNCTION public.f(a text) RETURNS text
+      LANGUAGE sql AS $$ SELECT a $$;
+plan: |
+  CREATE OR REPLACE FUNCTION public.f(a text)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+count:
+  routines: 1

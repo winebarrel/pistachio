@@ -108,7 +108,8 @@ pista apply ./schema/*.sql         # apply it
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types, domains, composite types, composite attributes, sequences)
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
-- Triggers (`CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER`, `INSTEAD OF` triggers on views, and the enable state via `ALTER TABLE ... ENABLE/DISABLE TRIGGER`). The function a trigger calls is not managed; see [Triggers](#triggers).
+- Triggers (`CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER`, `INSTEAD OF` triggers on views, and the enable state via `ALTER TABLE ... ENABLE/DISABLE TRIGGER`); see [Triggers](#triggers)
+- Routines (`CREATE FUNCTION`, `CREATE PROCEDURE`), opt-in with `--manage-routine`. An overload set is several objects, keyed by argument type. See [Routines](#routines).
 - Renaming (tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies, triggers via `-- pista:renamed-from` directive)
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
@@ -194,15 +195,18 @@ Flags:
                                not a TTY. PISTA_PAGER must be set.
 
   -I, --include=INCLUDE,...    Include only tables/views/enums/domains/composite
-                               types/sequences matching the pattern (wildcard:
-                               *, ?) ($PISTA_INCLUDE).
+                               types/sequences/routines matching the pattern
+                               (wildcard: *, ?) ($PISTA_INCLUDE).
   -E, --exclude=EXCLUDE,...    Exclude tables/views/enums/domains/composite
-                               types/sequences matching the pattern (wildcard:
-                               *, ?) ($PISTA_EXCLUDE).
+                               types/sequences/routines matching the pattern
+                               (wildcard: *, ?) ($PISTA_EXCLUDE).
       --enable=ENABLE,...      Enable only specified object types (can be
                                repeated) ($PISTA_ENABLE).
       --disable=DISABLE,...    Disable specified object types (can be repeated)
                                ($PISTA_DISABLE).
+      --manage-routine         Manage functions and procedures. Off by default;
+                               --allow-drop routine still gates dropping them
+                               ($PISTA_MANAGE_ROUTINE).
       --allow-drop=ALLOW-DROP,...
                                Allow dropping these object types (repeatable;
                                'all' allows everything) ($PISTA_ALLOW_DROP).
@@ -277,15 +281,18 @@ Flags:
                                not a TTY. PISTA_PAGER must be set.
 
   -I, --include=INCLUDE,...    Include only tables/views/enums/domains/composite
-                               types/sequences matching the pattern (wildcard:
-                               *, ?) ($PISTA_INCLUDE).
+                               types/sequences/routines matching the pattern
+                               (wildcard: *, ?) ($PISTA_INCLUDE).
   -E, --exclude=EXCLUDE,...    Exclude tables/views/enums/domains/composite
-                               types/sequences matching the pattern (wildcard:
-                               *, ?) ($PISTA_EXCLUDE).
+                               types/sequences/routines matching the pattern
+                               (wildcard: *, ?) ($PISTA_EXCLUDE).
       --enable=ENABLE,...      Enable only specified object types (can be
                                repeated) ($PISTA_ENABLE).
       --disable=DISABLE,...    Disable specified object types (can be repeated)
                                ($PISTA_DISABLE).
+      --manage-routine         Manage functions and procedures. Off by default;
+                               --allow-drop routine still gates dropping them
+                               ($PISTA_MANAGE_ROUTINE).
       --allow-drop=ALLOW-DROP,...
                                Allow dropping these object types (repeatable;
                                'all' allows everything) ($PISTA_ALLOW_DROP).
@@ -359,15 +366,18 @@ Flags:
                                not a TTY. PISTA_PAGER must be set.
 
   -I, --include=INCLUDE,...    Include only tables/views/enums/domains/composite
-                               types/sequences matching the pattern (wildcard:
-                               *, ?) ($PISTA_INCLUDE).
+                               types/sequences/routines matching the pattern
+                               (wildcard: *, ?) ($PISTA_INCLUDE).
   -E, --exclude=EXCLUDE,...    Exclude tables/views/enums/domains/composite
-                               types/sequences matching the pattern (wildcard:
-                               *, ?) ($PISTA_EXCLUDE).
+                               types/sequences/routines matching the pattern
+                               (wildcard: *, ?) ($PISTA_EXCLUDE).
       --enable=ENABLE,...      Enable only specified object types (can be
                                repeated) ($PISTA_ENABLE).
       --disable=DISABLE,...    Disable specified object types (can be repeated)
                                ($PISTA_DISABLE).
+      --manage-routine         Manage functions and procedures. Off by default;
+                               --allow-drop routine still gates dropping them
+                               ($PISTA_MANAGE_ROUTINE).
       --split=STRING           Output each table/view/enum/domain/composite
                                type/sequence as a separate file in the specified
                                directory.
@@ -519,7 +529,7 @@ pista plan --assume-validated schema.sql
 pista apply --assume-validated schema.sql
 ```
 
-By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type.
+By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type. `routine` covers functions and procedures, and also gates the drop half of a recreate.
 
 ```bash
 # Allow all drops
@@ -544,7 +554,7 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. T
 
 ### Executing arbitrary SQL
 
-Use `-- pista:execute` to include non-managed SQL (functions, triggers, grants) in your schema files. The check SQL after the directive is evaluated by both `plan` and `apply`. When it returns `true` the statement is executed, otherwise skipped, and `plan` leaves out the statements `apply` would skip. A common pattern skips when an object already exists:
+Use `-- pista:execute` to include non-managed SQL (grants, extensions) in your schema files. Functions and procedures can be managed declaratively instead; see [Routines](#routines). The check SQL after the directive is evaluated by both `plan` and `apply`. When it returns `true` the statement is executed, otherwise skipped, and `plan` leaves out the statements `apply` would skip. A common pattern skips when an object already exists:
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
@@ -662,7 +672,7 @@ pista -n staging -m staging=public apply schema.sql
 
 Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names). Also available as `$PISTA_INCLUDE` / `$PISTA_EXCLUDE` environment variables.
 
-Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`. Can be repeated. Also available as `$PISTA_ENABLE` / `$PISTA_DISABLE` environment variables.
+Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`. Can be repeated. Also available as `$PISTA_ENABLE` / `$PISTA_DISABLE` environment variables.
 
 These flags are available on the `dump`, `plan`, and `apply` subcommands.
 
@@ -688,6 +698,9 @@ pista dump --disable view
 # Plan changes for enums only
 pista plan --enable enum schema.sql
 
+# Plan changes for routines only (--manage-routine is still required)
+pista plan --manage-routine --enable routine schema.sql
+
 # Using environment variables
 PISTA_ENABLE=enum pista dump
 PISTA_DISABLE=view pista dump
@@ -696,7 +709,7 @@ PISTA_EXCLUDE='tmp_*' pista plan schema.sql
 ```
 
 > [!NOTE]
-> `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference); use them for inspection (`dump`, `plan`), not `apply`.
+> `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference); use them for inspection (`dump`, `plan`), not `apply`. `routine` narrows what `--manage-routine` turned on; it does not turn routines on by itself.
 
 > [!NOTE]
 > When both a CLI flag and its corresponding environment variable are set, the CLI flag overrides the environment variable (values are not merged). For example, running `PISTA_EXCLUDE='tmp_*' pista plan -E 'foo_*' schema.sql` excludes only `foo_*`; `tmp_*` is ignored.
@@ -821,7 +834,7 @@ The following references are not auto-rewritten and may produce a redundant `DRO
 
 ### Ignoring objects
 
-Use the `-- pista:ignore` directive to leave an object unmanaged. pistachio does not create, alter, or drop a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE TYPE ... AS (...)` / `CREATE DOMAIN` / `CREATE VIEW` marked with it. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
+Use the `-- pista:ignore` directive to leave an object unmanaged. pistachio does not create, alter, or drop a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE TYPE ... AS (...)` / `CREATE DOMAIN` / `CREATE VIEW` / `CREATE FUNCTION` / `CREATE PROCEDURE` marked with it. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
 
 ```sql
 -- pista:ignore
@@ -844,9 +857,65 @@ pista dump --split ./schema/
 # (writes ./schema/public.status.sql, ./schema/public.users.sql, ./schema/public.orders.sql, ...)
 ```
 
+## Routines
+
+Functions and procedures are managed only when `--manage-routine` is passed (also `$PISTA_MANAGE_ROUTINE`). Without it `pg_proc` is never read, so a schema maintained with `-- pista:execute` keeps working and plan output is unchanged.
+
+```bash
+pista dump --manage-routine
+pista plan --manage-routine schema.sql
+pista apply --manage-routine schema.sql
+```
+
+A routine is identified by its name and its argument types, so an overload set is several independent objects:
+
+```sql
+CREATE FUNCTION public.normalize(e text) RETURNS text
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$ SELECT lower(e) $$;
+
+CREATE FUNCTION public.normalize(e text, keep_case boolean) RETURNS text
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$ SELECT CASE WHEN keep_case THEN e ELSE lower(e) END $$;
+```
+
+The body, the language, and the attributes (`IMMUTABLE` / `STABLE` / `VOLATILE`, `STRICT`, `SECURITY DEFINER`, `LEAKPROOF`, `PARALLEL`, `COST`, `ROWS`, `SET`) are compared and applied with `CREATE OR REPLACE`. The changes PostgreSQL refuses in place run as `DROP` and `CREATE`, which needs `--allow-drop routine`:
+
+- changing the return type, including the columns of a `RETURNS TABLE`
+- renaming a parameter
+- removing a parameter default
+- turning a function into a procedure, or back
+
+Adding or removing a parameter is not a modification either. The argument types are the identity, so the new signature is a new routine and the old one is dropped, which needs `--allow-drop routine` as well.
+
+An attribute left at its default is not written back. PostgreSQL reports `VOLATILE`, `PARALLEL UNSAFE` and the default `COST` as absent, so a desired schema may spell them out or leave them off.
+
+A routine is created after the types its signature names and before every table, because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call one. A signature can name a relation instead of a type, as `RETURNS SETOF <table>` does; such a routine comes after its own relation and before every other one. Dropping runs the other way: views, then tables, then routines, then types.
+
+> [!IMPORTANT]
+> That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later. `plpgsql` is unaffected. Mark such a routine `-- pista:ignore` and create it with `-- pista:execute` instead.
+
+Argument and return types are reported without their schema when `search_path` reaches them, the same as any other name pistachio reads back. A desired schema may write a type in the routine's own schema either way; the two spellings are one routine. A comment goes on the full signature:
+
+```sql
+COMMENT ON FUNCTION public.normalize(text) IS 'v1';
+```
+
+The following are not managed. Both sides of the diff leave them out, so `dump` does not write them and `plan` does not propose dropping them:
+
+- aggregates and window functions
+- a routine whose body is written in the SQL-standard `BEGIN ATOMIC` form. Such a body records real dependencies on the tables it reads, so it cannot be created ahead of them
+- a routine an extension owns
+- a routine carrying an option pistachio does not read, `SUPPORT` and `TRANSFORM FOR TYPE` among them
+- renaming, via `-- pista:renamed-from`
+
+An unmanaged routine is warned about and skipped, never an error, because the desired schema is read whether or not `--manage-routine` is set.
+
+`SET <parameter> FROM CURRENT` is handled differently. It captures the session value at creation time, so the statement carries nothing to compare, but the database reports the resolved value and the routine is read back like any other. Such a routine is treated as `-- pista:ignore`: it is neither created, altered, nor dropped, and its signature is listed under `-- ignored:`.
+
 ## Triggers
 
-pistachio manages triggers, not the functions they call. Write the function with `-- pista:execute-first` so it exists before the `CREATE TRIGGER` that references it runs:
+pistachio manages triggers. The function a trigger calls is managed only with `--manage-routine`; see [Routines](#routines). Without that flag, write the function with `-- pista:execute-first` so it exists before the `CREATE TRIGGER` that references it runs:
 
 ```sql
 -- pista:execute-first

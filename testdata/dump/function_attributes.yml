@@ -1,0 +1,16 @@
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer DEFAULT 1) RETURNS SETOF integer
+      LANGUAGE sql IMMUTABLE STRICT LEAKPROOF SECURITY DEFINER PARALLEL SAFE
+      COST 5 ROWS 7 SET search_path TO public
+      AS $$ SELECT a $$;
+  COMMENT ON FUNCTION public.f(integer) IS 'sample';
+dump: |
+  -- public.f(integer)
+  CREATE OR REPLACE FUNCTION public.f(a integer DEFAULT 1)
+      RETURNS SETOF integer
+      LANGUAGE sql
+      IMMUTABLE STRICT SECURITY DEFINER LEAKPROOF PARALLEL SAFE COST 5 ROWS 7
+      SET search_path TO public
+      AS $$ SELECT a $$;
+  COMMENT ON FUNCTION public.f(integer) IS 'sample';

@@ -39,10 +39,15 @@ type Options struct {
 }
 
 type FilterOptions struct {
-	Include []string `short:"I" env:"PISTA_INCLUDE" help:"Include only tables/views/enums/domains/composite types/sequences matching the pattern (wildcard: *, ?)."`
-	Exclude []string `short:"E" env:"PISTA_EXCLUDE" help:"Exclude tables/views/enums/domains/composite types/sequences matching the pattern (wildcard: *, ?)."`
-	Enable  []string `enum:"table,view,enum,domain,composite_type,sequence" env:"PISTA_ENABLE" help:"Enable only specified object types (can be repeated)."`
-	Disable []string `enum:"table,view,enum,domain,composite_type,sequence" env:"PISTA_DISABLE" help:"Disable specified object types (can be repeated)."`
+	Include []string `short:"I" env:"PISTA_INCLUDE" help:"Include only tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?)."`
+	Exclude []string `short:"E" env:"PISTA_EXCLUDE" help:"Exclude tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?)."`
+	Enable  []string `enum:"table,view,enum,domain,composite_type,sequence,routine" env:"PISTA_ENABLE" help:"Enable only specified object types (can be repeated)."`
+	Disable []string `enum:"table,view,enum,domain,composite_type,sequence,routine" env:"PISTA_DISABLE" help:"Disable specified object types (can be repeated)."`
+	// ManageRoutine opts into functions and procedures. They are unmanaged by
+	// default: a schema that has been maintained with -- pista:execute holds
+	// routines the desired schema does not declare, and reading pg_proc
+	// unasked would report every one of them as a drop.
+	ManageRoutine bool `env:"PISTA_MANAGE_ROUTINE" help:"Manage functions and procedures. Off by default; --allow-drop routine still gates dropping them."`
 }
 
 // IsTypeEnabled returns true if the given object type should be included.

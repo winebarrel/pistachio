@@ -1,0 +1,24 @@
+# SET x FROM CURRENT records the session value at creation time, which the
+# statement does not carry, so there is nothing to compare against. The catalog
+# still reads such a routine back, because pg_get_functiondef writes the
+# resolved value, so dropping it from the desired side alone would plan a DROP
+# of a routine the schema file declares. It is treated as -- pista:ignore
+# instead: neither created, altered, nor dropped.
+manage_routine: true
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE FUNCTION public.g() RETURNS text
+      LANGUAGE sql
+      SECURITY DEFINER
+      SET search_path TO public
+      AS $$ SELECT 'x' $$;
+desired: |
+  CREATE FUNCTION public.g() RETURNS text
+      LANGUAGE sql
+      SECURITY DEFINER
+      SET search_path FROM CURRENT
+      AS $$ SELECT 'x' $$;
+plan: ""
+ignored: |
+  -- ignored: public.g()

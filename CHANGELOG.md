@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+* Manage functions and procedures, behind `--manage-routine` (`$PISTA_MANAGE_ROUTINE`). Routines are off by default, so a schema maintained with `-- pista:execute` keeps working and plan output is unchanged. With the flag, `pg_proc` is read, `dump` writes each routine, and the diff compares the body, the language and the attributes (volatility, `STRICT`, `SECURITY DEFINER`, `LEAKPROOF`, `PARALLEL`, `COST`, `ROWS`, `SET`). A routine is identified by its name and its argument types, so an overload set is several objects. Changes apply with `CREATE OR REPLACE`; the ones PostgreSQL refuses in place run as `DROP` and `CREATE`, gated by `--allow-drop routine`. `routine` also joins the `--enable` / `--disable` type list, and `-- pista:ignore` works on a `CREATE FUNCTION` or `CREATE PROCEDURE`.
+
+  A routine is created after the types its signature names and before every table, so a `CHECK` constraint, an index expression, a policy or a trigger can call one. A `LANGUAGE sql` body that reads a table created in the same run therefore fails to apply, since PostgreSQL parses a SQL body at creation time. Aggregates, window functions, a `BEGIN ATOMIC` body, a routine an extension owns, and one carrying an option pistachio does not read such as `SUPPORT` are not managed; each is warned about and skipped rather than failing the run. A routine with `SET ... FROM CURRENT` is read back with the value resolved, so it is treated as `-- pista:ignore` instead. Renaming a routine is not supported.
+
 ## [1.29.0] - 2026-08-24
 
 * Manage triggers. `CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER` and `INSTEAD OF` triggers on views are read from `pg_trigger`, written by `dump`, and diffed. A definition change uses `CREATE OR REPLACE TRIGGER`; switching a trigger to or from a constraint trigger runs as `DROP` and `CREATE`, gated by `--allow-drop trigger`. The enable state is carried as `ALTER TABLE ... ENABLE/DISABLE TRIGGER`, and `-- pista:renamed-from` renames a trigger. The function a trigger calls stays unmanaged, so it belongs in a `-- pista:execute-first` statement.

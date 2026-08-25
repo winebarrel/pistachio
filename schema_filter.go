@@ -24,6 +24,7 @@ func filterDesiredBySchemas(result *parser.ParseResult, schemas []string, schema
 	result.Enums = filterMapBySchema(result.Enums, schemaSet, func(e *model.Enum) string { return e.Schema })
 	result.Domains = filterMapBySchema(result.Domains, schemaSet, func(d *model.Domain) string { return d.Schema })
 	result.CompositeTypes = filterMapBySchema(result.CompositeTypes, schemaSet, func(ct *model.CompositeType) string { return ct.Schema })
+	result.Routines = filterMapBySchema(result.Routines, schemaSet, func(r *model.Routine) string { return r.Schema })
 }
 
 func filterMapBySchema[V any](m *orderedmap.Map[string, V], schemas map[string]bool, getSchema func(V) string) *orderedmap.Map[string, V] {

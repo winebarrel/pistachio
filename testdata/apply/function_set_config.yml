@@ -1,0 +1,21 @@
+# SET x TO y and SET x TO 'y' parse to the same value, so either spelling in
+# the desired schema matches what the catalog reports.
+manage_routine: true
+init: ""
+desired: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql
+      SET search_path TO public, pg_temp
+      SET work_mem TO '64MB'
+      SECURITY DEFINER
+      AS $$ SELECT 1 $$;
+applied: |
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS integer
+      LANGUAGE sql
+      SECURITY DEFINER
+      SET search_path TO public, pg_temp
+      SET work_mem TO '64MB'
+      AS $$ SELECT 1 $$;
+verify_no_drift: true

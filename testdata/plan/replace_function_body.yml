@@ -1,0 +1,15 @@
+# A body change replaces in place; no drop is involved.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.add(a integer, b integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a + b $$;
+desired: |
+  CREATE FUNCTION public.add(a integer, b integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a + b + 0 $$;
+plan: |
+  CREATE OR REPLACE FUNCTION public.add(a integer, b integer)
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT a + b + 0 $$;
+count:
+  routines: 1
