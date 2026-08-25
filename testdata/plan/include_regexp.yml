@@ -1,0 +1,23 @@
+include: ['/^posts_\d+$/']
+init: |
+  CREATE TABLE public.posts_1 (
+      id integer NOT NULL,
+      CONSTRAINT posts_1_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts_old (
+      id integer NOT NULL,
+      CONSTRAINT posts_old_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.posts_1 (
+      id integer NOT NULL,
+      title text,
+      CONSTRAINT posts_1_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts_old (
+      id integer NOT NULL,
+      title text,
+      CONSTRAINT posts_old_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.posts_1 ADD COLUMN title text;

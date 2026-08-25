@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Accept a regular expression in `--include` / `--exclude`. A pattern wrapped in slashes is one, so `-E '/^posts_\d+$/'` reaches a numbered partition set that a wildcard cannot; anything else stays a wildcard, and the two forms mix in one invocation. A regular expression matches anywhere in the name unless it is anchored; a wildcard still has to match the whole name. An invalid expression is rejected before the database is read. The flags did not change, so `$PISTA_INCLUDE` / `$PISTA_EXCLUDE` and the config file carry both forms.
+
 * Warn about an `ALTER TABLE` action or a `COMMENT ON` target the parser drops. Both have a parser case of their own, so neither reached the `ignored unsupported statement` warning: a column added by `ALTER TABLE ... ADD COLUMN` was absent from the desired schema and the plan proposed dropping it from the database, and `ALTER COLUMN ... SET DEFAULT` / `SET NOT NULL` / `TYPE` went the same way. The warning follows what the parser reads, so an action or target added later warns instead of vanishing. An `ALTER TABLE` naming a relation the file does not declare, or one marked `-- pista:ignore`, is still skipped without one.
 
 ## [1.30.0] - 2026-08-25

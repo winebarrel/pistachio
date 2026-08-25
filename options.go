@@ -3,6 +3,7 @@ package pistachio
 import (
 	"fmt"
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -39,8 +40,8 @@ type Options struct {
 }
 
 type FilterOptions struct {
-	Include []string `short:"I" env:"PISTA_INCLUDE" help:"Include only tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?)."`
-	Exclude []string `short:"E" env:"PISTA_EXCLUDE" help:"Exclude tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?)."`
+	Include []string `short:"I" env:"PISTA_INCLUDE" help:"Include only tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?; /re/ for a regular expression)."`
+	Exclude []string `short:"E" env:"PISTA_EXCLUDE" help:"Exclude tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?; /re/ for a regular expression)."`
 	Enable  []string `enum:"table,view,enum,domain,composite_type,sequence,routine" env:"PISTA_ENABLE" help:"Enable only specified object types (can be repeated)."`
 	Disable []string `enum:"table,view,enum,domain,composite_type,sequence,routine" env:"PISTA_DISABLE" help:"Disable specified object types (can be repeated)."`
 	// ManageRoutine opts into functions and procedures. They are unmanaged by
@@ -71,11 +72,36 @@ func (f *FilterOptions) IsTypeEnabled(typeName string) bool {
 	return true
 }
 
+// regexpPattern returns the expression inside a /.../ pattern. An unquoted
+// identifier cannot hold a slash, so the delimiters do not collide with real
+// names.
+func regexpPattern(pattern string) (string, bool) {
+	if len(pattern) >= 2 && strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") {
+		return pattern[1 : len(pattern)-1], true
+	}
+	return "", false
+}
+
+// matchPattern reports whether name matches one --include / --exclude pattern.
+// A pattern wrapped in slashes is a regular expression, which matches anywhere
+// in the name unless it is anchored. Anything else is a wildcard and has to
+// match the whole name.
+func matchPattern(pattern, name string) (bool, error) {
+	if expr, ok := regexpPattern(pattern); ok {
+		re, err := regexp.Compile(expr)
+		if err != nil {
+			return false, err
+		}
+		return re.MatchString(name), nil
+	}
+	return path.Match(pattern, name)
+}
+
 func (f *FilterOptions) MatchName(name string) bool {
 	if len(f.Include) > 0 {
 		matched := false
 		for _, pattern := range f.Include {
-			if ok, _ := path.Match(pattern, name); ok {
+			if ok, _ := matchPattern(pattern, name); ok {
 				matched = true
 				break
 			}
@@ -85,7 +111,7 @@ func (f *FilterOptions) MatchName(name string) bool {
 		}
 	}
 	for _, pattern := range f.Exclude {
-		if ok, _ := path.Match(pattern, name); ok {
+		if ok, _ := matchPattern(pattern, name); ok {
 			return false
 		}
 	}
@@ -104,12 +130,12 @@ func (f *FilterOptions) AfterApply() error {
 
 func (f *FilterOptions) ValidatePatterns() error {
 	for _, pattern := range f.Include {
-		if _, err := path.Match(pattern, ""); err != nil {
+		if _, err := matchPattern(pattern, ""); err != nil {
 			return fmt.Errorf("invalid --include pattern %q: %w", pattern, err)
 		}
 	}
 	for _, pattern := range f.Exclude {
-		if _, err := path.Match(pattern, ""); err != nil {
+		if _, err := matchPattern(pattern, ""); err != nil {
 			return fmt.Errorf("invalid --exclude pattern %q: %w", pattern, err)
 		}
 	}

@@ -198,10 +198,12 @@ Flags:
 
   -I, --include=INCLUDE,...    Include only tables/views/enums/domains/composite
                                types/sequences/routines matching the pattern
-                               (wildcard: *, ?) ($PISTA_INCLUDE).
+                               (wildcard: *, ?; /re/ for a regular expression)
+                               ($PISTA_INCLUDE).
   -E, --exclude=EXCLUDE,...    Exclude tables/views/enums/domains/composite
                                types/sequences/routines matching the pattern
-                               (wildcard: *, ?) ($PISTA_EXCLUDE).
+                               (wildcard: *, ?; /re/ for a regular expression)
+                               ($PISTA_EXCLUDE).
       --enable=ENABLE,...      Enable only specified object types (can be
                                repeated) ($PISTA_ENABLE).
       --disable=DISABLE,...    Disable specified object types (can be repeated)
@@ -284,10 +286,12 @@ Flags:
 
   -I, --include=INCLUDE,...    Include only tables/views/enums/domains/composite
                                types/sequences/routines matching the pattern
-                               (wildcard: *, ?) ($PISTA_INCLUDE).
+                               (wildcard: *, ?; /re/ for a regular expression)
+                               ($PISTA_INCLUDE).
   -E, --exclude=EXCLUDE,...    Exclude tables/views/enums/domains/composite
                                types/sequences/routines matching the pattern
-                               (wildcard: *, ?) ($PISTA_EXCLUDE).
+                               (wildcard: *, ?; /re/ for a regular expression)
+                               ($PISTA_EXCLUDE).
       --enable=ENABLE,...      Enable only specified object types (can be
                                repeated) ($PISTA_ENABLE).
       --disable=DISABLE,...    Disable specified object types (can be repeated)
@@ -369,10 +373,12 @@ Flags:
 
   -I, --include=INCLUDE,...    Include only tables/views/enums/domains/composite
                                types/sequences/routines matching the pattern
-                               (wildcard: *, ?) ($PISTA_INCLUDE).
+                               (wildcard: *, ?; /re/ for a regular expression)
+                               ($PISTA_INCLUDE).
   -E, --exclude=EXCLUDE,...    Exclude tables/views/enums/domains/composite
                                types/sequences/routines matching the pattern
-                               (wildcard: *, ?) ($PISTA_EXCLUDE).
+                               (wildcard: *, ?; /re/ for a regular expression)
+                               ($PISTA_EXCLUDE).
       --enable=ENABLE,...      Enable only specified object types (can be
                                repeated) ($PISTA_ENABLE).
       --disable=DISABLE,...    Disable specified object types (can be repeated)
@@ -672,7 +678,7 @@ pista -n staging -m staging=public apply schema.sql
 
 ### Filtering objects
 
-Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. Patterns match against object names only (not schema-qualified names). Also available as `$PISTA_INCLUDE` / `$PISTA_EXCLUDE` environment variables.
+Use `-I` / `--include` to include only matching objects by name, or `-E` / `--exclude` to exclude them. Patterns support `*` and `?` wildcards. A pattern wrapped in slashes is a regular expression, which matches anywhere in the name unless it is anchored; a wildcard has to match the whole name. Patterns match against object names only (not schema-qualified names). Also available as `$PISTA_INCLUDE` / `$PISTA_EXCLUDE` environment variables.
 
 Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`. Can be repeated. Also available as `$PISTA_ENABLE` / `$PISTA_DISABLE` environment variables.
 
@@ -687,6 +693,12 @@ pista plan -E 'tmp_*' schema.sql
 
 # Combine include and exclude
 pista apply -I 'user*' -E 'user_tmp' schema.sql
+
+# Exclude numbered partitions
+pista plan -E '/^posts_\d+$/' schema.sql
+
+# Mix the two forms
+pista dump -I 'user*' -I '/^audit_(log|trail)$/'
 
 # Dump only enums
 pista dump --enable enum
