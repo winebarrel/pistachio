@@ -27,6 +27,7 @@ type DumpResult struct {
 	Domains        *orderedmap.Map[string, *model.Domain]
 	CompositeTypes *orderedmap.Map[string, *model.CompositeType]
 	Sequences      *orderedmap.Map[string, *model.Sequence]
+	Routines       *orderedmap.Map[string, *model.Routine]
 	OmitSchema     bool
 	SortByDeps     bool
 	Count          ObjectCount
@@ -212,13 +213,37 @@ func (r *DumpResult) sequences() *orderedmap.Map[string, *model.Sequence] {
 	return sequences
 }
 
+// routines returns the routines with the schema stripped when --omit-schema is
+// set. A routine's argument types can name a type in the same schema, so those
+// lose the prefix too.
+func (r *DumpResult) routines() *orderedmap.Map[string, *model.Routine] {
+	if r.Routines == nil {
+		return orderedmap.New[string, *model.Routine]()
+	}
+	if !r.OmitSchema {
+		return r.Routines
+	}
+	routines := orderedmap.New[string, *model.Routine]()
+	for _, rt := range r.Routines.CollectValues() {
+		copied := *rt
+		copied.Schema = ""
+		copied.Args = make([]*model.RoutineArg, len(rt.Args))
+		for i, a := range rt.Args {
+			arg := *a
+			copied.Args[i] = &arg
+		}
+		routines.Set(copied.FQRN(), &copied)
+	}
+	return routines
+}
+
 func (r *DumpResult) String() string {
 	if r.SortByDeps {
 		if sql, ok := r.dependencyOrderedSQL(); ok {
 			return sql
 		}
 	}
-	return formatSchemaSQL(r.enums(), r.domains(), r.compositeTypes(), r.sequences(), r.tables(), r.views())
+	return formatSchemaSQL(r.enums(), r.domains(), r.compositeTypes(), r.sequences(), r.routines(), r.tables(), r.views())
 }
 
 // dumpItem carries an object's rendered SQL together with its position in the
@@ -242,7 +267,7 @@ type dumpItem struct {
 func (r *DumpResult) dependencyOrderedSQL() (string, bool) {
 	order, err := toposort.OrderFromSchema(
 		orEmpty(r.Enums), orEmpty(r.Domains), orEmpty(r.CompositeTypes),
-		orEmpty(r.Tables), orEmpty(r.Views), orEmpty(r.Sequences),
+		orEmpty(r.Tables), orEmpty(r.Views), orEmpty(r.Sequences), orEmpty(r.Routines),
 	)
 	if err != nil {
 		return "", false
@@ -264,6 +289,9 @@ func (r *DumpResult) dependencyOrderedSQL() (string, bool) {
 		return "", false
 	}
 	if items, ok = appendDumpItems(items, r.Sequences, r.sequences().CollectValues(), pos, model.SequenceToSQL); !ok {
+		return "", false
+	}
+	if items, ok = appendDumpItems(items, r.Routines, r.routines().CollectValues(), pos, model.RoutineToSQL); !ok {
 		return "", false
 	}
 	if items, ok = appendDumpItems(items, r.Tables, r.tables().CollectValues(), pos, model.TableToSQL); !ok {
@@ -334,6 +362,7 @@ func formatSchemaSQL(
 	domains *orderedmap.Map[string, *model.Domain],
 	compositeTypes *orderedmap.Map[string, *model.CompositeType],
 	sequences *orderedmap.Map[string, *model.Sequence],
+	routines *orderedmap.Map[string, *model.Routine],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 ) string {
@@ -349,6 +378,9 @@ func formatSchemaSQL(
 	}
 	if sequences != nil && sequences.Len() > 0 {
 		parts = append(parts, model.SequencesToSQL(sequences))
+	}
+	if routines != nil && routines.Len() > 0 {
+		parts = append(parts, model.RoutinesToSQL(routines))
 	}
 	if tables != nil && tables.Len() > 0 {
 		parts = append(parts, model.TablesToSQL(tables))
@@ -380,6 +412,13 @@ func (r *DumpResult) Files() map[string]string {
 	for _, s := range r.sequences().CollectValues() {
 		name := uniqueFileName(seen, toFileName(s.Schema, s.Name))
 		files[name] = model.SequenceToSQL(s) + "\n"
+		seen[strings.ToLower(name)] = true
+	}
+	for _, rt := range r.routines().CollectValues() {
+		// Overloads share a schema-qualified name, so uniqueFileName gives
+		// the second one a _2 suffix, the same as any other collision.
+		name := uniqueFileName(seen, toFileName(rt.Schema, rt.Name))
+		files[name] = model.RoutineToSQL(rt) + "\n"
 		seen[strings.ToLower(name)] = true
 	}
 	for _, t := range r.tables().CollectValues() {
@@ -471,19 +510,29 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		return nil, fmt.Errorf("failed to fetch sequences: %w", err)
 	}
 
+	// pg_proc is read only when --manage-routine asked for it.
+	routines := orderedmap.New[string, *model.Routine]()
+	if options.ManageRoutine {
+		routines, err = catalog.Routines(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch routines: %w", err)
+		}
+	}
+
 	filteredTables := options.filterTables(client.remapTableSchemas(tables))
 	filteredViews := options.filterViews(client.remapViewSchemas(views))
 	filteredEnums := options.filterEnums(client.remapEnumSchemas(enums))
 	filteredDomains := options.filterDomains(client.remapDomainSchemas(domains))
 	filteredCompositeTypes := options.filterCompositeTypes(client.remapCompositeTypeSchemas(compositeTypes))
 	filteredSequences := options.filterSequences(client.remapSequenceSchemas(sequences))
+	filteredRoutines := options.filterRoutines(client.remapRoutineSchemas(routines))
 
 	// Validate the dependency order up front so a cycle is a hard error rather
 	// than a silent fall back to name order. String() renders in this order.
 	if options.SortByDeps {
 		if _, err := toposort.OrderFromSchema(
 			filteredEnums, filteredDomains, filteredCompositeTypes,
-			filteredTables, filteredViews, filteredSequences,
+			filteredTables, filteredViews, filteredSequences, filteredRoutines,
 		); err != nil {
 			return nil, fmt.Errorf("failed to order dump by dependency: %w", err)
 		}
@@ -496,6 +545,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		Domains:        filteredDomains,
 		CompositeTypes: filteredCompositeTypes,
 		Sequences:      filteredSequences,
+		Routines:       filteredRoutines,
 		OmitSchema:     options.OmitSchema,
 		SortByDeps:     options.SortByDeps,
 		Count: ObjectCount{
@@ -506,6 +556,17 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 			Domains:        filteredDomains.Len(),
 			CompositeTypes: filteredCompositeTypes.Len(),
 			Sequences:      filteredSequences.Len(),
+			Routines:       routineCount(options.ManageRoutine, filteredRoutines),
 		},
 	}, nil
+}
+
+// routineCount returns the routine slot of ObjectCount: a count when routines
+// are managed, nil otherwise so the summary line leaves the slot out.
+func routineCount(manage bool, routines *orderedmap.Map[string, *model.Routine]) *int {
+	if !manage {
+		return nil
+	}
+	n := routines.Len()
+	return &n
 }

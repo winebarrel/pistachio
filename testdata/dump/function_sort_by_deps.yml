@@ -1,0 +1,24 @@
+# Routines sort after the types their signature names and before the tables.
+manage_routine: true
+sort_by_deps: true
+init: |
+  CREATE TYPE public.status AS ENUM ('active');
+  CREATE TABLE public.users (id integer);
+  CREATE FUNCTION public.label(s public.status) RETURNS text
+      LANGUAGE sql AS $$ SELECT s::text $$;
+dump: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active'
+  );
+
+  -- public.label(status)
+  CREATE OR REPLACE FUNCTION public.label(s status)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT s::text $$;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer
+  );

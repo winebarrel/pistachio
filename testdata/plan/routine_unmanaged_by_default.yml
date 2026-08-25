@@ -1,0 +1,7 @@
+# Without --manage-routine pg_proc is not read at all, so a routine the
+# desired schema does not declare is neither dropped nor reported.
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a $$;
+desired: ""
+plan: ""

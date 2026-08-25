@@ -1,0 +1,16 @@
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
+  CREATE FUNCTION public.f(a text) RETURNS text LANGUAGE sql AS $$ SELECT a $$;
+dump: |
+  -- public.f(integer)
+  CREATE OR REPLACE FUNCTION public.f(a integer)
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+
+  -- public.f(text)
+  CREATE OR REPLACE FUNCTION public.f(a text)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;

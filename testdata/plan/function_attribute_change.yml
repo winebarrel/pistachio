@@ -1,0 +1,15 @@
+# Volatility, strictness and parallel safety all replace in place.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql AS $$ SELECT 1 $$;
+desired: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+      AS $$ SELECT 1 $$;
+plan: |
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS integer
+      LANGUAGE sql
+      IMMUTABLE STRICT PARALLEL SAFE
+      AS $$ SELECT 1 $$;

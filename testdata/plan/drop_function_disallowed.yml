@@ -1,0 +1,10 @@
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a $$;
+desired: ""
+drop_policy:
+  allow_drop: []
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP FUNCTION public.f(integer);

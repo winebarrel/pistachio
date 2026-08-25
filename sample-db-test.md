@@ -142,8 +142,9 @@ rather than as an object of its own. Counting those too would add 2,206 more,
 886 of them gitlab's and 210 chado's. "Triggers" excludes the internal triggers
 a foreign key installs and the clones PostgreSQL puts on each partition of a
 partitioned table's trigger, the same as what pistachio reads and dump writes.
-All counts are limited to the schemas the sample is checked with, and exclude
-what an extension owns: the two views
+Routines have no column yet: the counts predate `--manage-routine` and have not
+been recounted since. All counts are limited to the schemas the sample is
+checked with, and exclude what an extension owns: the two views
 `pg_stat_statements` adds to sourcegraph's schema are not sourcegraph's schema
 and pistachio does not read them either.
 

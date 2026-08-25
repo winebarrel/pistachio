@@ -245,7 +245,7 @@ pista apply schema.sql --pre-sql-file pre.sql --with-tx
 
 ### Executing arbitrary SQL
 
-Use the `-- pista:execute` directive to include SQL statements that pistachio doesn't manage declaratively (functions, triggers, grants, etc.). These are executed after schema changes during `apply`.
+Use the `-- pista:execute` directive to include SQL statements that pistachio doesn't manage declaratively (grants, extensions, etc.). These are executed after schema changes during `apply`. Functions and procedures can be managed declaratively instead, with `--manage-routine`.
 
 ```sql
 -- pista:execute

@@ -1,0 +1,9 @@
+# Without --manage-routine pg_proc is not read, so the dump is unchanged.
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
+  CREATE TABLE public.users (id integer);
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer
+  );

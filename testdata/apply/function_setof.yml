@@ -1,0 +1,13 @@
+manage_routine: true
+init: ""
+desired: |
+  CREATE FUNCTION public.f() RETURNS SETOF integer
+      LANGUAGE sql ROWS 42 AS $$ SELECT 1 $$;
+applied: |
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS SETOF integer
+      LANGUAGE sql
+      ROWS 42
+      AS $$ SELECT 1 $$;
+verify_no_drift: true

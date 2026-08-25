@@ -1,0 +1,15 @@
+# PostgreSQL refuses to change a return type in place, so the routine is
+# dropped and recreated.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql AS $$ SELECT 1 $$;
+desired: |
+  CREATE FUNCTION public.f() RETURNS bigint
+      LANGUAGE sql AS $$ SELECT 1 $$;
+plan: |
+  DROP FUNCTION public.f();
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,6 +22,7 @@ type ParseResult struct {
 	Domains        *orderedmap.Map[string, *model.Domain]
 	CompositeTypes *orderedmap.Map[string, *model.CompositeType]
 	Sequences      *orderedmap.Map[string, *model.Sequence]
+	Routines       *orderedmap.Map[string, *model.Routine]
 	ExecuteStmts   []*ExecuteStmt
 }
 
@@ -140,6 +142,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 	domains := orderedmap.New[string, *model.Domain]()
 	compositeTypes := orderedmap.New[string, *model.CompositeType]()
 	sequences := orderedmap.New[string, *model.Sequence]()
+	routines := orderedmap.New[string, *model.Routine]()
 
 	stmtDirectives := extractStmtDirectives(sql, result.Stmts)
 	concurrentlyDirectives := extractConcurrentlyDirectives(sql, result.Stmts)
@@ -422,9 +425,29 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		case node.GetAlterSeqStmt() != nil:
 			applyAlterSeqOwnedBy(node.GetAlterSeqStmt(), defaultSchema, sequences)
 
+		case node.GetCreateFunctionStmt() != nil:
+			routine, err := parseCreateFunctionStmt(node.GetCreateFunctionStmt(), defaultSchema)
+			if errors.Is(err, errUnsupportedRoutine) {
+				// A routine pistachio reads but does not manage. The catalog
+				// skips the same ones, so warning and dropping it here keeps
+				// both sides of the diff in step.
+				warnIgnoredStmt(sql, rawStmt)
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if renameFrom != "" {
+				return nil, fmt.Errorf("pista:renamed-from is not supported for routines: %s", routine.FQRN())
+			}
+			routine.Ignore = ignore
+			if err := setUnique(routines, routine.FQRN(), "routine", routine); err != nil {
+				return nil, err
+			}
+
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
-			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, compositeTypes, sequences)
+			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, compositeTypes, sequences, routines)
 
 		default:
 			// A statement type no case above handles. It is dropped from the
@@ -437,7 +460,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		return nil, err
 	}
 
-	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, ExecuteStmts: executeStmts}
+	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, Routines: routines, ExecuteStmts: executeStmts}
 
 	if err := validateNamespaces(parsed); err != nil {
 		return nil, err
@@ -1535,7 +1558,7 @@ func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
 	return &table, &column
 }
 
-func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum], domains *orderedmap.Map[string, *model.Domain], compositeTypes *orderedmap.Map[string, *model.CompositeType], sequences *orderedmap.Map[string, *model.Sequence]) {
+func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum], domains *orderedmap.Map[string, *model.Domain], compositeTypes *orderedmap.Map[string, *model.CompositeType], sequences *orderedmap.Map[string, *model.Sequence], routines *orderedmap.Map[string, *model.Routine]) {
 	// COMMENT ON TYPE/DOMAIN uses TypeName, not a list
 	if cs.Objtype == pg_query.ObjectType_OBJECT_TYPE {
 		parseCommentOnType(cs, defaultSchema, enums, compositeTypes)
@@ -1543,6 +1566,11 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 	}
 	if cs.Objtype == pg_query.ObjectType_OBJECT_DOMAIN {
 		parseCommentOnDomain(cs, defaultSchema, domains)
+		return
+	}
+	// COMMENT ON FUNCTION/PROCEDURE carries an ObjectWithArgs, not a list.
+	if cs.Objtype == pg_query.ObjectType_OBJECT_FUNCTION || cs.Objtype == pg_query.ObjectType_OBJECT_PROCEDURE {
+		parseCommentOnRoutine(cs, defaultSchema, routines)
 		return
 	}
 

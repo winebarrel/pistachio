@@ -1,0 +1,11 @@
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a $$;
+  CREATE PROCEDURE public.p() LANGUAGE sql AS $$ SELECT $$;
+desired: ""
+# Drops run in reverse dependency order; routines with no edge between them
+# fall back to reverse name order.
+plan: |
+  DROP PROCEDURE public.p();
+  DROP FUNCTION public.f(integer);

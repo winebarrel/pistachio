@@ -21,6 +21,7 @@ func OrderFromSchema(
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 	sequences *orderedmap.Map[string, *model.Sequence],
+	routines *orderedmap.Map[string, *model.Routine],
 ) ([]string, error) {
 	g := newGraph()
 	defined := collectDefined(enums, domains, compositeTypes, tables, views, sequences)
@@ -110,6 +111,8 @@ func OrderFromSchema(
 			}
 		}
 	}
+
+	addRoutineDeps(g, routines, tables, views, defined)
 
 	order, err := g.Sort()
 	if err != nil {
@@ -432,4 +435,76 @@ func extractViewDepsFallback(definition, defaultSchema string, defined map[strin
 	}
 	sort.Strings(deps)
 	return deps
+}
+
+// RoutineNode returns the graph node name for a routine, given its
+// schema-qualified name. The identity argument list is left out, so an overload
+// set shares one node: the ordering rules below hold for every overload alike,
+// and a CREATE statement spells its parameters with names and defaults, which
+// no FQRN could be recovered from.
+//
+// The "routine:" prefix keeps the node out of the relation and type namespace.
+// A schema may hold a table and a function of the same name, and without the
+// prefix the two would collapse into one node and read as a cycle.
+func RoutineNode(qualifiedName string) string {
+	if qualifiedName == "" {
+		return ""
+	}
+	return "routine:" + qualifiedName
+}
+
+// addRoutineDeps places routines between the types they name and the tables
+// that call them.
+//
+// A routine depends on the types in its signature, so it is created after
+// them. Every table and view is made to depend on every routine, so routines
+// come first: a CHECK constraint, a GENERATED expression, an index expression,
+// a policy or a trigger can call one, and those run as part of the table DDL.
+// The edge is drawn wholesale rather than by reading each expression - the
+// answer would be the same "routine first" either way.
+//
+// The reverse direction is deliberately absent. A LANGUAGE sql body that reads
+// a table would want the table first, which cannot hold at the same time as
+// the rule above, so that case is a documented limitation rather than an edge.
+func addRoutineDeps(
+	g *graph,
+	routines *orderedmap.Map[string, *model.Routine],
+	tables *orderedmap.Map[string, *model.Table],
+	views *orderedmap.Map[string, *model.View],
+	defined map[string]bool,
+) {
+	if routines.Len() == 0 {
+		return
+	}
+
+	nodes := make([]string, 0, routines.Len())
+	seen := make(map[string]bool, routines.Len())
+	for _, r := range routines.All() {
+		node := RoutineNode(model.Ident(r.Schema, r.Name))
+		if !seen[node] {
+			seen[node] = true
+			nodes = append(nodes, node)
+		}
+		g.AddNode(node)
+
+		for _, a := range r.Args {
+			if dep := resolveTypeDep(a.Type, r.Schema, defined); dep != "" {
+				g.AddEdge(node, dep)
+			}
+		}
+		if dep := resolveTypeDep(r.ReturnType, r.Schema, defined); dep != "" {
+			g.AddEdge(node, dep)
+		}
+	}
+
+	for k := range tables.Keys() {
+		for _, node := range nodes {
+			g.AddEdge(k, node)
+		}
+	}
+	for k := range views.Keys() {
+		for _, node := range nodes {
+			g.AddEdge(k, node)
+		}
+	}
 }

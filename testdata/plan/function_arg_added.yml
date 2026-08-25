@@ -1,0 +1,15 @@
+# The argument types are part of the identity, so adding one is a new routine
+# and the old one is dropped.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a $$;
+desired: |
+  CREATE FUNCTION public.f(a integer, b integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT a + b $$;
+plan: |
+  CREATE OR REPLACE FUNCTION public.f(a integer, b integer)
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT a + b $$;
+  DROP FUNCTION public.f(integer);

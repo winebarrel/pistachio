@@ -1,0 +1,14 @@
+# Without --allow-drop routine the recreate is reported and the current
+# definition is left alone.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql AS $$ SELECT 1 $$;
+desired: |
+  CREATE FUNCTION public.f() RETURNS bigint
+      LANGUAGE sql AS $$ SELECT 1 $$;
+drop_policy:
+  allow_drop: []
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP FUNCTION public.f();

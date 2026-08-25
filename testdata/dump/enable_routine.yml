@@ -1,0 +1,11 @@
+manage_routine: true
+enable: [routine]
+init: |
+  CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+  CREATE TABLE public.users (id integer);
+dump: |
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;

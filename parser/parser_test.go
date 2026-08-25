@@ -165,19 +165,21 @@ func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {
 	assert.True(t, utf8.ValidString(out), "truncation must not split a rune")
 }
 
-// Deparse keeps the newlines inside a function body, so the warning must
-// collapse them; the message stays on one line.
+// Deparse keeps the newlines inside a DO block, so the warning must collapse
+// them; the message stays on one line. A DO block is used because deparse
+// renders every other unsupported statement on one line already, and a
+// CREATE FUNCTION is no longer unsupported.
 func TestParseSQL_WarnsUnsupportedStmt_CollapsesMultiline(t *testing.T) {
 	var buf bytes.Buffer
 	restore := parser.SetWarnWriter(&buf)
 	defer restore()
 
-	sql := "CREATE FUNCTION f() RETURNS int AS $$\nBEGIN\n  RETURN 1;\nEND;\n$$ LANGUAGE plpgsql;"
+	sql := "DO $$\nBEGIN\n  PERFORM 1;\nEND\n$$;"
 	_, err := parser.ParseSQLWithSchema(sql, "public")
 	require.NoError(t, err)
 
 	out := buf.String()
-	assert.Contains(t, out, "ignored unsupported statement: CREATE FUNCTION f()")
+	assert.Contains(t, out, "ignored unsupported statement: DO $$ BEGIN PERFORM 1; END $$")
 	assert.Equal(t, 1, strings.Count(out, "\n"), "the warning must be a single line")
 }
 

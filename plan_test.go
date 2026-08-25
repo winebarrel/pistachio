@@ -39,6 +39,7 @@ type planTestCase struct {
 	Exclude                  []string        `yaml:"exclude,omitempty"`
 	Enable                   []string        `yaml:"enable,omitempty"`
 	Disable                  []string        `yaml:"disable,omitempty"`
+	ManageRoutine            bool            `yaml:"manage_routine,omitempty"`
 	PreSQL                   string          `yaml:"pre_sql,omitempty"`
 	// PreSQLFile holds SQL content; the runner writes it to a temp file and
 	// passes the path to PlanOptions.PreSQLFile.
@@ -63,6 +64,7 @@ type expectedCount struct {
 	Domains        *int `yaml:"domains,omitempty"`
 	CompositeTypes *int `yaml:"composite_types,omitempty"`
 	Sequences      *int `yaml:"sequences,omitempty"`
+	Routines       *int `yaml:"routines,omitempty"`
 }
 
 func assertExpectedCount(t *testing.T, want *expectedCount, got pistachio.ObjectCount) {
@@ -87,6 +89,11 @@ func assertExpectedCount(t *testing.T, want *expectedCount, got pistachio.Object
 	}
 	if want.Sequences != nil {
 		assert.Equal(t, *want.Sequences, got.Sequences, "Count.Sequences")
+	}
+	if want.Routines != nil {
+		if assert.NotNil(t, got.Routines, "Count.Routines") {
+			assert.Equal(t, *want.Routines, *got.Routines, "Count.Routines")
+		}
 	}
 }
 
@@ -378,10 +385,11 @@ func TestPlan(t *testing.T) {
 			got, err := client.Plan(ctx, &pistachio.PlanOptions{
 				DropPolicy: dropPolicy,
 				FilterOptions: pistachio.FilterOptions{
-					Include: tc.Include,
-					Exclude: tc.Exclude,
-					Enable:  tc.Enable,
-					Disable: tc.Disable,
+					Include:       tc.Include,
+					Exclude:       tc.Exclude,
+					Enable:        tc.Enable,
+					Disable:       tc.Disable,
+					ManageRoutine: tc.ManageRoutine,
 				},
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,

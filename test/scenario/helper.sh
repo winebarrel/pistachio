@@ -76,7 +76,7 @@ assert_no_drop() {
   local plan_output
   plan_output=$(pista_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
-  if echo "$plan_output" | grep -qiE '^[[:space:]]*(DROP TABLE |DROP VIEW |DROP MATERIALIZED VIEW |DROP TYPE |DROP DOMAIN |ALTER TABLE .* DROP COLUMN)'; then
+  if echo "$plan_output" | grep -qiE '^[[:space:]]*(DROP TABLE |DROP VIEW |DROP MATERIALIZED VIEW |DROP TYPE |DROP DOMAIN |DROP FUNCTION |DROP PROCEDURE |ALTER TABLE .* DROP COLUMN)'; then
     fail "unexpected DROP in plan without --allow-drop"
     echo "    $plan_output" >&2
     return 1
@@ -106,6 +106,7 @@ assert_commented_drop() {
     column) drop_pattern='^-- skipped: ALTER TABLE .* DROP COLUMN' ;;
     enum)   drop_pattern='^-- skipped: DROP TYPE' ;;
     domain) drop_pattern='^-- skipped: DROP DOMAIN' ;;
+    routine) drop_pattern='^-- skipped: DROP (FUNCTION|PROCEDURE)' ;;
     *) fail "unknown expected_type: $expected_type"; return 1 ;;
   esac
 
@@ -146,6 +147,7 @@ assert_commented_drop_with_allowed() {
     column) drop_pattern='^-- skipped: ALTER TABLE .* DROP COLUMN' ;;
     enum)   drop_pattern='^-- skipped: DROP TYPE' ;;
     domain) drop_pattern='^-- skipped: DROP DOMAIN' ;;
+    routine) drop_pattern='^-- skipped: DROP (FUNCTION|PROCEDURE)' ;;
     *) fail "unknown expected_type: $expected_type"; return 1 ;;
   esac
 
@@ -181,6 +183,7 @@ assert_no_drop_type() {
     column) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP COLUMN' ;;
     enum)   drop_pattern='^[[:space:]]*DROP TYPE' ;;
     domain) drop_pattern='^[[:space:]]*DROP DOMAIN' ;;
+    routine) drop_pattern='^[[:space:]]*DROP (FUNCTION|PROCEDURE)' ;;
     *) fail "unknown protected_type: $protected_type"; return 1 ;;
   esac
 
@@ -215,6 +218,7 @@ assert_drop_type_present() {
     column) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP COLUMN' ;;
     enum)   drop_pattern='^[[:space:]]*DROP TYPE' ;;
     domain) drop_pattern='^[[:space:]]*DROP DOMAIN' ;;
+    routine) drop_pattern='^[[:space:]]*DROP (FUNCTION|PROCEDURE)' ;;
     *) fail "unknown expected_type: $expected_type"; return 1 ;;
   esac
 

@@ -1,0 +1,14 @@
+# PostgreSQL refuses to rename an input parameter in place.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT 1 $$;
+desired: |
+  CREATE FUNCTION public.f(b integer) RETURNS integer
+      LANGUAGE sql AS $$ SELECT 1 $$;
+plan: |
+  DROP FUNCTION public.f(integer);
+  CREATE OR REPLACE FUNCTION public.f(b integer)
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;
