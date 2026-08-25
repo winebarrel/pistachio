@@ -306,12 +306,48 @@ func TestParseSQL_FunctionWithoutReturnType(t *testing.T) {
 	assert.ErrorContains(t, err, "has no RETURNS clause and no OUT parameter")
 }
 
+// An option pistachio does not handle leaves the routine unmanaged rather than
+// failing the parse. A desired routine is read whether or not --manage-routine
+// is set, so an error here would reach someone who never asked for routines.
 func TestParseSQL_FunctionUnsupportedOption(t *testing.T) {
-	_, err := parseSQLWithPublicSchema(`
+	for _, tc := range []struct {
+		name string
+		sql  string
+	}{
+		{"transform", `CREATE FUNCTION public.f(a integer) RETURNS integer
+		    LANGUAGE c TRANSFORM FOR TYPE integer AS 'obj', 'sym';`},
+		{"support", `CREATE FUNCTION public.f(a integer) RETURNS integer
+		    LANGUAGE sql SUPPORT public.f_supp AS $$ SELECT a $$;`},
+		{"set from current", `CREATE FUNCTION public.f() RETURNS text
+		    LANGUAGE sql SET search_path FROM CURRENT AS $$ SELECT 'x' $$;`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			restore := parser.SetWarnWriter(&buf)
+			defer restore()
+
+			result, err := parseSQLWithPublicSchema(tc.sql)
+			require.NoError(t, err)
+			assert.Equal(t, 0, result.Routines.Len())
+			assert.Contains(t, buf.String(), "ignored unsupported statement:")
+		})
+	}
+}
+
+// The same statements must not fail a plan for someone who never opted in.
+func TestParseSQL_UnsupportedRoutineDoesNotFailTheFile(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t1 (id integer);
 		CREATE FUNCTION public.f(a integer) RETURNS integer
-		    LANGUAGE c TRANSFORM FOR TYPE integer AS 'obj', 'sym';
+		    LANGUAGE sql SUPPORT public.f_supp AS $$ SELECT a $$;
 	`)
-	assert.ErrorContains(t, err, "unsupported routine option: transform")
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Tables.Len())
+	assert.Equal(t, 0, result.Routines.Len())
 }
 
 func TestParseSQL_FunctionNameTooManyParts(t *testing.T) {

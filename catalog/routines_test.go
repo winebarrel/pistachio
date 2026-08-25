@@ -104,6 +104,23 @@ func TestRoutines(t *testing.T) {
 		assert.Equal(t, []string{"public.kept()"}, routines.CollectKeys())
 	})
 
+	// A routine carrying an option pistachio does not handle is skipped rather
+	// than failing the whole read, the way the parser skips it on the desired
+	// side. pg_get_functiondef writes SUPPORT back, so the row reaches the
+	// parser and comes out unsupported.
+	t.Run("a routine with an unsupported option is skipped", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE FUNCTION public.kept() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+			CREATE FUNCTION public.supp(internal) RETURNS internal
+			    LANGUAGE internal AS 'pg_stat_get_backend_pid';
+			CREATE FUNCTION public.with_support(a integer) RETURNS integer
+			    LANGUAGE sql SUPPORT public.supp AS $$ SELECT a $$;
+		`)
+		routines, err := newCatalog(t).Routines(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"public.kept()", "public.supp(internal)"}, routines.CollectKeys())
+	})
+
 	// A routine an extension owns belongs to that extension, not to the
 	// desired schema, so it is left out the way every other object type is.
 	t.Run("extension routines are left out", func(t *testing.T) {

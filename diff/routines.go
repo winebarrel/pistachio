@@ -59,11 +59,29 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 	return result, nil
 }
 
+// normalizeTypes returns a copy whose signature types have the routine's own
+// schema stripped. The catalog reports such a type bare when search_path
+// reaches it while a desired schema may write it qualified, and comparing the
+// two spellings directly would read as a change on every run.
+func normalizeTypes(r *model.Routine) *model.Routine {
+	c := *r
+	c.ReturnType = model.StripTypeSchema(r.ReturnType, r.Schema)
+	c.Args = make([]*model.RoutineArg, len(r.Args))
+	for i, a := range r.Args {
+		arg := *a
+		arg.Type = model.StripTypeSchema(a.Type, r.Schema)
+		c.Args[i] = &arg
+	}
+	return &c
+}
+
 // diffRoutine returns the statements that bring one routine in line, plus any
 // drop the policy suppressed.
 func diffRoutine(current, desired *model.Routine, dropAllowed bool) (stmts, disallowed []string) {
-	if current.SQL() != desired.SQL() {
-		if needsDropCreate(current, desired) {
+	currentNorm, desiredNorm := normalizeTypes(current), normalizeTypes(desired)
+
+	if currentNorm.SQL() != desiredNorm.SQL() {
+		if needsDropCreate(currentNorm, desiredNorm) {
 			// PostgreSQL rejects CREATE OR REPLACE for this change, so the
 			// routine has to go first. Without the drop policy the current
 			// definition stays, and the comment is left alone with it.

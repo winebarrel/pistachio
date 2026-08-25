@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -96,6 +97,12 @@ func (c *Catalog) ListRoutines(ctx context.Context) ([]*model.Routine, error) {
 		// pg_get_functiondef always schema-qualifies the name, so the default
 		// schema passed here is never consulted.
 		routine, err := parser.ParseRoutineDef(definition, "")
+		if errors.Is(err, parser.ErrUnsupportedRoutine) {
+			// A routine pistachio does not manage. The parser drops the same
+			// ones from the desired schema, so skipping the row here keeps the
+			// two sides in step instead of failing the whole read.
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to parse routine definition: %w", err)
 		}

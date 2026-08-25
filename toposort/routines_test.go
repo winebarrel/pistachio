@@ -123,3 +123,35 @@ func TestOrderFromSchema_RoutineDependsOnReturnType(t *testing.T) {
 	order := orderWithRoutines(t, enums, orderedmap.New[string, *model.Table](), orderedmap.New[string, *model.View](), routines)
 	assert.Less(t, indexOf(t, order, "public.zzz_status"), indexOf(t, order, "routine:public.aaa_f"))
 }
+
+// A signature can name a relation as well as a type. The wholesale table to
+// routine edge has to skip that pair, or it closes a cycle and the sort fails.
+func TestOrderFromSchema_RoutineReturningATable(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("public.users", &model.Table{Schema: "public", Name: "users", Columns: orderedmap.New[string, *model.Column]()})
+	tables.Set("public.other", &model.Table{Schema: "public", Name: "other", Columns: orderedmap.New[string, *model.Column]()})
+
+	routines := routineMap(&model.Routine{
+		Schema: "public", Name: "all_users", ReturnType: "public.users", ReturnsSet: true, Language: "sql",
+	})
+
+	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, orderedmap.New[string, *model.View](), routines)
+
+	// After its own table, and still before every other one.
+	assert.Less(t, indexOf(t, order, "public.users"), indexOf(t, order, "routine:public.all_users"))
+	assert.Less(t, indexOf(t, order, "routine:public.all_users"), indexOf(t, order, "public.other"))
+}
+
+// The same holds for a table row type used as a parameter.
+func TestOrderFromSchema_RoutineTakingATableRowType(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("public.users", &model.Table{Schema: "public", Name: "users", Columns: orderedmap.New[string, *model.Column]()})
+
+	routines := routineMap(&model.Routine{
+		Schema: "public", Name: "label", ReturnType: "text", Language: "sql",
+		Args: []*model.RoutineArg{{Name: "u", Type: "public.users"}},
+	})
+
+	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, orderedmap.New[string, *model.View](), routines)
+	assert.Less(t, indexOf(t, order, "public.users"), indexOf(t, order, "routine:public.label"))
+}

@@ -11,12 +11,15 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// errUnsupportedRoutine marks a CREATE FUNCTION / PROCEDURE statement that
-// pistachio reads but does not manage. The caller turns it into the same
+// ErrUnsupportedRoutine marks a CREATE FUNCTION / PROCEDURE statement that
+// pistachio reads but does not manage. The parser turns it into the same
 // "ignored unsupported statement" warning any other unhandled statement gets,
-// which keeps the desired side in step with the catalog side: the queries in
-// catalog/routines.go skip exactly these routines too.
-var errUnsupportedRoutine = errors.New("unsupported routine")
+// and the catalog skips the row rather than failing the whole read, so both
+// sides of the diff leave the same routines out. Never fail a parse over one:
+// a routine the desired schema declares is read whether or not
+// --manage-routine is set, so an error here would reach someone who never
+// asked for routines at all.
+var ErrUnsupportedRoutine = errors.New("unsupported routine")
 
 // Default COST and ROWS per pg_proc. pg_get_functiondef prints neither when
 // the routine carries the default, so the parser drops them as well.
@@ -50,7 +53,7 @@ func parseCreateFunctionStmt(cfs *pg_query.CreateFunctionStmt, defaultSchema str
 	// whatever it reads, so it cannot be created ahead of the tables the way
 	// pistachio orders routines. The catalog skips these too.
 	if cfs.SqlBody != nil {
-		return nil, errUnsupportedRoutine
+		return nil, ErrUnsupportedRoutine
 	}
 
 	schema, name, err := splitFuncName(cfs.Funcname, defaultSchema)
@@ -244,9 +247,11 @@ func parseRoutineOptions(options []*pg_query.Node, routine *model.Routine) error
 		case "window":
 			// prokind 'w'. The catalog does not read window functions, so the
 			// desired side leaves them alone too.
-			return errUnsupportedRoutine
+			return ErrUnsupportedRoutine
 		default:
-			return fmt.Errorf("unsupported routine option: %s", de.Defname)
+			// SUPPORT and TRANSFORM FOR TYPE reach here, and pg_get_functiondef
+			// writes both back, so the catalog skips the same routines.
+			return fmt.Errorf("%w: option %s", ErrUnsupportedRoutine, de.Defname)
 		}
 	}
 	return nil
@@ -272,6 +277,14 @@ func parseRoutineConfig(arg *pg_query.Node) (*model.RoutineConfig, error) {
 	if vss == nil {
 		return nil, fmt.Errorf("unexpected SET clause on routine")
 	}
+	// SET x FROM CURRENT captures the session value at creation time, which is
+	// not in the statement, so there is nothing to compare against.
+	// pg_get_functiondef always writes a concrete value, so only a desired
+	// schema can spell it this way.
+	if len(vss.Args) == 0 {
+		return nil, fmt.Errorf("%w: SET %s has no value to compare", ErrUnsupportedRoutine, vss.Name)
+	}
+
 	cfg := &model.RoutineConfig{Name: vss.Name}
 	for _, a := range vss.Args {
 		c := a.GetAConst()

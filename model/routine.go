@@ -86,19 +86,39 @@ func (a RoutineArg) InArg() bool {
 	}
 }
 
-// FQRN returns the schema-qualified name with the identity argument list,
-// the same shape pg_get_function_identity_arguments produces. Two routines in
-// one schema can share a name, so the argument list is part of the key.
+// FQRN returns the key the diff matches routines by: the schema-qualified name
+// with the identity argument list, in the shape
+// pg_get_function_identity_arguments produces. Two routines in one schema can
+// share a name, so the argument list is part of it.
+//
+// A type in the routine's own schema loses that qualifier here. The catalog
+// reports such a type bare when search_path reaches it while a desired schema
+// may write it qualified, and without this the two spellings would key as two
+// routines, so a plan would create one and drop the other on every run.
+// Signature renders the types as they were read, for the SQL that has to
+// resolve them.
 func (r Routine) FQRN() string {
-	return Ident(r.Schema, r.Name) + "(" + strings.Join(r.identityArgTypes(), ", ") + ")"
+	return Ident(r.Schema, r.Name) + "(" + strings.Join(r.argTypes(true), ", ") + ")"
 }
 
-func (r Routine) identityArgTypes() []string {
+// Signature returns the schema-qualified name and identity argument list with
+// the type names as read, for a DROP or a COMMENT that PostgreSQL has to
+// resolve under the same search_path the types were reported through.
+func (r Routine) Signature() string {
+	return Ident(r.Schema, r.Name) + "(" + strings.Join(r.argTypes(false), ", ") + ")"
+}
+
+func (r Routine) argTypes(stripSchema bool) []string {
 	types := make([]string, 0, len(r.Args))
 	for _, a := range r.Args {
-		if a.InArg() {
-			types = append(types, a.Type)
+		if !a.InArg() {
+			continue
 		}
+		if stripSchema {
+			types = append(types, StripTypeSchema(a.Type, r.Schema))
+			continue
+		}
+		types = append(types, a.Type)
 	}
 	return types
 }
@@ -263,14 +283,14 @@ func DollarQuote(s string) string {
 
 func (r Routine) CommentSQL() string {
 	if r.Comment != nil {
-		return "COMMENT ON " + r.Kind() + " " + r.FQRN() + " IS " + QuoteLiteral(*r.Comment) + ";"
+		return "COMMENT ON " + r.Kind() + " " + r.Signature() + " IS " + QuoteLiteral(*r.Comment) + ";"
 	}
 	return ""
 }
 
 // DropSQL returns the DROP statement for the routine.
 func (r Routine) DropSQL() string {
-	return "DROP " + r.Kind() + " " + r.FQRN() + ";"
+	return "DROP " + r.Kind() + " " + r.Signature() + ";"
 }
 
 // String returns a debug-friendly representation.
@@ -279,7 +299,7 @@ func (r Routine) String() string {
 }
 
 func RoutineToSQL(r *Routine) string {
-	parts := []string{"-- " + r.FQRN(), r.SQL()}
+	parts := []string{"-- " + r.Signature(), r.SQL()}
 	if s := r.CommentSQL(); s != "" {
 		parts = append(parts, s)
 	}

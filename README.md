@@ -890,12 +890,12 @@ Adding or removing a parameter is not a modification either. The argument types 
 
 An attribute left at its default is not written back. PostgreSQL reports `VOLATILE`, `PARALLEL UNSAFE` and the default `COST` as absent, so a desired schema may spell them out or leave them off.
 
-A routine is created after the types its signature names and before every table, because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call one. Dropping runs the other way: views, then tables, then routines, then types.
+A routine is created after the types its signature names and before every table, because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call one. A signature can name a relation instead of a type, as `RETURNS SETOF <table>` does; such a routine comes after its own relation and before every other one. Dropping runs the other way: views, then tables, then routines, then types.
 
 > [!IMPORTANT]
 > That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later. `plpgsql` is unaffected. Mark such a routine `-- pista:ignore` and create it with `-- pista:execute` instead.
 
-Argument and return types are reported without their schema when `search_path` reaches them, the same as any other name pistachio reads back, so write them the way `dump` does. A comment goes on the full signature:
+Argument and return types are reported without their schema when `search_path` reaches them, the same as any other name pistachio reads back. A desired schema may write a type in the routine's own schema either way; the two spellings are one routine. A comment goes on the full signature:
 
 ```sql
 COMMENT ON FUNCTION public.normalize(text) IS 'v1';
@@ -906,7 +906,11 @@ The following are not managed. Both sides of the diff leave them out, so `dump` 
 - aggregates and window functions
 - a routine whose body is written in the SQL-standard `BEGIN ATOMIC` form. Such a body records real dependencies on the tables it reads, so it cannot be created ahead of them
 - a routine an extension owns
+- a routine carrying an option pistachio does not read, `SUPPORT` and `TRANSFORM FOR TYPE` among them
+- a routine with `SET <parameter> FROM CURRENT`, which captures the session value at creation time and so is not in the statement to compare
 - renaming, via `-- pista:renamed-from`
+
+An unmanaged routine is warned about and skipped, never an error, because the desired schema is read whether or not `--manage-routine` is set.
 
 ## Triggers
 

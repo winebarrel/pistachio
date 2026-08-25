@@ -216,3 +216,34 @@ func TestDiffRoutines_ArgTypeChangeIsDropAndCreate(t *testing.T) {
 	assert.Contains(t, result.Stmts[0], "CREATE OR REPLACE FUNCTION public.f(a bigint)")
 	assert.Equal(t, []string{"DROP FUNCTION public.f(integer);"}, result.DropStmts)
 }
+
+// The catalog reports a type in the routine's own schema bare when search_path
+// reaches it, while a desired schema may write it qualified. The two spellings
+// are one routine, not two, so neither a replace nor a drop is due.
+func TestDiffRoutines_SchemaQualifiedTypeIsTheSameRoutine(t *testing.T) {
+	bare := newRoutine(func(r *model.Routine) {
+		r.Args[0].Type = "dom"
+		r.ReturnType = "dom"
+	})
+	qualified := newRoutine(func(r *model.Routine) {
+		r.Args[0].Type = "public.dom"
+		r.ReturnType = "public.dom"
+	})
+
+	assert.Equal(t, bare.FQRN(), qualified.FQRN(), "the two spellings must key alike")
+
+	result, err := diff.DiffRoutines(newRoutineMap(bare), newRoutineMap(qualified), diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.DisallowedDropStmts)
+}
+
+// A DROP has to name the types as they were read, since PostgreSQL resolves
+// them under the same search_path the catalog reported them through.
+func TestDiffRoutines_DropNamesTypesAsRead(t *testing.T) {
+	qualified := newRoutine(func(r *model.Routine) { r.Args[0].Type = "public.dom" })
+	result, err := diff.DiffRoutines(newRoutineMap(qualified), newRoutineMap(), diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"DROP FUNCTION public.f(public.dom);"}, result.DropStmts)
+}

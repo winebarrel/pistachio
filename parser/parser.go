@@ -427,7 +427,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 
 		case node.GetCreateFunctionStmt() != nil:
 			routine, err := parseCreateFunctionStmt(node.GetCreateFunctionStmt(), defaultSchema)
-			if errors.Is(err, errUnsupportedRoutine) {
+			if errors.Is(err, ErrUnsupportedRoutine) {
 				// A routine pistachio reads but does not manage. The catalog
 				// skips the same ones, so warning and dropping it here keeps
 				// both sides of the diff in step.

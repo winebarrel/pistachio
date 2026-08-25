@@ -1,0 +1,16 @@
+# The catalog reports a type in the routine's own schema bare when search_path
+# reaches it. A desired schema writing it qualified is the same routine, so
+# nothing is due. Keying the two spellings apart used to plan a
+# CREATE OR REPLACE and a DROP of the same function on every run.
+manage_routine: true
+init: |
+  CREATE DOMAIN public.dom AS text;
+  CREATE FUNCTION public.f(x dom) RETURNS dom
+      LANGUAGE sql AS $$ SELECT x $$;
+desired: |
+  CREATE DOMAIN public.dom AS text;
+  CREATE OR REPLACE FUNCTION public.f(x public.dom)
+      RETURNS public.dom
+      LANGUAGE sql
+      AS $$ SELECT x $$;
+plan: ""

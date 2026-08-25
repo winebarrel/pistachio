@@ -1326,20 +1326,12 @@ func foldTypeMod(typeName string) string {
 }
 
 // stripTypeSchema removes a redundant "<schema>." qualifier from a column type
-// name, preserving any trailing "[]". The catalog reports a type in the search
-// path unqualified (via format_type), while desired SQL may write it schema-
-// qualified. Stripping the table's own schema makes the two forms compare
-// equal instead of emitting a no-op SET DATA TYPE on every plan. A type in a
-// different search-path schema than its table is not covered.
+// name, so that a desired schema writing it qualified compares equal to the
+// catalog reporting it bare instead of emitting a no-op SET DATA TYPE on every
+// plan. Routine signatures need the same rule, so the implementation lives in
+// model.
 func stripTypeSchema(typeName, schema string) string {
-	if schema == "" {
-		return typeName
-	}
-	prefix := schema + "."
-	if strings.HasPrefix(typeName, prefix) {
-		return typeName[len(prefix):]
-	}
-	return typeName
+	return model.StripTypeSchema(typeName, schema)
 }
 
 // schemaOf returns the schema component of a canonical "schema.name"

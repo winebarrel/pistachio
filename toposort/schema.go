@@ -457,15 +457,20 @@ func RoutineNode(qualifiedName string) string {
 // that call them.
 //
 // A routine depends on the types in its signature, so it is created after
-// them. Every table and view is made to depend on every routine, so routines
-// come first: a CHECK constraint, a GENERATED expression, an index expression,
-// a policy or a trigger can call one, and those run as part of the table DDL.
-// The edge is drawn wholesale rather than by reading each expression - the
-// answer would be the same "routine first" either way.
+// them. Every table and view is then made to depend on every routine, so
+// routines come first: a CHECK constraint, a GENERATED expression, an index
+// expression, a policy or a trigger can call one, and those run as part of the
+// table DDL. The edge is drawn wholesale rather than by reading each
+// expression, since the answer is the same "routine first" either way.
 //
-// The reverse direction is deliberately absent. A LANGUAGE sql body that reads
-// a table would want the table first, which cannot hold at the same time as
-// the rule above, so that case is a documented limitation rather than an edge.
+// A signature can name a relation as well as a type: RETURNS SETOF <table>, or
+// a table row type as a parameter. That relation is skipped when the wholesale
+// edge is drawn, or the pair would close a cycle and the sort would fail. Such
+// a routine lands after its own relation and before every other one.
+//
+// The reverse direction is otherwise absent. A LANGUAGE sql body that reads a
+// table would want the table first, which cannot hold at the same time as the
+// rule above, so that case is a documented limitation rather than an edge.
 func addRoutineDeps(
 	g *graph,
 	routines *orderedmap.Map[string, *model.Routine],
@@ -479,32 +484,41 @@ func addRoutineDeps(
 
 	nodes := make([]string, 0, routines.Len())
 	seen := make(map[string]bool, routines.Len())
+	// What each routine's own signature names, so the wholesale edge can skip
+	// those pairs. Overloads share a node, so the sets merge per node.
+	named := make(map[string]map[string]bool, routines.Len())
+
 	for _, r := range routines.All() {
 		node := RoutineNode(model.Ident(r.Schema, r.Name))
 		if !seen[node] {
 			seen[node] = true
 			nodes = append(nodes, node)
+			named[node] = map[string]bool{}
 		}
 		g.AddNode(node)
 
 		for _, a := range r.Args {
-			if dep := resolveTypeDep(a.Type, r.Schema, defined); dep != "" {
+			if dep := resolveTypeDep(a.Type, r.Schema, defined); dep != "" && dep != node {
 				g.AddEdge(node, dep)
+				named[node][dep] = true
 			}
 		}
-		if dep := resolveTypeDep(r.ReturnType, r.Schema, defined); dep != "" {
+		if dep := resolveTypeDep(r.ReturnType, r.Schema, defined); dep != "" && dep != node {
 			g.AddEdge(node, dep)
+			named[node][dep] = true
 		}
 	}
 
-	for k := range tables.Keys() {
-		for _, node := range nodes {
-			g.AddEdge(k, node)
+	addDependents := func(keys func(func(string) bool)) {
+		for k := range keys {
+			for _, node := range nodes {
+				if named[node][k] {
+					continue
+				}
+				g.AddEdge(k, node)
+			}
 		}
 	}
-	for k := range views.Keys() {
-		for _, node := range nodes {
-			g.AddEdge(k, node)
-		}
-	}
+	addDependents(tables.Keys())
+	addDependents(views.Keys())
 }

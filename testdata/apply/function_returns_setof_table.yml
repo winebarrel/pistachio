@@ -1,0 +1,39 @@
+# A signature that names a relation used to close a cycle in the dependency
+# graph: every table depends on every routine, and the routine depends back on
+# its own table. plan fell through to the fallback order and put the routine
+# first, so the apply failed on a fresh schema.
+manage_routine: true
+init: ""
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text
+  );
+  CREATE FUNCTION public.all_users() RETURNS SETOF public.users
+      LANGUAGE sql AS $$ SELECT * FROM users $$;
+# The table comes first, which is the whole point. The desired schema wrote the
+# return type qualified, so it is applied that way; the dump below reports it
+# bare, the way format_type does under the default search_path, and the
+# verify_no_drift re-plan confirms the two spellings are one routine.
+applied_sql: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text
+  );
+  CREATE OR REPLACE FUNCTION public.all_users()
+      RETURNS SETOF public.users
+      LANGUAGE sql
+      AS $$ SELECT * FROM users $$;
+applied: |
+  -- public.all_users()
+  CREATE OR REPLACE FUNCTION public.all_users()
+      RETURNS SETOF users
+      LANGUAGE sql
+      AS $$ SELECT * FROM users $$;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text
+  );
+verify_no_drift: true
