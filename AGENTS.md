@@ -14,6 +14,8 @@ Drift that appears only with a desired schema written some other way is low prio
 
 Avoid normalization that makes the diff complex.
 
+Do not emit DDL a change does not need, and never emit it implicitly. Low load on the database comes before a simple interface: a directive the user writes beats an inference.
+
 Do not chase corner cases. A rare input is not worth an implementation that is hard to follow, and the schemas people actually write come first.
 
 Do not coddle the user. Assume they know PostgreSQL and their own schema.
