@@ -48,6 +48,8 @@ pista plan  desired.sql     # ...should now print "No changes"
 pista dump                  # dump the current schema
 ```
 
+The image sets `$PISTA_MANAGE_ROUTINE`, so the functions and procedures in the demo schema are managed too.
+
 The source for the image is under [`demo/`](demo/).
 
 ## Example

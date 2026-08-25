@@ -19,11 +19,10 @@ CREATE DOMAIN email_address AS text
 -- Sequence: public-facing post reference numbers
 CREATE SEQUENCE post_ref_seq START 1000;
 
--- ---------- trigger functions ----------
---  Not managed by pistachio; created only when missing.
+-- ---------- functions and procedures ----------
+--  Managed declaratively; the demo has $PISTA_MANAGE_ROUTINE set.
 
--- pista:execute-first SELECT to_regprocedure('public.set_updated_at()') IS NULL
-CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger
+CREATE FUNCTION set_updated_at() RETURNS trigger
     LANGUAGE plpgsql AS $$
 BEGIN
     NEW.updated_at := now();
@@ -31,12 +30,28 @@ BEGIN
 END;
 $$;
 
--- pista:execute-first SELECT to_regprocedure('public.notify_comment()') IS NULL
-CREATE OR REPLACE FUNCTION notify_comment() RETURNS trigger
+CREATE FUNCTION notify_comment() RETURNS trigger
     LANGUAGE plpgsql AS $$
 BEGIN
     PERFORM pg_notify('comments', NEW.post_id::text);
     RETURN NULL;
+END;
+$$;
+
+CREATE FUNCTION slugify(t text) RETURNS text
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$ SELECT lower(replace(t, ' ', '-')) $$;
+
+COMMENT ON FUNCTION slugify(text) IS 'Tag name -> URL slug';
+
+CREATE FUNCTION post_excerpt(body text, len integer DEFAULT 100) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$ SELECT left(body, len) $$;
+
+CREATE PROCEDURE refresh_tag_usage()
+    LANGUAGE plpgsql AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW tag_usage;
 END;
 $$;
 
