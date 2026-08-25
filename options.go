@@ -73,8 +73,8 @@ func (f *FilterOptions) IsTypeEnabled(typeName string) bool {
 }
 
 // regexpPattern returns the expression inside a /.../ pattern. An unquoted
-// identifier cannot hold a slash, so the delimiters do not collide with the
-// object names people write.
+// identifier cannot hold a slash, so the delimiters do not collide with real
+// names.
 func regexpPattern(pattern string) (string, bool) {
 	if len(pattern) >= 2 && strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") {
 		return pattern[1 : len(pattern)-1], true
@@ -83,9 +83,9 @@ func regexpPattern(pattern string) (string, bool) {
 }
 
 // matchPattern reports whether name matches one --include / --exclude pattern.
-// A pattern wrapped in slashes is a regular expression, matched the way Go
-// matches one: anywhere in the name unless the expression anchors itself.
-// Anything else is a wildcard and has to match the whole name.
+// A pattern wrapped in slashes is a regular expression, which matches anywhere
+// in the name unless it is anchored. Anything else is a wildcard and has to
+// match the whole name.
 func matchPattern(pattern, name string) (bool, error) {
 	if expr, ok := regexpPattern(pattern); ok {
 		re, err := regexp.Compile(expr)
