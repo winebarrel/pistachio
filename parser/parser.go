@@ -423,7 +423,11 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				continue
 			}
 
-			warnIgnoredAlterTableCmds(sql, rawStmt, as)
+			// A table marked -- pista:ignore is out of the diff, so an
+			// action dropped from it cannot mislead the plan.
+			if !t.Ignore {
+				warnIgnoredAlterTableCmds(sql, rawStmt, as)
+			}
 
 			// RLS toggles, trigger states and constraint subcommands can
 			// coexist in one ALTER TABLE statement. Each helper picks up only

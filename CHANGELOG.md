@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Warn about an `ALTER TABLE` action or a `COMMENT ON` target the parser drops. Both have a parser case of their own, so neither reached the `ignored unsupported statement` warning: a column added by `ALTER TABLE ... ADD COLUMN` was absent from the desired schema and the plan proposed dropping it from the database, and `ALTER COLUMN ... SET DEFAULT` / `SET NOT NULL` / `TYPE` went the same way. The warning follows what the parser reads, so an action or target added later warns instead of vanishing. An `ALTER TABLE` naming a relation the file does not declare is still skipped without one.
+* Warn about an `ALTER TABLE` action or a `COMMENT ON` target the parser drops. Both have a parser case of their own, so neither reached the `ignored unsupported statement` warning: a column added by `ALTER TABLE ... ADD COLUMN` was absent from the desired schema and the plan proposed dropping it from the database, and `ALTER COLUMN ... SET DEFAULT` / `SET NOT NULL` / `TYPE` went the same way. The warning follows what the parser reads, so an action or target added later warns instead of vanishing. An `ALTER TABLE` naming a relation the file does not declare, or one marked `-- pista:ignore`, is still skipped without one.
 
 ## [1.30.0] - 2026-08-25
 

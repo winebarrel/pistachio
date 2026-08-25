@@ -315,6 +315,22 @@ func TestParseSQL_NoWarnForAlterTableOnUndeclaredRelation(t *testing.T) {
 	assert.Empty(t, buf.String())
 }
 
+// A table marked -- pista:ignore is out of the diff, so an action dropped
+// from it cannot mislead the plan and the warning would be noise.
+func TestParseSQL_NoWarnForAlterTableOnIgnoredTable(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	_, err := parseSQLWithPublicSchema(`
+		-- pista:ignore
+		CREATE TABLE public.t (id integer);
+		ALTER TABLE public.t ADD COLUMN x text;
+	`)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
 // COMMENT ON is dispatched by target. A target the parser does not model is
 // dropped, so it warns like any other unsupported statement.
 func TestParseSQL_WarnsUnsupportedCommentTarget(t *testing.T) {
