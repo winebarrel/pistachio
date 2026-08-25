@@ -174,8 +174,8 @@ sample-db-hive:
 # matrix. The awk drops them: it buffers each CREATE OR REPLACE FUNCTION
 # through the LANGUAGE line that ends it, and skips the six whose body uses the
 # operator plus the three that call the three-argument groupoverlaps, which is
-# one of the six. Nothing else is dropped, and pistachio does not manage
-# functions in any case, so what the check sees is the same schema.
+# one of the six. Nothing else is dropped, so the 94 functions that do load are
+# part of the round trip like every other object.
 .PHONY: sample-db-chado
 sample-db-chado:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS chado'

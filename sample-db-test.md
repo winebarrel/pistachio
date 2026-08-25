@@ -139,73 +139,74 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 Object counts of the loaded schemas, as of 2026-08-08 on PostgreSQL 15.18
 (16.13 for icingadb, rt, znuny, gitlab, hive, ranger, ambari, ovirt, and chado,
 the last counted 2026-08-24; the Sequences column was counted on 15.18
-throughout, and Triggers, added 2026-08-24, on 15.18 for every sample).
-"Constraints" excludes foreign keys; "Types" counts enums and domains;
-"Sequences" counts standalone sequences only, since pistachio manages the
-sequence behind a serial or identity column as an attribute of that column
-rather than as an object of its own. Counting those too would add 2,206 more,
-886 of them gitlab's and 210 chado's. "Triggers" excludes the internal triggers
-a foreign key installs and the clones PostgreSQL puts on each partition of a
-partitioned table's trigger, the same as what pistachio reads and dump writes.
-Routines have no column yet. The counts predate `--manage-routine`, though the
-round-trip check covers them. All counts are limited to the schemas the sample is
-checked with, and exclude what an extension owns: the two views
-`pg_stat_statements` adds to sourcegraph's schema are not sourcegraph's schema
-and pistachio does not read them either.
+throughout, Triggers, added 2026-08-24, and Routines, added 2026-08-25, on
+15.18 for every sample). "Constraints" excludes foreign keys; "Types" counts
+enums and domains; "Sequences" counts standalone sequences only, since
+pistachio manages the sequence behind a serial or identity column as an
+attribute of that column rather than as an object of its own. Counting those
+too would add 2,206 more, 886 of them gitlab's and 210 chado's. "Triggers"
+excludes the internal triggers a foreign key installs and the clones PostgreSQL
+puts on each partition of a partitioned table's trigger, the same as what
+pistachio reads and dump writes. "Routines" counts what `--manage-routine`
+reads, so the aggregates, window functions, and `BEGIN ATOMIC` bodies pistachio
+leaves to `-- pista:execute` are out of it. All counts are limited to the
+schemas the sample is checked with, and exclude what an extension owns: the two
+views `pg_stat_statements` adds to sourcegraph's schema are not sourcegraph's
+schema and pistachio does not read them either.
 
-| Sample | Tables | Columns | Indexes | FKs | Constraints | Views | Types | Sequences | Triggers |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| chinook | 11 | 64 | 21 | 11 | 11 | 0 | 0 | 0 | 0 |
-| dvdrental | 15 | 86 | 32 | 18 | 16 | 7 | 2 | 13 | 15 |
-| happiness_index | 1 | 9 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |
-| lego | 8 | 28 | 6 | 0 | 6 | 0 | 0 | 0 | 0 |
-| netflix | 1 | 12 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |
-| pagila | 22 | 129 | 55 | 36 | 23 | 8 | 3 | 13 | 15 |
-| periodic_table | 1 | 28 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |
-| titanic | 1 | 21 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |
-| world | 3 | 24 | 3 | 2 | 4 | 0 | 0 | 0 | 0 |
-| usda | 10 | 67 | 15 | 10 | 9 | 0 | 0 | 0 | 0 |
-| dellstore2 | 8 | 52 | 11 | 3 | 5 | 0 | 0 | 0 | 0 |
-| french_towns | 3 | 14 | 9 | 2 | 9 | 0 | 0 | 0 | 0 |
-| iso_3166 | 2 | 7 | 2 | 1 | 2 | 0 | 0 | 0 | 0 |
-| northwind | 14 | 92 | 14 | 13 | 14 | 0 | 0 | 0 | 0 |
-| employees | 6 | 24 | 9 | 6 | 6 | 0 | 1 | 0 | 0 |
-| mimiciv | 31 | 342 | 67 | 51 | 24 | 0 | 0 | 0 | 0 |
-| mediawiki | 64 | 389 | 192 | 0 | 60 | 0 | 1 | 0 | 0 |
-| synapse | 134 | 624 | 236 | 14 | 86 | 0 | 0 | 10 | 1 |
-| temporal | 37 | 217 | 44 | 0 | 40 | 0 | 0 | 0 | 0 |
-| icingadb | 66 | 634 | 179 | 7 | 74 | 0 | 13 | 0 | 0 |
-| rt | 38 | 407 | 88 | 1 | 38 | 0 | 0 | 32 | 0 |
-| sourcegraph | 180 | 1,715 | 453 | 362 | 273 | 18 | 8 | 1 | 29 |
-| imdb | 21 | 108 | 44 | 0 | 21 | 0 | 0 | 0 | 0 |
-| adventureworks | 68 | 456 | 71 | 90 | 157 | 21 | 0 | 0 | 0 |
-| clubdata | 3 | 19 | 10 | 3 | 3 | 0 | 0 | 0 | 0 |
-| demodb | 9 | 45 | 15 | 8 | 21 | 3 | 0 | 0 | 0 |
-| musicbrainz | 374 | 2,469 | 907 | 770 | 1,032 | 10 | 7 | 0 | 0 |
-| znuny | 126 | 1,103 | 326 | 286 | 190 | 0 | 0 | 0 | 0 |
-| hive | 84 | 546 | 141 | 55 | 91 | 0 | 0 | 0 | 0 |
-| ranger | 85 | 889 | 305 | 213 | 130 | 1 | 0 | 84 | 0 |
-| ambari | 113 | 693 | 172 | 124 | 140 | 0 | 0 | 0 | 0 |
-| ovirt | 152 | 1,386 | 377 | 165 | 167 | 1 | 0 | 9 | 0 |
-| gitlab | 1,422 | 14,293 | 6,353 | 2,325 | 3,949 | 15 | 0 | 8 | 388 |
-| ledgersmb | 158 | 950 | 263 | 247 | 265 | 1 | 0 | 2 | 11 |
-| koji | 68 | 415 | 150 | 183 | 159 | 0 | 0 | 0 | 0 |
-| kea | 64 | 475 | 172 | 73 | 71 | 0 | 0 | 0 | 81 |
-| dolphinscheduler | 64 | 623 | 149 | 0 | 80 | 0 | 0 | 30 | 0 |
-| camunda | 49 | 681 | 281 | 42 | 56 | 0 | 0 | 0 | 0 |
-| wso2apim | 247 | 1,495 | 421 | 168 | 353 | 0 | 0 | 104 | 1 |
-| discourse | 354 | 3,173 | 1,114 | 23 | 336 | 1 | 2 | 0 | 4 |
-| icinga_director | 121 | 872 | 381 | 171 | 236 | 0 | 21 | 0 | 0 |
-| flowable | 62 | 844 | 222 | 60 | 66 | 0 | 0 | 0 | 0 |
-| ejabberd | 42 | 258 | 78 | 5 | 15 | 0 | 0 | 0 | 0 |
-| guacamole | 23 | 104 | 61 | 30 | 29 | 0 | 5 | 0 | 0 |
-| dotcms | 167 | 1,373 | 346 | 113 | 190 | 0 | 0 | 22 | 10 |
-| osm | 57 | 391 | 155 | 71 | 55 | 0 | 8 | 0 | 0 |
-| chado | 213 | 1,017 | 837 | 472 | 399 | 1,864 | 0 | 1 | 0 |
-| **Total** | **4,802** | **39,663** | **14,791** | **6,234** | **8,915** | **1,950** | **69** | **329** | **555** |
+| Sample | Tables | Columns | Indexes | FKs | Constraints | Views | Types | Sequences | Triggers | Routines |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| chinook | 11 | 64 | 21 | 11 | 11 | 0 | 0 | 0 | 0 | 0 |
+| dvdrental | 15 | 86 | 32 | 18 | 16 | 7 | 2 | 13 | 15 | 9 |
+| happiness_index | 1 | 9 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+| lego | 8 | 28 | 6 | 0 | 6 | 0 | 0 | 0 | 0 | 0 |
+| netflix | 1 | 12 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+| pagila | 22 | 129 | 55 | 36 | 23 | 8 | 3 | 13 | 15 | 9 |
+| periodic_table | 1 | 28 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+| titanic | 1 | 21 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+| world | 3 | 24 | 3 | 2 | 4 | 0 | 0 | 0 | 0 | 0 |
+| usda | 10 | 67 | 15 | 10 | 9 | 0 | 0 | 0 | 0 | 0 |
+| dellstore2 | 8 | 52 | 11 | 3 | 5 | 0 | 0 | 0 | 0 | 1 |
+| french_towns | 3 | 14 | 9 | 2 | 9 | 0 | 0 | 0 | 0 | 0 |
+| iso_3166 | 2 | 7 | 2 | 1 | 2 | 0 | 0 | 0 | 0 | 0 |
+| northwind | 14 | 92 | 14 | 13 | 14 | 0 | 0 | 0 | 0 | 0 |
+| employees | 6 | 24 | 9 | 6 | 6 | 0 | 1 | 0 | 0 | 0 |
+| mimiciv | 31 | 342 | 67 | 51 | 24 | 0 | 0 | 0 | 0 | 0 |
+| mediawiki | 64 | 389 | 192 | 0 | 60 | 0 | 1 | 0 | 0 | 0 |
+| synapse | 134 | 624 | 236 | 14 | 86 | 0 | 0 | 10 | 1 | 1 |
+| temporal | 37 | 217 | 44 | 0 | 40 | 0 | 0 | 0 | 0 | 0 |
+| icingadb | 66 | 634 | 179 | 7 | 74 | 0 | 13 | 0 | 0 | 2 |
+| rt | 38 | 407 | 88 | 1 | 38 | 0 | 0 | 32 | 0 | 0 |
+| sourcegraph | 180 | 1,715 | 453 | 362 | 273 | 18 | 8 | 1 | 29 | 37 |
+| imdb | 21 | 108 | 44 | 0 | 21 | 0 | 0 | 0 | 0 | 0 |
+| adventureworks | 68 | 456 | 71 | 90 | 157 | 21 | 0 | 0 | 0 | 0 |
+| clubdata | 3 | 19 | 10 | 3 | 3 | 0 | 0 | 0 | 0 | 0 |
+| demodb | 9 | 45 | 15 | 8 | 21 | 3 | 0 | 0 | 0 | 0 |
+| musicbrainz | 374 | 2,469 | 907 | 770 | 1,032 | 10 | 7 | 0 | 0 | 130 |
+| znuny | 126 | 1,103 | 326 | 286 | 190 | 0 | 0 | 0 | 0 | 0 |
+| hive | 84 | 546 | 141 | 55 | 91 | 0 | 0 | 0 | 0 | 0 |
+| ranger | 85 | 889 | 305 | 213 | 130 | 1 | 0 | 84 | 0 | 2 |
+| ambari | 113 | 693 | 172 | 124 | 140 | 0 | 0 | 0 | 0 | 0 |
+| ovirt | 152 | 1,386 | 377 | 165 | 167 | 1 | 0 | 9 | 0 | 0 |
+| gitlab | 1,422 | 14,293 | 6,353 | 2,325 | 3,949 | 15 | 0 | 8 | 388 | 337 |
+| ledgersmb | 158 | 950 | 263 | 247 | 265 | 1 | 0 | 2 | 11 | 7 |
+| koji | 68 | 415 | 150 | 183 | 159 | 0 | 0 | 0 | 0 | 2 |
+| kea | 64 | 475 | 172 | 73 | 71 | 0 | 0 | 0 | 81 | 130 |
+| dolphinscheduler | 64 | 623 | 149 | 0 | 80 | 0 | 0 | 30 | 0 | 0 |
+| camunda | 49 | 681 | 281 | 42 | 56 | 0 | 0 | 0 | 0 | 0 |
+| wso2apim | 247 | 1,495 | 421 | 168 | 353 | 0 | 0 | 104 | 1 | 1 |
+| discourse | 354 | 3,173 | 1,114 | 23 | 336 | 1 | 2 | 0 | 4 | 0 |
+| icinga_director | 121 | 872 | 381 | 171 | 236 | 0 | 21 | 0 | 0 | 1 |
+| flowable | 62 | 844 | 222 | 60 | 66 | 0 | 0 | 0 | 0 | 0 |
+| ejabberd | 42 | 258 | 78 | 5 | 15 | 0 | 0 | 0 | 0 | 0 |
+| guacamole | 23 | 104 | 61 | 30 | 29 | 0 | 5 | 0 | 0 | 0 |
+| dotcms | 167 | 1,373 | 346 | 113 | 190 | 0 | 0 | 22 | 10 | 17 |
+| osm | 57 | 391 | 155 | 71 | 55 | 0 | 8 | 0 | 0 | 2 |
+| chado | 213 | 1,017 | 837 | 472 | 399 | 1,864 | 0 | 1 | 0 | 94 |
+| **Total** | **4,802** | **39,663** | **14,791** | **6,234** | **8,915** | **1,950** | **69** | **329** | **555** | **782** |
 
-The 47 dumps come to about 129,000 lines of SQL. chado is 41,400 of them, the
-longest dump of any sample, and gitlab 27,600. gitlab is still nearly half of
+The 47 dumps come to about 144,000 lines of SQL. chado is 43,700 of them, the
+longest dump of any sample, and gitlab 34,700. gitlab is still nearly half of
 the indexes and constraints, a third of the tables, and about 40 percent of the
 columns and foreign keys; musicbrainz, discourse, and wso2apim are the largest
 of what remains, and chado is nearly all of the views. gitlab is also why
@@ -257,6 +258,15 @@ partitions is attached across one; and triggers
 state; kea's 81 outnumber its 64 tables; ledgersmb's 11 and dotcms's 10 come
 next).
 
+Routines are concentrated the same way. Seventeen of the 47 samples declare one
+at all, and gitlab's 337, kea's and musicbrainz's 130 each, and chado's 94 are
+691 of the 782. Two thirds of them, 523, return `trigger`, though not every one
+of those has a trigger to call it: musicbrainz's 89 do not, since its loader
+concatenates a file list that leaves triggers out. 710 are written in plpgsql
+and 72 in sql. sourcegraph declares the only procedure any sample has. Only
+chado and kea overload a name, 11 of them and 3. Only sourcegraph, ledgersmb,
+and gitlab comment a routine, seven between them.
+
 ## Load-time adjustments
 
 Some upstream dumps cannot be piped into `psql` as they are. The loader targets
@@ -278,15 +288,15 @@ strip only what is irrelevant to a schema round trip:
   `bigserial`, so `client_min_messages` is raised to `warning` to quiet the
   implicit-sequence NOTICEs. Nine of its SQL functions are dropped, the six
   written against the `@` box operator that PostgreSQL 14 removed and the three
-  that call one of those six; they error out on every version in the CI matrix,
-  and pistachio does not manage functions in any case. The `create_point` calls
-  in the bodies of `boxrange` and `boxquery` are qualified with `chado.`,
-  because PostgreSQL 17 runs `CREATE INDEX` with `search_path` set to
-  `pg_catalog, pg_temp`: the three gist indexes over `boxrange` inline it,
-  which re-resolves an unqualified `create_point` under that `search_path` and
-  does not find it. With the calls qualified, every table, index, constraint,
-  and view loads on all four versions of the CI matrix, the three gist indexes
-  among them.
+  that call one of those six; they error out on every version in the CI matrix.
+  The 94 that load are part of the round trip like any other object. The
+  `create_point` calls in the bodies of `boxrange` and `boxquery` are qualified
+  with `chado.`, because PostgreSQL 17 runs `CREATE INDEX` with `search_path`
+  set to `pg_catalog, pg_temp`: the three gist indexes over `boxrange` inline
+  it, which re-resolves an unqualified `create_point` under that `search_path`
+  and does not find it. With the calls qualified, every table, index,
+  constraint, and view loads on all four versions of the CI matrix, the three
+  gist indexes among them.
 - **clubdata**: the dump creates its own database and reconnects to it, which
   cannot be done mid-pipe. Those two lines are dropped; the rest creates the
   `cd` schema itself.
@@ -344,8 +354,9 @@ strip only what is irrelevant to a schema round trip:
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.
 
-None of these touch table, column, index, constraint, view, or type
-definitions, so the round trip still covers the full schema.
+None of these touch table, column, index, constraint, view, type, or routine
+definitions, chado's nine unloadable functions aside, so the round trip still
+covers the full schema.
 
 ## Check-time flags
 
