@@ -373,3 +373,15 @@ func TestUnquoteIdent(t *testing.T) {
 		})
 	}
 }
+
+// A column type and a routine signature both compare through this: the catalog
+// reports a type in the search path unqualified while a desired schema may
+// write it qualified.
+func TestStripTypeSchema(t *testing.T) {
+	assert.Equal(t, "addr", StripTypeSchema("public.addr", "public"))
+	assert.Equal(t, "addr[]", StripTypeSchema("public.addr[]", "public"))
+	// A different schema prefix is left intact.
+	assert.Equal(t, "other.addr", StripTypeSchema("other.addr", "public"))
+	// An empty schema is a no-op.
+	assert.Equal(t, "addr", StripTypeSchema("addr", ""))
+}
