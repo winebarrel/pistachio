@@ -907,10 +907,11 @@ The following are not managed. Both sides of the diff leave them out, so `dump` 
 - a routine whose body is written in the SQL-standard `BEGIN ATOMIC` form. Such a body records real dependencies on the tables it reads, so it cannot be created ahead of them
 - a routine an extension owns
 - a routine carrying an option pistachio does not read, `SUPPORT` and `TRANSFORM FOR TYPE` among them
-- a routine with `SET <parameter> FROM CURRENT`, which captures the session value at creation time and so is not in the statement to compare
 - renaming, via `-- pista:renamed-from`
 
 An unmanaged routine is warned about and skipped, never an error, because the desired schema is read whether or not `--manage-routine` is set.
+
+`SET <parameter> FROM CURRENT` is handled differently. It captures the session value at creation time, so the statement carries nothing to compare, but the database reports the resolved value and the routine is read back like any other. Such a routine is treated as `-- pista:ignore`: it is neither created, altered, nor dropped, and its signature is listed under `-- ignored:`.
 
 ## Triggers
 

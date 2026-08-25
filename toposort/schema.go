@@ -497,13 +497,15 @@ func addRoutineDeps(
 		}
 		g.AddNode(node)
 
+		// No self-edge is possible: resolveTypeDep returns a key from defined,
+		// and nothing there carries the routine: prefix.
 		for _, a := range r.Args {
-			if dep := resolveTypeDep(a.Type, r.Schema, defined); dep != "" && dep != node {
+			if dep := resolveTypeDep(a.Type, r.Schema, defined); dep != "" {
 				g.AddEdge(node, dep)
 				named[node][dep] = true
 			}
 		}
-		if dep := resolveTypeDep(r.ReturnType, r.Schema, defined); dep != "" && dep != node {
+		if dep := resolveTypeDep(r.ReturnType, r.Schema, defined); dep != "" {
 			g.AddEdge(node, dep)
 			named[node][dep] = true
 		}

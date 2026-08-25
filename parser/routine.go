@@ -21,6 +21,18 @@ import (
 // asked for routines at all.
 var ErrUnsupportedRoutine = errors.New("unsupported routine")
 
+// errRoutineConfigFromCurrent marks SET x FROM CURRENT, which captures the
+// session value at creation time. The statement does not carry that value, so
+// there is nothing to compare against.
+//
+// This is not ErrUnsupportedRoutine, because the invariant that one rests on
+// does not hold here: pg_get_functiondef writes the resolved value, so the
+// catalog reads such a routine back like any other. Leaving it out of the
+// desired side alone would plan a DROP of a routine the schema file declares.
+// The routine is marked Ignore instead, which takes the key off both sides and
+// surfaces it as -- ignored:, the same as -- pista:ignore.
+var errRoutineConfigFromCurrent = errors.New("routine config from current")
+
 // Default COST and ROWS per pg_proc. pg_get_functiondef prints neither when
 // the routine carries the default, so the parser drops them as well.
 const (
@@ -240,6 +252,10 @@ func parseRoutineOptions(options []*pg_query.Node, routine *model.Routine) error
 			routine.Rows = &f
 		case "set":
 			cfg, err := parseRoutineConfig(de.Arg)
+			if errors.Is(err, errRoutineConfigFromCurrent) {
+				routine.Ignore = true
+				continue
+			}
 			if err != nil {
 				return err
 			}
@@ -277,12 +293,8 @@ func parseRoutineConfig(arg *pg_query.Node) (*model.RoutineConfig, error) {
 	if vss == nil {
 		return nil, fmt.Errorf("unexpected SET clause on routine")
 	}
-	// SET x FROM CURRENT captures the session value at creation time, which is
-	// not in the statement, so there is nothing to compare against.
-	// pg_get_functiondef always writes a concrete value, so only a desired
-	// schema can spell it this way.
 	if len(vss.Args) == 0 {
-		return nil, fmt.Errorf("%w: SET %s has no value to compare", ErrUnsupportedRoutine, vss.Name)
+		return nil, fmt.Errorf("%w: SET %s", errRoutineConfigFromCurrent, vss.Name)
 	}
 
 	cfg := &model.RoutineConfig{Name: vss.Name}

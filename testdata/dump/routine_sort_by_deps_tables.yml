@@ -1,0 +1,88 @@
+# An unrelated routine must not disturb the dependency order of everything
+# else: posts sorts after users because of the foreign key, not before it by
+# name.
+manage_routine: true
+sort_by_deps: true
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status public.status NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+  CREATE VIEW public.active_posts AS SELECT id FROM public.posts;
+  CREATE FUNCTION public.noop() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+dump: |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.noop()
+  CREATE OR REPLACE FUNCTION public.noop()
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status status NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+  -- public.active_posts
+  CREATE OR REPLACE VIEW public.active_posts AS
+  SELECT posts.id
+     FROM posts;
+dump_pg16: &dump_pg16plus |
+  -- public.status
+  CREATE TYPE public.status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.noop()
+  CREATE OR REPLACE FUNCTION public.noop()
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status status NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+  -- public.active_posts
+  CREATE OR REPLACE VIEW public.active_posts AS
+  SELECT id
+     FROM posts;
+dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus

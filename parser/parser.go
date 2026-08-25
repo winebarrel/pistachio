@@ -440,7 +440,9 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			if renameFrom != "" {
 				return nil, fmt.Errorf("pista:renamed-from is not supported for routines: %s", routine.FQRN())
 			}
-			routine.Ignore = ignore
+			// The parser sets Ignore itself for a routine it reads but cannot
+			// compare, so this must not clear it.
+			routine.Ignore = routine.Ignore || ignore
 			if err := setUnique(routines, routine.FQRN(), "routine", routine); err != nil {
 				return nil, err
 			}

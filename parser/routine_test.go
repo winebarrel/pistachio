@@ -318,8 +318,6 @@ func TestParseSQL_FunctionUnsupportedOption(t *testing.T) {
 		    LANGUAGE c TRANSFORM FOR TYPE integer AS 'obj', 'sym';`},
 		{"support", `CREATE FUNCTION public.f(a integer) RETURNS integer
 		    LANGUAGE sql SUPPORT public.f_supp AS $$ SELECT a $$;`},
-		{"set from current", `CREATE FUNCTION public.f() RETURNS text
-		    LANGUAGE sql SET search_path FROM CURRENT AS $$ SELECT 'x' $$;`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -332,6 +330,46 @@ func TestParseSQL_FunctionUnsupportedOption(t *testing.T) {
 			assert.Contains(t, buf.String(), "ignored unsupported statement:")
 		})
 	}
+}
+
+// SET x FROM CURRENT is kept and marked Ignore rather than dropped. The
+// catalog does read such a routine back, because pg_get_functiondef writes the
+// resolved value, so dropping it here alone would plan a DROP of a routine the
+// schema file declares.
+func TestParseSQL_FunctionSetFromCurrent(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	result, err := parseSQLWithPublicSchema(`CREATE FUNCTION public.f() RETURNS text
+	    LANGUAGE sql SET search_path FROM CURRENT AS $$ SELECT 'x' $$;`)
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Routines.Len())
+	r, ok := result.Routines.GetOk("public.f()")
+	require.True(t, ok)
+	assert.True(t, r.Ignore)
+	assert.Empty(t, r.Config)
+	assert.Empty(t, buf.String())
+}
+
+// An explicit -- pista:ignore must not be undone by a routine that already
+// marked itself, nor the other way round.
+func TestParseSQL_FunctionSetFromCurrentWithIgnoreDirective(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		-- pista:ignore
+		CREATE FUNCTION public.f() RETURNS text
+		    LANGUAGE sql SET search_path FROM CURRENT AS $$ SELECT 'x' $$;
+		CREATE FUNCTION public.g() RETURNS text
+		    LANGUAGE sql SET search_path FROM CURRENT AS $$ SELECT 'y' $$;
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 2, result.Routines.Len())
+	f, ok := result.Routines.GetOk("public.f()")
+	require.True(t, ok)
+	assert.True(t, f.Ignore)
+	g, ok := result.Routines.GetOk("public.g()")
+	require.True(t, ok)
+	assert.True(t, g.Ignore)
 }
 
 // The same statements must not fail a plan for someone who never opted in.

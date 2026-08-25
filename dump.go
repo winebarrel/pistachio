@@ -276,6 +276,18 @@ func (r *DumpResult) dependencyOrderedSQL() (string, bool) {
 	for i, name := range order {
 		pos[name] = i
 	}
+	// A routine's graph node is keyed by name alone under a routine: prefix,
+	// while the dump map is keyed by FQRN, so alias each FQRN onto its node's
+	// position. Without this every routine misses the lookup below and the
+	// whole dump degrades to the name order. An FQRN always carries its
+	// parentheses, so it cannot collide with another kind of key. Overloads
+	// share a node and so share a position; the stable sort keeps their map
+	// order.
+	for k, rt := range orEmpty(r.Routines).All() {
+		if p, ok := pos[toposort.RoutineNode(model.Ident(rt.Schema, rt.Name))]; ok {
+			pos[k] = p
+		}
+	}
 
 	var items []dumpItem
 	var ok bool
