@@ -563,7 +563,7 @@ func foldNotDistinct(node *pg_query.Node) *pg_query.Node {
 //
 // Only a bare NULL literal is rewritten, which is what PostgreSQL does with
 // one. A cast literal is left alone, and so is a row value, which the catalog
-// hands back as the operator whichever test it stored; see isRowOperand.
+// keeps apart from the test; see isRowOperand.
 func nullTestFromDistinct(node *pg_query.Node) *pg_query.Node {
 	ae := node.GetAExpr()
 	if ae == nil {
@@ -633,12 +633,13 @@ func isNullConst(node *pg_query.Node) bool {
 // row constructor, or the whole-row reference a table name written as tbl.*
 // produces.
 //
-// PostgreSQL rewrites a row value like any other operand: the test it stores
-// is the scalar one, whatever the argument's type. The type check lives in the
-// deparse, which prints IS NULL for a row test or a scalar argument and the
-// operator otherwise, to keep the scalar meaning. A row-typed argument
-// therefore comes back as the operator either way, which is what skipping it
-// here matches.
+// PostgreSQL rewrites the operator on a row value like on any other operand:
+// what it stores is the scalar test, whatever the argument's type. The type
+// check lives in the deparse, which prints IS NULL for a row test or a scalar
+// argument and the operator otherwise, to keep the scalar meaning. So the
+// catalog keeps the two spellings apart on a row-typed argument, a rewritten
+// operator printing as the operator and a written row test as IS NULL, and
+// folding them together here would invent an equality it never shows.
 //
 // A column whose type is composite is a plain ColumnRef, so it does not count
 // and the rewrite fires on it. Both sides normalize alike, so nothing drifts;

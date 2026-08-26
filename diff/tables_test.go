@@ -2051,8 +2051,8 @@ func TestEqualConstraintDef_distinctFromNullBothSidesKept(t *testing.T) {
 }
 
 func TestEqualConstraintDef_distinctFromNullRowKept(t *testing.T) {
-	// The catalog hands a row-typed argument back as the operator whichever
-	// test it stored, so the two forms must not compare equal.
+	// The catalog keeps the two spellings apart on a row-typed argument, so
+	// they must not compare equal.
 	assert.False(t, equalConstraintDef(
 		"CHECK ((ROW(a, b) IS NOT DISTINCT FROM NULL))",
 		"CHECK (ROW(a, b) IS NULL)",
