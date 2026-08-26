@@ -1,0 +1,32 @@
+# A CHECK and a partial index written against a bare NULL literal are stored
+# as an IS NULL test, so without the same rewrite every run re-adds the
+# constraint (revalidating the whole table) and rebuilds the index.
+init: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      handed_over_at timestamp,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_pending_check CHECK (handed_over_at IS NOT DISTINCT FROM NULL)
+  );
+  CREATE INDEX shipments_carrier_idx ON public.shipments USING btree (id) WHERE (carrier IS DISTINCT FROM NULL);
+desired: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      handed_over_at timestamp,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_pending_check CHECK (handed_over_at IS NOT DISTINCT FROM NULL)
+  );
+  CREATE INDEX shipments_carrier_idx ON public.shipments USING btree (id) WHERE (carrier IS DISTINCT FROM NULL);
+applied: |
+  -- public.shipments
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      handed_over_at timestamp without time zone,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_pending_check CHECK (handed_over_at IS NULL)
+  );
+  CREATE INDEX shipments_carrier_idx ON public.shipments USING btree (id) WHERE (carrier IS NOT NULL);
+applied_sql: ""

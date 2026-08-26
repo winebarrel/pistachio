@@ -1,0 +1,44 @@
+# The rewrite lands on every expression the catalog stores, not on one node
+# kind, so it sits in the shared expression normalization: a domain CHECK, a
+# view body, a policy USING and WITH CHECK, a trigger WHEN clause and a
+# generated column all write the operator and read back an IS NULL test. The
+# view holds one in its target list, where a cast is left alone but this is
+# not.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE DOMAIN public.grade AS integer CHECK (VALUE IS DISTINCT FROM NULL);
+  CREATE TABLE public.tickets (
+      id bigint NOT NULL,
+      assignee text,
+      closed_at timestamp,
+      open boolean GENERATED ALWAYS AS (closed_at IS NOT DISTINCT FROM NULL) STORED,
+      CONSTRAINT tickets_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.unassigned AS
+      SELECT id, (closed_at IS NOT DISTINCT FROM NULL) AS still_open
+      FROM public.tickets WHERE assignee IS NOT DISTINCT FROM NULL;
+  ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY assigned_tickets ON public.tickets USING (assignee IS DISTINCT FROM NULL);
+  CREATE POLICY assigned_inserts ON public.tickets FOR INSERT WITH CHECK (assignee IS DISTINCT FROM NULL);
+  CREATE TRIGGER tickets_audit AFTER UPDATE OF assignee ON public.tickets
+      FOR EACH ROW WHEN (old.assignee IS NOT DISTINCT FROM NULL) EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE DOMAIN public.grade AS integer CHECK (VALUE IS DISTINCT FROM NULL);
+  CREATE TABLE public.tickets (
+      id bigint NOT NULL,
+      assignee text,
+      closed_at timestamp,
+      open boolean GENERATED ALWAYS AS (closed_at IS NOT DISTINCT FROM NULL) STORED,
+      CONSTRAINT tickets_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.unassigned AS
+      SELECT id, (closed_at IS NOT DISTINCT FROM NULL) AS still_open
+      FROM public.tickets WHERE assignee IS NOT DISTINCT FROM NULL;
+  ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY assigned_tickets ON public.tickets USING (assignee IS DISTINCT FROM NULL);
+  CREATE POLICY assigned_inserts ON public.tickets FOR INSERT WITH CHECK (assignee IS DISTINCT FROM NULL);
+  -- The catalog reports the trigger with the function unqualified, since
+  -- search_path reaches public, so the desired side writes it that way.
+  CREATE TRIGGER tickets_audit AFTER UPDATE OF assignee ON public.tickets
+      FOR EACH ROW WHEN (old.assignee IS NOT DISTINCT FROM NULL) EXECUTE FUNCTION stamp();
+plan: ""
