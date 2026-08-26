@@ -1280,6 +1280,12 @@ func TestEqualDefault(t *testing.T) {
 	assert.False(t, equalDefault(new("0"), new("1")))
 }
 
+func TestEqualDefault_distinctFromNull(t *testing.T) {
+	// A DEFAULT is stored through the same rewrite. It cannot name a column,
+	// so both operands are constants.
+	assert.True(t, equalDefault(new("('x' IS NOT NULL)"), new("('x' IS DISTINCT FROM NULL)")))
+}
+
 func TestEqualDefault_currentTimeCastStripped(t *testing.T) {
 	// pg_get_expr emits `'00:00:00'::time without time zone` on a time column
 	// DEFAULT; user typically writes the bare literal.
@@ -1962,6 +1968,98 @@ func TestEqualConstraintDef_notOverOtherOperatorKept(t *testing.T) {
 	assert.False(t, equalConstraintDef(
 		"CHECK ((NOT (a = b)))",
 		"CHECK (a = b)",
+	))
+}
+
+func TestEqualConstraintDef_distinctFromNull(t *testing.T) {
+	// Parse analysis rewrites the operator against a bare NULL literal into
+	// an IS NULL test, so pg_get_constraintdef hands back the test whichever
+	// way the definition was written. The literal is rewritten on either
+	// side of the operator.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((a IS NULL))",
+		"CHECK (a IS NOT DISTINCT FROM NULL)",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((a IS NOT NULL))",
+		"CHECK (a IS DISTINCT FROM NULL)",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((a IS NULL))",
+		"CHECK (NULL IS NOT DISTINCT FROM a)",
+	))
+}
+
+func TestEqualConstraintDef_distinctFromNullOppositeTestKept(t *testing.T) {
+	// The rewrite must not swallow the opposite test.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((a IS NOT NULL))",
+		"CHECK (a IS NOT DISTINCT FROM NULL)",
+	))
+}
+
+func TestEqualConstraintDef_distinctFromTypedNullKept(t *testing.T) {
+	// PostgreSQL rewrites a bare NULL literal only, so a cast one stays an
+	// operator on both sides and folds the way any other operand does.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((NOT (a IS DISTINCT FROM NULL::integer)))",
+		"CHECK (a IS NOT DISTINCT FROM NULL::integer)",
+	))
+	assert.False(t, equalConstraintDef(
+		"CHECK ((a IS NULL))",
+		"CHECK (a IS NOT DISTINCT FROM NULL::integer)",
+	))
+	// A text-like cast is stripped on both sides first, so the stored
+	// negation reaches the rewrite as the operator.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((NOT (a IS DISTINCT FROM NULL::text)))",
+		"CHECK (a IS NULL)",
+	))
+}
+
+func TestEqualConstraintDef_notOverNullTest(t *testing.T) {
+	// PostgreSQL rewrites the comparison inside a negation the definition
+	// wrote and keeps the negation, so the two sides can differ by a NOT.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((NOT (a IS NOT NULL)))",
+		"CHECK (NOT (a IS DISTINCT FROM NULL))",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((NOT (a IS NULL)))",
+		"CHECK (NOT (a IS NOT DISTINCT FROM NULL))",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((NOT (a IS NOT NULL)))",
+		"CHECK (a IS NULL)",
+	))
+	// A row value is left alone, since neither test is the other's negation
+	// there.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((NOT (ROW(a, b) IS NOT NULL)))",
+		"CHECK (ROW(a, b) IS NULL)",
+	))
+}
+
+func TestEqualConstraintDef_distinctFromNullBothSidesKept(t *testing.T) {
+	// Nothing is left to test when both operands are the literal, so it is
+	// left as written. PostgreSQL stores that one as a test on a cast
+	// literal, which the operator does not compare equal to.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((NULL::unknown IS NULL))",
+		"CHECK (NULL IS NOT DISTINCT FROM NULL)",
+	))
+}
+
+func TestEqualConstraintDef_distinctFromNullRowKept(t *testing.T) {
+	// The catalog keeps the two spellings apart on a row-typed argument, so
+	// they must not compare equal.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((ROW(a, b) IS NOT DISTINCT FROM NULL))",
+		"CHECK (ROW(a, b) IS NULL)",
+	))
+	assert.False(t, equalConstraintDef(
+		"CHECK ((t.* IS NOT DISTINCT FROM NULL))",
+		"CHECK (t.* IS NULL)",
 	))
 }
 

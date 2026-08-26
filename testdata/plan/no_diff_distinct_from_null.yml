@@ -1,0 +1,34 @@
+# Parse analysis rewrites a comparison against a bare NULL literal into an
+# IS NULL test, so the catalog hands back the test where the desired side keeps
+# the operator. Without the same rewrite the CHECKs are dropped and re-added on
+# every run, which revalidates every row, and both indexes are rebuilt. The
+# literal sits on either side of the operator here, since which side holds it
+# does not matter. A cast literal and a written NOT are stored as the negation
+# of the opposite test, which the same normalization has to reach.
+init: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      handed_over_at timestamp,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_pending_check CHECK (handed_over_at IS NOT DISTINCT FROM NULL),
+      CONSTRAINT shipments_carrier_check CHECK (NULL IS DISTINCT FROM carrier),
+      CONSTRAINT shipments_cast_check CHECK (carrier IS NOT DISTINCT FROM NULL::text),
+      CONSTRAINT shipments_not_check CHECK (NOT (handed_over_at IS DISTINCT FROM NULL))
+  );
+  CREATE INDEX shipments_pending_idx ON public.shipments USING btree (id) WHERE (handed_over_at IS NOT DISTINCT FROM NULL);
+  CREATE INDEX shipments_carrier_expr_idx ON public.shipments USING btree (((carrier IS DISTINCT FROM NULL)));
+desired: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      handed_over_at timestamp,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_pending_check CHECK (handed_over_at IS NOT DISTINCT FROM NULL),
+      CONSTRAINT shipments_carrier_check CHECK (NULL IS DISTINCT FROM carrier),
+      CONSTRAINT shipments_cast_check CHECK (carrier IS NOT DISTINCT FROM NULL::text),
+      CONSTRAINT shipments_not_check CHECK (NOT (handed_over_at IS DISTINCT FROM NULL))
+  );
+  CREATE INDEX shipments_pending_idx ON public.shipments USING btree (id) WHERE (handed_over_at IS NOT DISTINCT FROM NULL);
+  CREATE INDEX shipments_carrier_expr_idx ON public.shipments USING btree (((carrier IS DISTINCT FROM NULL)));
+plan: ""

@@ -1,0 +1,20 @@
+# The rewrite must not swallow a genuine change: an IS NULL test and the
+# operator against NULL land on the same shape, so the opposite test has to
+# stay different and re-create the CHECK.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      taken_at timestamp,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_taken_check CHECK (taken_at IS NOT NULL)
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      taken_at timestamp,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_taken_check CHECK (taken_at IS NOT DISTINCT FROM NULL)
+  );
+plan: |
+  ALTER TABLE public.readings DROP CONSTRAINT readings_taken_check;
+  ALTER TABLE public.readings ADD CONSTRAINT readings_taken_check CHECK (taken_at IS NOT DISTINCT FROM NULL);

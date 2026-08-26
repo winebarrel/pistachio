@@ -483,8 +483,10 @@ func isSerialType(typeName string) bool {
 //   - Folds NOT (a IS DISTINCT FROM b) into a IS NOT DISTINCT FROM b, the shape
 //     PostgreSQL rewrites the written operator into when it stores an
 //     expression.
+//   - Turns those operators against a bare NULL literal into the IS NULL test
+//     parse analysis rewrites them to, and inverts such a test under a NOT.
 //
-// All three are symmetric: they apply to the catalog side and the written side
+// All four are symmetric: they apply to the catalog side and the written side
 // alike. The walk reaches every node kind, so a sub-query inside an RLS policy
 // or a view body, and an expression inside a SQL/JSON constructor, get the
 // same treatment as a top-level operand.
@@ -515,6 +517,12 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 	if folded := foldNotDistinct(node); folded != nil {
 		return folded
 	}
+	if test := nullTestFromDistinct(node); test != nil {
+		return test
+	}
+	if folded := foldNotNullTest(node); folded != nil {
+		return folded
+	}
 	return node
 }
 
@@ -541,6 +549,112 @@ func foldNotDistinct(node *pg_query.Node) *pg_query.Node {
 	}
 	inner.Kind = pg_query.A_Expr_Kind_AEXPR_NOT_DISTINCT
 	return be.Args[0]
+}
+
+// nullTestFromDistinct turns a IS NOT DISTINCT FROM NULL into a IS NULL and
+// a IS DISTINCT FROM NULL into a IS NOT NULL, and returns nil for anything
+// else.
+//
+// Parse analysis rewrites the comparison before the expression is stored, so
+// pg_get_constraintdef and pg_get_expr hand back the test whichever way the
+// definition was written. The fold above cannot reach it: the stored form is
+// another node, not a negation. A negation the definition wrote around the
+// test is left to foldNotNullTest below.
+//
+// Only a bare NULL literal is rewritten, which is what PostgreSQL does with
+// one. A cast literal is left alone, and so is a row value, which the catalog
+// keeps apart from the test; see isRowOperand.
+func nullTestFromDistinct(node *pg_query.Node) *pg_query.Node {
+	ae := node.GetAExpr()
+	if ae == nil {
+		return nil
+	}
+	var testType pg_query.NullTestType
+	switch ae.Kind {
+	case pg_query.A_Expr_Kind_AEXPR_NOT_DISTINCT:
+		testType = pg_query.NullTestType_IS_NULL
+	case pg_query.A_Expr_Kind_AEXPR_DISTINCT:
+		testType = pg_query.NullTestType_IS_NOT_NULL
+	default:
+		return nil
+	}
+	arg := ae.Lexpr
+	if isNullConst(arg) {
+		arg = ae.Rexpr
+	} else if !isNullConst(ae.Rexpr) {
+		return nil
+	}
+	if isNullConst(arg) || isRowOperand(arg) {
+		return nil
+	}
+	return &pg_query.Node{
+		Node: &pg_query.Node_NullTest{
+			NullTest: &pg_query.NullTest{Arg: arg, Nulltesttype: testType},
+		},
+	}
+}
+
+// foldNotNullTest turns NOT (a IS NOT NULL) into a IS NULL and NOT (a IS NULL)
+// into a IS NOT NULL, and returns nil for anything else.
+//
+// The two sides can differ by a NOT wrapper. PostgreSQL rewrites the
+// comparison inside a negation the definition wrote and keeps the negation, so
+// NOT (a IS DISTINCT FROM NULL) is stored as NOT (a IS NOT NULL). A cast
+// literal is stored that way too, and the cast strip above then leaves the
+// wrapper behind, while the same definition written without the cast folds
+// straight to a IS NULL. Inverting the test lands both sides on one shape.
+//
+// A row value is left alone: IS NULL on a row asks whether every field is null
+// and IS NOT NULL whether none is, so neither is the other's negation.
+func foldNotNullTest(node *pg_query.Node) *pg_query.Node {
+	be := node.GetBoolExpr()
+	if be == nil || be.Boolop != pg_query.BoolExprType_NOT_EXPR || len(be.Args) != 1 {
+		return nil
+	}
+	nt := be.Args[0].GetNullTest()
+	if nt == nil || isRowOperand(nt.Arg) {
+		return nil
+	}
+	if nt.Nulltesttype == pg_query.NullTestType_IS_NULL {
+		nt.Nulltesttype = pg_query.NullTestType_IS_NOT_NULL
+	} else {
+		nt.Nulltesttype = pg_query.NullTestType_IS_NULL
+	}
+	return be.Args[0]
+}
+
+// isNullConst reports whether the node is a bare NULL literal.
+func isNullConst(node *pg_query.Node) bool {
+	c := node.GetAConst()
+	return c != nil && c.Isnull
+}
+
+// isRowOperand reports whether the node is a row value the parse tree shows: a
+// row constructor, or the whole-row reference a table name written as tbl.*
+// produces.
+//
+// PostgreSQL rewrites the operator on a row value like on any other operand:
+// what it stores is the scalar test, whatever the argument's type. The type
+// check lives in the deparse, which prints IS NULL for a row test or a scalar
+// argument and the operator otherwise, to keep the scalar meaning. So the
+// catalog keeps the two spellings apart on a row-typed argument, a rewritten
+// operator printing as the operator and a written row test as IS NULL, and
+// folding them together here would invent an equality it never shows.
+//
+// A column whose type is composite is a plain ColumnRef, so it does not count
+// and the rewrite fires on it. Both sides normalize alike, so nothing drifts;
+// the cost is that p IS NULL and p IS NOT DISTINCT FROM NULL compare equal on
+// such a column, and a change between the two is dropped from the plan.
+func isRowOperand(node *pg_query.Node) bool {
+	if node.GetRowExpr() != nil {
+		return true
+	}
+	for _, f := range node.GetColumnRef().GetFields() {
+		if f.GetAStar() != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // isTextLikeTypeName returns true if the TypeName refers to a text-like type

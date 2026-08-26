@@ -583,38 +583,6 @@ Workaround: write the call unqualified.
 
 Origin: found while adding `-- pista:execute-first`, 2026-07-31.
 
-## Perpetual drift on the DISTINCT operators against NULL
-
-Priority: low.
-
-A comparison written against a NULL literal, as
-`CHECK (a IS NOT DISTINCT FROM NULL)`, is re-emitted on every plan. Applying
-it succeeds and changes nothing, so `plan --check` stays at exit code 2
-forever. Parse analysis rewrites the comparison to `a IS NULL` before it is
-stored, so `pg_get_constraintdef` and `pg_get_expr` hand back a `NullTest`
-while the desired side keeps what the user wrote. `IS DISTINCT FROM NULL`
-against `IS NOT NULL` goes the same way.
-
-The rewrite happens in parse analysis, so it lands on every expression the
-catalog stores rather than on one node kind: a CHECK, an index predicate and
-a view body written that way all come back as `IS NULL`. A column DEFAULT
-does too, though a DEFAULT cannot reference a column, so both operands there
-are constants.
-
-`foldNotDistinct` (`diff/tables.go`) folds
-`NOT (a IS DISTINCT FROM b)` into `a IS NOT DISTINCT FROM b`, which is the
-shape the catalog stores for every other operand, but a `NullTest` carries no
-negation to fold and is a different node. pg_query_go stops at the raw
-parser, so the desired side never reaches the rewrite on its own. Matching it
-means rewriting an `A_Expr` of kind `AEXPR_NOT_DISTINCT` whose operand is a
-NULL `A_Const` into a `NullTest` on the desired side, and `AEXPR_DISTINCT`
-into its negation.
-
-`dump` writes `IS NULL`, so a schema kept through `pista dump` never hits
-this.
-
-Workaround: write `IS NULL` / `IS NOT NULL`.
-
 ## Perpetual drift on a serial column written as an explicit default
 
 Priority: low.
