@@ -1,0 +1,22 @@
+# PostgreSQL rewrites the operator but does not collapse the resulting double
+# negation: `NOT (a IS NOT DISTINCT FROM b)` is stored as
+# `NOT (NOT (a IS DISTINCT FROM b))`. Folding only the inner
+# `NOT (... IS DISTINCT FROM ...)` therefore lands both sides on the same
+# shape, with no double-negation elimination.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      prev_value integer,
+      curr_value integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_changed_check CHECK (NOT (prev_value IS NOT DISTINCT FROM curr_value))
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      prev_value integer,
+      curr_value integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_changed_check CHECK (NOT (prev_value IS NOT DISTINCT FROM curr_value))
+  );
+plan: ""

@@ -480,8 +480,11 @@ func isSerialType(typeName string) bool {
 //     adds to anything string-typed and a written definition practically never
 //     carries.
 //   - Converts = ANY(ARRAY[...]) to IN (...) (PostgreSQL internal representation).
+//   - Folds NOT (a IS DISTINCT FROM b) into a IS NOT DISTINCT FROM b, the shape
+//     PostgreSQL rewrites the written operator into when it stores an
+//     expression.
 //
-// Both are symmetric: they apply to the catalog side and the written side
+// All three are symmetric: they apply to the catalog side and the written side
 // alike. The walk reaches every node kind, so a sub-query inside an RLS policy
 // or a view body, and an expression inside a SQL/JSON constructor, get the
 // same treatment as a top-level operand.
@@ -509,7 +512,35 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 			}
 		}
 	}
+	if folded := foldNotDistinct(node); folded != nil {
+		return folded
+	}
 	return node
+}
+
+// foldNotDistinct turns NOT (a IS DISTINCT FROM b) into the equivalent
+// a IS NOT DISTINCT FROM b, and returns nil for anything else.
+//
+// PostgreSQL stores the written IS NOT DISTINCT FROM as that negation, so
+// pg_get_constraintdef and pg_get_expr hand back the NOT form either way.
+// Folding towards the operator keeps the generated DDL in the spelling the
+// author used.
+//
+// PostgreSQL does not collapse the double negation a written NOT (a IS NOT
+// DISTINCT FROM b) leaves behind, and neither does this: the walk visits
+// children first, so only the inner negation folds, which is what the written
+// form parses to anyway.
+func foldNotDistinct(node *pg_query.Node) *pg_query.Node {
+	be := node.GetBoolExpr()
+	if be == nil || be.Boolop != pg_query.BoolExprType_NOT_EXPR || len(be.Args) != 1 {
+		return nil
+	}
+	inner := be.Args[0].GetAExpr()
+	if inner == nil || inner.Kind != pg_query.A_Expr_Kind_AEXPR_DISTINCT {
+		return nil
+	}
+	inner.Kind = pg_query.A_Expr_Kind_AEXPR_NOT_DISTINCT
+	return be.Args[0]
 }
 
 // isTextLikeTypeName returns true if the TypeName refers to a text-like type

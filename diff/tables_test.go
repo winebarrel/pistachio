@@ -1926,6 +1926,58 @@ func TestEqualConstraintDef_castFormattingDiff(t *testing.T) {
 	))
 }
 
+func TestEqualConstraintDef_notDistinctFrom(t *testing.T) {
+	// pg_get_constraintdef returns the operator as the negation of
+	// IS DISTINCT FROM, whichever way the definition was written.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((NOT (a IS DISTINCT FROM b)))",
+		"CHECK (a IS NOT DISTINCT FROM b)",
+	))
+}
+
+func TestEqualConstraintDef_notDistinctFromDoubleNegation(t *testing.T) {
+	// The negation PostgreSQL leaves in place stays on both sides, so only
+	// the inner one folds.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((NOT (NOT (a IS DISTINCT FROM b))))",
+		"CHECK (NOT (a IS NOT DISTINCT FROM b))",
+	))
+}
+
+func TestEqualConstraintDef_distinctFromNotFolded(t *testing.T) {
+	// The fold is one-way: IS DISTINCT FROM is stored as written and must
+	// not compare equal to its negation.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((a IS DISTINCT FROM b))",
+		"CHECK (a IS NOT DISTINCT FROM b)",
+	))
+}
+
+func TestEqualConstraintDef_notOverOtherOperatorKept(t *testing.T) {
+	// Only IS DISTINCT FROM folds; NOT over anything else is left alone.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((NOT (a = b)))",
+		"CHECK (NOT (a = b))",
+	))
+	assert.False(t, equalConstraintDef(
+		"CHECK ((NOT (a = b)))",
+		"CHECK (a = b)",
+	))
+}
+
+func TestEqualConstraintDef_notOverBoolOperatorKept(t *testing.T) {
+	// NOT binds tighter than AND, so a fold that dropped the negation's
+	// parentheses would turn this into the different `NOT a AND b`.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((NOT (a AND b)))",
+		"CHECK (NOT (a AND b))",
+	))
+	assert.False(t, equalConstraintDef(
+		"CHECK ((NOT (a AND b)))",
+		"CHECK ((NOT a) AND b)",
+	))
+}
+
 func TestEqualConstraintDef_different(t *testing.T) {
 	assert.False(t, equalConstraintDef(
 		"CHECK (age > 0)",

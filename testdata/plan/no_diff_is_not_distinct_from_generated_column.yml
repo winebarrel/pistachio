@@ -1,0 +1,18 @@
+# A generated column is the one place the unfolded operator did not drift but
+# failed the run: PostgreSQL has no way to alter a generated expression in
+# place, so the diff rejects the change it thought it saw.
+init: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      in_house boolean GENERATED ALWAYS AS (carrier IS NOT DISTINCT FROM 'own_fleet') STORED,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      in_house boolean GENERATED ALWAYS AS (carrier IS NOT DISTINCT FROM 'own_fleet') STORED,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id)
+  );
+plan: ""
