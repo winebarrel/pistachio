@@ -1,0 +1,29 @@
+# PostgreSQL stores `a IS NOT DISTINCT FROM b` as `NOT (a IS DISTINCT FROM b)`,
+# so a desired schema that writes the operator has to fold into the same shape
+# as the catalog side. Without the fold the table and domain CHECKs are dropped
+# and re-added on every run, which revalidates every row, and both indexes are
+# rebuilt. An index carries an expression in its elements and in its WHERE
+# clause, so there is one of each here.
+init: |
+  CREATE DOMAIN public.grade AS integer CHECK (VALUE IS NOT DISTINCT FROM 3);
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      handed_over_at timestamp,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_carrier_check CHECK (carrier IS NOT DISTINCT FROM 'own_fleet')
+  );
+  CREATE INDEX shipments_in_house_idx ON public.shipments USING btree (id) WHERE (carrier IS NOT DISTINCT FROM 'own_fleet');
+  CREATE INDEX shipments_carrier_expr_idx ON public.shipments USING btree (((carrier IS NOT DISTINCT FROM 'own_fleet')));
+desired: |
+  CREATE DOMAIN public.grade AS integer CHECK (VALUE IS NOT DISTINCT FROM 3);
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      handed_over_at timestamp,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_carrier_check CHECK (carrier IS NOT DISTINCT FROM 'own_fleet')
+  );
+  CREATE INDEX shipments_in_house_idx ON public.shipments USING btree (id) WHERE (carrier IS NOT DISTINCT FROM 'own_fleet');
+  CREATE INDEX shipments_carrier_expr_idx ON public.shipments USING btree (((carrier IS NOT DISTINCT FROM 'own_fleet')));
+plan: ""

@@ -1,0 +1,36 @@
+# The fold that makes `a IS NOT DISTINCT FROM b` compare equal to the stored
+# `NOT (a IS DISTINCT FROM b)` sits in the shared expression normalization, so
+# a view body, a policy USING and WITH CHECK, and a trigger WHEN clause get it
+# too.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.tickets (
+      id bigint NOT NULL,
+      assignee text,
+      closer text,
+      CONSTRAINT tickets_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.self_closed AS
+      SELECT id FROM public.tickets WHERE assignee IS NOT DISTINCT FROM closer;
+  ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY own_tickets ON public.tickets USING (assignee IS NOT DISTINCT FROM current_user);
+  CREATE POLICY own_inserts ON public.tickets FOR INSERT WITH CHECK (assignee IS NOT DISTINCT FROM current_user);
+  CREATE TRIGGER tickets_audit AFTER UPDATE OF assignee ON public.tickets
+      FOR EACH ROW WHEN (old.assignee IS NOT DISTINCT FROM new.assignee) EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.tickets (
+      id bigint NOT NULL,
+      assignee text,
+      closer text,
+      CONSTRAINT tickets_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.self_closed AS
+      SELECT id FROM public.tickets WHERE assignee IS NOT DISTINCT FROM closer;
+  ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY own_tickets ON public.tickets USING (assignee IS NOT DISTINCT FROM current_user);
+  CREATE POLICY own_inserts ON public.tickets FOR INSERT WITH CHECK (assignee IS NOT DISTINCT FROM current_user);
+  -- The catalog reports the trigger with the function unqualified, since
+  -- search_path reaches public, so the desired side writes it that way.
+  CREATE TRIGGER tickets_audit AFTER UPDATE OF assignee ON public.tickets
+      FOR EACH ROW WHEN (old.assignee IS NOT DISTINCT FROM new.assignee) EXECUTE FUNCTION stamp();
+plan: ""

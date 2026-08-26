@@ -1,0 +1,20 @@
+# The other direction: `dump` writes what the catalog stores, so a desired
+# schema written that way must keep planning clean now that the fold runs on
+# the desired side too.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier IS NOT DISTINCT FROM 'own_fleet')
+  );
+  CREATE INDEX parcels_in_house_idx ON public.parcels USING btree (id) WHERE (carrier IS NOT DISTINCT FROM 'own_fleet');
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (NOT carrier IS DISTINCT FROM 'own_fleet'::text)
+  );
+  CREATE INDEX parcels_in_house_idx ON public.parcels USING btree (id) WHERE (NOT (carrier IS DISTINCT FROM 'own_fleet'::text));
+plan: ""

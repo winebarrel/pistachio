@@ -1,0 +1,29 @@
+# A CHECK and a partial index written with `IS NOT DISTINCT FROM` are stored as
+# `NOT (... IS DISTINCT FROM ...)`, so without the fold every run re-adds the
+# constraint (revalidating the whole table) and rebuilds the index.
+init: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_carrier_check CHECK (carrier IS NOT DISTINCT FROM 'own_fleet')
+  );
+  CREATE INDEX shipments_in_house_idx ON public.shipments USING btree (id) WHERE (carrier IS NOT DISTINCT FROM 'own_fleet');
+desired: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_carrier_check CHECK (carrier IS NOT DISTINCT FROM 'own_fleet')
+  );
+  CREATE INDEX shipments_in_house_idx ON public.shipments USING btree (id) WHERE (carrier IS NOT DISTINCT FROM 'own_fleet');
+applied: |
+  -- public.shipments
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id),
+      CONSTRAINT shipments_carrier_check CHECK (NOT carrier IS DISTINCT FROM 'own_fleet'::text)
+  );
+  CREATE INDEX shipments_in_house_idx ON public.shipments USING btree (id) WHERE (NOT (carrier IS DISTINCT FROM 'own_fleet'::text));
+applied_sql: ""

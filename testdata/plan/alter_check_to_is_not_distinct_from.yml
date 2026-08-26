@@ -1,0 +1,21 @@
+# The fold must not swallow a genuine change: turning `IS DISTINCT FROM` into
+# `IS NOT DISTINCT FROM` inverts the predicate, so the CHECK is re-created.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      prev_value integer,
+      curr_value integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_changed_check CHECK (prev_value IS DISTINCT FROM curr_value)
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      prev_value integer,
+      curr_value integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_changed_check CHECK (prev_value IS NOT DISTINCT FROM curr_value)
+  );
+plan: |
+  ALTER TABLE public.readings DROP CONSTRAINT readings_changed_check;
+  ALTER TABLE public.readings ADD CONSTRAINT readings_changed_check CHECK (prev_value IS NOT DISTINCT FROM curr_value);

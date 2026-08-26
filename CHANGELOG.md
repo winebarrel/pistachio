@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Stop `IS NOT DISTINCT FROM` from drifting. PostgreSQL stores the operator as the negation of `IS DISTINCT FROM`, so a desired schema that wrote it never matched the catalog: a `CHECK` was dropped and re-added on every run, which revalidates the whole table, and an index using it was rebuilt. The fold sits in the shared expression normalization, so a view body, a policy `USING` / `WITH CHECK`, a trigger `WHEN` clause and a domain `CHECK` get it too. A generated column did not drift but failed the run, since a generated expression cannot be altered in place.
+
 ## [1.31.0] - 2026-08-25
 
 * Accept a regular expression in `--include` / `--exclude`. A pattern wrapped in slashes is one, so `-E '/^posts_\d+$/'` reaches a numbered partition set that a wildcard cannot; anything else stays a wildcard, and the two forms mix in one invocation. A regular expression matches anywhere in the name unless it is anchored; a wildcard still has to match the whole name. An invalid expression is rejected before the database is read. The flags did not change, so `$PISTA_INCLUDE` / `$PISTA_EXCLUDE` and the config file carry both forms.
