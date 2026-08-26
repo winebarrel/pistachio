@@ -1,0 +1,16 @@
+# A new table takes the settings after the CREATE, the way `dump` writes them.
+init: ""
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text STORAGE main COMPRESSION pglz,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+plan: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;

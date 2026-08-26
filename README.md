@@ -105,7 +105,7 @@ pista apply ./schema/*.sql         # apply it
 - Tables (including unlogged and partitioned tables)
 - Views
 - Materialized views
-- Columns (serial/bigserial/smallserial, identity, generated)
+- Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression)
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types, domains, composite types, composite attributes, sequences)
@@ -116,7 +116,7 @@ pista apply ./schema/*.sql         # apply it
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 
-pistachio parses only the statements above. It drops any other statement in a schema file, such as `SET`, `GRANT`, or `CREATE EXTENSION`, and prints a `pistachio: ignored unsupported statement:` warning to standard error for each one. The same warning covers the parts it does not read of a statement it does parse, such as the `ALTER TABLE ... ADD COLUMN` and `ALTER COLUMN ... SET DEFAULT` a `pg_dump` file carries, or `COMMENT ON INDEX`. To keep an unsupported statement in the file and run it during `apply`, mark it with `-- pista:execute`, which also silences the warning. A `BEGIN` or `COMMIT` warning points at `--with-tx` and `--try-tx`, which wrap the apply in a transaction.
+pistachio parses only the statements above. It drops any other statement in a schema file, such as `SET`, `GRANT`, or `CREATE EXTENSION`, and prints a `pistachio: ignored unsupported statement:` warning to standard error for each one. The same warning covers the parts it does not read of a statement it does parse, such as the `ALTER TABLE ... ADD COLUMN` and `ALTER COLUMN ... SET DEFAULT` a `pg_dump` file carries, or `COMMENT ON INDEX`. The `ALTER COLUMN ... SET STORAGE` and `SET COMPRESSION` such a file carries are read. To keep an unsupported statement in the file and run it during `apply`, mark it with `-- pista:execute`, which also silences the warning. A `BEGIN` or `COMMIT` warning points at `--with-tx` and `--try-tx`, which wrap the apply in a transaction.
 
 ## Usage
 

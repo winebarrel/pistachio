@@ -114,15 +114,6 @@ database carries routinely. Recorded as a deliberate choice, not a bug.
 
 Origin: [#384](https://github.com/winebarrel/pistachio/pull/384).
 
-## `Column.StorageType` is dead code
-
-`model.Column.StorageType` is declared but never read or written by
-parser / catalog / diff. Either implement column storage diffs
-(`ALTER COLUMN ... SET STORAGE PLAIN|EXTERNAL|EXTENDED|MAIN`) or drop
-the field. Today the value is always the zero string.
-
-Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit.
-
 ## Constraint `Deferrable` / `Deferred` granularity
 
 `Constraint.Deferrable` / `Constraint.Deferred` are read from the

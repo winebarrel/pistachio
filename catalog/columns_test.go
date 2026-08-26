@@ -49,6 +49,47 @@ func TestListColumnsByTable(t *testing.T) {
 		assert.False(t, email.NotNull)
 	})
 
+	t.Run("storage and compression", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.docs (
+				id integer NOT NULL,
+				body text STORAGE external,
+				note text COMPRESSION pglz,
+				title text
+			);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		tbl := tables.Get("public.docs")
+		require.NotNil(t, tbl)
+
+		body, ok := tbl.Columns.GetOk("body")
+		require.True(t, ok)
+		assert.Equal(t, "external", body.StorageType)
+		assert.Equal(t, "extended", body.TypeStorage)
+		assert.Equal(t, "", body.Compression)
+
+		note, ok := tbl.Columns.GetOk("note")
+		require.True(t, ok)
+		assert.Equal(t, "pglz", note.Compression)
+
+		// A column left alone reports the strategy it has, which is the
+		// type's own; the two being equal is what says it was never set.
+		title, ok := tbl.Columns.GetOk("title")
+		require.True(t, ok)
+		assert.Equal(t, "extended", title.StorageType)
+		assert.Equal(t, "extended", title.TypeStorage)
+		assert.Equal(t, "", title.Compression)
+
+		id, ok := tbl.Columns.GetOk("id")
+		require.True(t, ok)
+		assert.Equal(t, "plain", id.StorageType)
+		assert.Equal(t, "plain", id.TypeStorage)
+	})
+
 	t.Run("with default", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.users (

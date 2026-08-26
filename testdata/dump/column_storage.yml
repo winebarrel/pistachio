@@ -1,0 +1,20 @@
+# A column left at its type's strategy writes nothing, so only the two that
+# were set come back. lz4 is left out of the server-backed fixtures since a
+# build without it rejects the method.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text STORAGE external,
+      note text COMPRESSION pglz,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      note text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;
+  ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;

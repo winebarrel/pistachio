@@ -106,6 +106,9 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 
 // newTableExtras returns non-FK extras and FK statements separately.
 func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcurrently bool, err error) {
+	if storageSQL := t.StorageSQL(); storageSQL != "" {
+		stmts = append(stmts, strings.Split(storageSQL, "\n")...)
+	}
 	for _, idx := range t.Indexes.CollectValues() {
 		stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)
 		if err != nil {
@@ -288,6 +291,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 	for name, col := range desired.All() {
 		if _, ok := current.GetOk(name); !ok {
 			stmts = append(stmts, addColumnSQL(fqtn, col))
+			stmts = append(stmts, columnStorageSQL(fqtn, nil, col, false)...)
 		}
 	}
 
@@ -380,7 +384,8 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// Type or collation change. Collation is altered via SET DATA TYPE
 	// because PostgreSQL has no separate "set collation" syntax; re-issuing
 	// SET DATA TYPE without COLLATE reverts to the type's default collation.
-	if !equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) || !equalCollation(current.Collation, desired.Collation) {
+	retyped := !equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) || !equalCollation(current.Collation, desired.Collation)
+	if retyped {
 		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + desired.TypeName
 		if desired.Collation != nil {
 			sql += " COLLATE " + *desired.Collation
@@ -452,6 +457,57 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		// "CONSTRAINT <name> NOT NULL" on identity columns; emitting a rename
 		// here would surface a name the dumper hides.
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME CONSTRAINT "+model.Ident(*current.NotNullName)+" TO "+model.Ident(*desired.NotNullName)+";")
+	}
+
+	// TOAST storage and compression last, since SET DATA TYPE resets both.
+	stmts = append(stmts, columnStorageSQL(fqtn, current, desired, retyped)...)
+
+	return stmts
+}
+
+// columnStorageSQL returns the statements that put a column's TOAST storage
+// and compression where the desired definition wants them. current is nil for
+// a column being added, and retyped says a SET DATA TYPE runs before these.
+//
+// A definition that names neither asks for the defaults, which for storage is
+// the strategy the column's type carries and for compression is whatever
+// default_toast_compression holds when a value is written. Only the catalog
+// knows the former, so an empty desired strategy is resolved against the
+// current column's type; the latter is a value the column simply does not
+// carry, so the two sides compare as written. Neither statement rewrites the
+// table: both decide how values inserted later are stored.
+//
+// A column being added and one SET DATA TYPE rebuilds both land on the type's
+// defaults, whatever they held before. PostgreSQL resets them there even when
+// the type does not change, which a collation change goes through, so what the
+// definition names is written out again and what it leaves out already sits
+// where it belongs.
+func columnStorageSQL(fqtn string, current, desired *model.Column, retyped bool) []string {
+	var stmts []string
+	reset := current == nil || retyped
+
+	switch {
+	case reset:
+		if desired.StorageType != "" {
+			stmts = append(stmts, model.SetStorageSQL(fqtn, desired.Name, desired.StorageType))
+		}
+	default:
+		storage := desired.StorageType
+		if storage == "" {
+			storage = current.TypeStorage
+		}
+		if storage != "" && current.StorageType != storage {
+			stmts = append(stmts, model.SetStorageSQL(fqtn, desired.Name, storage))
+		}
+	}
+
+	switch {
+	case reset:
+		if desired.Compression != "" {
+			stmts = append(stmts, model.SetCompressionSQL(fqtn, desired.Name, desired.Compression))
+		}
+	case current.Compression != desired.Compression:
+		stmts = append(stmts, model.SetCompressionSQL(fqtn, desired.Name, desired.Compression))
 	}
 
 	return stmts

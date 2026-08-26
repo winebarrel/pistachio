@@ -1,0 +1,17 @@
+# Neither statement rewrites the table; both decide how values inserted later
+# are stored.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text STORAGE main COMPRESSION pglz,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;

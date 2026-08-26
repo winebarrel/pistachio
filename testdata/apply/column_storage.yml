@@ -1,0 +1,28 @@
+# Both settings apply and the re-plan comes out clean, which is what keeps a
+# resolved strategy from re-emitting on every run.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text STORAGE external,
+      note text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      note text COMPRESSION pglz,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      note text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;
+applied_sql: |
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTENDED;
+  ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;

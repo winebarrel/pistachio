@@ -1,0 +1,20 @@
+# A partition takes its strategy from the parent, and declares no columns of
+# its own, so only the parent writes the statement. Applying it there recurses
+# to the partitions under it.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      body text STORAGE main
+  ) PARTITION BY RANGE (id);
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (10);
+dump: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      body text
+  )
+  PARTITION BY RANGE (id);
+  ALTER TABLE public.events ALTER COLUMN body SET STORAGE MAIN;
+
+  -- public.events_1
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (10);

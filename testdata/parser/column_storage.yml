@@ -1,0 +1,24 @@
+# STORAGE in a column definition needs PostgreSQL 16, and pg_dump writes both
+# settings as separate statements for that reason, so the model renders them
+# that way whichever form the file used. DEFAULT reads as no setting at all.
+input: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text STORAGE external COMPRESSION lz4,
+      note text STORAGE DEFAULT COMPRESSION DEFAULT
+  );
+  ALTER TABLE public.docs ALTER COLUMN note SET STORAGE main;
+  ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;
+  -- A setting for a column the file does not declare has nothing to sit on.
+  ALTER TABLE public.docs ALTER COLUMN gone SET STORAGE main;
+expected: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      note text
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;
+  ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION lz4;
+  ALTER TABLE public.docs ALTER COLUMN note SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;

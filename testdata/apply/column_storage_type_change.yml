@@ -1,0 +1,33 @@
+# SET DATA TYPE puts both settings back at the type's defaults, so a column
+# that keeps them across a type change has to be given them again, and one that
+# leaves them out is already where it belongs. The re-plan every apply case
+# runs is what catches either half going wrong.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text STORAGE main COMPRESSION pglz,
+      note text STORAGE main,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body character varying(200) STORAGE main COMPRESSION pglz,
+      note character varying(200),
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body character varying(200),
+      note character varying(200),
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;
+applied_sql: |
+  ALTER TABLE public.docs ALTER COLUMN body SET DATA TYPE character varying(200);
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;
+  ALTER TABLE public.docs ALTER COLUMN note SET DATA TYPE character varying(200);

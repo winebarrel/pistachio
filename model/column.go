@@ -43,8 +43,19 @@ type Column struct {
 	Generated   ColumnGenerated
 	// Collation in quoted SQL form, ready to follow COLLATE
 	// (e.g. `pg_catalog."C"`). nil for the default collation.
-	Collation   *string
+	Collation *string
+	// StorageType is the column's TOAST strategy in the keyword form the
+	// catalog reports it (plain, external, extended, main). The desired side
+	// holds what the definition wrote, and is empty when it wrote nothing or
+	// wrote DEFAULT.
 	StorageType string
+	// TypeStorage is the strategy the column's type defaults to. Only the
+	// catalog fills it; the desired side has no way to know it, so the diff
+	// resolves an empty StorageType against this one.
+	TypeStorage string
+	// Compression is the column's TOAST compression method (pglz, lz4), empty
+	// when the column carries none and default_toast_compression decides.
+	Compression string
 	Comment     *string
 }
 

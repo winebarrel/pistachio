@@ -1,0 +1,31 @@
+# Both settings are ALTER COLUMN actions, so they merge with their peers under
+# one ALTER TABLE.
+bulk_alter: true
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text STORAGE external,
+      note text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text STORAGE main,
+      note text COMPRESSION pglz,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      note text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;
+applied_sql: |
+  ALTER TABLE public.docs
+    ALTER COLUMN body SET STORAGE MAIN,
+    ALTER COLUMN note SET COMPRESSION pglz;
