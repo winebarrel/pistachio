@@ -469,19 +469,20 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 // and compression where the desired definition wants them. current is nil for
 // a column being added, and retyped says a SET DATA TYPE runs before these.
 //
-// A definition that names neither asks for the defaults, which for storage is
-// the strategy the column's type carries and for compression is whatever
-// default_toast_compression holds when a value is written. Only the catalog
-// knows the former, so an empty desired strategy is resolved against the
-// current column's type; the latter is a value the column simply does not
-// carry, so the two sides compare as written. Neither statement rewrites the
-// table: both decide how values inserted later are stored.
+// A definition that names neither asks for the defaults: the strategy the
+// column's type carries, and whatever default_toast_compression holds when a
+// value is written. Only the catalog knows the first, so an unwritten strategy
+// is resolved against the current column's type. Compression is a value the
+// column does not carry either way, so the two sides compare as written.
 //
-// A column being added and one SET DATA TYPE rebuilds both land on the type's
-// defaults, whatever they held before. PostgreSQL resets them there even when
-// the type does not change, which a collation change goes through, so what the
-// definition names is written out again and what it leaves out already sits
-// where it belongs.
+// A column being added, and one a SET DATA TYPE rebuilds, sit at the type's
+// defaults whatever they held before; PostgreSQL resets them there even when
+// the type does not change, which a collation change goes through. What the
+// definition names is therefore written out again, and what it leaves out is
+// already where it belongs.
+//
+// Neither statement rewrites the table; both decide how values inserted later
+// are stored.
 func columnStorageSQL(fqtn string, current, desired *model.Column, retyped bool) []string {
 	var stmts []string
 	reset := current == nil || retyped

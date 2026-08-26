@@ -751,8 +751,7 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 
 // normalizeStorageKeyword lowercases a STORAGE strategy or a COMPRESSION
 // method and reads DEFAULT as none, which is how the catalog reports a column
-// that carries neither. The grammar takes both as identifiers, so a quoted one
-// keeps its case and is left alone.
+// that carries neither.
 func normalizeStorageKeyword(name string) string {
 	if strings.EqualFold(name, "default") {
 		return ""

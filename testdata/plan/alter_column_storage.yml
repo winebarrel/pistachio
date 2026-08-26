@@ -1,5 +1,5 @@
-# Neither statement rewrites the table; both decide how values inserted later
-# are stored.
+# Both settings arrive on a column that carries neither. Neither statement
+# rewrites the table; they decide how values inserted later are stored.
 init: |
   CREATE TABLE public.docs (
       id integer NOT NULL,

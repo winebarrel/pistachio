@@ -1,5 +1,5 @@
-# ADD COLUMN cannot carry either setting on 15, so the column arrives plain and
-# the settings follow it.
+# The settings are statements of their own here as everywhere else, so the
+# column arrives at its type's defaults and they follow it.
 init: |
   CREATE TABLE public.docs (
       id integer NOT NULL,

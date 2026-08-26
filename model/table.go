@@ -161,9 +161,8 @@ func (t Table) TrigSQL() string {
 }
 
 // SetStorageSQL returns the statement that puts a column's TOAST strategy at
-// storage, which is one of the four keywords. The strategy is written where
-// PostgreSQL writes it, in a statement of its own: the column definition
-// accepts STORAGE only from PostgreSQL 16 on.
+// storage, one of the four keywords. It is a statement of its own because a
+// column definition accepts STORAGE only from PostgreSQL 16 on.
 func SetStorageSQL(fqtn, col, storage string) string {
 	return "ALTER TABLE " + fqtn + " ALTER COLUMN " + Ident(col) + " SET STORAGE " + strings.ToUpper(storage) + ";"
 }
@@ -180,8 +179,7 @@ func SetCompressionSQL(fqtn, col, compression string) string {
 
 // StorageSQL renders the columns whose TOAST storage or compression is not the
 // default. A partition child and an INHERITS child declare no columns of their
-// own, and a partition takes the strategy from its parent, so both are left
-// out.
+// own, and a partition takes both from its parent, so neither is rendered.
 func (t Table) StorageSQL() string {
 	if t.PartitionOf != nil {
 		return ""

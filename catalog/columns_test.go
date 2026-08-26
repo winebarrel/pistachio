@@ -90,6 +90,35 @@ func TestListColumnsByTable(t *testing.T) {
 		assert.Equal(t, "plain", id.TypeStorage)
 	})
 
+	t.Run("storage of a domain column", func(t *testing.T) {
+		// A domain carries the base type's strategy, and the column is read
+		// against the domain rather than the type under it.
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE DOMAIN public.shorttext AS varchar(50);
+			CREATE TABLE public.docs (
+				a public.shorttext,
+				b public.shorttext STORAGE main
+			);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		tbl := tables.Get("public.docs")
+		require.NotNil(t, tbl)
+
+		a, ok := tbl.Columns.GetOk("a")
+		require.True(t, ok)
+		assert.Equal(t, "extended", a.StorageType)
+		assert.Equal(t, "extended", a.TypeStorage)
+
+		b, ok := tbl.Columns.GetOk("b")
+		require.True(t, ok)
+		assert.Equal(t, "main", b.StorageType)
+		assert.Equal(t, "extended", b.TypeStorage)
+	})
+
 	t.Run("with default", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.users (
