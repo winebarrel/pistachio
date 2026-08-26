@@ -2032,8 +2032,8 @@ func TestEqualConstraintDef_notOverNullTest(t *testing.T) {
 		"CHECK ((NOT (a IS NOT NULL)))",
 		"CHECK (a IS NULL)",
 	))
-	// A row operand is left alone, since neither test is the other's
-	// negation there.
+	// A row value is left alone, since neither test is the other's negation
+	// there.
 	assert.False(t, equalConstraintDef(
 		"CHECK ((NOT (ROW(a, b) IS NOT NULL)))",
 		"CHECK (ROW(a, b) IS NULL)",
@@ -2041,18 +2041,19 @@ func TestEqualConstraintDef_notOverNullTest(t *testing.T) {
 }
 
 func TestEqualConstraintDef_distinctFromNullBothSidesKept(t *testing.T) {
-	// Nothing is left to test when both operands are the literal, and
-	// PostgreSQL stores that one with a cast, so it is left as written.
+	// Nothing is left to test when both operands are the literal, so it is
+	// left as written. PostgreSQL stores that one as a test on a cast
+	// literal, which the operator does not compare equal to.
 	assert.False(t, equalConstraintDef(
-		"CHECK ((NULL IS NULL))",
+		"CHECK ((NULL::unknown IS NULL))",
 		"CHECK (NULL IS NOT DISTINCT FROM NULL)",
 	))
 }
 
 func TestEqualConstraintDef_distinctFromNullRowKept(t *testing.T) {
-	// A row operand is left alone by PostgreSQL, since IS NULL on a row
-	// asks whether every field is null rather than whether the row itself
-	// is, so the two forms must not compare equal.
+	// A row value is left alone by PostgreSQL, since IS NULL on a row asks
+	// whether every field is null rather than whether the row itself is, so
+	// the two forms must not compare equal.
 	assert.False(t, equalConstraintDef(
 		"CHECK ((ROW(a, b) IS NOT DISTINCT FROM NULL))",
 		"CHECK (ROW(a, b) IS NULL)",

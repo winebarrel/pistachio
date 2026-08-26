@@ -515,7 +515,7 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 		}
 	}
 	if folded := foldNotDistinct(node); folded != nil {
-		node = folded
+		return folded
 	}
 	if test := nullTestFromDistinct(node); test != nil {
 		return test
@@ -558,12 +558,11 @@ func foldNotDistinct(node *pg_query.Node) *pg_query.Node {
 // Parse analysis rewrites the comparison before the expression is stored, so
 // pg_get_constraintdef and pg_get_expr hand back the test whichever way the
 // definition was written. The fold above cannot reach it: the stored form is
-// another node, not a negation. Running after that fold picks up
-// NOT (a IS DISTINCT FROM NULL::text), which arrives here as the operator once
-// the cast is stripped.
+// another node, not a negation. A negation the definition wrote around the
+// test is left to foldNotNullTest below.
 //
 // Only a bare NULL literal is rewritten, which is what PostgreSQL does. It
-// leaves a cast literal alone, and a row operand too, since IS NULL on a row
+// leaves a cast literal alone, and a row value too, since IS NULL on a row
 // asks whether every field is null rather than whether the row is.
 func nullTestFromDistinct(node *pg_query.Node) *pg_query.Node {
 	ae := node.GetAExpr()
@@ -605,8 +604,8 @@ func nullTestFromDistinct(node *pg_query.Node) *pg_query.Node {
 // wrapper behind, while the same definition written without the cast folds
 // straight to a IS NULL. Inverting the test lands both sides on one shape.
 //
-// A row operand is left alone: IS NULL on a row asks whether every field is
-// null and IS NOT NULL whether none is, so neither is the other's negation.
+// A row value is left alone: IS NULL on a row asks whether every field is null
+// and IS NOT NULL whether none is, so neither is the other's negation.
 func foldNotNullTest(node *pg_query.Node) *pg_query.Node {
 	be := node.GetBoolExpr()
 	if be == nil || be.Boolop != pg_query.BoolExprType_NOT_EXPR || len(be.Args) != 1 {
@@ -630,8 +629,16 @@ func isNullConst(node *pg_query.Node) bool {
 	return c != nil && c.Isnull
 }
 
-// isRowOperand reports whether the node is a row value: a row constructor or
-// the whole-row reference a table name written as tbl.* produces.
+// isRowOperand reports whether the node is a row value the parse tree shows: a
+// row constructor, or the whole-row reference a table name written as tbl.*
+// produces.
+//
+// A column whose type is composite is a plain ColumnRef, so it does not count.
+// PostgreSQL keeps such a column out of the rewrite as well, but it goes by
+// the type, which this normalization does not have. Both sides normalize
+// alike, so nothing drifts; the cost is that p IS NULL and
+// p IS NOT DISTINCT FROM NULL on a composite column compare equal, and a
+// change between the two is dropped from the plan.
 func isRowOperand(node *pg_query.Node) bool {
 	if node.GetRowExpr() != nil {
 		return true
