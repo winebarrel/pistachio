@@ -3426,3 +3426,38 @@ func TestDiffColumns_identityUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
 }
+
+func TestColumnStorageSQL(t *testing.T) {
+	cur := func() *model.Column {
+		return &model.Column{Name: "body", TypeName: "text", StorageType: "external", TypeStorage: "extended", Compression: "pglz"}
+	}
+
+	// Nothing to do when both sides agree.
+	assert.Empty(t, columnStorageSQL("public.docs", cur(), &model.Column{
+		Name: "body", TypeName: "text", StorageType: "external", Compression: "pglz",
+	}, false))
+
+	// A definition that names neither asks for the defaults: the type's own
+	// strategy, and default_toast_compression.
+	assert.Equal(t, []string{
+		"ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTENDED;",
+		"ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION default;",
+	}, columnStorageSQL("public.docs", cur(), &model.Column{Name: "body", TypeName: "text"}, false))
+
+	// A column being added carries only what it names.
+	assert.Equal(t, []string{
+		"ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;",
+	}, columnStorageSQL("public.docs", nil, &model.Column{Name: "body", TypeName: "text", StorageType: "main"}, false))
+	assert.Empty(t, columnStorageSQL("public.docs", nil, &model.Column{Name: "body", TypeName: "text"}, false))
+
+	// SET DATA TYPE resets both, so what the definition names is written out
+	// again even though the current column already holds it, and what it
+	// leaves out is already where it belongs.
+	assert.Equal(t, []string{
+		"ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;",
+		"ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;",
+	}, columnStorageSQL("public.docs", cur(), &model.Column{
+		Name: "body", TypeName: "text", StorageType: "external", Compression: "pglz",
+	}, true))
+	assert.Empty(t, columnStorageSQL("public.docs", cur(), &model.Column{Name: "body", TypeName: "text"}, true))
+}

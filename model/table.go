@@ -179,7 +179,8 @@ func SetCompressionSQL(fqtn, col, compression string) string {
 
 // StorageSQL renders the columns whose TOAST storage or compression is not the
 // default. A partition child and an INHERITS child declare no columns of their
-// own, and a partition takes both from its parent, so neither is rendered.
+// own, and a partition copies both off the parent attribute as it is created,
+// so neither is rendered.
 func (t Table) StorageSQL() string {
 	if t.PartitionOf != nil {
 		return ""
