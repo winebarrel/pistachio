@@ -15,4 +15,3 @@ applied: |
       city text
   );
   COMMENT ON TYPE public.address IS 'an address';
-verify_no_drift: true

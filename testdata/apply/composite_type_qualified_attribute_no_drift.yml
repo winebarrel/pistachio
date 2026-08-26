@@ -23,4 +23,3 @@ applied: |
   CREATE TYPE public.outer_t AS (
       i inner_t
   );
-verify_no_drift: true

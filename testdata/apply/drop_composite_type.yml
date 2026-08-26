@@ -12,4 +12,3 @@ applied: |
   CREATE TYPE public.keepme AS (
       a integer
   );
-verify_no_drift: true

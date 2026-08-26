@@ -17,4 +17,3 @@ applied: |
       name text NOT NULL,
       CONSTRAINT items_pkey PRIMARY KEY (id)
   );
-verify_no_drift: true

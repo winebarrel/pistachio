@@ -24,4 +24,3 @@ applied: |
       CONSTRAINT users_login_key UNIQUE NULLS NOT DISTINCT (login),
       CONSTRAINT users_tenant_key UNIQUE NULLS NOT DISTINCT (tenant_id)
   );
-verify_no_drift: true

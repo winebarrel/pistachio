@@ -22,4 +22,3 @@ applied: |
 
   -- public.logs_2026
   CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
-verify_no_drift: true

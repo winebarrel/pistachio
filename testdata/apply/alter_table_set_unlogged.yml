@@ -17,4 +17,3 @@ applied: |
       token text NOT NULL,
       CONSTRAINT sessions_pkey PRIMARY KEY (id)
   );
-verify_no_drift: true

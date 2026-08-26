@@ -6,4 +6,3 @@ applied: |
   -- public.short_code
   CREATE DOMAIN public.short_code AS character varying(8) DEFAULT 'AAAA'::character varying NOT NULL;
 applied_sql: ""
-verify_no_drift: true

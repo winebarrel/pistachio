@@ -1,3 +1,6 @@
+# The pre-SQL creates a table the desired schema does not describe, so the
+# post-apply re-plan would want to drop it. The drift is the point of the case.
+skip_drift_check: true
 pre_sql_file: |
   CREATE TABLE public.pre_hook (
       id integer NOT NULL,

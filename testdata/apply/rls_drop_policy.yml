@@ -22,4 +22,3 @@ applied: |
   );
 
   ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
-verify_no_drift: true

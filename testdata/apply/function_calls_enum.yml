@@ -28,4 +28,3 @@ applied: |
       RETURNS text
       LANGUAGE sql
       AS $$ SELECT s::text $$;
-verify_no_drift: true

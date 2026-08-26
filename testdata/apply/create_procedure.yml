@@ -9,4 +9,3 @@ applied: |
   CREATE OR REPLACE PROCEDURE public.bump(INOUT x integer)
       LANGUAGE plpgsql
       AS $$ BEGIN x := x + 1; END $$;
-verify_no_drift: true

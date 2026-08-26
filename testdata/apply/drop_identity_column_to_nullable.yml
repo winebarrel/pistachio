@@ -14,4 +14,3 @@ applied: |
       id integer,
       name text NOT NULL
   );
-verify_no_drift: true

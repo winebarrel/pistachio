@@ -1,5 +1,4 @@
 bulk_alter: true
-verify_no_drift: true
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,

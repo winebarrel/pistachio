@@ -23,4 +23,3 @@ applied: |
       val integer DEFAULT 42
   );
 applied_sql: ""
-verify_no_drift: true

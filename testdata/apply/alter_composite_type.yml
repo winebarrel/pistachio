@@ -22,4 +22,3 @@ applied: |
       city character varying(100),
       country text
   );
-verify_no_drift: true

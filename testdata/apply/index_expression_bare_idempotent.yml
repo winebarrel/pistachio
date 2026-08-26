@@ -21,4 +21,3 @@ applied: |
   );
   CREATE INDEX people_lower_name_idx ON public.people USING btree (lower((name)::text));
 applied_sql: ""
-verify_no_drift: true

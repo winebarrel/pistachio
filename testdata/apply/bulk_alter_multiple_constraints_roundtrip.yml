@@ -25,4 +25,3 @@ applied: |
       CONSTRAINT orders_code_key UNIQUE (code),
       CONSTRAINT orders_amount_check CHECK (amount > 0)
   );
-verify_no_drift: true

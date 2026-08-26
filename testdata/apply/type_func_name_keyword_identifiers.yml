@@ -25,4 +25,3 @@ applied_sql: |
   ALTER TABLE public."left" ADD COLUMN "join" text;
   ALTER TABLE public."left" ADD CONSTRAINT "cross" CHECK ("right" > 0);
   CREATE INDEX "natural" ON public."left" USING btree ("join");
-verify_no_drift: true

@@ -17,4 +17,3 @@ applied: |
 
   CREATE TRIGGER events_stamp BEFORE INSERT OR UPDATE ON events FOR EACH ROW EXECUTE FUNCTION stamp();
   ALTER TABLE public.events ENABLE ALWAYS TRIGGER events_stamp;
-verify_no_drift: true

@@ -9,4 +9,3 @@ applied: |
   CREATE DOMAIN public.label AS text
       CONSTRAINT label_not_empty CHECK ((VALUE <> ''::text))
       CONSTRAINT label_not_keyword CHECK ((VALUE <> ' CONSTRAINT '::text));
-verify_no_drift: true

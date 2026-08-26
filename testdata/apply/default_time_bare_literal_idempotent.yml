@@ -15,4 +15,3 @@ applied: |
       start_at time without time zone DEFAULT '00:00:00'::time without time zone NOT NULL
   );
 applied_sql: ""
-verify_no_drift: true

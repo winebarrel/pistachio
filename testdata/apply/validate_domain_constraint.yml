@@ -1,4 +1,3 @@
-verify_no_drift: true
 init: |
   CREATE DOMAIN public.pos_int AS integer;
   ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;

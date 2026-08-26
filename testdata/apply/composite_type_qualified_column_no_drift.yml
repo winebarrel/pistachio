@@ -26,4 +26,3 @@ applied: |
       id integer,
       home addr
   );
-verify_no_drift: true

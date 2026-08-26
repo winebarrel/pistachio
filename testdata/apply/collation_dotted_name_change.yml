@@ -15,4 +15,3 @@ applied: |
   );
 applied_sql: |
   ALTER TABLE public.t ALTER COLUMN c SET DATA TYPE text COLLATE public."my.coll";
-verify_no_drift: true

@@ -22,4 +22,3 @@ applied: |
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
   CREATE INDEX idx_users_name ON public.users USING btree (name);
-verify_no_drift: true

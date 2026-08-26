@@ -15,4 +15,3 @@ applied: |
       MAXVALUE 9223372036854775807
       CACHE 1;
   COMMENT ON SEQUENCE public.order_seq IS 'Order id generator';
-verify_no_drift: true

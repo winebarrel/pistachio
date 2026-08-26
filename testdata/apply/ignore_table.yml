@@ -27,4 +27,3 @@ applied: |
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
-verify_no_drift: true

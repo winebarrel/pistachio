@@ -14,7 +14,7 @@ desired: |
 # The table comes first, which is the whole point. The desired schema wrote the
 # return type qualified, so it is applied that way; the dump below reports it
 # bare, the way format_type does under the default search_path, and the
-# verify_no_drift re-plan confirms the two spellings are one routine.
+# post-apply re-plan confirms the two spellings are one routine.
 applied_sql: |
   CREATE TABLE public.users (
       id integer NOT NULL,
@@ -36,4 +36,3 @@ applied: |
       id integer NOT NULL,
       name text
   );
-verify_no_drift: true

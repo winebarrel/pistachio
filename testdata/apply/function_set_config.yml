@@ -18,4 +18,3 @@ applied: |
       SET search_path TO public, pg_temp
       SET work_mem TO '64MB'
       AS $$ SELECT 1 $$;
-verify_no_drift: true
