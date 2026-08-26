@@ -97,17 +97,20 @@ emit `ALTER TABLE ... SET TABLESPACE <new>` and
 
 Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit.
 
-## Persistence of a partitioned table cannot be changed
+## Persistence on a partitioned table is ignored
 
-A partitioned table keeps its `relpersistence`, and the diff leaves it alone.
-PostgreSQL changes persistence by rewriting the table, and a partitioned one
-has nothing to rewrite, so `ALTER TABLE ... SET LOGGED` on it reports success
-and changes neither the parent nor the partitions under it (verified on 15 and
-17; 18 rejects an unlogged partitioned table outright, so the shape cannot
-arise there). Emitting it would replan forever, so `diffPersistence` skips a partitioned
-table, and a desired schema that flips one there is silently ignored. The value
-only decides the default for partitions created later. Closing it means
-erroring at plan time, the way a domain base-type change does.
+`ALTER TABLE ... SET LOGGED` on a partitioned table reports success and changes
+neither the parent nor the partitions under it, verified on 15, 16 and 17.
+Emitting it would replan forever, so `diffPersistence` skips a partitioned
+table, and a desired schema that flips one there is silently ignored.
+
+There is nothing to reach anyway. The parent holds no storage for the value to
+describe, and it does not reach the children either: a partition created under
+an unlogged parent is permanent unless it says `UNLOGGED` itself. PostgreSQL 18
+removed the form for that reason, so the shape cannot arise there at all.
+Erroring at plan time, the way a domain base-type change does, would fail a
+whole run over a value that means nothing, on a form a dump of a 15 to 17
+database carries routinely. Recorded as a deliberate choice, not a bug.
 
 Origin: [#384](https://github.com/winebarrel/pistachio/pull/384).
 
