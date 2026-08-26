@@ -561,9 +561,9 @@ func foldNotDistinct(node *pg_query.Node) *pg_query.Node {
 // another node, not a negation. A negation the definition wrote around the
 // test is left to foldNotNullTest below.
 //
-// Only a bare NULL literal is rewritten, which is what PostgreSQL does. It
-// leaves a cast literal alone, and a row value too, since IS NULL on a row
-// asks whether every field is null rather than whether the row is.
+// Only a bare NULL literal is rewritten, which is what PostgreSQL does with
+// one. A cast literal is left alone, and so is a row value, which the catalog
+// hands back as the operator whichever test it stored; see isRowOperand.
 func nullTestFromDistinct(node *pg_query.Node) *pg_query.Node {
 	ae := node.GetAExpr()
 	if ae == nil {
@@ -633,12 +633,17 @@ func isNullConst(node *pg_query.Node) bool {
 // row constructor, or the whole-row reference a table name written as tbl.*
 // produces.
 //
-// A column whose type is composite is a plain ColumnRef, so it does not count.
-// PostgreSQL keeps such a column out of the rewrite as well, but it goes by
-// the type, which this normalization does not have. Both sides normalize
-// alike, so nothing drifts; the cost is that p IS NULL and
-// p IS NOT DISTINCT FROM NULL on a composite column compare equal, and a
-// change between the two is dropped from the plan.
+// PostgreSQL rewrites a row value like any other operand: the test it stores
+// is the scalar one, whatever the argument's type. The type check lives in the
+// deparse, which prints IS NULL for a row test or a scalar argument and the
+// operator otherwise, to keep the scalar meaning. A row-typed argument
+// therefore comes back as the operator either way, which is what skipping it
+// here matches.
+//
+// A column whose type is composite is a plain ColumnRef, so it does not count
+// and the rewrite fires on it. Both sides normalize alike, so nothing drifts;
+// the cost is that p IS NULL and p IS NOT DISTINCT FROM NULL compare equal on
+// such a column, and a change between the two is dropped from the plan.
 func isRowOperand(node *pg_query.Node) bool {
 	if node.GetRowExpr() != nil {
 		return true

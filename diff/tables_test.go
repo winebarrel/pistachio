@@ -2051,9 +2051,8 @@ func TestEqualConstraintDef_distinctFromNullBothSidesKept(t *testing.T) {
 }
 
 func TestEqualConstraintDef_distinctFromNullRowKept(t *testing.T) {
-	// A row value is left alone by PostgreSQL, since IS NULL on a row asks
-	// whether every field is null rather than whether the row itself is, so
-	// the two forms must not compare equal.
+	// The catalog hands a row-typed argument back as the operator whichever
+	// test it stored, so the two forms must not compare equal.
 	assert.False(t, equalConstraintDef(
 		"CHECK ((ROW(a, b) IS NOT DISTINCT FROM NULL))",
 		"CHECK (ROW(a, b) IS NULL)",
