@@ -10,4 +10,3 @@ applied: |
       RETURNS TABLE(id integer, name text)
       LANGUAGE sql
       AS $$ SELECT 1, 'x' $$;
-verify_no_drift: true

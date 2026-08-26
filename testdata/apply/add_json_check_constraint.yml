@@ -2,12 +2,11 @@
 # expression references, so the walker has to find the column inside the
 # SQL/JSON constructor. PostgreSQL names this one products_qty_check; a walker
 # that misses the column would name it products_check, and the next plan would
-# drop and re-add the constraint forever. verify_no_drift is what pins that.
+# drop and re-add the constraint forever. The post-apply re-plan pins that.
 #
 # The RETURNING clause is written out, since that is what the catalog holds and
-# what the applied dump shows; verify_no_drift would fail without it.
+# what the applied dump shows; the re-plan would fail without it.
 min_pg: 16
-verify_no_drift: true
 init: |
   CREATE TABLE public.products (
       id integer NOT NULL,

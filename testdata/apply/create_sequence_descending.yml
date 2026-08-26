@@ -1,5 +1,5 @@
 # Descending sequence: MINVALUE defaults to the type minimum, MAXVALUE to -1,
-# and START to MAXVALUE. verify_no_drift proves the parsed defaults match the
+# and START to MAXVALUE. The re-plan proves the parsed defaults match the
 # catalog (also exercises the bigint-min value carried as a pg_query Float).
 init: ""
 desired: |
@@ -13,4 +13,3 @@ applied: |
       MINVALUE -9223372036854775808
       MAXVALUE -1
       CACHE 1;
-verify_no_drift: true

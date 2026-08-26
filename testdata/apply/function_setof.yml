@@ -10,4 +10,3 @@ applied: |
       LANGUAGE sql
       ROWS 42
       AS $$ SELECT 1 $$;
-verify_no_drift: true

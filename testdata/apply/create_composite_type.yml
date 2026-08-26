@@ -23,4 +23,3 @@ applied: |
   COMMENT ON COLUMN public.address.city IS 'the city';
 count:
   composite_types: 0
-verify_no_drift: true

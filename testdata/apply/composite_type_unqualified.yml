@@ -21,4 +21,3 @@ applied: |
   );
   COMMENT ON TYPE public.address IS 'addr';
   COMMENT ON COLUMN public.address.city IS 'c';
-verify_no_drift: true

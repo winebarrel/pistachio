@@ -16,4 +16,3 @@ applied: |
       LANGUAGE sql
       STABLE
       AS $$ SELECT 2 $$;
-verify_no_drift: true

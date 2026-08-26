@@ -28,4 +28,3 @@ applied_pg18: |
   );
 # Confirm a re-plan produces no further DDL on PG18 (the named NOT NULL on the
 # new column matches between desired and current).
-verify_no_drift: true

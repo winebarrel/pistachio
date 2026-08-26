@@ -45,11 +45,14 @@ type applyTestCase struct {
 	// ConcurrentlyPreSQLFile holds SQL content; the runner writes it to a temp
 	// file and passes the path to ApplyOptions.ConcurrentlyPreSQLFile.
 	ConcurrentlyPreSQLFile string `yaml:"concurrently_pre_sql_file,omitempty"`
-	// VerifyNoDrift, when true, runs Plan against the same desired SQL after
-	// Apply and asserts that no further DDL is produced. This catches cases
-	// where the apply succeeds but a parser/diff bug would generate a spurious
-	// diff on the next run (e.g. CONCURRENTLY not stripped from index defs).
-	VerifyNoDrift bool `yaml:"verify_no_drift,omitempty"`
+	// SkipDriftCheck turns off the post-apply re-plan. Every case runs Plan
+	// against the same desired SQL after Apply and asserts that no further DDL
+	// is produced, which catches an apply that succeeds while a parser/diff bug
+	// would generate a spurious diff on the next run (e.g. CONCURRENTLY not
+	// stripped from index defs). Set it only where the case leaves drift on
+	// purpose, such as pre-SQL that creates an object the desired schema does
+	// not describe.
+	SkipDriftCheck bool `yaml:"skip_drift_check,omitempty"`
 }
 
 type applyDropPolicy struct {
@@ -148,7 +151,7 @@ func TestApply(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.expectedApplied(pgMajor)), strings.TrimSpace(got.String()))
 
-			if tc.VerifyNoDrift {
+			if !tc.SkipDriftCheck {
 				plan, err := client.Plan(ctx, &pistachio.PlanOptions{
 					DropPolicy: dropPolicy,
 					FilterOptions: pistachio.FilterOptions{

@@ -11,4 +11,3 @@ applied: |
       LANGUAGE sql
       IMMUTABLE STRICT
       AS $$ SELECT a + b $$;
-verify_no_drift: true

@@ -22,4 +22,3 @@ applied: |
       SECURITY DEFINER
       SET search_path TO public
       AS $$ SELECT 'x' $$;
-verify_no_drift: true

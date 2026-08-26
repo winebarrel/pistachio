@@ -29,4 +29,3 @@ applied_sql: |
   CREATE TABLE public.t (
       c text COLLATE public."my.coll"
   );
-verify_no_drift: true

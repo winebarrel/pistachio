@@ -17,4 +17,3 @@ applied: |
       MAXVALUE 5000
       CACHE 1
       CYCLE;
-verify_no_drift: true

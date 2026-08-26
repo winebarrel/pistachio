@@ -24,4 +24,3 @@ applied: |
 
   -- public.events_east
   CREATE TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m');
-verify_no_drift: true

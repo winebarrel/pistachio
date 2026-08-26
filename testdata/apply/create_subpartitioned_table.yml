@@ -24,4 +24,3 @@ applied: |
 
   -- public.events_east_web
   CREATE TABLE public.events_east_web PARTITION OF public.events_east FOR VALUES IN ('web');
-verify_no_drift: true

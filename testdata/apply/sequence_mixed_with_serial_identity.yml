@@ -39,4 +39,3 @@ applied: |
 count:
   sequences: 1
   tables: 1
-verify_no_drift: true

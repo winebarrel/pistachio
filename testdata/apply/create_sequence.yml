@@ -20,4 +20,3 @@ applied: |
       MINVALUE 1
       MAXVALUE 9223372036854775807
       CACHE 1;
-verify_no_drift: true

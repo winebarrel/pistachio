@@ -18,4 +18,3 @@ applied: |
       CONSTRAINT employees_vacation_hours_check CHECK (vacation_hours >= '-40'::integer AND vacation_hours <= 240)
   );
 applied_sql: ""
-verify_no_drift: true

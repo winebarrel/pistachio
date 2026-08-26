@@ -11,4 +11,3 @@ applied: |
       MINVALUE 1
       MAXVALUE 32767
       CACHE 1;
-verify_no_drift: true

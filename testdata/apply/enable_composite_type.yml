@@ -15,4 +15,3 @@ applied: |
   CREATE TYPE public.addr AS (
       street text
   );
-verify_no_drift: true

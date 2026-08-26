@@ -21,4 +21,3 @@ applied: |
   );
   CREATE INDEX events_recent_idx ON public.events USING btree (id) WHERE (occurred_at >= '2020-01-01'::date);
 applied_sql: ""
-verify_no_drift: true

@@ -3,4 +3,3 @@ init: |
   CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql AS $$ SELECT a $$;
 desired: ""
 applied: ""
-verify_no_drift: true

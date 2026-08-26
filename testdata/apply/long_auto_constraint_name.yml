@@ -3,8 +3,8 @@
 # predicts has to be shortened the same way. Predicting the full-length name
 # made the server truncate it to something else, and the next run then planned
 # the constraint again forever. The unnamed PRIMARY KEY, CHECK, UNIQUE and
-# FOREIGN KEY here all produce a name too long to fit, so verify_no_drift
-# checks every label against what the server actually stored.
+# FOREIGN KEY here all produce a name too long to fit, so the re-plan checks
+# every label against what the server actually stored.
 #
 # The two table names diverge well before the 51st byte, which is where the
 # table part of a NOT NULL name is cut. PG18 names those constraints, and
@@ -62,4 +62,3 @@ applied: |
       CONSTRAINT customer_subscription_billing_hist_region_code_channel_code_key UNIQUE (region_code, channel_code),
       CONSTRAINT customer_subscription_billing_history_archive_20_quantity_check CHECK (quantity > 0)
   );
-verify_no_drift: true

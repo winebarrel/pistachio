@@ -1,5 +1,4 @@
 assume_validated: true
-verify_no_drift: true
 init: ""
 desired: |
   CREATE TABLE public.users (

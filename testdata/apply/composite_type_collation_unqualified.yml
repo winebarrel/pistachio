@@ -12,4 +12,3 @@ applied: |
   CREATE TYPE public.ct AS (
       name text COLLATE pg_catalog."C"
   );
-verify_no_drift: true

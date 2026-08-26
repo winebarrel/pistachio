@@ -34,4 +34,3 @@ applied_sql: |
   DROP TABLE public."outer";
   DROP SEQUENCE public."freeze";
   DROP TYPE public."binary";
-verify_no_drift: true

@@ -28,4 +28,3 @@ applied: |
       a integer,
       b text
   );
-verify_no_drift: true

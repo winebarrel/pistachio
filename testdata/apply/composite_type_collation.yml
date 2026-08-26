@@ -15,4 +15,3 @@ applied: |
       name text COLLATE pg_catalog."C",
       other text
   );
-verify_no_drift: true

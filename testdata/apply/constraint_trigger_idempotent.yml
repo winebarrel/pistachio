@@ -28,4 +28,3 @@ applied_sql: ""
 drop_policy:
   allow_drop:
     - all
-verify_no_drift: true

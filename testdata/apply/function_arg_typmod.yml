@@ -11,4 +11,3 @@ applied: |
       RETURNS void
       LANGUAGE sql
       AS $$ SELECT $$;
-verify_no_drift: true
