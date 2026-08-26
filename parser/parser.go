@@ -1256,7 +1256,7 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 	}, nil
 }
 
-func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, rawStmt *pg_query.RawStmt, defaultSchema string) (*model.Domain, error) {
+func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, _ *pg_query.RawStmt, defaultSchema string) (*model.Domain, error) {
 	schema := defaultSchema
 	name := ""
 
