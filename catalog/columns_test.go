@@ -53,10 +53,11 @@ func TestListColumnsByTable(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.docs (
 				id integer NOT NULL,
-				body text STORAGE external,
+				body text,
 				note text COMPRESSION pglz,
 				title text
 			);
+			ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
 		require.NoError(t, err)
@@ -97,8 +98,9 @@ func TestListColumnsByTable(t *testing.T) {
 			CREATE DOMAIN public.shorttext AS varchar(50);
 			CREATE TABLE public.docs (
 				a public.shorttext,
-				b public.shorttext STORAGE main
+				b public.shorttext
 			);
+			ALTER TABLE public.docs ALTER COLUMN b SET STORAGE MAIN;
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
 		require.NoError(t, err)

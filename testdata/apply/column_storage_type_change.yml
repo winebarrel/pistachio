@@ -7,11 +7,14 @@
 init: |
   CREATE TABLE public.docs (
       id integer NOT NULL,
-      body text STORAGE main COMPRESSION pglz,
-      note text STORAGE main,
-      title text STORAGE external,
+      body text COMPRESSION pglz,
+      note text,
+      title text,
       CONSTRAINT docs_pkey PRIMARY KEY (id)
   );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN note SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN title SET STORAGE EXTERNAL;
 desired: |
   CREATE TABLE public.docs (
       id integer NOT NULL,
