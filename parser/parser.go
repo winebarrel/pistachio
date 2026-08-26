@@ -272,7 +272,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			}
 
 		case node.GetCreateDomainStmt() != nil:
-			domain, err := parseCreateDomainStmt(node.GetCreateDomainStmt(), rawStmt, defaultSchema)
+			domain, err := parseCreateDomainStmt(node.GetCreateDomainStmt(), defaultSchema)
 			if err != nil {
 				return nil, err
 			}
@@ -1256,7 +1256,7 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 	}, nil
 }
 
-func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, _ *pg_query.RawStmt, defaultSchema string) (*model.Domain, error) {
+func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, defaultSchema string) (*model.Domain, error) {
 	schema := defaultSchema
 	name := ""
 
