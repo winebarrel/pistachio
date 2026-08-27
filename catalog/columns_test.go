@@ -49,6 +49,78 @@ func TestListColumnsByTable(t *testing.T) {
 		assert.False(t, email.NotNull)
 	})
 
+	t.Run("storage and compression", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.docs (
+				id integer NOT NULL,
+				body text,
+				note text COMPRESSION pglz,
+				title text
+			);
+			ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		tbl := tables.Get("public.docs")
+		require.NotNil(t, tbl)
+
+		body, ok := tbl.Columns.GetOk("body")
+		require.True(t, ok)
+		assert.Equal(t, "external", body.StorageType)
+		assert.Equal(t, "extended", body.TypeStorage)
+		assert.Equal(t, "", body.Compression)
+
+		note, ok := tbl.Columns.GetOk("note")
+		require.True(t, ok)
+		assert.Equal(t, "pglz", note.Compression)
+
+		// A column left alone reports the strategy it has, which is the
+		// type's own; the two being equal is what says it was never set.
+		title, ok := tbl.Columns.GetOk("title")
+		require.True(t, ok)
+		assert.Equal(t, "extended", title.StorageType)
+		assert.Equal(t, "extended", title.TypeStorage)
+		assert.Equal(t, "", title.Compression)
+
+		id, ok := tbl.Columns.GetOk("id")
+		require.True(t, ok)
+		assert.Equal(t, "plain", id.StorageType)
+		assert.Equal(t, "plain", id.TypeStorage)
+	})
+
+	t.Run("storage of a domain column", func(t *testing.T) {
+		// A domain carries the base type's strategy, and the column is read
+		// against the domain rather than the type under it.
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE DOMAIN public.shorttext AS varchar(50);
+			CREATE TABLE public.docs (
+				a public.shorttext,
+				b public.shorttext
+			);
+			ALTER TABLE public.docs ALTER COLUMN b SET STORAGE MAIN;
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		tbl := tables.Get("public.docs")
+		require.NotNil(t, tbl)
+
+		a, ok := tbl.Columns.GetOk("a")
+		require.True(t, ok)
+		assert.Equal(t, "extended", a.StorageType)
+		assert.Equal(t, "extended", a.TypeStorage)
+
+		b, ok := tbl.Columns.GetOk("b")
+		require.True(t, ok)
+		assert.Equal(t, "main", b.StorageType)
+		assert.Equal(t, "extended", b.TypeStorage)
+	})
+
 	t.Run("with default", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.users (

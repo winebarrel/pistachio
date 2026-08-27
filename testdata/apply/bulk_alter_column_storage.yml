@@ -1,0 +1,41 @@
+# Both settings are ALTER COLUMN actions, so they merge with their peers under
+# one ALTER TABLE. The merged form is order-independent: SET DATA TYPE runs in
+# an earlier pass than either setting, so the reset it does lands before them
+# whichever way the statement reads.
+bulk_alter: true
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      note text,
+      title text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;
+  ALTER TABLE public.docs ALTER COLUMN title SET STORAGE MAIN;
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text STORAGE main,
+      note text COMPRESSION pglz,
+      title character varying(100) STORAGE main,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      note text,
+      title character varying(100),
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;
+  ALTER TABLE public.docs ALTER COLUMN title SET STORAGE MAIN;
+applied_sql: |
+  ALTER TABLE public.docs
+    ALTER COLUMN body SET STORAGE MAIN,
+    ALTER COLUMN note SET COMPRESSION pglz,
+    ALTER COLUMN title SET DATA TYPE character varying(100),
+    ALTER COLUMN title SET STORAGE MAIN;

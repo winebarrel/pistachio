@@ -160,6 +160,43 @@ func (t Table) TrigSQL() string {
 	return strings.Join(stmts, "\n")
 }
 
+// SetStorageSQL returns the statement that puts a column's TOAST strategy at
+// storage, one of the four keywords. It is a statement of its own because a
+// column definition accepts STORAGE only from PostgreSQL 16 on.
+func SetStorageSQL(fqtn, col, storage string) string {
+	return "ALTER TABLE " + fqtn + " ALTER COLUMN " + Ident(col) + " SET STORAGE " + strings.ToUpper(storage) + ";"
+}
+
+// SetCompressionSQL returns the statement that puts a column's TOAST
+// compression at compression. An empty method hands the column back to
+// default_toast_compression.
+func SetCompressionSQL(fqtn, col, compression string) string {
+	if compression == "" {
+		compression = "default"
+	}
+	return "ALTER TABLE " + fqtn + " ALTER COLUMN " + Ident(col) + " SET COMPRESSION " + compression + ";"
+}
+
+// StorageSQL renders the columns whose TOAST storage or compression is not the
+// default. A partition child and an INHERITS child declare no columns of their
+// own, and a partition copies both off the parent attribute as it is created,
+// so neither is rendered.
+func (t Table) StorageSQL() string {
+	if t.PartitionOf != nil {
+		return ""
+	}
+	var stmts []string
+	for _, col := range t.Columns.CollectValues() {
+		if col.StorageType != "" && col.StorageType != col.TypeStorage {
+			stmts = append(stmts, SetStorageSQL(t.FQTN(), col.Name, col.StorageType))
+		}
+		if col.Compression != "" {
+			stmts = append(stmts, SetCompressionSQL(t.FQTN(), col.Name, col.Compression))
+		}
+	}
+	return strings.Join(stmts, "\n")
+}
+
 func (t Table) CommentSQL() string {
 	var stmts []string
 	if t.Comment != nil {
@@ -175,6 +212,9 @@ func (t Table) CommentSQL() string {
 
 func TableToSQL(t *Table) string {
 	parts := []string{"-- " + t.FQTN(), t.SQL()}
+	if s := t.StorageSQL(); s != "" {
+		parts = append(parts, s)
+	}
 	if s := t.IdxSQL(); s != "" {
 		parts = append(parts, s)
 	}

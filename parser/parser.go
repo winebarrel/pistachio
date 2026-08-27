@@ -87,8 +87,9 @@ func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
 
 // alterTableSupportedCmds lists the ALTER TABLE actions the parser reads into
 // the model: constraints (parseAlterTableConstraints), the row-level security
-// toggles (applyAlterTableRLS) and the trigger states
-// (applyAlterTableTriggerState). Anything else is dropped, so warning is
+// toggles (applyAlterTableRLS), the trigger states
+// (applyAlterTableTriggerState) and the column storage and compression
+// (applyAlterTableColumnStorage). Anything else is dropped, so warning is
 // driven off this list rather than off a list of the actions to reject: an
 // action PostgreSQL adds later warns instead of vanishing.
 var alterTableSupportedCmds = map[pg_query.AlterTableType]bool{
@@ -101,6 +102,8 @@ var alterTableSupportedCmds = map[pg_query.AlterTableType]bool{
 	pg_query.AlterTableType_AT_DisableTrig:        true,
 	pg_query.AlterTableType_AT_EnableAlwaysTrig:   true,
 	pg_query.AlterTableType_AT_EnableReplicaTrig:  true,
+	pg_query.AlterTableType_AT_SetStorage:         true,
+	pg_query.AlterTableType_AT_SetCompression:     true,
 }
 
 // commentTargetSupported lists the COMMENT ON targets parseCommentStmt reads
@@ -429,12 +432,13 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				warnIgnoredAlterTableCmds(sql, rawStmt, as)
 			}
 
-			// RLS toggles, trigger states and constraint subcommands can
-			// coexist in one ALTER TABLE statement. Each helper picks up only
-			// its own subtypes and walks the cmd list independently, so run
-			// all three.
+			// RLS toggles, trigger states, column storage and constraint
+			// subcommands can coexist in one ALTER TABLE statement. Each
+			// helper picks up only its own subtypes and walks the cmd list
+			// independently, so run them all.
 			applyAlterTableRLS(as, t)
 			applyAlterTableTriggerState(as, t)
+			applyAlterTableColumnStorage(as, t)
 
 			cons, fks, err := parseAlterTableConstraints(as, defaultSchema)
 			if err != nil {
@@ -697,6 +701,8 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 	}
 
 	col.Collation = collationFromClause(cd.CollClause)
+	col.StorageType = normalizeStorageKeyword(cd.StorageName)
+	col.Compression = normalizeStorageKeyword(cd.Compression)
 
 	for _, conNode := range cd.Constraints {
 		con := conNode.GetConstraint()
@@ -741,6 +747,44 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 	}
 
 	return col, nil
+}
+
+// normalizeStorageKeyword lowercases a STORAGE strategy or a COMPRESSION
+// method and reads DEFAULT as none, which is how the catalog reports a column
+// that carries neither.
+func normalizeStorageKeyword(name string) string {
+	if strings.EqualFold(name, "default") {
+		return ""
+	}
+	return strings.ToLower(name)
+}
+
+// applyAlterTableColumnStorage reads the storage and compression actions onto
+// the columns they name. pg_dump writes both as separate statements, so a file
+// adopted from one carries them here rather than in the column definition.
+func applyAlterTableColumnStorage(as *pg_query.AlterTableStmt, t *model.Table) {
+	for _, cmdNode := range as.Cmds {
+		cmd := cmdNode.GetAlterTableCmd()
+		if cmd == nil {
+			continue
+		}
+		if cmd.Subtype != pg_query.AlterTableType_AT_SetStorage &&
+			cmd.Subtype != pg_query.AlterTableType_AT_SetCompression {
+			continue
+		}
+		// A setting for a column the file does not declare has nothing to sit
+		// on, the same as a trigger state on a table declared elsewhere.
+		col, ok := t.Columns.GetOk(cmd.Name)
+		if !ok {
+			continue
+		}
+		value := normalizeStorageKeyword(cmd.Def.GetString_().GetSval())
+		if cmd.Subtype == pg_query.AlterTableType_AT_SetStorage {
+			col.StorageType = value
+		} else {
+			col.Compression = value
+		}
+	}
 }
 
 // nameDataLen mirrors PostgreSQL's NAMEDATALEN. An identifier holds at most

@@ -114,14 +114,23 @@ database carries routinely. Recorded as a deliberate choice, not a bug.
 
 Origin: [#384](https://github.com/winebarrel/pistachio/pull/384).
 
-## `Column.StorageType` is dead code
+## `SET COMPRESSION` does not reach the partitions that already exist
 
-`model.Column.StorageType` is declared but never read or written by
-parser / catalog / diff. Either implement column storage diffs
-(`ALTER COLUMN ... SET STORAGE PLAIN|EXTERNAL|EXTENDED|MAIN`) or drop
-the field. Today the value is always the zero string.
+`ALTER TABLE ... ALTER COLUMN ... SET COMPRESSION` never recurses: `ATPrepCmd`
+carries `/* This command never recurses */` for `AT_SetCompression`, while
+`AT_SetStorage` next to it calls `ATSimpleRecursion`. A partition created later
+copies both settings off the parent attribute, so only a table that already has
+partitions is hit: the parent's method changes and theirs does not. A type
+change goes the same way, since `SET DATA TYPE` recurses and resets the
+compression of every partition while the re-emit that follows it names the
+parent alone.
 
-Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit.
+Nothing catches it on the next run. A partition child declares no columns of
+its own, so `diffTable` returns before `diffColumns` and the plan reads clean.
+Closing it means emitting the statement once per partition, which the column
+diff has no reason to walk otherwise.
+
+Origin: review of [#442](https://github.com/winebarrel/pistachio/pull/442).
 
 ## Constraint `Deferrable` / `Deferred` granularity
 

@@ -1,0 +1,22 @@
+# A column left at its type's strategy writes nothing, so only the two that
+# were set come back. The setup writes STORAGE as a statement of its own, since
+# a column definition takes it only from 16 on, and lz4 stays out of the
+# server-backed fixtures since a build without it rejects the method.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      note text COMPRESSION pglz,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;
+dump: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      note text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;
+  ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;

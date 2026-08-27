@@ -1,0 +1,44 @@
+# SET DATA TYPE puts both settings back at the type's defaults, so a column
+# that keeps them across a type change has to be given them again, and one that
+# leaves them out is already where it belongs. A collation change goes through
+# the same statement, and PostgreSQL resets there too even though the type does
+# not move. The re-plan every apply case runs is what catches any of it going
+# wrong.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text COMPRESSION pglz,
+      note text,
+      title text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN note SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN title SET STORAGE EXTERNAL;
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body character varying(200) STORAGE main COMPRESSION pglz,
+      note character varying(200),
+      title text STORAGE external COLLATE pg_catalog."C",
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body character varying(200),
+      note character varying(200),
+      title text COLLATE pg_catalog."C",
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;
+  ALTER TABLE public.docs ALTER COLUMN title SET STORAGE EXTERNAL;
+applied_sql: |
+  ALTER TABLE public.docs ALTER COLUMN body SET DATA TYPE character varying(200);
+  ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;
+  ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;
+  ALTER TABLE public.docs ALTER COLUMN note SET DATA TYPE character varying(200);
+  ALTER TABLE public.docs ALTER COLUMN title SET DATA TYPE text COLLATE pg_catalog."C";
+  ALTER TABLE public.docs ALTER COLUMN title SET STORAGE EXTERNAL;

@@ -37,6 +37,26 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 			a.attidentity,
 			a.attgenerated,
 			quote_ident(con.nspname) || '.' || quote_ident(co.collname) AS collation,
+			-- attstorage always holds a strategy, so the type's own is read
+			-- alongside it: a column left at the default is only visible as
+			-- the two being equal.
+			COALESCE(CASE a.attstorage
+				WHEN 'p' THEN 'plain'
+				WHEN 'e' THEN 'external'
+				WHEN 'x' THEN 'extended'
+				WHEN 'm' THEN 'main'
+			END, '') AS storage_type,
+			COALESCE(CASE t.typstorage
+				WHEN 'p' THEN 'plain'
+				WHEN 'e' THEN 'external'
+				WHEN 'x' THEN 'extended'
+				WHEN 'm' THEN 'main'
+			END, '') AS type_storage,
+			CASE a.attcompression
+				WHEN 'p' THEN 'pglz'
+				WHEN 'l' THEN 'lz4'
+				ELSE ''
+			END AS compression,
 			d.description
 		FROM
 			pg_catalog.pg_attribute a
@@ -100,6 +120,9 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 			&col.Identity,
 			&col.Generated,
 			&col.Collation,
+			&col.StorageType,
+			&col.TypeStorage,
+			&col.Compression,
 			&col.Comment,
 		)
 		if err != nil {

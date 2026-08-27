@@ -234,6 +234,30 @@ func TestParseSQL_WarnsIgnoredAlterTableAction_KeepsSupportedAction(t *testing.T
 	assert.NotContains(t, out, "t_id_check", "the parsed action must not be reported as ignored")
 }
 
+// The storage and compression actions are read into the model, so neither
+// reaches the warning that covers the actions the parser drops.
+func TestParseSQL_ColumnStorageActionNotWarned(t *testing.T) {
+	var buf bytes.Buffer
+	restore := parser.SetWarnWriter(&buf)
+	defer restore()
+
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (body text);
+		ALTER TABLE public.t ALTER COLUMN body SET STORAGE MAIN;
+		ALTER TABLE public.t ALTER COLUMN body SET COMPRESSION pglz;
+	`)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.t")
+	require.True(t, ok)
+	col, ok := tbl.Columns.GetOk("body")
+	require.True(t, ok)
+	assert.Equal(t, "main", col.StorageType)
+	assert.Equal(t, "pglz", col.Compression)
+
+	assert.Empty(t, buf.String())
+}
+
 // Several dropped actions in one statement are reported together, on one line.
 func TestParseSQL_WarnsIgnoredAlterTableAction_MultipleActions(t *testing.T) {
 	var buf bytes.Buffer

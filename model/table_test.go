@@ -342,3 +342,49 @@ func TestTablesToSQL_multipleTables(t *testing.T) {
 	assert.Contains(t, got, "-- public.a")
 	assert.Contains(t, got, "-- public.b")
 }
+
+func TestTable_StorageSQL(t *testing.T) {
+	tbl := newTable("public", "docs")
+	// A column at its type's own strategy carries nothing.
+	tbl.Columns.Set("title", &model.Column{Name: "title", TypeName: "text", StorageType: "extended", TypeStorage: "extended"})
+	tbl.Columns.Set("body", &model.Column{Name: "body", TypeName: "text", StorageType: "external", TypeStorage: "extended"})
+	tbl.Columns.Set("note", &model.Column{Name: "note", TypeName: "text", StorageType: "extended", TypeStorage: "extended", Compression: "pglz"})
+
+	assert.Equal(t,
+		"ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;\n"+
+			"ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;",
+		tbl.StorageSQL())
+}
+
+func TestTable_StorageSQL_Empty(t *testing.T) {
+	tbl := newTable("public", "docs")
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", StorageType: "plain", TypeStorage: "plain"})
+	assert.Empty(t, tbl.StorageSQL())
+}
+
+// A partition child declares no columns of its own and takes the strategy from
+// its parent, so the statements belong to the parent alone.
+func TestTable_StorageSQL_PartitionChild(t *testing.T) {
+	tbl := newTable("public", "docs_1")
+	parent := "public.docs"
+	bound := "FOR VALUES FROM (0) TO (10)"
+	tbl.PartitionOf = &parent
+	tbl.PartitionBound = &bound
+	tbl.Columns.Set("body", &model.Column{Name: "body", TypeName: "text", StorageType: "external", TypeStorage: "extended"})
+	assert.Empty(t, tbl.StorageSQL())
+}
+
+func TestSetCompressionSQL_Default(t *testing.T) {
+	// An empty method hands the column back to default_toast_compression.
+	assert.Equal(t,
+		"ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION default;",
+		model.SetCompressionSQL("public.docs", "body", ""))
+}
+
+func TestTableToSQL_IncludesStorage(t *testing.T) {
+	tbl := newTable("public", "docs")
+	tbl.Columns.Set("body", &model.Column{Name: "body", TypeName: "text", StorageType: "main", TypeStorage: "extended"})
+	out := model.TableToSQL(tbl)
+	assert.Contains(t, out, "CREATE TABLE public.docs")
+	assert.Contains(t, out, "ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;")
+}
