@@ -552,8 +552,10 @@ func isSerialType(typeName string) bool {
 //     expression.
 //   - Turns those operators against a bare NULL literal into the IS NULL test
 //     parse analysis rewrites them to, and inverts such a test under a NOT.
+//   - Drops the schema qualifier from a function call name, which the catalog
+//     omits whenever the function's schema is on the search_path.
 //
-// All four are symmetric: they apply to the catalog side and the written side
+// All five are symmetric: they apply to the catalog side and the written side
 // alike. The walk reaches every node kind, so a sub-query inside an RLS policy
 // or a view body, and an expression inside a SQL/JSON constructor, get the
 // same treatment as a top-level operand.
@@ -590,7 +592,43 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 	if folded := foldNotNullTest(node); folded != nil {
 		return folded
 	}
+	stripFuncSchema(node)
 	return node
+}
+
+// lastNamePart drops everything before the final part of a qualified name, so
+// schema.f and catalog.schema.f both reduce to f. PostgreSQL accepts the
+// three-part form when the catalog names the current database, and pg_query
+// parses it, so matching on a two-part name alone would leave it drifting.
+//
+// parseTriggerDef applies it to an EXECUTE FUNCTION name, which is not an
+// expression node and so never reaches the walk above.
+func lastNamePart(name []*pg_query.Node) []*pg_query.Node {
+	if len(name) < 2 {
+		return name
+	}
+	return name[len(name)-1:]
+}
+
+// stripFuncSchema drops the schema qualifier from a function call name, so
+// public.f(v) and f(v) compare equal.
+//
+// pg_get_constraintdef, pg_get_expr, pg_get_indexdef, pg_get_viewdef and
+// pg_get_triggerdef print a call unqualified whenever the function's schema is
+// on the search_path, while the desired side keeps what the file wrote. Left
+// alone, a qualified call re-emits its constraint, index, policy, trigger,
+// default or view on every plan, and a generated expression, which cannot be
+// altered in place, fails the run outright.
+//
+// This is the treatment a view body's table reference already gets from
+// stripQualifications, and it carries the same tradeoff: two same-named
+// functions in different schemas compare equal, so moving a call from one
+// schema to another produces no diff. Telling them apart means reading the
+// search_path, which the diff does not thread.
+func stripFuncSchema(node *pg_query.Node) {
+	if fc := node.GetFuncCall(); fc != nil {
+		fc.Funcname = lastNamePart(fc.Funcname)
+	}
 }
 
 // foldNotDistinct turns NOT (a IS DISTINCT FROM b) into the equivalent

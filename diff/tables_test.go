@@ -3509,3 +3509,52 @@ func TestDiffForeignKeys_RenameSuppressionKeepsOtherRenames(t *testing.T) {
 		"ALTER TABLE ONLY public.t ADD CONSTRAINT b FOREIGN KEY (pid) REFERENCES q(id);",
 	}, addStmts)
 }
+
+// A call written schema-qualified compares equal to the unqualified form the
+// catalog prints once the function's schema is on the search_path. One case
+// per comparison entry point, since each parses its own way in.
+func TestStripFuncSchema(t *testing.T) {
+	t.Run("constraint", func(t *testing.T) {
+		assert.True(t, equalConstraintDef(
+			"CHECK ((lower_v(v) <> 'x'::text))",
+			"CHECK (public.lower_v(v) <> 'x')"))
+	})
+
+	t.Run("index expression", func(t *testing.T) {
+		assert.True(t, equalIndexDef(
+			"CREATE INDEX i ON public.t USING btree (lower_v(v))",
+			"CREATE INDEX i ON public.t USING btree (public.lower_v(v))"))
+	})
+
+	t.Run("index predicate", func(t *testing.T) {
+		assert.True(t, equalIndexDef(
+			"CREATE INDEX i ON public.t USING btree (v) WHERE (lower_v(v) <> 'y'::text)",
+			"CREATE INDEX i ON public.t USING btree (v) WHERE public.lower_v(v) <> 'y'"))
+	})
+
+	t.Run("select expression", func(t *testing.T) {
+		assert.True(t, equalSelectExpr("lower_v(v)", "public.lower_v(v)"))
+	})
+
+	t.Run("default", func(t *testing.T) {
+		assert.True(t, equalDefault(new("lower_v('A'::text)"), new("public.lower_v('A')")))
+	})
+
+	t.Run("view body", func(t *testing.T) {
+		assert.True(t, equalViewDef(
+			"SELECT lower_v(t.v) AS lv FROM t",
+			"SELECT public.lower_v(t.v) AS lv FROM public.t"))
+	})
+
+	// PostgreSQL accepts catalog.schema.f when the catalog names the current
+	// database, so the strip cannot key on a two-part name alone.
+	t.Run("three-part name", func(t *testing.T) {
+		assert.True(t, equalSelectExpr("lower_v(v)", "postgres.public.lower_v(v)"))
+	})
+
+	// A bare name has nothing to strip and must survive untouched.
+	t.Run("unqualified is left alone", func(t *testing.T) {
+		assert.True(t, equalSelectExpr("lower_v(v)", "lower_v(v)"))
+		assert.False(t, equalSelectExpr("lower_v(v)", "upper_v(v)"))
+	})
+}

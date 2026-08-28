@@ -548,49 +548,61 @@ is the same prerequisite as the INHERITS plan / apply entry above.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
-## Perpetual drift on a schema-qualified function call in a CHECK constraint
+## An EXCLUDE constraint is not normalized at all
 
 Priority: low.
 
-A CHECK constraint that calls a function schema-qualified, written as
-`CHECK (public.lower_v(v) <> 'x')`, is re-emitted as `DROP CONSTRAINT` +
-`ADD CONSTRAINT` on every plan. Applying it succeeds and changes nothing, so
-`plan --check` stays at exit code 2 forever. `pg_get_constraintdef` returns
-the call unqualified when the function's schema is on the search_path, while
-the desired side keeps what the user wrote.
+`equalConstraintDef` normalizes `RawExpr`, which is where a `CHECK` body sits.
+An exclusion constraint puts its elements in `Constraint.Exclusions` and its
+predicate in `Constraint.WhereClause`, and neither goes through
+`normalizeCheckExpr`, so the two sides are compared as the parser left them.
 
-`normalizeCheckExpr` (`diff/tables.go`) strips text-like casts and
-canonicalises `= ANY(ARRAY[...])` -> `IN (...)`, but never touches the
-`FuncCall` name, so the two forms deparse differently. Index expressions
-and index predicates run through `normalizeCheckExpr` as well
-(`normalizeIndexStmt`), so the same drift is expected there. A view body
-that calls a function qualified drifts the same way: `stripQualifications`
-(`diff/views.go`) clears `RangeVar.Schemaname` and never looks at the call.
+Every normalization the walk performs is therefore missing there. A
+schema-qualified call drifts, `EXCLUDE USING btree (public.lower_v(v) WITH =)`
+being re-emitted as `DROP CONSTRAINT` + `ADD CONSTRAINT` on every plan, and so
+does a cast the catalog adds and the file does not: `((v || 'x') WITH =)` is
+stored as `((v || 'x'::text) WITH =)`. This is wider than the schema question
+and predates the strip.
 
-A column `DEFAULT nextval('public.counter'::regclass)` drifts too, but not
-through the same node. The schema sits inside a string literal argument
-rather than in a `FuncCall` name, so stripping the name symmetrically leaves
-it; reaching it means reading the regclass literal. `equalDefault` applies no
-schema normalization of any kind.
+Passing `Exclusions` and `WhereClause` through the same walk is the obvious
+shape, and the elements are `IndexElem` nodes, which `normalizeIndexStmt`
+already knows how to handle.
 
-The codebase already normalizes schema qualification three different ways.
-`stripQualifications` (`diff/views.go`) clears `RangeVar.Schemaname` and a
-table-qualified `ColumnRef` unconditionally on both sides, without
-consulting the search_path. `normalizeFKSchema` (`diff/tables.go`) goes the
-other way and fills an empty schema in with the owning table's. And
-`stripTypeSchema` (`diff/tables.go`) removes only the container's own
-schema prefix.
+`dump` writes the catalog form, so a dump fed back plans clean and only a
+hand-written exclusion reaches this.
 
-The view approach is the cheapest fit here: strip the schema from a
-`FuncCall` name symmetrically in `normalizeCheckExpr`. It carries the same
-tradeoff views already accept, that two same-named functions in different
-schemas compare equal. The stricter alternative is the search_path-aware
-stripping described in the cross-schema user-type entry above, which the
-diff cannot do today because it does not thread the schema list.
+Workaround: write the exclusion the way `pg_get_constraintdef` prints it.
 
-Workaround: write the call unqualified.
+Origin: review of [#455](https://github.com/winebarrel/pistachio/pull/455).
 
-Origin: found while adding `-- pista:execute-first`, 2026-07-31.
+## Perpetual drift on a schema-qualified sequence in a column DEFAULT
+
+Priority: low.
+
+A column `DEFAULT nextval('public.counter'::regclass)` is re-emitted as
+`ALTER COLUMN ... SET DEFAULT` on every plan. Applying it succeeds and changes
+nothing, so `plan --check` stays at exit code 2 forever. `pg_get_expr` returns
+the sequence unqualified when its schema is on the search_path, while the
+desired side keeps what the user wrote.
+
+The call itself no longer drifts: `stripFuncSchema` (`diff/tables.go`) drops
+the schema from a `FuncCall` name symmetrically, which reaches every site
+`normalizeCheckExpr` covers. The sequence here is not in that name. It sits
+inside a string literal argument, so reaching it means reading the regclass
+literal, quoted identifiers included. `equalDefault` applies no schema
+normalization of any kind beyond the walk.
+
+A function moved between two schemas is the cost of the symmetric strip:
+`a.f(v)` and `b.f(v)` compare equal, so the move produces no diff. This is the
+tradeoff a view body's table reference already carries. Telling them apart
+means the search_path-aware stripping described in the cross-schema user-type
+entry above, which the diff cannot do today because it does not thread the
+schema list.
+
+Workaround: write the sequence unqualified.
+
+Origin: found while adding `-- pista:execute-first`, 2026-07-31. The function
+call half was closed later; the literal half is what remains.
 
 ## Perpetual drift on a serial column written as an explicit default
 

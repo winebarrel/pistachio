@@ -388,3 +388,26 @@ func TestRenameTriggerDef_Unparseable(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected parse result")
 }
+
+// pg_get_triggerdef omits the schema of the EXECUTE FUNCTION name once the
+// function's schema is on the search_path, so the written qualified form has
+// to compare equal to it. A three-part name is stripped the same way.
+func TestEqualTriggerDef_QualifiedFunction(t *testing.T) {
+	current := "CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION stamp()"
+
+	for name, desired := range map[string]string{
+		"two-part":   "CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION public.stamp()",
+		"three-part": "CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION postgres.public.stamp()",
+	} {
+		t.Run(name, func(t *testing.T) {
+			same, err := equalTriggerDef(current, desired, "public")
+			require.NoError(t, err)
+			assert.True(t, same)
+		})
+	}
+
+	// A different function is still a difference.
+	same, err := equalTriggerDef(current, "CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION public.other()", "public")
+	require.NoError(t, err)
+	assert.False(t, same)
+}
