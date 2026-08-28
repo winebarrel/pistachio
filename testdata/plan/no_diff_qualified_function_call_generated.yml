@@ -1,0 +1,21 @@
+# A generated expression that calls a function schema-qualified. This is the
+# one site where the qualified form does not merely drift: a generated
+# expression cannot be altered in place, so the diff fails outright and takes
+# the whole run with it, including the objects that have nothing to do with it.
+# That is why it is not in no_diff_qualified_function_call.yml.
+init: |
+  CREATE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      v text,
+      g text GENERATED ALWAYS AS (public.lower_v(v)) STORED,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      v text,
+      g text GENERATED ALWAYS AS (public.lower_v(v)) STORED,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+plan: ""

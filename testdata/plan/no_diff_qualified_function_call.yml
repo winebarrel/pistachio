@@ -2,20 +2,22 @@
 # pg_get_constraintdef, pg_get_indexdef, pg_get_viewdef and pg_get_triggerdef
 # all print the call unqualified once the function's schema is on the
 # search_path, so every expression site below compared a qualified form against
-# an unqualified one and re-emitted its statement on every plan. The generated
-# column was worse than drift: a generated expression cannot be altered in
-# place, so the run failed outright.
+# an unqualified one and re-emitted its statement on every plan. The
+# materialized view was the worst of them: DROP plus CREATE discards the data
+# it holds, on every apply.
 #
-# One site per statement kind, so a failure names the one that drifted. The
+# One site per statement kind, so a failure names the ones that drifted. The
+# generated column sits in no_diff_qualified_function_call_generated.yml
+# instead: it fails the diff outright, which would mask everything here. The
 # functions live in init alone because routines are unmanaged by default.
 init: |
   CREATE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
   CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE DOMAIN public.lowered AS text CONSTRAINT lowered_check CHECK (public.lower_v(VALUE) = VALUE);
   CREATE TABLE public.t (
       id integer NOT NULL,
       v text,
       d text DEFAULT public.lower_v('A'),
-      g text GENERATED ALWAYS AS (public.lower_v(v)) STORED,
       CONSTRAINT t_pkey PRIMARY KEY (id),
       CONSTRAINT t_v_check CHECK (public.lower_v(v) <> 'x')
   );
@@ -23,14 +25,16 @@ init: |
   CREATE INDEX t_pred_idx ON public.t (v) WHERE public.lower_v(v) <> 'y';
   ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
   CREATE POLICY t_pol ON public.t USING (public.lower_v(v) <> 'z');
+  CREATE POLICY t_pol_w ON public.t FOR INSERT WITH CHECK (public.lower_v(v) <> 'w');
   CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW WHEN (public.lower_v(NEW.v) <> 'q') EXECUTE FUNCTION public.stamp();
   CREATE VIEW public.v AS SELECT public.lower_v(t.v) AS lv FROM public.t;
+  CREATE MATERIALIZED VIEW public.mv AS SELECT public.lower_v(t.v) AS lv FROM public.t;
 desired: |
+  CREATE DOMAIN public.lowered AS text CONSTRAINT lowered_check CHECK (public.lower_v(VALUE) = VALUE);
   CREATE TABLE public.t (
       id integer NOT NULL,
       v text,
       d text DEFAULT public.lower_v('A'),
-      g text GENERATED ALWAYS AS (public.lower_v(v)) STORED,
       CONSTRAINT t_pkey PRIMARY KEY (id),
       CONSTRAINT t_v_check CHECK (public.lower_v(v) <> 'x')
   );
@@ -38,6 +42,8 @@ desired: |
   CREATE INDEX t_pred_idx ON public.t (v) WHERE public.lower_v(v) <> 'y';
   ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
   CREATE POLICY t_pol ON public.t USING (public.lower_v(v) <> 'z');
+  CREATE POLICY t_pol_w ON public.t FOR INSERT WITH CHECK (public.lower_v(v) <> 'w');
   CREATE TRIGGER t_stamp BEFORE INSERT ON public.t FOR EACH ROW WHEN (public.lower_v(NEW.v) <> 'q') EXECUTE FUNCTION public.stamp();
   CREATE VIEW public.v AS SELECT public.lower_v(t.v) AS lv FROM public.t;
+  CREATE MATERIALIZED VIEW public.mv AS SELECT public.lower_v(t.v) AS lv FROM public.t;
 plan: ""

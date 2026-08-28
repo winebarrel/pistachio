@@ -612,11 +612,13 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 // schema to another produces no diff. Telling them apart means reading the
 // search_path, which the diff does not thread.
 //
-// Only a two-part name is touched. A bare name has nothing to strip, and a
-// longer one is not a function call the parser accepts.
+// Everything before the last part goes, so schema.f and catalog.schema.f both
+// reduce to f. PostgreSQL accepts the three-part form when the catalog names
+// the current database, and pg_query parses it, so matching on a two-part name
+// alone would leave it drifting.
 func stripFuncSchema(node *pg_query.Node) {
-	if fc := node.GetFuncCall(); fc != nil && len(fc.Funcname) == 2 {
-		fc.Funcname = fc.Funcname[1:]
+	if fc := node.GetFuncCall(); fc != nil && len(fc.Funcname) > 1 {
+		fc.Funcname = fc.Funcname[len(fc.Funcname)-1:]
 	}
 }
 

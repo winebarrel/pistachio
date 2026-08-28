@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Stop a schema-qualified function call from drifting. `pg_get_constraintdef`, `pg_get_expr`, `pg_get_indexdef`, `pg_get_viewdef` and `pg_get_triggerdef` all print a call unqualified once the function's schema is on the search_path, while the desired side keeps what the file wrote, so `CHECK (public.lower_v(v) <> 'x')` and every other call written that way re-emitted its statement on every plan. A `CHECK` was dropped and re-added, which revalidates the whole table, an index was rebuilt, and a materialized view was dropped and recreated, discarding the data it held. A generated expression did not drift but failed the run outright, since it cannot be altered in place. The strip is symmetric and carries the tradeoff a view body's table reference already has: two same-named functions in different schemas compare equal. A schema inside a `nextval('public.counter'::regclass)` literal is not a call name and still drifts; TODO.md covers it.
+
 * Name the same pair every run when `-m` maps two schemas onto one destination. The check walked a Go map, so with three sources on one destination the rejection named a different pair each time the same command was run.
 
 * Stop one suppressed constraint rename from taking another with it. A renamed constraint whose definition also changes goes through `DROP` and `ADD` rather than `RENAME`, and the `RENAME` was suppressed by matching the rendered statement as a substring. With `a` renamed to `b` alongside `xa` renamed to `by` on one table, the needle for the first matched the statement for the second, so `xa` was left in the database under its old name and the same plan came back on the next run. Foreign keys were suppressed the same way and had the same hole.
