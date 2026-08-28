@@ -798,14 +798,6 @@ symmetric. `CREATE AGGREGATE` has a shape `model.Routine` does not cover.
 
 Origin: routine support.
 
-## Sample database coverage has no Routines column
-
-The table in `sample-db-test.md` counts tables, columns, indexes, FKs,
-constraints, views, types, sequences and triggers per sample. The counts predate
-`--manage-routine`, so routines have no column yet.
-
-Origin: routine support.
-
 ## `COMMENT ON INDEX` is not managed
 
 Priority: low.
