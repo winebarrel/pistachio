@@ -9,6 +9,12 @@ import (
 // filterDesiredBySchemas removes objects from the parse result whose schema
 // is not in the target schemas list. This prevents objects from unrelated
 // schemas in the SQL file from being treated as desired state.
+//
+// Every object map ParseResult carries is named below. One left out reaches the
+// diff with nothing to compare against, so the plan creates it in a schema the
+// run was not asked to manage. ExecuteStmts is not an object map: a
+// -- pista:execute statement is raw SQL the file asked to run, which carries no
+// schema to filter on.
 func filterDesiredBySchemas(result *parser.ParseResult, schemas []string, schemaMap map[string]string) {
 	schemaSet := make(map[string]bool, len(schemas))
 	for _, s := range schemas {
@@ -24,6 +30,7 @@ func filterDesiredBySchemas(result *parser.ParseResult, schemas []string, schema
 	result.Enums = filterMapBySchema(result.Enums, schemaSet, func(e *model.Enum) string { return e.Schema })
 	result.Domains = filterMapBySchema(result.Domains, schemaSet, func(d *model.Domain) string { return d.Schema })
 	result.CompositeTypes = filterMapBySchema(result.CompositeTypes, schemaSet, func(ct *model.CompositeType) string { return ct.Schema })
+	result.Sequences = filterMapBySchema(result.Sequences, schemaSet, func(s *model.Sequence) string { return s.Schema })
 	result.Routines = filterMapBySchema(result.Routines, schemaSet, func(r *model.Routine) string { return r.Schema })
 }
 
