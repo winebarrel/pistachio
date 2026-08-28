@@ -7,6 +7,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -243,6 +244,12 @@ func resolveUnqualified(name, defaultSchema string, defined map[string]bool) str
 
 // extractViewDeps parses a view definition SQL to find referenced tables/views.
 // Uses pg_query to parse the SELECT statement and extract RangeVar references.
+//
+// The walk reaches every node kind, which the older enumeration could not do: a
+// sub-query under a cast, GREATEST, an array or row constructor, a subscript,
+// ORDER BY, GROUP BY, LIMIT, an OVER clause or an aggregate FILTER named a
+// relation the view was then ordered without waiting for. Two new views in one
+// run, one reading the other from such a position, applied in the wrong order.
 func extractViewDeps(definition, defaultSchema string, defined map[string]bool) []string {
 	seen := make(map[string]bool)
 
@@ -256,9 +263,15 @@ func extractViewDeps(definition, defaultSchema string, defined map[string]bool) 
 		return extractViewDepsFallback(definition, defaultSchema, defined)
 	}
 
-	// Walk the AST to find RangeVar nodes
 	for _, stmt := range result.Stmts {
-		collectRangeVars(stmt.Stmt, defaultSchema, defined, seen)
+		pgast.Walk(stmt.Stmt, pgast.WalkOptions{}, func(_ pgast.Ctx, node *pg_query.Node) *pg_query.Node {
+			if rv := node.GetRangeVar(); rv != nil {
+				if name := qualifyRangeVar(rv, defaultSchema, defined); name != "" {
+					seen[name] = true
+				}
+			}
+			return node
+		})
 	}
 
 	deps := make([]string, 0, len(seen))
@@ -267,124 +280,6 @@ func extractViewDeps(definition, defaultSchema string, defined map[string]bool) 
 	}
 	sort.Strings(deps)
 	return deps
-}
-
-// collectRangeVars recursively walks a pg_query Node tree to find all
-// RangeVar references (table/view names in FROM clauses, JOINs, subqueries).
-func collectRangeVars(node *pg_query.Node, defaultSchema string, defined map[string]bool, seen map[string]bool) {
-	if node == nil {
-		return
-	}
-
-	// Check if this node is a RangeVar
-	if rv := node.GetRangeVar(); rv != nil {
-		if name := qualifyRangeVar(rv, defaultSchema, defined); name != "" {
-			seen[name] = true
-		}
-		return
-	}
-
-	// Check if this is a SelectStmt and walk its parts
-	if ss := node.GetSelectStmt(); ss != nil {
-		// CTEs (WITH clause)
-		if ss.WithClause != nil {
-			for _, cte := range ss.WithClause.Ctes {
-				if c := cte.GetCommonTableExpr(); c != nil {
-					collectRangeVars(c.Ctequery, defaultSchema, defined, seen)
-				}
-			}
-		}
-		// FROM clause
-		for _, from := range ss.FromClause {
-			collectRangeVars(from, defaultSchema, defined, seen)
-		}
-		// Target list (scalar subqueries in SELECT)
-		for _, target := range ss.TargetList {
-			if rt := target.GetResTarget(); rt != nil && rt.Val != nil {
-				collectRangeVars(rt.Val, defaultSchema, defined, seen)
-			}
-		}
-		if ss.WhereClause != nil {
-			collectRangeVars(ss.WhereClause, defaultSchema, defined, seen)
-		}
-		if ss.HavingClause != nil {
-			collectRangeVars(ss.HavingClause, defaultSchema, defined, seen)
-		}
-		// Set operations (UNION, INTERSECT, EXCEPT)
-		if ss.Larg != nil {
-			collectRangeVars(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Larg}}, defaultSchema, defined, seen)
-		}
-		if ss.Rarg != nil {
-			collectRangeVars(&pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss.Rarg}}, defaultSchema, defined, seen)
-		}
-		return
-	}
-
-	// Walk JoinExpr (including join qualifiers that may contain subqueries)
-	if join := node.GetJoinExpr(); join != nil {
-		collectRangeVars(join.Larg, defaultSchema, defined, seen)
-		collectRangeVars(join.Rarg, defaultSchema, defined, seen)
-		if join.Quals != nil {
-			collectRangeVars(join.Quals, defaultSchema, defined, seen)
-		}
-		return
-	}
-
-	// Walk subselect
-	if sub := node.GetRangeSubselect(); sub != nil {
-		collectRangeVars(sub.Subquery, defaultSchema, defined, seen)
-		return
-	}
-
-	// Walk sublink (subquery in WHERE/HAVING clause, e.g., EXISTS, IN)
-	if sl := node.GetSubLink(); sl != nil {
-		collectRangeVars(sl.Subselect, defaultSchema, defined, seen)
-		return
-	}
-
-	// Walk expression nodes that may contain subqueries
-	if expr := node.GetAExpr(); expr != nil {
-		collectRangeVars(expr.Lexpr, defaultSchema, defined, seen)
-		collectRangeVars(expr.Rexpr, defaultSchema, defined, seen)
-		return
-	}
-
-	if boolExpr := node.GetBoolExpr(); boolExpr != nil {
-		for _, arg := range boolExpr.Args {
-			collectRangeVars(arg, defaultSchema, defined, seen)
-		}
-		return
-	}
-
-	if fc := node.GetFuncCall(); fc != nil {
-		for _, arg := range fc.Args {
-			collectRangeVars(arg, defaultSchema, defined, seen)
-		}
-		return
-	}
-
-	if ce := node.GetCoalesceExpr(); ce != nil {
-		for _, arg := range ce.Args {
-			collectRangeVars(arg, defaultSchema, defined, seen)
-		}
-		return
-	}
-
-	if cs := node.GetCaseExpr(); cs != nil {
-		if cs.Arg != nil {
-			collectRangeVars(cs.Arg, defaultSchema, defined, seen)
-		}
-		for _, when := range cs.Args {
-			if w := when.GetCaseWhen(); w != nil {
-				collectRangeVars(w.Expr, defaultSchema, defined, seen)
-				collectRangeVars(w.Result, defaultSchema, defined, seen)
-			}
-		}
-		if cs.Defresult != nil {
-			collectRangeVars(cs.Defresult, defaultSchema, defined, seen)
-		}
-		return
-	}
 }
 
 // qualifyRangeVar returns the schema-qualified FQDN of a RangeVar that exists
