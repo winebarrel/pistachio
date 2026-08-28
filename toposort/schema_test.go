@@ -1252,3 +1252,85 @@ func TestOrderFromSchema_ViewWithFromSubquery(t *testing.T) {
 
 	assert.Less(t, idx["public.orders"], idx["public.order_totals"], "orders referenced in FROM subquery")
 }
+
+// A table reference sits wherever an expression can, and the walk has to reach
+// all of them. Each case names z_defaults from a position of its own. That name
+// sorts after the view, so only the dependency edge can place it first.
+func TestOrderFromSchema_ViewWithNestedSubquery(t *testing.T) {
+	definitions := map[string]string{
+		"cast":       "SELECT id, (SELECT val FROM z_defaults LIMIT 1)::text FROM users",
+		"greatest":   "SELECT id, GREATEST((SELECT val FROM z_defaults LIMIT 1), 0) FROM users",
+		"order by":   "SELECT id FROM users ORDER BY (SELECT val FROM z_defaults LIMIT 1)",
+		"group by":   "SELECT id FROM users GROUP BY id, (SELECT val FROM z_defaults LIMIT 1)",
+		"array":      "SELECT id, ARRAY[(SELECT val FROM z_defaults LIMIT 1)] FROM users",
+		"row":        "SELECT id, ROW((SELECT val FROM z_defaults LIMIT 1)) FROM users",
+		"is null":    "SELECT id FROM users WHERE (SELECT val FROM z_defaults LIMIT 1) IS NULL",
+		"window":     "SELECT id, count(*) OVER (PARTITION BY (SELECT val FROM z_defaults LIMIT 1)) FROM users",
+		"limit":      "SELECT id FROM users LIMIT (SELECT val FROM z_defaults LIMIT 1)",
+		"lateral":    "SELECT u.id FROM users u, LATERAL (SELECT val FROM z_defaults) d",
+		"filter":     "SELECT count(*) FILTER (WHERE id > (SELECT val FROM z_defaults LIMIT 1)) FROM users",
+		"values":     "SELECT id FROM users UNION ALL SELECT * FROM (VALUES ((SELECT val FROM z_defaults LIMIT 1))) v(id)",
+		"subscript":  "SELECT id, (ARRAY[1, 2])[(SELECT val FROM z_defaults LIMIT 1)] FROM users",
+		"not exists": "SELECT id FROM users WHERE NOT EXISTS (SELECT 1 FROM z_defaults)",
+	}
+
+	for name, definition := range definitions {
+		t.Run(name, func(t *testing.T) {
+			tables := orderedmap.New[string, *model.Table]()
+			tables.Set("public.users", newTable("public", "users"))
+			tables.Set("public.z_defaults", newTable("public", "z_defaults"))
+
+			views := orderedmap.New[string, *model.View]()
+			views.Set("public.a_view", &model.View{Schema: "public", Name: "a_view", Definition: definition})
+
+			order, err := orderFromSchema(
+				orderedmap.New[string, *model.Enum](),
+				orderedmap.New[string, *model.Domain](),
+				tables, views)
+			require.NoError(t, err)
+
+			idx := make(map[string]int)
+			for i, n := range order {
+				idx[n] = i
+			}
+			assert.Less(t, idx["public.users"], idx["public.a_view"])
+			assert.Less(t, idx["public.z_defaults"], idx["public.a_view"])
+		})
+	}
+}
+
+// A composite type is created after the types its attributes name. Both names
+// sort after the composite type, so only the dependency edges place them first.
+func TestOrderFromSchema_CompositeTypeAttributeTypes(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	enums.Set("public.z_status", &model.Enum{Schema: "public", Name: "z_status", Values: []string{"ok"}})
+
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set("public.z_positive", &model.Domain{Schema: "public", Name: "z_positive", BaseType: "integer"})
+
+	compositeTypes := orderedmap.New[string, *model.CompositeType]()
+	compositeTypes.Set("public.a_row", &model.CompositeType{
+		Schema: "public",
+		Name:   "a_row",
+		Attributes: []*model.CompositeAttribute{
+			{Name: "state", TypeName: "z_status"},
+			{Name: "qty", TypeName: "public.z_positive"},
+		},
+	})
+
+	order, err := toposort.OrderFromSchema(
+		enums, domains, compositeTypes,
+		orderedmap.New[string, *model.Table](),
+		orderedmap.New[string, *model.View](),
+		orderedmap.New[string, *model.Sequence](),
+		orderedmap.New[string, *model.Routine]())
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.z_status"], idx["public.a_row"], "enum before composite type")
+	assert.Less(t, idx["public.z_positive"], idx["public.a_row"], "domain before composite type")
+}
