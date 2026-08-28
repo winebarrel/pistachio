@@ -448,11 +448,11 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 }
 
 // detectPolicyRenames finds desired policies with RenameFrom that match a
-// current policy on the same table. Returns the rename statements, the
-// adjusted current map keyed by new names, and a renamedFrom[newName] = oldName
-// map so the caller can suppress the RENAME when the policy needs DROP+CREATE.
-func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Policy]) ([]string, *orderedmap.Map[string, *model.Policy], map[string]string, error) {
-	var stmts []string
+// current policy on the same table. Returns the adjusted current map keyed by
+// new names and a renamedFrom[newName] = oldName map. The caller renders the
+// ALTER POLICY ... RENAME statements, so it can both suppress the ones whose
+// policy needs DROP+CREATE and keep the rest in the desired schema's order.
+func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Policy]) (*orderedmap.Map[string, *model.Policy], map[string]string, error) {
 	adjusted := cloneMap(current)
 	renamedFrom := map[string]string{}
 
@@ -471,14 +471,13 @@ func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *
 			if _, exists := adjusted.GetOk(newName); exists {
 				continue
 			}
-			return nil, nil, nil, fmt.Errorf("rename source policy %s not found on %s", model.Ident(oldName), fqtn)
+			return nil, nil, fmt.Errorf("rename source policy %s not found on %s", model.Ident(oldName), fqtn)
 		}
 
 		if _, exists := adjusted.GetOk(newName); exists {
-			return nil, nil, nil, fmt.Errorf("cannot rename policy %s to %s on %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
+			return nil, nil, fmt.Errorf("cannot rename policy %s to %s on %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
 		}
 
-		stmts = append(stmts, "ALTER POLICY "+model.Ident(oldName)+" ON "+fqtn+" RENAME TO "+model.Ident(newName)+";")
 		renamedFrom[newName] = oldName
 
 		adjusted.Delete(oldName)
@@ -487,7 +486,7 @@ func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *
 		adjusted.Set(newName, &renamed)
 	}
 
-	return stmts, adjusted, renamedFrom, nil
+	return adjusted, renamedFrom, nil
 }
 
 // cloneMap creates a shallow copy of an orderedmap.

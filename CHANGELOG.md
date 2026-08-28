@@ -4,6 +4,8 @@
 
 * Evaluate a `-- pista:execute` check under the target schemas in `plan`, as `apply` already did. `plan` ran the check under the connection's `search_path`, which is `public` by default, so a check reading a table in another target schema failed there and the statement was reported as undetermined, while `apply` answered the check and skipped it. The plan advertised a statement that never ran. The `SET` goes out only on a run that has a check to evaluate, and after the catalog has been read, so nothing else moves.
 
+* Emit the `ALTER POLICY ... RENAME TO` statements in the desired schema's order. The renames were read out of a Go map, whose iteration order is randomized, so a plan renaming two or more policies on one table printed them in a different order on every run. The statements are independent, so only the output moved, but a plan that is reviewed, or diffed against the previous run, has to be stable.
+
 ## [1.34.0] - 2026-08-28
 
 * Manage a partitioned table without its partitions, behind `--skip-partition-child` (`$PISTA_SKIP_PARTITION_CHILD`). Where another tool creates the partitions, pg_partman for example, a schema file that declares the parent alone planned a `DROP TABLE` for every partition, and `-E` only reached names that carry a pattern. With the flag `dump` writes the parent alone, and `plan` / `apply` skip a partition on both sides of the diff, including the indexes, policies and comments it owns. The parent stays managed, and PostgreSQL carries `ADD COLUMN` and an index created on it down to the partitions. A partition is skipped whether or not it is partitioned itself, so a sub-partitioned level goes with the leaves under it. An `INHERITS` child carries no partition bound and stays managed.
