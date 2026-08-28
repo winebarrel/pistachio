@@ -21,6 +21,13 @@ on the first plan (the second run after applying the rename is clean):
 
 Resolving these requires cross-object awareness in the diff phase.
 
+The rewrite does not reach a partition child. `diffTable` takes a separate
+branch for one, which returns before the rewrite block, and a `PARTITION OF`
+child declares no columns, so its own rename map is empty. A trigger or policy
+created directly on a child is in the model, since the catalog excludes only
+the clones the parent pushes down, so a rename on the parent leaves a redundant
+statement on such a child. Carrying the rename there needs the parent's map.
+
 Origin: [#123](https://github.com/winebarrel/pistachio/pull/123).
 
 ## Validation of column refs in GENERATED / DEFAULT expressions
