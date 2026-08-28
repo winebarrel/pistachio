@@ -219,10 +219,12 @@ func alterTriggerStateSQL(fqtn string, trg *model.Trigger) string {
 
 // parseTriggerDef parses a CREATE TRIGGER statement and takes out the wording
 // that says nothing about the trigger's state: an implicit relation schema is
-// filled in from the owning relation, OR REPLACE is cleared, and the WHEN
-// expression goes through the normalization constraint CHECK bodies use, since
-// pg_get_triggerdef adds casts there the way pg_get_constraintdef does. It
-// returns the whole result so the caller can deparse it back.
+// filled in from the owning relation, OR REPLACE is cleared, the schema of the
+// EXECUTE FUNCTION name is dropped, since pg_get_triggerdef omits it once the
+// function's schema is on the search_path, and the WHEN expression goes through
+// the normalization constraint CHECK bodies use, since pg_get_triggerdef adds
+// casts there the way pg_get_constraintdef does. It returns the whole result so
+// the caller can deparse it back.
 func parseTriggerDef(def, schema string) (*pg_query.ParseResult, *pg_query.CreateTrigStmt, error) {
 	result, err := pg_query.Parse(def)
 	if err != nil {
@@ -239,6 +241,9 @@ func parseTriggerDef(def, schema string) (*pg_query.ParseResult, *pg_query.Creat
 		ct.Relation.Schemaname = schema
 	}
 	ct.Replace = false
+	if len(ct.Funcname) == 2 {
+		ct.Funcname = ct.Funcname[1:]
+	}
 	if ct.WhenClause != nil {
 		ct.WhenClause = normalizeCheckExpr(ct.WhenClause)
 	}
