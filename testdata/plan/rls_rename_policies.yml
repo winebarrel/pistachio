@@ -1,0 +1,27 @@
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY old_read ON public.documents FOR SELECT USING (owner = current_user);
+  CREATE POLICY old_write ON public.documents FOR INSERT WITH CHECK (owner = current_user);
+  CREATE POLICY old_purge ON public.documents FOR DELETE USING (owner = current_user);
+desired: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  -- pista:renamed-from old_read
+  CREATE POLICY new_read ON public.documents FOR SELECT USING (owner = current_user);
+  -- pista:renamed-from old_write
+  CREATE POLICY new_write ON public.documents FOR INSERT WITH CHECK (owner = current_user);
+  -- pista:renamed-from old_purge
+  CREATE POLICY new_purge ON public.documents FOR DELETE USING (owner = current_user);
+plan: |
+  ALTER POLICY old_read ON public.documents RENAME TO new_read;
+  ALTER POLICY old_write ON public.documents RENAME TO new_write;
+  ALTER POLICY old_purge ON public.documents RENAME TO new_purge;
