@@ -319,3 +319,121 @@ func TestRewriteColumnRefsInForeignKeys_RewritesLocalAttrs(t *testing.T) {
 	assert.Contains(t, got.Definition, "(buyer_id)")
 	assert.Contains(t, got.Definition, "users (id)")
 }
+
+func TestRewriteColumnRefsInTriggers_RewritesUpdateOfAndWhen(t *testing.T) {
+	in := orderedmap.New[string, *model.Trigger]()
+	original := &model.Trigger{
+		Schema: "public",
+		Table:  "products",
+		Name:   "products_audit",
+		Definition: "CREATE TRIGGER products_audit AFTER UPDATE OF qty ON public.products " +
+			"FOR EACH ROW WHEN (new.qty IS DISTINCT FROM old.qty) EXECUTE FUNCTION public.stamp()",
+	}
+	in.Set("products_audit", original)
+
+	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	got, ok := out.GetOk("products_audit")
+	require.True(t, ok)
+	assert.Contains(t, got.Definition, "UPDATE OF quantity")
+	assert.Contains(t, got.Definition, "new.quantity IS DISTINCT FROM old.quantity")
+	assert.NotContains(t, got.Definition, "qty")
+	// The original input must not be mutated.
+	assert.Contains(t, original.Definition, "UPDATE OF qty")
+}
+
+func TestRewriteColumnRefsInTriggers_LeavesFunctionArgsAlone(t *testing.T) {
+	// PostgreSQL does not rewrite the arguments passed to the trigger function
+	// on RENAME COLUMN, so neither does the rewriter.
+	in := orderedmap.New[string, *model.Trigger]()
+	in.Set("t", &model.Trigger{
+		Definition: "CREATE TRIGGER t AFTER UPDATE ON public.products " +
+			"FOR EACH ROW EXECUTE FUNCTION public.stamp('qty')",
+	})
+
+	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	got, ok := out.GetOk("t")
+	require.True(t, ok)
+	assert.Contains(t, got.Definition, "'qty'")
+}
+
+func TestRewriteColumnRefsInTriggers_LeavesOtherQualifiersAlone(t *testing.T) {
+	// Only NEW and OLD qualify a column in a WHEN clause. A qualifier naming
+	// anything else is not a column reference this rewrite owns.
+	in := orderedmap.New[string, *model.Trigger]()
+	in.Set("t", &model.Trigger{
+		Definition: "CREATE TRIGGER t AFTER UPDATE ON public.products " +
+			"FOR EACH ROW WHEN (new.qty > other.qty) EXECUTE FUNCTION public.stamp()",
+	})
+
+	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	got, ok := out.GetOk("t")
+	require.True(t, ok)
+	assert.Contains(t, got.Definition, "new.quantity")
+	assert.Contains(t, got.Definition, "other.qty")
+}
+
+func TestRewriteColumnRefsInTriggers_NoCascadeOnChain(t *testing.T) {
+	// a->b alongside b->c must not cascade through a single reference to c.
+	in := orderedmap.New[string, *model.Trigger]()
+	in.Set("t", &model.Trigger{
+		Definition: "CREATE TRIGGER t AFTER UPDATE OF a, b ON public.products " +
+			"FOR EACH ROW EXECUTE FUNCTION public.stamp()",
+	})
+
+	out := rewriteColumnRefsInTriggers(in, map[string]string{"a": "b", "b": "c"})
+	got, ok := out.GetOk("t")
+	require.True(t, ok)
+	assert.Contains(t, got.Definition, "UPDATE OF b, c")
+}
+
+func TestRewriteColumnRefsInTriggers_RewritesQuotedName(t *testing.T) {
+	in := orderedmap.New[string, *model.Trigger]()
+	in.Set("t", &model.Trigger{
+		Definition: `CREATE TRIGGER t AFTER UPDATE OF "Qty" ON public.products ` +
+			`FOR EACH ROW WHEN (new."Qty" > 0) EXECUTE FUNCTION public.stamp()`,
+	})
+
+	out := rewriteColumnRefsInTriggers(in, one("Qty", "Quantity"))
+	got, ok := out.GetOk("t")
+	require.True(t, ok)
+	assert.Contains(t, got.Definition, `UPDATE OF "Quantity"`)
+	assert.Contains(t, got.Definition, `new."Quantity" > 0`)
+}
+
+func TestRewriteColumnRefsInTriggers_FallbackOnParseError(t *testing.T) {
+	in := orderedmap.New[string, *model.Trigger]()
+	in.Set("t", &model.Trigger{Definition: "not a valid CREATE TRIGGER"})
+
+	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	got, ok := out.GetOk("t")
+	require.True(t, ok)
+	// Unparseable definitions are kept intact so downstream comparison still works.
+	assert.Equal(t, "not a valid CREATE TRIGGER", got.Definition)
+}
+
+func TestRewriteColumnRefsInTriggers_FallbackOnEmptyDefinition(t *testing.T) {
+	in := orderedmap.New[string, *model.Trigger]()
+	in.Set("t", &model.Trigger{Definition: ""})
+
+	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	got, ok := out.GetOk("t")
+	require.True(t, ok)
+	assert.Equal(t, "", got.Definition)
+}
+
+func TestRewriteColumnRefsInTriggers_FallbackOnOtherStatement(t *testing.T) {
+	in := orderedmap.New[string, *model.Trigger]()
+	in.Set("t", &model.Trigger{Definition: "SELECT qty FROM public.products"})
+
+	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
+	got, ok := out.GetOk("t")
+	require.True(t, ok)
+	// Parseable but not a CREATE TRIGGER, so nothing is rewritten.
+	assert.Equal(t, "SELECT qty FROM public.products", got.Definition)
+}
+
+func TestRewriteColumnRefsInTriggers_NilPassesThrough(t *testing.T) {
+	// A relation with no triggers carries a nil map, which triggerMap
+	// normalizes downstream.
+	assert.Nil(t, rewriteColumnRefsInTriggers(nil, one("qty", "quantity")))
+}
