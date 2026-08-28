@@ -1,12 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [1.33.0] - 2026-08-28
 
 * Check the column references in a `DEFAULT` or `GENERATED` expression against the table's desired columns. The validator already read the index, constraint and foreign-key definitions on a table, so a stale name left in one of those failed the plan with a message naming it, while the same name in a column expression reached the database and failed there. A generated expression may reference only columns of its own table, so every name it carries is checked. A plain `DEFAULT` may reference no column at all, which PostgreSQL rejects on its own; the names it does carry are checked the same way rather than rejected outright. An expression pg_query cannot read is skipped, the way an unreadable index definition already was.
 
 * Carry the triggers, policies and generated columns on a table through a column rename. `-- pista:renamed-from` rewrote the column references in the same table's indexes, constraints and foreign keys before the comparison, and left the other three same-table dependents alone. A trigger `UPDATE OF` list or `WHEN` expression, and a policy `USING` / `WITH CHECK` clause, read as a definition change, so the plan carried a `CREATE OR REPLACE TRIGGER` or an `ALTER POLICY` next to the rename. PostgreSQL applies `RENAME COLUMN` to all of them, so neither statement changed anything, and the trigger one took a `SHARE ROW EXCLUSIVE` lock to do it. A stored generated expression was worse than noise: it cannot be altered in place, so the run failed with `cannot change GENERATED expression` on a rename PostgreSQL would have carried through.
 
   A constraint trigger keeps its kind through the rewrite, so it is not dropped and recreated either. The arguments passed to a trigger function are left alone, as PostgreSQL does not rewrite them, and so is a plain `DEFAULT`, which cannot reference a column. Views and other tables are still not rewritten; TODO.md records what is left.
+
+## [1.32.0] - 2026-08-28
 
 * Stop `IS NOT DISTINCT FROM` from drifting. PostgreSQL stores the operator as the negation of `IS DISTINCT FROM`, so a desired schema that wrote it never matched the catalog: a `CHECK` was dropped and re-added on every run, which revalidates the whole table, and an index using it was rebuilt. The fold sits in the shared expression normalization, so a view body, a policy `USING` / `WITH CHECK`, a trigger `WHEN` clause and a domain `CHECK` get it too. A generated column did not drift but failed the run, since a generated expression cannot be altered in place.
 
