@@ -698,6 +698,8 @@ prints the name it chose, so a view whose body holds
 two `ResTarget` names disagree, and `CREATE OR REPLACE VIEW` is re-emitted on
 every plan. Reproducing the name means reimplementing `FigureColname`, which
 walks the expression to pick a function name, a column name or `?column?`.
+`figureIndexColname` (`parser/parser.go`) already walks an expression this way
+for an index element, so the shared half of the work is in the tree.
 
 Workaround: write the alias the way `pista dump` emits it.
 
