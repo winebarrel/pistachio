@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
@@ -738,6 +739,78 @@ func rewriteColumnRefsInTriggers(triggers *orderedmap.Map[string, *model.Trigger
 		clone := *trg
 		if updated, err := rewriteColumnsInTriggerDef(clone.Definition, renames); err == nil {
 			clone.Definition = updated
+		}
+		out.Set(name, &clone)
+	}
+	return out
+}
+
+// rewriteColumnsInExpr returns a bare SQL expression with column references
+// rewritten according to the renames map (old -> new). Policy USING /
+// WITH CHECK clauses and stored-generated column expressions are stored this
+// way, and both reference columns of their own table unqualified.
+//
+// All renames are applied in a single AST walk, so chained renames (a->b and
+// b->c) do not cascade.
+func rewriteColumnsInExpr(expr string, renames map[string]string) (string, error) {
+	result, target, err := parseSelectExpr(expr)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse expression: %w", err)
+	}
+	rewriteColumnRefsInExpr(target.Val, renames)
+	sql, err := pg_query.Deparse(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to deparse expression: %w", err)
+	}
+	return strings.TrimPrefix(sql, "SELECT "), nil
+}
+
+// rewriteColumnRefsInPolicies returns a clone of policies with USING and
+// WITH CHECK updated to reflect the column renames. PostgreSQL applies
+// RENAME COLUMN to a policy on the same table, so without the rewrite the
+// comparison reads the rename as an expression change and emits a redundant
+// ALTER POLICY. Expressions that fail to parse/deparse are left unchanged,
+// which falls back to that redundant statement.
+func rewriteColumnRefsInPolicies(policies *orderedmap.Map[string, *model.Policy], renames map[string]string) *orderedmap.Map[string, *model.Policy] {
+	out := orderedmap.New[string, *model.Policy]()
+	for name, pol := range policies.All() {
+		clone := *pol
+		clone.Using = rewriteColumnsInExprPtr(pol.Using, renames)
+		clone.WithCheck = rewriteColumnsInExprPtr(pol.WithCheck, renames)
+		out.Set(name, &clone)
+	}
+	return out
+}
+
+// rewriteColumnsInExprPtr rewrites an optional expression, returning the
+// original pointer when there is nothing to rewrite or the rewrite fails.
+func rewriteColumnsInExprPtr(expr *string, renames map[string]string) *string {
+	if expr == nil {
+		return nil
+	}
+	updated, err := rewriteColumnsInExpr(*expr, renames)
+	if err != nil {
+		return expr
+	}
+	return &updated
+}
+
+// rewriteColumnRefsInGenerated returns a clone of columns with each generated
+// expression updated to reflect the column renames. PostgreSQL applies
+// RENAME COLUMN to the expression, so without the rewrite diffColumns reads
+// the rename as an expression change, which it reports as an error since a
+// generated expression cannot be altered in place. A plain DEFAULT is left
+// alone: it cannot reference a column, so a rename never reaches it.
+//
+// STORED is the only kind the desired side reaches today, since pg_query does
+// not parse PostgreSQL 18's VIRTUAL yet. The test is on the column being
+// generated at all, so a virtual one needs nothing here once it does.
+func rewriteColumnRefsInGenerated(cols *orderedmap.Map[string, *model.Column], renames map[string]string) *orderedmap.Map[string, *model.Column] {
+	out := orderedmap.New[string, *model.Column]()
+	for name, col := range cols.All() {
+		clone := *col
+		if col.Generated.IsGeneratedColumn() && col.Default != nil {
+			clone.Default = rewriteColumnsInExprPtr(col.Default, renames)
 		}
 		out.Set(name, &clone)
 	}

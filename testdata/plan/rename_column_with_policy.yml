@@ -1,0 +1,23 @@
+# PostgreSQL applies RENAME COLUMN to a policy on the same table, so the USING
+# and WITH CHECK clauses need no DDL of their own.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY docs_own ON public.docs FOR ALL
+      USING (owner = CURRENT_USER) WITH CHECK (owner <> 'nobody');
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      -- pista:renamed-from owner
+      owner_name text NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY docs_own ON public.docs FOR ALL
+      USING (owner_name = CURRENT_USER) WITH CHECK (owner_name <> 'nobody'::text);
+plan: |
+  ALTER TABLE public.docs RENAME COLUMN owner TO owner_name;

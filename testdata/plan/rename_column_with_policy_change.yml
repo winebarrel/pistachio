@@ -1,0 +1,23 @@
+# The rewrite must not swallow a change the desired schema does ask for. The
+# USING clause only follows the rename, while the roles change, so the plan
+# carries the rename and an ALTER POLICY that names TO alone.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY docs_own ON public.docs FOR SELECT TO PUBLIC USING (owner = CURRENT_USER);
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      -- pista:renamed-from owner
+      owner_name text NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY docs_own ON public.docs FOR SELECT TO postgres USING (owner_name = CURRENT_USER);
+plan: |
+  ALTER TABLE public.docs RENAME COLUMN owner TO owner_name;
+  ALTER POLICY docs_own ON public.docs TO postgres;

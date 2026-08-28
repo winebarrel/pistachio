@@ -10,10 +10,10 @@ way reaches it, and writing it the way `dump` does avoids it.
 ## Auto-rewrite of column references in views and cross-table FKs
 
 When a column is renamed via `-- pista:renamed-from`, the rewriter only
-updates same-table dependents (indexes, constraints, FKs on the same
-table). The following references are **not** rewritten and may produce a
-redundant `DROP/CREATE` on the first plan (the second run after applying
-the rename is clean):
+updates same-table dependents (indexes, constraints, FKs, triggers,
+policies and generated expressions on the same table). The following
+references are **not** rewritten and may produce a redundant `DROP/CREATE`
+on the first plan (the second run after applying the rename is clean):
 
 - View / materialized view definitions that `SELECT` the renamed column.
 - Foreign keys in *other* tables whose `REFERENCES this_table(renamed_col)`

@@ -431,3 +431,80 @@ func TestRewriteColumnRefsInTriggers_FallbackOnOtherStatement(t *testing.T) {
 	// Parseable but not a CREATE TRIGGER, so nothing is rewritten.
 	assert.Equal(t, "SELECT qty FROM public.products", got.Definition)
 }
+
+func TestRewriteColumnRefsInPolicies_RewritesBothClauses(t *testing.T) {
+	in := orderedmap.New[string, *model.Policy]()
+	using := "(owner = CURRENT_USER)"
+	withCheck := "(owner <> 'nobody'::text)"
+	original := &model.Policy{Name: "docs_own", Using: &using, WithCheck: &withCheck}
+	in.Set("docs_own", original)
+
+	out := rewriteColumnRefsInPolicies(in, one("owner", "owner_name"))
+	got, ok := out.GetOk("docs_own")
+	require.True(t, ok)
+	// The deparse lowercases CURRENT_USER. Only the comparison reads this
+	// text, and equalSelectExpr deparses both sides, so the case does not
+	// matter; the emitted ALTER POLICY comes off the desired side.
+	assert.Contains(t, *got.Using, "owner_name = current_user")
+	assert.Contains(t, *got.WithCheck, "owner_name <> 'nobody'")
+	// The original input must not be mutated.
+	assert.Equal(t, "(owner = CURRENT_USER)", *original.Using)
+}
+
+func TestRewriteColumnRefsInPolicies_KeepsNilClauses(t *testing.T) {
+	in := orderedmap.New[string, *model.Policy]()
+	in.Set("p", &model.Policy{Name: "p"})
+
+	out := rewriteColumnRefsInPolicies(in, one("owner", "owner_name"))
+	got, ok := out.GetOk("p")
+	require.True(t, ok)
+	assert.Nil(t, got.Using)
+	assert.Nil(t, got.WithCheck)
+}
+
+func TestRewriteColumnRefsInPolicies_FallbackOnParseError(t *testing.T) {
+	in := orderedmap.New[string, *model.Policy]()
+	broken := "owner = ("
+	in.Set("p", &model.Policy{Name: "p", Using: &broken})
+
+	out := rewriteColumnRefsInPolicies(in, one("owner", "owner_name"))
+	got, ok := out.GetOk("p")
+	require.True(t, ok)
+	// Unparseable expressions are kept intact so downstream comparison still works.
+	assert.Equal(t, "owner = (", *got.Using)
+}
+
+func TestRewriteColumnRefsInGenerated_RewritesExpression(t *testing.T) {
+	in := orderedmap.New[string, *model.Column]()
+	expr := "(qty * 2)"
+	in.Set("total", &model.Column{Name: "total", Generated: 's', Default: &expr})
+
+	out := rewriteColumnRefsInGenerated(in, one("qty", "quantity"))
+	got, ok := out.GetOk("total")
+	require.True(t, ok)
+	assert.Contains(t, *got.Default, "quantity * 2")
+}
+
+func TestRewriteColumnRefsInGenerated_LeavesPlainDefaultAlone(t *testing.T) {
+	// A plain DEFAULT cannot reference a column, so a rename never reaches it.
+	in := orderedmap.New[string, *model.Column]()
+	expr := "'qty'::text"
+	in.Set("label", &model.Column{Name: "label", Default: &expr})
+
+	out := rewriteColumnRefsInGenerated(in, one("qty", "quantity"))
+	got, ok := out.GetOk("label")
+	require.True(t, ok)
+	assert.Equal(t, "'qty'::text", *got.Default)
+}
+
+func TestRewriteColumnRefsInGenerated_NoCascadeOnChain(t *testing.T) {
+	// a->b alongside b->c must not cascade through a single reference to c.
+	in := orderedmap.New[string, *model.Column]()
+	expr := "(a + b)"
+	in.Set("total", &model.Column{Name: "total", Generated: 's', Default: &expr})
+
+	out := rewriteColumnRefsInGenerated(in, map[string]string{"a": "b", "b": "c"})
+	got, ok := out.GetOk("total")
+	require.True(t, ok)
+	assert.Contains(t, *got.Default, "b + c")
+}
