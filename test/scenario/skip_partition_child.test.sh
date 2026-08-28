@@ -21,7 +21,7 @@ fi
 
 # --- Step 2: the flag leaves it alone ---
 step "02 partition is left alone with the flag"
-plan_output=$("$PISTA" plan --allow-drop all --skip-partition-child "$DATA/steps/01_parent_only.sql" 2>&1) || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pista_plan --skip-partition-child "$DATA/steps/01_parent_only.sql") || { fail "plan failed: $plan_output"; true; }
 if echo "$plan_output" | grep -qF -e '-- No changes'; then
   pass
 else
@@ -31,13 +31,13 @@ fi
 
 # --- Step 3: a change to the parent still applies, drift-free ---
 step "03 parent change applies and reaches the partition"
-apply_output=$("$PISTA" apply --allow-drop all --skip-partition-child "$DATA/steps/02_parent_column.sql" 2>&1) || { fail "apply failed: $apply_output"; true; }
+apply_output=$(pista_apply --skip-partition-child "$DATA/steps/02_parent_column.sql") || { fail "apply failed: $apply_output"; true; }
 child_col=$(psql -X "$PISTA_CONN_STR" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='events_p2024' AND column_name='data')")
 if [ "$child_col" != "t" ]; then
   fail "expected the added column to reach the partition"
   echo "    $apply_output" >&2
 else
-  drift=$("$PISTA" plan --allow-drop all --skip-partition-child "$DATA/steps/02_parent_column.sql" 2>&1)
+  drift=$(pista_plan --skip-partition-child "$DATA/steps/02_parent_column.sql")
   if echo "$drift" | grep -qF -e '-- No changes'; then
     pass
   else
@@ -49,7 +49,7 @@ fi
 # --- Step 4: a partition created afterwards does not show up as a change ---
 step "04 new partition does not enter the plan"
 psql -X "$PISTA_CONN_STR" -q -v ON_ERROR_STOP=1 -c "CREATE TABLE public.events_p2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')"
-plan_output=$("$PISTA" plan --allow-drop all --skip-partition-child "$DATA/steps/02_parent_column.sql" 2>&1) || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pista_plan --skip-partition-child "$DATA/steps/02_parent_column.sql") || { fail "plan failed: $plan_output"; true; }
 if echo "$plan_output" | grep -qF -e '-- No changes'; then
   pass
 else
@@ -78,7 +78,7 @@ step "06 dump output round-trips"
 tmp_sql=$(mktemp)
 trap 'rm -f "$tmp_sql"' EXIT
 "$PISTA" dump --skip-partition-child > "$tmp_sql"
-plan_output=$("$PISTA" plan --allow-drop all --skip-partition-child "$tmp_sql" 2>&1) || { fail "plan failed: $plan_output"; true; }
+plan_output=$(pista_plan --skip-partition-child "$tmp_sql") || { fail "plan failed: $plan_output"; true; }
 if echo "$plan_output" | grep -qF -e '-- No changes'; then
   pass
 else
