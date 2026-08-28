@@ -966,6 +966,12 @@ type definitionChange struct {
 	validateOnly bool
 }
 
+// renameConstraintSQL renders the rename a constraint and a foreign key share;
+// PostgreSQL spells both ALTER TABLE ... RENAME CONSTRAINT.
+func renameConstraintSQL(fqtn, oldName, newName string) string {
+	return "ALTER TABLE " + fqtn + " RENAME CONSTRAINT " + model.Ident(oldName) + " TO " + model.Ident(newName) + ";"
+}
+
 func newDefinitionChange(sameDef, currentValidated, desiredValidated bool) definitionChange {
 	return definitionChange{
 		changed:      !sameDef || currentValidated != desiredValidated,
@@ -992,7 +998,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames
-	renameStmts, current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
+	current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1007,19 +1013,15 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		}
 	}
 
-	// Only emit rename statements for constraints that don't need recreation
-	for _, stmt := range renameStmts {
-		skip := false
-		for name := range needsRecreation {
-			oldName := renamedFrom[name]
-			if strings.Contains(stmt, model.Ident(oldName)+" TO "+model.Ident(name)) {
-				skip = true
-				break
-			}
+	// The renames that stand follow the desired schema's order. One whose
+	// constraint is being recreated is left out, since the ADD below already
+	// puts the new name in place.
+	for name := range desired.Keys() {
+		oldName, renamed := renamedFrom[name]
+		if !renamed || needsRecreation[name] {
+			continue
 		}
-		if !skip {
-			stmts = append(stmts, stmt)
-		}
+		stmts = append(stmts, renameConstraintSQL(fqtn, oldName, name))
 	}
 
 	// Drop removed or changed constraints. Pure removals (constraint absent
@@ -1230,7 +1232,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames (renames go into addStmts since they may depend on table renames)
-	renameStmts, current, renamedFrom, err := detectForeignKeyRenames(fqtn, current, desired)
+	current, renamedFrom, err := detectForeignKeyRenames(fqtn, current, desired)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -1245,19 +1247,15 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 		}
 	}
 
-	// Only emit rename statements for FKs that don't need recreation
-	for _, stmt := range renameStmts {
-		skip := false
-		for name := range needsRecreation {
-			oldName := renamedFrom[name]
-			if strings.Contains(stmt, model.Ident(oldName)+" TO "+model.Ident(name)) {
-				skip = true
-				break
-			}
+	// The renames that stand follow the desired schema's order. One whose key
+	// is being recreated is left out, since the ADD below already puts the new
+	// name in place.
+	for name := range desired.Keys() {
+		oldName, renamed := renamedFrom[name]
+		if !renamed || needsRecreation[name] {
+			continue
 		}
-		if !skip {
-			addStmts = append(addStmts, stmt)
-		}
+		addStmts = append(addStmts, renameConstraintSQL(fqtn, oldName, name))
 	}
 
 	// Drop removed or changed FKs. A NOT VALID -> validated key keeps its

@@ -1,0 +1,26 @@
+# A rename suppressed because its constraint is being recreated must not take
+# another rename with it. a -> b changes its expression, so it goes through
+# DROP + ADD; xa -> by is a plain rename and has to survive. The names are
+# chosen so "a TO b" is a substring of the statement renaming xa to by.
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      x integer NOT NULL,
+      y integer NOT NULL,
+      CONSTRAINT a CHECK ((x > 0)),
+      CONSTRAINT xa CHECK ((y > 0))
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      x integer NOT NULL,
+      y integer NOT NULL,
+      -- pista:renamed-from a
+      CONSTRAINT b CHECK ((x > 1)),
+      -- pista:renamed-from xa
+      CONSTRAINT by CHECK ((y > 0))
+  );
+plan: |
+  ALTER TABLE public.t RENAME CONSTRAINT xa TO by;
+  ALTER TABLE public.t DROP CONSTRAINT a;
+  ALTER TABLE public.t ADD CONSTRAINT b CHECK (x > 1);

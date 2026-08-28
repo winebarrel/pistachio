@@ -297,10 +297,12 @@ func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *
 	return stmts, adjusted, nil
 }
 
-// detectConstraintRenames finds desired constraints with RenameFrom that match a current constraint.
-// Returns (renameStmts, adjustedCurrent, renamedFrom map[newName]oldName, error).
-func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint]) ([]string, *orderedmap.Map[string, *model.Constraint], map[string]string, error) {
-	var stmts []string
+// detectConstraintRenames finds desired constraints with RenameFrom that match a
+// current constraint. Returns (adjustedCurrent, renamedFrom map[newName]oldName,
+// error). The caller renders the ALTER TABLE ... RENAME CONSTRAINT statements,
+// so it can leave out the ones whose constraint is being recreated and keep the
+// rest in the desired schema's order.
+func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint]) (*orderedmap.Map[string, *model.Constraint], map[string]string, error) {
 	adjusted := cloneMap(current)
 	renamedFrom := map[string]string{}
 
@@ -319,16 +321,13 @@ func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[strin
 			if _, exists := adjusted.GetOk(newName); exists {
 				continue
 			}
-			return nil, nil, nil, fmt.Errorf("rename source constraint %s not found in %s", model.Ident(oldName), fqtn)
+			return nil, nil, fmt.Errorf("rename source constraint %s not found in %s", model.Ident(oldName), fqtn)
 		}
 
-		if oldName != newName {
-			if _, exists := adjusted.GetOk(newName); exists {
-				return nil, nil, nil, fmt.Errorf("cannot rename constraint %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
-			}
+		if _, exists := adjusted.GetOk(newName); exists {
+			return nil, nil, fmt.Errorf("cannot rename constraint %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
 		}
 
-		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME CONSTRAINT "+model.Ident(oldName)+" TO "+model.Ident(newName)+";")
 		renamedFrom[newName] = oldName
 
 		adjusted.Delete(oldName)
@@ -337,7 +336,7 @@ func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[strin
 		adjusted.Set(newName, &renamed)
 	}
 
-	return stmts, adjusted, renamedFrom, nil
+	return adjusted, renamedFrom, nil
 }
 
 // detectIndexRenames finds desired indexes with RenameFrom that match a current index.
@@ -406,8 +405,7 @@ func updateIndexName(def string, newName string) (string, error) {
 
 // detectForeignKeyRenames finds desired foreign keys with RenameFrom that match a current FK.
 // Returns (renameStmts, adjustedCurrent, renamedFrom map[newName]oldName, error).
-func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[string, *model.ForeignKey]) ([]string, *orderedmap.Map[string, *model.ForeignKey], map[string]string, error) {
-	var stmts []string
+func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[string, *model.ForeignKey]) (*orderedmap.Map[string, *model.ForeignKey], map[string]string, error) {
 	adjusted := cloneMap(current)
 	renamedFrom := map[string]string{}
 
@@ -426,16 +424,13 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 			if _, exists := adjusted.GetOk(newName); exists {
 				continue
 			}
-			return nil, nil, nil, fmt.Errorf("rename source foreign key %s not found in %s", model.Ident(oldName), fqtn)
+			return nil, nil, fmt.Errorf("rename source foreign key %s not found in %s", model.Ident(oldName), fqtn)
 		}
 
-		if oldName != newName {
-			if _, exists := adjusted.GetOk(newName); exists {
-				return nil, nil, nil, fmt.Errorf("cannot rename foreign key %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
-			}
+		if _, exists := adjusted.GetOk(newName); exists {
+			return nil, nil, fmt.Errorf("cannot rename foreign key %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
 		}
 
-		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME CONSTRAINT "+model.Ident(oldName)+" TO "+model.Ident(newName)+";")
 		renamedFrom[newName] = oldName
 
 		adjusted.Delete(oldName)
@@ -444,7 +439,7 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 		adjusted.Set(newName, &renamed)
 	}
 
-	return stmts, adjusted, renamedFrom, nil
+	return adjusted, renamedFrom, nil
 }
 
 // detectPolicyRenames finds desired policies with RenameFrom that match a
