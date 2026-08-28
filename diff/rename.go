@@ -403,8 +403,10 @@ func updateIndexName(def string, newName string) (string, error) {
 	return deparsed, nil
 }
 
-// detectForeignKeyRenames finds desired foreign keys with RenameFrom that match a current FK.
-// Returns (renameStmts, adjustedCurrent, renamedFrom map[newName]oldName, error).
+// detectForeignKeyRenames finds desired foreign keys with RenameFrom that match
+// a current FK. Returns (adjustedCurrent, renamedFrom map[newName]oldName,
+// error). The caller renders the ALTER TABLE ... RENAME CONSTRAINT statements,
+// the same way detectConstraintRenames leaves it to diffConstraints.
 func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[string, *model.ForeignKey]) (*orderedmap.Map[string, *model.ForeignKey], map[string]string, error) {
 	adjusted := cloneMap(current)
 	renamedFrom := map[string]string{}
