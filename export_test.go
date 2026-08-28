@@ -14,6 +14,10 @@ var (
 	BuildDefReplacer          = buildDefReplacer
 )
 
+func FilterTables(f *FilterOptions, tables *orderedmap.Map[string, *model.Table]) *orderedmap.Map[string, *model.Table] {
+	return f.filterTables(tables)
+}
+
 func DumpResultTables(r *DumpResult) *orderedmap.Map[string, *model.Table] {
 	return r.tables()
 }

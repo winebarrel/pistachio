@@ -37,6 +37,7 @@ type applyTestCase struct {
 	Enable                   []string         `yaml:"enable,omitempty"`
 	Disable                  []string         `yaml:"disable,omitempty"`
 	ManageRoutine            bool             `yaml:"manage_routine,omitempty"`
+	SkipPartitionChild       bool             `yaml:"skip_partition_child,omitempty"`
 	PreSQL                   string           `yaml:"pre_sql,omitempty"`
 	// PreSQLFile holds SQL content; the runner writes it to a temp file and
 	// passes the path to ApplyOptions.PreSQLFile.
@@ -121,11 +122,12 @@ func TestApply(t *testing.T) {
 			result, err := client.Apply(ctx, &pistachio.ApplyOptions{
 				DropPolicy: dropPolicy,
 				FilterOptions: pistachio.FilterOptions{
-					Include:       tc.Include,
-					Exclude:       tc.Exclude,
-					Enable:        tc.Enable,
-					Disable:       tc.Disable,
-					ManageRoutine: tc.ManageRoutine,
+					Include:            tc.Include,
+					Exclude:            tc.Exclude,
+					Enable:             tc.Enable,
+					Disable:            tc.Disable,
+					ManageRoutine:      tc.ManageRoutine,
+					SkipPartitionChild: tc.SkipPartitionChild,
 				},
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
@@ -155,11 +157,12 @@ func TestApply(t *testing.T) {
 				plan, err := client.Plan(ctx, &pistachio.PlanOptions{
 					DropPolicy: dropPolicy,
 					FilterOptions: pistachio.FilterOptions{
-						Include:       tc.Include,
-						Exclude:       tc.Exclude,
-						Enable:        tc.Enable,
-						Disable:       tc.Disable,
-						ManageRoutine: tc.ManageRoutine,
+						Include:            tc.Include,
+						Exclude:            tc.Exclude,
+						Enable:             tc.Enable,
+						Disable:            tc.Disable,
+						ManageRoutine:      tc.ManageRoutine,
+						SkipPartitionChild: tc.SkipPartitionChild,
 					},
 					Files:                    []string{desiredFile},
 					DisableIndexConcurrently: tc.DisableIndexConcurrently,

@@ -1777,7 +1777,7 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 			// Restricted to true partition children: an INHERITS-style child
 			// still goes through the regular column diff, where a bodyless
 			// entry would be mistaken for a new column.
-			if t.PartitionOf != nil && t.PartitionBound != nil {
+			if t.IsPartitionChild() {
 				t.Columns.Set(colName, &model.Column{Name: colName, Comment: comment})
 			}
 			return

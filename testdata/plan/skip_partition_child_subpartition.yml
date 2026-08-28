@@ -1,0 +1,22 @@
+# A middle level is a child of its own parent, so --skip-partition-child holds
+# it out along with the leaf under it. Only the top parent stays managed.
+skip_partition_child: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      region text NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, region, id)
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01') PARTITION BY LIST (region);
+  CREATE TABLE public.events_2024_jp PARTITION OF public.events_2024 FOR VALUES IN ('jp');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      region text NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, region, id)
+  ) PARTITION BY RANGE (created_at);
+plan: ""
+count:
+  tables: 1
