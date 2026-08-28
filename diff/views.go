@@ -446,12 +446,14 @@ func diffViewIndexes(current, desired *model.View, dc DropChecker) (stmts []stri
 		desiredIndexes = desired.Indexes
 	}
 
+	sameDef := equalIndexDefs(currentIndexes, desiredIndexes)
+
 	// Drop removed or changed indexes. Pure removals honor the index-drop
 	// policy; definition changes still run DROP+CREATE.
 	idxAllowed := dc.IsDropAllowed("index")
 	for name, currentIdx := range currentIndexes.All() {
 		desiredIdx, ok := desiredIndexes.GetOk(name)
-		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
+		if !ok || !sameDef[name] {
 			// Pure drops have no desired entry. Fall back to the current
 			// entry's flag, which forceConcurrentlyDirectives sets when
 			// --force-index-concurrently is in effect.
@@ -478,16 +480,16 @@ func diffViewIndexes(current, desired *model.View, dc DropChecker) (stmts []stri
 
 	// Add new or changed indexes
 	for name, desiredIdx := range desiredIndexes.All() {
-		currentIdx, ok := currentIndexes.GetOk(name)
-		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmt, err := createIndexSQL(desiredIdx.Definition, desiredIdx.Concurrently)
-			if err != nil {
-				return nil, nil, false, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
-			}
-			stmts = append(stmts, stmt)
-			if desiredIdx.Concurrently {
-				hasConcurrently = true
-			}
+		if _, ok := currentIndexes.GetOk(name); ok && sameDef[name] {
+			continue
+		}
+		stmt, err := createIndexSQL(desiredIdx.Definition, desiredIdx.Concurrently)
+		if err != nil {
+			return nil, nil, false, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
+		}
+		stmts = append(stmts, stmt)
+		if desiredIdx.Concurrently {
+			hasConcurrently = true
 		}
 	}
 

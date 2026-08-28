@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Stop one suppressed constraint rename from taking another with it. A renamed constraint whose definition also changes goes through `DROP` and `ADD` rather than `RENAME`, and the `RENAME` was suppressed by matching the rendered statement as a substring. With `a` renamed to `b` alongside `xa` renamed to `by` on one table, the needle for the first matched the statement for the second, so `xa` was left in the database under its old name and the same plan came back on the next run. Foreign keys were suppressed the same way and had the same hole.
+
 * Evaluate a `-- pista:execute` check under the target schemas in `plan`, as `apply` already did. `plan` ran the check under the connection's `search_path`, which is `public` by default, so a check reading a table in another target schema failed there and the statement was reported as undetermined, while `apply` answered the check and skipped it. The plan advertised a statement that never ran. The `SET` goes out only on a run that has a check to evaluate, and after the catalog has been read, so nothing else moves.
 
 * Order a view after every relation its body names. The dependency scan walked a hand-written list of node kinds, so a reference under a cast, `GREATEST`, an array or row constructor, a subscript, `ORDER BY`, `GROUP BY`, `LIMIT`, an `OVER` clause or an aggregate `FILTER` went unseen. Two new views in one run, one reading the other from such a position, were created in the wrong order and the apply failed on the relation that did not exist yet. The scan now uses the same walk the view comparison does, which reaches every node kind.
