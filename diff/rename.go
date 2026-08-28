@@ -731,12 +731,8 @@ func rewriteColumnsInTriggerDef(def string, renames map[string]string) (string, 
 // trigger on the same table, so without the rewrite the comparison reads the
 // rename as a definition change and emits a redundant CREATE OR REPLACE
 // TRIGGER. Definitions that fail to parse/deparse are left unchanged, which
-// falls back to that redundant statement. A nil map, which is what a relation
-// with no triggers carries, passes through.
+// falls back to that redundant statement.
 func rewriteColumnRefsInTriggers(triggers *orderedmap.Map[string, *model.Trigger], renames map[string]string) *orderedmap.Map[string, *model.Trigger] {
-	if triggers == nil {
-		return nil
-	}
 	out := orderedmap.New[string, *model.Trigger]()
 	for name, trg := range triggers.All() {
 		clone := *trg

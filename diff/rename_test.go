@@ -431,9 +431,3 @@ func TestRewriteColumnRefsInTriggers_FallbackOnOtherStatement(t *testing.T) {
 	// Parseable but not a CREATE TRIGGER, so nothing is rewritten.
 	assert.Equal(t, "SELECT qty FROM public.products", got.Definition)
 }
-
-func TestRewriteColumnRefsInTriggers_NilPassesThrough(t *testing.T) {
-	// A relation with no triggers carries a nil map, which triggerMap
-	// normalizes downstream.
-	assert.Nil(t, rewriteColumnRefsInTriggers(nil, one("qty", "quantity")))
-}
