@@ -602,7 +602,7 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 // parses it, so matching on a two-part name alone would leave it drifting.
 //
 // parseTriggerDef applies it to an EXECUTE FUNCTION name, which is not an
-// expression node and so never reaches the walk below.
+// expression node and so never reaches the walk above.
 func lastNamePart(name []*pg_query.Node) []*pg_query.Node {
 	if len(name) < 2 {
 		return name
