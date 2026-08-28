@@ -209,6 +209,10 @@ func collectColumnRefsInFKDef(def string) []string {
 // name it carries belongs to the set checked here. A plain DEFAULT may
 // reference no column at all, which PostgreSQL rejects on its own; the names
 // it does carry are checked the same way rather than rejected outright.
+//
+// Only unqualified names are read, as they are for an index or a constraint.
+// A generated expression may write one qualified, which the diff cannot
+// compare at all; TODO.md records that.
 func collectColumnRefsInColumnExpr(expr string) []string {
 	result, err := pg_query.Parse("SELECT " + expr)
 	if err != nil || len(result.Stmts) == 0 {

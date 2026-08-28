@@ -819,3 +819,15 @@ func TestValidateColumnRefs_ColumnExprReportsPerColumn(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, 2, strings.Count(err.Error(), "column qty referenced"))
 }
+
+func TestValidateColumnRefs_ColumnExprQuotedName(t *testing.T) {
+	tbl := newValidatableTable("items", "id")
+	tbl.Columns.Set("total", &model.Column{
+		Name:      "total",
+		Generated: model.ColumnGenerated('s'),
+		Default:   ptr(`"Qty" * 2`),
+	})
+	err := validateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `column "Qty" referenced in the GENERATED expression on column total`)
+}
