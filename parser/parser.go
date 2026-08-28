@@ -582,6 +582,8 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 		table.TableSpace = &ts
 	}
 
+	table.StorageParams = parseStorageParams(cs.Options)
+
 	if cs.Partspec != nil {
 		def, err := deparsePartitionSpec(cs)
 		if err != nil {
@@ -2284,4 +2286,51 @@ func deparsePartitionBound(cs *pg_query.CreateStmt) (string, error) {
 		return "", fmt.Errorf("could not extract partition bound from: %s", sql)
 	}
 	return strings.TrimSpace(sql[idx+len(prefix):]), nil
+}
+
+// parseStorageParams reads the WITH clause of a CREATE TABLE. A parameter of
+// the TOAST relation arrives with `toast` as its namespace and is keyed under
+// the same `toast.` prefix the catalog reports it with.
+func parseStorageParams(options []*pg_query.Node) *orderedmap.Map[string, string] {
+	params := make(map[string]string, len(options))
+	for _, o := range options {
+		de := o.GetDefElem()
+		name := de.GetDefname()
+		if ns := de.GetDefnamespace(); ns != "" {
+			name = ns + "." + name
+		}
+		// WITH (oids = false) is what every pg_dump before 12 writes on every
+		// table. PostgreSQL still accepts it in a CREATE TABLE and stores
+		// nothing for it, while ALTER TABLE ... SET rejects the name, so it is
+		// not a parameter. oids = true is rejected by the CREATE itself.
+		if name == "oids" {
+			continue
+		}
+		params[name] = storageParamValue(de)
+	}
+	return model.SortedStorageParams(params)
+}
+
+// storageParamValue reads a storage parameter's value as text. A parameter
+// written without one asks for true, which is what PostgreSQL stores for it.
+func storageParamValue(de *pg_query.DefElem) string {
+	switch n := de.GetArg().GetNode().(type) {
+	case *pg_query.Node_String_:
+		return n.String_.Sval
+	case *pg_query.Node_Integer:
+		return strconv.FormatInt(int64(n.Integer.Ival), 10)
+	case *pg_query.Node_Float:
+		return n.Float.Fval
+	case *pg_query.Node_TypeName:
+		// A value that reads as a bare identifier, `autovacuum_enabled = off`,
+		// arrives as a type name: the grammar accepts a type there. Its parts
+		// carry the word PostgreSQL stores.
+		var parts []string
+		for _, name := range n.TypeName.Names {
+			parts = append(parts, name.GetString_().GetSval())
+		}
+		return strings.Join(parts, ".")
+	default:
+		return "true"
+	}
 }

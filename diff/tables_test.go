@@ -3558,3 +3558,33 @@ func TestStripFuncSchema(t *testing.T) {
 		assert.False(t, equalSelectExpr("lower_v(v)", "upper_v(v)"))
 	})
 }
+
+func TestEqualIndexDef_storageParamQuoting(t *testing.T) {
+	// pg_get_indexdef quotes the value, a file writes it bare.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80')",
+		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=80)",
+	))
+}
+
+func TestEqualIndexDef_storageParamOrder(t *testing.T) {
+	// The catalog keeps the order the parameters were created in.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80', deduplicate_items=off)",
+		"CREATE INDEX idx ON public.users USING btree (id) WITH (deduplicate_items=off, fillfactor=80)",
+	))
+}
+
+func TestEqualIndexDef_storageParamValueChange(t *testing.T) {
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80')",
+		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=90)",
+	))
+}
+
+func TestEqualIndexDef_storageParamAdded(t *testing.T) {
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON public.users USING btree (id)",
+		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=80)",
+	))
+}

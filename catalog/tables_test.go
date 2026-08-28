@@ -170,3 +170,48 @@ func TestTables(t *testing.T) {
 		assert.Equal(t, `public."Odd Parent"`, *child.PartitionOf)
 	})
 }
+
+func TestTables_StorageParams(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	t.Run("none", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.users (
+				id integer NOT NULL,
+				CONSTRAINT users_pkey PRIMARY KEY (id)
+			);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+		tbl, ok := tables.GetOk("public.users")
+		require.True(t, ok)
+		assert.Equal(t, 0, tbl.StorageParams.Len())
+	})
+
+	// The TOAST relation's parameters are read under the toast. prefix
+	// PostgreSQL sets them with, and the table's own without one. The text
+	// column is what gives the table a TOAST relation to read.
+	t.Run("table and toast", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.docs (
+				id integer NOT NULL,
+				body text,
+				CONSTRAINT docs_pkey PRIMARY KEY (id)
+			) WITH (fillfactor = 70, autovacuum_enabled = off, toast.autovacuum_enabled = off);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+		tbl, ok := tables.GetOk("public.docs")
+		require.True(t, ok)
+		assert.Equal(t,
+			[]string{"autovacuum_enabled", "fillfactor", "toast.autovacuum_enabled"},
+			tbl.StorageParams.CollectKeys())
+		assert.Equal(t, []string{"off", "70", "off"}, tbl.StorageParams.CollectValues())
+	})
+}

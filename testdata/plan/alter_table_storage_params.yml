@@ -1,0 +1,14 @@
+# A parameter arriving and one changing value go out in one ALTER. Neither
+# rewrites the table; both decide how the table is filled and vacuumed later.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 90, autovacuum_vacuum_scale_factor = 0.05);
+plan: |
+  ALTER TABLE public.users SET (autovacuum_vacuum_scale_factor='0.05', fillfactor='90');

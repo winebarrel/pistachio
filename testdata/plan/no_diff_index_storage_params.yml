@@ -1,0 +1,18 @@
+# pg_get_indexdef quotes a numeric parameter value and a hand-written index
+# writes it bare, so the two spellings have to compare equal. They did not,
+# and the index was dropped and recreated on every run.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name) WITH (fillfactor = 80);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name) WITH (fillfactor = 80);
+plan: ""

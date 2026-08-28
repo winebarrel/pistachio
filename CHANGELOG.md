@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.36.0] - 2026-08-29
+
+* Manage a table's storage parameters, the `WITH (...)` clause. Neither side read them, so `dump` dropped the clause and no plan proposed one: the per-table autovacuum settings a pg_dump file carries went unmanaged without a warning. A change goes out as `ALTER TABLE ... SET (...)` with a `RESET` for the parameters the desired schema no longer names. A `toast.` parameter is read from the TOAST relation and diffed alongside. `WITH (oids = false)`, which a pg_dump before 12 writes, is not a parameter and is skipped.
+
+* Stop an index's storage parameters from drifting. `pg_get_indexdef` quotes a value that does not read as an identifier, `fillfactor='80'`, while a file writes the number bare, so the two never matched and the index was dropped and recreated on every run. The order the catalog keeps them in is not compared either.
+
 ## [1.35.0] - 2026-08-29
 
 * Stop a schema-qualified function call from drifting. `pg_get_constraintdef`, `pg_get_expr`, `pg_get_indexdef`, `pg_get_viewdef` and `pg_get_triggerdef` all print a call unqualified once the function's schema is on the search_path, while the desired side keeps what the file wrote, so `CHECK (public.lower_v(v) <> 'x')` and every other call written that way re-emitted its statement on every plan. A `CHECK` was dropped and re-added, which revalidates the whole table, an index was rebuilt, and a materialized view was dropped and recreated, discarding the data it held. A generated expression did not drift but failed the run outright, since it cannot be altered in place. The strip is symmetric and carries the tradeoff a view body's table reference already has: two same-named functions in different schemas compare equal. A schema inside a `nextval('public.counter'::regclass)` literal is not a call name and still drifts; TODO.md covers it.

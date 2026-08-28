@@ -1,0 +1,16 @@
+# --skip-partition-child drops the partitions from both sides, so a parameter
+# only a partition carries is neither set nor reset.
+skip_partition_child: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2025 PARTITION OF public.events
+      FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') WITH (fillfactor = 60);
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+plan: ""

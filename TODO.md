@@ -548,6 +548,52 @@ is the same prerequisite as the INHERITS plan / apply entry above.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
+## View and materialized view storage parameters are not read
+
+Priority: low.
+
+A view carries `security_barrier` and `check_option`, a materialized view the
+autovacuum settings, and neither side reads them. `dump` drops the clause, and
+a desired schema that writes it plans nothing, the way a table's parameters
+behaved before they were read. Losing `security_barrier` from a dump is the
+one that matters, since the view is a security boundary without it.
+
+`pg_class.reloptions` holds them for both, next to the table's, and
+`ALTER VIEW ... SET (...)` / `RESET (...)` and the `ALTER MATERIALIZED VIEW`
+forms are what a change goes out as. The table work put the reading and the
+rendering in `SortedStorageParams` and `Table.StorageParamsSQL`, which the view
+model can use as they are.
+
+`dump` writes no clause and the parser reads none, so a dump fed back plans
+clean and only a hand-written view reaches this.
+
+Origin: review of [#458](https://github.com/winebarrel/pistachio/pull/458).
+
+## A constraint's index storage parameters are not read
+
+Priority: low.
+
+`ALTER TABLE t ADD CONSTRAINT t_v_key UNIQUE (v) WITH (fillfactor = 70)` puts
+the parameters on the index the constraint owns. `pg_get_constraintdef` does
+not print them, so the current side reads the constraint as `UNIQUE (v)` and
+the two never match: the plan is `DROP CONSTRAINT` + `ADD CONSTRAINT` on every
+run, which rebuilds the index under an ACCESS EXCLUSIVE lock. `dump` drops the
+clause for the same reason, so a table's parameters survive a dump and a
+constraint's do not.
+
+The parameters are on `pg_class` under `pg_constraint.conindid`, next to the
+ones `ListIndexes` already reads, and appending them to the definition is what
+would make both sides agree. `normalizeStorageParams` then folds the quoting
+the way it does for a plain index.
+
+`dump` writes the catalog form, so a dump fed back plans clean and only a
+hand-written constraint reaches this.
+
+Workaround: create the index separately, `CREATE UNIQUE INDEX ... WITH
+(fillfactor = 70)`, where the parameters are read.
+
+Origin: [#458](https://github.com/winebarrel/pistachio/pull/458).
+
 ## An EXCLUDE constraint is not normalized at all
 
 Priority: low.

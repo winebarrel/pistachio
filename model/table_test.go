@@ -403,3 +403,85 @@ func TestTableToSQL_IncludesStorage(t *testing.T) {
 	assert.Contains(t, out, "CREATE TABLE public.docs")
 	assert.Contains(t, out, "ALTER TABLE public.docs ALTER COLUMN body SET STORAGE MAIN;")
 }
+
+func TestTable_StorageParamsSQL_empty(t *testing.T) {
+	tbl := newTable("public", "users")
+	assert.Empty(t, tbl.StorageParamsSQL())
+
+	tbl.StorageParams = model.SortedStorageParams(nil)
+	assert.Empty(t, tbl.StorageParamsSQL())
+}
+
+func TestTable_StorageParamsSQL_sortedAndQuoted(t *testing.T) {
+	tbl := newTable("public", "users")
+	tbl.StorageParams = model.SortedStorageParams(map[string]string{
+		"toast.autovacuum_enabled": "off",
+		"fillfactor":               "70",
+		"autovacuum_enabled":       "off",
+	})
+
+	assert.Equal(t,
+		"WITH (autovacuum_enabled='off', fillfactor='70', toast.autovacuum_enabled='off')",
+		tbl.StorageParamsSQL())
+}
+
+func TestTable_SQL_storageParams(t *testing.T) {
+	tbl := newTable("public", "users")
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	tbl.StorageParams = model.SortedStorageParams(map[string]string{"fillfactor": "70"})
+
+	assert.Equal(t,
+		"CREATE TABLE public.users (\n    id integer NOT NULL\n)\nWITH (fillfactor='70');",
+		tbl.SQL())
+}
+
+func TestTable_SQL_storageParams_partitionOf(t *testing.T) {
+	tbl := newTable("public", "events_east")
+	parent := "public.events"
+	bound := "FOR VALUES FROM ('a') TO ('m')"
+	partDef := "LIST (kind)"
+	ts := "fast_ssd"
+	tbl.PartitionOf = &parent
+	tbl.PartitionBound = &bound
+	tbl.Partitioned = true
+	tbl.PartitionDef = &partDef
+	tbl.TableSpace = &ts
+	tbl.StorageParams = model.SortedStorageParams(map[string]string{"fillfactor": "60"})
+
+	// WITH sits between PARTITION BY and TABLESPACE, as the grammar has it.
+	assert.Equal(t,
+		"CREATE TABLE public.events_east PARTITION OF public.events FOR VALUES FROM ('a') TO ('m')\n"+
+			"PARTITION BY LIST (kind)\nWITH (fillfactor='60')\nTABLESPACE fast_ssd;",
+		tbl.SQL())
+}
+
+func TestTable_SQL_storageParams_inherits(t *testing.T) {
+	tbl := newTable("public", "child")
+	parent := "public.parent"
+	tbl.PartitionOf = &parent
+	tbl.Constraints.Set("child_pkey", &model.Constraint{Name: "child_pkey", Definition: "PRIMARY KEY (id)"})
+	tbl.StorageParams = model.SortedStorageParams(map[string]string{"fillfactor": "65"})
+
+	assert.Equal(t,
+		"CREATE TABLE public.child(\n    CONSTRAINT child_pkey PRIMARY KEY (id))\n"+
+			"INHERITS (public.parent)\nWITH (fillfactor='65');",
+		tbl.SQL())
+}
+
+func TestSetStorageParamsSQL(t *testing.T) {
+	assert.Equal(t,
+		"ALTER TABLE public.users SET (fillfactor='90', toast.autovacuum_enabled='off');",
+		model.SetStorageParamsSQL("public.users", []string{"fillfactor='90'", "toast.autovacuum_enabled='off'"}))
+}
+
+func TestResetStorageParamsSQL(t *testing.T) {
+	assert.Equal(t,
+		"ALTER TABLE public.users RESET (autovacuum_enabled, fillfactor);",
+		model.ResetStorageParamsSQL("public.users", []string{"autovacuum_enabled", "fillfactor"}))
+}
+
+func TestSortedStorageParams(t *testing.T) {
+	params := model.SortedStorageParams(map[string]string{"b": "2", "a": "1", "c": "3"})
+	assert.Equal(t, []string{"a", "b", "c"}, params.CollectKeys())
+	assert.Equal(t, []string{"1", "2", "3"}, params.CollectValues())
+}

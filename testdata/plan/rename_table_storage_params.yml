@@ -1,0 +1,16 @@
+# A rename does not disturb the parameters, and a parameter that does change
+# is set under the new name, after the RENAME.
+init: |
+  CREATE TABLE public.old_users (
+      id integer NOT NULL,
+      CONSTRAINT old_users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70);
+desired: |
+  -- pista:renamed-from old_users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT old_users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 90);
+plan: |
+  ALTER TABLE public.old_users RENAME TO users;
+  ALTER TABLE public.users SET (fillfactor='90');

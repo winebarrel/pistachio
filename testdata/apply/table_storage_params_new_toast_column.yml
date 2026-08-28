@@ -1,0 +1,26 @@
+# A table with no toastable column has no TOAST relation, and PostgreSQL
+# discards a toast. parameter set on it. The ADD COLUMN in the same plan
+# creates the relation, so the parameter has somewhere to land as long as it
+# goes after the column statements. The re-plan is what checks it landed.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  ) WITH (toast.autovacuum_enabled = off);
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  )
+  WITH (toast.autovacuum_enabled='off');
+applied_sql: |
+  ALTER TABLE public.docs ADD COLUMN body text;
+  ALTER TABLE public.docs SET (toast.autovacuum_enabled='off');

@@ -1,0 +1,14 @@
+# A new table carries its storage parameters in the CREATE, so no ALTER
+# follows it.
+init: ""
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70, autovacuum_enabled = off);
+plan: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  )
+  WITH (autovacuum_enabled='off', fillfactor='70');

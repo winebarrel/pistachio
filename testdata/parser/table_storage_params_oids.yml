@@ -1,0 +1,10 @@
+input: |
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  ) WITH (oids = false, fillfactor = 70);
+expected: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  )
+  WITH (fillfactor='70');

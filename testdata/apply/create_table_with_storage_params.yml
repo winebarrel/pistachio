@@ -1,0 +1,25 @@
+# A new table carries the parameters in the CREATE, and the re-plan comes out
+# clean: what the parser read back out of the WITH clause has to match what
+# the catalog then reports.
+init: ""
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70, autovacuum_enabled = off, toast.autovacuum_enabled = off);
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  )
+  WITH (autovacuum_enabled='off', fillfactor='70', toast.autovacuum_enabled='off');
+applied_sql: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  )
+  WITH (autovacuum_enabled='off', fillfactor='70', toast.autovacuum_enabled='off');

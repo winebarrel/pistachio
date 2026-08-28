@@ -103,6 +103,7 @@ pista apply ./schema/*.sql         # apply it
 - Composite types (`CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME ATTRIBUTE`). Attributes are matched by name, so reordering them produces no diff (PostgreSQL cannot reorder attributes). `ALTER ATTRIBUTE ... TYPE` fails at apply while a table column uses the type; PostgreSQL does not allow it and `CASCADE` does not help.
 - Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
 - Tables (including unlogged and partitioned tables)
+- Storage parameters, the `WITH (...)` clause on a table and on an index. A `toast.` parameter belongs to the TOAST relation. PostgreSQL creates that relation only for a table with a toastable column, and discards the setting when there is none, so such a table re-plans it on every run. A partitioned table holds no parameter, and a partition does not inherit the parent's.
 - Views
 - Materialized views
 - Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression)

@@ -132,7 +132,7 @@ ALTER TABLE public.users
   ALTER COLUMN name SET NOT NULL;
 ```
 
-Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs stay separate statements. The `--bulk-alter` flag merges every table regardless of directives.
+Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, storage parameter `SET` / `RESET`, and skipped DROPs stay separate statements. The `--bulk-alter` flag merges every table regardless of directives.
 
 ## -- pista:ignore
 
