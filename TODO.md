@@ -704,6 +704,8 @@ prints the name it chose, so a view whose body holds
 two `ResTarget` names disagree, and `CREATE OR REPLACE VIEW` is re-emitted on
 every plan. Reproducing the name means reimplementing `FigureColname`, which
 walks the expression to pick a function name, a column name or `?column?`.
+`figureIndexColname` (`parser/parser.go`) already walks an expression this way
+for an index element, so the shared half of the work is in the tree.
 
 Workaround: write the alias the way `pista dump` emits it.
 
@@ -801,14 +803,6 @@ Origin: routine support.
 `prokind` `'a'` and `'w'` are filtered out of the catalog query, and the parser
 warns about a `CREATE FUNCTION ... WINDOW` and drops it, so the two sides stay
 symmetric. `CREATE AGGREGATE` has a shape `model.Routine` does not cover.
-
-Origin: routine support.
-
-## Sample database coverage has no Routines column
-
-The table in `sample-db-test.md` counts tables, columns, indexes, FKs,
-constraints, views, types, sequences and triggers per sample. The counts predate
-`--manage-routine`, so routines have no column yet.
 
 Origin: routine support.
 
