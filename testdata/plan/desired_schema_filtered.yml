@@ -1,5 +1,8 @@
+# Every object type the desired schema can declare outside the target schemas
+# is dropped before the diff, so none of them is created.
 count:
   tables: 1
+manage_routine: true
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,
@@ -13,4 +16,10 @@ desired: |
   CREATE TABLE other.stuff (
       id integer NOT NULL
   );
+  CREATE VIEW other.stuff_view AS SELECT id FROM other.stuff;
+  CREATE TYPE other.mood AS ENUM ('ok', 'bad');
+  CREATE DOMAIN other.positive AS integer CONSTRAINT positive_check CHECK (VALUE > 0);
+  CREATE TYPE other.point AS (x integer, y integer);
+  CREATE SEQUENCE other.counter;
+  CREATE FUNCTION other.answer() RETURNS integer LANGUAGE sql AS $$SELECT 42$$;
 plan: ""
