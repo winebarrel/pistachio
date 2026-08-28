@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
@@ -249,9 +250,10 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 }
 
 // detectColumnRenames finds desired columns with RenameFrom that match a current column.
-// Column references in same-table indexes, constraints, and foreign keys are
-// rewritten in the adjusted current state by `rewriteColumnRefsInIndexes`,
-// `rewriteColumnRefsInConstraints`, and `rewriteColumnRefsInForeignKeys`
+// Column references in same-table indexes, constraints, foreign keys and
+// triggers are rewritten in the adjusted current state by
+// `rewriteColumnRefsInIndexes`, `rewriteColumnRefsInConstraints`,
+// `rewriteColumnRefsInForeignKeys` and `rewriteColumnRefsInTriggers`
 // (called from diffTable), so a plain rename does not produce redundant
 // drop/recreate operations on those dependents. View definitions and
 // foreign-key references in *other* tables are still not rewritten; see
@@ -664,6 +666,151 @@ func rewriteColumnRefsInForeignKeys(fks *orderedmap.Map[string, *model.ForeignKe
 		clone := *fk
 		if updated, err := rewriteColumnsInConstraintDef(clone.Definition, renames); err == nil {
 			clone.Definition = updated
+		}
+		out.Set(name, &clone)
+	}
+	return out
+}
+
+// rewriteTriggerWhenColumnRefs walks a trigger WHEN expression and rewrites
+// each NEW.<col> / OLD.<col> reference whose column name appears in renames.
+// NEW and OLD are the only qualifiers a WHEN clause takes, so a two-field
+// ColumnRef names a column here, unlike in an index or constraint expression
+// where the qualifier could be a table.
+func rewriteTriggerWhenColumnRefs(node *pg_query.Node, renames map[string]string) {
+	pgast.Walk(node, pgast.WalkOptions{SkipSubqueries: true}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+		cr := n.GetColumnRef()
+		if cr == nil || len(cr.Fields) != 2 {
+			return n
+		}
+		qual := cr.Fields[0].GetString_()
+		if qual == nil || (qual.Sval != "new" && qual.Sval != "old") {
+			return n
+		}
+		if s := cr.Fields[1].GetString_(); s != nil {
+			if newName, ok := renames[s.Sval]; ok {
+				s.Sval = newName
+			}
+		}
+		return n
+	})
+}
+
+// rewriteColumnsInTriggerDef returns a new CREATE TRIGGER definition with the
+// column names rewritten according to the renames map (old -> new). A trigger
+// names columns in the UPDATE OF list and the WHEN expression. The arguments
+// passed to the trigger function are left alone, as PostgreSQL does not
+// rewrite them on RENAME COLUMN either.
+//
+// All renames are applied in a single pass, so chained renames (a->b and
+// b->c) do not cascade.
+func rewriteColumnsInTriggerDef(def string, renames map[string]string) (string, error) {
+	result, err := pg_query.Parse(def)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse trigger definition: %w", err)
+	}
+	if len(result.Stmts) != 1 {
+		return "", fmt.Errorf("unexpected parse result for trigger definition: %s", def)
+	}
+	ct := result.Stmts[0].Stmt.GetCreateTrigStmt()
+	if ct == nil {
+		return "", fmt.Errorf("expected CreateTrigStmt in trigger definition: %s", def)
+	}
+	for _, n := range ct.Columns {
+		if s := n.GetString_(); s != nil {
+			if newName, ok := renames[s.Sval]; ok {
+				s.Sval = newName
+			}
+		}
+	}
+	rewriteTriggerWhenColumnRefs(ct.WhenClause, renames)
+	return pg_query.Deparse(result)
+}
+
+// rewriteColumnRefsInTriggers returns a clone of triggers with each Definition
+// updated to reflect the column renames. PostgreSQL applies RENAME COLUMN to a
+// trigger on the same table, so without the rewrite the comparison reads the
+// rename as a definition change and emits a redundant CREATE OR REPLACE
+// TRIGGER. Definitions that fail to parse/deparse are left unchanged, which
+// falls back to that redundant statement.
+func rewriteColumnRefsInTriggers(triggers *orderedmap.Map[string, *model.Trigger], renames map[string]string) *orderedmap.Map[string, *model.Trigger] {
+	out := orderedmap.New[string, *model.Trigger]()
+	for name, trg := range triggers.All() {
+		clone := *trg
+		if updated, err := rewriteColumnsInTriggerDef(clone.Definition, renames); err == nil {
+			clone.Definition = updated
+		}
+		out.Set(name, &clone)
+	}
+	return out
+}
+
+// rewriteColumnsInExpr returns a bare SQL expression with column references
+// rewritten according to the renames map (old -> new). Policy USING /
+// WITH CHECK clauses and stored-generated column expressions are stored this
+// way, and both reference columns of their own table unqualified.
+//
+// All renames are applied in a single AST walk, so chained renames (a->b and
+// b->c) do not cascade.
+func rewriteColumnsInExpr(expr string, renames map[string]string) (string, error) {
+	result, target, err := parseSelectExpr(expr)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse expression: %w", err)
+	}
+	rewriteColumnRefsInExpr(target.Val, renames)
+	sql, err := pg_query.Deparse(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to deparse expression: %w", err)
+	}
+	return strings.TrimPrefix(sql, "SELECT "), nil
+}
+
+// rewriteColumnRefsInPolicies returns a clone of policies with USING and
+// WITH CHECK updated to reflect the column renames. PostgreSQL applies
+// RENAME COLUMN to a policy on the same table, so without the rewrite the
+// comparison reads the rename as an expression change and emits a redundant
+// ALTER POLICY. Expressions that fail to parse/deparse are left unchanged,
+// which falls back to that redundant statement.
+func rewriteColumnRefsInPolicies(policies *orderedmap.Map[string, *model.Policy], renames map[string]string) *orderedmap.Map[string, *model.Policy] {
+	out := orderedmap.New[string, *model.Policy]()
+	for name, pol := range policies.All() {
+		clone := *pol
+		clone.Using = rewriteColumnsInExprPtr(pol.Using, renames)
+		clone.WithCheck = rewriteColumnsInExprPtr(pol.WithCheck, renames)
+		out.Set(name, &clone)
+	}
+	return out
+}
+
+// rewriteColumnsInExprPtr rewrites an optional expression, returning the
+// original pointer when there is nothing to rewrite or the rewrite fails.
+func rewriteColumnsInExprPtr(expr *string, renames map[string]string) *string {
+	if expr == nil {
+		return nil
+	}
+	updated, err := rewriteColumnsInExpr(*expr, renames)
+	if err != nil {
+		return expr
+	}
+	return &updated
+}
+
+// rewriteColumnRefsInGenerated returns a clone of columns with each generated
+// expression updated to reflect the column renames. PostgreSQL applies
+// RENAME COLUMN to the expression, so without the rewrite diffColumns reads
+// the rename as an expression change, which it reports as an error since a
+// generated expression cannot be altered in place. A plain DEFAULT is left
+// alone: it cannot reference a column, so a rename never reaches it.
+//
+// STORED is the only kind the desired side reaches today, since pg_query does
+// not parse PostgreSQL 18's VIRTUAL yet. The test is on the column being
+// generated at all, so a virtual one needs nothing here once it does.
+func rewriteColumnRefsInGenerated(cols *orderedmap.Map[string, *model.Column], renames map[string]string) *orderedmap.Map[string, *model.Column] {
+	out := orderedmap.New[string, *model.Column]()
+	for name, col := range cols.All() {
+		clone := *col
+		if col.Generated.IsGeneratedColumn() && col.Default != nil {
+			clone.Default = rewriteColumnsInExprPtr(col.Default, renames)
 		}
 		out.Set(name, &clone)
 	}

@@ -10,10 +10,10 @@ way reaches it, and writing it the way `dump` does avoids it.
 ## Auto-rewrite of column references in views and cross-table FKs
 
 When a column is renamed via `-- pista:renamed-from`, the rewriter only
-updates same-table dependents (indexes, constraints, FKs on the same
-table). The following references are **not** rewritten and may produce a
-redundant `DROP/CREATE` on the first plan (the second run after applying
-the rename is clean):
+updates same-table dependents (indexes, constraints, FKs, triggers,
+policies and generated expressions on the same table). The following
+references are **not** rewritten and may produce a redundant `DROP/CREATE`
+on the first plan (the second run after applying the rename is clean):
 
 - View / materialized view definitions that `SELECT` the renamed column.
 - Foreign keys in *other* tables whose `REFERENCES this_table(renamed_col)`
@@ -21,23 +21,14 @@ the rename is clean):
 
 Resolving these requires cross-object awareness in the diff phase.
 
+The rewrite does not reach a partition child. `diffTable` takes a separate
+branch for one, which returns before the rewrite block, and a `PARTITION OF`
+child declares no columns, so its own rename map is empty. A trigger or policy
+created directly on a child is in the model, since the catalog excludes only
+the clones the parent pushes down, so a rename on the parent leaves a redundant
+statement on such a child. Carrying the rename there needs the parent's map.
+
 Origin: [#123](https://github.com/winebarrel/pistachio/pull/123).
-
-## Trigger definitions are not rewritten on a column rename
-
-When a column is renamed via `-- pista:renamed-from`, the rewriter updates the
-same-table dependents it knows about (indexes, constraints, FKs). A trigger on
-the same table is not among them, so a `UPDATE OF <col>` list or a `WHEN`
-expression naming the old column reads as a definition change and the first
-plan emits a redundant `CREATE OR REPLACE TRIGGER`. PostgreSQL applies
-`RENAME COLUMN` to the trigger itself, so the second run after the rename is
-clean.
-
-Same class as the view and cross-table FK entry above, and the fix is the same
-shape: run the column-rename rewriter over `Table.Triggers` and
-`View.Triggers`.
-
-Origin: trigger support.
 
 ## Validation of column refs in GENERATED / DEFAULT expressions
 

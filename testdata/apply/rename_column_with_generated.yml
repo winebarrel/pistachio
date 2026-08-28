@@ -1,0 +1,27 @@
+# The rename carries the generated expression, and the re-plan that follows
+# finds nothing left to do.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      total integer GENERATED ALWAYS AS (qty * 2) STORED,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      total integer GENERATED ALWAYS AS (quantity * 2) STORED,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER TABLE public.items RENAME COLUMN qty TO quantity;
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      quantity integer NOT NULL,
+      total integer GENERATED ALWAYS AS ((quantity * 2)) STORED,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );

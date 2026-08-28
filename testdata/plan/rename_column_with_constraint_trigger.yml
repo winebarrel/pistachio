@@ -1,0 +1,26 @@
+# A constraint trigger names columns in the same two places, and the rewrite
+# has to keep the CONSTRAINT keyword. Losing it would read as a switch to a
+# plain trigger, which PostgreSQL will not replace in place, so the plan would
+# carry a DROP and a CREATE.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE CONSTRAINT TRIGGER products_check AFTER UPDATE OF qty ON public.products
+      DEFERRABLE FOR EACH ROW WHEN (new.qty IS DISTINCT FROM old.qty)
+      EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE CONSTRAINT TRIGGER products_check AFTER UPDATE OF quantity ON products
+      DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW
+      WHEN (new.quantity IS DISTINCT FROM old.quantity) EXECUTE FUNCTION stamp();
+plan: |
+  ALTER TABLE public.products RENAME COLUMN qty TO quantity;

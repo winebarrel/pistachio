@@ -19,6 +19,7 @@ func newTable(schema, name string) *model.Table {
 		ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
 		Indexes:     orderedmap.New[string, *model.Index](),
 		Policies:    orderedmap.New[string, *model.Policy](),
+		Triggers:    orderedmap.New[string, *model.Trigger](),
 	}
 }
 

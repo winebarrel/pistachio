@@ -1,0 +1,23 @@
+# PostgreSQL applies RENAME COLUMN to the trigger itself, so the UPDATE OF list
+# and the WHEN expression need no DDL of their own. The current definition is
+# rewritten before the comparison so the plan carries the rename alone.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER products_audit AFTER UPDATE OF qty ON public.products
+      FOR EACH ROW WHEN (new.qty IS DISTINCT FROM old.qty) EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER products_audit AFTER UPDATE OF quantity ON products
+      FOR EACH ROW WHEN (new.quantity IS DISTINCT FROM old.quantity) EXECUTE FUNCTION stamp();
+plan: |
+  ALTER TABLE public.products RENAME COLUMN qty TO quantity;

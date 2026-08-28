@@ -1,0 +1,28 @@
+# The rewrite must not swallow a change the desired schema does ask for. One
+# trigger only follows the rename and stays out of the plan; the other also
+# widens its events, so it is replaced.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER products_audit AFTER UPDATE OF qty ON public.products
+      FOR EACH ROW WHEN (new.qty IS DISTINCT FROM old.qty) EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER products_stamp BEFORE UPDATE OF qty ON public.products
+      FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER products_audit AFTER UPDATE OF quantity ON products
+      FOR EACH ROW WHEN (new.quantity IS DISTINCT FROM old.quantity) EXECUTE FUNCTION stamp();
+  CREATE TRIGGER products_stamp BEFORE INSERT OR UPDATE OF quantity ON products
+      FOR EACH ROW EXECUTE FUNCTION stamp();
+plan: |
+  ALTER TABLE public.products RENAME COLUMN qty TO quantity;
+  CREATE OR REPLACE TRIGGER products_stamp BEFORE INSERT OR UPDATE OF quantity ON public.products FOR EACH ROW EXECUTE FUNCTION stamp();

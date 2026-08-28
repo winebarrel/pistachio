@@ -1,0 +1,33 @@
+# The rename carries the policy, and the re-plan that follows finds nothing
+# left to do.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      owner text NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY docs_own ON public.docs FOR ALL
+      USING (owner = CURRENT_USER) WITH CHECK (owner <> 'nobody');
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      -- pista:renamed-from owner
+      owner_name text NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY docs_own ON public.docs FOR ALL
+      USING (owner_name = CURRENT_USER) WITH CHECK (owner_name <> 'nobody'::text);
+applied_sql: |
+  ALTER TABLE public.docs RENAME COLUMN owner TO owner_name;
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      owner_name text NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY docs_own ON public.docs USING ((owner_name = CURRENT_USER)) WITH CHECK ((owner_name <> 'nobody'::text));

@@ -1,0 +1,20 @@
+# A generated expression cannot be altered in place, so reading the rename as
+# an expression change fails the whole run rather than emitting a redundant
+# statement. PostgreSQL carries the expression through RENAME COLUMN.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      total integer GENERATED ALWAYS AS (qty * 2) STORED,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      total integer GENERATED ALWAYS AS (quantity * 2) STORED,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.items RENAME COLUMN qty TO quantity;

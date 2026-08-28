@@ -1,0 +1,31 @@
+# RENAME COLUMN carries the trigger with it, so the apply holds the rename
+# alone and the re-plan that follows finds nothing left to do.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER products_audit AFTER UPDATE OF qty ON public.products
+      FOR EACH ROW WHEN (new.qty IS DISTINCT FROM old.qty) EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER products_audit AFTER UPDATE OF quantity ON products
+      FOR EACH ROW WHEN (new.quantity IS DISTINCT FROM old.quantity) EXECUTE FUNCTION stamp();
+applied_sql: |
+  ALTER TABLE public.products RENAME COLUMN qty TO quantity;
+applied: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      quantity integer NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+
+  CREATE TRIGGER products_audit AFTER UPDATE OF quantity ON products FOR EACH ROW WHEN (new.quantity IS DISTINCT FROM old.quantity) EXECUTE FUNCTION stamp();

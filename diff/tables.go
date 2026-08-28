@@ -199,14 +199,16 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 
 	// Rewrite column references in dependent objects so that subsequent diffs
 	// don't see the renamed column as a definition change. PostgreSQL applies
-	// RENAME COLUMN transparently to indexes/constraints/FKs on the same table.
-	// Also rekey current.Columns so diffComments looks up the right entry by
-	// the new column name.
+	// RENAME COLUMN transparently to the indexes, constraints, FKs, triggers
+	// and policies on the same table. Also rekey current.Columns so
+	// diffComments looks up the right entry by the new column name.
 	if columnRenames := collectColumnRenames(desired.Columns); len(columnRenames) > 0 {
 		clone := *current
 		clone.Indexes = rewriteColumnRefsInIndexes(current.Indexes, columnRenames)
 		clone.Constraints = rewriteColumnRefsInConstraints(current.Constraints, columnRenames)
 		clone.ForeignKeys = rewriteColumnRefsInForeignKeys(current.ForeignKeys, columnRenames)
+		clone.Triggers = rewriteColumnRefsInTriggers(current.Triggers, columnRenames)
+		clone.Policies = rewriteColumnRefsInPolicies(current.Policies, columnRenames)
 		clone.Columns = renameColumnKeys(current.Columns, columnRenames)
 		current = &clone
 	}
@@ -286,6 +288,14 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 		return nil, nil, nil, err
 	}
 	stmts = append(stmts, renameStmts...)
+
+	// A generated expression on the same table names the renamed column, and
+	// PostgreSQL carries it through RENAME COLUMN. Rewrite it on the current
+	// side so the comparison below does not read the rename as an expression
+	// change, which it cannot express as an ALTER.
+	if columnRenames := collectColumnRenames(desired); len(columnRenames) > 0 {
+		current = rewriteColumnRefsInGenerated(current, columnRenames)
+	}
 
 	// Add new columns
 	for name, col := range desired.All() {
