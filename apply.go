@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
 )
 
@@ -150,29 +149,11 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		}
 	}
 
-	// Set search_path to the target schemas, plus public, before running the
-	// managed DDL and the -- pista:execute statements, so an unqualified
-	// user-type reference in a column or attribute definition (e.g. "home addr")
-	// resolves. public is appended so a reference to an object commonly kept
-	// there (extension types such as citext, functions) still resolves from a
-	// non-public target schema; this extends the default search_path rather than
-	// replacing it. The generated DDL always schema-qualifies object names, so
-	// this only affects name resolution inside definitions, not where objects
-	// are created. It is not written to the output writer, matching the
-	// emitted-SQL contract.
-	quoted := make([]string, 0, len(client.Schemas)+1)
-	hasPublic := false
-	for _, s := range client.Schemas {
-		quoted = append(quoted, model.Ident(s))
-		if s == "public" {
-			hasPublic = true
-		}
-	}
-	if !hasPublic {
-		quoted = append(quoted, "public")
-	}
-	searchPath := "SET search_path TO " + strings.Join(quoted, ", ")
-	if _, err := exec(ctx, searchPath); err != nil {
+	// Set search_path to the target schemas before running the managed DDL and
+	// the -- pista:execute statements, so an unqualified user-type reference in
+	// a column or attribute definition (e.g. "home addr") resolves. It is not
+	// written to the output writer, matching the emitted-SQL contract.
+	if _, err := exec(ctx, client.searchPathSQL()); err != nil {
 		return nil, fmt.Errorf("failed to set search_path: %w", err)
 	}
 

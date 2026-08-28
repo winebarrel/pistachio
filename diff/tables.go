@@ -952,89 +952,133 @@ func alignCastNode(ctx pgast.Ctx, desired, current *pg_query.Node) *pg_query.Nod
 	}
 }
 
+// definitionChange records how one constraint or foreign key present on both
+// sides differs. equalConstraintDef and equalFKDef parse both definitions,
+// which is the most expensive thing a table diff does, and the rename, drop and
+// add loops below each ask the same question: comparing once and reading the
+// answer three times is what keeps a large schema off three parses per object.
+type definitionChange struct {
+	// changed says the object cannot stay as it is, so it is dropped and added
+	// back; PostgreSQL has no ALTER for a constraint definition.
+	changed bool
+	// validateOnly says the definitions match and only the NOT VALID flag
+	// differs, which VALIDATE CONSTRAINT settles in place.
+	validateOnly bool
+}
+
+// renameConstraintSQL renders the rename a constraint and a foreign key share;
+// PostgreSQL spells both ALTER TABLE ... RENAME CONSTRAINT.
+func renameConstraintSQL(fqtn, oldName, newName string) string {
+	return "ALTER TABLE " + fqtn + " RENAME CONSTRAINT " + model.Ident(oldName) + " TO " + model.Ident(newName) + ";"
+}
+
+func newDefinitionChange(sameDef, currentValidated, desiredValidated bool) definitionChange {
+	return definitionChange{
+		changed:      !sameDef || currentValidated != desiredValidated,
+		validateOnly: sameDef && !currentValidated && desiredValidated,
+	}
+}
+
+// constraintChanges compares every constraint present on both sides once.
+func constraintChanges(current, desired *orderedmap.Map[string, *model.Constraint]) map[string]definitionChange {
+	changes := make(map[string]definitionChange, desired.Len())
+	for name, desiredCon := range desired.All() {
+		currentCon, ok := current.GetOk(name)
+		if !ok {
+			continue
+		}
+		changes[name] = newDefinitionChange(
+			equalConstraintDef(currentCon.Definition, desiredCon.Definition),
+			currentCon.Validated, desiredCon.Validated)
+	}
+	return changes
+}
+
 func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, disallowed []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames
-	renameStmts, current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
+	current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	changes := constraintChanges(current, desired)
+
 	// Determine which renamed constraints need recreation instead of just rename
 	needsRecreation := map[string]bool{}
-	for name, currentCon := range current.All() {
-		desiredCon, ok := desired.GetOk(name)
-		if !ok {
-			continue
-		}
-		if !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
-			if equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
-				continue
-			}
-			if _, renamed := renamedFrom[name]; renamed {
-				needsRecreation[name] = true
-			}
+	for name := range renamedFrom {
+		if ch := changes[name]; ch.changed && !ch.validateOnly {
+			needsRecreation[name] = true
 		}
 	}
 
-	// Only emit rename statements for constraints that don't need recreation
-	for _, stmt := range renameStmts {
-		skip := false
-		for name := range needsRecreation {
-			oldName := renamedFrom[name]
-			if strings.Contains(stmt, model.Ident(oldName)+" TO "+model.Ident(name)) {
-				skip = true
-				break
-			}
+	// The renames that stand follow the desired schema's order. One whose
+	// constraint is being recreated is left out, since the ADD below already
+	// puts the new name in place.
+	for name := range desired.Keys() {
+		oldName, renamed := renamedFrom[name]
+		if !renamed || needsRecreation[name] {
+			continue
 		}
-		if !skip {
-			stmts = append(stmts, stmt)
-		}
+		stmts = append(stmts, renameConstraintSQL(fqtn, oldName, name))
 	}
 
 	// Drop removed or changed constraints. Pure removals (constraint absent
 	// from desired) honor the constraint-drop policy; definition changes still
-	// run DROP+ADD because PostgreSQL has no ALTER CONSTRAINT for definitions.
+	// run DROP+ADD. A NOT VALID -> validated constraint keeps its definition,
+	// so it is left to VALIDATE CONSTRAINT below.
 	conAllowed := dc.IsDropAllowed("constraint")
-	for name, currentCon := range current.All() {
-		desiredCon, ok := desired.GetOk(name)
-		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
-			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT
-			if ok && equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
-				continue
-			}
-			dropName := name
-			if oldName, renamed := renamedFrom[name]; renamed {
-				dropName = oldName
-			}
-			drop := "ALTER TABLE " + fqtn + " DROP CONSTRAINT " + model.Ident(dropName) + ";"
-			if !ok && !conAllowed {
-				disallowed = append(disallowed, "-- skipped: "+drop)
-				continue
-			}
-			stmts = append(stmts, drop)
+	for name := range current.Keys() {
+		_, ok := desired.GetOk(name)
+		ch := changes[name]
+		if ok && (!ch.changed || ch.validateOnly) {
+			continue
 		}
+		dropName := name
+		if oldName, renamed := renamedFrom[name]; renamed {
+			dropName = oldName
+		}
+		drop := "ALTER TABLE " + fqtn + " DROP CONSTRAINT " + model.Ident(dropName) + ";"
+		if !ok && !conAllowed {
+			disallowed = append(disallowed, "-- skipped: "+drop)
+			continue
+		}
+		stmts = append(stmts, drop)
 	}
 
-	// Add new or changed constraints
+	// Add new or changed constraints, or validate an existing NOT VALID one.
 	for name, desiredCon := range desired.All() {
-		currentCon, ok := current.GetOk(name)
-		if !ok || !equalConstraintDef(currentCon.Definition, desiredCon.Definition) || currentCon.Validated != desiredCon.Validated {
-			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT
-			if ok && equalConstraintDef(currentCon.Definition, desiredCon.Definition) && !currentCon.Validated && desiredCon.Validated {
-				stmts = append(stmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
-				continue
-			}
-			sql := "ALTER TABLE " + fqtn + " ADD CONSTRAINT " + model.Ident(name) + " " + desiredCon.Definition
-			if !desiredCon.Validated {
-				sql += " NOT VALID"
-			}
-			stmts = append(stmts, sql+";")
+		_, ok := current.GetOk(name)
+		ch := changes[name]
+		if ok && !ch.changed {
+			continue
 		}
+		if ch.validateOnly {
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
+			continue
+		}
+		sql := "ALTER TABLE " + fqtn + " ADD CONSTRAINT " + model.Ident(name) + " " + desiredCon.Definition
+		if !desiredCon.Validated {
+			sql += " NOT VALID"
+		}
+		stmts = append(stmts, sql+";")
 	}
 
 	return stmts, disallowed, nil
+}
+
+// equalIndexDefs compares every index present on both sides once. Like a
+// constraint definition, an index definition is compared by parsing both
+// sides, and the drop and add loops each ask the same question.
+func equalIndexDefs(current, desired *orderedmap.Map[string, *model.Index]) map[string]bool {
+	same := make(map[string]bool, desired.Len())
+	for name, desiredIdx := range desired.All() {
+		if currentIdx, ok := current.GetOk(name); ok {
+			same[name] = equalIndexDef(currentIdx.Definition, desiredIdx.Definition)
+		}
+	}
+	return same
 }
 
 type diffIndexesResult struct {
@@ -1054,13 +1098,15 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc Drop
 	}
 	result.Stmts = append(result.Stmts, renameStmts...)
 
+	sameDef := equalIndexDefs(current, desired)
+
 	// Drop removed or changed indexes. Pure removals (index absent from
 	// desired) honor the index-drop policy; definition changes still run
 	// DROP+CREATE because PostgreSQL has no ALTER INDEX for definitions.
 	idxAllowed := dc.IsDropAllowed("index")
 	for name, currentIdx := range current.All() {
 		desiredIdx, ok := desired.GetOk(name)
-		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
+		if !ok || !sameDef[name] {
 			// Use CONCURRENTLY when the desired index (when it exists and is
 			// being changed) has the per-index directive. For pure drops the
 			// desired entry is absent, so fall back to the current entry; that
@@ -1087,16 +1133,16 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc Drop
 
 	// Add new or changed indexes
 	for name, desiredIdx := range desired.All() {
-		currentIdx, ok := current.GetOk(name)
-		if !ok || !equalIndexDef(currentIdx.Definition, desiredIdx.Definition) {
-			stmt, err := createIndexSQL(desiredIdx.Definition, desiredIdx.Concurrently)
-			if err != nil {
-				return nil, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
-			}
-			result.Stmts = append(result.Stmts, stmt)
-			if desiredIdx.Concurrently {
-				result.HasConcurrently = true
-			}
+		if _, ok := current.GetOk(name); ok && sameDef[name] {
+			continue
+		}
+		stmt, err := createIndexSQL(desiredIdx.Definition, desiredIdx.Concurrently)
+		if err != nil {
+			return nil, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
+		}
+		result.Stmts = append(result.Stmts, stmt)
+		if desiredIdx.Concurrently {
+			result.HasConcurrently = true
 		}
 	}
 
@@ -1158,6 +1204,23 @@ func createIndexSQL(def string, concurrently bool) (string, error) {
 	return deparsed + ";", nil
 }
 
+// foreignKeyChanges compares every foreign key present on both sides once.
+// schema is the owning table's, which fills in an implicit one on the
+// referenced table.
+func foreignKeyChanges(current, desired *orderedmap.Map[string, *model.ForeignKey], schema string) map[string]definitionChange {
+	changes := make(map[string]definitionChange, desired.Len())
+	for name, desiredFk := range desired.All() {
+		currentFk, ok := current.GetOk(name)
+		if !ok {
+			continue
+		}
+		changes[name] = newDefinitionChange(
+			equalFKDef(currentFk.Definition, desiredFk.Definition, schema),
+			currentFk.Validated, desiredFk.Validated)
+	}
+	return changes
+}
+
 // diffForeignKeys returns (dropStmts, addStmts, disallowed, error).
 // Rename statements are included in addStmts (they depend on table renames being done first).
 // Pure FK removals (FK absent from desired while the owning table stays) honor
@@ -1167,79 +1230,65 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames (renames go into addStmts since they may depend on table renames)
-	renameStmts, current, renamedFrom, err := detectForeignKeyRenames(fqtn, current, desired)
+	current, renamedFrom, err := detectForeignKeyRenames(fqtn, current, desired)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
+	changes := foreignKeyChanges(current, desired, schema)
+
 	// Determine which renamed FKs need recreation (drop+add) instead of just rename
 	needsRecreation := map[string]bool{}
-	for name := range current.All() {
-		desiredFk, ok := desired.GetOk(name)
-		if !ok {
+	for name := range renamedFrom {
+		if ch := changes[name]; ch.changed && !ch.validateOnly {
+			needsRecreation[name] = true
+		}
+	}
+
+	// The renames that stand follow the desired schema's order. One whose key
+	// is being recreated is left out, since the ADD below already puts the new
+	// name in place.
+	for name := range desired.Keys() {
+		oldName, renamed := renamedFrom[name]
+		if !renamed || needsRecreation[name] {
 			continue
 		}
-		currentFk := current.Get(name)
-		if !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
-			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT (no recreation needed)
-			if equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
-				continue
-			}
-			if _, renamed := renamedFrom[name]; renamed {
-				needsRecreation[name] = true
-			}
-		}
+		addStmts = append(addStmts, renameConstraintSQL(fqtn, oldName, name))
 	}
 
-	// Only emit rename statements for FKs that don't need recreation
-	for _, stmt := range renameStmts {
-		skip := false
-		for name := range needsRecreation {
-			oldName := renamedFrom[name]
-			if strings.Contains(stmt, model.Ident(oldName)+" TO "+model.Ident(name)) {
-				skip = true
-				break
-			}
-		}
-		if !skip {
-			addStmts = append(addStmts, stmt)
-		}
-	}
-
-	// Drop removed or changed FKs
+	// Drop removed or changed FKs. A NOT VALID -> validated key keeps its
+	// definition, so it is left to VALIDATE CONSTRAINT below.
 	fkAllowed := dc.IsDropAllowed("foreign_key")
-	for name := range current.All() {
-		desiredFk, ok := desired.GetOk(name)
-		currentFk := current.Get(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
-			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT
-			if ok && equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
-				continue
-			}
-			dropName := name
-			if oldName, renamed := renamedFrom[name]; renamed {
-				dropName = oldName
-			}
-			drop := "ALTER TABLE " + fqtn + " DROP CONSTRAINT " + model.Ident(dropName) + ";"
-			if !ok && !fkAllowed {
-				disallowed = append(disallowed, "-- skipped: "+drop)
-				continue
-			}
-			dropStmts = append(dropStmts, drop)
+	for name := range current.Keys() {
+		_, ok := desired.GetOk(name)
+		ch := changes[name]
+		if ok && (!ch.changed || ch.validateOnly) {
+			continue
 		}
+		dropName := name
+		if oldName, renamed := renamedFrom[name]; renamed {
+			dropName = oldName
+		}
+		drop := "ALTER TABLE " + fqtn + " DROP CONSTRAINT " + model.Ident(dropName) + ";"
+		if !ok && !fkAllowed {
+			disallowed = append(disallowed, "-- skipped: "+drop)
+			continue
+		}
+		dropStmts = append(dropStmts, drop)
 	}
 
-	// Add new or changed FKs
+	// Add new or changed FKs, or validate an existing NOT VALID one.
 	for name, desiredFk := range desired.All() {
-		currentFk, ok := current.GetOk(name)
-		if !ok || !equalFKDef(currentFk.Definition, desiredFk.Definition, schema) || currentFk.Validated != desiredFk.Validated {
-			// NOT VALID -> validated with same definition can use VALIDATE CONSTRAINT
-			if ok && equalFKDef(currentFk.Definition, desiredFk.Definition, schema) && !currentFk.Validated && desiredFk.Validated {
-				addStmts = append(addStmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
-				continue
-			}
-			addStmts = append(addStmts, desiredFk.SQL())
+		_, ok := current.GetOk(name)
+		ch := changes[name]
+		if ok && !ch.changed {
+			continue
 		}
+		if ch.validateOnly {
+			addStmts = append(addStmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
+			continue
+		}
+		addStmts = append(addStmts, desiredFk.SQL())
 	}
 
 	return dropStmts, addStmts, disallowed, nil

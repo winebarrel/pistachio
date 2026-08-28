@@ -704,6 +704,34 @@ func TestDiffViews_matviewIndexAdd(t *testing.T) {
 	assert.Contains(t, result.CreateStmts[0], "CREATE INDEX idx_mv_n")
 }
 
+// A materialized view whose definition and indexes both stay put plans
+// nothing. The index loops still walk it, so this is what says they leave an
+// unchanged index alone.
+func TestDiffViews_matviewIndexUnchanged(t *testing.T) {
+	newMatview := func() *model.View {
+		mv := &model.View{
+			Schema: "public", Name: "mv", Materialized: true,
+			Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+		}
+		mv.Indexes.Set("idx_mv_n", &model.Index{
+			Schema: "public", Name: "idx_mv_n", Table: "mv",
+			Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+		})
+		return mv
+	}
+
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", newMatview())
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv", newMatview())
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.CreateStmts)
+	assert.Empty(t, result.DisallowedDropStmts)
+}
+
 func TestDiffViews_matviewIndexDrop(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	mv := &model.View{

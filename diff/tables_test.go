@@ -3451,3 +3451,61 @@ func TestColumnStorageSQL(t *testing.T) {
 	}, true))
 	assert.Empty(t, columnStorageSQL("public.docs", cur(), &model.Column{Name: "body", TypeName: "text"}, true))
 }
+
+// Suppressing the rename of a constraint that is being recreated must not take
+// another rename with it. Matching the rendered statement by substring did:
+// the needle for a -> b is a substring of the statement for xa -> by, so the
+// second rename was dropped and its constraint kept the old name.
+func TestDiffConstraints_RenameSuppressionKeepsOtherRenames(t *testing.T) {
+	current := orderedmap.New[string, *model.Constraint]()
+	desired := orderedmap.New[string, *model.Constraint]()
+
+	// a -> b, definition also changes, so the rename gives way to DROP + ADD.
+	current.Set("a", &model.Constraint{Name: "a", Definition: "CHECK ((x > 0))", Validated: true})
+	desired.Set("b", &model.Constraint{Name: "b", RenameFrom: new("a"), Definition: "CHECK ((x > 1))", Validated: true})
+
+	// xa -> by, definition unchanged, so this one is a plain rename.
+	current.Set("xa", &model.Constraint{Name: "xa", Definition: "CHECK ((y > 0))", Validated: true})
+	desired.Set("by", &model.Constraint{Name: "by", RenameFrom: new("xa"), Definition: "CHECK ((y > 0))", Validated: true})
+
+	stmts, _, err := diffConstraints("public.t", current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"ALTER TABLE public.t RENAME CONSTRAINT xa TO by;",
+		"ALTER TABLE public.t DROP CONSTRAINT a;",
+		"ALTER TABLE public.t ADD CONSTRAINT b CHECK ((x > 1));",
+	}, stmts)
+}
+
+func TestDiffForeignKeys_RenameSuppressionKeepsOtherRenames(t *testing.T) {
+	fk := func(name, refTable, renameFrom string) *model.ForeignKey {
+		f := &model.ForeignKey{
+			Constraint: model.Constraint{Name: name, Definition: "FOREIGN KEY (pid) REFERENCES " + refTable + "(id)", Validated: true},
+			Schema:     "public",
+			Table:      "t",
+		}
+		if renameFrom != "" {
+			f.RenameFrom = new(renameFrom)
+		}
+		return f
+	}
+
+	current := orderedmap.New[string, *model.ForeignKey]()
+	desired := orderedmap.New[string, *model.ForeignKey]()
+
+	// a -> b, target also changes, so the rename gives way to DROP + ADD.
+	current.Set("a", fk("a", "p", ""))
+	desired.Set("b", fk("b", "q", "a"))
+
+	// xa -> by, definition unchanged, so this one is a plain rename.
+	current.Set("xa", fk("xa", "p", ""))
+	desired.Set("by", fk("by", "p", "xa"))
+
+	dropStmts, addStmts, _, err := diffForeignKeys("public.t", "public", current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.t DROP CONSTRAINT a;"}, dropStmts)
+	assert.Equal(t, []string{
+		"ALTER TABLE public.t RENAME CONSTRAINT xa TO by;",
+		"ALTER TABLE ONLY public.t ADD CONSTRAINT b FOREIGN KEY (pid) REFERENCES q(id);",
+	}, addStmts)
+}

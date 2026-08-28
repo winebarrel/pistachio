@@ -105,6 +105,19 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		return nil, err
 	}
 
+	// A check SQL is evaluated under the same search_path apply gives it, so an
+	// unqualified name in it resolves to the same object in both commands.
+	// Without it a check reading a table in a non-public target schema failed
+	// here and was reported as undetermined, while apply answered it. The
+	// catalog has already been read, so this cannot change what the diff
+	// compared, and only a run that has a check to evaluate pays for the
+	// statement.
+	if hasCheckSQL(result.ExecuteStmts) {
+		if _, err := conn.Exec(ctx, client.searchPathSQL()); err != nil {
+			return nil, fmt.Errorf("failed to set search_path: %w", err)
+		}
+	}
+
 	// execute-first statements run before the schema changes, plain execute
 	// statements after them. Order within each group follows the source file.
 	// A statement whose check SQL is false is left out, so the plan shows what
@@ -164,4 +177,15 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		Count:           result.Count,
 		HasChanges:      hasChanges,
 	}, nil
+}
+
+// hasCheckSQL reports whether any execute statement carries a condition to
+// evaluate, so plan sets the search_path only when one is going to run.
+func hasCheckSQL(stmts []*parser.ExecuteStmt) bool {
+	for _, es := range stmts {
+		if es.CheckSQL != "" {
+			return true
+		}
+	}
+	return false
 }
