@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -3208,23 +3209,11 @@ func TestParseFKDef_success(t *testing.T) {
 	require.NotNil(t, con)
 }
 
-func TestParseDefaultExpr_parseError(t *testing.T) {
-	_, _, err := parseSelectExpr(")))INVALID(((")
-	require.Error(t, err)
-}
-
-func TestParseDefaultExpr_success(t *testing.T) {
-	_, target, err := parseSelectExpr("42")
-	require.NoError(t, err)
-	require.NotNil(t, target)
-	require.NotNil(t, target.Val)
-}
-
 func TestStripDefaultTopLevelCast_stripsWhenPeerHasNoCast(t *testing.T) {
 	// Top-level TypeCast is removed regardless of peer's shape, as long as
 	// the cast is at the root. equalDefault relies on this to collapse
 	// `'hello'::text` == `'hello'`.
-	_, target, err := parseSelectExpr("'hello'::text")
+	_, target, err := pgast.ParseExpr("'hello'::text")
 	require.NoError(t, err)
 	result := stripDefaultTopLevelCast(target.Val, nil)
 	require.NotNil(t, result)
@@ -3238,7 +3227,7 @@ func TestPeerIsNumericAtTopLevel_nil(t *testing.T) {
 func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericType(t *testing.T) {
 	// `'hello'::text` is a TypeCast but the type isn't numeric, so the
 	// gate must reject it.
-	_, target, err := parseSelectExpr("'hello'::text")
+	_, target, err := pgast.ParseExpr("'hello'::text")
 	require.NoError(t, err)
 	assert.False(t, peerIsNumericAtTopLevel(target.Val))
 }
@@ -3246,7 +3235,7 @@ func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericType(t *testing.T) {
 func TestPeerIsNumericAtTopLevel_typeCastOnColumnRef(t *testing.T) {
 	// `(col)::integer`; TypeCast on a non-AConst arg should not count as
 	// "would be numeric after strip"; the strip leaves a ColumnRef.
-	_, target, err := parseSelectExpr("(col)::integer")
+	_, target, err := pgast.ParseExpr("(col)::integer")
 	require.NoError(t, err)
 	assert.False(t, peerIsNumericAtTopLevel(target.Val))
 }
@@ -3254,7 +3243,7 @@ func TestPeerIsNumericAtTopLevel_typeCastOnColumnRef(t *testing.T) {
 func TestPeerIsNumericAtTopLevel_typeCastOnNonNumericSval(t *testing.T) {
 	// `'abc'::integer`; TypeCast on a Sval that doesn't parse as a
 	// number. Not coercible, so the gate must reject it.
-	_, target, err := parseSelectExpr("'abc'::integer")
+	_, target, err := pgast.ParseExpr("'abc'::integer")
 	require.NoError(t, err)
 	assert.False(t, peerIsNumericAtTopLevel(target.Val))
 }

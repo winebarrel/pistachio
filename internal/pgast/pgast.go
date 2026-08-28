@@ -95,3 +95,27 @@ func WalkExprColumnRefs(node *pg_query.Node, visit func(*pg_query.String)) {
 		return n
 	})
 }
+
+// ParseExpr parses a bare SQL expression by wrapping it in `SELECT <expr>`,
+// returning the parse result and the ResTarget holding the expression.
+// Callers may mutate target.Val and re-deparse the result.
+//
+// A bare expression is how PostgreSQL stores a column DEFAULT, a generated
+// expression and a policy USING / WITH CHECK clause, so the diff and the
+// validator both read one this way.
+//
+// The prefix gives exactly one target, and the loop avoids a guard for a shape
+// that cannot occur. The trailing error covers a parse that produced no target
+// at all.
+func ParseExpr(expr string) (*pg_query.ParseResult, *pg_query.ResTarget, error) {
+	result, err := pg_query.Parse("SELECT " + expr)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, raw := range result.GetStmts() {
+		for _, node := range raw.GetStmt().GetSelectStmt().GetTargetList() {
+			return result, node.GetResTarget(), nil
+		}
+	}
+	return nil, nil, fmt.Errorf("unexpected parse result for expression: %s", expr)
+}

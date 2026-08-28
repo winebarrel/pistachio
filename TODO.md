@@ -30,19 +30,25 @@ statement on such a child. Carrying the rename there needs the parent's map.
 
 Origin: [#123](https://github.com/winebarrel/pistachio/pull/123).
 
-## Validation of column refs in GENERATED / DEFAULT expressions
+## Perpetual failure on a qualified reference in a generated expression
 
-`ValidateColumnRefs` checks index / constraint / FK definitions against
-the desired column set. It does not currently walk:
+PostgreSQL accepts a table- or schema-qualified column reference in a generated
+expression, `total integer GENERATED ALWAYS AS (items.qty * 2) STORED`, and
+stores it stripped: `pg_get_expr` reads back `(qty * 2)`. The desired side
+keeps what the file wrote, so the two never compare equal, and because a
+generated expression cannot be altered in place the run fails with
+`cannot change GENERATED expression` on every plan rather than merely drifting.
+Nothing changes in the schema for it to report.
 
-- `GENERATED ALWAYS AS (<expr>) STORED` expressions on columns
-- `DEFAULT <expr>` expressions on columns
+`stripQualifications` does this for a view body. Reaching the same result here
+needs the table's own name at the point the expression is normalized, which
+`equalSelectExpr` is not given.
 
-A typo or stale rename in these expressions still surfaces only at apply
-time. Adding a walk over `model.Column.Default` for both kinds (gated by
-`Generated`) would close this gap.
+The column-reference validator does not read a qualified name either, so a
+stale one produces the diff error above rather than a message naming the
+column.
 
-Origin: [#124](https://github.com/winebarrel/pistachio/pull/124).
+Workaround: write the reference unqualified, which is what `pista dump` emits.
 
 ## INHERITS table plan / apply support
 

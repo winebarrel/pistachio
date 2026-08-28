@@ -1,0 +1,16 @@
+# A typo in a DEFAULT expression. PostgreSQL rejects a column reference in a
+# DEFAULT whatever it names, but a name the table does not carry is caught
+# before the run reaches the database.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      name text NOT NULL,
+      label text DEFAULT upper(nmae),
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+error: 'column nmae referenced in the DEFAULT expression on column label does not exist on table public.items'

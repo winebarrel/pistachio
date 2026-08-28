@@ -25,6 +25,8 @@ func newValidatableTable(name string, cols ...string) *model.Table {
 	return t
 }
 
+func ptr(s string) *string { return &s }
+
 func tablesMap(ts ...*model.Table) *orderedmap.Map[string, *model.Table] {
 	m := orderedmap.New[string, *model.Table]()
 	for _, t := range ts {
@@ -739,4 +741,93 @@ CREATE DOMAIN y AS integer;`
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate relation name: public.x (table and view)")
 	assert.Contains(t, err.Error(), "duplicate type name: public.y (table and domain)")
+}
+
+func TestValidateColumnRefs_GeneratedMissingColumn(t *testing.T) {
+	tbl := newValidatableTable("items", "id", "quantity")
+	tbl.Columns.Set("total", &model.Column{
+		Name:      "total",
+		Generated: model.ColumnGenerated('s'),
+		Default:   ptr("qty * 2"),
+	})
+	err := validateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "column qty referenced in the GENERATED expression on column total does not exist on table public.items")
+}
+
+func TestValidateColumnRefs_DefaultMissingColumn(t *testing.T) {
+	tbl := newValidatableTable("items", "id", "quantity")
+	tbl.Columns.Set("label", &model.Column{Name: "label", Default: ptr("upper(nmae)")})
+	err := validateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "column nmae referenced in the DEFAULT expression on column label does not exist on table public.items")
+}
+
+func TestValidateColumnRefs_ColumnExprValid(t *testing.T) {
+	tbl := newValidatableTable("items", "id", "qty")
+	tbl.Columns.Set("total", &model.Column{
+		Name:      "total",
+		Generated: model.ColumnGenerated('s'),
+		Default:   ptr("qty * 2"),
+	})
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
+}
+
+func TestValidateColumnRefs_ColumnExprWithoutColumnRefs(t *testing.T) {
+	// A DEFAULT that names no column must not be read as referencing one.
+	tbl := newValidatableTable("items", "id")
+	tbl.Columns.Set("seq", &model.Column{Name: "seq", Default: ptr("nextval('items_seq'::regclass)")})
+	tbl.Columns.Set("made", &model.Column{Name: "made", Default: ptr("CURRENT_DATE")})
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
+}
+
+func TestValidateColumnRefs_ColumnExprDeduplicates(t *testing.T) {
+	tbl := newValidatableTable("items", "id")
+	tbl.Columns.Set("total", &model.Column{
+		Name:      "total",
+		Generated: model.ColumnGenerated('s'),
+		Default:   ptr("qty + qty"),
+	})
+	err := validateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	assert.Equal(t, 1, strings.Count(err.Error(), "column qty referenced"))
+}
+
+func TestValidateColumnRefs_ColumnExprUnparsable(t *testing.T) {
+	// Validation degrades to a no-op rather than failing the run on an
+	// expression pg_query cannot read.
+	tbl := newValidatableTable("items", "id")
+	tbl.Columns.Set("total", &model.Column{Name: "total", Default: ptr("qty > ")})
+	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
+}
+
+func TestValidateColumnRefs_ColumnExprReportsPerColumn(t *testing.T) {
+	// Deduplication is per object, so the same missing name reached from two
+	// columns is reported once for each, the way two indexes would be.
+	tbl := newValidatableTable("items", "id")
+	tbl.Columns.Set("total", &model.Column{
+		Name:      "total",
+		Generated: model.ColumnGenerated('s'),
+		Default:   ptr("qty * 2"),
+	})
+	tbl.Columns.Set("half", &model.Column{
+		Name:      "half",
+		Generated: model.ColumnGenerated('s'),
+		Default:   ptr("qty / 2"),
+	})
+	err := validateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	assert.Equal(t, 2, strings.Count(err.Error(), "column qty referenced"))
+}
+
+func TestValidateColumnRefs_ColumnExprQuotedName(t *testing.T) {
+	tbl := newValidatableTable("items", "id")
+	tbl.Columns.Set("total", &model.Column{
+		Name:      "total",
+		Generated: model.ColumnGenerated('s'),
+		Default:   ptr(`"Qty" * 2`),
+	})
+	err := validateColumnRefs(tablesMap(tbl))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `column "Qty" referenced in the GENERATED expression on column total`)
 }

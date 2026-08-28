@@ -10,13 +10,14 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// validateColumnRefs returns an error if any index, constraint, or foreign-key
-// definition on a desired table references a column that does not exist in
-// that table's desired column set. All violations across all tables are
-// aggregated via errors.Join so a single plan run reports every problem.
-// Within a single object (index / constraint / FK), each missing column
-// name is reported at most once so multiple references to the same name
-// don't produce duplicate error lines.
+// validateColumnRefs returns an error if any column DEFAULT or GENERATED
+// expression, index, constraint, or foreign-key definition on a desired table
+// references a column that does not exist in that table's desired column set.
+// All violations across all tables are aggregated via errors.Join so a single
+// plan run reports every problem. Within a single object (column expression /
+// index / constraint / FK), each missing column name is reported at most once
+// so multiple references to the same name don't produce duplicate error
+// lines.
 //
 // Scope: only same-table references are checked. Foreign-key referenced
 // columns (PkAttrs, on the parent table) are out of scope. Tables that
@@ -41,6 +42,20 @@ func validateColumnRefs(tables *orderedmap.Map[string, *model.Table]) error {
 		cols := make(map[string]bool, t.Columns.Len())
 		for name := range t.Columns.Keys() {
 			cols[name] = true
+		}
+
+		for name, col := range t.Columns.All() {
+			if col.Default == nil {
+				continue
+			}
+			kind := "DEFAULT"
+			if col.Generated.IsGeneratedColumn() {
+				kind = "GENERATED"
+			}
+			reportMissing(&errs, cols, collectColumnRefsInColumnExpr(*col.Default), func(ref string) error {
+				return fmt.Errorf("column %s referenced in the %s expression on column %s does not exist on table %s",
+					model.Ident(ref), kind, model.Ident(name), fqtn)
+			})
 		}
 
 		for _, idx := range t.Indexes.CollectValues() {
@@ -183,6 +198,27 @@ func collectColumnRefsInFKDef(def string) []string {
 		}
 	}
 	return refs
+}
+
+// collectColumnRefsInColumnExpr returns the unqualified column names
+// referenced by a column DEFAULT or GENERATED expression, which is stored as
+// a bare expression rather than a statement. Returns nil on parse errors so
+// validation degrades to a no-op for unparsable expressions.
+//
+// A generated expression may reference only columns of its own table, so every
+// name it carries belongs to the set checked here. A plain DEFAULT may
+// reference no column at all, which PostgreSQL rejects on its own; the names
+// it does carry are checked the same way rather than rejected outright.
+//
+// Only unqualified names are read, as they are for an index or a constraint.
+// A generated expression may write one qualified, which the diff cannot
+// compare at all; TODO.md records that.
+func collectColumnRefsInColumnExpr(expr string) []string {
+	_, target, err := pgast.ParseExpr(expr)
+	if err != nil {
+		return nil
+	}
+	return walkExprColumnRefs(target.Val)
 }
 
 // walkExprColumnRefs returns the unqualified ColumnRef names found in an

@@ -6,6 +6,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -255,8 +256,8 @@ func equalSelectExpr(current, desired string) bool {
 	if current == desired {
 		return true
 	}
-	curResult, curTarget, parseErrCur := parseSelectExpr(current)
-	desResult, desTarget, parseErrDes := parseSelectExpr(desired)
+	curResult, curTarget, parseErrCur := pgast.ParseExpr(current)
+	desResult, desTarget, parseErrDes := pgast.ParseExpr(desired)
 	if parseErrCur != nil || parseErrDes != nil {
 		return current == desired
 	}

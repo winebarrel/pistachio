@@ -824,7 +824,7 @@ ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFER
 
 #### Column rename caveats
 
-When a column is renamed, pistachio rewrites column references in same-table indexes, constraints, and foreign keys (including `EXCLUDE`, partial / expression / `INCLUDE` indexes) on the current side, so a single `ALTER TABLE ... RENAME COLUMN` is emitted without redundant `DROP/CREATE` on the dependents.
+When a column is renamed, pistachio rewrites column references in same-table indexes, constraints, foreign keys (including `EXCLUDE`, partial / expression / `INCLUDE` indexes), triggers, policies and generated expressions on the current side, so a single `ALTER TABLE ... RENAME COLUMN` is emitted without redundant DDL on the dependents.
 
 The desired-side SQL must use the new column name in those dependent definitions:
 
@@ -839,12 +839,13 @@ CREATE TABLE public.users (
 CREATE INDEX idx_users_name ON public.users (display_name);
 ```
 
-If the desired side still references the old name, `pista plan` errors out at parse time with a message like `column name referenced in index idx_users_name does not exist on table public.users` (identifiers are quoted only when they aren't safe unquoted). All such unresolved references are reported in a single error.
+If the desired side still references the old name, `pista plan` errors out at parse time with a message like `column name referenced in index idx_users_name does not exist on table public.users` (identifiers are quoted only when they aren't safe unquoted). Index, constraint, foreign-key, `DEFAULT` and generated definitions are checked, and all such unresolved references are reported in a single error.
 
 The following references are not auto-rewritten and may produce a redundant `DROP/CREATE` on the first plan (the second run after applying the rename is clean):
 
 - View / materialized view definitions that `SELECT` the renamed column
 - Foreign keys in other tables whose `REFERENCES this_table(renamed_col)` points at the renamed column
+- Definitions on a partition child of the renamed table, which pistachio diffs on its own before the rewrite runs
 
 ### Ignoring objects
 

@@ -216,3 +216,27 @@ func TestWalkExprColumnRefs_SubLink(t *testing.T) {
 	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((a = ANY (SELECT b FROM other)))"))
 	assert.Equal(t, []string{"a"}, collectRefs(t, "CHECK ((COALESCE(a, 0) IN (SELECT b FROM other)))"))
 }
+
+func TestParseExpr_ParseError(t *testing.T) {
+	_, _, err := pgast.ParseExpr(")))INVALID(((")
+	require.Error(t, err)
+}
+
+func TestParseExpr_ReturnsTarget(t *testing.T) {
+	result, target, err := pgast.ParseExpr("42")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, target)
+	require.NotNil(t, target.Val)
+}
+
+func TestParseExpr_TargetIsMutable(t *testing.T) {
+	// Callers rewrite target.Val in place and deparse the result, so the
+	// target has to point into the tree the result holds.
+	result, target, err := pgast.ParseExpr("qty * 2")
+	require.NoError(t, err)
+	target.Val.GetAExpr().Lexpr.GetColumnRef().Fields[0].GetString_().Sval = "quantity"
+	sql, err := pg_query.Deparse(result)
+	require.NoError(t, err)
+	assert.Contains(t, sql, "quantity * 2")
+}
