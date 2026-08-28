@@ -4,6 +4,8 @@
 
 * Stop one suppressed constraint rename from taking another with it. A renamed constraint whose definition also changes goes through `DROP` and `ADD` rather than `RENAME`, and the `RENAME` was suppressed by matching the rendered statement as a substring. With `a` renamed to `b` alongside `xa` renamed to `by` on one table, the needle for the first matched the statement for the second, so `xa` was left in the database under its old name and the same plan came back on the next run. Foreign keys were suppressed the same way and had the same hole.
 
+* Emit the `ALTER POLICY ... RENAME TO` statements in the desired schema's order. The renames were read out of a Go map, whose iteration order is randomized, so a plan renaming two or more policies on one table printed them in a different order on every run. The statements are independent, so only the output moved, but a plan that is reviewed, or diffed against the previous run, has to be stable.
+
 ## [1.34.0] - 2026-08-28
 
 * Manage a partitioned table without its partitions, behind `--skip-partition-child` (`$PISTA_SKIP_PARTITION_CHILD`). Where another tool creates the partitions, pg_partman for example, a schema file that declares the parent alone planned a `DROP TABLE` for every partition, and `-E` only reached names that carry a pattern. With the flag `dump` writes the parent alone, and `plan` / `apply` skip a partition on both sides of the diff, including the indexes, policies and comments it owns. The parent stays managed, and PostgreSQL carries `ADD COLUMN` and an index created on it down to the partitions. A partition is skipped whether or not it is partitioned itself, so a sub-partitioned level goes with the leaves under it. An `INHERITS` child carries no partition bound and stays managed.
