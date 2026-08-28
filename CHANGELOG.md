@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.35.0] - 2026-08-29
 
 * Stop a schema-qualified function call from drifting. `pg_get_constraintdef`, `pg_get_expr`, `pg_get_indexdef`, `pg_get_viewdef` and `pg_get_triggerdef` all print a call unqualified once the function's schema is on the search_path, while the desired side keeps what the file wrote, so `CHECK (public.lower_v(v) <> 'x')` and every other call written that way re-emitted its statement on every plan. A `CHECK` was dropped and re-added, which revalidates the whole table, an index was rebuilt, and a materialized view was dropped and recreated, discarding the data it held. A generated expression did not drift but failed the run outright, since it cannot be altered in place. The strip is symmetric and carries the tradeoff a view body's table reference already has: two same-named functions in different schemas compare equal. A schema inside a `nextval('public.counter'::regclass)` literal is not a call name and still drifts; TODO.md covers it.
 
