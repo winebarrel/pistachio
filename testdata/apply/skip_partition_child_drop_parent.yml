@@ -1,0 +1,27 @@
+# Dropping the parent is still the parent's statement. PostgreSQL drops the
+# partitions with it, so an unmanaged partition does not survive its parent.
+skip_partition_child: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  DROP TABLE public.events;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

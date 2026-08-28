@@ -212,11 +212,10 @@ Flags:
       --manage-routine          Manage functions and procedures. Off by default;
                                 --allow-drop routine still gates dropping them
                                 ($PISTA_MANAGE_ROUTINE).
-      --skip-partition-child    Leave partition children unmanaged and
-                                manage the partitioned parent alone.
-                                For a schema whose partitions another tool
-                                creates. An INHERITS child is unaffected
-                                ($PISTA_SKIP_PARTITION_CHILD).
+      --skip-partition-child    Manage a partitioned table without its
+                                partitions. For a schema whose partitions
+                                another tool creates. An INHERITS child is
+                                unaffected ($PISTA_SKIP_PARTITION_CHILD).
       --allow-drop=ALLOW-DROP,...
                                 Allow dropping these object types (repeatable;
                                 'all' allows everything) ($PISTA_ALLOW_DROP).
@@ -306,11 +305,10 @@ Flags:
       --manage-routine          Manage functions and procedures. Off by default;
                                 --allow-drop routine still gates dropping them
                                 ($PISTA_MANAGE_ROUTINE).
-      --skip-partition-child    Leave partition children unmanaged and
-                                manage the partitioned parent alone.
-                                For a schema whose partitions another tool
-                                creates. An INHERITS child is unaffected
-                                ($PISTA_SKIP_PARTITION_CHILD).
+      --skip-partition-child    Manage a partitioned table without its
+                                partitions. For a schema whose partitions
+                                another tool creates. An INHERITS child is
+                                unaffected ($PISTA_SKIP_PARTITION_CHILD).
       --allow-drop=ALLOW-DROP,...
                                 Allow dropping these object types (repeatable;
                                 'all' allows everything) ($PISTA_ALLOW_DROP).
@@ -400,11 +398,10 @@ Flags:
       --manage-routine          Manage functions and procedures. Off by default;
                                 --allow-drop routine still gates dropping them
                                 ($PISTA_MANAGE_ROUTINE).
-      --skip-partition-child    Leave partition children unmanaged and
-                                manage the partitioned parent alone.
-                                For a schema whose partitions another tool
-                                creates. An INHERITS child is unaffected
-                                ($PISTA_SKIP_PARTITION_CHILD).
+      --skip-partition-child    Manage a partitioned table without its
+                                partitions. For a schema whose partitions
+                                another tool creates. An INHERITS child is
+                                unaffected ($PISTA_SKIP_PARTITION_CHILD).
       --split=STRING            Output each table/view/enum/domain/composite
                                 type/sequence as a separate file in the
                                 specified directory.
@@ -749,19 +746,16 @@ PISTA_EXCLUDE='tmp_*' pista plan schema.sql
 
 ### Skipping partition children
 
-Use `--skip-partition-child` to leave every partition of a partitioned table unmanaged and manage the parent alone. `dump` writes the parent without its partitions, and `plan` / `apply` neither create a partition the desired schema declares nor drop one the database holds. Also available as `$PISTA_SKIP_PARTITION_CHILD`. It works on the `dump`, `plan`, and `apply` subcommands.
+Use `--skip-partition-child` to manage a partitioned table without its partitions. `dump` writes the parent alone, and `plan` / `apply` neither create a partition the schema file declares nor drop one the database holds. Available on `dump`, `plan` and `apply`, and as `$PISTA_SKIP_PARTITION_CHILD`.
 
-Use it where another tool owns the partitions, pg_partman for example. `-E '/^posts_\d+$/'` reaches a regularly numbered set, but nothing reaches one whose names carry no pattern, and a desired schema that declares the parent alone plans a `DROP TABLE` for every partition it does not know about.
+Use it where another tool creates the partitions, pg_partman for example. Without it, a schema file that declares the parent alone plans a `DROP TABLE` for every partition, and `-E` only reaches names that carry a pattern.
 
 ```bash
-# Manage the partitioned parent and leave its partitions alone
 pista plan --skip-partition-child schema.sql
-
-# Dump writes the parent without its partitions
 pista dump --skip-partition-child
 ```
 
-A partition is left out whether or not it is partitioned itself, so a sub-partitioned level goes with the leaves under it. The parent still carries a change down: PostgreSQL applies `ADD COLUMN` and an index created on a partitioned table to every partition. A table attached with `INHERITS` is not a partition and stays managed.
+A partition is skipped whether or not it is partitioned itself, so a sub-partitioned level goes with the leaves under it. The parent still carries changes down: PostgreSQL applies `ADD COLUMN` and an index created on a partitioned table to every partition. An `INHERITS` child is not a partition and stays managed.
 
 ### Omit schema
 

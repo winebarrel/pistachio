@@ -314,6 +314,13 @@ func TestFilterTables_SkipPartitionChild(t *testing.T) {
 		assert.Equal(t, []string{"public.events", "public.events_old"}, got.CollectKeys())
 	})
 
+	t.Run("with include", func(t *testing.T) {
+		// A partition matching --include is skipped all the same.
+		f := &pistachio.FilterOptions{SkipPartitionChild: true, Include: []string{"events*"}}
+		got := pistachio.FilterTables(f, tables)
+		assert.Equal(t, []string{"public.events", "public.events_old"}, got.CollectKeys())
+	})
+
 	t.Run("with disabled table type", func(t *testing.T) {
 		f := &pistachio.FilterOptions{SkipPartitionChild: true, Disable: []string{"table"}}
 		assert.Equal(t, 0, pistachio.FilterTables(f, tables).Len())
