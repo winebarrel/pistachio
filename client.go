@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/winebarrel/pistachio/model"
 )
 
 type Client struct {
@@ -93,6 +94,33 @@ func (client *Client) ConnInfoComment() (string, error) {
 		RawPath: "/" + url.PathEscape(cfg.Database),
 	}
 	return "-- Connected to " + u.String(), nil
+}
+
+// searchPathSQL returns the SET that puts the target schemas, plus public, on
+// the search path.
+//
+// public is appended so a reference to an object commonly kept there
+// (extension types such as citext, functions) still resolves from a non-public
+// target schema; this extends the default search_path rather than replacing it.
+//
+// apply issues it before the managed DDL, so an unqualified user-type reference
+// in a column or attribute definition resolves. plan issues it before it
+// evaluates a -- pista:execute check, so the check answers the same question in
+// both commands. Neither affects where objects are created: the generated DDL
+// always schema-qualifies its object names.
+func (client *Client) searchPathSQL() string {
+	quoted := make([]string, 0, len(client.Schemas)+1)
+	hasPublic := false
+	for _, s := range client.Schemas {
+		quoted = append(quoted, model.Ident(s))
+		if s == "public" {
+			hasPublic = true
+		}
+	}
+	if !hasPublic {
+		quoted = append(quoted, "public")
+	}
+	return "SET search_path TO " + strings.Join(quoted, ", ")
 }
 
 // connect opens a database connection. When readOnly is true, the session
