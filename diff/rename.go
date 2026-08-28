@@ -753,7 +753,7 @@ func rewriteColumnRefsInTriggers(triggers *orderedmap.Map[string, *model.Trigger
 // All renames are applied in a single AST walk, so chained renames (a->b and
 // b->c) do not cascade.
 func rewriteColumnsInExpr(expr string, renames map[string]string) (string, error) {
-	result, target, err := parseSelectExpr(expr)
+	result, target, err := pgast.ParseExpr(expr)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse expression: %w", err)
 	}

@@ -214,18 +214,11 @@ func collectColumnRefsInFKDef(def string) []string {
 // A generated expression may write one qualified, which the diff cannot
 // compare at all; TODO.md records that.
 func collectColumnRefsInColumnExpr(expr string) []string {
-	result, err := pg_query.Parse("SELECT " + expr)
-	if err != nil || len(result.Stmts) == 0 {
+	_, target, err := pgast.ParseExpr(expr)
+	if err != nil {
 		return nil
 	}
-	// The prefix gives the expression exactly one target. Walking the list
-	// rather than indexing it keeps a shape that cannot occur from needing a
-	// guard of its own.
-	var refs []string
-	for _, n := range result.Stmts[0].Stmt.GetSelectStmt().GetTargetList() {
-		refs = append(refs, walkExprColumnRefs(n.GetResTarget().GetVal())...)
-	}
-	return refs
+	return walkExprColumnRefs(target.Val)
 }
 
 // walkExprColumnRefs returns the unqualified ColumnRef names found in an
