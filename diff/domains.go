@@ -177,10 +177,8 @@ func detectDomainRenames(current, desired *orderedmap.Map[string, *model.Domain]
 			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
-		if oldKey != newKey {
-			if _, exists := adjusted.GetOk(newKey); exists {
-				return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
-			}
+		if _, exists := adjusted.GetOk(newKey); exists {
+			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 		}
 
 		if oldDomain.Schema != desiredDomain.Schema {

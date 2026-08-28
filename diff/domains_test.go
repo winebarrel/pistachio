@@ -217,6 +217,16 @@ func TestDiffDomains_Rename_AlreadyApplied(t *testing.T) {
 	assert.Empty(t, result.Stmts)
 }
 
+// A directive naming the domain itself is not a rename.
+func TestDiffDomains_Rename_SameName(t *testing.T) {
+	oldName := "public.pos_int"
+	current := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", BaseType: "integer"})
+	desired := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", RenameFrom: &oldName, BaseType: "integer"})
+	result, err := diff.DiffDomains(current, desired, diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+}
+
 func TestDiffDomains_Rename_SourceNotFound(t *testing.T) {
 	oldName := "public.nonexistent"
 	current := newDomainMap()

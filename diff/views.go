@@ -455,11 +455,9 @@ func diffViewIndexes(current, desired *model.View, dc DropChecker) (stmts []stri
 			// Pure drops have no desired entry. Fall back to the current
 			// entry's flag, which forceConcurrentlyDirectives sets when
 			// --force-index-concurrently is in effect.
-			useConcurrently := false
+			useConcurrently := currentIdx.Concurrently
 			if ok {
 				useConcurrently = desiredIdx.Concurrently
-			} else {
-				useConcurrently = currentIdx.Concurrently
 			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {

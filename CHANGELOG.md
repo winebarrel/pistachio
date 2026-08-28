@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Name the same pair every run when `-m` maps two schemas onto one destination. The check walked a Go map, so with three sources on one destination the rejection named a different pair each time the same command was run.
+
 ## [1.34.0] - 2026-08-28
 
 * Manage a partitioned table without its partitions, behind `--skip-partition-child` (`$PISTA_SKIP_PARTITION_CHILD`). Where another tool creates the partitions, pg_partman for example, a schema file that declares the parent alone planned a `DROP TABLE` for every partition, and `-E` only reached names that carry a pattern. With the flag `dump` writes the parent alone, and `plan` / `apply` skip a partition on both sides of the diff, including the indexes, policies and comments it owns. The parent stays managed, and PostgreSQL carries `ADD COLUMN` and an index created on it down to the partitions. A partition is skipped whether or not it is partitioned itself, so a sub-partitioned level goes with the leaves under it. An `INHERITS` child carries no partition bound and stays managed.
