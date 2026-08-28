@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Leave a sequence the desired schema declares outside the target schemas alone. The desired-side schema filter named every object type but the sequence, so a `CREATE SEQUENCE other.counter` sitting in a file planned with `-n public` was compared against a current side that never holds it, and the plan created it in a schema the run was not asked to manage. A table, view, enum, domain, composite type or routine in the same file was already dropped before the diff.
+
 ## [1.34.0] - 2026-08-28
 
 * Manage a partitioned table without its partitions, behind `--skip-partition-child` (`$PISTA_SKIP_PARTITION_CHILD`). Where another tool creates the partitions, pg_partman for example, a schema file that declares the parent alone planned a `DROP TABLE` for every partition, and `-E` only reached names that carry a pattern. With the flag `dump` writes the parent alone, and `plan` / `apply` skip a partition on both sides of the diff, including the indexes, policies and comments it owns. The parent stays managed, and PostgreSQL carries `ADD COLUMN` and an index created on it down to the partitions. A partition is skipped whether or not it is partitioned itself, so a sub-partitioned level goes with the leaves under it. An `INHERITS` child carries no partition bound and stays managed.
