@@ -1,0 +1,27 @@
+# The parameters apply and the re-plan comes out clean. The table carries a
+# text column so that it has a TOAST relation for the toast.* parameter to
+# land on: PostgreSQL accepts the statement either way and discards it when
+# there is no such relation.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70, autovacuum_enabled = off);
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 90, toast.autovacuum_enabled = off);
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  )
+  WITH (fillfactor='90', toast.autovacuum_enabled='off');
+applied_sql: |
+  ALTER TABLE public.docs SET (fillfactor='90', toast.autovacuum_enabled='off');
+  ALTER TABLE public.docs RESET (autovacuum_enabled);

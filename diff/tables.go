@@ -1,9 +1,11 @@
 package diff
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -170,6 +172,8 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 
+		result.Stmts = append(result.Stmts, diffStorageParams(fqtn, current, desired)...)
+
 		result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
 		polStmts, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
 		if err != nil {
@@ -237,6 +241,8 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	result.FKDropStmts = append(result.FKDropStmts, fkDrops...)
 	result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
+
+	result.Stmts = append(result.Stmts, diffStorageParams(fqtn, current, desired)...)
 
 	// RLS toggles run before CREATE POLICY so a newly enabled table has its
 	// flag set when policies attach. Disabling RLS likewise comes before any
@@ -1460,6 +1466,33 @@ func normalizeIndexStmt(is *pg_query.IndexStmt) {
 	if is.WhereClause != nil {
 		is.WhereClause = normalizeCheckExpr(is.WhereClause)
 	}
+	normalizeStorageParams(is.Options)
+}
+
+// normalizeStorageParams canonicalises an index's WITH clause so the two
+// spellings of one parameter compare equal. pg_get_indexdef quotes a value
+// that does not read as an identifier, `fillfactor='80'`, while a file writes
+// the number bare, so the two arrive as a String and an Integer node. The
+// order is not part of the setting either, and the catalog keeps the one the
+// parameters were created in. Without this an index carrying a parameter was
+// dropped and recreated on every run.
+//
+// Only an integer is folded. No index storage parameter takes a fractional
+// value, and a value that reads as a bare word arrives as a String from both
+// sides already.
+func normalizeStorageParams(options []*pg_query.Node) {
+	for _, o := range options {
+		de := o.GetDefElem()
+		if i := de.GetArg().GetInteger(); i != nil {
+			sval := strconv.FormatInt(int64(i.Ival), 10)
+			de.Arg = &pg_query.Node{Node: &pg_query.Node_String_{String_: &pg_query.String{Sval: sval}}}
+		}
+	}
+	// No index storage parameter has a namespace, unlike a table's toast.
+	// ones, so the name alone orders them.
+	slices.SortStableFunc(options, func(a, b *pg_query.Node) int {
+		return cmp.Compare(a.GetDefElem().GetDefname(), b.GetDefElem().GetDefname())
+	})
 }
 
 // alignIndexCasts asymmetrically strips current-side TypeCast wrappers at

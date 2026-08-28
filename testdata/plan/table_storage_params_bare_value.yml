@@ -1,0 +1,14 @@
+# A parameter written without a value asks for true, which is what PostgreSQL
+# stores for it, so naming it in the desired schema against a table that
+# already has it is not a change.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (autovacuum_enabled = true);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (autovacuum_enabled);
+plan: ""

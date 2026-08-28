@@ -1,0 +1,19 @@
+# A partition holds its own storage parameters: PostgreSQL does not copy the
+# parent's as it creates one, so the child is diffed on its own. The parent is
+# partitioned and holds none, since it has no storage to apply them to.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2025 PARTITION OF public.events
+      FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2025 PARTITION OF public.events
+      FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') WITH (fillfactor = 60);
+plan: |
+  ALTER TABLE public.events_2025 SET (fillfactor='60');

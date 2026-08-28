@@ -1,0 +1,15 @@
+# The parameters carry through a rename untouched, so the plan is the RENAME
+# alone.
+init: |
+  CREATE TABLE public.old_users (
+      id integer NOT NULL,
+      CONSTRAINT old_users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70);
+desired: |
+  -- pista:renamed-from old_users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT old_users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70);
+plan: |
+  ALTER TABLE public.old_users RENAME TO users;

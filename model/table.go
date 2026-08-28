@@ -1,6 +1,7 @@
 package model
 
 import (
+	"maps"
 	"slices"
 	"strings"
 
@@ -16,8 +17,12 @@ type Table struct {
 	// Ignore marks the table as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the
 	// catalog side.
-	Ignore           bool
-	TableSpace       *string
+	Ignore     bool
+	TableSpace *string
+	// StorageParams holds the table's storage parameters, pg_class.reloptions,
+	// keyed by parameter name and ordered by it. A `toast.` prefix names a
+	// parameter of the TOAST relation, which is where pg_dump writes it too.
+	StorageParams    *orderedmap.Map[string, string]
 	Unlogged         bool
 	Partitioned      bool
 	PartitionDef     *string
@@ -58,6 +63,9 @@ func (t Table) SQL() string {
 			if t.Partitioned && t.PartitionDef != nil {
 				sql += "\nPARTITION BY " + *t.PartitionDef
 			}
+			if w := t.StorageParamsSQL(); w != "" {
+				sql += "\n" + w
+			}
 			if t.TableSpace != nil {
 				sql += "\nTABLESPACE " + Ident(*t.TableSpace)
 			}
@@ -71,8 +79,11 @@ func (t Table) SQL() string {
 					",\n",
 				) +
 				")\n" +
-				"INHERITS (" + *t.PartitionOf + ");"
-			return sql
+				"INHERITS (" + *t.PartitionOf + ")"
+			if w := t.StorageParamsSQL(); w != "" {
+				sql += "\n" + w
+			}
+			return sql + ";"
 		}
 	}
 
@@ -113,6 +124,10 @@ func (t Table) SQL() string {
 
 	if t.Partitioned && t.PartitionDef != nil {
 		sql += "\nPARTITION BY " + *t.PartitionDef
+	}
+
+	if w := t.StorageParamsSQL(); w != "" {
+		sql += "\n" + w
 	}
 
 	if t.TableSpace != nil {
@@ -165,6 +180,47 @@ func (t Table) TrigSQL() string {
 		}
 	}
 	return strings.Join(stmts, "\n")
+}
+
+// SortedStorageParams turns a name -> value map of storage parameters into an
+// ordered map keyed in name order, so neither the comparison nor the dump
+// depends on the order a file or the catalog kept them in.
+func SortedStorageParams(params map[string]string) *orderedmap.Map[string, string] {
+	om := orderedmap.New[string, string]()
+	for _, name := range slices.Sorted(maps.Keys(params)) {
+		om.Set(name, params[name])
+	}
+	return om
+}
+
+// StorageParamsSQL renders the table's storage parameters as the WITH clause
+// of a CREATE TABLE, or "" when it holds none. Every value is quoted.
+// PostgreSQL accepts that for any parameter, so the renderer does not have to
+// decide which spellings pass as a bare identifier.
+func (t Table) StorageParamsSQL() string {
+	if t.StorageParams == nil || t.StorageParams.Len() == 0 {
+		return ""
+	}
+	return "WITH (" + strings.Join(
+		t.StorageParams.TransformSlice(func(name, value string) string {
+			return name + "=" + QuoteLiteral(value)
+		}),
+		", ",
+	) + ")"
+}
+
+// SetStorageParamsSQL returns the statement that sets the named storage
+// parameters. It does not rewrite the table.
+func SetStorageParamsSQL(fqtn string, params []string) string {
+	return "ALTER TABLE " + fqtn + " SET (" + strings.Join(params, ", ") + ");"
+}
+
+// ResetStorageParamsSQL returns the statement that hands the named storage
+// parameters back to their defaults. RESET is the only way to say that: the
+// catalog holds no entry for a parameter that was never set, so a SET has no
+// default value to name.
+func ResetStorageParamsSQL(fqtn string, names []string) string {
+	return "ALTER TABLE " + fqtn + " RESET (" + strings.Join(names, ", ") + ");"
 }
 
 // SetStorageSQL returns the statement that puts a column's TOAST strategy at

@@ -1,0 +1,17 @@
+# A toast.* parameter sits on the TOAST relation, not on the table, and is
+# what pg_dump writes into the same WITH clause. It is diffed alongside the
+# table's own parameters.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  ) WITH (toast.autovacuum_enabled = off);
+plan: |
+  ALTER TABLE public.docs SET (toast.autovacuum_enabled='off');

@@ -1,0 +1,26 @@
+# A hand-written index parameter has to survive the apply and the re-plan.
+# Before the value was normalized the index was dropped and recreated on
+# every run that followed.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name) WITH (fillfactor = 80);
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name) WITH (fillfactor='80');
+applied_sql: |
+  CREATE INDEX users_name_idx ON public.users USING btree (name) WITH (fillfactor=80);

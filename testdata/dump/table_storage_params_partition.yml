@@ -1,0 +1,21 @@
+# A partition carries its own parameters, and the partitioned parent holds
+# none: PostgreSQL rejects every storage parameter on a relation with no
+# storage of its own.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2025 PARTITION OF public.events
+      FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') WITH (fillfactor = 60);
+dump: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+
+  -- public.events_2025
+  CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')
+  WITH (fillfactor='60');

@@ -1,0 +1,22 @@
+# --bulk-alter merges a table's column and constraint actions into one
+# statement. A storage parameter SET is not one of them and stays on its own,
+# so it does not pull an action PostgreSQL takes a different lock for into the
+# same statement.
+bulk_alter: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 90);
+plan: |
+  ALTER TABLE public.users
+    ADD COLUMN name text,
+    ADD COLUMN email text;
+  ALTER TABLE public.users SET (fillfactor='90');

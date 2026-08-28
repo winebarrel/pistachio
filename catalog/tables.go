@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/orderedmap/v2"
@@ -84,12 +85,15 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			pg_catalog.pg_get_expr(c.relpartbound, c.oid) AS partition_bound,
 			c.relrowsecurity,
 			c.relforcerowsecurity,
+			c.reloptions,
+			tc.reloptions AS toast_reloptions,
 			d.description
 		FROM
 			-- https://www.postgresql.org/docs/current/catalog-pg-class.html
 			pg_catalog.pg_class c
 			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 			LEFT JOIN pg_catalog.pg_tablespace ts ON ts.oid = c.reltablespace
+			LEFT JOIN pg_catalog.pg_class tc ON tc.oid = c.reltoastrelid
 			LEFT JOIN partition p ON p.inhrelid = c.oid
 			LEFT JOIN dependency_extension de ON de.objid = c.oid
 			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
@@ -118,6 +122,7 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 	for rows.Next() {
 		var t model.Table
 		var parentSchema, parentName *string
+		var reloptions, toastReloptions []string
 		err := rows.Scan(
 			&t.OID,
 			&t.Schema,
@@ -131,6 +136,8 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			&t.PartitionBound,
 			&t.RowSecurity,
 			&t.ForceRowSecurity,
+			&reloptions,
+			&toastReloptions,
 			&t.Comment,
 		)
 		if err != nil {
@@ -148,6 +155,7 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			parent := model.Ident(schema, *parentName)
 			t.PartitionOf = &parent
 		}
+		t.StorageParams = storageParams(reloptions, toastReloptions)
 		t.Columns = orderedmap.New[string, *model.Column]()
 		t.Indexes = orderedmap.New[string, *model.Index]()
 		t.Constraints = orderedmap.New[string, *model.Constraint]()
@@ -190,4 +198,22 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 	}
 
 	return tables, nil
+}
+
+// storageParams turns the two reloptions arrays a table is read with into one
+// map. reloptions holds the table's own parameters, toastReloptions the TOAST
+// relation's, which PostgreSQL sets and reads under a `toast.` prefix and
+// which pg_dump writes into the same WITH clause. Every entry is name=value,
+// including one written without a value, which PostgreSQL stores as true.
+func storageParams(reloptions, toastReloptions []string) *orderedmap.Map[string, string] {
+	params := make(map[string]string, len(reloptions)+len(toastReloptions))
+	collect := func(entries []string, prefix string) {
+		for _, e := range entries {
+			name, value, _ := strings.Cut(e, "=")
+			params[prefix+name] = value
+		}
+	}
+	collect(reloptions, "")
+	collect(toastReloptions, "toast.")
+	return model.SortedStorageParams(params)
 }

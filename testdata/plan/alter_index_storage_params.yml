@@ -1,0 +1,20 @@
+# A parameter that actually changes still rebuilds the index. PostgreSQL can
+# ALTER INDEX ... SET, but it does not take effect until the index is rebuilt,
+# so the drop and create say what the change costs.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name) WITH (fillfactor = 80);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name) WITH (fillfactor = 90);
+plan: |
+  DROP INDEX public.users_name_idx;
+  CREATE INDEX users_name_idx ON public.users USING btree (name) WITH (fillfactor=90);
