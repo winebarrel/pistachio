@@ -74,7 +74,7 @@ func DomainToSQL(d *Domain) string {
 
 func DomainsToSQL(domains *orderedmap.Map[string, *Domain]) string {
 	return strings.Join(
-		orderedmap.TransformSlice(domains, func(_ string, d *Domain) string {
+		domains.TransformSlice(func(_ string, d *Domain) string {
 			return DomainToSQL(d)
 		}),
 		"\n\n",

@@ -76,7 +76,7 @@ func ViewToSQL(v *View) string {
 
 func ViewsToSQL(views *orderedmap.Map[string, *View]) string {
 	return strings.Join(
-		orderedmap.TransformSlice(views, func(_ string, v *View) string {
+		views.TransformSlice(func(_ string, v *View) string {
 			return ViewToSQL(v)
 		}),
 		"\n\n",

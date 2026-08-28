@@ -58,7 +58,7 @@ func (t Table) SQL() string {
 		} else {
 			sql += "(\n" +
 				strings.Join(
-					orderedmap.TransformSlice(t.Constraints, func(_ string, con *Constraint) string {
+					t.Constraints.TransformSlice(func(_ string, con *Constraint) string {
 						return "    CONSTRAINT " + Ident(con.Name) + " " + con.Definition
 					}),
 					",\n",
@@ -72,7 +72,7 @@ func (t Table) SQL() string {
 	sql += " (\n" +
 		strings.Join(
 			slices.Concat(
-				orderedmap.TransformSlice(t.Columns, func(_ string, col *Column) string {
+				t.Columns.TransformSlice(func(_ string, col *Column) string {
 					q := "    " + Ident(col.Name) + " " + col.TypeName
 					if col.Collation != nil {
 						q += " COLLATE " + *col.Collation
@@ -96,7 +96,7 @@ func (t Table) SQL() string {
 					}
 					return q
 				}),
-				orderedmap.TransformSlice(t.Constraints, func(_ string, con *Constraint) string {
+				t.Constraints.TransformSlice(func(_ string, con *Constraint) string {
 					return "    CONSTRAINT " + Ident(con.Name) + " " + con.Definition
 				}),
 			),
@@ -117,14 +117,14 @@ func (t Table) SQL() string {
 
 func (t Table) IdxSQL() string {
 	return strings.Join(
-		orderedmap.TransformSlice(t.Indexes, func(_ string, idx *Index) string { return idx.SQL() }),
+		t.Indexes.TransformSlice(func(_ string, idx *Index) string { return idx.SQL() }),
 		"\n",
 	)
 }
 
 func (t Table) FkSQL() string {
 	return strings.Join(
-		orderedmap.TransformSlice(t.ForeignKeys, func(_ string, fk *ForeignKey) string { return fk.SQL() }),
+		t.ForeignKeys.TransformSlice(func(_ string, fk *ForeignKey) string { return fk.SQL() }),
 		"\n",
 	)
 }
@@ -235,7 +235,7 @@ func TableToSQL(t *Table) string {
 
 func TablesToSQL(tables *orderedmap.Map[string, *Table]) string {
 	return strings.Join(
-		orderedmap.TransformSlice(tables, func(_ string, t *Table) string {
+		tables.TransformSlice(func(_ string, t *Table) string {
 			return TableToSQL(t)
 		}),
 		"\n\n",

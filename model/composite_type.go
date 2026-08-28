@@ -90,7 +90,7 @@ func CompositeTypeToSQL(ct *CompositeType) string {
 
 func CompositeTypesToSQL(compositeTypes *orderedmap.Map[string, *CompositeType]) string {
 	return strings.Join(
-		orderedmap.TransformSlice(compositeTypes, func(_ string, ct *CompositeType) string {
+		compositeTypes.TransformSlice(func(_ string, ct *CompositeType) string {
 			return CompositeTypeToSQL(ct)
 		}),
 		"\n\n",
