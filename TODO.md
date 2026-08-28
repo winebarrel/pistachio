@@ -30,20 +30,6 @@ statement on such a child. Carrying the rename there needs the parent's map.
 
 Origin: [#123](https://github.com/winebarrel/pistachio/pull/123).
 
-## Validation of column refs in GENERATED / DEFAULT expressions
-
-`ValidateColumnRefs` checks index / constraint / FK definitions against
-the desired column set. It does not currently walk:
-
-- `GENERATED ALWAYS AS (<expr>) STORED` expressions on columns
-- `DEFAULT <expr>` expressions on columns
-
-A typo or stale rename in these expressions still surfaces only at apply
-time. Adding a walk over `model.Column.Default` for both kinds (gated by
-`Generated`) would close this gap.
-
-Origin: [#124](https://github.com/winebarrel/pistachio/pull/124).
-
 ## INHERITS table plan / apply support
 
 `model.Table.SQL` has an INHERITS branch that drops the child's own

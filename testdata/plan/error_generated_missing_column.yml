@@ -1,0 +1,17 @@
+# A generated expression left on the old column name after a rename. Without
+# the check the run reaches the database and fails on the ALTER.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      -- pista:renamed-from qty
+      quantity integer NOT NULL,
+      total integer GENERATED ALWAYS AS (qty * 2) STORED,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+error: 'column qty referenced in the GENERATED expression on column total does not exist on table public.items'
