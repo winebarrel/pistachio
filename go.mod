@@ -24,7 +24,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
 	golang.org/x/text v0.39.0 // indirect
-	golang.org/x/tools v0.49.0 // indirect
+	golang.org/x/tools v0.49.1-0.20260828025639-2e922938d07f // indirect
 )
 
 tool golang.org/x/tools/cmd/deadcode
