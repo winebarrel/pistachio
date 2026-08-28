@@ -604,32 +604,33 @@ Workaround: write the sequence unqualified.
 Origin: found while adding `-- pista:execute-first`, 2026-07-31. The function
 call half was closed later; the literal half is what remains.
 
-## Perpetual drift on a serial column written as an explicit default
+## A pg_dump serial column loses its default
 
 Priority: low.
 
-A serial column written the way `pg_dump` writes it plans
-`ALTER COLUMN id SET DEFAULT nextval(...)` on every run. Applying it succeeds
-and changes nothing, so `plan --check` stays at exit code 2 forever. `pg_dump`
-never writes `serial`; it splits the column into a plain `integer`, a
+`pg_dump` never writes `serial`. It splits the column into a plain `integer`, a
 `CREATE SEQUENCE`, an `ALTER SEQUENCE ... OWNED BY`, and a separate
-`SET DEFAULT`. The catalog reports such a column as `serial` with no default,
-which is what lets `id serial` round-trip, while the desired side keeps the
-explicit default. `equalTypeName` already treats `serial` and `integer` as
-equal; the defaults are what differ.
+`SET DEFAULT`. The parser reads the first three and drops the fourth, since
+`ALTER TABLE ... ALTER COLUMN ... SET DEFAULT` has no handler. It warns and
+moves on.
 
-`dump` does not produce this shape, so a schema kept through `pista dump`
-never hits it. It shows up when a `pg_dump` output is used as the starting
-desired file, which is a normal way to adopt the tool on an existing
-database.
+Against the database the file came from, this plans clean. The catalog reports
+such a column as `serial` with no default, the desired side holds `integer`
+with no default, and `equalTypeName` treats the two type names as equal.
 
-Comparing them needs the sequence the current column draws from, which the
-model does not carry, since the catalog nulls the default for serial columns.
-Suppressing the statement whenever the current column is serial and the
-desired default is any `nextval` would also swallow a genuine change to a
-different sequence.
+Against an empty database it does not reproduce the column. The plan is
+`CREATE TABLE public.t (id integer NOT NULL)` alone: the sequence is unmanaged
+because `OWNED BY` marks it so, and the default was dropped. What comes out is
+a plain integer column.
 
-Origin: bug audit, 2026-07-31.
+Reading `AT_ColumnDefault` onto the column is the fix, next to the
+`AT_SetStorage` and `AT_SetCompression` actions `applyAlterTableColumnStorage`
+already reads. The `nextval` argument names the sequence, so the serial shape
+is recoverable from it.
+
+Origin: bug audit, 2026-07-31. Rewritten once the drift it described stopped
+happening: the warn-and-drop of an unsupported `ALTER TABLE` action, added in
+1.31.0, is what makes the two sides agree.
 
 ## Perpetual drift on a view defined with `SELECT *`
 
