@@ -548,6 +548,33 @@ is the same prerequisite as the INHERITS plan / apply entry above.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
+## An EXCLUDE constraint is not normalized at all
+
+Priority: low.
+
+`equalConstraintDef` normalizes `RawExpr`, which is where a `CHECK` body sits.
+An exclusion constraint puts its elements in `Constraint.Exclusions` and its
+predicate in `Constraint.WhereClause`, and neither goes through
+`normalizeCheckExpr`, so the two sides are compared as the parser left them.
+
+Every normalization the walk performs is therefore missing there. A
+schema-qualified call drifts, `EXCLUDE USING btree (public.lower_v(v) WITH =)`
+being re-emitted as `DROP CONSTRAINT` + `ADD CONSTRAINT` on every plan, and so
+does a cast the catalog adds and the file does not: `((v || 'x') WITH =)` is
+stored as `((v || 'x'::text) WITH =)`. This is wider than the schema question
+and predates the strip.
+
+Passing `Exclusions` and `WhereClause` through the same walk is the obvious
+shape, and the elements are `IndexElem` nodes, which `normalizeIndexStmt`
+already knows how to handle.
+
+`dump` writes the catalog form, so a dump fed back plans clean and only a
+hand-written exclusion reaches this.
+
+Workaround: write the exclusion the way `pg_get_constraintdef` prints it.
+
+Origin: review of [#455](https://github.com/winebarrel/pistachio/pull/455).
+
 ## Perpetual drift on a schema-qualified sequence in a column DEFAULT
 
 Priority: low.

@@ -596,6 +596,20 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 	return node
 }
 
+// lastNamePart drops everything before the final part of a qualified name, so
+// schema.f and catalog.schema.f both reduce to f. PostgreSQL accepts the
+// three-part form when the catalog names the current database, and pg_query
+// parses it, so matching on a two-part name alone would leave it drifting.
+//
+// parseTriggerDef applies it to an EXECUTE FUNCTION name, which is not an
+// expression node and so never reaches the walk below.
+func lastNamePart(name []*pg_query.Node) []*pg_query.Node {
+	if len(name) < 2 {
+		return name
+	}
+	return name[len(name)-1:]
+}
+
 // stripFuncSchema drops the schema qualifier from a function call name, so
 // public.f(v) and f(v) compare equal.
 //
@@ -611,14 +625,9 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 // functions in different schemas compare equal, so moving a call from one
 // schema to another produces no diff. Telling them apart means reading the
 // search_path, which the diff does not thread.
-//
-// Everything before the last part goes, so schema.f and catalog.schema.f both
-// reduce to f. PostgreSQL accepts the three-part form when the catalog names
-// the current database, and pg_query parses it, so matching on a two-part name
-// alone would leave it drifting.
 func stripFuncSchema(node *pg_query.Node) {
-	if fc := node.GetFuncCall(); fc != nil && len(fc.Funcname) > 1 {
-		fc.Funcname = fc.Funcname[len(fc.Funcname)-1:]
+	if fc := node.GetFuncCall(); fc != nil {
+		fc.Funcname = lastNamePart(fc.Funcname)
 	}
 }
 
