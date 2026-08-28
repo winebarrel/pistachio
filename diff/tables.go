@@ -1112,11 +1112,9 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc Drop
 			// desired entry is absent, so fall back to the current entry; that
 			// field is normally false because the catalog doesn't carry it,
 			// but --force-index-concurrently sets it via forceConcurrentlyDirectives.
-			useConcurrently := false
+			useConcurrently := currentIdx.Concurrently
 			if ok {
 				useConcurrently = desiredIdx.Concurrently
-			} else {
-				useConcurrently = currentIdx.Concurrently
 			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {

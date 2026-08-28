@@ -122,6 +122,18 @@ func TestValidateSchemaMap(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate schema-map destination")
 	})
+
+	// With three sources on one destination the message has to name the same
+	// pair every run, so the error a user reads does not change between
+	// invocations of the same command.
+	t.Run("duplicate destinations name the same pair every run", func(t *testing.T) {
+		o := &pistachio.Options{SchemaMap: map[string]string{"c": "public", "a": "public", "b": "public"}}
+		for i := 0; i < 20; i++ {
+			err := o.ValidateSchemaMap()
+			require.Error(t, err)
+			assert.Equal(t, `duplicate schema-map destination "public": both "a" and "b" map to it`, err.Error())
+		}
+	})
 }
 
 func TestReverseRemapSchema(t *testing.T) {

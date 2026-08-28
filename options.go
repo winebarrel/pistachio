@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -151,12 +152,24 @@ func (o *Options) AfterApply() error {
 	return o.ValidateSchemaMap()
 }
 
+// ValidateSchemaMap rejects two sources mapping to one destination, which
+// would leave ReverseRemapSchema no way to pick between them. The sources are
+// walked in name order so the pair the message names is the same on every run;
+// a Go map iterates in a random one, and three sources on one destination then
+// produced a different message each time the same command was run.
 func (o *Options) ValidateSchemaMap() error {
 	if len(o.SchemaMap) <= 1 {
 		return nil
 	}
+	froms := make([]string, 0, len(o.SchemaMap))
+	for from := range o.SchemaMap {
+		froms = append(froms, from)
+	}
+	slices.Sort(froms)
+
 	seen := make(map[string]string, len(o.SchemaMap))
-	for from, to := range o.SchemaMap {
+	for _, from := range froms {
+		to := o.SchemaMap[from]
 		if prev, ok := seen[to]; ok {
 			return fmt.Errorf("duplicate schema-map destination %q: both %q and %q map to it", to, prev, from)
 		}

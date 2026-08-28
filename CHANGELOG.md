@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Name the same pair every run when `-m` maps two schemas onto one destination. The check walked a Go map, so with three sources on one destination the rejection named a different pair each time the same command was run.
+
 * Stop one suppressed constraint rename from taking another with it. A renamed constraint whose definition also changes goes through `DROP` and `ADD` rather than `RENAME`, and the `RENAME` was suppressed by matching the rendered statement as a substring. With `a` renamed to `b` alongside `xa` renamed to `by` on one table, the needle for the first matched the statement for the second, so `xa` was left in the database under its old name and the same plan came back on the next run. Foreign keys were suppressed the same way and had the same hole.
 
 * Evaluate a `-- pista:execute` check under the target schemas in `plan`, as `apply` already did. `plan` ran the check under the connection's `search_path`, which is `public` by default, so a check reading a table in another target schema failed there and the statement was reported as undetermined, while `apply` answered the check and skipped it. The plan advertised a statement that never ran. The `SET` goes out only on a run that has a check to evaluate, and after the catalog has been read, so nothing else moves.
