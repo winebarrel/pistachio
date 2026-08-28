@@ -548,6 +548,27 @@ is the same prerequisite as the INHERITS plan / apply entry above.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
+## View and materialized view storage parameters are not read
+
+Priority: low.
+
+A view carries `security_barrier` and `check_option`, a materialized view the
+autovacuum settings, and neither side reads them. `dump` drops the clause, and
+a desired schema that writes it plans nothing, the way a table's parameters
+behaved before they were read. Losing `security_barrier` from a dump is the
+one that matters, since the view is a security boundary without it.
+
+`pg_class.reloptions` holds them for both, next to the table's, and
+`ALTER VIEW ... SET (...)` / `RESET (...)` and the `ALTER MATERIALIZED VIEW`
+forms are what a change goes out as. The table work put the reading and the
+rendering in `SortedStorageParams` and `Table.StorageParamsSQL`, which the view
+model can use as they are.
+
+`dump` writes no clause and the parser reads none, so a dump fed back plans
+clean and only a hand-written view reaches this.
+
+Origin: review of [#458](https://github.com/winebarrel/pistachio/pull/458).
+
 ## A constraint's index storage parameters are not read
 
 Priority: low.
@@ -571,8 +592,7 @@ hand-written constraint reaches this.
 Workaround: create the index separately, `CREATE UNIQUE INDEX ... WITH
 (fillfactor = 70)`, where the parameters are read.
 
-Origin: the storage parameter work; found while auditing what else carries a
-`WITH` clause.
+Origin: [#458](https://github.com/winebarrel/pistachio/pull/458).
 
 ## An EXCLUDE constraint is not normalized at all
 

@@ -172,8 +172,6 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 
-		result.Stmts = append(result.Stmts, diffStorageParams(fqtn, current, desired)...)
-
 		result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
 		polStmts, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
 		if err != nil {
@@ -190,6 +188,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, trgDisallowed...)
 
 		result.Stmts = append(result.Stmts, diffComments(current, withInheritedColumns(current, desired))...)
+		result.Stmts = append(result.Stmts, diffStorageParams(fqtn, current, desired)...)
 
 		return result, nil
 	}
@@ -242,8 +241,6 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 
-	result.Stmts = append(result.Stmts, diffStorageParams(fqtn, current, desired)...)
-
 	// RLS toggles run before CREATE POLICY so a newly enabled table has its
 	// flag set when policies attach. Disabling RLS likewise comes before any
 	// policy DROP that the user may have stacked alongside.
@@ -272,6 +269,13 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// CONSTRAINT/INDEX fail with "does not exist". Policies referencing a
 	// dropped column block the DROP COLUMN entirely.
 	result.Stmts = append(result.Stmts, colDropStmts...)
+
+	// Storage parameters go last. Nothing in SET / RESET depends on the
+	// column statements, and sitting among them would split a --bulk-alter
+	// group, which merges only consecutive statements. They also have to stay
+	// after ADD COLUMN: a toast. parameter needs the TOAST relation that a
+	// first toastable column creates, and PostgreSQL discards it otherwise.
+	result.Stmts = append(result.Stmts, diffStorageParams(fqtn, current, desired)...)
 
 	return result, nil
 }

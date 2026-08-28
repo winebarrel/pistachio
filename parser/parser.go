@@ -2299,6 +2299,13 @@ func parseStorageParams(options []*pg_query.Node) *orderedmap.Map[string, string
 		if ns := de.GetDefnamespace(); ns != "" {
 			name = ns + "." + name
 		}
+		// WITH (oids = false) is what every pg_dump before 12 writes on every
+		// table. PostgreSQL still accepts it in a CREATE TABLE and stores
+		// nothing for it, while ALTER TABLE ... SET rejects the name, so it is
+		// not a parameter. oids = true is rejected by the CREATE itself.
+		if name == "oids" {
+			continue
+		}
 		params[name] = storageParamValue(de)
 	}
 	return model.SortedStorageParams(params)

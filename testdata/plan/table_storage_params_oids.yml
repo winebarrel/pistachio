@@ -1,0 +1,15 @@
+# A pg_dump from before PostgreSQL 12 writes WITH (oids = false) on every
+# table. PostgreSQL accepts it in a CREATE TABLE and stores nothing for it, so
+# reading it as a parameter would plan an ALTER TABLE ... SET that PostgreSQL
+# rejects, on every table of such a dump and on every run.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (oids = false);
+plan: ""
