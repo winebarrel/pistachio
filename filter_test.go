@@ -5,7 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio"
+	"github.com/winebarrel/pistachio/model"
 )
 
 func TestValidatePatterns(t *testing.T) {
@@ -274,5 +276,53 @@ func TestIsTypeEnabled_Enable(t *testing.T) {
 		assert.False(t, f.IsTypeEnabled("view"))
 		assert.True(t, f.IsTypeEnabled("enum"))
 		assert.False(t, f.IsTypeEnabled("domain"))
+	})
+}
+
+func partitionChildTable(name, parent, bound string) *model.Table {
+	return &model.Table{Schema: "public", Name: name, PartitionOf: &parent, PartitionBound: &bound}
+}
+
+func TestFilterTables_SkipPartitionChild(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("public.events", &model.Table{Schema: "public", Name: "events", Partitioned: true})
+	tables.Set("public.events_2024", partitionChildTable("events_2024", "public.events", "FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')"))
+	// A middle level is both partitioned and a child, and goes with the rest.
+	sub := partitionChildTable("events_2025", "public.events", "FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')")
+	sub.Partitioned = true
+	tables.Set("public.events_2025", sub)
+	// An INHERITS child carries no bound, so it is not a partition child.
+	parent := "public.events"
+	tables.Set("public.events_old", &model.Table{Schema: "public", Name: "events_old", PartitionOf: &parent})
+	tables.Set("public.users", &model.Table{Schema: "public", Name: "users"})
+
+	t.Run("off", func(t *testing.T) {
+		f := &pistachio.FilterOptions{}
+		got := pistachio.FilterTables(f, tables)
+		assert.Equal(t, []string{"public.events", "public.events_2024", "public.events_2025", "public.events_old", "public.users"}, got.CollectKeys())
+	})
+
+	t.Run("on", func(t *testing.T) {
+		f := &pistachio.FilterOptions{SkipPartitionChild: true}
+		got := pistachio.FilterTables(f, tables)
+		assert.Equal(t, []string{"public.events", "public.events_old", "public.users"}, got.CollectKeys())
+	})
+
+	t.Run("with exclude", func(t *testing.T) {
+		f := &pistachio.FilterOptions{SkipPartitionChild: true, Exclude: []string{"users"}}
+		got := pistachio.FilterTables(f, tables)
+		assert.Equal(t, []string{"public.events", "public.events_old"}, got.CollectKeys())
+	})
+
+	t.Run("with include", func(t *testing.T) {
+		// A partition matching --include is skipped all the same.
+		f := &pistachio.FilterOptions{SkipPartitionChild: true, Include: []string{"events*"}}
+		got := pistachio.FilterTables(f, tables)
+		assert.Equal(t, []string{"public.events", "public.events_old"}, got.CollectKeys())
+	})
+
+	t.Run("with disabled table type", func(t *testing.T) {
+		f := &pistachio.FilterOptions{SkipPartitionChild: true, Disable: []string{"table"}}
+		assert.Equal(t, 0, pistachio.FilterTables(f, tables).Len())
 	})
 }

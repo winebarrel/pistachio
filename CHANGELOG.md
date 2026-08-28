@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Manage a partitioned table without its partitions, behind `--skip-partition-child` (`$PISTA_SKIP_PARTITION_CHILD`). Where another tool creates the partitions, pg_partman for example, a schema file that declares the parent alone planned a `DROP TABLE` for every partition, and `-E` only reached names that carry a pattern. With the flag `dump` writes the parent alone, and `plan` / `apply` skip a partition on both sides of the diff, including the indexes, policies and comments it owns. The parent stays managed, and PostgreSQL carries `ADD COLUMN` and an index created on it down to the partitions. A partition is skipped whether or not it is partitioned itself, so a sub-partitioned level goes with the leaves under it. An `INHERITS` child carries no partition bound and stays managed.
+
 ## [1.33.0] - 2026-08-28
 
 * Check the column references in a `DEFAULT` or `GENERATED` expression against the table's desired columns. The validator already read the index, constraint and foreign-key definitions on a table, so a stale name left in one of those failed the plan with a message naming it, while the same name in a column expression reached the database and failed there. A generated expression may reference only columns of its own table, so every name it carries is checked. A plain `DEFAULT` may reference no column at all, which PostgreSQL rejects on its own; the names it does carry are checked the same way rather than rejected outright. An expression pg_query cannot read is skipped, the way an unreadable index definition already was.

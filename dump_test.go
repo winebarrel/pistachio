@@ -20,17 +20,18 @@ type dumpTestCase struct {
 	Dump string `yaml:"dump"`
 	// MinPG skips the fixture on a server older than this major version, for
 	// syntax the server does not accept yet.
-	MinPG         int      `yaml:"min_pg,omitempty"`
-	DumpPG16      string   `yaml:"dump_pg16,omitempty"`
-	DumpPG17      string   `yaml:"dump_pg17,omitempty"`
-	DumpPG18      string   `yaml:"dump_pg18,omitempty"`
-	OmitSchema    bool     `yaml:"omit_schema"`
-	SortByDeps    bool     `yaml:"sort_by_deps"`
-	Include       []string `yaml:"include,omitempty"`
-	Exclude       []string `yaml:"exclude,omitempty"`
-	Enable        []string `yaml:"enable,omitempty"`
-	Disable       []string `yaml:"disable,omitempty"`
-	ManageRoutine bool     `yaml:"manage_routine,omitempty"`
+	MinPG              int      `yaml:"min_pg,omitempty"`
+	DumpPG16           string   `yaml:"dump_pg16,omitempty"`
+	DumpPG17           string   `yaml:"dump_pg17,omitempty"`
+	DumpPG18           string   `yaml:"dump_pg18,omitempty"`
+	OmitSchema         bool     `yaml:"omit_schema"`
+	SortByDeps         bool     `yaml:"sort_by_deps"`
+	Include            []string `yaml:"include,omitempty"`
+	Exclude            []string `yaml:"exclude,omitempty"`
+	Enable             []string `yaml:"enable,omitempty"`
+	Disable            []string `yaml:"disable,omitempty"`
+	ManageRoutine      bool     `yaml:"manage_routine,omitempty"`
+	SkipPartitionChild bool     `yaml:"skip_partition_child,omitempty"`
 }
 
 func (tc *dumpTestCase) expectedDump(major int) string {
@@ -870,11 +871,12 @@ func TestDump(t *testing.T) {
 				OmitSchema: tc.OmitSchema,
 				SortByDeps: tc.SortByDeps,
 				FilterOptions: pistachio.FilterOptions{
-					Include:       tc.Include,
-					Exclude:       tc.Exclude,
-					Enable:        tc.Enable,
-					Disable:       tc.Disable,
-					ManageRoutine: tc.ManageRoutine,
+					Include:            tc.Include,
+					Exclude:            tc.Exclude,
+					Enable:             tc.Enable,
+					Disable:            tc.Disable,
+					ManageRoutine:      tc.ManageRoutine,
+					SkipPartitionChild: tc.SkipPartitionChild,
 				},
 			})
 			require.NoError(t, err)

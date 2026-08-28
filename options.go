@@ -49,6 +49,11 @@ type FilterOptions struct {
 	// routines the desired schema does not declare, and reading pg_proc
 	// unasked would report every one of them as a drop.
 	ManageRoutine bool `env:"PISTA_MANAGE_ROUTINE" help:"Manage functions and procedures. Off by default; --allow-drop routine still gates dropping them."`
+	// SkipPartitionChild leaves the partitions of a partitioned table
+	// unmanaged. Where another tool creates them, their names follow no
+	// pattern --exclude can state, and a schema file that declares the parent
+	// alone would plan a DROP for each one.
+	SkipPartitionChild bool `env:"PISTA_SKIP_PARTITION_CHILD" help:"Manage a partitioned table without its partitions. For a schema whose partitions another tool creates. An INHERITS child is unaffected."`
 }
 
 // IsTypeEnabled returns true if the given object type should be included.

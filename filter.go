@@ -9,12 +9,15 @@ func (f *FilterOptions) filterTables(tables *orderedmap.Map[string, *model.Table
 	if !f.IsTypeEnabled("table") {
 		return orderedmap.New[string, *model.Table]()
 	}
-	if len(f.Include) == 0 && len(f.Exclude) == 0 {
+	if len(f.Include) == 0 && len(f.Exclude) == 0 && !f.SkipPartitionChild {
 		return tables
 	}
 
 	filtered := orderedmap.New[string, *model.Table]()
 	for k, t := range tables.All() {
+		if f.SkipPartitionChild && t.IsPartitionChild() {
+			continue
+		}
 		if f.MatchName(t.Name) {
 			filtered.Set(k, t)
 		}

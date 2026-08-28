@@ -1,0 +1,21 @@
+# --skip-partition-child keeps the children out of the dump so its output can be
+# fed back as the desired schema under the same flag.
+skip_partition_child: true
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      level text NOT NULL,
+      message text,
+      CONSTRAINT logs_pkey PRIMARY KEY (level, id)
+  ) PARTITION BY LIST (level);
+  CREATE TABLE public.logs_info PARTITION OF public.logs FOR VALUES IN ('info', 'debug');
+  CREATE TABLE public.logs_error PARTITION OF public.logs FOR VALUES IN ('error', 'warning');
+dump: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      level text NOT NULL,
+      message text,
+      CONSTRAINT logs_pkey PRIMARY KEY (level, id)
+  )
+  PARTITION BY LIST (level);

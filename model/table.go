@@ -34,6 +34,13 @@ type Table struct {
 	Comment          *string
 }
 
+// IsPartitionChild reports whether the table is a partition of a declarative
+// partitioned table. An INHERITS child also carries PartitionOf, but no bound,
+// so the bound is what separates the two.
+func (t Table) IsPartitionChild() bool {
+	return t.PartitionOf != nil && t.PartitionBound != nil
+}
+
 func (t Table) FQTN() string {
 	return Ident(t.Schema, t.Name)
 }

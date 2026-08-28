@@ -152,7 +152,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// policies and comments are owned per-relation (children do not
 	// auto-inherit them), so they're still diffed here, mirroring how
 	// indexes and FKs work.
-	if desired.PartitionOf != nil && desired.PartitionBound != nil {
+	if desired.IsPartitionChild() {
 		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, dc)
 		if err != nil {
 			return nil, err

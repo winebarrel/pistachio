@@ -178,6 +178,21 @@ func TestTable_SQL_partitioned(t *testing.T) {
 	assert.Contains(t, sql, "PARTITION BY RANGE (created_at)")
 }
 
+func TestTable_IsPartitionChild(t *testing.T) {
+	parent := "public.events"
+	bound := "FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')"
+
+	tbl := newTable("public", "events_2024")
+	assert.False(t, tbl.IsPartitionChild())
+
+	tbl.PartitionOf = &parent
+	// An INHERITS child carries a parent but no bound.
+	assert.False(t, tbl.IsPartitionChild())
+
+	tbl.PartitionBound = &bound
+	assert.True(t, tbl.IsPartitionChild())
+}
+
 func TestTable_SQL_partitionOf_withBound(t *testing.T) {
 	tbl := newTable("public", "events_2024")
 	parent := "public.events"

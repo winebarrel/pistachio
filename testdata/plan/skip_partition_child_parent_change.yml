@@ -1,0 +1,20 @@
+# A change to the parent is still planned while --skip-partition-child holds the
+# children out. The added column reaches every child through the parent, which
+# is why a child needs no statement of its own.
+skip_partition_child: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL,
+      data text,
+      CONSTRAINT events_pkey PRIMARY KEY (created_at, id)
+  ) PARTITION BY RANGE (created_at);
+plan: |
+  ALTER TABLE public.events ADD COLUMN data text;
