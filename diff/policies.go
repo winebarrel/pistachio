@@ -50,7 +50,7 @@ func diffPolicies(
 
 	// Detect renames first so subsequent diff steps see the renamed policy
 	// under its new name in the adjusted current map.
-	renameStmts, current, renamedFrom, err := detectPolicyRenames(fqtn, current, desired)
+	current, renamedFrom, err := detectPolicyRenames(fqtn, current, desired)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -71,18 +71,14 @@ func diffPolicies(
 			needsRecreateRenamed[newName] = true
 		}
 	}
-	for newName, oldName := range renamedFrom {
-		if needsRecreateRenamed[newName] {
+	// The renames follow the desired schema's order. renamedFrom is a Go map,
+	// so iterating it would put them in a different order on every run.
+	for newName := range desired.Keys() {
+		oldName, renamed := renamedFrom[newName]
+		if !renamed || needsRecreateRenamed[newName] {
 			continue
 		}
-		// Find the matching rename statement (ordering preserved from desired).
-		needle := "ALTER POLICY " + model.Ident(oldName) + " ON " + fqtn + " RENAME TO " + model.Ident(newName) + ";"
-		for _, stmt := range renameStmts {
-			if stmt == needle {
-				stmts = append(stmts, stmt)
-				break
-			}
-		}
+		stmts = append(stmts, renamePolicySQL(fqtn, oldName, newName))
 	}
 
 	policyAllowed := dc.IsDropAllowed("policy")
@@ -143,6 +139,10 @@ func needsRecreate(a, b *model.Policy) bool {
 
 func dropPolicySQL(fqtn, name string) string {
 	return "DROP POLICY " + model.Ident(name) + " ON " + fqtn + ";"
+}
+
+func renamePolicySQL(fqtn, oldName, newName string) string {
+	return "ALTER POLICY " + model.Ident(oldName) + " ON " + fqtn + " RENAME TO " + model.Ident(newName) + ";"
 }
 
 // alterPolicySQL returns a single ALTER POLICY statement covering the
