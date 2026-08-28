@@ -4,6 +4,8 @@
 
 * Stop one suppressed constraint rename from taking another with it. A renamed constraint whose definition also changes goes through `DROP` and `ADD` rather than `RENAME`, and the `RENAME` was suppressed by matching the rendered statement as a substring. With `a` renamed to `b` alongside `xa` renamed to `by` on one table, the needle for the first matched the statement for the second, so `xa` was left in the database under its old name and the same plan came back on the next run. Foreign keys were suppressed the same way and had the same hole.
 
+* Leave a sequence the desired schema declares outside the target schemas alone. The desired-side schema filter named every object type but the sequence, so a `CREATE SEQUENCE other.counter` sitting in a file planned with `-n public` was compared against a current side that never holds it, and the plan created it in a schema the run was not asked to manage. A table, view, enum, domain, composite type or routine in the same file was already dropped before the diff.
+
 * Emit the `ALTER POLICY ... RENAME TO` statements in the desired schema's order. The renames were read out of a Go map, whose iteration order is randomized, so a plan renaming two or more policies on one table printed them in a different order on every run. The statements are independent, so only the output moved, but a plan that is reviewed, or diffed against the previous run, has to be stable.
 
 ## [1.34.0] - 2026-08-28
