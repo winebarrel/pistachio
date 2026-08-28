@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Leave a sequence the desired schema declares outside the target schemas alone. The desired-side schema filter named every object type but the sequence, so a `CREATE SEQUENCE other.counter` sitting in a file planned with `-n public` was compared against a current side that never holds it, and the plan created it in a schema the run was not asked to manage. A table, view, enum, domain, composite type or routine in the same file was already dropped before the diff.
+
 * Emit the `ALTER POLICY ... RENAME TO` statements in the desired schema's order. The renames were read out of a Go map, whose iteration order is randomized, so a plan renaming two or more policies on one table printed them in a different order on every run. The statements are independent, so only the output moved, but a plan that is reviewed, or diffed against the previous run, has to be stable.
 
 ## [1.34.0] - 2026-08-28
