@@ -363,3 +363,68 @@ func TestDiffPolicies_Rename_QuotedIdentifierWithArrow(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{`ALTER POLICY "a->b" ON public.documents RENAME TO c;`}, stmts)
 }
+
+// Several renames on one table are emitted in the desired schema's order. The
+// rename bookkeeping is a Go map, whose iteration order is randomized, so a
+// single run can line up by chance; the repeat catches an order that follows
+// the map rather than the desired schema.
+func TestDiffPolicies_RenameOrderFollowsDesired(t *testing.T) {
+	names := []string{"a", "b", "c", "d"}
+
+	want := make([]string, len(names))
+	for i, n := range names {
+		want[i] = "ALTER POLICY old_" + n + " ON public.documents RENAME TO new_" + n + ";"
+	}
+
+	for i := 0; i < 20; i++ {
+		cur := orderedmap.New[string, *model.Policy]()
+		des := orderedmap.New[string, *model.Policy]()
+		for _, n := range names {
+			cur.Set("old_"+n, newPolicy("old_"+n, 'r', withUsing("true")))
+			des.Set("new_"+n, newPolicy("new_"+n, 'r', withUsing("true"), renameFrom("old_"+n)))
+		}
+
+		stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, want, stmts)
+	}
+}
+
+// A directive naming the policy itself is not a rename.
+func TestDiffPolicies_RenameToSameName(t *testing.T) {
+	cur := orderedmap.New[string, *model.Policy]()
+	des := orderedmap.New[string, *model.Policy]()
+	cur.Set("p", newPolicy("p", 'r', withUsing("true")))
+	des.Set("p", newPolicy("p", 'r', withUsing("true"), renameFrom("p")))
+
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+// The run after the rename was applied still carries the directive: the source
+// is gone and the destination is there, so there is nothing left to do.
+func TestDiffPolicies_RenameAlreadyApplied(t *testing.T) {
+	cur := orderedmap.New[string, *model.Policy]()
+	des := orderedmap.New[string, *model.Policy]()
+	cur.Set("new", newPolicy("new", 'r', withUsing("true")))
+	des.Set("new", newPolicy("new", 'r', withUsing("true"), renameFrom("old")))
+
+	stmts, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, stmts)
+}
+
+// Renaming onto a policy the table already has would collide, so it fails
+// rather than emitting a statement PostgreSQL rejects.
+func TestDiffPolicies_RenameDestinationExists(t *testing.T) {
+	cur := orderedmap.New[string, *model.Policy]()
+	des := orderedmap.New[string, *model.Policy]()
+	cur.Set("old", newPolicy("old", 'r', withUsing("true")))
+	cur.Set("new", newPolicy("new", 'r', withUsing("true")))
+	des.Set("new", newPolicy("new", 'r', withUsing("true"), renameFrom("old")))
+
+	_, _, err := diffPolicies("public.documents", cur, des, allowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot rename policy old to new on public.documents: destination already exists")
+}
