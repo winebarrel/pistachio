@@ -417,3 +417,38 @@ func TestPlan(t *testing.T) {
 		})
 	}
 }
+
+// A -- pista:execute check runs under the same search_path in plan as in
+// apply, so an unqualified name in it resolves to the same object in both.
+// Without that, the check below cannot see myschema.flags, the plan reports it
+// as unevaluable and keeps the statement, and apply then skips it.
+func TestPlan_ExecuteCheckUsesTargetSearchPath(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.flags (
+    id integer NOT NULL,
+    CONSTRAINT flags_pkey PRIMARY KEY (id)
+);
+INSERT INTO myschema.flags (id) VALUES (1);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE myschema.flags (
+    id integer NOT NULL,
+    CONSTRAINT flags_pkey PRIMARY KEY (id)
+);
+-- pista:execute SELECT NOT EXISTS (SELECT 1 FROM flags)
+INSERT INTO myschema.flags (id) VALUES (2);
+`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.False(t, got.HasChanges)
+	assert.Empty(t, got.SQL)
+}

@@ -62,7 +62,7 @@ See [Renaming objects](README.md#renaming-objects) in the README for column rena
 
 Includes non-managed SQL (functions, triggers, grants) in schema files. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression: when it returns `true` the statement is executed, otherwise skipped. Without a check, the statement always runs.
 
-`plan` evaluates the check too, and leaves out the statements `apply` would skip, so the plan shows what will run.
+`plan` evaluates the check too, and leaves out the statements `apply` would skip, so the plan shows what will run. Both commands run it under the target schemas plus `public`, so an unqualified name in the check resolves to the same object either way.
 
 Some checks cannot be answered at plan time. `plan` runs before the managed DDL and on a read-only connection, so a check that reads a table the same run creates, or that writes, fails there while answering fine during `apply`. Such a statement stays in the plan with the reason recorded, and `apply` decides:
 
