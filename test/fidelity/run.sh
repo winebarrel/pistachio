@@ -17,7 +17,9 @@
 # make, not a diff to silence.
 #
 # pg_dump has to be at least as new as the server, which is its own rule, not
-# one this check adds.
+# one this check adds. The server is reached through PGHOST / PGUSER / PGPORT,
+# the way the psql-based make targets are; TEST_PISTA_CONN_STR does not reach
+# it. Only `public` is reset and dumped, so a schema file lives in one schema.
 set -uo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -30,6 +32,8 @@ export PGPORT="${PGPORT:-5415}"
 # else. Set as an environment variable so it reaches every pista call.
 export PISTA_MANAGE_ROUTINE=1
 
+echo "Building pista..."
+go build -o pista ./cmd/pista
 : "${PISTA:=./pista}"
 
 WORK="$(mktemp -d)"
@@ -109,6 +113,15 @@ check() {
     _fail=$((_fail + 1))
   fi
 }
+
+# Every schema would fail the same way on a pg_dump older than the server, so
+# check it once and name it.
+pg_dump_major="$(pg_dump --version | sed -E 's/.* ([0-9]+).*/\1/')"
+server_major="$(( $(psql -X -q -At -c 'SHOW server_version_num') / 10000 ))"
+if [ "$pg_dump_major" -lt "$server_major" ]; then
+  echo "pg_dump $pg_dump_major cannot dump a PostgreSQL $server_major server" >&2
+  exit 1
+fi
 
 echo "=== restore fidelity ==="
 for f in test/fidelity/schemas/*.sql; do
