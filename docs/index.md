@@ -1,17 +1,36 @@
-![pistachio](https://github.com/user-attachments/assets/d1e6ca05-778e-4329-af87-ce68d2abaebc)
+# pistachio
 
-[![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
+Declarative schema management tool for PostgreSQL with a Terraform-like
+plan/apply workflow, built on
+[pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired
+schema in SQL; pistachio generates the DDL diff.
 
-Declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL; pistachio generates the DDL diff.
-
-**[Documentation](https://winebarrel.github.io/pistachio/)** | [Getting Started](https://winebarrel.github.io/pistachio/getting-started/) | [Commands](https://winebarrel.github.io/pistachio/reference/commands/) | [Design and scope](https://winebarrel.github.io/pistachio/about/design/)
-
-## Workflow
-
-![pistachio workflow](docs/workflow.svg)
+![pistachio workflow](workflow.svg)
 
 ![](https://github.com/user-attachments/assets/8ceaef33-7d4e-4bd8-bf94-1a79342cf1e1)
+
+## Try it with Docker
+
+A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
+
+```bash
+docker run --rm -it ghcr.io/winebarrel/pistachio-demo
+```
+
+The container starts a shell in `/demo` with `pista` and `psql` preconfigured. Edit `desired.sql`, then run:
+
+```bash
+pista plan  desired.sql     # show the DDL diff
+pista apply desired.sql     # apply the changes
+pista plan  desired.sql     # ...should now print "No changes"
+pista dump                  # dump the current schema
+```
+
+The image sets `$PISTA_MANAGE_ROUTINE`, so the functions and procedures in the demo schema are managed too.
+
+The source for the image is under [`demo/`](https://github.com/winebarrel/pistachio/tree/main/demo).
+
+
 
 ## Installation
 
@@ -30,6 +49,8 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 | macOS   | amd64, arm64 |
 | Linux   | amd64, arm64 |
 | Windows | amd64        |
+
+
 
 ## Example
 
@@ -76,24 +97,14 @@ pista apply ./schema/*.sql         # apply it
 ```
 
 
-## Demo
+## Where to go next
 
-A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
-
-```bash
-docker run --rm -it ghcr.io/winebarrel/pistachio-demo
-```
-
-See [Try it with Docker](https://winebarrel.github.io/pistachio/#try-it-with-docker).
-
-## Development
-
-```bash
-docker compose up -d
-make test
-```
-
-See [Contributing](https://winebarrel.github.io/pistachio/contributing/) for the test suites and the PostgreSQL version matrix.
+- [Getting Started](getting-started.md) walks through dump, edit, plan, apply.
+- [Guides](guides/renaming.md) cover one task each: renaming, filtering,
+  drops, transactions, multiple schemas.
+- [Commands](reference/commands.md) lists every flag.
+- [Design and scope](about/design.md) says what pistachio does not manage, and
+  why.
 
 ## Related projects
 

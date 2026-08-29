@@ -35,3 +35,6 @@ go.work.sum
 /*.sql
 *.bak
 /demo.gif
+
+# Generated documentation site
+site/
