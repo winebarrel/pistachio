@@ -53,5 +53,5 @@ nav:
       - about/performance.md
       - about/changelog.md
   - Contributing:
-      - Development: contributing.md
+      - contributing.md
       - Sample database tests: contributing-samples.md
