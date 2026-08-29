@@ -548,6 +548,27 @@ is the same prerequisite as the INHERITS plan / apply entry above.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
+## A dump of a partitioned table with an index on the parent does not reload
+
+Priority: low.
+
+`dump` writes each table followed by its own indexes, so an index on a
+partitioned parent is created before the partitions under it. PostgreSQL then
+creates the partition's copy itself, under the name the dump goes on to
+declare, and psql stops on `relation "logs_2025_at_idx" already exists`.
+pg_dump avoids it by writing every table first and every index after, with an
+`ALTER INDEX ... ATTACH PARTITION` for each child.
+
+Feeding the dump back to `pista plan` is clean, which is the contract, so this
+only reaches someone loading a dump with psql. `test/fidelity` is where it
+turned up, and its `partition.sql` leaves the parent index out with a note
+pointing here. Putting it back is the regression test.
+
+Emitting the indexes after every table, or following pg_dump with `ON ONLY`
+plus `ATTACH`, are the two shapes. The first changes the order of every dump.
+
+Origin: [#459](https://github.com/winebarrel/pistachio/pull/459).
+
 ## View and materialized view storage parameters are not read
 
 Priority: low.

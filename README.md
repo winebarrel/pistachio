@@ -1034,6 +1034,11 @@ docker compose --profile all up -d # 15, 16, 17 and 18
 make PGPORT=5417 test
 ```
 
+`make test-scenario` runs the CLI scenario tests, and `make test-fidelity`
+checks that a `pista dump` reloaded into an empty database produces the schema
+it was taken from, comparing `pg_dump` output on both sides. The latter needs a
+`pg_dump` at least as new as the server.
+
 ## Related projects
 
 - [ridgepole](https://github.com/ridgepole/ridgepole): DB schema

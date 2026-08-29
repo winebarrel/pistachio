@@ -71,6 +71,12 @@ keywords:
 test-scenario: clean-schema
 	bash test/scenario/run.sh
 
+# Cleaned for the same reason as `test`: run.sh resets `public` per schema and
+# leaves every other schema alone.
+.PHONY: test-fidelity
+test-fidelity: clean-schema
+	bash test/fidelity/run.sh
+
 .PHONY: demo
 demo: clean-schema
 	vhs demo.tape

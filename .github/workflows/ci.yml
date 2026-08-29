@@ -130,6 +130,19 @@ jobs:
       - run: make deadcode
       - run: make TEST_OPTS='-coverprofile=coverage.txt'
       - run: make test-scenario
+      # test-fidelity reloads a dump and compares pg_dump output, and pg_dump
+      # refuses a server newer than itself. The runner ships an older client
+      # than the newest server in the matrix, so install the newest one; it
+      # dumps every version in the matrix.
+      - name: Install the PostgreSQL client
+        run: |
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+      - run: make test-fidelity
       - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
