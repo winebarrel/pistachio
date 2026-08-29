@@ -1,4 +1,4 @@
-# Sample Database Tests
+# Sample database tests
 
 pistachio is checked against real-world PostgreSQL schemas, not just the
 hand-written fixtures in `testdata/`. Each sample database is downloaded from
