@@ -62,6 +62,11 @@ jobs:
       # The runner's PostgreSQL listens on the default port; the Makefile
       # otherwise defaults to the port compose.yaml publishes locally.
       PGPORT: "5432"
+      # Every plan, apply and dump opens its own connection, and the fixtures
+      # add up to more than a thousand of them. sslmode=disable takes the SSL
+      # negotiation round-trip out of each one; the server is on loopback and
+      # has SSL off anyway, so there is nothing to negotiate.
+      TEST_PISTA_CONN_STR: postgres://postgres@localhost:5432/postgres?sslmode=disable
     steps:
       # Keep LF line endings; test fixtures are compared byte for byte.
       - run: git config --global core.autocrlf false
@@ -71,6 +76,20 @@ jobs:
           go-version-file: go.mod
       - name: Install GNU Make
         run: choco install -y --no-progress make
+      # A PostgreSQL backend on Windows is a new process rather than a fork,
+      # and Defender scans every one of them. The tests open a connection per
+      # fixture, so that scan sits on the hot path more than a thousand times.
+      # Excluding the server's own files and executable takes it off. This only
+      # buys time, so warn and carry on if the image stops allowing it.
+      - name: Exclude PostgreSQL from Defender
+        shell: pwsh
+        run: |
+          try {
+            Add-MpPreference -ExclusionPath $env:PGBIN, $env:PGDATA -ErrorAction Stop
+            Add-MpPreference -ExclusionProcess postgres.exe -ErrorAction Stop
+          } catch {
+            Write-Warning "could not add Defender exclusions: $_"
+          }
       # PostgreSQL is preinstalled on the runner image but the service is
       # stopped and disabled by default. PGDATA / PGBIN are set by the image
       # and point at that install. Switch it to trust auth to match the Linux
