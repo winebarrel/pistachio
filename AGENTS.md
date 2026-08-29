@@ -27,13 +27,14 @@ make build          # go build ./cmd/pista (outputs ./pista at the repo root)
 make vet            # go vet ./...
 make test           # go test -p 1 -v ./... $(TEST_OPTS)
 make test-scenario  # CLI scenario tests (bash, requires PostgreSQL)
+make test-fidelity  # restore fidelity check (bash, requires PostgreSQL and pg_dump)
 make lint           # golangci-lint run
 make fix            # golangci-lint run --fix (auto-fix lint errors)
 ```
 
 - Tests require a running PostgreSQL instance. `compose.yaml` publishes each version of the CI matrix on its own port (15 -> 5415, 16 -> 5416, 17 -> 5417, 18 -> 5418), so several can run side by side; `PGPORT` (default 5415) selects which one every `psql`- and test-based target uses. The Makefile builds `TEST_PISTA_CONN_STR` from it; set that variable to point somewhere else entirely.
 - Tests run with `-p 1` (sequential packages) because integration tests share a single database.
-- `make test` and `make test-scenario` depend on `clean-schema`, so they wipe every user schema before running. The tests themselves reset only `public`, and a sample schema left over from `make schema` is otherwise still visible to them. `clean-schema` follows `PGHOST`/`PGUSER`/`PGPORT`, not `TEST_PISTA_CONN_STR`, so override `PGPORT` rather than the connection string.
+- `make test`, `make test-scenario` and `make test-fidelity` depend on `clean-schema`, so they wipe every user schema before running. The tests themselves reset only `public`, and a sample schema left over from `make schema` is otherwise still visible to them. `clean-schema` follows `PGHOST`/`PGUSER`/`PGPORT`, not `TEST_PISTA_CONN_STR`, so override `PGPORT` rather than the connection string.
 - `make schema` and other `psql`-based targets rely on `PGHOST=localhost` / `PGUSER=postgres` / `PGPORT` (exported from the Makefile).
 - The sample schema targets (`schema`, `sample-db-*`, `test-samples`, `clean-schema`, `reset-db`) live in `sample-db.mk`, which the Makefile includes. See `sample-db-test.md`.
 
@@ -48,6 +49,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - `internal/testutil/` - Test helpers (DB connection, setup)
 - `testdata/` - YAML-based test fixtures for multiple test suites, including integration and unit tests
 - `test/scenario/` - CLI-level scenario tests (shell scripts that run `pista` CLI against sample schemas)
+- `test/fidelity/` - restore fidelity check: loads `pista dump` output into an empty database and diffs `pg_dump` against the original
 
 ## Development workflow
 
@@ -77,6 +79,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - New plan/apply/dump tests should be added as YAML fixtures whenever the test is purely SQL-input -> SQL/dump-output. Reach for a Go test only when the scenario can't be expressed that way: connection or auth errors, transaction/Writer plumbing, file-IO failures, the `--execute*` features, multi-schema setups that need helpers like `setupSchemaDB`, or assertions that examine internal Go data structures (`Files()` map, `ObjectCount` methods, schema-map helpers, etc.). When the harness lacks a field for a behavior you want to assert in a fixture, prefer extending the `*TestCase` struct with one optional field (defaulting to nil/zero so existing fixtures are unaffected) over keeping the test in Go.
 - `orderedmap.Map` is used throughout for deterministic iteration order of schema objects.
 - CLI scenario tests live in `test/scenario/`. Each `*.test.sh` script loads an initial schema, then applies incremental changes step by step, verifying plan output and drift-free state at each step. Shared helpers are in `helper.sh`; test SQL data is in `test/scenario/testdata/<schema>/`.
+- The restore fidelity check lives in `test/fidelity/`. It loads a schema, records `pg_dump -s`, loads `pista dump` into an empty database, and requires the second `pg_dump -s` to be identical. PostgreSQL supplies the expected output, so it catches what `dump` drops even when nobody wrote a fixture for it and the `plan` round trip agrees. Adding coverage means adding one `.sql` file under `schemas/`, holding only what pistachio manages; a construct it does not manage shows up as a diff and is a decision, not noise.
 
 ## Writing style
 
