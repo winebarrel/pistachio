@@ -25,6 +25,12 @@ on:
 permissions:
   contents: read
 
+# One Pages deployment at a time. Two pushes to main in quick succession would
+# otherwise race, and cancelling the older one would publish out of order.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest

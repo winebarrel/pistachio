@@ -76,8 +76,8 @@ CREATE INDEX idx_users_display_name ON public.users (display_name);
 ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFERENCES public.users(id);
 ```
 
-> [!TIP]
-> Rename directives that have already been applied are silently skipped. Leave them in place until cleanup.
+!!! tip
+    Rename directives that have already been applied are silently skipped. Leave them in place until cleanup.
 
 ### Column rename caveats
 

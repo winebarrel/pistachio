@@ -57,8 +57,8 @@ An attribute left at its default is not written back. PostgreSQL reports `VOLATI
 
 A routine is created after the types its signature names and before every table, because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call one. A signature can name a relation instead of a type, as `RETURNS SETOF <table>` does; such a routine comes after its own relation and before every other one. Dropping runs the other way: views, then tables, then routines, then types.
 
-> [!IMPORTANT]
-> That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later. `plpgsql` is unaffected. Mark such a routine `-- pista:ignore` and create it with `-- pista:execute` instead.
+!!! info
+    That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later. `plpgsql` is unaffected. Mark such a routine `-- pista:ignore` and create it with `-- pista:execute` instead.
 
 Argument and return types are reported without their schema when `search_path` reaches them, the same as any other name pistachio reads back. A desired schema may write a type in the routine's own schema either way; the two spellings are one routine. A comment goes on the full signature:
 
@@ -123,14 +123,14 @@ The `ALL` and `USER` forms of `ENABLE TRIGGER` name no single trigger and are ig
 
 # Constraint and index naming
 
-> [!IMPORTANT]
-> Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are auto-named by pistachio following PostgreSQL's convention: `{table}_pkey`, and `{table}_{col}..._key`, `{table}_{col}..._fkey`, `{table}_{col}..._excl` joining every key column. A `CHECK` becomes `{table}_{col}_check` when its expression references one column and `{table}_check` when it references none or several, which is what PostgreSQL does even for a constraint written on a column.
->
-> An index written without a name (e.g. `CREATE INDEX ON users (name)`) is named `{table}_{col}..._idx`, joining every index element including the `INCLUDE` list. An element written as an expression takes the name PostgreSQL gives it: the function it calls (`(lower(name))` gives `users_lower_idx`), the field of a field selection, the column under a subscript, the type of a cast that has nothing under it, or `expr` when it has none of its own.
->
-> A name that does not fit in 63 bytes (NAMEDATALEN - 1) is shortened the way PostgreSQL shortens it, by trimming the table and column parts and keeping the trailing label.
->
-> The auto-naming has one limitation: when a generated name meets a name already in use, whether generated or explicit, PostgreSQL appends a number with no separator (e.g. `users_id_check1`, `users_name_idx1`) that pistachio cannot predict, so such a file is rejected as a duplicate name.
->
-> Use explicit `CONSTRAINT <name>` clauses and index names to avoid these issues.
+!!! info
+    Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are auto-named by pistachio following PostgreSQL's convention: `{table}_pkey`, and `{table}_{col}..._key`, `{table}_{col}..._fkey`, `{table}_{col}..._excl` joining every key column. A `CHECK` becomes `{table}_{col}_check` when its expression references one column and `{table}_check` when it references none or several, which is what PostgreSQL does even for a constraint written on a column.
+
+    An index written without a name (e.g. `CREATE INDEX ON users (name)`) is named `{table}_{col}..._idx`, joining every index element including the `INCLUDE` list. An element written as an expression takes the name PostgreSQL gives it: the function it calls (`(lower(name))` gives `users_lower_idx`), the field of a field selection, the column under a subscript, the type of a cast that has nothing under it, or `expr` when it has none of its own.
+
+    A name that does not fit in 63 bytes (NAMEDATALEN - 1) is shortened the way PostgreSQL shortens it, by trimming the table and column parts and keeping the trailing label.
+
+    The auto-naming has one limitation: when a generated name meets a name already in use, whether generated or explicit, PostgreSQL appends a number with no separator (e.g. `users_id_check1`, `users_name_idx1`) that pistachio cannot predict, so such a file is rejected as a duplicate name.
+
+    Use explicit `CONSTRAINT <name>` clauses and index names to avoid these issues.
 

@@ -52,6 +52,8 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 
 
 
+## Example
+
 Create a schema file:
 
 ```sql

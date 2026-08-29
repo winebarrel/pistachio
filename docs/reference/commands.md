@@ -38,10 +38,10 @@ Commands:
 Run "pista <command> --help" for more information on a command.
 ```
 
-> [!note]
-> By default, pistachio targets the `public` schema.
-> 
-> See [Working with multiple schemas](../guides/multiple-schemas.md) for details.
+!!! note
+    By default, pistachio targets the `public` schema.
+
+    See [Working with multiple schemas](../guides/multiple-schemas.md) for details.
 
 <details>
 <summary><code>pista plan --help</code></summary>
@@ -327,8 +327,8 @@ Every connection sets `search_path` to `public`, so a server-side `ALTER ROLE ..
 
 The catalog reports an object reachable through `search_path` without its schema. `dump` writes the object as the catalog reports it, and `plan` compares that form against the desired schema, so a desired schema that qualifies an object the catalog reports bare differs on every run. Under `--search-path=` the objects pistachio manages keep their schema. Under `--search-path=myschema` the objects in `myschema` lose theirs, and under the default so do those in `public`.
 
-> [!NOTE]
-> `apply` sets `search_path` to the target schemas plus `public` so unqualified type and object references resolve. `plan` output does not include that `SET search_path`, so piping `pista plan -n <schema>` into `psql` for a non-public schema may fail on an unqualified reference. Qualify the reference or run `pista apply`.
+!!! note
+    `apply` sets `search_path` to the target schemas plus `public` so unqualified type and object references resolve. `plan` output does not include that `SET search_path`, so piping `pista plan -n <schema>` into `psql` for a non-public schema may fail on an unqualified reference. Qualify the reference or run `pista apply`.
 
 
 ## apply
@@ -400,8 +400,8 @@ pista plan --force-index-concurrently schema.sql
 pista apply --force-index-concurrently schema.sql
 ```
 
-> [!NOTE]
-> When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`. To keep the opt-in and run without a transaction instead, use `--try-tx`.
+!!! note
+    When the generated diff includes `CREATE INDEX CONCURRENTLY` or `DROP INDEX CONCURRENTLY`, `--with-tx` cannot be used because `CONCURRENTLY` operations cannot run inside a transaction. If there are no index changes, `--with-tx` is allowed even when an index is opted into `CONCURRENTLY`. To run `apply` inside a transaction in spite of the opt-in, combine `--with-tx` with `--disable-index-concurrently`. To keep the opt-in and run without a transaction instead, use `--try-tx`.
 
 Use `--bulk-alter` to combine consecutive `ALTER TABLE` actions on the same table into a single statement with comma-separated actions. This reduces metadata-lock churn and lets PostgreSQL plan the changes together. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, and skipped DROPs are kept as separate statements. Also available as `$PISTA_BULK_ALTER`.
 
@@ -453,10 +453,10 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. T
 -- No changes
 ```
 
-> [!NOTE]
-> Only pure removals of constraints, foreign keys, and indexes (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index`. Definition changes still execute regardless of `--allow-drop`: constraints and foreign keys as DROP + ADD, and indexes as DROP + CREATE, because PostgreSQL has no `ALTER CONSTRAINT` and no general `ALTER INDEX` form for definition changes.
->
-> Foreign-key drops emitted because the owning table is being dropped follow the table-drop policy (not `foreign_key`): if the table drop is suppressed, the FK drop is suppressed too and surfaces as `-- skipped:` alongside the table.
+!!! note
+    Only pure removals of constraints, foreign keys, and indexes (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index`. Definition changes still execute regardless of `--allow-drop`: constraints and foreign keys as DROP + ADD, and indexes as DROP + CREATE, because PostgreSQL has no `ALTER CONSTRAINT` and no general `ALTER INDEX` form for definition changes.
+
+    Foreign-key drops emitted because the owning table is being dropped follow the table-drop policy (not `foreign_key`): if the table drop is suppressed, the FK drop is suppressed too and surfaces as `-- skipped:` alongside the table.
 
 
 ## dump
