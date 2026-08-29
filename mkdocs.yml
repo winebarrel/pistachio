@@ -24,6 +24,9 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
 
+hooks:
+  - hooks.py
+
 markdown_extensions:
   - admonition
   - pymdownx.details

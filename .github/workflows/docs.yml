@@ -9,6 +9,7 @@ on:
     paths:
       - docs/**
       - mkdocs.yml
+      - hooks.py
       - requirements-docs.txt
       - CHANGELOG.md
       - TODO.md
@@ -17,6 +18,7 @@ on:
     paths:
       - docs/**
       - mkdocs.yml
+      - hooks.py
       - requirements-docs.txt
       - CHANGELOG.md
       - TODO.md
