@@ -50,7 +50,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - `testdata/` - YAML-based test fixtures for multiple test suites, including integration and unit tests
 - `test/scenario/` - CLI-level scenario tests (shell scripts that run `pista` CLI against sample schemas)
 - `test/fidelity/` - restore fidelity check: loads `pista dump` output into an empty database and diffs `pg_dump` against the original
-- `docs/` - the documentation site, built with MkDocs and published to GitHub Pages. The Markdown is the source; `mkdocs build --strict` fails on a broken internal link. `CHANGELOG.md` and `TODO.md` stay at the repository root and are symlinked into `docs/about/`.
+- `docs/` - the documentation site, built with MkDocs and published to GitHub Pages. The Markdown is the source; `mkdocs build --strict` fails on a broken internal link. The social plugin draws a preview card per page, so a local build needs Cairo and Pango installed as well as `requirements-docs.txt`. `CHANGELOG.md` and `TODO.md` stay at the repository root and are symlinked into `docs/about/`.
 
 ## Development workflow
 
