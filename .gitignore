@@ -38,3 +38,6 @@ go.work.sum
 
 # Generated documentation site
 site/
+
+# Byte-compiled hooks.py, written when the docs are built locally
+__pycache__/
