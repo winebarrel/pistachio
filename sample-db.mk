@@ -64,6 +64,9 @@ guacamole|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/guac
 dotcms|sample-db-url-schema|URL=https://raw.githubusercontent.com/dotCMS/core/b0095c0c3920e236efcc16ceb136cd5dd88804b7/dotCMS/src/main/resources/postgres.sql SCHEMA=dotcms|dotcms
 osm|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/openstreetmap/openstreetmap-website/9da0fa5ecbff8adc5e6e91c7cf22546755a91f77/db/structure.sql SCHEMA=osm|osm
 chado|sample-db-chado|URL=https://raw.githubusercontent.com/GMOD/Chado/31c2407716e3d0fe4e837b6effad0a510af22238/chado/schemas/1.31/default_schema.sql|chado,genetic_code,so,frange
+wso2is|sample-db-url-schema|URL=https://raw.githubusercontent.com/wso2/carbon-identity-framework/a956a69ffdd1bcf916132682b12b5f319102f69e/features/identity-core/org.wso2.carbon.identity.core.server.feature/resources/dbscripts/postgresql.sql SCHEMA=wso2is CLIENT_MIN_MESSAGES=warning|wso2is
+nightingale|sample-db-url-schema|URL=https://raw.githubusercontent.com/ccfos/nightingale/8362cbe18f98b3c06af176d71b13994673912c46/docker/compose-postgres/initsql_for_postgres/a-n9e-for-Postgres.sql SCHEMA=nightingale|nightingale
+danbooru|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/danbooru/danbooru/f8de3ba286db1f9a1f3efbbf495bcbc1001e7b9b/db/structure.sql SCHEMA=danbooru|danbooru
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -129,9 +132,11 @@ sample-db-mimiciv:
 #
 # CLIENT_MIN_MESSAGES defaults to notice, the server default; a sample whose
 # dump is noisy on a fresh database can raise it from its SAMPLES record. kea,
-# dolphinscheduler, and wso2apim raise it to warning, since each drops what it
-# is about to create with IF EXISTS, and ranger to error, since it does the same
-# and commits outside a transaction, which adds a warning per statement.
+# dolphinscheduler, wso2apim, and wso2is raise it to warning, since each drops
+# what it is about to create with IF EXISTS, wso2is also because five of its
+# index names are over 63 characters and the server says so as it truncates
+# them, and ranger to error, since it drops the same way and commits outside a
+# transaction, which adds a warning per statement.
 CLIENT_MIN_MESSAGES ?= notice
 
 .PHONY: sample-db-url-schema
@@ -299,25 +304,28 @@ sample-db-camunda:
 	  echo; \
 	done | PGOPTIONS='-c search_path=camunda' $(PSQL)
 
-# A pg_dump-style dump loaded into a schema of its own. discourse and osm ship
-# their schema as Rails' db/structure.sql, which belongs in a schema of its own
-# like the sample-db-url-schema dumps but is pg_dump output: it empties
-# search_path and qualifies every object it creates with `public`, so neither
-# PGOPTIONS nor the hive-style search_path rewrite reaches it. Drop the line
-# that empties search_path and strip the `public.` qualifier instead, which
-# leaves every name unqualified and lets search_path place it. The CREATE
+# A pg_dump-style dump loaded into a schema of its own. discourse, osm, and
+# danbooru ship their schema as Rails' db/structure.sql, which belongs in a
+# schema of its own like the sample-db-url-schema dumps but is pg_dump output:
+# it empties search_path and qualifies every object it creates with `public`,
+# so neither PGOPTIONS nor the hive-style search_path rewrite reaches it. Drop
+# the line that empties search_path and strip the `public.` qualifier instead,
+# which leaves every name unqualified and lets search_path place it. The CREATE
 # EXTENSION lines say `WITH SCHEMA public` without a dot, so they are untouched
-# and the types they own (discourse's halfvec, hstore, and trgm operator
-# classes, osm's geometry) still resolve from `public`, which stays second in
-# the search path. Column names that merely start with "public" (`public`,
-# `public_version`) are not qualifiers and are left alone. The tail of the file
-# is Rails' own `SET search_path TO "$user", public` followed by the migration
-# versions it inserts into schema_migrations, which is data and would land in
-# the wrong schema anyway, so everything from that line on is dropped.
+# and the types and operator classes they own (discourse's halfvec, hstore, and
+# trgm operator classes, osm's geometry, danbooru's trgm and btree_gin operator
+# classes) still resolve from `public`, which stays second in the search path.
+# Column names that merely start with "public" (`public`, `public_version`) are
+# not qualifiers and are left alone. The tail of the file is Rails' own
+# `SET search_path TO "$user", public` followed by the migration versions it
+# inserts into schema_migrations, which is data and would land in the wrong
+# schema anyway, so everything from that line on is dropped.
 #
 # discourse needs pgvector and osm needs PostGIS, neither of which the official
 # postgres image ships; compose.yaml and the samples CI job install both. See
-# docs/contributing-samples.md.
+# docs/contributing-samples.md. danbooru installs five extensions of its own,
+# btree_gin, fuzzystrmatch, pg_trgm, pgcrypto, and pgstattuple, but all five are
+# contrib and the official image already has them.
 .PHONY: sample-db-pgdump-schema
 sample-db-pgdump-schema:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
