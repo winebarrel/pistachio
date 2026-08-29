@@ -56,7 +56,7 @@ CREATE TYPE public.postal_address AS (
 );
 ```
 
-See [Renaming objects](README.md#renaming-objects) in the README for column rename caveats.
+See [Renaming objects](../guides/renaming.md) for column rename caveats.
 
 ## -- pista:execute
 
@@ -79,7 +79,7 @@ During `apply` the check runs at its proper moment, so a failure there is an err
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ ... $$ LANGUAGE plpgsql;
 ```
 
-See [Executing arbitrary SQL](README.md#executing-arbitrary-sql) in the README for versioning patterns.
+See [Running arbitrary SQL](../guides/executing-sql.md) for versioning patterns.
 
 ## -- pista:execute-first
 

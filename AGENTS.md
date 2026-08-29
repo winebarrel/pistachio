@@ -36,7 +36,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - Tests run with `-p 1` (sequential packages) because integration tests share a single database.
 - `make test`, `make test-scenario` and `make test-fidelity` depend on `clean-schema`, so they wipe every user schema before running. The tests themselves reset only `public`, and a sample schema left over from `make schema` is otherwise still visible to them. `clean-schema` follows `PGHOST`/`PGUSER`/`PGPORT`, not `TEST_PISTA_CONN_STR`, so override `PGPORT` rather than the connection string.
 - `make schema` and other `psql`-based targets rely on `PGHOST=localhost` / `PGUSER=postgres` / `PGPORT` (exported from the Makefile).
-- The sample schema targets (`schema`, `sample-db-*`, `test-samples`, `clean-schema`, `reset-db`) live in `sample-db.mk`, which the Makefile includes. See `sample-db-test.md`.
+- The sample schema targets (`schema`, `sample-db-*`, `test-samples`, `clean-schema`, `reset-db`) live in `sample-db.mk`, which the Makefile includes. See `docs/contributing-samples.md`.
 
 ## Project structure
 
@@ -50,6 +50,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - `testdata/` - YAML-based test fixtures for multiple test suites, including integration and unit tests
 - `test/scenario/` - CLI-level scenario tests (shell scripts that run `pista` CLI against sample schemas)
 - `test/fidelity/` - restore fidelity check: loads `pista dump` output into an empty database and diffs `pg_dump` against the original
+- `docs/` - the documentation site, built with MkDocs and published to GitHub Pages. The Markdown is the source; `mkdocs build --strict` fails on a broken internal link. `CHANGELOG.md` and `TODO.md` stay at the repository root and are symlinked into `docs/about/`.
 
 ## Development workflow
 

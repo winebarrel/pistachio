@@ -1,0 +1,58 @@
+site_name: pistachio
+site_description: Declarative schema management tool for PostgreSQL
+site_url: https://winebarrel.github.io/pistachio/
+repo_url: https://github.com/winebarrel/pistachio
+repo_name: winebarrel/pistachio
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guides:
+      - guides/renaming.md
+      - guides/multiple-schemas.md
+      - guides/filtering.md
+      - guides/drops.md
+      - guides/transactions.md
+      - guides/executing-sql.md
+      - guides/splitting.md
+      - guides/ci.md
+  - Reference:
+      - reference/commands.md
+      - reference/directives.md
+      - reference/objects.md
+      - reference/configuration.md
+  - About:
+      - about/design.md
+      - about/limitations.md
+      - about/performance.md
+      - about/changelog.md
+  - Contributing:
+      - contributing.md
+      - contributing-samples.md
