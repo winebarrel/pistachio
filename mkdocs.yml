@@ -49,9 +49,9 @@ nav:
       - reference/configuration.md
   - About:
       - about/design.md
-      - about/limitations.md
+      - Known limitations: about/limitations.md
       - about/performance.md
       - about/changelog.md
   - Contributing:
-      - contributing.md
-      - contributing-samples.md
+      - Development: contributing.md
+      - Sample database tests: contributing-samples.md
