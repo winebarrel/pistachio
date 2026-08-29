@@ -32,8 +32,12 @@ export PGPORT="${PGPORT:-5415}"
 # else. Set as an environment variable so it reaches every pista call.
 export PISTA_MANAGE_ROUTINE=1
 
+# Guarded because the script runs without -e: the checks below rely on a
+# failing command being a result rather than the end of the run. A build that
+# fails without stopping would leave an earlier binary in place and report on
+# code that is no longer there.
 echo "Building pista..."
-go build -o pista ./cmd/pista
+go build -o pista ./cmd/pista || exit 1
 : "${PISTA:=./pista}"
 
 WORK="$(mktemp -d)"
@@ -117,7 +121,8 @@ check() {
 # Every schema would fail the same way on a pg_dump older than the server, so
 # check it once and name it.
 pg_dump_major="$(pg_dump --version | sed -E 's/.* ([0-9]+).*/\1/')"
-server_major="$(( $(psql -X -q -At -c 'SHOW server_version_num') / 10000 ))"
+server_version_num="$(psql -X -q -At -c 'SHOW server_version_num')" || exit 1
+server_major="$(( server_version_num / 10000 ))"
 if [ "$pg_dump_major" -lt "$server_major" ]; then
   echo "pg_dump $pg_dump_major cannot dump a PostgreSQL $server_major server" >&2
   exit 1
