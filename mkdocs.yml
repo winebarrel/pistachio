@@ -42,7 +42,6 @@ nav:
       - guides/transactions.md
       - guides/executing-sql.md
       - guides/splitting.md
-      - guides/ci.md
   - Reference:
       - reference/commands.md
       - reference/directives.md

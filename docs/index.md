@@ -9,7 +9,7 @@ schema in SQL; pistachio generates the DDL diff.
 
 ![](https://github.com/user-attachments/assets/8ceaef33-7d4e-4bd8-bf94-1a79342cf1e1)
 
-## Try it in three minutes
+## Try it with Docker
 
 A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
 

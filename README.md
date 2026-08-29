@@ -84,7 +84,7 @@ A demo image bundles PostgreSQL with a sample schema for trying `pista` without 
 docker run --rm -it ghcr.io/winebarrel/pistachio-demo
 ```
 
-See [Try it in three minutes](https://winebarrel.github.io/pistachio/#try-it-in-three-minutes).
+See [Try it with Docker](https://winebarrel.github.io/pistachio/#try-it-with-docker).
 
 ## Development
 

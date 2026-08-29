@@ -1,6 +1,6 @@
 # Running arbitrary SQL
 
-Use the `-- pista:execute` directive to include SQL statements that pistachio doesn't manage declaratively (grants, extensions, etc.). These are executed after schema changes during `apply`. Functions and procedures can be managed declaratively instead, with `--manage-routine`.
+Use the `-- pista:execute` directive to include SQL statements that pistachio doesn't manage declaratively (grants, extensions, etc.). These are executed after schema changes during `apply`. Functions and procedures can be managed declaratively instead; see [Routines](../reference/objects.md#routines).
 
 ```sql
 -- pista:execute
@@ -26,13 +26,10 @@ $$ LANGUAGE plpgsql;
 
 Execute statements appear in `plan` output. During `apply`, the check SQL is evaluated and the statement is skipped if it returns `false`.
 
-## The check SQL
+## Check patterns
 
-Functions and procedures can be managed declaratively instead; see
-[Routines](../reference/objects.md#routines). The check SQL after the directive
-is evaluated by both `plan` and `apply`. When it returns `true` the statement is
-executed, otherwise skipped, and `plan` leaves out the statements `apply` would
-skip. A common pattern skips when an object already exists:
+`plan` leaves out the statements `apply` would skip. A common check skips when
+the object already exists:
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
@@ -68,6 +65,4 @@ CREATE TABLE public.users (
 ```
 
 The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after.
-
-See [Getting Started](../getting-started.md) for details.
 
