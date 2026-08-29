@@ -1,0 +1,18 @@
+/* The home page heading holds the logo and no text, so the heading metrics
+   apply to nothing visible: an inline image sits on a text baseline, which
+   leaves the line box's leading above and below it, and the bottom margin is
+   sized for 2em text. */
+.md-typeset h1 > img {
+  display: block;
+}
+
+.md-typeset h1:has(> img) {
+  margin-bottom: 1rem;
+}
+
+/* The permalink is inline, so a block image pushes it onto a line of its own
+   and the heading gains an empty text line. The home page title needs no
+   anchor. */
+.md-typeset h1:has(> img) .headerlink {
+  display: none;
+}
