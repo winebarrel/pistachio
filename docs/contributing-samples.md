@@ -133,6 +133,9 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | dotcms | dotcms | [dotCMS/core](https://github.com/dotCMS/core) |
 | osm | osm | [openstreetmap/openstreetmap-website](https://github.com/openstreetmap/openstreetmap-website) |
 | chado | chado, genetic_code, so, frange | [GMOD/Chado](https://github.com/GMOD/Chado) |
+| wso2is | wso2is | [wso2/carbon-identity-framework](https://github.com/wso2/carbon-identity-framework) |
+| nightingale | nightingale | [ccfos/nightingale](https://github.com/ccfos/nightingale) |
+| danbooru | danbooru | [danbooru/danbooru](https://github.com/danbooru/danbooru) |
 
 ## Coverage
 
@@ -140,7 +143,8 @@ Object counts of the loaded schemas, as of 2026-08-08 on PostgreSQL 15.18
 (16.13 for icingadb, rt, znuny, gitlab, hive, ranger, ambari, ovirt, and chado,
 the last counted 2026-08-24; the Sequences column was counted on 15.18
 throughout, Triggers, added 2026-08-24, and Routines, added 2026-08-25, on
-15.18 for every sample). "Constraints" excludes foreign keys; "Types" counts
+15.18 for every sample; wso2is, nightingale, and danbooru were counted
+2026-08-29 on 15.17). "Constraints" excludes foreign keys; "Types" counts
 enums and domains; "Sequences" counts standalone sequences only, since
 pistachio manages the sequence behind a serial or identity column as an
 attribute of that column rather than as an object of its own. Counting those
@@ -203,14 +207,17 @@ schema and pistachio does not read them either.
 | dotcms | 167 | 1,373 | 346 | 113 | 190 | 0 | 0 | 22 | 10 | 17 |
 | osm | 57 | 391 | 155 | 71 | 55 | 0 | 8 | 0 | 0 | 2 |
 | chado | 213 | 1,017 | 837 | 472 | 399 | 1,864 | 0 | 1 | 0 | 94 |
-| **Total** | **4,802** | **39,663** | **14,791** | **6,234** | **8,915** | **1,950** | **69** | **329** | **555** | **782** |
+| wso2is | 172 | 1,108 | 362 | 128 | 271 | 0 | 0 | 92 | 0 | 0 |
+| nightingale | 47 | 514 | 116 | 0 | 59 | 0 | 0 | 0 | 0 | 0 |
+| danbooru | 66 | 641 | 456 | 93 | 65 | 2 | 0 | 0 | 0 | 3 |
+| **Total** | **5,087** | **41,926** | **15,725** | **6,455** | **9,310** | **1,952** | **69** | **421** | **555** | **785** |
 
-The 47 dumps come to about 144,000 lines of SQL. chado is 43,700 of them, the
-longest dump of any sample, and gitlab 34,700. gitlab is still nearly half of
-the indexes and constraints, a third of the tables, and about 40 percent of the
-columns and foreign keys; musicbrainz, discourse, and wso2apim are the largest
-of what remains, and chado is nearly all of the views. gitlab is also why
-`clean-schema` drops tables a batch at a time rather than cascading through
+The 50 dumps come to about 150,000 lines of SQL. chado is 43,700 of them, the
+longest dump of any sample, and gitlab 34,700. gitlab is still about 40 percent
+of the indexes and constraints, a third of the columns and foreign keys, and
+more than a quarter of the tables; musicbrainz, discourse, and wso2apim are the
+largest of what remains, and chado is nearly all of the views. gitlab is also
+why `clean-schema` drops tables a batch at a time rather than cascading through
 `DROP SCHEMA`: a single statement takes locks on every object it reaches, and
 gitlab's 1,422 tables and their indexes run the server out of lock table space
 at the default `max_locks_per_transaction`. It is why `reset-db` resets only
@@ -234,12 +241,17 @@ views (adventureworks, pagila), tsvector
 columns (dvdrental, pagila), a non-default
 collation (musicbrainz), composite types (ovirt declares 10 of them, more than
 any other sample, and sourcegraph and chado 2 each), standalone sequences
-rather than serial columns (ranger, whose 85 tables come with 84 of them, and
-wso2apim, which mixes 104 of them in with serial columns), a schema written
-entirely in quoted mixed-case identifiers, so every name is case-sensitive
-(hive's 84 tables, where chinook has 11), an index-heavy schema of 192 indexes
-over 64 tables (mediawiki), partitioned tables at scale (gitlab declares 100 of them and
-attaches 2,054 partitions, all of which live in schemas of their own), table
+rather than serial columns (ranger, whose 85 tables come with 84 of them,
+wso2apim, which mixes 104 of them in with serial columns, and wso2is, which
+declares 92 for its 172 tables and wires 87 of them into a column DEFAULT), a
+schema written entirely in quoted mixed-case identifiers, so every name is
+case-sensitive (hive's 84 tables, where chinook has 11), index-heavy schemas
+(danbooru's 456 indexes over 66 tables are seven to a table, denser than any
+other sample, 55 of them gin, 29 of those over an expression and 17 naming
+`gin_trgm_ops`, and 49 partial; mediawiki's 192 over 64, only one of them
+partial and none over an expression), partitioned tables at scale (gitlab
+declares 100 of them and attaches 2,054 partitions, all of which live in
+schemas of their own), table
 inheritance (ledgersmb attaches 21 children with INHERITS, the only sample that
 does), four unique indexes declared `NULLS NOT DISTINCT` and one index with an
 `INCLUDE` column (discourse), views at scale (chado's 1,864 are more than
@@ -258,14 +270,15 @@ partitions is attached across one; and triggers
 state; kea's 81 outnumber its 64 tables; ledgersmb's 11 and dotcms's 10 come
 next).
 
-Routines are concentrated the same way. Seventeen of the 47 samples declare one
+Routines are concentrated the same way. Eighteen of the 50 samples declare one
 at all, and gitlab's 337, kea's and musicbrainz's 130 each, and chado's 94 are
-691 of the 782. Two thirds of them, 523, return `trigger`, though not every one
+691 of the 785. Two thirds of them, 523, return `trigger`, though not every one
 of those has a trigger to call it: musicbrainz's 89 do not, since its loader
 concatenates a file list that leaves triggers out. 710 are written in plpgsql
-and 72 in sql. sourcegraph declares the only procedure any sample has. Only
-chado and kea overload a name, 11 of them and 3. Only sourcegraph, ledgersmb,
-and gitlab comment a routine, seven between them.
+and 75 in sql. sourcegraph declares the only procedure any sample has. Only
+chado and kea overload a name, 11 of them and 3, though danbooru's three, all
+sql, include a `lower(text[])` that shadows a built-in. Only sourcegraph,
+ledgersmb, and gitlab comment a routine, seven between them.
 
 ## Load-time adjustments
 
@@ -302,17 +315,21 @@ strip only what is irrelevant to a schema round trip:
   `cd` schema itself.
 - **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
   constraint, and the `\copy` lines are dropped.
-- **discourse**, **osm**: both ship their schema as Rails' `db/structure.sql`,
-  which belongs in a schema of its own like the group below but is `pg_dump`
-  output that empties `search_path` and qualifies every object with `public`, so
-  neither `PGOPTIONS` nor hive's one-line rewrite reaches it. The line that
-  empties `search_path` is dropped and the `public.` qualifier is stripped,
-  which leaves every name unqualified for `search_path` to place. The `CREATE
-  EXTENSION` lines say `WITH SCHEMA public` without a dot, so they are untouched
-  and the types they own still resolve from `public`, which stays second in the
-  search path. The tail of the file is Rails' own `SET search_path` followed by
-  the migration versions it inserts into `schema_migrations`, which is data, so
-  everything from that line on is dropped.
+- **discourse**, **osm**, **danbooru**: all three ship their schema as Rails'
+  `db/structure.sql`, which belongs in a schema of its own like the group below
+  but is `pg_dump` output that empties `search_path` and qualifies every object
+  with `public`, so neither `PGOPTIONS` nor hive's one-line rewrite reaches it.
+  The line that empties `search_path` is dropped and the `public.` qualifier is
+  stripped, which leaves every name unqualified for `search_path` to place. The
+  `CREATE EXTENSION` lines say `WITH SCHEMA public` without a dot, so they are
+  untouched and the types they own still resolve from `public`, which stays
+  second in the search path. The tail of the file is Rails' own
+  `SET search_path` followed by the migration versions it inserts into
+  `schema_migrations`, which is data, so everything from that line on is
+  dropped. danbooru installs five extensions of its own, `btree_gin`,
+  `fuzzystrmatch`, `pg_trgm`, `pgcrypto`, and `pgstattuple`, but all five are
+  contrib and the official image already has them, so it needs nothing
+  installed the way discourse and osm do.
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
@@ -322,21 +339,23 @@ strip only what is irrelevant to a schema round trip:
   the `hive` schema.
 - **imdb**: the schema and its foreign key indexes ship as two files, so
   `schema.sql` and `fkindexes.sql` are concatenated.
-- **kea**, **dolphinscheduler**, **wso2apim**: each dump drops what it is about
-  to create with `IF EXISTS`, so `client_min_messages` is raised to `warning`
-  for the load.
+- **kea**, **dolphinscheduler**, **wso2apim**, **wso2is**: each dump drops what
+  it is about to create with `IF EXISTS`, so `client_min_messages` is raised to
+  `warning` for the load. wso2is is also where five index names run past the 63
+  character identifier limit, and the server says so as it truncates them.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
   **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,
-  **flowable**, **ejabberd**, **guacamole**, **dotcms**: these dumps name no
-  schema at all, so whichever schema comes first in `search_path` gets them.
-  Each is loaded into a schema of its own instead of
-  `public`, so that `make schema`, which puts every sample in one database, does
-  not stack them on top of the other public samples (mediawiki and pagila both
-  define `actor` and `category`). gitlab creates `gitlab_partitions_static` and
-  `gitlab_partitions_dynamic` itself and never qualifies anything with `public`,
-  so its 1,083 top-level tables follow `search_path` into `gitlab` while its
-  partitions stay in the two schemas it named.
+  **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
+  **nightingale**: these dumps name no schema at all, so whichever schema comes
+  first in `search_path` gets them. Each is loaded into a schema of its own
+  instead of `public`, so that `make schema`, which puts every sample in one
+  database, does not stack them on top of the other public samples (mediawiki
+  and pagila both define `actor` and `category`). gitlab creates
+  `gitlab_partitions_static` and `gitlab_partitions_dynamic` itself and never
+  qualifies anything with `public`, so its 1,083 top-level tables follow
+  `search_path` into `gitlab` while its partitions stay in the two schemas it
+  named.
 - **mimiciv**: the schema ships as three files, so `create.sql` (tables),
   `constraint.sql` (primary and foreign keys), and `index.sql` are concatenated
   in that order. Both later files drop what they create with `IF EXISTS` first,
