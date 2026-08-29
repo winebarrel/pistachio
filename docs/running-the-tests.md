@@ -1,4 +1,4 @@
-# Development
+# Running the tests
 
 ```bash
 docker compose up -d

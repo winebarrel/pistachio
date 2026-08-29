@@ -1,6 +1,6 @@
 # Loading the real-world sample schemas and checking that pista round-trips
 # them. Included by the Makefile, which owns PGHOST/PGUSER/PGPORT and SHELL.
-# See docs/contributing-samples.md.
+# See docs/sample-database-tests.md.
 
 # Single source of the real-world sample schemas, consumed by both `schema`
 # (loads them all into one database) and `test-samples` (loads each into an
@@ -317,7 +317,7 @@ sample-db-camunda:
 #
 # discourse needs pgvector and osm needs PostGIS, neither of which the official
 # postgres image ships; compose.yaml and the samples CI job install both. See
-# docs/contributing-samples.md.
+# docs/sample-database-tests.md.
 .PHONY: sample-db-pgdump-schema
 sample-db-pgdump-schema:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'

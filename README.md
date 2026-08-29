@@ -93,7 +93,7 @@ docker compose up -d
 make test
 ```
 
-See [Contributing](https://winebarrel.github.io/pistachio/contributing/) for the test suites and the PostgreSQL version matrix.
+See [Running the tests](https://winebarrel.github.io/pistachio/running-the-tests/) for the test suites and the PostgreSQL version matrix.
 
 ## Related projects
 

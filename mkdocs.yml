@@ -60,6 +60,6 @@ nav:
       - Known limitations: about/limitations.md
       - about/performance.md
       - about/changelog.md
-  - Contributing:
-      - contributing.md
-      - contributing-samples.md
+  - Development:
+      - running-the-tests.md
+      - sample-database-tests.md
