@@ -1,4 +1,4 @@
-# pistachio
+![pistachio](https://github.com/user-attachments/assets/d1e6ca05-778e-4329-af87-ce68d2abaebc)
 
 Declarative schema management tool for PostgreSQL with a Terraform-like
 plan/apply workflow, built on
