@@ -1,3 +1,11 @@
+---
+# The nav calls this page Home, which is the wrong headline for the social
+# card a link to the site expands into. Name the project there instead.
+social:
+  cards_layout_options:
+    title: pistachio
+---
+
 # ![pistachio](https://github.com/user-attachments/assets/d1e6ca05-778e-4329-af87-ce68d2abaebc)
 
 Declarative schema management tool for PostgreSQL with a Terraform-like

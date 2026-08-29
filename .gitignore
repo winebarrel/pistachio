@@ -41,3 +41,7 @@ site/
 
 # Byte-compiled hooks.py, written when the docs are built locally
 __pycache__/
+
+# Social card images and the fonts they are drawn with, cached by the social
+# plugin when the docs are built locally
+.cache/

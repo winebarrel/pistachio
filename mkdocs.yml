@@ -26,6 +26,13 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
 
+plugins:
+  # Listing plugins turns off the default set, so search has to be named again.
+  - search
+  # Generates a preview image per page and the og:/twitter: meta tags that point
+  # at it, so a link to the site expands into a card.
+  - social
+
 hooks:
   - hooks.py
 
