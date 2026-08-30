@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.37.0] - 2026-08-30
+## [1.37.0] - 2026-08-31
 
 * Stop `BETWEEN`, `LIKE` and `NOT IN` from drifting. The grammar rewrites `BETWEEN` into the comparisons it stands for, `LIKE` / `ILIKE` / `SIMILAR TO` into their operators, `NOT IN` into `<> ALL (ARRAY[...])` and `(a, b)` into `ROW(a, b)` before the expression reaches the catalog, so a desired schema that wrote the keyword never matched what came back: a `CHECK` was dropped and re-added on every run, which revalidates the whole table, a partial index was rebuilt and a view recreated. A generated column failed the run instead, since a generated expression cannot be altered in place. The folds sit in the shared expression normalization, so a domain `CHECK`, a column `DEFAULT`, a policy `USING` / `WITH CHECK` and a trigger `WHEN` clause get them too. `IN` already folded against the `= ANY (ARRAY[...])` it is stored as; that fold now matches the operator as well, so `x > ANY (...)` and `x > ALL (...)` stay apart. A typed literal is still re-printed in its type's output form and drifts; TODO.md covers it.
 
