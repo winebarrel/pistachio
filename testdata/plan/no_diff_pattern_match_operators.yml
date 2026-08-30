@@ -1,0 +1,37 @@
+# The grammar rewrites LIKE, ILIKE and SIMILAR TO into their operators
+# (`~~`, `~~*`, `~`) on the way in, so the catalog only ever hands the operator
+# back. An ESCAPE clause becomes a like_escape() / similar_to_escape() call,
+# which the catalog prints unqualified once pg_catalog is on the search_path.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_like_check CHECK (carrier LIKE 'own%'),
+      CONSTRAINT parcels_ilike_check CHECK (carrier ILIKE 'own%'),
+      CONSTRAINT parcels_not_like_check CHECK (carrier NOT LIKE 'sub%'),
+      CONSTRAINT parcels_not_ilike_check CHECK (carrier NOT ILIKE 'sub%'),
+      CONSTRAINT parcels_escape_check CHECK (carrier LIKE 'own!%' ESCAPE '!'),
+      CONSTRAINT parcels_similar_check CHECK (carrier SIMILAR TO 'own%'),
+      CONSTRAINT parcels_not_similar_check CHECK (carrier NOT SIMILAR TO 'sub%'),
+      CONSTRAINT parcels_similar_escape_check CHECK (carrier SIMILAR TO 'own%' ESCAPE '!')
+  );
+  CREATE INDEX parcels_own_idx ON public.parcels USING btree (id) WHERE (carrier LIKE 'own%');
+  CREATE VIEW public.parcels_own AS SELECT id FROM public.parcels WHERE carrier LIKE 'own%';
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_like_check CHECK (carrier LIKE 'own%'),
+      CONSTRAINT parcels_ilike_check CHECK (carrier ILIKE 'own%'),
+      CONSTRAINT parcels_not_like_check CHECK (carrier NOT LIKE 'sub%'),
+      CONSTRAINT parcels_not_ilike_check CHECK (carrier NOT ILIKE 'sub%'),
+      CONSTRAINT parcels_escape_check CHECK (carrier LIKE 'own!%' ESCAPE '!'),
+      CONSTRAINT parcels_similar_check CHECK (carrier SIMILAR TO 'own%'),
+      CONSTRAINT parcels_not_similar_check CHECK (carrier NOT SIMILAR TO 'sub%'),
+      CONSTRAINT parcels_similar_escape_check CHECK (carrier SIMILAR TO 'own%' ESCAPE '!')
+  );
+  CREATE INDEX parcels_own_idx ON public.parcels USING btree (id) WHERE (carrier LIKE 'own%');
+  CREATE VIEW public.parcels_own AS SELECT id FROM public.parcels WHERE carrier LIKE 'own%';
+plan: ""

@@ -1,0 +1,17 @@
+# The `IN` <-> `= ANY (ARRAY[...])` fold, in both spellings: what the file
+# writes and what `dump` writes have to plan clean against the same database.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier IN ('own_a', 'own_b'))
+  );
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier = ANY (ARRAY['own_a'::text, 'own_b'::text]))
+  );
+plan: ""

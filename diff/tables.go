@@ -556,19 +556,24 @@ func isSerialType(typeName string) bool {
 //   - Strips casts to text-like types (text, varchar), which pg_get_constraintdef
 //     adds to anything string-typed and a written definition practically never
 //     carries.
-//   - Converts = ANY(ARRAY[...]) to IN (...) (PostgreSQL internal representation).
+//   - Converts = ANY(ARRAY[...]) to IN (...) and <> ALL(ARRAY[...]) to
+//     NOT IN (...) (PostgreSQL internal representation).
 //   - Folds NOT (a IS DISTINCT FROM b) into a IS NOT DISTINCT FROM b, the shape
 //     PostgreSQL rewrites the written operator into when it stores an
 //     expression.
 //   - Turns those operators against a bare NULL literal into the IS NULL test
 //     parse analysis rewrites them to, and inverts such a test under a NOT.
+//   - Expands BETWEEN, and drops the keyword spelling from LIKE, ILIKE and
+//     SIMILAR TO, as the grammar and parse analysis do before the expression
+//     reaches the catalog. desugar.go holds these, the row-constructor
+//     spelling, and the AND/OR flattening an expanded BETWEEN needs.
 //   - Drops the schema qualifier from a function call name, which the catalog
 //     omits whenever the function's schema is on the search_path.
 //
-// All five are symmetric: they apply to the catalog side and the written side
-// alike. The walk reaches every node kind, so a sub-query inside an RLS policy
-// or a view body, and an expression inside a SQL/JSON constructor, get the
-// same treatment as a top-level operand.
+// All of them are symmetric: they apply to the catalog side and the written
+// side alike. The walk reaches every node kind, so a sub-query inside an RLS
+// policy or a view body, and an expression inside a SQL/JSON constructor, get
+// the same treatment as a top-level operand.
 //
 // The one position left alone is a top-level cast on a SELECT target: the cast
 // type there decides the resulting view's output column type, so stripping it
@@ -583,16 +588,13 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 			return tc.Arg
 		}
 	}
-	if ae := node.GetAExpr(); ae != nil && ae.Kind == pg_query.A_Expr_Kind_AEXPR_OP_ANY {
-		if arr := ae.Rexpr.GetAArrayExpr(); arr != nil {
-			ae.Kind = pg_query.A_Expr_Kind_AEXPR_IN
-			ae.Rexpr = &pg_query.Node{
-				Node: &pg_query.Node_List{
-					List: &pg_query.List{Items: arr.Elements},
-				},
-			}
-		}
+	foldArrayComparison(node)
+	if expanded := desugarBetween(node); expanded != nil {
+		return expanded
 	}
+	desugarPatternMatch(node)
+	normalizeRowFormat(node)
+	flattenBoolExpr(node)
 	if folded := foldNotDistinct(node); folded != nil {
 		return folded
 	}

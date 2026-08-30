@@ -1,0 +1,30 @@
+# normalizeCheckExpr is shared by every expression site, so the fold has to
+# hold outside a table CHECK too: a domain constraint, a column default, an RLS
+# policy predicate and a trigger WHEN clause each drifted on their own.
+init: |
+  CREATE FUNCTION public.noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE DOMAIN public.small_level AS integer CONSTRAINT small_level_check CHECK (VALUE BETWEEN 1 AND 10);
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      owner text,
+      label text DEFAULT (CASE WHEN 1 BETWEEN 0 AND 2 THEN 'lo' ELSE 'hi' END),
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.readings ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY readings_sel ON public.readings FOR SELECT USING (level BETWEEN 1 AND 10);
+  CREATE TRIGGER readings_stamp BEFORE UPDATE ON public.readings
+      FOR EACH ROW WHEN (NEW.level BETWEEN 1 AND 10) EXECUTE FUNCTION public.noop();
+desired: |
+  CREATE DOMAIN public.small_level AS integer CONSTRAINT small_level_check CHECK (VALUE BETWEEN 1 AND 10);
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      owner text,
+      label text DEFAULT (CASE WHEN 1 BETWEEN 0 AND 2 THEN 'lo' ELSE 'hi' END),
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.readings ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY readings_sel ON public.readings FOR SELECT USING (level BETWEEN 1 AND 10);
+  CREATE TRIGGER readings_stamp BEFORE UPDATE ON public.readings FOR EACH ROW WHEN (new.level BETWEEN 1 AND 10) EXECUTE FUNCTION noop();
+plan: ""

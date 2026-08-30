@@ -1,0 +1,19 @@
+# `IN` already folded against the `= ANY (ARRAY[...])` the catalog stores.
+# `NOT IN` is stored as `<> ALL (ARRAY[...])` and did not.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier NOT IN ('sub_a', 'sub_b'))
+  );
+  CREATE INDEX parcels_own_idx ON public.parcels USING btree (id) WHERE (carrier NOT IN ('sub_a', 'sub_b'));
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier NOT IN ('sub_a', 'sub_b'))
+  );
+  CREATE INDEX parcels_own_idx ON public.parcels USING btree (id) WHERE (carrier NOT IN ('sub_a', 'sub_b'));
+plan: ""

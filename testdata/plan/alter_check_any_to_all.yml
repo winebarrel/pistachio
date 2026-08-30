@@ -1,0 +1,20 @@
+# `= ANY (ARRAY[...])` folds to `IN` and `<> ALL (ARRAY[...])` to `NOT IN`,
+# because those are the two shapes PostgreSQL stores them as. Any other
+# operator has no such rewrite, so `> ANY` and `> ALL` have to stay apart.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_level_check CHECK (level > ANY (ARRAY[1, 2]))
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_level_check CHECK (level > ALL (ARRAY[1, 2]))
+  );
+plan: |
+  ALTER TABLE public.readings DROP CONSTRAINT readings_level_check;
+  ALTER TABLE public.readings ADD CONSTRAINT readings_level_check CHECK (level > ALL(ARRAY[1, 2]));

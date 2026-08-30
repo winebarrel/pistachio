@@ -1,0 +1,20 @@
+# `(a, b)` and `ROW(a, b)` are the same row constructor, told apart in the
+# parse tree only by the row_format field ruleutils reads to pick a spelling.
+# The catalog always prints the explicit form.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      lo integer,
+      hi integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_bounds_check CHECK ((lo, hi) > (0, 0))
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      lo integer,
+      hi integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_bounds_check CHECK ((lo, hi) > (0, 0))
+  );
+plan: ""
