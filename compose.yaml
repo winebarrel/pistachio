@@ -7,11 +7,11 @@
 #   docker compose up -d pg17         # 17 only
 #   docker compose --profile all up -d
 #
-# The discourse sample declares `CREATE EXTENSION vector` and the osm sample
-# `CREATE EXTENSION postgis`, neither of which the official image ships, so
-# install pgvector and PostGIS from PGDG before starting the server. The image's
-# entrypoint runs as root and drops to postgres itself, so apt runs first and
-# hands over with exec. Starting a container therefore needs network access; the
+# The discourse sample declares `CREATE EXTENSION vector` and the osm and
+# inaturalist samples `CREATE EXTENSION postgis`, neither of which the official
+# image ships, so install pgvector and PostGIS from PGDG before starting the
+# server. The image's entrypoint runs as root and drops to postgres itself, so
+# apt runs first and hands over with exec. Starting a container therefore needs network access; the
 # samples CI job installs the same packages into its service container.
 x-postgres: &postgres
   environment:

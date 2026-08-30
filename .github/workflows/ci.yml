@@ -198,10 +198,11 @@ jobs:
         with:
           go-version-file: go.mod
       # The discourse sample declares `CREATE EXTENSION vector` and the osm
-      # sample `CREATE EXTENSION postgis`, neither of which the official image
-      # ships. Install both from PGDG into the running service container;
-      # CREATE EXTENSION reads the control file when it is called, so the server
-      # does not need a restart. compose.yaml does the same for local runs.
+      # and inaturalist samples `CREATE EXTENSION postgis`, neither of which the
+      # official image ships. Install both from PGDG into the running service
+      # container; CREATE EXTENSION reads the control file when it is called, so
+      # the server does not need a restart. compose.yaml does the same for local
+      # runs.
       - name: Install pgvector and PostGIS
         run: |
           cid=$(docker ps --filter ancestor=postgres:18 --format '{{.ID}}')
