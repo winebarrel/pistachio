@@ -1,0 +1,18 @@
+# The other direction: `dump` writes the comparisons the catalog stores, so a
+# desired schema written that way has to keep planning clean once the desired
+# side folds BETWEEN too.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_level_check CHECK (level BETWEEN 1 AND 10)
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_level_check CHECK ((level >= 1) AND (level <= 10))
+  );
+plan: ""

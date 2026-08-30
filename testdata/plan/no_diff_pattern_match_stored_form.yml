@@ -1,0 +1,17 @@
+# `dump` writes the operator the catalog stores, so the operator spelling has
+# to plan clean against a database loaded from the keyword spelling.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_like_check CHECK (carrier LIKE 'own%')
+  );
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_like_check CHECK (carrier ~~ 'own%'::text)
+  );
+plan: ""

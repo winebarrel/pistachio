@@ -1,0 +1,33 @@
+# A full round trip: the ADD CONSTRAINT the plan emits keeps the keyword
+# spelling, PostgreSQL stores the expansion, and the re-plan afterwards finds
+# no drift against it.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      carrier text,
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      carrier text,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_level_check CHECK (level BETWEEN 1 AND 10),
+      CONSTRAINT readings_carrier_check CHECK (carrier LIKE 'own%'),
+      CONSTRAINT readings_excl_check CHECK (carrier NOT IN ('a', 'b'))
+  );
+  CREATE INDEX readings_level_idx ON public.readings USING btree (id) WHERE (level BETWEEN 1 AND 10);
+applied: |
+  -- public.readings
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      carrier text,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_carrier_check CHECK (carrier ~~ 'own%'::text),
+      CONSTRAINT readings_excl_check CHECK (carrier <> ALL (ARRAY['a'::text, 'b'::text])),
+      CONSTRAINT readings_level_check CHECK (level >= 1 AND level <= 10)
+  );
+  CREATE INDEX readings_level_idx ON public.readings USING btree (id) WHERE ((level >= 1) AND (level <= 10));

@@ -1,0 +1,20 @@
+# Two positions the WHERE-clause cases do not reach: an index key that is an
+# expression rather than a column, and a view's SELECT target, which the view
+# comparison walks separately so it can leave a top-level cast alone.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX readings_in_range_idx ON public.readings USING btree (((level BETWEEN 1 AND 10)));
+  CREATE VIEW public.readings_flagged AS SELECT id, (level BETWEEN 1 AND 10) AS in_range FROM public.readings;
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX readings_in_range_idx ON public.readings USING btree (((level BETWEEN 1 AND 10)));
+  CREATE VIEW public.readings_flagged AS SELECT id, (level BETWEEN 1 AND 10) AS in_range FROM public.readings;
+plan: ""

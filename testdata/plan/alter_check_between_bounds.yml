@@ -1,0 +1,19 @@
+# The fold must not swallow a genuine change: a different upper bound is a
+# different constraint, so the CHECK is re-created.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_level_check CHECK (level BETWEEN 1 AND 10)
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_level_check CHECK (level BETWEEN 1 AND 20)
+  );
+plan: |
+  ALTER TABLE public.readings DROP CONSTRAINT readings_level_check;
+  ALTER TABLE public.readings ADD CONSTRAINT readings_level_check CHECK (level BETWEEN 1 AND 20);

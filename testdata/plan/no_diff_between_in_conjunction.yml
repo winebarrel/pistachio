@@ -1,0 +1,25 @@
+# The grammar flattens `a AND b AND c` into one BoolExpr as it parses, so the
+# catalog definition re-parses flat while a BETWEEN expanded after parsing
+# keeps the nesting. They line up only once the fold flattens too. Both operand
+# positions are here, since the grammar flattens on the left alone.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      active boolean,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_left_check CHECK ((level BETWEEN 1 AND 10) AND active),
+      CONSTRAINT readings_right_check CHECK (active AND (level BETWEEN 1 AND 10)),
+      CONSTRAINT readings_or_check CHECK ((level NOT BETWEEN 1 AND 10) OR active)
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      active boolean,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_left_check CHECK ((level BETWEEN 1 AND 10) AND active),
+      CONSTRAINT readings_right_check CHECK (active AND (level BETWEEN 1 AND 10)),
+      CONSTRAINT readings_or_check CHECK ((level NOT BETWEEN 1 AND 10) OR active)
+  );
+plan: ""

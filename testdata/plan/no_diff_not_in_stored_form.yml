@@ -1,0 +1,17 @@
+# `dump` writes the scalar-array comparison the catalog stores, so that
+# spelling has to plan clean against a database loaded from `NOT IN`.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier NOT IN ('sub_a', 'sub_b'))
+  );
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier <> ALL (ARRAY['sub_a'::text, 'sub_b'::text]))
+  );
+plan: ""

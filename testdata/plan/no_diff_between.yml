@@ -1,0 +1,29 @@
+# PostgreSQL expands BETWEEN into the comparisons it is defined as before the
+# expression reaches the catalog, so pg_get_constraintdef, pg_get_indexdef and
+# pg_get_viewdef never hand BETWEEN back. Left unfolded, a written BETWEEN
+# re-creates its constraint, index and view on every plan.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_level_check CHECK (level BETWEEN 1 AND 10),
+      CONSTRAINT readings_level_excl_check CHECK (level NOT BETWEEN 20 AND 30),
+      CONSTRAINT readings_level_sym_check CHECK (level BETWEEN SYMMETRIC 40 AND 50),
+      CONSTRAINT readings_level_notsym_check CHECK (level NOT BETWEEN SYMMETRIC 60 AND 70)
+  );
+  CREATE INDEX readings_level_idx ON public.readings USING btree (id) WHERE (level BETWEEN 1 AND 10);
+  CREATE VIEW public.readings_in_range AS SELECT id FROM public.readings WHERE level BETWEEN 1 AND 10;
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id),
+      CONSTRAINT readings_level_check CHECK (level BETWEEN 1 AND 10),
+      CONSTRAINT readings_level_excl_check CHECK (level NOT BETWEEN 20 AND 30),
+      CONSTRAINT readings_level_sym_check CHECK (level BETWEEN SYMMETRIC 40 AND 50),
+      CONSTRAINT readings_level_notsym_check CHECK (level NOT BETWEEN SYMMETRIC 60 AND 70)
+  );
+  CREATE INDEX readings_level_idx ON public.readings USING btree (id) WHERE (level BETWEEN 1 AND 10);
+  CREATE VIEW public.readings_in_range AS SELECT id FROM public.readings WHERE level BETWEEN 1 AND 10;
+plan: ""

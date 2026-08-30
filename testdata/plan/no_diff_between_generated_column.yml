@@ -1,0 +1,18 @@
+# A generated column fails the run rather than drifting. PostgreSQL cannot
+# alter a generated expression in place, so the diff rejects the change and no
+# other table in the schema is planned.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      in_range boolean GENERATED ALWAYS AS (level BETWEEN 1 AND 10) STORED,
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      level integer,
+      in_range boolean GENERATED ALWAYS AS (level BETWEEN 1 AND 10) STORED,
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+plan: ""

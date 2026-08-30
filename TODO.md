@@ -628,8 +628,10 @@ Every normalization the walk performs is therefore missing there. A
 schema-qualified call drifts, `EXCLUDE USING btree (public.lower_v(v) WITH =)`
 being re-emitted as `DROP CONSTRAINT` + `ADD CONSTRAINT` on every plan, and so
 does a cast the catalog adds and the file does not: `((v || 'x') WITH =)` is
-stored as `((v || 'x'::text) WITH =)`. This is wider than the schema question
-and predates the strip.
+stored as `((v || 'x'::text) WITH =)`. The folds in `diff/desugar.go` are
+missing too, so the `BETWEEN` in
+`EXCLUDE USING gist (r WITH &&) WHERE (a BETWEEN 1 AND 10)` drifts here alone.
+This is wider than the schema question and predates the strip.
 
 Passing `Exclusions` and `WhereClause` through the same walk is the obvious
 shape, and the elements are `IndexElem` nodes, which `normalizeIndexStmt`
@@ -641,6 +643,36 @@ hand-written exclusion reaches this.
 Workaround: write the exclusion the way `pg_get_constraintdef` prints it.
 
 Origin: review of [#455](https://github.com/winebarrel/pistachio/pull/455).
+
+## Perpetual drift on a typed literal the catalog re-prints
+
+Priority: low.
+
+A constant written with a type name is stored as the value that type's input
+function produced, not as the text that produced it. `CHECK (a > timestamp
+'2000-01-01')` comes back from `pg_get_constraintdef` as
+`CHECK ((a > '2000-01-01 00:00:00'::timestamp without time zone))`, so the two
+sides never compare equal and the `CHECK` is dropped and re-added on every
+plan, revalidating the whole table. An index predicate, a view body, a policy,
+a trigger `WHEN` and a domain `CHECK` drift the same way, and a generated
+column fails the run, since it cannot be altered in place.
+
+`a AT TIME ZONE 'UTC' > '2000-01-01'` is the same case: the right operand
+resolves to `timestamp without time zone` and is re-printed in that type's
+output form.
+
+This is the one rewrite `diff/desugar.go` does not undo. The others are
+syntactic, so the fold is a tree rewrite the grammar already defines. Matching
+a literal means running the type's input and output functions over it, which
+would put a query to the server in the middle of the comparison.
+
+`dump` writes the catalog form, so a dump fed back plans clean and only a
+hand-written literal reaches this.
+
+Workaround: write the literal the way `pg_get_constraintdef` prints it, or
+leave the type off.
+
+Origin: expression normalization review, 2026-08-30.
 
 ## Perpetual drift on a schema-qualified sequence in a column DEFAULT
 

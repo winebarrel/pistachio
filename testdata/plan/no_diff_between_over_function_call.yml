@@ -1,0 +1,18 @@
+# The operand is copied into each comparison, so one that is a call rather than
+# a column reference has to survive being cloned, with its schema already
+# stripped.
+init: |
+  CREATE TABLE public.onetime_codes (
+      id integer NOT NULL,
+      code text NOT NULL,
+      CONSTRAINT onetime_codes_pkey PRIMARY KEY (id),
+      CONSTRAINT onetime_codes_code_check CHECK (char_length(code) BETWEEN 43 AND 128)
+  );
+desired: |
+  CREATE TABLE public.onetime_codes (
+      id integer NOT NULL,
+      code text NOT NULL,
+      CONSTRAINT onetime_codes_pkey PRIMARY KEY (id),
+      CONSTRAINT onetime_codes_code_check CHECK (pg_catalog.char_length(code) BETWEEN 43 AND 128)
+  );
+plan: ""

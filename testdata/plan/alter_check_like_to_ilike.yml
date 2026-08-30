@@ -1,0 +1,19 @@
+# LIKE and ILIKE are different operators, so folding the keyword away must not
+# make them compare equal.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_like_check CHECK (carrier LIKE 'own%')
+  );
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_like_check CHECK (carrier ILIKE 'own%')
+  );
+plan: |
+  ALTER TABLE public.parcels DROP CONSTRAINT parcels_like_check;
+  ALTER TABLE public.parcels ADD CONSTRAINT parcels_like_check CHECK (carrier ILIKE 'own%');
