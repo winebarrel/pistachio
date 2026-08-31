@@ -24,6 +24,12 @@ type ApplyOptions struct {
 	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops. Cannot be combined with --with-tx."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
+	Exclusive                bool     `xor:"exclusive" env:"PISTA_EXCLUSIVE" help:"Make apply runs on the same database mutually exclusive: fail immediately when another exclusive apply is running."`
+	// ExclusiveWait enables the same mutual exclusion as Exclusive and waits
+	// for the other apply instead of failing. A pointer because 0 is a valid
+	// value (wait without limit) and must be distinguishable from "not set".
+	// The type rejects a negative value at parse time.
+	ExclusiveWait *UnsignedDuration `xor:"exclusive" env:"PISTA_EXCLUSIVE_WAIT" placeholder:"DURATION" help:"Like --exclusive, but wait up to the given duration (0 waits without limit) for the other apply to finish."`
 }
 
 // ApplyResult holds the result of an Apply operation.
@@ -54,6 +60,15 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return nil, err
 	}
 	defer conn.Close(ctx) //nolint:errcheck
+
+	// Acquire the exclusion before the catalog is read, so the diff below
+	// cannot be computed against a state another exclusive apply is still
+	// changing. Released when the connection closes.
+	if options.Exclusive || options.ExclusiveWait != nil {
+		if err := acquireExclusive(ctx, conn, options.ExclusiveWait, w); err != nil {
+			return nil, err
+		}
+	}
 
 	result, err := client.diffAll(ctx, conn, &diffAllOptions{
 		FilterOptions:            options.FilterOptions,
