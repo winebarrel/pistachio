@@ -3,7 +3,7 @@
 ## The contract
 
 `pista dump` output, fed back as the desired schema, plans clean. A break in
-that round trip is a bug. CI dumps and re-plans 47 real-world schemas, and
+that round trip is a bug. CI dumps and re-plans dozens of real-world schemas, and
 reloads a smaller set covering one object kind each into an empty database to
 compare it against the original with `pg_dump`. The second check is what
 catches something the dump drops when the plan overlooks it too.
