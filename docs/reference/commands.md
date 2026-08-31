@@ -449,7 +449,7 @@ pista plan --assume-validated schema.sql
 pista apply --assume-validated schema.sql
 ```
 
-Use `--exclusive` to make apply runs on the same database mutually exclusive. When another exclusive apply is running, the command fails immediately, before anything is read or applied. Use `--exclusive-wait` instead to wait for the other apply to finish, up to the given duration (`0` waits without limit). The two flags conflict. Also available as `$PISTA_EXCLUSIVE` / `$PISTA_EXCLUSIVE_WAIT`. See [Preventing concurrent applies](../guides/exclusive-apply.md).
+Use `--exclusive` to make apply runs on the same database mutually exclusive: while another exclusive apply is running, the command fails at once. `--exclusive-wait` waits for the other apply instead, up to the given duration (`0` waits without limit). The two flags conflict. Also available as `$PISTA_EXCLUSIVE` / `$PISTA_EXCLUSIVE_WAIT`. See [Preventing concurrent applies](../guides/exclusive-apply.md).
 
 ```bash
 pista apply schema.sql --exclusive

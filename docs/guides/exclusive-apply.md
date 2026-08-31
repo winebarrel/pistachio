@@ -1,12 +1,12 @@
 # Preventing concurrent applies
 
-Two `pista apply` runs against the same database can interleave: each computes its diff from a snapshot the other is still changing, then issues DDL based on it. `--exclusive` makes apply runs mutually exclusive. When another exclusive apply is running, the command fails immediately, before anything is read or applied:
+Two apply runs on one database can interleave: each computes its diff from a state the other is changing. `--exclusive` makes apply runs mutually exclusive. While another exclusive apply is running, the command fails at once, before anything is read or applied:
 
 ```bash
 pista apply schema.sql --exclusive
 ```
 
-Use `--exclusive-wait` instead to wait for the other apply to finish, up to the given duration. `0` waits without limit. The two flags conflict.
+`--exclusive-wait` waits for the other apply instead, up to the given duration. `0` waits without limit. The two flags conflict.
 
 ```bash
 pista apply schema.sql --exclusive-wait=5m
@@ -16,10 +16,8 @@ Also available as `$PISTA_EXCLUSIVE` / `$PISTA_EXCLUSIVE_WAIT`.
 
 ## How it works
 
-The exclusion is a session-level [advisory lock](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS), taken right after connecting and before the current schema is read, so the diff is never computed against a state another exclusive apply is still changing. It is released when the connection closes, including on a crash, and it holds no table lock, so it does not block reads or writes to the schema.
+The exclusion is a session-level [advisory lock](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS), taken right after connecting and before the current schema is read, so the diff never reflects a state another exclusive apply is changing. It holds no table lock and does not block reads or writes. It is released when the connection closes, including on a crash.
 
-Because the lock is session-level, transaction boundaries do not affect it: it behaves the same with and without `--with-tx`, and across `CREATE INDEX CONCURRENTLY`, which runs outside a transaction. The lock key includes a hash of the database name, so applies to different databases on the same cluster do not exclude each other.
+Transaction boundaries do not affect a session-level lock, so it works the same with and without `--with-tx` and across `CREATE INDEX CONCURRENTLY`. The lock key includes a hash of the database name; applies to different databases on one cluster do not exclude each other.
 
-## Limitations
-
-The exclusion only covers apply runs that opt in with `--exclusive` or `--exclusive-wait`. An apply without the flag, another tool, or a psql session issuing DDL is not blocked.
+Only apply runs that pass `--exclusive` or `--exclusive-wait` are excluded. DDL from any other source is not blocked.
