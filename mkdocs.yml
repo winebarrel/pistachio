@@ -58,6 +58,7 @@ nav:
       - guides/filtering.md
       - guides/drops.md
       - guides/transactions.md
+      - guides/exclusive-apply.md
       - guides/executing-sql.md
       - guides/splitting.md
   - Reference:

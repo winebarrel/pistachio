@@ -148,86 +148,100 @@ Arguments:
   <files> ...    Path to the desired schema SQL file(s).
 
 Flags:
-  -h, --help                    Show context-sensitive help.
+  -h, --help                       Show context-sensitive help.
   -c, --conn-string="postgres://postgres@localhost/postgres"
-                                PostgreSQL connection string. See
-                                https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-                                ($PISTA_CONN_STR)
-  -d, --dbname=STRING           PostgreSQL database name. Overrides the dbname
-                                in --conn-string ($PISTA_DBNAME).
-      --password=STRING         PostgreSQL password ($PISTA_PASSWORD).
-  -n, --schemas=public,...      Schemas to inspect and modify ($PISTA_SCHEMAS).
+                                   PostgreSQL connection string. See
+                                   https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+                                   ($PISTA_CONN_STR)
+  -d, --dbname=STRING              PostgreSQL database name. Overrides the
+                                   dbname in --conn-string ($PISTA_DBNAME).
+      --password=STRING            PostgreSQL password ($PISTA_PASSWORD).
+  -n, --schemas=public,...         Schemas to inspect and modify
+                                   ($PISTA_SCHEMAS).
   -m, --schema-map=KEY=VALUE;...
-                                Schema name mapping (e.g. -m old=new).
-      --search-path=public      search_path for the database connection.
-                                The catalog reports an object reachable through
-                                it without its schema, so this decides how
-                                dump writes that object. Pass an empty value to
-                                qualify everything ($PISTA_SEARCH_PATH).
-  -C, --config=FILE             Load options from a YAML file ($PISTA_CONFIG).
+                                   Schema name mapping (e.g. -m old=new).
+      --search-path=public         search_path for the database connection. The
+                                   catalog reports an object reachable through
+                                   it without its schema, so this decides how
+                                   dump writes that object. Pass an empty value
+                                   to qualify everything ($PISTA_SEARCH_PATH).
+  -C, --config=FILE                Load options from a YAML file
+                                   ($PISTA_CONFIG).
       --version
-      --[no-]pager              Force paging via $PISTA_PAGER even when stdout
-                                is not a TTY. PISTA_PAGER must be set.
+      --[no-]pager                 Force paging via $PISTA_PAGER even when
+                                   stdout is not a TTY. PISTA_PAGER must be set.
 
-  -I, --include=INCLUDE,...     Include only
-                                tables/views/enums/domains/composite
-                                types/sequences/routines matching the pattern
-                                (wildcard: *, ?; /re/ for a regular expression)
-                                ($PISTA_INCLUDE).
-  -E, --exclude=EXCLUDE,...     Exclude tables/views/enums/domains/composite
-                                types/sequences/routines matching the pattern
-                                (wildcard: *, ?; /re/ for a regular expression)
-                                ($PISTA_EXCLUDE).
-      --enable=ENABLE,...       Enable only specified object types (can be
-                                repeated) ($PISTA_ENABLE).
-      --disable=DISABLE,...     Disable specified object types (can be repeated)
-                                ($PISTA_DISABLE).
-      --manage-routine          Manage functions and procedures. Off by default;
-                                --allow-drop routine still gates dropping them
-                                ($PISTA_MANAGE_ROUTINE).
-      --skip-partition-child    Manage a partitioned table without its
-                                partitions. For a schema whose partitions
-                                another tool creates. An INHERITS child is
-                                unaffected ($PISTA_SKIP_PARTITION_CHILD).
+  -I, --include=INCLUDE,...        Include only
+                                   tables/views/enums/domains/composite
+                                   types/sequences/routines matching the
+                                   pattern (wildcard: *, ?; /re/ for a regular
+                                   expression) ($PISTA_INCLUDE).
+  -E, --exclude=EXCLUDE,...        Exclude tables/views/enums/domains/composite
+                                   types/sequences/routines matching the
+                                   pattern (wildcard: *, ?; /re/ for a regular
+                                   expression) ($PISTA_EXCLUDE).
+      --enable=ENABLE,...          Enable only specified object types (can be
+                                   repeated) ($PISTA_ENABLE).
+      --disable=DISABLE,...        Disable specified object types (can be
+                                   repeated) ($PISTA_DISABLE).
+      --manage-routine             Manage functions and procedures. Off by
+                                   default; --allow-drop routine still gates
+                                   dropping them ($PISTA_MANAGE_ROUTINE).
+      --skip-partition-child       Manage a partitioned table without its
+                                   partitions. For a schema whose partitions
+                                   another tool creates. An INHERITS child is
+                                   unaffected ($PISTA_SKIP_PARTITION_CHILD).
       --allow-drop=ALLOW-DROP,...
-                                Allow dropping these object types (repeatable;
-                                'all' allows everything) ($PISTA_ALLOW_DROP).
-      --pre-sql=STRING          SQL to execute before applying changes
-                                ($PISTA_PRE_SQL).
-      --pre-sql-file=STRING     Path to a SQL file to execute before applying
-                                changes ($PISTA_PRE_SQL_FILE).
+                                   Allow dropping these object types
+                                   (repeatable; 'all' allows everything)
+                                   ($PISTA_ALLOW_DROP).
+      --pre-sql=STRING             SQL to execute before applying changes
+                                   ($PISTA_PRE_SQL).
+      --pre-sql-file=STRING        Path to a SQL file to execute before applying
+                                   changes ($PISTA_PRE_SQL_FILE).
       --concurrently-pre-sql=STRING
-                                SQL to execute before CONCURRENTLY
-                                index DDL (e.g. SET lock_timeout).
-                                Runs outside any transaction, only when
-                                the diff contains CONCURRENTLY index DDL
-                                ($PISTA_CONCURRENTLY_PRE_SQL).
+                                   SQL to execute before CONCURRENTLY
+                                   index DDL (e.g. SET lock_timeout).
+                                   Runs outside any transaction, only when
+                                   the diff contains CONCURRENTLY index DDL
+                                   ($PISTA_CONCURRENTLY_PRE_SQL).
       --concurrently-pre-sql-file=STRING
-                                Path to a SQL file to execute
-                                before CONCURRENTLY index DDL
-                                ($PISTA_CONCURRENTLY_PRE_SQL_FILE).
-      --with-tx                 Execute pre-SQL and schema changes in a
-                                transaction ($PISTA_WITH_TX).
-      --try-tx                  Execute pre-SQL and schema changes in a
-                                transaction when possible. A diff containing
-                                CONCURRENTLY index DDL runs without a
-                                transaction instead of failing ($PISTA_TRY_TX).
+                                   Path to a SQL file to execute
+                                   before CONCURRENTLY index DDL
+                                   ($PISTA_CONCURRENTLY_PRE_SQL_FILE).
+      --with-tx                    Execute pre-SQL and schema changes in a
+                                   transaction ($PISTA_WITH_TX).
+      --try-tx                     Execute pre-SQL and schema changes in
+                                   a transaction when possible. A diff
+                                   containing CONCURRENTLY index DDL runs
+                                   without a transaction instead of failing
+                                   ($PISTA_TRY_TX).
       --disable-index-concurrently
-                                Ignore CONCURRENTLY opt-ins (directive and
-                                inline) and emit plain CREATE/DROP INDEX
-                                ($PISTA_DISABLE_INDEX_CONCURRENTLY).
+                                   Ignore CONCURRENTLY opt-ins (directive and
+                                   inline) and emit plain CREATE/DROP INDEX
+                                   ($PISTA_DISABLE_INDEX_CONCURRENTLY).
       --force-index-concurrently
-                                Force CONCURRENTLY on every CREATE/DROP INDEX,
-                                including pure drops. Cannot be combined with
-                                --with-tx ($PISTA_FORCE_INDEX_CONCURRENTLY).
-      --bulk-alter              Combine consecutive ALTER TABLE actions on the
-                                same table into a single statement. FK changes,
-                                RENAME, VALIDATE CONSTRAINT, RLS toggles, and
-                                skipped DROPs stay separate ($PISTA_BULK_ALTER).
-      --assume-validated        Treat every table constraint, domain constraint,
-                                and foreign key as validated: ignore NOT
-                                VALID and never emit VALIDATE CONSTRAINT
-                                ($PISTA_ASSUME_VALIDATED).
+                                   Force CONCURRENTLY on every CREATE/DROP
+                                   INDEX, including pure drops.
+                                   Cannot be combined with --with-tx
+                                   ($PISTA_FORCE_INDEX_CONCURRENTLY).
+      --bulk-alter                 Combine consecutive ALTER TABLE actions on
+                                   the same table into a single statement.
+                                   FK changes, RENAME, VALIDATE CONSTRAINT,
+                                   RLS toggles, and skipped DROPs stay separate
+                                   ($PISTA_BULK_ALTER).
+      --assume-validated           Treat every table constraint, domain
+                                   constraint, and foreign key as validated:
+                                   ignore NOT VALID and never emit VALIDATE
+                                   CONSTRAINT ($PISTA_ASSUME_VALIDATED).
+      --exclusive                  Make apply runs on the same database
+                                   mutually exclusive: fail immediately
+                                   when another exclusive apply is running
+                                   ($PISTA_EXCLUSIVE).
+      --exclusive-wait=DURATION    Like --exclusive, but wait up to
+                                   the given duration (0 waits without
+                                   limit) for the other apply to finish
+                                   ($PISTA_EXCLUSIVE_WAIT).
 ```
 
 </details>
@@ -433,6 +447,13 @@ Use `--assume-validated` to treat every table constraint, domain constraint, and
 ```bash
 pista plan --assume-validated schema.sql
 pista apply --assume-validated schema.sql
+```
+
+Use `--exclusive` to make apply runs on the same database mutually exclusive. When another exclusive apply is running, the command fails immediately, before anything is read or applied. Use `--exclusive-wait` instead to wait for the other apply to finish, up to the given duration (`0` waits without limit). The two flags conflict. Also available as `$PISTA_EXCLUSIVE` / `$PISTA_EXCLUSIVE_WAIT`. See [Preventing concurrent applies](../guides/exclusive-apply.md).
+
+```bash
+pista apply schema.sql --exclusive
+pista apply schema.sql --exclusive-wait=5m
 ```
 
 By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type. `routine` covers functions and procedures, and also gates the drop half of a recreate.

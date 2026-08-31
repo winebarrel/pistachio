@@ -5,6 +5,8 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
+const ExclusiveLockClassID = exclusiveLockClassID
+
 var (
 	ResolvePreSQL             = resolvePreSQL
 	ResolveConcurrentlyPreSQL = resolveConcurrentlyPreSQL
