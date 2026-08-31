@@ -39,8 +39,9 @@ func releaseExclusive(ctx context.Context, conn *pgx.Conn) error {
 	return err
 }
 
-func durationPtr(d time.Duration) *time.Duration {
-	return &d
+func durationPtr(d time.Duration) *pistachio.UnsignedDuration {
+	w := pistachio.UnsignedDuration(d)
+	return &w
 }
 
 func TestApplyExclusive(t *testing.T) {
@@ -123,7 +124,7 @@ func TestApplyExclusiveWaitTimeout(t *testing.T) {
 	var buf bytes.Buffer
 	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
-		ExclusiveWait: &wait,
+		ExclusiveWait: durationPtr(wait),
 	}, &buf)
 	require.ErrorContains(t, err, "did not finish within")
 	assert.GreaterOrEqual(t, time.Since(start), wait)
@@ -279,20 +280,12 @@ func TestApplyExclusiveWaitCanceled(t *testing.T) {
 	assert.NotContains(t, err.Error(), "did not finish within")
 }
 
-func TestApplyExclusiveWaitNegative(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-	testutil.SetupDB(t, ctx, conn, "")
-
-	client := pistachio.NewClient(&pistachio.Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	_, err := client.Apply(ctx, &pistachio.ApplyOptions{
-		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
-		ExclusiveWait: durationPtr(-time.Second),
-	}, io.Discard)
-	require.ErrorContains(t, err, "negative")
+func TestUnsignedDuration(t *testing.T) {
+	var d pistachio.UnsignedDuration
+	require.NoError(t, d.UnmarshalText([]byte("5m")))
+	assert.Equal(t, pistachio.UnsignedDuration(5*time.Minute), d)
+	require.NoError(t, d.UnmarshalText([]byte("0")))
+	assert.Equal(t, pistachio.UnsignedDuration(0), d)
+	require.ErrorContains(t, d.UnmarshalText([]byte("-3s")), "negative")
+	require.Error(t, d.UnmarshalText([]byte("bad")))
 }

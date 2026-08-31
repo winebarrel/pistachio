@@ -28,7 +28,8 @@ type ApplyOptions struct {
 	// ExclusiveWait enables the same mutual exclusion as Exclusive and waits
 	// for the other apply instead of failing. A pointer because 0 is a valid
 	// value (wait without limit) and must be distinguishable from "not set".
-	ExclusiveWait *time.Duration `xor:"exclusive" env:"PISTA_EXCLUSIVE_WAIT" placeholder:"DURATION" help:"Like --exclusive, but wait up to the given duration (0 waits without limit) for the other apply to finish."`
+	// The type rejects a negative value at parse time.
+	ExclusiveWait *UnsignedDuration `xor:"exclusive" env:"PISTA_EXCLUSIVE_WAIT" placeholder:"DURATION" help:"Like --exclusive, but wait up to the given duration (0 waits without limit) for the other apply to finish."`
 }
 
 // ApplyResult holds the result of an Apply operation.
