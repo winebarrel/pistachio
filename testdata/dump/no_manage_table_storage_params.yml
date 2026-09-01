@@ -1,6 +1,5 @@
-# The table's parameters, a toast.* one, and an index's, all of which pg_dump
-# writes and none of which used to survive a dump.
-manage_storage_param: true
+# Without --manage-storage-param dump writes no WITH clause for a table. An
+# index's parameters are part of its definition and are written either way.
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,
@@ -14,6 +13,5 @@ dump: |
       id integer NOT NULL,
       name text,
       CONSTRAINT users_pkey PRIMARY KEY (id)
-  )
-  WITH (autovacuum_enabled='off', fillfactor='70', toast.autovacuum_enabled='off');
+  );
   CREATE INDEX users_name_idx ON public.users USING btree (name) WITH (fillfactor='80');

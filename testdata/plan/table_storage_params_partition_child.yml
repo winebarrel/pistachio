@@ -1,6 +1,7 @@
 # A partition holds its own storage parameters: PostgreSQL does not copy the
 # parent's as it creates one, so the child is diffed on its own. The parent is
 # partitioned and holds none, since it has no storage to apply them to.
+manage_storage_param: true
 init: |
   CREATE TABLE public.events (
       id integer NOT NULL,

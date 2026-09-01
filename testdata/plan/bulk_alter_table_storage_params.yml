@@ -5,6 +5,7 @@
 bulk_alter: true
 drop_policy:
   allow_drop: [column]
+manage_storage_param: true
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,

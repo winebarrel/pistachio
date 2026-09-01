@@ -1,5 +1,6 @@
 # A rename does not disturb the parameters, and a parameter that does change
 # is set under the new name, after the RENAME.
+manage_storage_param: true
 init: |
   CREATE TABLE public.old_users (
       id integer NOT NULL,

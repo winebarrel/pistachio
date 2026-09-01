@@ -1,6 +1,7 @@
 # The catalog reports a numeric value quoted and the file writes it bare, and
 # the order a file lists the parameters in is not the order the catalog keeps
 # them. Neither is a change.
+manage_storage_param: true
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,

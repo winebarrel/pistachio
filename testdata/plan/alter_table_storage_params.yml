@@ -1,5 +1,6 @@
 # A parameter arriving and one changing value go out in one ALTER. Neither
 # rewrites the table; both decide how the table is filled and vacuumed later.
+manage_storage_param: true
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,

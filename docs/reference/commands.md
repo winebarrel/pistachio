@@ -92,6 +92,10 @@ Flags:
       --manage-routine          Manage functions and procedures. Off by default;
                                 --allow-drop routine still gates dropping them
                                 ($PISTA_MANAGE_ROUTINE).
+      --manage-storage-param    Manage a table's storage parameters, the WITH
+                                (...) clause. Off by default; without it the
+                                clause is ignored on both sides and dump does
+                                not write it ($PISTA_MANAGE_STORAGE_PARAM).
       --skip-partition-child    Manage a partitioned table without its
                                 partitions. For a schema whose partitions
                                 another tool creates. An INHERITS child is
@@ -187,6 +191,10 @@ Flags:
       --manage-routine             Manage functions and procedures. Off by
                                    default; --allow-drop routine still gates
                                    dropping them ($PISTA_MANAGE_ROUTINE).
+      --manage-storage-param       Manage a table's storage parameters, the WITH
+                                   (...) clause. Off by default; without it the
+                                   clause is ignored on both sides and dump does
+                                   not write it ($PISTA_MANAGE_STORAGE_PARAM).
       --skip-partition-child       Manage a partitioned table without its
                                    partitions. For a schema whose partitions
                                    another tool creates. An INHERITS child is
@@ -292,6 +300,10 @@ Flags:
       --manage-routine          Manage functions and procedures. Off by default;
                                 --allow-drop routine still gates dropping them
                                 ($PISTA_MANAGE_ROUTINE).
+      --manage-storage-param    Manage a table's storage parameters, the WITH
+                                (...) clause. Off by default; without it the
+                                clause is ignored on both sides and dump does
+                                not write it ($PISTA_MANAGE_STORAGE_PARAM).
       --skip-partition-child    Manage a partitioned table without its
                                 partitions. For a schema whose partitions
                                 another tool creates. An INHERITS child is

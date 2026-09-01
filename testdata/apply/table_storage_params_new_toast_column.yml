@@ -2,6 +2,7 @@
 # discards a toast. parameter set on it. The ADD COLUMN in the same plan
 # creates the relation, so the parameter has somewhere to land as long as it
 # goes after the column statements. The re-plan is what checks it landed.
+manage_storage_param: true
 init: |
   CREATE TABLE public.docs (
       id integer NOT NULL,

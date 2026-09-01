@@ -583,7 +583,8 @@ one that matters, since the view is a security boundary without it.
 `ALTER VIEW ... SET (...)` / `RESET (...)` and the `ALTER MATERIALIZED VIEW`
 forms are what a change goes out as. The table work put the reading and the
 rendering in `SortedStorageParams` and `Table.StorageParamsSQL`, which the view
-model can use as they are.
+model can use as they are, and `--manage-storage-param` is the gate they would
+sit behind.
 
 `dump` writes no clause and the parser reads none, so a dump fed back plans
 clean and only a hand-written view reaches this.

@@ -1,0 +1,16 @@
+# The WITH clause of a new table is dropped along with the rest: the CREATE
+# comes out without it, so a schema file that carries parameters plans the
+# same statement whether or not it does.
+init: ""
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70, toast.autovacuum_enabled = off);
+plan: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );

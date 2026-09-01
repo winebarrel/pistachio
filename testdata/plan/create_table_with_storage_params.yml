@@ -1,5 +1,6 @@
 # A new table carries its storage parameters in the CREATE, so no ALTER
 # follows it.
+manage_storage_param: true
 init: ""
 desired: |
   CREATE TABLE public.users (

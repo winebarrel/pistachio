@@ -31,6 +31,7 @@ type dumpTestCase struct {
 	Enable             []string `yaml:"enable,omitempty"`
 	Disable            []string `yaml:"disable,omitempty"`
 	ManageRoutine      bool     `yaml:"manage_routine,omitempty"`
+	ManageStorageParam bool     `yaml:"manage_storage_param,omitempty"`
 	SkipPartitionChild bool     `yaml:"skip_partition_child,omitempty"`
 }
 
@@ -876,6 +877,7 @@ func TestDump(t *testing.T) {
 					Enable:             tc.Enable,
 					Disable:            tc.Disable,
 					ManageRoutine:      tc.ManageRoutine,
+					ManageStorageParam: tc.ManageStorageParam,
 					SkipPartitionChild: tc.SkipPartitionChild,
 				},
 			})

@@ -147,6 +147,10 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		count.Routines = &n
 	}
 
+	if !options.ManageStorageParam {
+		clearStorageParams(filteredTables, desiredTables)
+	}
+
 	switch {
 	case options.DisableIndexConcurrently:
 		clearConcurrentlyDirectives(desiredTables, desiredViews)
@@ -291,6 +295,19 @@ func clearConcurrentlyDirectives(
 	for _, v := range views.CollectValues() {
 		for _, idx := range v.Indexes.CollectValues() {
 			idx.Concurrently = false
+		}
+	}
+}
+
+// clearStorageParams drops the storage parameters off every table in the
+// given maps, used when --manage-storage-param was not passed. Clearing both
+// sides is what leaves them unmanaged: no SET or RESET is planned, a WITH
+// clause a desired schema writes is not carried into the CREATE TABLE, and
+// dump does not write one.
+func clearStorageParams(tableMaps ...*orderedmap.Map[string, *model.Table]) {
+	for _, tables := range tableMaps {
+		for _, t := range tables.CollectValues() {
+			t.StorageParams = nil
 		}
 	}
 }

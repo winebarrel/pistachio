@@ -1,6 +1,7 @@
 # Dropping a parameter from the desired schema asks for the default back.
 # RESET is the only way to say that: the catalog holds no entry for a
 # parameter that was never set, so there is no default value to name.
+manage_storage_param: true
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,

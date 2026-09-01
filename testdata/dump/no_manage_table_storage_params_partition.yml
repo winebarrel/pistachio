@@ -1,7 +1,5 @@
-# A partition carries its own parameters, and the partitioned parent holds
-# none: PostgreSQL rejects every storage parameter on a relation with no
-# storage of its own.
-manage_storage_param: true
+# A partition renders through its own branch of the table SQL, so the clause
+# has to be left off there as well.
 init: |
   CREATE TABLE public.events (
       id integer NOT NULL,
@@ -18,5 +16,4 @@ dump: |
   PARTITION BY RANGE (at);
 
   -- public.events_2025
-  CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')
-  WITH (fillfactor='60');
+  CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');

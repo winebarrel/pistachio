@@ -1,6 +1,7 @@
 # A toast.* parameter sits on the TOAST relation, not on the table, and is
 # what pg_dump writes into the same WITH clause. It is diffed alongside the
 # table's own parameters.
+manage_storage_param: true
 init: |
   CREATE TABLE public.docs (
       id integer NOT NULL,

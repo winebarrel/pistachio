@@ -16,10 +16,11 @@ check. It needs a running PostgreSQL instance (`PGHOST=localhost`,
 `PGUSER=postgres`, exported by the Makefile), plus `psql`, `curl`, and network
 access to the upstream hosts. The same target runs in CI as the `samples` job.
 
-The runner exports `PISTA_MANAGE_ROUTINE=1`, so functions and procedures are
-part of the round trip even though they are opt-in on the command line. It is an
-environment variable rather than a per-sample flag because it has to reach both
-the dump and the plan, and the manifest's flags column reaches only the plan.
+The runner exports `PISTA_MANAGE_ROUTINE=1` and `PISTA_MANAGE_STORAGE_PARAM=1`,
+so functions, procedures and a table's storage parameters are part of the round
+trip even though they are opt-in on the command line. They are environment
+variables rather than per-sample flags because they have to reach both the dump
+and the plan, and the manifest's flags column reaches only the plan.
 
 The server also needs pgvector for the discourse sample's `halfvec` columns and
 PostGIS for the osm and inaturalist samples' `geometry` columns. The official
