@@ -20,6 +20,25 @@ func TestDiffViews_newView(t *testing.T) {
 	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW public.v1")
 }
 
+func TestDiffViews_newView_withTrigger(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	desired := orderedmap.New[string, *model.View]()
+	triggers := orderedmap.New[string, *model.Trigger]()
+	triggers.Set("v1_ins", &model.Trigger{
+		Schema:     "public",
+		Table:      "v1",
+		Name:       "v1_ins",
+		Definition: "CREATE TRIGGER v1_ins INSTEAD OF INSERT ON public.v1 FOR EACH ROW EXECUTE FUNCTION stamp()",
+	})
+	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Triggers: triggers})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.CreateStmts, 2)
+	assert.Contains(t, result.CreateStmts[0], "CREATE OR REPLACE VIEW public.v1")
+	assert.Equal(t, "CREATE TRIGGER v1_ins INSTEAD OF INSERT ON public.v1 FOR EACH ROW EXECUTE FUNCTION stamp();", result.CreateStmts[1])
+}
+
 func TestDiffViews_dropView(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
