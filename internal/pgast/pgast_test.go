@@ -240,3 +240,21 @@ func TestParseExpr_TargetIsMutable(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, sql, "quantity * 2")
 }
+
+func TestParseExpr_NoTarget(t *testing.T) {
+	// SELECT FROM t parses with an empty target list, so the trailing error
+	// is the one path that reports it.
+	_, _, err := pgast.ParseExpr("FROM t")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected parse result for expression")
+}
+
+func TestDeparseConstraintDef_NotAConstraintResult(t *testing.T) {
+	// A ParseResult that did not come from ParseConstraintDefStrict deparses
+	// without the wrapper prefix and is rejected.
+	result, err := pg_query.Parse("SELECT 1")
+	require.NoError(t, err)
+	_, err = pgast.DeparseConstraintDef(result)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected deparsed form")
+}
