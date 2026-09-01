@@ -3588,3 +3588,35 @@ func TestEqualIndexDef_storageParamAdded(t *testing.T) {
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=80)",
 	))
 }
+
+func TestDiffTables_newTable_withStorageRLSAndTrigger(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	tbl := newTable("public", "docs")
+	tbl.Columns.Set("body", &model.Column{Name: "body", TypeName: "text", NotNull: true, StorageType: "external", TypeStorage: "extended", Compression: "pglz"})
+	tbl.RowSecurity = true
+	using := "true"
+	tbl.Policies.Set("p", &model.Policy{
+		Name: "p", Schema: "public", Table: "docs",
+		Permissive: true, Command: 'r', Using: &using,
+	})
+	tbl.Triggers.Set("stamp", &model.Trigger{
+		Schema:     "public",
+		Table:      "docs",
+		Name:       "stamp",
+		Definition: "CREATE TRIGGER stamp BEFORE INSERT ON public.docs FOR EACH ROW EXECUTE FUNCTION stamp()",
+	})
+	desired.Set("public.docs", tbl)
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.Stmts, 6)
+	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.docs")
+	assert.Equal(t, "ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;", result.Stmts[1])
+	assert.Equal(t, "ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;", result.Stmts[2])
+	assert.Equal(t, "ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;", result.Stmts[3])
+	assert.Equal(t, "CREATE POLICY p ON public.docs FOR SELECT USING (true);", result.Stmts[4])
+	assert.Equal(t, "CREATE TRIGGER stamp BEFORE INSERT ON public.docs FOR EACH ROW EXECUTE FUNCTION stamp();", result.Stmts[5])
+	assert.False(t, result.HasConcurrently)
+}

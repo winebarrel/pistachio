@@ -3163,3 +3163,105 @@ func TestParseCommentStmt_InheritsChildColumnNotSynthesized(t *testing.T) {
 	// entry would look like a new column, so no entry is created.
 	assert.Equal(t, 0, child.Columns.Len())
 }
+
+func TestReadSQLFile_Stdin_ReadError(t *testing.T) {
+	// Reading from the write end of a pipe fails, so ReadSQLFile reports it.
+	_, w, err := os.Pipe()
+	require.NoError(t, err)
+	defer w.Close()
+
+	origStdin := os.Stdin
+	os.Stdin = w
+	defer func() {
+		os.Stdin = origStdin
+	}()
+
+	_, err = parser.ReadSQLFile("-")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read SQL from stdin")
+}
+
+func TestParseSQL_RenameDirective_InlineForeignKey(t *testing.T) {
+	sql := `CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.orders (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    CONSTRAINT orders_pkey PRIMARY KEY (id),
+    -- pista:renamed-from old_fk
+    CONSTRAINT new_fk FOREIGN KEY (user_id) REFERENCES public.users(id)
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.orders")
+	require.True(t, ok)
+	fk, ok := tbl.ForeignKeys.GetOk("new_fk")
+	require.True(t, ok)
+	require.NotNil(t, fk.RenameFrom)
+	assert.Equal(t, "old_fk", *fk.RenameFrom)
+}
+
+func TestParseSQL_RenameDirective_CompositeType(t *testing.T) {
+	sql := `-- pista:renamed-from public.old_addr
+CREATE TYPE public.addr AS (
+    street text,
+    -- pista:renamed-from town
+    city text
+);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	ct, ok := result.CompositeTypes.GetOk("public.addr")
+	require.True(t, ok)
+	require.NotNil(t, ct.RenameFrom)
+	assert.Equal(t, "public.old_addr", *ct.RenameFrom)
+	require.Len(t, ct.Attributes, 2)
+	assert.Nil(t, ct.Attributes[0].RenameFrom)
+	require.NotNil(t, ct.Attributes[1].RenameFrom)
+	assert.Equal(t, "town", *ct.Attributes[1].RenameFrom)
+}
+
+func TestParseSQL_DuplicateCompositeType(t *testing.T) {
+	sql := `CREATE TYPE public.addr AS (street text);
+CREATE TYPE public.addr AS (street text);`
+
+	_, err := parseSQLWithPublicSchema(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate composite type")
+}
+
+func TestParseSQL_RenameDirective_Sequence(t *testing.T) {
+	sql := `-- pista:renamed-from old_seq
+CREATE SEQUENCE public.new_seq;`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	seq, ok := result.Sequences.GetOk("public.new_seq")
+	require.True(t, ok)
+	require.NotNil(t, seq.RenameFrom)
+	assert.Equal(t, "public.old_seq", *seq.RenameFrom)
+}
+
+func TestParseSQL_DuplicateSequence(t *testing.T) {
+	sql := `CREATE SEQUENCE public.s1;
+CREATE SEQUENCE public.s1;`
+
+	_, err := parseSQLWithPublicSchema(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate sequence")
+}
+
+func TestParseSQL_SequenceValueOverflow(t *testing.T) {
+	// A literal past int64 arrives as a Float node and fails ParseInt.
+	sql := `CREATE SEQUENCE public.s1 MAXVALUE 99999999999999999999;`
+
+	_, err := parseSQLWithPublicSchema(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `invalid value "99999999999999999999" for sequence option maxvalue`)
+}

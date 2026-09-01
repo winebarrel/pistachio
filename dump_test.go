@@ -939,3 +939,112 @@ CREATE TABLE public.users (id integer);`)
 	assert.Len(t, files, 1)
 	assert.Contains(t, files, "public.users.sql")
 }
+
+func TestDumpResult_SortByDeps_OmitSchemaCollisionFallsBackInString(t *testing.T) {
+	// Client.Dump rejects --omit-schema with several schemas, but String() has
+	// no error channel. In a directly built DumpResult, stripping the schema
+	// off two same-named objects collapses them onto one key, the adjusted
+	// collection comes up short against the dependency order, and String()
+	// degrades to the name order instead of panicking. One sub-case per
+	// collection so every appendDumpItems call sees its own short map.
+	newTable := func(schema string) *model.Table {
+		tbl := &model.Table{
+			Schema:      schema,
+			Name:        "x",
+			Columns:     orderedmap.New[string, *model.Column](),
+			Constraints: orderedmap.New[string, *model.Constraint](),
+			ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
+			Indexes:     orderedmap.New[string, *model.Index](),
+		}
+		tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+		return tbl
+	}
+
+	tests := []struct {
+		name   string
+		result *pistachio.DumpResult
+		want   string
+	}{
+		{
+			name: "enums",
+			result: func() *pistachio.DumpResult {
+				m := orderedmap.New[string, *model.Enum]()
+				m.Set("a.x", &model.Enum{Schema: "a", Name: "x", Values: []string{"v"}})
+				m.Set("b.x", &model.Enum{Schema: "b", Name: "x", Values: []string{"v"}})
+				return &pistachio.DumpResult{Enums: m}
+			}(),
+			want: "CREATE TYPE x AS ENUM",
+		},
+		{
+			name: "domains",
+			result: func() *pistachio.DumpResult {
+				m := orderedmap.New[string, *model.Domain]()
+				m.Set("a.x", &model.Domain{Schema: "a", Name: "x", BaseType: "text"})
+				m.Set("b.x", &model.Domain{Schema: "b", Name: "x", BaseType: "text"})
+				return &pistachio.DumpResult{Domains: m}
+			}(),
+			want: "CREATE DOMAIN x AS text",
+		},
+		{
+			name: "composite types",
+			result: func() *pistachio.DumpResult {
+				m := orderedmap.New[string, *model.CompositeType]()
+				m.Set("a.x", &model.CompositeType{Schema: "a", Name: "x", Attributes: []*model.CompositeAttribute{{Name: "n", TypeName: "text"}}})
+				m.Set("b.x", &model.CompositeType{Schema: "b", Name: "x", Attributes: []*model.CompositeAttribute{{Name: "n", TypeName: "text"}}})
+				return &pistachio.DumpResult{CompositeTypes: m}
+			}(),
+			want: "CREATE TYPE x AS (",
+		},
+		{
+			name: "sequences",
+			result: func() *pistachio.DumpResult {
+				m := orderedmap.New[string, *model.Sequence]()
+				m.Set("a.x", &model.Sequence{Schema: "a", Name: "x"})
+				m.Set("b.x", &model.Sequence{Schema: "b", Name: "x"})
+				return &pistachio.DumpResult{Sequences: m}
+			}(),
+			want: "CREATE SEQUENCE x",
+		},
+		{
+			name: "routines",
+			result: func() *pistachio.DumpResult {
+				m := orderedmap.New[string, *model.Routine]()
+				m.Set("a.x()", &model.Routine{Schema: "a", Name: "x", Language: "sql", ReturnType: "integer", Body: " SELECT 1 "})
+				m.Set("b.x()", &model.Routine{Schema: "b", Name: "x", Language: "sql", ReturnType: "integer", Body: " SELECT 1 "})
+				return &pistachio.DumpResult{Routines: m}
+			}(),
+			want: "CREATE OR REPLACE FUNCTION x()",
+		},
+		{
+			name: "tables",
+			result: func() *pistachio.DumpResult {
+				m := orderedmap.New[string, *model.Table]()
+				m.Set("a.x", newTable("a"))
+				m.Set("b.x", newTable("b"))
+				return &pistachio.DumpResult{Tables: m}
+			}(),
+			want: "CREATE TABLE x",
+		},
+		{
+			name: "views",
+			result: func() *pistachio.DumpResult {
+				m := orderedmap.New[string, *model.View]()
+				m.Set("a.x", &model.View{Schema: "a", Name: "x", Definition: "SELECT 1"})
+				m.Set("b.x", &model.View{Schema: "b", Name: "x", Definition: "SELECT 1"})
+				return &pistachio.DumpResult{Views: m}
+			}(),
+			want: "CREATE OR REPLACE VIEW x",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.result.SortByDeps = true
+			tt.result.OmitSchema = true
+			s := tt.result.String()
+			assert.Contains(t, s, tt.want)
+			// The two originals collapsed onto one unqualified object.
+			assert.Equal(t, 1, strings.Count(s, tt.want))
+		})
+	}
+}

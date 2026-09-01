@@ -317,18 +317,14 @@ func parseRoutineConfig(arg *pg_query.Node) (*model.RoutineConfig, error) {
 	return cfg, nil
 }
 
+// The generated getters take a nil receiver, so a non-String (non-Boolean)
+// argument falls through to the proto zero value without a guard here.
 func defElemString(arg *pg_query.Node) string {
-	if s := arg.GetString_(); s != nil {
-		return s.GetSval()
-	}
-	return ""
+	return arg.GetString_().GetSval()
 }
 
 func defElemBool(arg *pg_query.Node) bool {
-	if b := arg.GetBoolean(); b != nil {
-		return b.GetBoolval()
-	}
-	return false
+	return arg.GetBoolean().GetBoolval()
 }
 
 func defElemFloat(arg *pg_query.Node) (float64, error) {

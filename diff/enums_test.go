@@ -593,3 +593,23 @@ func TestDiffEnums_RenameSourceNotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source")
 }
+
+func TestDiffEnums_AddValuesToEmptyEnum(t *testing.T) {
+	current := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+	})
+	desired := newEnumMap(&model.Enum{
+		Schema: "public",
+		Name:   "status",
+		Values: []string{"active", "inactive"},
+	})
+	result, err := diff.DiffEnums(current, desired, diff.AllowAllDrops{})
+	require.NoError(t, err)
+	// With no existing value to anchor on, the first ADD VALUE carries
+	// neither AFTER nor BEFORE; the second anchors on the first.
+	assert.Equal(t, []string{
+		"ALTER TYPE public.status ADD VALUE 'active';",
+		"ALTER TYPE public.status ADD VALUE 'inactive' AFTER 'active';",
+	}, result.Stmts)
+}
