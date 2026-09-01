@@ -139,6 +139,8 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | danbooru | danbooru | [danbooru/danbooru](https://github.com/danbooru/danbooru) |
 | openolat | openolat | [OpenOLAT/OpenOLAT](https://github.com/OpenOLAT/OpenOLAT) |
 | inaturalist | inaturalist | [inaturalist/inaturalist](https://github.com/inaturalist/inaturalist) |
+| joomla | joomla | [joomla/joomla-cms](https://github.com/joomla/joomla-cms) |
+| harbor | harbor | [goharbor/harbor](https://github.com/goharbor/harbor) |
 
 ## Coverage
 
@@ -147,7 +149,8 @@ for icingadb, rt, znuny, gitlab, hive, ranger, ambari, ovirt, and chado, the
 last counted 2026-08-24; the Sequences column was counted on 15.18 throughout,
 Triggers, added 2026-08-24, and Routines, added 2026-08-25, on 15.18 for every
 sample; wso2is, nightingale, and danbooru were counted 2026-08-29 on 15.17;
-openolat and inaturalist 2026-08-30 on 16.13). "Constraints" excludes foreign
+openolat and inaturalist 2026-08-30 on 16.13; joomla and harbor 2026-09-01 on
+16.13). "Constraints" excludes foreign
 keys; "Types" counts enums and domains; "Sequences" counts standalone sequences
 only, since pistachio manages the sequence behind a serial or identity column as
 an attribute of that column rather than as an object of its own. Counting those
@@ -215,9 +218,11 @@ schema and pistachio does not read them either.
 | danbooru | 66 | 641 | 456 | 93 | 65 | 2 | 0 | 0 | 0 | 3 |
 | openolat | 382 | 4,378 | 1,239 | 632 | 423 | 8 | 0 | 0 | 0 | 0 |
 | inaturalist | 186 | 1,673 | 580 | 1 | 159 | 0 | 0 | 0 | 0 | 4 |
-| **Total** | **5,655** | **47,977** | **17,544** | **7,088** | **9,892** | **1,960** | **71** | **421** | **555** | **789** |
+| joomla | 76 | 830 | 287 | 0 | 84 | 0 | 0 | 0 | 0 | 1 |
+| harbor | 48 | 390 | 119 | 13 | 90 | 0 | 0 | 0 | 10 | 1 |
+| **Total** | **5,779** | **49,197** | **17,950** | **7,101** | **10,066** | **1,960** | **71** | **421** | **565** | **791** |
 
-The 52 dumps come to about 161,000 lines of SQL. chado is 43,700 of them, the
+The 54 dumps come to about 163,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about 40 percent
 of the constraints, more than a third of the indexes, and roughly a third of the
 columns and foreign keys, over a quarter of the tables; musicbrainz, openolat,
@@ -280,15 +285,16 @@ partitions is attached across one; and triggers
 state; kea's 81 outnumber its 64 tables; ledgersmb's 11 and dotcms's 10 come
 next).
 
-Routines are concentrated the same way. Nineteen of the 52 samples declare one
-at all, and gitlab's 337, kea's and musicbrainz's 130 each, and chado's 94 are
-691 of the 789. Two thirds of them, 523, return `trigger`, though not every one
-of those has a trigger to call it: musicbrainz's 89 do not, since its loader
-concatenates a file list that leaves triggers out. 712 are written in plpgsql
-and 77 in sql. sourcegraph declares the only procedure any sample has, and
-inaturalist the only aggregate, which `--manage-routine` does not read and so is
-in neither count. Only chado and kea overload a name, 11 of them and 3, though
-danbooru's three, all sql, include a `lower(text[])` that shadows a built-in.
+Routines are concentrated the same way. Twenty-one of the 54 samples declare
+one at all, and gitlab's 337, kea's and musicbrainz's 130 each, and chado's 94
+are 691 of the 791. Two thirds of them, 524, return `trigger`, though not
+every one of those has a trigger to call it: musicbrainz's 89 do not, since its
+loader concatenates a file list that leaves triggers out. 714 are written in
+plpgsql and 77 in sql. sourcegraph declares the only procedure any sample has,
+and inaturalist the only aggregate, which `--manage-routine` does not read and
+so is in neither count. Only chado and kea overload a name, 11 of them and 3,
+though danbooru's three, all sql, include a `lower(text[])` that shadows a
+built-in.
 Only sourcegraph, ledgersmb, and gitlab comment a routine, seven between them.
 
 ## Load-time adjustments
@@ -345,12 +351,27 @@ strip only what is irrelevant to a schema round trip:
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
+- **harbor**: the schema ships as one file per release, each a delta meant to
+  be replayed by golang-migrate, which tracks what it has applied in a
+  `schema_migrations` table of its own. One delta `ALTER TABLE`s that table
+  directly, so a stand-in `schema_migrations` is created before the deltas run
+  and dropped once they have; it is golang-migrate's bookkeeping, not part of
+  Harbor's schema. A few deltas also omit their file's closing `;`, which
+  merges the next file's opening statement into it once concatenated, so
+  every file gets one appended regardless of whether it already ends in one.
 - **hive**: the dump belongs in a schema of its own like the group below, but
   it is `pg_dump` output that sets `search_path` to `public` itself, which
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
   the `hive` schema.
 - **imdb**: the schema and its foreign key indexes ship as two files, so
   `schema.sql` and `fkindexes.sql` are concatenated.
+- **joomla**: the schema ships as three files that must load in order --
+  `base.sql`, `extensions.sql`, and `supports.sql`, the last of which
+  references content types `extensions.sql` creates -- so they are
+  concatenated. None of the three create a schema or set `search_path`
+  themselves, and every table name carries the literal `#__` prefix Joomla
+  substitutes at install time; quoted, it is just an ordinary identifier and
+  needs no rewriting.
 - **kea**, **dolphinscheduler**, **wso2apim**, **wso2is**: each dump drops what
   it is about to create with `IF EXISTS`, so `client_min_messages` is raised to
   `warning` for the load. wso2is is also where five index names run past the 63

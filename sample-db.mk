@@ -69,6 +69,8 @@ nightingale|sample-db-url-schema|URL=https://raw.githubusercontent.com/ccfos/nig
 danbooru|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/danbooru/danbooru/f8de3ba286db1f9a1f3efbbf495bcbc1001e7b9b/db/structure.sql SCHEMA=danbooru|danbooru
 openolat|sample-db-url-schema|URL=https://raw.githubusercontent.com/OpenOLAT/OpenOLAT/8d07a02fe4dafb8c82179f3efa77e1cb985fdc7e/src/main/resources/database/postgresql/setupDatabase.sql SCHEMA=openolat|openolat
 inaturalist|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/inaturalist/inaturalist/e52c649d2f0e8e260c2dce6fcf6448d971100415/db/structure.sql SCHEMA=inaturalist|inaturalist
+joomla|sample-db-joomla||joomla
+harbor|sample-db-harbor||harbor
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -337,6 +339,59 @@ sample-db-pgdump-schema:
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
 	  | PGOPTIONS='-c search_path=$(SCHEMA),public' $(PSQL)
+
+# Joomla CMS (joomla/joomla-cms, GPL-2.0-or-later). The PostgreSQL installer
+# ships as three files that must load in that order -- base.sql (the core
+# tables), extensions.sql (the bundled extensions and plugins), and
+# supports.sql (the smart search tables, which reference extensions.sql's
+# content types) -- none of which create a schema or set search_path
+# themselves. Every table name carries the literal `#__` prefix Joomla
+# replaces at install time; left as `#__` and quoted, it is just an ordinary
+# identifier, so nothing needs rewriting.
+JOOMLA_SQL_FILES = base.sql extensions.sql supports.sql
+
+.PHONY: sample-db-joomla
+sample-db-joomla:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS joomla'
+	for f in $(JOOMLA_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/joomla/joomla-cms/b2648c39655a1dc9ceb2791cf9131acc4f98d22e/installation/sql/postgresql/$$f || exit 1; \
+	  echo; \
+	done | PGOPTIONS='-c search_path=joomla' $(PSQL)
+
+# Harbor (goharbor/harbor, Apache-2.0), the CNCF container registry. Its
+# schema ships as one file per release, each an incremental delta meant to be
+# replayed by golang-migrate, which tracks what it has already applied in a
+# schema_migrations table of its own. One delta ALTERs that table directly to
+# add a column a later delta drops again, so a stand-in schema_migrations
+# table is created before the deltas run and dropped once they have, since
+# golang-migrate's own bookkeeping is not part of Harbor's schema. A few
+# deltas also omit their file's closing semicolon, which merges the next
+# file's opening statement into it once concatenated, so every file gets one
+# appended regardless of whether it already ends in one.
+HARBOR_SQL_FILES = 0001_initial_schema.up.sql 0002_1.7.0_schema.up.sql \
+	0003_add_replication_op_uuid.up.sql 0004_1.8.0_schema.up.sql \
+	0005_1.8.2_schema.up.sql 0010_1.9.0_schema.up.sql 0011_1.9.1_schema.up.sql \
+	0012_1.9.4_schema.up.sql 0015_1.10.0_schema.up.sql 0030_2.0.0_schema.up.sql \
+	0031_2.0.3_schema.up.sql 0040_2.1.0_schema.up.sql 0041_2.1.4_schema.up.sql \
+	0050_2.2.0_schema.up.sql 0051_2.2.1_schema.up.sql 0052_2.2.2_schema.up.sql \
+	0053_2.2.3_schema.up.sql 0060_2.3.0_schema.up.sql 0061_2.3.4_schema.up.sql \
+	0070_2.4.0_schema.up.sql 0071_2.4.2_schema.up.sql 0080_2.5.0_schema.up.sql \
+	0081_2.5.2_schema.up.sql 0082_2.5.3_schema.up.sql 0090_2.6.0_schema.up.sql \
+	0091_2.6.2_schema.up.sql 0100_2.7.0_schema.up.sql 0110_2.8.0_schema.up.sql \
+	0111_2.8.1_schema.up.sql 0120_2.9.0_schema.up.sql 0130_2.10.0_schema.up.sql \
+	0140_2.11.0_schema.up.sql 0150_2.12.0_schema.up.sql 0160_2.13.0_schema.up.sql \
+	0170_2.14.0_schema.up.sql 0171_2.14.1_schema.up.sql 0180_2.15.0_schema.up.sql \
+	0181_2.15.3_schema.up.sql 0190_2.16.0_schema.up.sql
+
+.PHONY: sample-db-harbor
+sample-db-harbor:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS harbor'
+	$(PSQL) -c 'SET search_path = harbor; CREATE TABLE schema_migrations (version bigint NOT NULL PRIMARY KEY, dirty boolean NOT NULL DEFAULT false)'
+	for f in $(HARBOR_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/goharbor/harbor/fb4e2406747df0b01dec994bf593f49261f6a874/make/migrations/postgresql/$$f || exit 1; \
+	  echo ';'; \
+	done | PGOPTIONS='-c search_path=harbor -c client_min_messages=warning' $(PSQL)
+	$(PSQL) -c 'SET search_path = harbor; DROP TABLE schema_migrations'
 
 .PHONY: test-samples
 test-samples:
