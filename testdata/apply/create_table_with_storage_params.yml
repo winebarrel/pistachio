@@ -1,6 +1,7 @@
 # A new table carries the parameters in the CREATE, and the re-plan comes out
 # clean: what the parser read back out of the WITH clause has to match what
 # the catalog then reports.
+manage_storage_param: true
 init: ""
 desired: |
   CREATE TABLE public.docs (

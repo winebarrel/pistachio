@@ -1,0 +1,15 @@
+# Without --manage-storage-param the parameters are off both sides of the
+# diff: one the database carries and the desired schema drops is not reset,
+# one the desired schema writes and the database does not carry is not set,
+# and a value that differs is not altered.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70, autovacuum_enabled = off);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 90, toast.autovacuum_enabled = off);
+plan: ""

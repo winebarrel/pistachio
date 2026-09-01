@@ -11,6 +11,10 @@ import (
 // names. Neither rewrites the table. Both sides are keyed in name order, so
 // the statements come out the same on every run.
 //
+// The caller clears the parameters on both sides unless --manage-storage-param
+// asked for them, so an unmanaged run reaches here with two empty maps and
+// plans nothing.
+//
 // A partitioned table needs no special case, since PostgreSQL rejects every
 // parameter on a relation that holds no storage. A partition holds its own,
 // which it does not take from the parent, and is diffed like any other table.

@@ -1,6 +1,7 @@
 # --skip-partition-child drops the partitions from both sides, so a parameter
 # only a partition carries is neither set nor reset.
 skip_partition_child: true
+manage_storage_param: true
 init: |
   CREATE TABLE public.events (
       id integer NOT NULL,

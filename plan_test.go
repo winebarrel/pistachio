@@ -40,6 +40,7 @@ type planTestCase struct {
 	Enable                   []string        `yaml:"enable,omitempty"`
 	Disable                  []string        `yaml:"disable,omitempty"`
 	ManageRoutine            bool            `yaml:"manage_routine,omitempty"`
+	ManageStorageParam       bool            `yaml:"manage_storage_param,omitempty"`
 	SkipPartitionChild       bool            `yaml:"skip_partition_child,omitempty"`
 	PreSQL                   string          `yaml:"pre_sql,omitempty"`
 	// PreSQLFile holds SQL content; the runner writes it to a temp file and
@@ -391,6 +392,7 @@ func TestPlan(t *testing.T) {
 					Enable:             tc.Enable,
 					Disable:            tc.Disable,
 					ManageRoutine:      tc.ManageRoutine,
+					ManageStorageParam: tc.ManageStorageParam,
 					SkipPartitionChild: tc.SkipPartitionChild,
 				},
 				Files:                    []string{desiredFile},

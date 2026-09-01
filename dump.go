@@ -539,6 +539,10 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	filteredSequences := options.filterSequences(client.remapSequenceSchemas(sequences))
 	filteredRoutines := options.filterRoutines(client.remapRoutineSchemas(routines))
 
+	if !options.ManageStorageParam {
+		clearStorageParams(filteredTables)
+	}
+
 	// Validate the dependency order up front so a cycle is a hard error rather
 	// than a silent fall back to name order. String() renders in this order.
 	if options.SortByDeps {

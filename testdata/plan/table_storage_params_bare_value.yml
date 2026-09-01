@@ -1,6 +1,7 @@
 # A parameter written without a value asks for true, which is what PostgreSQL
 # stores for it, so naming it in the desired schema against a table that
 # already has it is not a change.
+manage_storage_param: true
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,

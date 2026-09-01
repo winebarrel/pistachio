@@ -32,6 +32,10 @@ export PGPORT="${PGPORT:-5415}"
 # else. Set as an environment variable so it reaches every pista call.
 export PISTA_MANAGE_ROUTINE=1
 
+# A table's storage parameters are opt-in as well, and pg_dump writes the WITH
+# clause, so the dump has to carry it for the two to compare equal.
+export PISTA_MANAGE_STORAGE_PARAM=1
+
 # Guarded because the script runs without -e: the checks below rely on a
 # failing command being a result rather than the end of the run. A build that
 # fails without stopping would leave an earlier binary in place and report on

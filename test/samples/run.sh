@@ -22,6 +22,10 @@ export PGPORT="${PGPORT:-5415}"
 # plan.
 export PISTA_MANAGE_ROUTINE=1
 
+# A table's storage parameters are opt-in as well, and the samples carry the
+# WITH clauses real schemas write, so the round trip has to hold up for them.
+export PISTA_MANAGE_STORAGE_PARAM=1
+
 : "${PISTA:=./pista}"
 
 _pass=0

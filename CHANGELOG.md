@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.38.1] - 2026-09-01
+
+* Make a table's storage parameters opt-in, behind `--manage-storage-param` (`$PISTA_MANAGE_STORAGE_PARAM`). Managing them by default reset the autovacuum settings a table was tuned with, which are set on the database more often than written in a schema file. Without the flag they are dropped from both sides of the diff: no `SET` or `RESET` is planned, the `WITH` clause a file writes is left off the `CREATE TABLE`, and `dump` does not write one. An index's parameters are part of its definition and are managed either way.
+
 ## [1.38.0] - 2026-08-31
 
 * Add `--exclusive` / `--exclusive-wait` to `apply`. Opted-in apply runs on one database become mutually exclusive: `--exclusive` fails at once while another exclusive apply is running, `--exclusive-wait` waits for it up to the given duration (`0` waits without limit). The exclusion is a session-level advisory lock scoped to the database, taken before the catalog read and released when the connection closes; `--with-tx` and CONCURRENTLY index DDL do not affect it, and DDL from any other source is not blocked.

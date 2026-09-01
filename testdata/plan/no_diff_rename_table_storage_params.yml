@@ -1,5 +1,6 @@
 # The parameters carry through a rename untouched, so the plan is the RENAME
 # alone.
+manage_storage_param: true
 init: |
   CREATE TABLE public.old_users (
       id integer NOT NULL,

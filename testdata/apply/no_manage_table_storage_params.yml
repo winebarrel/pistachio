@@ -1,0 +1,37 @@
+# The parameters a database carries survive an apply that does not manage
+# them: nothing is reset, the new table is created without the clause its
+# file writes, and the re-plan is clean.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70);
+applied: |
+  -- public.docs
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.users ADD COLUMN name text;

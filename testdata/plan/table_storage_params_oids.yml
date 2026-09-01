@@ -2,6 +2,7 @@
 # table. PostgreSQL accepts it in a CREATE TABLE and stores nothing for it, so
 # reading it as a parameter would plan an ALTER TABLE ... SET that PostgreSQL
 # rejects, on every table of such a dump and on every run.
+manage_storage_param: true
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,
