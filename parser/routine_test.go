@@ -485,3 +485,28 @@ func TestParseSQL_CommentOnRoutineWithQualifiedArgType(t *testing.T) {
 	require.NotNil(t, r.Comment)
 	assert.Equal(t, "v1", *r.Comment)
 }
+
+func TestParseSQL_FunctionSecurityDefinerAndLeakproof(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE FUNCTION public.f() RETURNS integer
+		    LANGUAGE sql SECURITY DEFINER LEAKPROOF AS $$ SELECT 1 $$;
+	`)
+	require.NoError(t, err)
+
+	r, ok := result.Routines.GetOk("public.f()")
+	require.True(t, ok)
+	assert.True(t, r.SecurityDefiner)
+	assert.True(t, r.Leakproof)
+}
+
+func TestParseRoutineDef(t *testing.T) {
+	r, err := parser.ParseRoutineDef(
+		"CREATE FUNCTION public.add(a integer, b integer) RETURNS integer LANGUAGE sql AS $$ SELECT a + b $$;",
+		"public",
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "public", r.Schema)
+	assert.Equal(t, "add", r.Name)
+	assert.Equal(t, "integer", r.ReturnType)
+	assert.Equal(t, " SELECT a + b ", r.Body)
+}
