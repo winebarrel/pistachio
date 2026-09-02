@@ -1,0 +1,11 @@
+init: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY,
+      down bigint GENERATED ALWAYS AS IDENTITY (INCREMENT BY -1)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY (NO MINVALUE NO MAXVALUE NO CYCLE),
+      down bigint GENERATED ALWAYS AS IDENTITY (INCREMENT BY -1 NO MINVALUE NO MAXVALUE)
+  );
+plan: ""

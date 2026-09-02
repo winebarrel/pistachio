@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/internal/testutil"
+	"github.com/winebarrel/pistachio/model"
 )
 
 func TestListColumnsByTables(t *testing.T) {
@@ -234,6 +235,43 @@ func TestListColumnsByTables(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "integer", id.TypeName)
 		assert.True(t, id.Identity.IsGeneratedByDefault())
+	})
+
+	t.Run("identity sequence options", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.items (
+				id integer GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5 MINVALUE 10 MAXVALUE 1000 CACHE 20 CYCLE),
+				plain integer GENERATED ALWAYS AS IDENTITY,
+				ser serial NOT NULL,
+				name text NOT NULL
+			);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		tbl := tables.Get("public.items")
+		id, ok := tbl.Columns.GetOk("id")
+		require.True(t, ok)
+		assert.Equal(t, &model.IdentitySequence{
+			Start: 100, Min: 10, Max: 1000, Increment: 5, Cache: 20, Cycle: true,
+		}, id.IdentitySeq)
+
+		plain, ok := tbl.Columns.GetOk("plain")
+		require.True(t, ok)
+		assert.Equal(t, &model.IdentitySequence{
+			Start: 1, Min: 1, Max: 2147483647, Increment: 1, Cache: 1,
+		}, plain.IdentitySeq)
+
+		// A serial column owns a sequence too, but through deptype 'a'.
+		ser, ok := tbl.Columns.GetOk("ser")
+		require.True(t, ok)
+		assert.Nil(t, ser.IdentitySeq)
+
+		name, ok := tbl.Columns.GetOk("name")
+		require.True(t, ok)
+		assert.Nil(t, name.IdentitySeq)
 	})
 
 	t.Run("column comment", func(t *testing.T) {

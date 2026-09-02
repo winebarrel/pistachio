@@ -733,6 +733,23 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 			case "d":
 				col.Identity = model.ColumnIdentity('d')
 			}
+			if col.Identity.IsIdentityColumn() {
+				// PostgreSQL takes the sequence type from the column and
+				// rejects an AS option here, so the bounds resolve against the
+				// column type.
+				p, err := parseSeqOptions(con.Options, col.TypeName)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse identity options for column %s: %w", cd.Colname, err)
+				}
+				col.IdentitySeq = &model.IdentitySequence{
+					Start:     p.start,
+					Min:       p.min,
+					Max:       p.max,
+					Increment: p.increment,
+					Cache:     p.cache,
+					Cycle:     p.cycle,
+				}
+			}
 		case pg_query.ConstrType_CONSTR_GENERATED:
 			// pg_query reports GeneratedWhen="a" (ALWAYS) for STORED generated
 			// columns. PostgreSQL only supports STORED at this time, so any
@@ -1478,17 +1495,27 @@ func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*mo
 	}, nil
 }
 
-// parseCreateSeqStmt parses a CREATE SEQUENCE statement, filling in the same
-// implicit defaults PostgreSQL applies (so a bare "CREATE SEQUENCE s" matches
-// the catalog values 1/1/2^63-1/1/1/false). NO MINVALUE and NO MAXVALUE (arg
-// nil) are treated as "use the default", matching PostgreSQL.
-func parseCreateSeqStmt(cs *pg_query.CreateSeqStmt, defaultSchema string) (*model.Sequence, error) {
-	schema := cs.Sequence.Schemaname
-	if schema == "" {
-		schema = defaultSchema
-	}
+// seqParams holds a sequence option list after PostgreSQL's implicit defaults
+// have been filled in.
+type seqParams struct {
+	dataType    string
+	start       int64
+	min         int64
+	max         int64
+	increment   int64
+	cache       int64
+	cycle       bool
+	ownerTable  *string
+	ownerColumn *string
+}
 
-	dataType := "bigint"
+// parseSeqOptions reads a sequence option list, the one CREATE SEQUENCE takes
+// and the one an identity column's sequence_options gives, and fills in the
+// same implicit defaults PostgreSQL applies (so a bare "CREATE SEQUENCE s"
+// matches the catalog values 1/1/2^63-1/1/1/false). NO MINVALUE and NO MAXVALUE
+// (arg nil) are treated as "use the default", matching PostgreSQL. dataType is
+// the type to resolve the bounds against, and an AS option overrides it.
+func parseSeqOptions(options []*pg_query.Node, dataType string) (*seqParams, error) {
 	var (
 		increment                int64 = 1
 		hasMin, hasMax, hasStart bool
@@ -1498,7 +1525,7 @@ func parseCreateSeqStmt(cs *pg_query.CreateSeqStmt, defaultSchema string) (*mode
 		ownerTable, ownerColumn  *string
 	)
 
-	for _, o := range cs.Options {
+	for _, o := range options {
 		de := o.GetDefElem()
 		if de == nil {
 			continue
@@ -1565,56 +1592,59 @@ func parseCreateSeqStmt(cs *pg_query.CreateSeqStmt, defaultSchema string) (*mode
 	}
 
 	// Apply PostgreSQL's defaults for any options left unspecified.
-	typeMin, typeMax := seqTypeBounds(dataType)
-	ascending := increment > 0
+	def := model.DefaultIdentitySequence(dataType, increment)
 	if !hasMin {
-		if ascending {
-			minVal = 1
-		} else {
-			minVal = typeMin
-		}
+		minVal = def.Min
 	}
 	if !hasMax {
-		if ascending {
-			maxVal = typeMax
-		} else {
-			maxVal = -1
-		}
+		maxVal = def.Max
 	}
 	if !hasStart {
-		if ascending {
+		if increment > 0 {
 			startVal = minVal
 		} else {
 			startVal = maxVal
 		}
 	}
 
-	return &model.Sequence{
-		Schema:      schema,
-		Name:        cs.Sequence.Relname,
-		DataType:    dataType,
-		Start:       startVal,
-		Min:         minVal,
-		Max:         maxVal,
-		Increment:   increment,
-		Cache:       cacheVal,
-		Cycle:       cycle,
-		OwnerTable:  ownerTable,
-		OwnerColumn: ownerColumn,
+	return &seqParams{
+		dataType:    dataType,
+		start:       startVal,
+		min:         minVal,
+		max:         maxVal,
+		increment:   increment,
+		cache:       cacheVal,
+		cycle:       cycle,
+		ownerTable:  ownerTable,
+		ownerColumn: ownerColumn,
 	}, nil
 }
 
-// seqTypeBounds returns the min and max values of a sequence data type.
-// Unknown types fall back to bigint bounds.
-func seqTypeBounds(dataType string) (int64, int64) {
-	switch dataType {
-	case "smallint":
-		return -32768, 32767
-	case "integer":
-		return -2147483648, 2147483647
-	default: // bigint
-		return -9223372036854775808, 9223372036854775807
+// parseCreateSeqStmt parses a CREATE SEQUENCE statement.
+func parseCreateSeqStmt(cs *pg_query.CreateSeqStmt, defaultSchema string) (*model.Sequence, error) {
+	schema := cs.Sequence.Schemaname
+	if schema == "" {
+		schema = defaultSchema
 	}
+
+	p, err := parseSeqOptions(cs.Options, "bigint")
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.Sequence{
+		Schema:      schema,
+		Name:        cs.Sequence.Relname,
+		DataType:    p.dataType,
+		Start:       p.start,
+		Min:         p.min,
+		Max:         p.max,
+		Increment:   p.increment,
+		Cache:       p.cache,
+		Cycle:       p.cycle,
+		OwnerTable:  p.ownerTable,
+		OwnerColumn: p.ownerColumn,
+	}, nil
 }
 
 // defElemInt64 reads an integer sequence option. pg_query encodes values that

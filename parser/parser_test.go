@@ -3264,3 +3264,12 @@ func TestParseSQL_SequenceValueOverflow(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `invalid value "99999999999999999999" for sequence option maxvalue`)
 }
+
+func TestParseSQL_IdentityValueOverflow(t *testing.T) {
+	sql := `CREATE TABLE public.t1 (id bigint GENERATED ALWAYS AS IDENTITY (START WITH 99999999999999999999));`
+
+	_, err := parseSQLWithPublicSchema(sql)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse identity options for column id")
+	assert.Contains(t, err.Error(), `invalid value "99999999999999999999" for sequence option start`)
+}
