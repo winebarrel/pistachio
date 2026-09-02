@@ -1,0 +1,65 @@
+name: Fuzz
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    # Weekly, on a longer budget than a pull request gets.
+    - cron: '43 4 * * 1'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -xeo pipefail {0}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    # The fuzz targets parse SQL and diff the result against itself, so no
+    # database is involved. `make test` already replays the seed corpus; this
+    # job is the part that goes looking for new inputs.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: ./parser/
+            target: FuzzParseSQLWithSchema
+          - package: ./diff/
+            target: FuzzDiffSelf
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # go stores the corpus it grows under GOCACHE, so a run starts from
+      # whatever the last one found instead of from the seeds alone. The key
+      # rotates every run and falls back to the newest prefix match, which is
+      # how a cache entry gets replaced rather than frozen at its first write.
+      - id: gocache
+        run: echo "dir=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.gocache.outputs.dir }}/fuzz
+          key: fuzz-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-${{ matrix.target }}-
+      - name: Fuzz ${{ matrix.target }}
+        run: |
+          go test ${{ matrix.package }} -run='^$' \
+            -fuzz='^${{ matrix.target }}$' \
+            -fuzztime=${{ github.event_name == 'schedule' && '15m' || '1m' }}
+      # A failing input is written into the package's testdata/fuzz/, where it
+      # becomes a seed the ordinary tests replay. Keep it so the crash can be
+      # committed and reproduced instead of having to be found again.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore
