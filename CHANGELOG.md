@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Name the object and the position in a duplicate-name error. `duplicate column: id` said neither which table the column was on nor where the file repeats it. It now reads `duplicate column: id on public.users` and prints the line with a caret under it, as a syntax error does. A column or constraint is pointed at where it is defined, everything else at the statement that repeats the name. The checks that report a clash between two objects, a table and a view of one name for example, are unchanged.
+
 ## [1.40.0] - 2026-09-04
 
 * Name the file, line and column in parse errors. A syntax error or a bad `-- pista:` directive now prints the offending line with a caret under the column, in the style of a compiler, instead of the bare message. With several schema files the line number is local to the file the error is in.

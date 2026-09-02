@@ -1516,7 +1516,7 @@ CREATE INDEX ON public.t (a);
 CREATE INDEX ON public.t (a) WHERE b > 0;`
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate index: t_a_idx")
+	assert.Equal(t, "duplicate index: t_a_idx on public.t", err.Error())
 }
 
 func TestParseSQL_NullColumnConstraintIsNotAConstraint(t *testing.T) {
@@ -1712,7 +1712,7 @@ CREATE INDEX idx ON public.mv (cnt);`
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate index")
+	assert.Equal(t, "duplicate index: idx on public.mv", err.Error())
 }
 
 func TestParseSQL_IndexOnSchemalessTable(t *testing.T) {
@@ -2055,7 +2055,7 @@ CREATE INDEX idx_name ON public.users (name);`
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate index")
+	assert.Equal(t, "duplicate index: idx_name on public.users", err.Error())
 }
 
 func TestParseSQL_DuplicateConstraint(t *testing.T) {
@@ -2068,7 +2068,7 @@ func TestParseSQL_DuplicateConstraint(t *testing.T) {
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate constraint")
+	assert.Equal(t, "duplicate constraint: items_pkey on public.items", err.Error())
 }
 
 func TestParseSQL_DuplicateColumn(t *testing.T) {
@@ -2080,7 +2080,7 @@ func TestParseSQL_DuplicateColumn(t *testing.T) {
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate column")
+	assert.Equal(t, "duplicate column: id on public.users", err.Error())
 }
 
 func TestParseSQL_DuplicateForeignKeyAlterTable(t *testing.T) {
@@ -2091,7 +2091,7 @@ ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCE
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate foreign key")
+	assert.Equal(t, "duplicate foreign key: fk_user on public.orders", err.Error())
 }
 
 func TestParseSQL_DuplicateConstraintAlterTable(t *testing.T) {
@@ -2101,7 +2101,7 @@ ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);`
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate constraint")
+	assert.Equal(t, "duplicate constraint: items_code_unique on public.items", err.Error())
 }
 
 func TestParseSQL_DuplicateInlineForeignKey(t *testing.T) {
@@ -2115,7 +2115,7 @@ CREATE TABLE public.items (
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate foreign key")
+	assert.Equal(t, "duplicate foreign key: items_fk on public.items", err.Error())
 }
 
 func TestParseSQL_DuplicateColumnLevelConstraint(t *testing.T) {
@@ -2126,7 +2126,7 @@ func TestParseSQL_DuplicateColumnLevelConstraint(t *testing.T) {
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate constraint")
+	assert.Equal(t, "duplicate constraint: items_pkey on public.items", err.Error())
 }
 
 func TestParseSQL_DuplicateColumnLevelForeignKey(t *testing.T) {
@@ -2138,7 +2138,7 @@ CREATE TABLE public.items (
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate foreign key")
+	assert.Equal(t, "duplicate foreign key: items_fk on public.items", err.Error())
 }
 
 func TestParseSQL_PolicyOnUnknownTable(t *testing.T) {
@@ -2157,7 +2157,7 @@ CREATE POLICY p ON public.documents FOR ALL USING (owner = current_user);`
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate policy")
+	assert.Equal(t, "duplicate policy: p on public.documents", err.Error())
 }
 
 func TestParseSQLWithSchema_ViewComment(t *testing.T) {
