@@ -29,7 +29,7 @@ Four cases are measured:
 
 - Apple M4 Pro (14 cores), 64 GB RAM
 - PostgreSQL 15.18 (Docker, connected over `localhost`)
-- pistachio built from `fafe754` (after v1.38.1, with the 1.39.0 catalog read)
+- pistachio built from `fafe754` (after v1.38.1)
 
 The database runs on the same host, so client/server latency is negligible.
 Times over a network connection will be higher because reading the catalog adds
@@ -62,26 +62,23 @@ grows the same way, from 160 to 16,000 lines.
 
 ## Analysis
 
-Runtime scales close to linearly with the table count. At small sizes a fixed
-overhead of about 30 ms (process startup and connecting to PostgreSQL)
-dominates, which is why the smallest schemas do not get proportionally faster.
-Subtract that overhead and going from 100 to 1,000 tables multiplies the
-remaining time by 8 to 10 in every case.
+Runtime scales close to linearly with the table count. A fixed overhead of about
+30 ms (process startup and connecting to PostgreSQL) sets the floor, which is
+why the smallest schemas do not get proportionally faster. Above it, 10 times
+the tables costs 8 to 10 times the time.
 
-No single stage dominates any more. The create plan parses the SQL file and
-generates the diff without reading the catalog; dump reads the catalog and
-serializes it without parsing. At 1,000 tables the two cost about the same
-(0.27s and 0.22s), and the noop plan, which does both, costs roughly their sum.
-The catalog read used to take a round trip per object and was the largest cost
-by a wide margin. 1.39.0 made it a fixed number of queries, and the noop plan
-and dump cases are now around 40% and 65% faster than the previous measurement
-of this page, which was taken after v1.19.0.
+No single stage dominates. The create plan parses the SQL file and diffs it
+without reading the catalog; dump reads the catalog and serializes it without
+parsing. At 1,000 tables the two cost about the same, 0.27s and 0.22s, and the
+noop plan, which does both, costs roughly their sum. The catalog read used to
+cost a round trip per object and outweighed the rest; 1.39.0, which this build
+includes, made it a fixed number of queries.
 
-The modify plan is only 8 ms slower than the noop plan at 1,000 tables. Reading
-the catalog and parsing the desired schema is the bulk of the work, so emitting
-3,000 DDL statements on top of that is cheap. Every case stays under half a
-second at 1,000 tables, so pistachio is not a bottleneck for schemas of typical
-size. Larger schemas were not measured.
+The modify plan is 8 ms slower than the noop plan at 1,000 tables. Reading the
+catalog and parsing the desired schema are the bulk of the work, so emitting
+3,000 DDL statements on top costs little. Every case stays under half a second
+at that size, so pistachio is not a bottleneck for schemas of typical size.
+Larger schemas were not measured.
 
 ## Reproducing
 
@@ -122,11 +119,10 @@ sed -e 's/qty integer/qty bigint/' \
 time pista plan modified.sql # modify plan (diff on every table)
 ```
 
-The foreign key has to be declared on the column. pistachio does not read a
-standalone `ALTER TABLE ... ADD COLUMN ... REFERENCES`, so writing it that way
-leaves the foreign keys out of the desired schema and the noop plan proposes
-dropping them.
+The foreign key has to sit on the column. pistachio does not read a standalone
+`ALTER TABLE ... ADD COLUMN ... REFERENCES`. Written that way the foreign keys
+never reach the desired schema, and the noop plan proposes dropping them.
 
-Dropping a schema of 1,000 tables in one statement needs more locks than the
-default allows. Raise `max_locks_per_transaction` (4096 is enough here) before
-resetting between runs.
+Dropping 1,000 tables in one statement needs more locks than the default allows,
+so raise `max_locks_per_transaction` before resetting between runs. 4096 is
+enough.
