@@ -82,6 +82,15 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	if err := client.validateSchemas(); err != nil {
 		return nil, err
 	}
+	desired, err := client.loadDesiredInput(
+		options.Files,
+		options.PreSQL, options.PreSQLFile,
+		options.ConcurrentlyPreSQL, options.ConcurrentlyPreSQLFile,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	conn, err := client.connect(ctx, !options.NoReadOnly)
 	if err != nil {
 		return nil, err
@@ -91,11 +100,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	result, err := client.diffAll(ctx, conn, &diffAllOptions{
 		FilterOptions:            options.FilterOptions,
 		DropPolicy:               options.DropPolicy,
-		Files:                    options.Files,
-		PreSQL:                   options.PreSQL,
-		PreSQLFile:               options.PreSQLFile,
-		ConcurrentlyPreSQL:       options.ConcurrentlyPreSQL,
-		ConcurrentlyPreSQLFile:   options.ConcurrentlyPreSQLFile,
+		Desired:                  desired,
 		DisableIndexConcurrently: options.DisableIndexConcurrently,
 		ForceIndexConcurrently:   options.ForceIndexConcurrently,
 		BulkAlter:                options.BulkAlter,
