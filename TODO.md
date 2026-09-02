@@ -942,3 +942,47 @@ makes `dump` emit index comments, so a database that has one where the desired
 schema does not will plan `COMMENT ON INDEX ... IS NULL;`.
 
 Origin: discussion, 2026-08-25.
+
+## A NOT VALID CHECK constraint is restored validated
+
+`catalog.ListConstraints` reads `convalidated`, and `model.Constraint` carries
+it as `Validated`, but only `ForeignKey.SQL` writes `NOT VALID`. A table's
+check constraints are written inside `CREATE TABLE`, where the clause cannot be
+spelled, so `pista dump` prints the constraint as if it were validated and the
+reload scans the table to validate it.
+
+The work is to emit a `NOT VALID` check the way a foreign key is already
+emitted, as its own `ALTER TABLE ... ADD CONSTRAINT` after the table, and to
+leave the validated ones inline.
+
+Origin: the restore fidelity check, 2026-09-02.
+`test/fidelity/schemas/check_constraints.sql` notes what it leaves out.
+
+## Identity column sequence options are not read
+
+`model.Column.Identity` is a single byte, `ALWAYS` or `BY DEFAULT`. The sequence
+behind the column has the same options as any other, `INCREMENT BY`, `START
+WITH`, `MINVALUE`, `MAXVALUE`, `CACHE` and `CYCLE`, and none of them are read or
+written, so `pista dump` restores the column at the defaults.
+
+The work is a sequence-options struct on the column, a `pg_sequence` read for
+the sequence `pg_depend` ties to the column, the `( ... )` tail on the column
+definition in the parser, and an `ALTER TABLE ... ALTER COLUMN ... SET
+GENERATED` path in the diff for a change to an existing column.
+
+Origin: the restore fidelity check, 2026-09-02.
+`test/fidelity/schemas/identity.sql` notes what it leaves out.
+
+## `WITH CHECK OPTION` on a view is not managed
+
+Nothing reads `pg_class.reloptions` `check_option` or parses the trailing
+`WITH [CASCADED | LOCAL] CHECK OPTION`, so the clause is dropped from a view in
+the desired schema without an error and `pista dump` does not emit one. An
+updatable view loses the constraint on restore.
+
+The work is a field on `model.View`, a catalog read, the parser clause, and
+emission from the create and replace paths. Related to the view storage
+parameters entry above, which reads the same `reloptions` column.
+
+Origin: the restore fidelity check, 2026-09-02.
+`test/fidelity/schemas/view_columns.sql` notes what it leaves out.

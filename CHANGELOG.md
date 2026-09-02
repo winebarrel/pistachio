@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Stop a self-referencing foreign key from disabling the dependency sort. A key pointing at its own table's primary key, the `parent_id` of a tree, was added to the graph as a self-edge and read back as a cycle. `plan` and `apply` fall back to category order when the sort fails, so one such table anywhere in the schema dropped the order for the whole run: two new views, one selecting from the other, went out in file order and the apply failed on the view that did not exist yet. `dump --sort-by-deps` treats a cycle as a hard error and wrote nothing at all. The composite type and view branches already skipped a self-reference; the foreign key branch now does the same.
+
 ## [1.39.0] - 2026-09-02
 
 * Read a schema in a fixed number of queries. A table's columns, constraints and policies were read one table at a time, and a domain's constraints and a composite type's attributes one type at a time, so a run cost a round trip per object. The gitlab sample schema took 910 statements for its 1083 tables; it now takes 13. The cost was in the round trips, so the gain grows with the latency to the database. The catalog is unchanged, so no plan or dump differs.

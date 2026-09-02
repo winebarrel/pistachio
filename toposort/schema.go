@@ -78,6 +78,10 @@ func OrderFromSchema(
 		// FK dependencies. Use model.Ident so the lookup matches the map keys
 		// (which are also model.Ident-formed) for non-safe identifiers like
 		// quoted or reserved-word names.
+		//
+		// A key pointing at the table's own primary key, the parent_id of a
+		// tree, is skipped: the table is created in one statement and the key
+		// resolves within it, so a self-edge here would be read as a cycle.
 		if t.ForeignKeys != nil {
 			for _, fk := range t.ForeignKeys.CollectValues() {
 				if fk.RefTable == nil {
@@ -85,10 +89,10 @@ func OrderFromSchema(
 				}
 				if fk.RefSchema != nil {
 					ref := model.Ident(*fk.RefSchema, *fk.RefTable)
-					if defined[ref] {
+					if defined[ref] && ref != k {
 						g.AddEdge(k, ref)
 					}
-				} else if ref := resolveUnqualified(model.Ident(*fk.RefTable), t.Schema, defined); ref != "" {
+				} else if ref := resolveUnqualified(model.Ident(*fk.RefTable), t.Schema, defined); ref != "" && ref != k {
 					g.AddEdge(k, ref)
 				}
 			}
