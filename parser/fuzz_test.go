@@ -29,7 +29,7 @@ func FuzzParseSQLWithSchema(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, sql string) {
-		result, err := parseSQLWithSchema(sql, "public")
+		result, err := parseSQLWithSchema(sql, "public", nil)
 		if err != nil {
 			// The location renderer must survive whatever position an
 			// arbitrary input produces.

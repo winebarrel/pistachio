@@ -6,11 +6,16 @@ import "io"
 // entry point is ParseSQLFilesWithSchema, which calls the unexported
 // parseSQLWithSchema and readSQLFile internally.
 var (
-	ParseSQLWithSchema = parseSQLWithSchema
 	ReadSQLFile        = readSQLFile
 	IgnoredStmtSnippet = ignoredStmtSnippet
 	AnnotateError      = annotateError
 )
+
+// ParseSQLWithSchema parses SQL that came from no file, which is how most
+// parser tests call in. A warning then names no position.
+func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {
+	return parseSQLWithSchema(sql, defaultSchema, nil)
+}
 
 type FileSpan = fileSpan
 

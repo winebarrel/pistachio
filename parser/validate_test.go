@@ -383,7 +383,7 @@ func TestParseSQLWithSchema_RejectsUnresolvedColumnRef(t *testing.T) {
 );
 CREATE INDEX idx_users_name ON users (name);`
 
-	_, err := parseSQLWithSchema(sql, "public")
+	_, err := parseSQLWithSchema(sql, "public", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column name referenced in index idx_users_name does not exist on table public.users")
 }
@@ -396,7 +396,7 @@ func TestParseSQLWithSchema_AcceptsResolvedColumnRefs(t *testing.T) {
 );
 CREATE INDEX idx_users_name ON users (name);`
 
-	_, err := parseSQLWithSchema(sql, "public")
+	_, err := parseSQLWithSchema(sql, "public", nil)
 	require.NoError(t, err)
 }
 
@@ -630,7 +630,7 @@ CREATE VIEW x AS SELECT 1 AS n;`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseSQLWithSchema(tt.sql, "public")
+			_, err := parseSQLWithSchema(tt.sql, "public", nil)
 			require.Error(t, err)
 			assert.EqualError(t, err, tt.want)
 		})
@@ -714,7 +714,7 @@ CREATE TYPE et2 AS ENUM ('a');`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseSQLWithSchema(tt.sql, "public")
+			_, err := parseSQLWithSchema(tt.sql, "public", nil)
 			require.NoError(t, err)
 		})
 	}
@@ -726,7 +726,7 @@ func TestValidateNamespaces_ReportsEachNameOnce(t *testing.T) {
 	sql := `CREATE TABLE x (id integer);
 CREATE TYPE x AS (n integer);`
 
-	_, err := parseSQLWithSchema(sql, "public")
+	_, err := parseSQLWithSchema(sql, "public", nil)
 	require.Error(t, err)
 	assert.Equal(t, 1, strings.Count(err.Error(), "duplicate"))
 }
@@ -737,7 +737,7 @@ CREATE VIEW x AS SELECT 1 AS n;
 CREATE TABLE y (id integer);
 CREATE DOMAIN y AS integer;`
 
-	_, err := parseSQLWithSchema(sql, "public")
+	_, err := parseSQLWithSchema(sql, "public", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate relation name: public.x (table and view)")
 	assert.Contains(t, err.Error(), "duplicate type name: public.y (table and domain)")

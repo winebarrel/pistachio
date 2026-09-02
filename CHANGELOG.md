@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Name the file, line and column in the ignored-statement warning. It carried the statement text alone, which does not say where the statement is when the schema spans several files, or when the same `GRANT` appears in more than one of them. It now reads `pistachio: schema/items.sql:12:1: ignored unsupported statement: DROP TABLE public.items`. A parse that came from no file names no position.
+
 ## [1.40.0] - 2026-09-04
 
 * Name the file, line and column in parse errors. A syntax error or a bad `-- pista:` directive now prints the offending line with a caret under the column, in the style of a compiler, instead of the bare message. With several schema files the line number is local to the file the error is in.
