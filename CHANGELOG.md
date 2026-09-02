@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.39.1] - 2026-09-02
 
 * Stop a self-referencing foreign key from disabling the dependency sort. A key pointing at its own table's primary key, the `parent_id` of a tree, was added to the graph as a self-edge and read back as a cycle. `plan` and `apply` fall back to category order when the sort fails, so one such table anywhere in the schema dropped the order for the whole run: two new views, one selecting from the other, went out in file order and the apply failed on the view that did not exist yet. `dump --sort-by-deps` treats a cycle as a hard error and wrote nothing at all. The composite type and view branches already skipped a self-reference; the foreign key branch now does the same.
 
