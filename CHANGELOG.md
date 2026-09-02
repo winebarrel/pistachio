@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.40.0] - 2026-09-04
 
 * Name the file, line and column in parse errors. A syntax error or a bad `-- pista:` directive now prints the offending line with a caret under the column, in the style of a compiler, instead of the bare message. With several schema files the line number is local to the file the error is in.
 
