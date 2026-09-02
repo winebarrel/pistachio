@@ -9,8 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func ConnectDB(t *testing.T) *pgx.Conn {
-	t.Helper()
+// ConnString returns the connection string the tests use. A test that needs its
+// own connection builds it from here.
+func ConnString() string {
 	connString := os.Getenv("TEST_PISTA_CONN_STR")
 	if connString == "" {
 		// The port compose.yaml publishes PostgreSQL 15 on. `make test`
@@ -18,7 +19,12 @@ func ConnectDB(t *testing.T) *pgx.Conn {
 		// only applies to a bare `go test`.
 		connString = "postgres://postgres@localhost:5415/postgres"
 	}
-	conn, err := pgx.Connect(context.Background(), connString)
+	return connString
+}
+
+func ConnectDB(t *testing.T) *pgx.Conn {
+	t.Helper()
+	conn, err := pgx.Connect(context.Background(), ConnString())
 	require.NoError(t, err)
 	return conn
 }

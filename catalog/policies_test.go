@@ -10,7 +10,7 @@ import (
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
-func TestListPoliciesByTable(t *testing.T) {
+func TestListPoliciesByTables(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)

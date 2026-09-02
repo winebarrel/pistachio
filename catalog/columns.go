@@ -9,10 +9,14 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([]*model.Column, error) {
+// ListColumnsByTables returns the columns of the given tables, keyed by table
+// OID and in attnum order. One query serves every table; reading them one at a
+// time cost a round trip per table.
+func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table) (map[uint32][]*model.Column, error) {
 	q := `
 		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
 		SELECT
+			a.attrelid,
 			a.attname,
 			CASE
 				WHEN s.is_serial
@@ -91,15 +95,21 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 			AND nn.contype = 'n'
 			AND nn.conkey = ARRAY[a.attnum]
 		WHERE
-			a.attrelid = @table_oid
+			a.attrelid = ANY(@table_oids::oid[])
 			AND a.attnum >= 1
 			AND NOT a.attisdropped
 		ORDER BY
+			a.attrelid,
 			a.attnum
 	`
 
+	oids := tableOIDs(tables)
+	if len(oids) == 0 {
+		return map[uint32][]*model.Column{}, nil
+	}
+
 	args := pgx.NamedArgs{
-		"table_oid": table.OID,
+		"table_oids": oids,
 	}
 
 	rows, err := c.conn.Query(ctx, q, args)
@@ -108,10 +118,12 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 	}
 	defer rows.Close()
 
-	var cols []*model.Column
+	colsByTable := map[uint32][]*model.Column{}
 	for rows.Next() {
 		var col model.Column
+		var tableOID uint32
 		err := rows.Scan(
+			&tableOID,
 			&col.Name,
 			&col.TypeName,
 			&col.NotNull,
@@ -138,12 +150,12 @@ func (c *Catalog) ListColumnsByTable(ctx context.Context, table *model.Table) ([
 		if col.NotNullName != nil && strings.HasSuffix(*col.NotNullName, "_not_null") {
 			col.NotNullName = nil
 		}
-		cols = append(cols, &col)
+		colsByTable[tableOID] = append(colsByTable[tableOID], &col)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("catalog: failed to scan column info rows: %w", err)
 	}
 
-	return cols, nil
+	return colsByTable, nil
 }

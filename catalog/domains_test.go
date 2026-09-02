@@ -73,4 +73,39 @@ func TestDomains(t *testing.T) {
 		require.NotNil(t, d.Comment)
 		assert.Equal(t, "Positive integer", *d.Comment)
 	})
+
+	// Constraints are read for every domain at once. A domain must get its own
+	// and only its own, in conname order, and one without constraints must stay
+	// without them.
+	t.Run("multiple domains", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE DOMAIN public.pos_int AS integer
+				CONSTRAINT pos_int_max CHECK (VALUE < 100)
+				CONSTRAINT pos_int_min CHECK (VALUE > 0);
+			CREATE DOMAIN public.lower_text AS text
+				CONSTRAINT lower_text_case CHECK (VALUE = lower(VALUE));
+			CREATE DOMAIN public.plain AS text;
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		domains, err := cat.Domains(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 3, domains.Len())
+
+		posInt := domains.Get("public.pos_int")
+		require.NotNil(t, posInt)
+		require.Len(t, posInt.Constraints, 2)
+		assert.Equal(t, "pos_int_max", posInt.Constraints[0].Name)
+		assert.Equal(t, "pos_int_min", posInt.Constraints[1].Name)
+		assert.Contains(t, posInt.Constraints[1].Definition, "> 0")
+
+		lowerText := domains.Get("public.lower_text")
+		require.NotNil(t, lowerText)
+		require.Len(t, lowerText.Constraints, 1)
+		assert.Equal(t, "lower_text_case", lowerText.Constraints[0].Name)
+
+		plain := domains.Get("public.plain")
+		require.NotNil(t, plain)
+		assert.Empty(t, plain.Constraints)
+	})
 }

@@ -9,7 +9,10 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table) ([]*model.Constraint, []*model.ForeignKey, error) {
+// ListConstraintsByTables returns the table constraints and the foreign keys of
+// the given tables, each keyed by table OID and in contype then name order. One
+// query serves every table.
+func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.Table) (map[uint32][]*model.Constraint, map[uint32][]*model.ForeignKey, error) {
 	q := `
 		WITH
 			-- One row per pg_constraint row: the conkey columns in conkey
@@ -31,11 +34,12 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 					JOIN pg_catalog.pg_attribute a ON a.attrelid = con.conrelid
 					AND a.attnum = ANY(con.conkey)
 				WHERE
-					con.conrelid = @table_oid
+					con.conrelid = ANY(@table_oids::oid[])
 				GROUP BY
 					con.oid
 			)
 		SELECT
+			con.conrelid,
 			con.oid,
 			con.conname,
 			con.contype,
@@ -53,12 +57,12 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 			LEFT JOIN pg_catalog.pg_namespace rn ON rn.oid = rc.relnamespace
 			LEFT JOIN column_t col ON col.con_oid = con.oid
 		WHERE
-			con.conrelid = @table_oid
+			con.conrelid = ANY(@table_oids::oid[])
 			-- The table-level constraint types, listed the way the ORDER BY
 			-- below lists them. Two other types share the catalog and belong
 			-- elsewhere. PG18's per-column NOT NULL rows (contype='n') are
 			-- read into Column.NotNull / Column.NotNullName by
-			-- ListColumnsByTable. CREATE CONSTRAINT TRIGGER records the
+			-- ListColumnsByTables. CREATE CONSTRAINT TRIGGER records the
 			-- trigger here too (contype='t'), where pg_get_constraintdef
 			-- renders it as the bare word TRIGGER, followed by the deferral
 			-- clause when it has one; reading that as a table constraint made
@@ -68,11 +72,22 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 			-- the model has somewhere to put it.
 			AND con.contype = ANY ('{p,u,c,x,f}'::"char"[])
 		ORDER BY
+			con.conrelid,
 			array_position('{p,u,c,x,f}'::"char"[], con.contype),
 			con.conname
 	`
+
+	constraints := map[uint32][]*model.Constraint{}
+	foreignKeys := map[uint32][]*model.ForeignKey{}
+
+	oids := tableOIDs(tables)
+	if len(oids) == 0 {
+		return constraints, foreignKeys, nil
+	}
+
+	tableByOID := tablesByOID(tables)
 	args := pgx.NamedArgs{
-		"table_oid": table.OID,
+		"table_oids": oids,
 	}
 
 	rows, err := c.conn.Query(ctx, q, args)
@@ -81,13 +96,13 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 	}
 	defer rows.Close()
 
-	var constraints []*model.Constraint
-	var foreignKeys []*model.ForeignKey
 	for rows.Next() {
 		var con model.Constraint
+		var tableOID uint32
 		var refSchema, refTable *string
 
 		err := rows.Scan(
+			&tableOID,
 			&con.OID,
 			&con.Name,
 			&con.Type,
@@ -109,6 +124,7 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 		con.Definition = strings.TrimSuffix(con.Definition, " NOT VALID")
 
 		if con.Type.IsForeignKeyConstraint() {
+			table := tableByOID[tableOID]
 			fk := model.ForeignKey{
 				Constraint: con,
 				Schema:     table.Schema,
@@ -116,9 +132,9 @@ func (c *Catalog) ListConstraintsByTable(ctx context.Context, table *model.Table
 				RefSchema:  refSchema,
 				RefTable:   refTable,
 			}
-			foreignKeys = append(foreignKeys, &fk)
+			foreignKeys[tableOID] = append(foreignKeys[tableOID], &fk)
 		} else {
-			constraints = append(constraints, &con)
+			constraints[tableOID] = append(constraints[tableOID], &con)
 		}
 	}
 

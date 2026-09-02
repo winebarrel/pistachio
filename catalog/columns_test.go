@@ -10,7 +10,7 @@ import (
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
-func TestListColumnsByTable(t *testing.T) {
+func TestListColumnsByTables(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)

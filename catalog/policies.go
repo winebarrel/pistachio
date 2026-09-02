@@ -8,9 +8,10 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// ListPoliciesByTable returns row-level security policies attached to the
-// given table, in pg_policy.polname order.
-func (c *Catalog) ListPoliciesByTable(ctx context.Context, table *model.Table) ([]*model.Policy, error) {
+// ListPoliciesByTables returns the row-level security policies attached to the
+// given tables, keyed by table OID and in pg_policy.polname order. One query
+// serves every table.
+func (c *Catalog) ListPoliciesByTables(ctx context.Context, tables []*model.Table) (map[uint32][]*model.Policy, error) {
 	// pg_policy.polroles uses OID 0 to represent PUBLIC. pg_roles does not
 	// contain a row for OID 0, so a join would silently drop PUBLIC when it
 	// appears alongside named roles (e.g. TO PUBLIC, app_user). UNION the
@@ -18,6 +19,7 @@ func (c *Catalog) ListPoliciesByTable(ctx context.Context, table *model.Table) (
 	// preserved and sorted together.
 	q := `
 		SELECT
+			pol.polrelid,
 			pol.polname,
 			pol.polpermissive,
 			pol.polcmd,
@@ -41,11 +43,21 @@ func (c *Catalog) ListPoliciesByTable(ctx context.Context, table *model.Table) (
 			-- https://www.postgresql.org/docs/current/catalog-pg-policy.html
 			pg_catalog.pg_policy pol
 		WHERE
-			pol.polrelid = @table_oid
+			pol.polrelid = ANY(@table_oids::oid[])
 		ORDER BY
+			pol.polrelid,
 			pol.polname
 	`
-	args := pgx.NamedArgs{"table_oid": table.OID}
+
+	policies := map[uint32][]*model.Policy{}
+
+	oids := tableOIDs(tables)
+	if len(oids) == 0 {
+		return policies, nil
+	}
+
+	tableByOID := tablesByOID(tables)
+	args := pgx.NamedArgs{"table_oids": oids}
 
 	rows, err := c.conn.Query(ctx, q, args)
 	if err != nil {
@@ -53,13 +65,11 @@ func (c *Catalog) ListPoliciesByTable(ctx context.Context, table *model.Table) (
 	}
 	defer rows.Close()
 
-	var policies []*model.Policy
 	for rows.Next() {
-		p := &model.Policy{
-			Schema: table.Schema,
-			Table:  table.Name,
-		}
+		var tableOID uint32
+		p := &model.Policy{}
 		err := rows.Scan(
+			&tableOID,
 			&p.Name,
 			&p.Permissive,
 			&p.Command,
@@ -70,7 +80,10 @@ func (c *Catalog) ListPoliciesByTable(ctx context.Context, table *model.Table) (
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan policy info: %w", err)
 		}
-		policies = append(policies, p)
+		table := tableByOID[tableOID]
+		p.Schema = table.Schema
+		p.Table = table.Name
+		policies[tableOID] = append(policies[tableOID], p)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("catalog: failed to scan policy info rows: %w", err)

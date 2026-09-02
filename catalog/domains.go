@@ -93,35 +93,49 @@ func (c *Catalog) ListDomains(ctx context.Context) ([]*model.Domain, error) {
 		return nil, fmt.Errorf("catalog: failed to scan domain info rows: %w", err)
 	}
 
-	// Fetch constraints for each domain
+	oids := make([]uint32, len(domains))
+	for i, d := range domains {
+		oids[i] = d.OID
+	}
+
+	constraintsByDomain, err := c.listDomainConstraints(ctx, oids)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, d := range domains {
-		constraints, err := c.listDomainConstraints(ctx, d.OID)
-		if err != nil {
-			return nil, err
-		}
-		d.Constraints = constraints
+		d.Constraints = constraintsByDomain[d.OID]
 	}
 
 	return domains, nil
 }
 
-func (c *Catalog) listDomainConstraints(ctx context.Context, domainOID uint32) ([]*model.DomainConstraint, error) {
+// listDomainConstraints returns the check constraints of the given domains,
+// keyed by domain OID and in conname order. One query serves every domain.
+func (c *Catalog) listDomainConstraints(ctx context.Context, domainOIDs []uint32) (map[uint32][]*model.DomainConstraint, error) {
 	q := `
 		SELECT
+			con.contypid,
 			con.conname,
 			pg_catalog.pg_get_constraintdef(con.oid) AS definition,
 			con.convalidated
 		FROM
 			pg_catalog.pg_constraint con
 		WHERE
-			con.contypid = @oid
+			con.contypid = ANY(@domain_oids::oid[])
 			AND con.contype = 'c'
 		ORDER BY
+			con.contypid,
 			con.conname
 	`
 
+	constraints := map[uint32][]*model.DomainConstraint{}
+	if len(domainOIDs) == 0 {
+		return constraints, nil
+	}
+
 	args := pgx.NamedArgs{
-		"oid": domainOID,
+		"domain_oids": domainOIDs,
 	}
 
 	rows, err := c.conn.Query(ctx, q, args)
@@ -130,10 +144,10 @@ func (c *Catalog) listDomainConstraints(ctx context.Context, domainOID uint32) (
 	}
 	defer rows.Close()
 
-	var constraints []*model.DomainConstraint
 	for rows.Next() {
 		var dc model.DomainConstraint
-		err := rows.Scan(&dc.Name, &dc.Definition, &dc.Validated)
+		var domainOID uint32
+		err := rows.Scan(&domainOID, &dc.Name, &dc.Definition, &dc.Validated)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan domain constraint: %w", err)
 		}
@@ -141,7 +155,7 @@ func (c *Catalog) listDomainConstraints(ctx context.Context, domainOID uint32) (
 		// constraints. Strip it so Definition only holds the constraint body;
 		// validation state is tracked via Validated.
 		dc.Definition = strings.TrimSuffix(dc.Definition, " NOT VALID")
-		constraints = append(constraints, &dc)
+		constraints[domainOID] = append(constraints[domainOID], &dc)
 	}
 
 	if err := rows.Err(); err != nil {
