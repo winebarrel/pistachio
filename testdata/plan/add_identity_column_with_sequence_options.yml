@@ -1,0 +1,11 @@
+init: |
+  CREATE TABLE public.items (
+      name text NOT NULL
+  );
+desired: |
+  CREATE TABLE public.items (
+      name text NOT NULL,
+      id bigint GENERATED ALWAYS AS IDENTITY (START WITH 50 INCREMENT BY 2)
+  );
+plan: |
+  ALTER TABLE public.items ADD COLUMN id bigint GENERATED ALWAYS AS IDENTITY (START WITH 50 INCREMENT BY 2);

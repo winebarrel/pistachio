@@ -643,6 +643,71 @@ func TestAddColumnSQL_generatedStored(t *testing.T) {
 	assert.Contains(t, addColumnSQL("public.users", col), "GENERATED ALWAYS AS (first || last) STORED")
 }
 
+func TestAddColumnSQL_identitySequenceOptions(t *testing.T) {
+	col := &model.Column{
+		Name:     "id",
+		TypeName: "bigint",
+		Identity: model.ColumnIdentity('a'),
+		IdentitySeq: &model.IdentitySequence{
+			Start: 50, Min: 1, Max: 9223372036854775807, Increment: 2, Cache: 10,
+		},
+	}
+	assert.Equal(t,
+		"ALTER TABLE public.users ADD COLUMN id bigint GENERATED ALWAYS AS IDENTITY (START WITH 50 INCREMENT BY 2 CACHE 10);",
+		addColumnSQL("public.users", col))
+}
+
+func TestIdentitySeqClauses(t *testing.T) {
+	def := new(model.DefaultIdentitySequence("integer", 1))
+
+	tests := []struct {
+		name     string
+		current  *model.IdentitySequence
+		desired  *model.IdentitySequence
+		expected []string
+	}{
+		{
+			name:    "one side is not an identity column",
+			current: nil,
+			desired: def,
+		},
+		{
+			name:    "unchanged",
+			current: def,
+			desired: new(model.DefaultIdentitySequence("integer", 1)),
+		},
+		{
+			name:    "every option changes",
+			current: def,
+			desired: &model.IdentitySequence{
+				Start: 100, Min: 10, Max: 1000, Increment: 5, Cache: 20, Cycle: true,
+			},
+			expected: []string{
+				"SET START WITH 100",
+				"SET INCREMENT BY 5",
+				"SET MINVALUE 10",
+				"SET MAXVALUE 1000",
+				"SET CACHE 20",
+				"SET CYCLE",
+			},
+		},
+		{
+			name: "back to the defaults",
+			current: &model.IdentitySequence{
+				Start: 100, Min: 1, Max: 2147483647, Increment: 1, Cache: 1, Cycle: true,
+			},
+			desired:  def,
+			expected: []string{"SET START WITH 1", "SET NO CYCLE"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, identitySeqClauses(tt.current, tt.desired))
+		})
+	}
+}
+
 func TestDiffConstraints_add(t *testing.T) {
 	current := orderedmap.New[string, *model.Constraint]()
 	desired := orderedmap.New[string, *model.Constraint]()
@@ -3403,6 +3468,49 @@ func TestDiffColumns_changeIdentityKind_byDefaultToAlways(t *testing.T) {
 	assert.Equal(t, []string{
 		"ALTER TABLE public.items ALTER COLUMN id SET GENERATED ALWAYS;",
 	}, stmts)
+}
+
+func TestDiffColumns_identitySequenceOptionsFollowTheType(t *testing.T) {
+	identity := func(typeName string, seq model.IdentitySequence) *model.Column {
+		return &model.Column{
+			Name:        "id",
+			TypeName:    typeName,
+			NotNull:     true,
+			Identity:    model.ColumnIdentity('a'),
+			IdentitySeq: &seq,
+		}
+	}
+
+	t.Run("a bound at the type default needs no clause of its own", func(t *testing.T) {
+		current := orderedmap.New[string, *model.Column]()
+		current.Set("id", identity("integer", model.DefaultIdentitySequence("integer", 1)))
+
+		desired := orderedmap.New[string, *model.Column]()
+		desired.Set("id", identity("bigint", model.DefaultIdentitySequence("bigint", 1)))
+
+		stmts, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.items ALTER COLUMN id SET DATA TYPE bigint;",
+		}, stmts)
+	})
+
+	t.Run("an explicit bound the retype keeps does", func(t *testing.T) {
+		current := orderedmap.New[string, *model.Column]()
+		current.Set("id", identity("integer", model.IdentitySequence{
+			Start: 1, Min: 1, Max: 1000, Increment: 1, Cache: 1,
+		}))
+
+		desired := orderedmap.New[string, *model.Column]()
+		desired.Set("id", identity("bigint", model.DefaultIdentitySequence("bigint", 1)))
+
+		stmts, _, _, err := diffColumns("public.items", current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.items ALTER COLUMN id SET DATA TYPE bigint;",
+			"ALTER TABLE public.items ALTER COLUMN id SET MAXVALUE 9223372036854775807;",
+		}, stmts)
+	})
 }
 
 func TestDiffColumns_identityUnchanged(t *testing.T) {

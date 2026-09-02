@@ -1,0 +1,10 @@
+init: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5 CACHE 20)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL
+  );
+plan: |
+  ALTER TABLE public.items ALTER COLUMN id DROP IDENTITY IF EXISTS;

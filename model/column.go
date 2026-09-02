@@ -40,6 +40,9 @@ type Column struct {
 	NotNullName *string
 	Default     *string
 	Identity    ColumnIdentity
+	// IdentitySeq holds the sequence parameters of an identity column. It is
+	// nil when the column is not an identity column.
+	IdentitySeq *IdentitySequence
 	Generated   ColumnGenerated
 	// Collation in quoted SQL form, ready to follow COLLATE
 	// (e.g. `pg_catalog."C"`). nil for the default collation.

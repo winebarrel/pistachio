@@ -958,20 +958,20 @@ leave the validated ones inline.
 Origin: the restore fidelity check, 2026-09-02.
 `test/fidelity/schemas/check_constraints.sql` notes what it leaves out.
 
-## Identity column sequence options are not read
+## An identity column's sequence name is not managed
 
-`model.Column.Identity` is a single byte, `ALWAYS` or `BY DEFAULT`. The sequence
-behind the column has the same options as any other, `INCREMENT BY`, `START
-WITH`, `MINVALUE`, `MAXVALUE`, `CACHE` and `CYCLE`, and none of them are read or
-written, so `pista dump` restores the column at the defaults.
+The sequence behind an identity column is created as `<table>_<column>_seq` and
+`pista dump` never writes the `SEQUENCE NAME` that `pg_dump` does, so a
+sequence renamed by hand restores under the default name. The options the
+sequence carries are managed; only the name is not.
 
-The work is a sequence-options struct on the column, a `pg_sequence` read for
-the sequence `pg_depend` ties to the column, the `( ... )` tail on the column
-definition in the parser, and an `ALTER TABLE ... ALTER COLUMN ... SET
-GENERATED` path in the diff for a change to an existing column.
+Reading it is one more column in the identity read, and `CREATE TABLE` takes
+`SEQUENCE NAME` inside the identity options, so `dump` is easy. The diff is
+not: changing the name on an existing column is `ALTER SEQUENCE ... RENAME TO`,
+and pistachio takes a rename from a `-- pista:renamed-from` directive rather
+than inferring one, so a directive would have to reach a column's sequence.
 
-Origin: the restore fidelity check, 2026-09-02.
-`test/fidelity/schemas/identity.sql` notes what it leaves out.
+Origin: identity sequence options, 2026-09-02.
 
 ## `WITH CHECK OPTION` on a view is not managed
 

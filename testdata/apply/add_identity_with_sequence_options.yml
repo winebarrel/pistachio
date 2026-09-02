@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY (START WITH 50 INCREMENT BY 2 CACHE 10)
+  );
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY (START WITH 50 INCREMENT BY 2 CACHE 10)
+  );

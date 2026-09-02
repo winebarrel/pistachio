@@ -61,7 +61,13 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 				WHEN 'l' THEN 'lz4'
 				ELSE ''
 			END AS compression,
-			d.description
+			d.description,
+			iseq.seqstart,
+			iseq.seqmin,
+			iseq.seqmax,
+			iseq.seqincrement,
+			iseq.seqcache,
+			iseq.seqcycle
 		FROM
 			pg_catalog.pg_attribute a
 			JOIN pg_catalog.pg_type t ON t.oid = a.atttypid
@@ -94,6 +100,22 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			LEFT JOIN pg_catalog.pg_constraint nn ON nn.conrelid = a.attrelid
 			AND nn.contype = 'n'
 			AND nn.conkey = ARRAY[a.attnum]
+			-- The sequence behind an identity column. deptype 'i' marks it,
+			-- and only an identity column has one, so the join is empty for
+			-- every other column including a serial one (deptype 'a').
+			LEFT JOIN LATERAL (
+				SELECT
+					sq.*
+				FROM
+					pg_catalog.pg_depend dep
+					JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = dep.objid
+				WHERE
+					dep.classid = 'pg_class'::regclass
+					AND dep.refclassid = 'pg_class'::regclass
+					AND dep.deptype = 'i'
+					AND dep.refobjid = a.attrelid
+					AND dep.refobjsubid = a.attnum
+			) iseq ON true
 		WHERE
 			a.attrelid = ANY(@table_oids::oid[])
 			AND a.attnum >= 1
@@ -122,6 +144,9 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 	for rows.Next() {
 		var col model.Column
 		var tableOID uint32
+		// Null for every column that is not an identity column.
+		var seqStart, seqMin, seqMax, seqIncrement, seqCache *int64
+		var seqCycle *bool
 		err := rows.Scan(
 			&tableOID,
 			&col.Name,
@@ -136,9 +161,25 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			&col.TypeStorage,
 			&col.Compression,
 			&col.Comment,
+			&seqStart,
+			&seqMin,
+			&seqMax,
+			&seqIncrement,
+			&seqCache,
+			&seqCycle,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan column info: %w", err)
+		}
+		if seqStart != nil && seqMin != nil && seqMax != nil && seqIncrement != nil && seqCache != nil && seqCycle != nil {
+			col.IdentitySeq = &model.IdentitySequence{
+				Start:     *seqStart,
+				Min:       *seqMin,
+				Max:       *seqMax,
+				Increment: *seqIncrement,
+				Cache:     *seqCache,
+				Cycle:     *seqCycle,
+			}
 		}
 		// PG18 auto-names unnamed NOT NULL constraints as <table>_<col>_not_null
 		// (see ChooseConstraintName in src/backend/catalog/pg_constraint.c). The
