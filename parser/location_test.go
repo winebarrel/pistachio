@@ -166,6 +166,133 @@ func TestParseSQLFiles_DirectiveWithArgsLocation(t *testing.T) {
   | ^`, err.Error())
 }
 
+func TestParseSQLFiles_DuplicateColumnLocation(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"users.sql": `CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text,
+    id bigint
+);
+`,
+	})
+
+	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `duplicate column: id on public.users
+ --> `+paths[0]+`:4:5
+  |
+4 |     id bigint
+  |     ^`, err.Error())
+}
+
+func TestParseSQLFiles_DuplicateConstraintLocation(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"users.sql": `CREATE TABLE public.users (
+    id integer,
+    CONSTRAINT users_check CHECK (id > 0),
+    CONSTRAINT users_check UNIQUE (id)
+);
+`,
+	})
+
+	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `duplicate constraint: users_check on public.users
+ --> `+paths[0]+`:4:5
+  |
+4 |     CONSTRAINT users_check UNIQUE (id)
+  |     ^`, err.Error())
+}
+
+// A constraint written on the column carries its own position, so the caret
+// lands on it rather than on the start of the line.
+func TestParseSQLFiles_DuplicateColumnConstraintLocation(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"users.sql": `CREATE TABLE public.users (
+    id integer CONSTRAINT users_key PRIMARY KEY,
+    code text CONSTRAINT users_key UNIQUE
+);
+`,
+	})
+
+	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `duplicate constraint: users_key on public.users
+ --> `+paths[0]+`:3:15
+  |
+3 |     code text CONSTRAINT users_key UNIQUE
+  |               ^`, err.Error())
+}
+
+// The leading comment and blank line belong to the second statement as far as
+// pg_query is concerned, so the caret has to skip them to reach CREATE.
+func TestParseSQLFiles_DuplicateTableLocationSkipsLeadingComment(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"users.sql": `CREATE TABLE public.users (id integer);
+
+-- the same table again
+CREATE TABLE public.users (id integer);
+`,
+	})
+
+	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `duplicate table: public.users
+ --> `+paths[0]+`:4:1
+  |
+4 | CREATE TABLE public.users (id integer);
+  | ^`, err.Error())
+}
+
+// pg_query leaves StmtLen at 0 for a final statement with no semicolon, so
+// the statement region runs to the end of the input.
+func TestParseSQLFiles_DuplicateTableLocationWithoutTrailingSemicolon(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"users.sql": "CREATE TABLE public.users (id integer);\n\n-- again\nCREATE TABLE public.users (id integer)",
+	})
+
+	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `duplicate table: public.users
+ --> `+paths[0]+`:4:1
+  |
+4 | CREATE TABLE public.users (id integer)
+  | ^`, err.Error())
+}
+
+func TestParseSQLFiles_DuplicateTableInSecondFile(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "a.sql")
+	second := filepath.Join(dir, "b.sql")
+	require.NoError(t, os.WriteFile(first, []byte("CREATE TABLE public.users (id integer);\n"), 0o644))
+	require.NoError(t, os.WriteFile(second, []byte("CREATE TABLE public.items (id integer);\nCREATE TABLE public.users (id bigint);\n"), 0o644))
+
+	_, err := parser.ParseSQLFilesWithSchema([]string{first, second}, "public")
+	require.Error(t, err)
+	assert.Equal(t, `duplicate table: public.users
+ --> `+second+`:2:1
+  |
+2 | CREATE TABLE public.users (id bigint);
+  | ^`, err.Error())
+}
+
+func TestParseSQLFiles_DuplicatePolicyLocation(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"users.sql": `CREATE TABLE public.users (id integer);
+CREATE POLICY p ON public.users USING (true);
+CREATE POLICY p ON public.users USING (false);
+`,
+	})
+
+	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `duplicate policy: p on public.users
+ --> `+paths[0]+`:3:1
+  |
+3 | CREATE POLICY p ON public.users USING (false);
+  | ^`, err.Error())
+}
+
 func TestParseSQLFiles_SyntaxErrorOnStdin(t *testing.T) {
 	r, w, err := os.Pipe()
 	require.NoError(t, err)

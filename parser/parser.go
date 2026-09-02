@@ -161,9 +161,20 @@ func warnIgnoredAlterTableCmds(sql string, rawStmt *pg_query.RawStmt, as *pg_que
 	})
 }
 
-func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V) error {
+// setUnique records v under key and rejects a name the map already holds.
+// on names the object the key belongs to, empty for a name that stands on its
+// own in a schema. offset is where in the parsed SQL the message points, so
+// the error can name the file, line and column of the repeat.
+func setUnique[V any](m *orderedmap.Map[string, V], key, kind string, v V, on string, offset int32) error {
 	if _, ok := m.GetOk(key); ok {
-		return fmt.Errorf("duplicate %s: %s", kind, key)
+		scope := ""
+		if on != "" {
+			scope = " on " + on
+		}
+		return &locatedError{
+			msg:    fmt.Sprintf("duplicate %s: %s%s", kind, key, scope),
+			offset: int(offset),
+		}
 	}
 	m.Set(key, v)
 	return nil
@@ -251,6 +262,9 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		node := rawStmt.Stmt
 		renameFrom := stmtDirectives[rawStmt.StmtLocation]
 		ignore := ignoreDirectives[rawStmt.StmtLocation]
+		// Where a duplicate-name error points when the repeat is the
+		// statement itself rather than a part of one.
+		stmtOffset := stmtStart(sql, rawStmt)
 
 		switch {
 		case node.GetCreateEnumStmt() != nil:
@@ -283,7 +297,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			}
 
 			enum.Ignore = ignore
-			if err := setUnique(enums, enum.FQEN(), "enum", enum); err != nil {
+			if err := setUnique(enums, enum.FQEN(), "enum", enum, "", stmtOffset); err != nil {
 				return nil, err
 			}
 
@@ -297,7 +311,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				domain.RenameFrom = &qualified
 			}
 			domain.Ignore = ignore
-			if err := setUnique(domains, domain.FQDN(), "domain", domain); err != nil {
+			if err := setUnique(domains, domain.FQDN(), "domain", domain, "", stmtOffset); err != nil {
 				return nil, err
 			}
 
@@ -328,7 +342,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			}
 
 			compositeType.Ignore = ignore
-			if err := setUnique(compositeTypes, compositeType.FQCN(), "composite type", compositeType); err != nil {
+			if err := setUnique(compositeTypes, compositeType.FQCN(), "composite type", compositeType, "", stmtOffset); err != nil {
 				return nil, err
 			}
 
@@ -369,7 +383,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			}
 
 			table.Ignore = ignore
-			if err := setUnique(tables, table.FQTN(), "table", table); err != nil {
+			if err := setUnique(tables, table.FQTN(), "table", table, "", stmtOffset); err != nil {
 				return nil, err
 			}
 
@@ -383,7 +397,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				view.RenameFrom = &qualified
 			}
 			view.Ignore = ignore
-			if err := setUnique(views, view.FQVN(), "view", view); err != nil {
+			if err := setUnique(views, view.FQVN(), "view", view, "", stmtOffset); err != nil {
 				return nil, err
 			}
 
@@ -399,7 +413,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 					view.RenameFrom = &qualified
 				}
 				view.Ignore = ignore
-				if err := setUnique(views, view.FQVN(), "materialized view", view); err != nil {
+				if err := setUnique(views, view.FQVN(), "materialized view", view, "", stmtOffset); err != nil {
 					return nil, err
 				}
 			}
@@ -418,11 +432,11 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			}
 			fqtn := model.Ident(idx.Schema, idx.Table)
 			if t, ok := tables.GetOk(fqtn); ok {
-				if err := setUnique(t.Indexes, idx.Name, "index", idx); err != nil {
+				if err := setUnique(t.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
 			} else if v, ok := views.GetOk(fqtn); ok && v.Materialized {
-				if err := setUnique(v.Indexes, idx.Name, "index", idx); err != nil {
+				if err := setUnique(v.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
 			}
@@ -467,7 +481,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 					unquoted := normalizeUnqualifiedDirective(renameFrom)
 					fk.RenameFrom = &unquoted
 				}
-				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
+				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
 			}
@@ -476,13 +490,13 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 					unquoted := normalizeUnqualifiedDirective(renameFrom)
 					con.RenameFrom = &unquoted
 				}
-				if err := setUnique(t.Constraints, con.Name, "constraint", con); err != nil {
+				if err := setUnique(t.Constraints, con.Name, "constraint", con, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
 			}
 
 		case node.GetCreatePolicyStmt() != nil:
-			policy, err := parseCreatePolicyStmt(node.GetCreatePolicyStmt(), defaultSchema, tables)
+			policy, err := parseCreatePolicyStmt(node.GetCreatePolicyStmt(), defaultSchema, tables, stmtOffset)
 			if err != nil {
 				return nil, err
 			}
@@ -500,7 +514,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				unquoted := normalizeUnqualifiedDirective(renameFrom)
 				trg.RenameFrom = &unquoted
 			}
-			if err := attachTrigger(trg, tables, views); err != nil {
+			if err := attachTrigger(trg, tables, views, stmtOffset); err != nil {
 				return nil, err
 			}
 
@@ -514,7 +528,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				seq.RenameFrom = &qualified
 			}
 			seq.Ignore = ignore
-			if err := setUnique(sequences, seq.FQN(), "sequence", seq); err != nil {
+			if err := setUnique(sequences, seq.FQN(), "sequence", seq, "", stmtOffset); err != nil {
 				return nil, err
 			}
 
@@ -539,7 +553,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			// The parser sets Ignore itself for a routine it reads but cannot
 			// compare, so this must not clear it.
 			routine.Ignore = routine.Ignore || ignore
-			if err := setUnique(routines, routine.FQRN(), "routine", routine); err != nil {
+			if err := setUnique(routines, routine.FQRN(), "routine", routine, "", stmtOffset); err != nil {
 				return nil, err
 			}
 
@@ -633,7 +647,7 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 			if err != nil {
 				return nil, err
 			}
-			if err := setUnique(table.Columns, col.Name, "column", col); err != nil {
+			if err := setUnique(table.Columns, col.Name, "column", col, table.FQTN(), cd.Location); err != nil {
 				return nil, err
 			}
 
@@ -650,7 +664,7 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 					return nil, err
 				}
 				if fk != nil {
-					if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
+					if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk, table.FQTN(), con.Location); err != nil {
 						return nil, err
 					}
 				}
@@ -660,7 +674,7 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 					return nil, err
 				}
 				if constraint != nil {
-					if err := setUnique(table.Constraints, constraint.Name, "constraint", constraint); err != nil {
+					if err := setUnique(table.Constraints, constraint.Name, "constraint", constraint, table.FQTN(), con.Location); err != nil {
 						return nil, err
 					}
 					// PK implies NOT NULL on all key columns
@@ -1161,7 +1175,7 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 				return err
 			}
 			if fk != nil {
-				if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk); err != nil {
+				if err := setUnique(table.ForeignKeys, fk.Name, "foreign key", fk, table.FQTN(), con.Location); err != nil {
 					return err
 				}
 			}
@@ -1172,7 +1186,7 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 				return err
 			}
 			if constraint != nil {
-				if err := setUnique(table.Constraints, constraint.Name, "constraint", constraint); err != nil {
+				if err := setUnique(table.Constraints, constraint.Name, "constraint", constraint, table.FQTN(), con.Location); err != nil {
 					return err
 				}
 			}

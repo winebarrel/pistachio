@@ -36,11 +36,13 @@ func applyAlterTableRLS(as *pg_query.AlterTableStmt, t *model.Table) {
 // parseCreatePolicyStmt converts a CreatePolicyStmt into a model.Policy and
 // attaches it to the owning table. Returns the created policy so the caller
 // can apply post-parse decorations (e.g. RenameFrom). The table must already
-// exist in `tables`, otherwise an error is returned.
+// exist in `tables`, otherwise an error is returned. offset is where the
+// statement starts, which a duplicate-name error points at.
 func parseCreatePolicyStmt(
 	cps *pg_query.CreatePolicyStmt,
 	defaultSchema string,
 	tables *orderedmap.Map[string, *model.Table],
+	offset int32,
 ) (*model.Policy, error) {
 	if cps.Table == nil {
 		return nil, fmt.Errorf("CREATE POLICY: missing table reference")
@@ -89,7 +91,7 @@ func parseCreatePolicyStmt(
 		policy.WithCheck = &wc
 	}
 
-	if err := setUnique(tbl.Policies, policy.Name, "policy", policy); err != nil {
+	if err := setUnique(tbl.Policies, policy.Name, "policy", policy, fqtn, offset); err != nil {
 		return nil, err
 	}
 	return policy, nil

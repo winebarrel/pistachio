@@ -105,7 +105,7 @@ CREATE TRIGGER t_ins BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION sta
 CREATE TRIGGER t_ins BEFORE DELETE ON public.t FOR EACH ROW EXECUTE FUNCTION stamp();`
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate trigger")
+	assert.Equal(t, "duplicate trigger: t_ins on public.t", err.Error())
 }
 
 // The same trigger name on two tables is legal: a trigger name is unique
