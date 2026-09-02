@@ -39,9 +39,14 @@ vet:
 # TEST_JUNIT names a file to write a JUnit XML report to, which is what
 # Codecov Test Analytics ingests. Leave it empty and the report is skipped;
 # `go test` then writes straight to the terminal. Set, the output goes through
-# go-junit-report instead and is copied to stderr so the log still shows it.
+# go-junit-report, which -iocopy passes on to the terminal unchanged.
+#
+# -set-exit-code is what carries a failure out of the pipeline: make on Windows
+# does not use the SHELL set above, so pipefail is not in effect there and the
+# pipeline would otherwise report go-junit-report's own status. It covers a
+# failed test, a package that fails as a whole, and a build failure.
 ifneq ($(TEST_JUNIT),)
-TEST_REPORT = | tee /dev/stderr | go tool go-junit-report > $(TEST_JUNIT)
+TEST_REPORT = | go tool go-junit-report -iocopy -set-exit-code -out $(TEST_JUNIT)
 endif
 
 # The Go tests reset `public` and nothing else, so whatever `make schema`
