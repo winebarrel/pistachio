@@ -191,15 +191,28 @@ func readSQLFile(path string) (string, error) {
 
 func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult, error) {
 	var sqls []string
+	var spans []fileSpan
+	offset := 0
 	for _, path := range paths {
 		sql, err := readSQLFile(path)
 		if err != nil {
 			return nil, err
 		}
+		spanPath := path
+		if path == "-" {
+			spanPath = "<stdin>"
+		}
+		spans = append(spans, fileSpan{path: spanPath, start: offset})
 		sqls = append(sqls, sql)
+		offset += len(sql) + 1 // the "\n" the join puts between files
 	}
 
-	return parseSQLWithSchema(strings.Join(sqls, "\n"), defaultSchema)
+	joined := strings.Join(sqls, "\n")
+	result, err := parseSQLWithSchema(joined, defaultSchema)
+	if err != nil {
+		return nil, annotateError(err, joined, spans)
+	}
+	return result, nil
 }
 
 func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {

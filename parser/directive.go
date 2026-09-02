@@ -42,27 +42,28 @@ var knownDirectives = map[string]bool{
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
 // and returns an error if any are found.
 func validateDirectives(rawSQL string) error {
-	matches := anyDirectivePattern.FindAllStringSubmatch(rawSQL, -1)
+	matches := anyDirectivePattern.FindAllStringSubmatchIndex(rawSQL, -1)
 	for _, m := range matches {
-		name := strings.TrimSpace(m[1])
+		// m[0] is the match start, m[2]:m[3] the name group.
+		name := strings.TrimSpace(rawSQL[m[2]:m[3]])
 		if name == "" {
-			return fmt.Errorf("invalid directive: -- pista: (missing directive name)")
+			return &locatedError{msg: "invalid directive: -- pista: (missing directive name)", offset: m[0]}
 		}
 		if !knownDirectives[name] {
-			return fmt.Errorf("unknown directive: -- pista:%s", name)
+			return &locatedError{msg: fmt.Sprintf("unknown directive: -- pista:%s", name), offset: m[2]}
 		}
 	}
 
-	if concurrentlyWithArgsPattern.MatchString(rawSQL) {
-		return fmt.Errorf("-- pista:concurrently does not accept arguments")
+	if m := concurrentlyWithArgsPattern.FindStringIndex(rawSQL); m != nil {
+		return &locatedError{msg: "-- pista:concurrently does not accept arguments", offset: m[0]}
 	}
 
-	if bulkAlterWithArgsPattern.MatchString(rawSQL) {
-		return fmt.Errorf("-- pista:bulk-alter does not accept arguments")
+	if m := bulkAlterWithArgsPattern.FindStringIndex(rawSQL); m != nil {
+		return &locatedError{msg: "-- pista:bulk-alter does not accept arguments", offset: m[0]}
 	}
 
-	if ignoreWithArgsPattern.MatchString(rawSQL) {
-		return fmt.Errorf("-- pista:ignore does not accept arguments")
+	if m := ignoreWithArgsPattern.FindStringIndex(rawSQL); m != nil {
+		return &locatedError{msg: "-- pista:ignore does not accept arguments", offset: m[0]}
 	}
 
 	return nil

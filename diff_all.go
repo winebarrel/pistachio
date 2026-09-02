@@ -90,9 +90,10 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		}
 	}
 
+	// Not wrapped: the parser's message already names the file.
 	desired, err := parser.ParseSQLFilesWithSchema(options.Files, client.Schemas[0])
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse SQL file: %w", err)
+		return nil, err
 	}
 
 	filterDesiredBySchemas(desired, client.Schemas, client.SchemaMap)
