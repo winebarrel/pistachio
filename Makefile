@@ -74,6 +74,18 @@ fix:
 deadcode:
 	bash scripts/check-deadcode.sh
 
+# Fuzzing. The targets need no database, so this is the one test target that
+# runs anywhere. FUZZTIME is per target, not for the run as a whole, and each
+# has to be started on its own because `go test -fuzz` takes one target at a
+# time. A crash is written under the package's testdata/fuzz/, where it turns
+# into a seed the ordinary `go test` replays from then on.
+FUZZTIME ?= 1m
+
+.PHONY: fuzz
+fuzz:
+	go test ./parser/ -run='^$$' -fuzz=FuzzParseSQLWithSchema -fuzztime=$(FUZZTIME)
+	go test ./diff/ -run='^$$' -fuzz=FuzzDiffSelf -fuzztime=$(FUZZTIME)
+
 .PHONY: keywords
 keywords:
 	bash scripts/gen-keywords.sh
