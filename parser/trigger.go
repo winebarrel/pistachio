@@ -48,18 +48,20 @@ func parseCreateTrigStmt(ct *pg_query.CreateTrigStmt, defaultSchema string) (*mo
 
 // attachTrigger files a parsed trigger under the table or view it is on. A
 // trigger names its relation, so the relation has to be declared first, the
-// way CREATE POLICY needs its table.
+// way CREATE POLICY needs its table. offset is where the statement starts,
+// which a duplicate-name error points at.
 func attachTrigger(
 	trg *model.Trigger,
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
+	offset int32,
 ) error {
 	fqtn := trg.FQTN()
 	if t, ok := tables.GetOk(fqtn); ok {
-		return setUnique(t.Triggers, trg.Name, "trigger", trg)
+		return setUnique(t.Triggers, trg.Name, "trigger", trg, fqtn, offset)
 	}
 	if v, ok := views.GetOk(fqtn); ok {
-		return setUnique(v.Triggers, trg.Name, "trigger", trg)
+		return setUnique(v.Triggers, trg.Name, "trigger", trg, fqtn, offset)
 	}
 	return fmt.Errorf("CREATE TRIGGER %s: relation %s not defined", trg.Name, fqtn)
 }

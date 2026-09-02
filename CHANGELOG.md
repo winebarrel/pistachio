@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 * Name the file, line and column in the ignored-statement warning. It carried the statement text alone, which does not say where the statement is when the schema spans several files, or when the same `GRANT` appears in more than one of them. It now reads `pistachio: schema/items.sql:12:1: ignored unsupported statement: DROP TABLE public.items`. A parse that came from no file names no position.
+* Name the object and the position in a duplicate-name error. `duplicate column: id` said neither which table the column was on nor where the file repeats it. It now reads `duplicate column: id on public.users` and prints the line with a caret under it, as a syntax error does. A column or constraint is pointed at where it is defined, everything else at the statement that repeats the name. The checks that report a clash between two objects, a table and a view of one name for example, are unchanged.
 
 ## [1.40.0] - 2026-09-04
 
