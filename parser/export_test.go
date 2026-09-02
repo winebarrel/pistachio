@@ -9,7 +9,18 @@ var (
 	ParseSQLWithSchema = parseSQLWithSchema
 	ReadSQLFile        = readSQLFile
 	IgnoredStmtSnippet = ignoredStmtSnippet
+	AnnotateError      = annotateError
 )
+
+type FileSpan = fileSpan
+
+func NewFileSpan(path string, start int) fileSpan {
+	return fileSpan{path: path, start: start}
+}
+
+func NewLocatedError(msg string, offset int) error {
+	return &locatedError{msg: msg, offset: offset}
+}
 
 // SetWarnWriter swaps the destination for ignored-statement warnings and
 // returns a function that restores the previous writer.

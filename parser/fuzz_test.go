@@ -31,6 +31,9 @@ func FuzzParseSQLWithSchema(f *testing.F) {
 	f.Fuzz(func(t *testing.T, sql string) {
 		result, err := parseSQLWithSchema(sql, "public")
 		if err != nil {
+			// The location renderer must survive whatever position an
+			// arbitrary input produces.
+			annotateError(err, sql, []fileSpan{{path: "fuzz.sql", start: 0}})
 			return
 		}
 

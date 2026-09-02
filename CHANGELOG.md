@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Name the file, line and column in parse errors. A syntax error or a bad `-- pista:` directive now prints the offending line with a caret under the column, in the style of a compiler, instead of the bare message. With several schema files the line number is local to the file the error is in.
+
 * Stop a self-referencing foreign key from disabling the dependency sort. A key pointing at its own table's primary key, the `parent_id` of a tree, was added to the graph as a self-edge and read back as a cycle. `plan` and `apply` fall back to category order when the sort fails, so one such table anywhere in the schema dropped the order for the whole run: two new views, one selecting from the other, went out in file order and the apply failed on the view that did not exist yet. `dump --sort-by-deps` treats a cycle as a hard error and wrote nothing at all. The composite type and view branches already skipped a self-reference; the foreign key branch now does the same.
 
 * Manage an identity column's sequence options, the `( ... )` after `AS IDENTITY`. `START WITH`, `INCREMENT BY`, `MINVALUE`, `MAXVALUE`, `CACHE` and `CYCLE` were read by neither side, so a file that wrote them was applied at the defaults and `dump` dropped them. A change goes out as `ALTER TABLE ... ALTER COLUMN ... SET`, and an option the desired schema no longer names is reset to its default. `dump` writes only the options that differ from the defaults.
