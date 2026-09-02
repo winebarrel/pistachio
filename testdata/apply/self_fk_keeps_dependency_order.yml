@@ -1,0 +1,70 @@
+# nodes carries a key pointing at its own primary key. That used to be read as
+# a cycle, and orderStatements falls back to category order for the whole run
+# when the sort fails, so a_view was created before the b_view it selects from
+# and the apply failed. The file order is the wrong order on purpose.
+init: ""
+desired: |
+  CREATE TABLE public.nodes (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT nodes_pkey PRIMARY KEY (id),
+      CONSTRAINT nodes_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.nodes(id)
+  );
+  CREATE TABLE public.src (
+      id integer NOT NULL,
+      CONSTRAINT src_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.a_view AS SELECT id FROM public.b_view;
+  CREATE VIEW public.b_view AS SELECT id FROM public.src;
+applied: |
+  -- public.nodes
+  CREATE TABLE public.nodes (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT nodes_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.nodes ADD CONSTRAINT nodes_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES nodes(id);
+
+  -- public.src
+  CREATE TABLE public.src (
+      id integer NOT NULL,
+      CONSTRAINT src_pkey PRIMARY KEY (id)
+  );
+
+  -- public.a_view
+  CREATE OR REPLACE VIEW public.a_view AS
+  SELECT b_view.id
+     FROM b_view;
+
+  -- public.b_view
+  CREATE OR REPLACE VIEW public.b_view AS
+  SELECT src.id
+     FROM src;
+applied_pg16: &applied_pg16plus |
+  -- public.nodes
+  CREATE TABLE public.nodes (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT nodes_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.nodes ADD CONSTRAINT nodes_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES nodes(id);
+
+  -- public.src
+  CREATE TABLE public.src (
+      id integer NOT NULL,
+      CONSTRAINT src_pkey PRIMARY KEY (id)
+  );
+
+  -- public.a_view
+  CREATE OR REPLACE VIEW public.a_view AS
+  SELECT id
+     FROM b_view;
+
+  -- public.b_view
+  CREATE OR REPLACE VIEW public.b_view AS
+  SELECT id
+     FROM src;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

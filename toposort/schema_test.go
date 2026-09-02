@@ -121,6 +121,68 @@ func TestOrderFromSchemaWithSequences_NextvalQuotedName(t *testing.T) {
 	assert.Less(t, idx[`public."Zzz_seq"`], idx[`public."Aaa"`], "quoted sequence before dependent table")
 }
 
+func TestOrderFromSchemaWithSequences_NextvalQualifiedName(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	// The schema-qualified literal a pg_dump file carries. It matches a key in
+	// defined directly, without the search_path fallback the two tests above
+	// take.
+	sequences := orderedmap.New[string, *model.Sequence]()
+	sequences.Set("public.zzz_seq", &model.Sequence{Schema: "public", Name: "zzz_seq"})
+
+	def := "nextval('public.zzz_seq'::regclass)"
+	tables := orderedmap.New[string, *model.Table]()
+	aaa := &model.Table{Schema: "public", Name: "aaa"}
+	aaa.Columns = orderedmap.New[string, *model.Column]()
+	aaa.Columns.Set("id", &model.Column{Name: "id", TypeName: "bigint", Default: &def})
+	aaa.Indexes = orderedmap.New[string, *model.Index]()
+	aaa.Constraints = orderedmap.New[string, *model.Constraint]()
+	aaa.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.aaa", aaa)
+
+	order, err := toposort.OrderFromSchema(enums, domains, orderedmap.New[string, *model.CompositeType](), tables, views, sequences, orderedmap.New[string, *model.Routine]())
+	require.NoError(t, err)
+
+	idx := make(map[string]int)
+	for i, name := range order {
+		idx[name] = i
+	}
+	assert.Less(t, idx["public.zzz_seq"], idx["public.aaa"], "qualified sequence before dependent table")
+}
+
+// A default the scan cannot read a sequence name out of leaves the table with
+// no edge, rather than failing the sort.
+func TestOrderFromSchemaWithSequences_NextvalUnreadable(t *testing.T) {
+	for name, def := range map[string]string{
+		"no literal":         "nextval(id)",
+		"unterminated quote": "nextval('zzz_seq",
+	} {
+		t.Run(name, func(t *testing.T) {
+			enums := orderedmap.New[string, *model.Enum]()
+			domains := orderedmap.New[string, *model.Domain]()
+			views := orderedmap.New[string, *model.View]()
+
+			sequences := orderedmap.New[string, *model.Sequence]()
+			sequences.Set("public.zzz_seq", &model.Sequence{Schema: "public", Name: "zzz_seq"})
+
+			tables := orderedmap.New[string, *model.Table]()
+			aaa := &model.Table{Schema: "public", Name: "aaa"}
+			aaa.Columns = orderedmap.New[string, *model.Column]()
+			aaa.Columns.Set("id", &model.Column{Name: "id", TypeName: "bigint", Default: &def})
+			aaa.Indexes = orderedmap.New[string, *model.Index]()
+			aaa.Constraints = orderedmap.New[string, *model.Constraint]()
+			aaa.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+			tables.Set("public.aaa", aaa)
+
+			order, err := toposort.OrderFromSchema(enums, domains, orderedmap.New[string, *model.CompositeType](), tables, views, sequences, orderedmap.New[string, *model.Routine]())
+			require.NoError(t, err)
+			assert.ElementsMatch(t, []string{"public.aaa", "public.zzz_seq"}, order)
+		})
+	}
+}
+
 func TestOrderFromSchema_ForeignKey(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()
@@ -159,6 +221,49 @@ func TestOrderFromSchema_ForeignKey(t *testing.T) {
 	}
 
 	assert.Less(t, idx["public.users"], idx["public.posts"], "FK target before FK source")
+}
+
+// A tree table whose FK points at its own primary key is a self-edge, not a
+// cycle: the table is created in one statement and the key resolves within it.
+// Both the qualified and the unqualified reference reach the same node.
+func TestOrderFromSchema_SelfReferencingFK(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	tables := orderedmap.New[string, *model.Table]()
+
+	refNodes := "nodes"
+	refSchema := "public"
+
+	nodes := &model.Table{Schema: "public", Name: "nodes"}
+	nodes.Columns = orderedmap.New[string, *model.Column]()
+	nodes.Indexes = orderedmap.New[string, *model.Index]()
+	nodes.Constraints = orderedmap.New[string, *model.Constraint]()
+	nodes.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	nodes.ForeignKeys.Set("nodes_parent_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "nodes_parent_fk"},
+		RefSchema:  &refSchema,
+		RefTable:   &refNodes,
+	})
+	tables.Set("public.nodes", nodes)
+
+	refEdges := "edges"
+
+	edges := &model.Table{Schema: "public", Name: "edges"}
+	edges.Columns = orderedmap.New[string, *model.Column]()
+	edges.Indexes = orderedmap.New[string, *model.Index]()
+	edges.Constraints = orderedmap.New[string, *model.Constraint]()
+	edges.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	edges.ForeignKeys.Set("edges_parent_fk", &model.ForeignKey{
+		Constraint: model.Constraint{Name: "edges_parent_fk"},
+		RefTable:   &refEdges,
+	})
+	tables.Set("public.edges", edges)
+
+	order, err := orderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"public.nodes", "public.edges"}, order)
 }
 
 func TestOrderFromSchema_ViewToView(t *testing.T) {

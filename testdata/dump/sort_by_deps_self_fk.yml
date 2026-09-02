@@ -1,0 +1,35 @@
+# A key pointing at the table's own primary key is a self-edge, not a cycle:
+# the FK is emitted as its own ALTER TABLE after the table, so nothing has to
+# come first. nodes carries the qualified form and leaves the unqualified one.
+sort_by_deps: true
+init: |
+  CREATE TABLE public.nodes (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT nodes_pkey PRIMARY KEY (id),
+      CONSTRAINT nodes_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.nodes(id)
+  );
+  CREATE TABLE public.leaves (
+      id integer NOT NULL,
+      node_id integer,
+      CONSTRAINT leaves_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.leaves ADD CONSTRAINT leaves_node_id_fkey FOREIGN KEY (node_id) REFERENCES nodes(id);
+dump: |
+  -- public.nodes
+  CREATE TABLE public.nodes (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT nodes_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.nodes ADD CONSTRAINT nodes_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES nodes(id);
+
+  -- public.leaves
+  CREATE TABLE public.leaves (
+      id integer NOT NULL,
+      node_id integer,
+      CONSTRAINT leaves_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.leaves ADD CONSTRAINT leaves_node_id_fkey FOREIGN KEY (node_id) REFERENCES nodes(id);
