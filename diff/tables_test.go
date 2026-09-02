@@ -1270,7 +1270,7 @@ func TestSchemaOf(t *testing.T) {
 	// A quoted schema containing a dot: the dot inside quotes is not a separator.
 	assert.Equal(t, `"a.b"`, schemaOf(`"a.b".people`))
 	// No top-level dot yields "".
-	assert.Equal(t, "", schemaOf("people"))
+	assert.Empty(t, schemaOf("people"))
 }
 
 func TestEqualDefault(t *testing.T) {

@@ -30,7 +30,7 @@ func TestIdent_uppercase(t *testing.T) {
 }
 
 func TestIdent_empty(t *testing.T) {
-	assert.Equal(t, "", Ident(""))
+	assert.Empty(t, Ident(""))
 }
 
 func TestIdent_emptySchema(t *testing.T) {

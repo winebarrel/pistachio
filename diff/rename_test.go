@@ -418,7 +418,7 @@ func TestRewriteColumnRefsInTriggers_FallbackOnEmptyDefinition(t *testing.T) {
 	out := rewriteColumnRefsInTriggers(in, one("qty", "quantity"))
 	got, ok := out.GetOk("t")
 	require.True(t, ok)
-	assert.Equal(t, "", got.Definition)
+	assert.Empty(t, got.Definition)
 }
 
 func TestRewriteColumnRefsInTriggers_FallbackOnOtherStatement(t *testing.T) {

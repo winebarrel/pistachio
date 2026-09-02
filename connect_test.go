@@ -3,7 +3,6 @@ package pistachio
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -172,7 +171,7 @@ func TestBuildConnConfig_InvalidConnStringReturnsError(t *testing.T) {
 
 	_, err := client.buildConnConfig()
 	require.Error(t, err)
-	assert.True(t, strings.Contains(err.Error(), "failed to parse connection string"))
+	assert.Contains(t, err.Error(), "failed to parse connection string")
 }
 
 func TestConnInfoComment(t *testing.T) {
@@ -275,5 +274,5 @@ func TestConnect_InvalidConnStringPropagatesBuildError(t *testing.T) {
 
 	_, err := client.connect(context.Background(), false)
 	require.Error(t, err)
-	assert.True(t, strings.Contains(err.Error(), "failed to parse connection string"))
+	assert.Contains(t, err.Error(), "failed to parse connection string")
 }

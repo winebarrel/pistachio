@@ -91,7 +91,7 @@ func TestReadSQLFile_Stdin_ReadAll(t *testing.T) {
 
 	got, err := parser.ReadSQLFile("-")
 	require.NoError(t, err)
-	assert.Equal(t, "", got)
+	assert.Empty(t, got)
 }
 
 func TestParseSQL_InvalidSQL(t *testing.T) {
@@ -536,8 +536,7 @@ func TestParseSQLFilesWithSchema(t *testing.T) {
 
 func TestParseSQLFilesWithSchema_MissingFile(t *testing.T) {
 	_, err := parser.ParseSQLFilesWithSchema([]string{filepath.Join(t.TempDir(), "missing.sql")}, "public")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, fs.ErrNotExist)
+	require.ErrorIs(t, err, fs.ErrNotExist)
 	assert.Contains(t, err.Error(), "failed to read SQL file")
 }
 
@@ -1792,7 +1791,7 @@ GRANT SELECT ON public.users TO readonly_role;`
 	assert.Equal(t, 1, result.Tables.Len())
 	require.Len(t, result.ExecuteStmts, 1)
 	assert.Contains(t, result.ExecuteStmts[0].SQL, "GRANT select")
-	assert.Equal(t, "", result.ExecuteStmts[0].CheckSQL)
+	assert.Empty(t, result.ExecuteStmts[0].CheckSQL)
 }
 
 func TestParseSQL_IndexOnUnknownTableSkipped(t *testing.T) {

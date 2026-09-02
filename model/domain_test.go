@@ -56,7 +56,7 @@ func TestDomain_CommentSQL(t *testing.T) {
 
 func TestDomain_CommentSQL_NoComment(t *testing.T) {
 	d := &model.Domain{Schema: "public", Name: "pos_int", BaseType: "integer"}
-	assert.Equal(t, "", d.CommentSQL())
+	assert.Empty(t, d.CommentSQL())
 }
 
 func TestDomainToSQL(t *testing.T) {

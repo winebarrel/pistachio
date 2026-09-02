@@ -49,7 +49,7 @@ func TestEnum_CommentSQL_NoComment(t *testing.T) {
 		Name:   "status",
 		Values: []string{"active"},
 	}
-	assert.Equal(t, "", e.CommentSQL())
+	assert.Empty(t, e.CommentSQL())
 }
 
 func TestEnumToSQL(t *testing.T) {

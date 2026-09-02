@@ -71,7 +71,7 @@ func TestListColumnsByTables(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "external", body.StorageType)
 		assert.Equal(t, "extended", body.TypeStorage)
-		assert.Equal(t, "", body.Compression)
+		assert.Empty(t, body.Compression)
 
 		note, ok := tbl.Columns.GetOk("note")
 		require.True(t, ok)
@@ -83,7 +83,7 @@ func TestListColumnsByTables(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "extended", title.StorageType)
 		assert.Equal(t, "extended", title.TypeStorage)
-		assert.Equal(t, "", title.Compression)
+		assert.Empty(t, title.Compression)
 
 		id, ok := tbl.Columns.GetOk("id")
 		require.True(t, ok)
