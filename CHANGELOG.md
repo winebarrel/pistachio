@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.39.0] - 2026-09-02
+
+* Read a schema in a fixed number of queries. A table's columns, constraints and policies were read one table at a time, and a domain's constraints and a composite type's attributes one type at a time, so a run cost a round trip per object. The gitlab sample schema took 910 statements for its 1083 tables; it now takes 13. The cost was in the round trips, so the gain grows with the latency to the database. The catalog is unchanged, so no plan or dump differs.
+
 ## [1.38.1] - 2026-09-01
 
 * Make a table's storage parameters opt-in, behind `--manage-storage-param` (`$PISTA_MANAGE_STORAGE_PARAM`). Managing them by default reset the autovacuum settings a table was tuned with, which are set on the database more often than written in a schema file. Without the flag they are dropped from both sides of the diff: no `SET` or `RESET` is planned, the `WITH` clause a file writes is left off the `CREATE TABLE`, and `dump` does not write one. An index's parameters are part of its definition and are managed either way.

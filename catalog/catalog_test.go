@@ -38,7 +38,9 @@ func TestCatalog_ClosedConnection(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, conn.Close(ctx))
 
-	tbl := &model.Table{Schema: "public", Name: "users"}
+	// A non-zero OID so the batched readers reach the connection instead of
+	// returning early on an empty table list.
+	tbls := []*model.Table{{OID: 1, Schema: "public", Name: "users"}}
 
 	tests := []struct {
 		name string
@@ -60,9 +62,9 @@ func TestCatalog_ClosedConnection(t *testing.T) {
 		{"ListRoutines", func() error { _, err := cat.ListRoutines(ctx); return err }},
 		{"ListIndexes", func() error { _, err := cat.ListIndexes(ctx); return err }},
 		{"ListTriggers", func() error { _, err := cat.ListTriggers(ctx); return err }},
-		{"ListColumnsByTable", func() error { _, err := cat.ListColumnsByTable(ctx, tbl); return err }},
-		{"ListConstraintsByTable", func() error { _, _, err := cat.ListConstraintsByTable(ctx, tbl); return err }},
-		{"ListPoliciesByTable", func() error { _, err := cat.ListPoliciesByTable(ctx, tbl); return err }},
+		{"ListColumnsByTables", func() error { _, err := cat.ListColumnsByTables(ctx, tbls); return err }},
+		{"ListConstraintsByTables", func() error { _, _, err := cat.ListConstraintsByTables(ctx, tbls); return err }},
+		{"ListPoliciesByTables", func() error { _, err := cat.ListPoliciesByTables(ctx, tbls); return err }},
 	}
 
 	for _, tt := range tests {

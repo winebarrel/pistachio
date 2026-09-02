@@ -86,22 +86,32 @@ func (c *Catalog) ListCompositeTypes(ctx context.Context) ([]*model.CompositeTyp
 		return nil, fmt.Errorf("catalog: failed to scan composite type info rows: %w", err)
 	}
 
+	relids := make([]uint32, len(ctRows))
+	for i, r := range ctRows {
+		relids[i] = r.typrelid
+	}
+
+	attrsByRelid, err := c.listCompositeAttributes(ctx, relids)
+	if err != nil {
+		return nil, err
+	}
+
 	compositeTypes := make([]*model.CompositeType, 0, len(ctRows))
 	for _, r := range ctRows {
-		attrs, err := c.listCompositeAttributes(ctx, r.typrelid)
-		if err != nil {
-			return nil, err
-		}
-		r.ct.Attributes = attrs
+		r.ct.Attributes = attrsByRelid[r.typrelid]
 		compositeTypes = append(compositeTypes, r.ct)
 	}
 
 	return compositeTypes, nil
 }
 
-func (c *Catalog) listCompositeAttributes(ctx context.Context, relid uint32) ([]*model.CompositeAttribute, error) {
+// listCompositeAttributes returns the attributes of the given composite types'
+// relations, keyed by relation OID and in attnum order. One query serves every
+// composite type.
+func (c *Catalog) listCompositeAttributes(ctx context.Context, relids []uint32) (map[uint32][]*model.CompositeAttribute, error) {
 	q := `
 		SELECT
+			a.attrelid,
 			a.attname,
 			pg_catalog.format_type(a.atttypid, a.atttypmod) AS type,
 			(SELECT quote_ident(cn.nspname) || '.' || quote_ident(coll.collname) FROM pg_catalog.pg_collation coll JOIN pg_catalog.pg_namespace cn ON cn.oid = coll.collnamespace WHERE coll.oid = a.attcollation AND a.attcollation <> 0 AND coll.collname <> 'default') AS collation,
@@ -112,15 +122,21 @@ func (c *Catalog) listCompositeAttributes(ctx context.Context, relid uint32) ([]
 			AND d.classoid = 'pg_class'::regclass
 			AND d.objsubid = a.attnum
 		WHERE
-			a.attrelid = @relid
+			a.attrelid = ANY(@relids::oid[])
 			AND a.attnum > 0
 			AND NOT a.attisdropped
 		ORDER BY
+			a.attrelid,
 			a.attnum
 	`
 
+	attrs := map[uint32][]*model.CompositeAttribute{}
+	if len(relids) == 0 {
+		return attrs, nil
+	}
+
 	args := pgx.NamedArgs{
-		"relid": relid,
+		"relids": relids,
 	}
 
 	rows, err := c.conn.Query(ctx, q, args)
@@ -129,14 +145,14 @@ func (c *Catalog) listCompositeAttributes(ctx context.Context, relid uint32) ([]
 	}
 	defer rows.Close()
 
-	var attrs []*model.CompositeAttribute
 	for rows.Next() {
 		var a model.CompositeAttribute
-		err := rows.Scan(&a.Name, &a.TypeName, &a.Collation, &a.Comment)
+		var relid uint32
+		err := rows.Scan(&relid, &a.Name, &a.TypeName, &a.Collation, &a.Comment)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan composite attribute: %w", err)
 		}
-		attrs = append(attrs, &a)
+		attrs[relid] = append(attrs[relid], &a)
 	}
 
 	if err := rows.Err(); err != nil {

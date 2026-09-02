@@ -168,36 +168,58 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 		return nil, fmt.Errorf("catalog: failed to scan table info rows: %w", err)
 	}
 
+	// Each of these is one query for all the tables, keyed by table OID.
+	// Asking per table cost a round trip each.
+	colsByTable, err := c.ListColumnsByTables(ctx, tables)
+	if err != nil {
+		return nil, fmt.Errorf("catalog: failed to get columns: %w", err)
+	}
+
+	consByTable, fksByTable, err := c.ListConstraintsByTables(ctx, tables)
+	if err != nil {
+		return nil, fmt.Errorf("catalog: failed to get constraints: %w", err)
+	}
+
+	policiesByTable, err := c.ListPoliciesByTables(ctx, tables)
+	if err != nil {
+		return nil, fmt.Errorf("catalog: failed to get policies: %w", err)
+	}
+
 	for _, t := range tables {
-		cols, err := c.ListColumnsByTable(ctx, t)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to get columns for %s.%s: %w", t.Schema, t.Name, err)
-		}
-		for _, col := range cols {
+		for _, col := range colsByTable[t.OID] {
 			t.Columns.Set(col.Name, col)
 		}
-
-		cons, fks, err := c.ListConstraintsByTable(ctx, t)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to get constraints for %s.%s: %w", t.Schema, t.Name, err)
-		}
-		for _, con := range cons {
+		for _, con := range consByTable[t.OID] {
 			t.Constraints.Set(con.Name, con)
 		}
-		for _, fk := range fks {
+		for _, fk := range fksByTable[t.OID] {
 			t.ForeignKeys.Set(fk.Name, fk)
 		}
-
-		policies, err := c.ListPoliciesByTable(ctx, t)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to get policies for %s.%s: %w", t.Schema, t.Name, err)
-		}
-		for _, p := range policies {
+		for _, p := range policiesByTable[t.OID] {
 			t.Policies.Set(p.Name, p)
 		}
 	}
 
 	return tables, nil
+}
+
+// tableOIDs returns the pg_class OIDs the per-table readers filter on.
+func tableOIDs(tables []*model.Table) []uint32 {
+	oids := make([]uint32, len(tables))
+	for i, t := range tables {
+		oids[i] = t.OID
+	}
+	return oids
+}
+
+// tablesByOID indexes the tables by OID, for readers that need the schema and
+// name of the table a row belongs to.
+func tablesByOID(tables []*model.Table) map[uint32]*model.Table {
+	byOID := make(map[uint32]*model.Table, len(tables))
+	for _, t := range tables {
+		byOID[t.OID] = t
+	}
+	return byOID
 }
 
 // storageParams turns the two reloptions arrays a table is read with into one

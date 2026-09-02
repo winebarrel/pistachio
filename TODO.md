@@ -211,7 +211,7 @@ syntax, which `pg_query_go` does not yet parse (libpg_query PR #317 is
 still in draft as of 2026-05). Once that lands, the parser can accept
 the standalone form and the diff can drop the no-op branches.
 
-A second limitation: `catalog.ListColumnsByTable` strips any constraint
+A second limitation: `catalog.ListColumnsByTables` strips any constraint
 name with the `_not_null` suffix to mask PG18's auto-naming (which does
 not follow column or table renames). An explicit user name that happens
 to end in `_not_null` is therefore lost on round-trip. A more precise
@@ -524,7 +524,7 @@ replans forever.
 
 Closing this means letting the catalog surface sequences that are merely
 owned, kept apart from the serial and identity ones that stay column
-attributes (the distinction `catalog.ListColumnsByTable` already draws by
+attributes (the distinction `catalog.ListColumnsByTables` already draws by
 checking that the column default draws from the sequence), and teaching the
 diff to emit `ALTER SEQUENCE ... OWNED BY` / `OWNED BY NONE` for the
 transitions. That widens the set of objects pistachio manages, so it is a

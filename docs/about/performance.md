@@ -35,6 +35,10 @@ The database runs on the same host, so client/server latency is negligible.
 Times over a network connection will be higher because reading the catalog adds
 round trips.
 
+These numbers predate 1.39.0, which made the catalog read a fixed number of
+queries. The noop plan and dump cases are faster than the table shows, and more
+so over a network.
+
 ## Schema shape
 
 Each table has 9 columns of mixed types (bigint identity primary key, text,
