@@ -1,0 +1,16 @@
+# The desired schema ends without a semicolon, so pg_query reports no length
+# for the CREATE TABLE and the directive scan has to read it to the end of the
+# input. Without that the rename planned a drop and a create.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:renamed-from public.users
+  CREATE TABLE public.accounts (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  )
+plan: |
+  ALTER TABLE public.users RENAME TO accounts;
