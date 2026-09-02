@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 * Read the desired schema before connecting. `plan` and `apply` opened the connection first, so a missing file, a syntax error or a duplicate name was reported only once the database answered, and a run against an unreachable database reported the connection rather than the file. Both now read and parse the schema files, and resolve `--pre-sql-file` and `--concurrently-pre-sql-file`, before connecting. A successful run is unchanged; one that cannot read its own files opens no connection, and takes no lock under `--exclusive`.
+* Name the object and the position in a duplicate-name error. `duplicate column: id` said neither which table the column was on nor where the file repeats it. It now reads `duplicate column: id on public.users` and prints the line with a caret under it, as a syntax error does. A column or constraint is pointed at where it is defined, everything else at the statement that repeats the name. The checks that report a clash between two objects, a table and a view of one name for example, are unchanged.
 
 ## [1.40.0] - 2026-09-04
 

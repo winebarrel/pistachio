@@ -7,8 +7,22 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 	pgparser "github.com/pganalyze/pg_query_go/v6/parser"
 )
+
+// stmtStart returns the byte offset of a statement's first token. pg_query
+// counts the blank lines and comments before a statement as part of it, so
+// StmtLocation on its own can point at whitespace rather than at the keyword.
+func stmtStart(sql string, rawStmt *pg_query.RawStmt) int32 {
+	start := rawStmt.StmtLocation
+	end := start + rawStmt.StmtLen
+	// pg_query leaves StmtLen at 0 for the final statement in the input.
+	if rawStmt.StmtLen == 0 || end > int32(len(sql)) {
+		end = int32(len(sql))
+	}
+	return start + int32(findLeadingCommentEnd(sql[start:end]))
+}
 
 // fileSpan records where a desired-schema file starts in the SQL handed to
 // the parser, which parses every file joined into one input.
