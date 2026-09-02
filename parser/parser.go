@@ -198,7 +198,11 @@ func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult
 		if err != nil {
 			return nil, err
 		}
-		spans = append(spans, fileSpan{path: path, start: offset})
+		spanPath := path
+		if path == "-" {
+			spanPath = "<stdin>"
+		}
+		spans = append(spans, fileSpan{path: spanPath, start: offset})
 		sqls = append(sqls, sql)
 		offset += len(sql) + 1 // the "\n" the join puts between files
 	}

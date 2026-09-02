@@ -166,6 +166,31 @@ func TestParseSQLFiles_DirectiveWithArgsLocation(t *testing.T) {
   | ^`, err.Error())
 }
 
+func TestParseSQLFiles_SyntaxErrorOnStdin(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+
+	origStdin := os.Stdin
+	os.Stdin = r
+	defer func() {
+		os.Stdin = origStdin
+		r.Close()
+	}()
+
+	go func() {
+		w.WriteString("CREATE TABEL public.items (id integer);\n")
+		w.Close()
+	}()
+
+	_, err = parser.ParseSQLFilesWithSchema([]string{"-"}, "public")
+	require.Error(t, err)
+	assert.Equal(t, `failed to parse SQL: syntax error at or near "TABEL"
+ --> <stdin>:1:8
+  |
+1 | CREATE TABEL public.items (id integer);
+  |        ^`, err.Error())
+}
+
 func TestAnnotateError_NoPosition(t *testing.T) {
 	err := assert.AnError
 	got := parser.AnnotateError(err, "CREATE TABLE t (id int);", []parser.FileSpan{parser.NewFileSpan("a.sql", 0)})
