@@ -56,24 +56,25 @@ func DefaultIdentitySequence(typeName string, increment int64) IdentitySequence 
 }
 
 // RetypedTo returns the parameters the sequence has once the column's type
-// changes from oldType to newType. PostgreSQL carries a bound left at the old
-// type's default over to the new type's default and leaves an explicit bound
-// alone. A diff that follows a type change reads the current side through
-// this, or it plans a bound the retype already set.
+// changes from oldType to newType. PostgreSQL moves a bound sitting at the old
+// type's extreme to the new type's extreme, in either direction, and leaves
+// any other bound alone; the start does not move. A diff that follows a type
+// change reads the current side through this, or it plans a bound the retype
+// already set.
 func (s *IdentitySequence) RetypedTo(oldType, newType string) *IdentitySequence {
 	if s == nil || oldType == newType {
 		return s
 	}
 
-	old := DefaultIdentitySequence(oldType, s.Increment)
-	def := DefaultIdentitySequence(newType, s.Increment)
+	oldMin, oldMax := seqTypeBounds(oldType)
+	newMin, newMax := seqTypeBounds(newType)
 
 	retyped := *s
-	if retyped.Min == old.Min {
-		retyped.Min = def.Min
+	if retyped.Min == oldMin {
+		retyped.Min = newMin
 	}
-	if retyped.Max == old.Max {
-		retyped.Max = def.Max
+	if retyped.Max == oldMax {
+		retyped.Max = newMax
 	}
 
 	return &retyped

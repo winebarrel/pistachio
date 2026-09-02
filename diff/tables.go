@@ -555,7 +555,7 @@ func columnStorageSQL(fqtn string, current, desired *model.Column, retyped bool)
 // START WITH only moves where the sequence restarts; the current value is left
 // alone, the same as ALTER SEQUENCE.
 func identitySeqClauses(current, desired *model.IdentitySequence) []string {
-	if current == nil || desired == nil || *current == *desired {
+	if current == nil || desired == nil {
 		return nil
 	}
 

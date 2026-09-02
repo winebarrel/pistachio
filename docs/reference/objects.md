@@ -8,7 +8,7 @@
 - Storage parameters, the `WITH (...)` clause. An index's parameters are always managed; a table's are opt-in with `--manage-storage-param`. See [Table storage parameters](#table-storage-parameters).
 - Views
 - Materialized views
-- Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression). An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed; a change goes out as `ALTER TABLE ... ALTER COLUMN ... SET`.
+- Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression). An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed; a change goes out as `ALTER TABLE ... ALTER COLUMN ... SET`. No `RESTART` is planned, the same as `ALTER SEQUENCE`, so a change that puts the sequence's current value outside the new range fails at apply with the server's error.
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, types, domains, composite types, composite attributes, sequences)

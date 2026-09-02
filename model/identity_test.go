@@ -54,7 +54,7 @@ func TestIdentitySequenceRetypedTo(t *testing.T) {
 		assert.Same(t, seq, seq.RetypedTo("integer", "integer"))
 	})
 
-	t.Run("a bound at the old default follows the type", func(t *testing.T) {
+	t.Run("a bound at the old type's extreme follows the type", func(t *testing.T) {
 		seq := new(model.DefaultIdentitySequence("integer", 1))
 		assert.Equal(t, new(model.DefaultIdentitySequence("bigint", 1)), seq.RetypedTo("integer", "bigint"))
 	})
@@ -62,6 +62,16 @@ func TestIdentitySequenceRetypedTo(t *testing.T) {
 	t.Run("descending too", func(t *testing.T) {
 		seq := new(model.DefaultIdentitySequence("bigint", -1))
 		assert.Equal(t, new(model.DefaultIdentitySequence("integer", -1)), seq.RetypedTo("bigint", "integer"))
+	})
+
+	t.Run("an extreme against the direction follows as well", func(t *testing.T) {
+		// An ascending sequence whose MINVALUE sits at integer's minimum: the
+		// server moves it on the type change even though it is not the
+		// ascending default.
+		seq := &model.IdentitySequence{Start: -2147483648, Min: -2147483648, Max: 1000, Increment: 1, Cache: 1}
+		assert.Equal(t,
+			&model.IdentitySequence{Start: -2147483648, Min: -9223372036854775808, Max: 1000, Increment: 1, Cache: 1},
+			seq.RetypedTo("integer", "bigint"))
 	})
 
 	t.Run("an explicit bound stays", func(t *testing.T) {
