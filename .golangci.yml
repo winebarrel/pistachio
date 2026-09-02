@@ -1,8 +1,18 @@
 version: "2"
 linters:
   enable:
+    - asasalint
+    - durationcheck
     - errorlint
+    - fatcontext
+    - makezero
+    - nilerr
+    - nilnesserr
+    - reassign
+    - testifylint
     - unconvert
+    - usestdlibvars
+    - wastedassign
   exclusions:
     rules:
       - linters:

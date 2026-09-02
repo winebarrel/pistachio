@@ -178,13 +178,13 @@ func TestExtractInlineDirectives_Mixed(t *testing.T) {
 func TestExtractConstraintName(t *testing.T) {
 	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
 	assert.Equal(t, "My Con", extractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))
-	assert.Equal(t, "", extractConstraintName("id integer NOT NULL"))
-	assert.Equal(t, "", extractConstraintName(""))
+	assert.Empty(t, extractConstraintName("id integer NOT NULL"))
+	assert.Empty(t, extractConstraintName(""))
 	// Unquoted names are lowercased
 	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT Users_Pkey PRIMARY KEY (id)"))
 	// An unterminated quote yields no name rather than a truncated one
-	assert.Equal(t, "", extractConstraintName(`CONSTRAINT "unterminated UNIQUE (code)`))
-	assert.Equal(t, "", extractConstraintName("CONSTRAINT "))
+	assert.Empty(t, extractConstraintName(`CONSTRAINT "unterminated UNIQUE (code)`))
+	assert.Empty(t, extractConstraintName("CONSTRAINT "))
 }
 
 func TestNormalizeUnqualifiedDirective(t *testing.T) {
@@ -239,12 +239,12 @@ func TestExtractColumnName(t *testing.T) {
 	assert.Equal(t, "id", extractColumnName("id integer NOT NULL,"))
 	assert.Equal(t, "name", extractColumnName("name text NOT NULL"))
 	assert.Equal(t, "My Col", extractColumnName(`"My Col" text NOT NULL,`))
-	assert.Equal(t, "", extractColumnName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
-	assert.Equal(t, "", extractColumnName(""))
+	assert.Empty(t, extractColumnName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
+	assert.Empty(t, extractColumnName(""))
 	// Unquoted names are lowercased
 	assert.Equal(t, "displayname", extractColumnName("DisplayName text NOT NULL"))
 	// An unterminated quote yields no name rather than a truncated one
-	assert.Equal(t, "", extractColumnName(`"unterminated text NOT NULL`))
+	assert.Empty(t, extractColumnName(`"unterminated text NOT NULL`))
 }
 
 func TestExtractExecuteDirectives_WithCheckSQL(t *testing.T) {
@@ -287,7 +287,7 @@ GRANT SELECT ON public.users TO readonly_role;`
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0].SQL, "GRANT select")
-	assert.Equal(t, "", stmts[0].CheckSQL)
+	assert.Empty(t, stmts[0].CheckSQL)
 	assert.Len(t, skip, 1)
 }
 
@@ -320,7 +320,7 @@ CREATE OR REPLACE FUNCTION public.func2() RETURNS void AS $$ BEGIN END; $$ LANGU
 	stmts, skip, err := extractExecuteDirectives(sql, result.Stmts)
 	require.NoError(t, err)
 	require.Len(t, stmts, 2)
-	assert.Equal(t, "", stmts[0].CheckSQL)
+	assert.Empty(t, stmts[0].CheckSQL)
 	assert.Equal(t, "SELECT true", stmts[1].CheckSQL)
 	assert.Len(t, skip, 2)
 }
@@ -349,7 +349,7 @@ CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ BEGIN END; $$ LAN
 	require.Len(t, stmts, 1)
 	assert.True(t, stmts[0].First)
 	assert.Contains(t, stmts[0].SQL, "CREATE OR REPLACE FUNCTION")
-	assert.Equal(t, "", stmts[0].CheckSQL)
+	assert.Empty(t, stmts[0].CheckSQL)
 	assert.Len(t, skip, 1)
 }
 

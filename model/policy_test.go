@@ -13,7 +13,7 @@ func TestPolicyCommand_String(t *testing.T) {
 	assert.Equal(t, "INSERT", model.PolicyCommand('a').String())
 	assert.Equal(t, "UPDATE", model.PolicyCommand('w').String())
 	assert.Equal(t, "DELETE", model.PolicyCommand('d').String())
-	assert.Equal(t, "", model.PolicyCommand(0).String())
+	assert.Empty(t, model.PolicyCommand(0).String())
 }
 
 func TestPolicyCommand_IsAll(t *testing.T) {

@@ -61,7 +61,7 @@ func TestCompositeType_CommentSQL(t *testing.T) {
 	assert.Equal(t, "COMMENT ON TYPE public.address IS 'an address';", ct.CommentSQL())
 
 	ct.Comment = nil
-	assert.Equal(t, "", ct.CommentSQL())
+	assert.Empty(t, ct.CommentSQL())
 }
 
 func TestCompositeType_AttributeCommentSQLs(t *testing.T) {

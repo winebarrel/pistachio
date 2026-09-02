@@ -279,7 +279,7 @@ func TestTable_IdxSQL(t *testing.T) {
 
 func TestTable_IdxSQL_empty(t *testing.T) {
 	tbl := newTable("public", "users")
-	assert.Equal(t, "", tbl.IdxSQL())
+	assert.Empty(t, tbl.IdxSQL())
 }
 
 func TestTable_FkSQL(t *testing.T) {
@@ -307,7 +307,7 @@ func TestTable_CommentSQL(t *testing.T) {
 func TestTable_CommentSQL_noComments(t *testing.T) {
 	tbl := newTable("public", "users")
 	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
-	assert.Equal(t, "", tbl.CommentSQL())
+	assert.Empty(t, tbl.CommentSQL())
 }
 
 func TestTablesToSQL(t *testing.T) {

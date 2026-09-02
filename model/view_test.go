@@ -32,7 +32,7 @@ func TestView_CommentSQL(t *testing.T) {
 
 func TestView_CommentSQL_nil(t *testing.T) {
 	v := model.View{Schema: "public", Name: "active_users"}
-	assert.Equal(t, "", v.CommentSQL())
+	assert.Empty(t, v.CommentSQL())
 }
 
 func TestViewsToSQL(t *testing.T) {
