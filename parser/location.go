@@ -64,8 +64,56 @@ func annotateError(err error, sql string, spans []fileSpan) error {
 		offset = locErr.offset
 	}
 
-	if offset < 0 || len(spans) == 0 {
+	pos, ok := locate(sql, spans, offset)
+	if !ok {
 		return err
+	}
+
+	// The caret pad mirrors the runes before the column, keeping tabs so the
+	// caret lands under the column however the line is indented.
+	var pad strings.Builder
+	for _, r := range sql[pos.lineStart:pos.offset] {
+		if r == '\t' {
+			pad.WriteByte('\t')
+		} else {
+			pad.WriteByte(' ')
+		}
+	}
+
+	num := strconv.Itoa(pos.line)
+	gutter := strings.Repeat(" ", len(num))
+
+	return fmt.Errorf("%s\n%s--> %s\n%s |\n%s | %s\n%s | %s^",
+		err.Error(),
+		gutter, pos,
+		gutter,
+		num, sql[pos.lineStart:pos.lineEnd],
+		gutter, pad.String())
+}
+
+// sourcePos is a byte offset in the parsed SQL resolved to the file it came
+// from and the line and column within it.
+type sourcePos struct {
+	path string
+	line int
+	col  int
+	// offset is the resolved offset, clamped to the input; lineStart and
+	// lineEnd bound the line holding it.
+	offset    int
+	lineStart int
+	lineEnd   int
+}
+
+func (p sourcePos) String() string {
+	return fmt.Sprintf("%s:%d:%d", p.path, p.line, p.col)
+}
+
+// locate resolves a byte offset in the SQL handed to the parser against the
+// files it was joined from. It reports false when there is no position, or no
+// file to name, as when a string was parsed rather than files.
+func locate(sql string, spans []fileSpan, offset int) (sourcePos, bool) {
+	if offset < 0 || len(spans) == 0 {
+		return sourcePos{}, false
 	}
 	offset = min(offset, len(sql))
 
@@ -82,29 +130,15 @@ func annotateError(err error, sql string, spans []fileSpan) error {
 	if i := strings.IndexByte(sql[offset:], '\n'); i >= 0 {
 		lineEnd = offset + i
 	}
-	lineNo := 1 + strings.Count(sql[span.start:offset], "\n")
-	col := 1 + utf8.RuneCountInString(sql[lineStart:offset])
 
-	// The caret pad mirrors the runes before the column, keeping tabs so the
-	// caret lands under the column however the line is indented.
-	var pad strings.Builder
-	for _, r := range sql[lineStart:offset] {
-		if r == '\t' {
-			pad.WriteByte('\t')
-		} else {
-			pad.WriteByte(' ')
-		}
-	}
-
-	num := strconv.Itoa(lineNo)
-	gutter := strings.Repeat(" ", len(num))
-
-	return fmt.Errorf("%s\n%s--> %s:%d:%d\n%s |\n%s | %s\n%s | %s^",
-		err.Error(),
-		gutter, span.path, lineNo, col,
-		gutter,
-		num, sql[lineStart:lineEnd],
-		gutter, pad.String())
+	return sourcePos{
+		path:      span.path,
+		line:      1 + strings.Count(sql[span.start:offset], "\n"),
+		col:       1 + utf8.RuneCountInString(sql[lineStart:offset]),
+		offset:    offset,
+		lineStart: lineStart,
+		lineEnd:   lineEnd,
+	}, true
 }
 
 // runeOffsetToByte returns the byte offset of the n-th rune (0-based), or

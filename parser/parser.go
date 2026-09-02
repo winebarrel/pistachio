@@ -71,7 +71,12 @@ func txHint(rawStmt *pg_query.RawStmt) string {
 // warnIgnoredStmt reports a statement type that no parser case handles. The
 // snippet is collapsed to one line and truncated on a rune boundary, so the
 // warning stays short and valid UTF-8 even for a large multi-line body.
-func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
+//
+// The statement's file, line and column lead the message when the parse came
+// from files:
+//
+//	pistachio: schema/items.sql:12:1: ignored unsupported statement: DROP TABLE public.items
+func warnIgnoredStmt(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt) {
 	snippet := strings.Join(strings.Fields(ignoredStmtSnippet(sql, rawStmt)), " ")
 	if snippet == "" {
 		return
@@ -82,7 +87,12 @@ func warnIgnoredStmt(sql string, rawStmt *pg_query.RawStmt) {
 		snippet = string(runes[:maxRunes]) + "..."
 	}
 
-	fmt.Fprintf(warnWriter, "pistachio: ignored unsupported statement: %s%s\n", snippet, txHint(rawStmt)) //nolint:errcheck
+	at := ""
+	if pos, ok := locate(sql, spans, int(stmtStart(sql, rawStmt))); ok {
+		at = pos.String() + ": "
+	}
+
+	fmt.Fprintf(warnWriter, "pistachio: %signored unsupported statement: %s%s\n", at, snippet, txHint(rawStmt)) //nolint:errcheck
 }
 
 // alterTableSupportedCmds lists the ALTER TABLE actions the parser reads into
@@ -130,7 +140,7 @@ var commentTargetSupported = map[pg_query.ObjectType]bool{
 // one that mixes a supported action with an unsupported one reports only the
 // latter. The rebuilt statement keeps the original location, which is what
 // the snippet falls back to when deparse fails.
-func warnIgnoredAlterTableCmds(sql string, rawStmt *pg_query.RawStmt, as *pg_query.AlterTableStmt) {
+func warnIgnoredAlterTableCmds(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt, as *pg_query.AlterTableStmt) {
 	var ignored []*pg_query.Node
 
 	for _, cmdNode := range as.Cmds {
@@ -145,7 +155,7 @@ func warnIgnoredAlterTableCmds(sql string, rawStmt *pg_query.RawStmt, as *pg_que
 		return
 	}
 
-	warnIgnoredStmt(sql, &pg_query.RawStmt{
+	warnIgnoredStmt(sql, spans, &pg_query.RawStmt{
 		Stmt: &pg_query.Node{
 			Node: &pg_query.Node_AlterTableStmt{
 				AlterTableStmt: &pg_query.AlterTableStmt{
@@ -219,14 +229,18 @@ func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult
 	}
 
 	joined := strings.Join(sqls, "\n")
-	result, err := parseSQLWithSchema(joined, defaultSchema)
+	result, err := parseSQLWithSchema(joined, defaultSchema, spans)
 	if err != nil {
 		return nil, annotateError(err, joined, spans)
 	}
 	return result, nil
 }
 
-func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {
+// parseSQLWithSchema parses the SQL every desired-schema file was joined
+// into. spans says where each file starts, so a warning can name the file a
+// statement is in. A caller parsing a string passes none, and the warning
+// carries no position.
+func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*ParseResult, error) {
 	if err := validateDirectives(sql); err != nil {
 		return nil, err
 	}
@@ -456,7 +470,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 			// A table marked -- pista:ignore is out of the diff, so an
 			// action dropped from it cannot mislead the plan.
 			if !t.Ignore {
-				warnIgnoredAlterTableCmds(sql, rawStmt, as)
+				warnIgnoredAlterTableCmds(sql, spans, rawStmt, as)
 			}
 
 			// RLS toggles, trigger states, column storage and constraint
@@ -541,7 +555,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 				// A routine pistachio reads but does not manage. The catalog
 				// skips the same ones, so warning and dropping it here keeps
 				// both sides of the diff in step.
-				warnIgnoredStmt(sql, rawStmt)
+				warnIgnoredStmt(sql, spans, rawStmt)
 				continue
 			}
 			if err != nil {
@@ -560,7 +574,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
 			if !commentTargetSupported[cs.Objtype] {
-				warnIgnoredStmt(sql, rawStmt)
+				warnIgnoredStmt(sql, spans, rawStmt)
 				break
 			}
 			parseCommentStmt(cs, defaultSchema, tables, views, enums, domains, compositeTypes, sequences, routines)
@@ -568,7 +582,7 @@ func parseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) 
 		default:
 			// A statement type no case above handles. It is dropped from the
 			// desired schema, so warn instead of failing silently.
-			warnIgnoredStmt(sql, rawStmt)
+			warnIgnoredStmt(sql, spans, rawStmt)
 		}
 	}
 

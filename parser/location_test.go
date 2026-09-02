@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -344,4 +345,66 @@ func TestAnnotateError_WideGutter(t *testing.T) {
    |
 10 | CREATE x
    |        ^`, got.Error())
+}
+
+func TestParseSQLFiles_IgnoredStatementWarningLocation(t *testing.T) {
+	var buf bytes.Buffer
+	defer parser.SetWarnWriter(&buf)()
+
+	paths := writeSQLFiles(t, map[string]string{
+		"items.sql": `CREATE TABLE public.items (id integer);
+
+-- no longer wanted
+DROP TABLE public.items;
+`,
+	})
+
+	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	require.NoError(t, err)
+	assert.Equal(t,
+		"pistachio: "+paths[0]+":4:1: ignored unsupported statement: DROP TABLE public.items\n",
+		buf.String())
+}
+
+func TestParseSQLFiles_IgnoredStatementWarningInSecondFile(t *testing.T) {
+	var buf bytes.Buffer
+	defer parser.SetWarnWriter(&buf)()
+
+	dir := t.TempDir()
+	first := filepath.Join(dir, "a.sql")
+	second := filepath.Join(dir, "b.sql")
+	require.NoError(t, os.WriteFile(first, []byte("CREATE TABLE public.items (id integer);\n"), 0o644))
+	require.NoError(t, os.WriteFile(second, []byte("CREATE TABLE public.users (id integer);\nGRANT SELECT ON public.users TO someone;\n"), 0o644))
+
+	_, err := parser.ParseSQLFilesWithSchema([]string{first, second}, "public")
+	require.NoError(t, err)
+	assert.Equal(t,
+		"pistachio: "+second+":2:1: ignored unsupported statement: GRANT select ON public.users TO someone\n",
+		buf.String())
+}
+
+// An ALTER TABLE action no handler reads warns on its own, and carries the
+// position of the statement it came from.
+func TestParseSQLFiles_IgnoredAlterTableActionWarningLocation(t *testing.T) {
+	var buf bytes.Buffer
+	defer parser.SetWarnWriter(&buf)()
+
+	paths := writeSQLFiles(t, map[string]string{
+		"items.sql": "CREATE TABLE public.items (id integer);\nALTER TABLE public.items ALTER COLUMN id SET STATISTICS 100;\n",
+	})
+
+	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "pistachio: "+paths[0]+":2:1: ignored unsupported statement: ALTER TABLE public.items ALTER COLUMN id SET STATISTICS 100")
+}
+
+// Parsing a string names no file, so the warning reads as it did before
+// positions were added.
+func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {
+	var buf bytes.Buffer
+	defer parser.SetWarnWriter(&buf)()
+
+	_, err := parser.ParseSQLWithSchema("CREATE TABLE public.items (id integer);\nDROP TABLE public.items;\n", "public")
+	require.NoError(t, err)
+	assert.Equal(t, "pistachio: ignored unsupported statement: DROP TABLE public.items\n", buf.String())
 }
