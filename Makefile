@@ -36,6 +36,14 @@ install:
 vet:
 	go vet ./...
 
+# TEST_JUNIT names a file to write a JUnit XML report to, which is what
+# Codecov Test Analytics ingests. Leave it empty and the report is skipped;
+# `go test` then writes straight to the terminal. Set, the output goes through
+# go-junit-report instead and is copied to stderr so the log still shows it.
+ifneq ($(TEST_JUNIT),)
+TEST_REPORT = | tee /dev/stderr | go tool go-junit-report > $(TEST_JUNIT)
+endif
+
 # The Go tests reset `public` and nothing else, so whatever `make schema`
 # loaded into the other schemas is still there while they run. A test that
 # looks something up without naming its schema then finds a sample's object
@@ -47,7 +55,7 @@ vet:
 # another. Override PGPORT, or wipe the other server yourself.
 .PHONY: test
 test: clean-schema
-	go test -p 1 -v ./... $(TEST_OPTS)
+	go test -p 1 -v ./... $(TEST_OPTS) $(TEST_REPORT)
 
 .PHONY: lint
 lint:

@@ -112,10 +112,19 @@ jobs:
         run: go build -o pista.exe ./cmd/pista
       - name: Smoke test
         run: ./pista.exe --help
-      - run: make TEST_OPTS='-coverprofile=coverage.txt'
+      - run: make TEST_OPTS='-coverprofile=coverage.txt' TEST_JUNIT=junit.xml
       - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          flags: windows
+      # Uploaded even when the tests failed, since a failed test is what the
+      # report is there to describe.
+      - uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1.2.1
+        if: ${{ !cancelled() }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit.xml
+          disable_search: true
           flags: windows
 
   test:
@@ -147,7 +156,7 @@ jobs:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
       - run: make deadcode
-      - run: make TEST_OPTS='-coverprofile=coverage.txt'
+      - run: make TEST_OPTS='-coverprofile=coverage.txt' TEST_JUNIT=junit.xml
       - run: make test-scenario
       # test-fidelity reloads a dump and compares pg_dump output, and pg_dump
       # refuses a server newer than itself. The runner ships an older client
@@ -169,6 +178,15 @@ jobs:
           # Each matrix job uploads its own coverage; Codecov merges them so
           # PG-version-specific paths (e.g. PG18-only catalog reads) are
           # counted as covered when any matrix entry exercises them.
+      # Uploaded even when the tests failed, since a failed test is what the
+      # report is there to describe.
+      - uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1.2.1
+        if: ${{ !cancelled() }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit.xml
+          disable_search: true
+          flags: pg${{ matrix.postgres }}
 
   samples:
     runs-on: ubuntu-latest
