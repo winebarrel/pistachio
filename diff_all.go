@@ -19,15 +19,51 @@ import (
 type diffAllOptions struct {
 	FilterOptions
 	DropPolicy
-	Files                    []string
-	PreSQL                   string
-	PreSQLFile               string
-	ConcurrentlyPreSQL       string
-	ConcurrentlyPreSQLFile   string
+	Desired                  *desiredInput
 	DisableIndexConcurrently bool
 	ForceIndexConcurrently   bool
 	BulkAlter                bool
 	AssumeValidated          bool
+}
+
+// desiredInput is what a run reads from the file system: the parsed desired
+// schema and the pre-SQL that goes with it.
+type desiredInput struct {
+	schema             *parser.ParseResult
+	preSQL             string
+	concurrentlyPreSQL string
+}
+
+// loadDesiredInput reads and parses every file a diff needs. Plan and Apply
+// call it before they connect, so a missing file, a syntax error or a
+// duplicate name is reported without a database, and an exclusive apply does
+// not take its lock before it can read its own input.
+func (client *Client) loadDesiredInput(
+	files []string,
+	preSQL, preSQLFile string,
+	concurrentlyPreSQL, concurrentlyPreSQLFile string,
+) (*desiredInput, error) {
+	// Not wrapped: the parser's message already names the file.
+	schema, err := parser.ParseSQLFilesWithSchema(files, client.Schemas[0])
+	if err != nil {
+		return nil, err
+	}
+
+	resolvedPreSQL, err := resolvePreSQL(preSQL, preSQLFile)
+	if err != nil {
+		return nil, err
+	}
+
+	resolvedConcurrentlyPreSQL, err := resolveConcurrentlyPreSQL(concurrentlyPreSQL, concurrentlyPreSQLFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return &desiredInput{
+		schema:             schema,
+		preSQL:             resolvedPreSQL,
+		concurrentlyPreSQL: resolvedConcurrentlyPreSQL,
+	}, nil
 }
 
 // diffAllResult holds the result of diffAll.
@@ -90,11 +126,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		}
 	}
 
-	// Not wrapped: the parser's message already names the file.
-	desired, err := parser.ParseSQLFilesWithSchema(options.Files, client.Schemas[0])
-	if err != nil {
-		return nil, err
-	}
+	desired := options.Desired.schema
 
 	filterDesiredBySchemas(desired, client.Schemas, client.SchemaMap)
 
@@ -218,16 +250,6 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff,
 	)
 
-	preSQL, err := resolvePreSQL(options.PreSQL, options.PreSQLFile)
-	if err != nil {
-		return nil, err
-	}
-
-	concurrentlyPreSQL, err := resolveConcurrentlyPreSQL(options.ConcurrentlyPreSQL, options.ConcurrentlyPreSQLFile)
-	if err != nil {
-		return nil, err
-	}
-
 	var disallowed []string
 	disallowed = append(disallowed, viewDiff.DisallowedDropStmts...)
 	disallowed = append(disallowed, tableDiff.DisallowedDropStmts...)
@@ -241,8 +263,8 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		Stmts:                stmts,
 		DisallowedDrops:      disallowed,
 		Ignored:              ignoredComments,
-		PreSQL:               preSQL,
-		ConcurrentlyPreSQL:   concurrentlyPreSQL,
+		PreSQL:               options.Desired.preSQL,
+		ConcurrentlyPreSQL:   options.Desired.concurrentlyPreSQL,
 		Count:                count,
 		ExecuteStmts:         desired.ExecuteStmts,
 		HasConcurrentlyIndex: tableDiff.HasConcurrently || viewDiff.HasConcurrently,

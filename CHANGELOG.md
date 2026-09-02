@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Read the desired schema before connecting. `plan` and `apply` opened the connection first, so a missing file, a syntax error or a duplicate name was reported only once the database answered, and a run against an unreachable database reported the connection rather than the file. Both now read and parse the schema files, and resolve `--pre-sql-file` and `--concurrently-pre-sql-file`, before connecting. A successful run is unchanged; one that cannot read its own files opens no connection, and takes no lock under `--exclusive`.
+
 ## [1.40.0] - 2026-09-04
 
 * Name the file, line and column in parse errors. A syntax error or a bad `-- pista:` directive now prints the offending line with a caret under the column, in the style of a compiler, instead of the bare message. With several schema files the line number is local to the file the error is in.
