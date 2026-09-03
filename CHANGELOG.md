@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.41.0] - 2026-09-03
 
 * Read a directive that follows a `/* ... */` comment. The scan for the comments before a statement stopped at the first block comment, so a directive written after one was never seen: a `-- pista:renamed-from` under a block comment planned a drop and a create instead of a rename, and a block comment left at the end of the line above did the same. Both comment forms are now skipped, nested block comments included, and a directive inside a block comment stays commented out. The position an error or a warning points at skips them as well, so it lands on the statement rather than on the `/*` line or on the indent.
 
@@ -12,7 +12,7 @@
 
 * Name the object and the position in a duplicate-name error. `duplicate column: id` said neither which table the column was on nor where the file repeats it. It now reads `duplicate column: id on public.users` and prints the line with a caret under it, as a syntax error does. A column or constraint is pointed at where it is defined, everything else at the statement that repeats the name. The checks that report a clash between two objects, a table and a view of one name for example, are unchanged.
 
-## [1.40.0] - 2026-09-04
+## [1.40.0] - 2026-09-03
 
 * Name the file, line and column in parse errors. A syntax error or a bad `-- pista:` directive now prints the offending line with a caret under the column, in the style of a compiler, instead of the bare message. With several schema files the line number is local to the file the error is in.
 
