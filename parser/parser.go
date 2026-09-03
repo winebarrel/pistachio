@@ -41,13 +41,7 @@ func ignoredStmtSnippet(sql string, rawStmt *pg_query.RawStmt) string {
 		return deparsed
 	}
 
-	start := rawStmt.StmtLocation
-	end := start + rawStmt.StmtLen
-	// pg_query leaves StmtLen at 0 for the final statement in the input.
-	if rawStmt.StmtLen == 0 || end > int32(len(sql)) {
-		end = int32(len(sql))
-	}
-	return sql[start:end]
+	return stmtRegion(sql, rawStmt)
 }
 
 // txHint suggests the flags that wrap the apply in a transaction, but only for
@@ -292,11 +286,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 
 			// Extract value-level rename directives from raw SQL
-			stmtEnd := rawStmt.StmtLocation + rawStmt.StmtLen
-			if stmtEnd > int32(len(sql)) {
-				stmtEnd = int32(len(sql))
-			}
-			rawStmtSQL := sql[rawStmt.StmtLocation:stmtEnd]
+			rawStmtSQL := stmtRegion(sql, rawStmt)
 			valueDirectives, err := extractEnumValueDirectives(rawStmtSQL)
 			if err != nil {
 				return nil, err
@@ -342,11 +332,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			// Extract attribute-level rename directives from raw SQL. The
 			// composite type body is a column-like list, so the CREATE TABLE
 			// inline-directive scanner applies unchanged.
-			stmtEnd := rawStmt.StmtLocation + rawStmt.StmtLen
-			if stmtEnd > int32(len(sql)) {
-				stmtEnd = int32(len(sql))
-			}
-			rawStmtSQL := sql[rawStmt.StmtLocation:stmtEnd]
+			rawStmtSQL := stmtRegion(sql, rawStmt)
 			attrDirectives := extractInlineDirectives(rawStmtSQL)
 			for _, attr := range compositeType.Attributes {
 				if oldName, ok := attrDirectives.Columns[attr.Name]; ok {
@@ -374,11 +360,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 
 			// Extract column/constraint-level directives from raw SQL
-			stmtEnd := rawStmt.StmtLocation + rawStmt.StmtLen
-			if stmtEnd > int32(len(sql)) {
-				stmtEnd = int32(len(sql))
-			}
-			rawStmtSQL := sql[rawStmt.StmtLocation:stmtEnd]
+			rawStmtSQL := stmtRegion(sql, rawStmt)
 			inlineDirectives := extractInlineDirectives(rawStmtSQL)
 			for colName, oldName := range inlineDirectives.Columns {
 				if col, ok := table.Columns.GetOk(colName); ok {

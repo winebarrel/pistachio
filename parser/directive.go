@@ -91,12 +91,7 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 
 	for _, stmt := range stmts {
 		loc := stmt.StmtLocation
-		end := loc + stmt.StmtLen
-		if end > int32(len(rawSQL)) {
-			end = int32(len(rawSQL))
-		}
-
-		region := rawSQL[loc:end]
+		region := stmtRegion(rawSQL, stmt)
 		leadingEnd := findLeadingCommentEnd(region)
 		leading := region[:leadingEnd]
 
@@ -208,12 +203,7 @@ func extractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]s
 
 	for _, stmt := range stmts {
 		loc := stmt.StmtLocation
-		end := loc + stmt.StmtLen
-		if end > int32(len(rawSQL)) {
-			end = int32(len(rawSQL))
-		}
-
-		region := rawSQL[loc:end]
+		region := stmtRegion(rawSQL, stmt)
 
 		// Only scan the leading comment block before the actual SQL keyword.
 		// Find where the first non-comment, non-whitespace content starts.
@@ -262,12 +252,7 @@ func extractFlagDirectives(pattern *regexp.Regexp, rawSQL string, stmts []*pg_qu
 
 	for _, stmt := range stmts {
 		loc := stmt.StmtLocation
-		end := loc + stmt.StmtLen
-		if end > int32(len(rawSQL)) {
-			end = int32(len(rawSQL))
-		}
-
-		region := rawSQL[loc:end]
+		region := stmtRegion(rawSQL, stmt)
 		leadingEnd := findLeadingCommentEnd(region)
 		leading := region[:leadingEnd]
 
@@ -279,21 +264,21 @@ func extractFlagDirectives(pattern *regexp.Regexp, rawSQL string, stmts []*pg_qu
 	return directives
 }
 
-// findLeadingCommentEnd returns the byte offset where leading comments/whitespace
-// end and the actual SQL statement begins.
+// findLeadingCommentEnd returns the byte offset where leading comments and
+// whitespace end and the statement begins. A string of nothing but comments
+// returns its length, so the offset always stays within the string.
 func findLeadingCommentEnd(s string) int {
-	lines := strings.Split(s, "\n")
 	offset := 0
-	for _, line := range lines {
+	for offset < len(s) {
+		line := s[offset:]
+		if i := strings.IndexByte(line, '\n'); i >= 0 {
+			line = line[:i+1]
+		}
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
-			offset += len(line) + 1 // +1 for \n
-		} else {
+		if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
 			break
 		}
-	}
-	if offset > len(s) {
-		offset = len(s)
+		offset += len(line)
 	}
 	return offset
 }

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bytes"
 	"testing"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -611,4 +612,137 @@ func TestFormatExecuteStmt_WithoutSemicolon(t *testing.T) {
 func TestFormatExecuteStmt_WithoutCheck(t *testing.T) {
 	es := &ExecuteStmt{SQL: "GRANT SELECT ON t TO r;", CheckSQL: ""}
 	assert.Equal(t, "-- pista:execute\nGRANT SELECT ON t TO r;", FormatExecuteStmt(es))
+}
+
+// pg_query leaves StmtLen at 0 for a final statement with no semicolon, so
+// every directive scan has to read that statement's region to the end of the
+// input. Each case is the SQL a file would end with, run once per ending; all
+// three must agree.
+func TestDirectivesOnTrailingStatementWithoutSemicolon(t *testing.T) {
+	tests := []struct {
+		name      string
+		sql       string
+		check     func(t *testing.T, r *ParseResult)
+		noWarning bool
+	}{
+		{
+			name: "renamed-from",
+			sql: `CREATE TABLE public.a (id integer);
+-- pista:renamed-from public.old_b
+CREATE TABLE public.b (id integer)`,
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				b := r.Tables.Get("public.b")
+				require.NotNil(t, b.RenameFrom)
+				assert.Equal(t, "public.old_b", *b.RenameFrom)
+			},
+		},
+		{
+			name: "ignore",
+			sql: `CREATE TABLE public.a (id integer);
+-- pista:ignore
+CREATE TABLE public.b (id integer)`,
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.True(t, r.Tables.Get("public.b").Ignore)
+			},
+		},
+		{
+			name: "concurrently",
+			sql: `CREATE TABLE public.a (id integer);
+-- pista:concurrently
+CREATE INDEX idx ON public.a (id)`,
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.True(t, r.Tables.Get("public.a").Indexes.Get("idx").Concurrently)
+			},
+		},
+		{
+			name: "bulk-alter",
+			sql: `-- pista:bulk-alter
+CREATE TABLE public.a (id integer)`,
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.True(t, r.Tables.Get("public.a").BulkAlter)
+			},
+		},
+		{
+			name: "execute",
+			sql: `CREATE TABLE public.a (id integer);
+-- pista:execute
+GRANT SELECT ON public.a TO someone`,
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				require.Len(t, r.ExecuteStmts, 1)
+				assert.Contains(t, r.ExecuteStmts[0].SQL, "GRANT")
+			},
+			// The statement is run at apply, so it must not also be
+			// reported as one the parser dropped.
+			noWarning: true,
+		},
+		{
+			name: "column renamed-from",
+			sql: `CREATE TABLE public.b (
+    id integer,
+    -- pista:renamed-from old_name
+    name text
+)`,
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				col := r.Tables.Get("public.b").Columns.Get("name")
+				require.NotNil(t, col.RenameFrom)
+				assert.Equal(t, "old_name", *col.RenameFrom)
+			},
+		},
+		{
+			name: "enum value renamed-from",
+			sql: `CREATE TYPE public.e AS ENUM (
+    -- pista:renamed-from old_a
+    'a'
+)`,
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.Equal(t, map[string]string{"a": "old_a"}, r.Enums.Get("public.e").ValueRenameFrom)
+			},
+		},
+		{
+			name: "composite attribute renamed-from",
+			sql: `CREATE TYPE public.ct AS (
+    -- pista:renamed-from old_x
+    x integer
+)`,
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				attr := r.CompositeTypes.Get("public.ct").Attributes[0]
+				require.NotNil(t, attr.RenameFrom)
+				assert.Equal(t, "old_x", *attr.RenameFrom)
+			},
+		},
+	}
+
+	// A file usually ends with a newline, so the statement text and the
+	// region can end on either side of it.
+	endings := []struct{ name, suffix string }{
+		{"without semicolon", ""},
+		{"without semicolon, trailing newline", "\n"},
+		{"with semicolon", ";\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, ending := range endings {
+				t.Run(ending.name, func(t *testing.T) {
+					var warnings bytes.Buffer
+					defer SetWarnWriter(&warnings)()
+
+					r, err := parseSQLWithSchema(tt.sql+ending.suffix, "public", nil)
+					require.NoError(t, err)
+					tt.check(t, r)
+					if tt.noWarning {
+						assert.Empty(t, warnings.String())
+					}
+				})
+			}
+		})
+	}
 }
