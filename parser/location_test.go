@@ -408,3 +408,26 @@ func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "pistachio: ignored unsupported statement: DROP TABLE public.items\n", buf.String())
 }
+
+// The caret points at the statement's first token, so it has to skip the
+// indent, a block comment, and whatever shares the line before it.
+func TestParseSQLFiles_IgnoredStatementWarningSkipsToTheStatement(t *testing.T) {
+	var buf bytes.Buffer
+	defer parser.SetWarnWriter(&buf)()
+
+	paths := writeSQLFiles(t, map[string]string{
+		"items.sql": `CREATE TABLE public.items (id integer); DROP TABLE public.items;
+/* no longer wanted */
+DROP TABLE public.items;
+    DROP TABLE public.items;
+`,
+	})
+
+	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	require.NoError(t, err)
+	assert.Equal(t,
+		"pistachio: "+paths[0]+":1:41: ignored unsupported statement: DROP TABLE public.items\n"+
+			"pistachio: "+paths[0]+":3:1: ignored unsupported statement: DROP TABLE public.items\n"+
+			"pistachio: "+paths[0]+":4:5: ignored unsupported statement: DROP TABLE public.items\n",
+		buf.String())
+}
