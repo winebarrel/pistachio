@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.41.0] - 2026-09-04
 
 * Read a directive that follows a `/* ... */` comment. The scan for the comments before a statement stopped at the first block comment, so a directive written after one was never seen: a `-- pista:renamed-from` under a block comment planned a drop and a create instead of a rename, and a block comment left at the end of the line above did the same. Both comment forms are now skipped, nested block comments included, and a directive inside a block comment stays commented out. The position an error or a warning points at skips them as well, so it lands on the statement rather than on the `/*` line or on the indent.
 
