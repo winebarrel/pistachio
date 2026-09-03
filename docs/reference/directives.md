@@ -1,6 +1,6 @@
 # Directives
 
-pistachio reads directives from SQL comments in schema files. A directive is a line comment of the form `-- pista:<name>` placed on its own line immediately before the target statement. Unknown directive names are rejected at parse time. A directive placed before a statement it does not apply to is ignored.
+pistachio reads directives from SQL comments in schema files. A directive is a line comment of the form `-- pista:<name>` placed on its own line before the target statement. Blank lines and further comments of either form may come between the two, so a `/* ... */` note above the statement does not detach the directive from it. A directive written inside a `/* ... */` comment is commented out and does not apply, but it is still checked, so a typo or a stray argument in one fails the parse rather than passing unnoticed. Unknown directive names are rejected at parse time. A directive placed before a statement it does not apply to is ignored.
 
 | Directive | Arguments | Applies to | Purpose |
 |---|---|---|---|

@@ -2,10 +2,14 @@
 
 ## [Unreleased]
 
+* Read a directive that follows a `/* ... */` comment. The scan for the comments before a statement stopped at the first block comment, so a directive written after one was never seen: a `-- pista:renamed-from` under a block comment planned a drop and a create instead of a rename, and a block comment left at the end of the line above did the same. Both comment forms are now skipped, nested block comments included, and a directive inside a block comment stays commented out. The position an error or a warning points at skips them as well, so it lands on the statement rather than on the `/*` line or on the indent.
+
 * Apply a directive on a file's last statement when it ends without a semicolon. pg_query reports no length for such a statement, so the scans that carve out a statement's text got an empty region: `-- pista:renamed-from` planned a drop and a create instead of a rename, `-- pista:ignore` left the object managed, and `-- pista:execute` left the statement to the ignored-statement warning instead of running it at apply. `-- pista:concurrently`, `-- pista:bulk-alter` and the inline column, enum value and composite attribute renames went the same way. The scans now share one helper, which reads such a statement to the end of the input.
 
 * Name the file, line and column in the ignored-statement warning. It carried the statement text alone, which does not say where the statement is when the schema spans several files, or when the same `GRANT` appears in more than one of them. It now reads `pistachio: schema/items.sql:12:1: ignored unsupported statement: DROP TABLE public.items`. A parse that came from no file names no position.
+
 * Read the desired schema before connecting. `plan` and `apply` opened the connection first, so a missing file, a syntax error or a duplicate name was reported only once the database answered, and a run against an unreachable database reported the connection rather than the file. Both now read and parse the schema files, and resolve `--pre-sql-file` and `--concurrently-pre-sql-file`, before connecting. A successful run is unchanged; one that cannot read its own files opens no connection, and takes no lock under `--exclusive`.
+
 * Name the object and the position in a duplicate-name error. `duplicate column: id` said neither which table the column was on nor where the file repeats it. It now reads `duplicate column: id on public.users` and prints the line with a caret under it, as a syntax error does. A column or constraint is pointed at where it is defined, everything else at the statement that repeats the name. The checks that report a clash between two objects, a table and a view of one name for example, are unchanged.
 
 ## [1.40.0] - 2026-09-04

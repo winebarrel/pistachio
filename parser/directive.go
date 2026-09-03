@@ -91,9 +91,7 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 
 	for _, stmt := range stmts {
 		loc := stmt.StmtLocation
-		region := stmtRegion(rawSQL, stmt)
-		leadingEnd := findLeadingCommentEnd(region)
-		leading := region[:leadingEnd]
+		leading := leadingDirectiveText(stmtRegion(rawSQL, stmt))
 
 		// The two directives put the statement on opposite sides of the
 		// managed DDL, so carrying both is a contradiction rather than a
@@ -203,12 +201,7 @@ func extractStmtDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32]s
 
 	for _, stmt := range stmts {
 		loc := stmt.StmtLocation
-		region := stmtRegion(rawSQL, stmt)
-
-		// Only scan the leading comment block before the actual SQL keyword.
-		// Find where the first non-comment, non-whitespace content starts.
-		leadingEnd := findLeadingCommentEnd(region)
-		leading := region[:leadingEnd]
+		leading := leadingDirectiveText(stmtRegion(rawSQL, stmt))
 
 		matches := renameDirectivePattern.FindAllStringSubmatch(leading, -1)
 		if len(matches) > 0 {
@@ -252,9 +245,7 @@ func extractFlagDirectives(pattern *regexp.Regexp, rawSQL string, stmts []*pg_qu
 
 	for _, stmt := range stmts {
 		loc := stmt.StmtLocation
-		region := stmtRegion(rawSQL, stmt)
-		leadingEnd := findLeadingCommentEnd(region)
-		leading := region[:leadingEnd]
+		leading := leadingDirectiveText(stmtRegion(rawSQL, stmt))
 
 		if pattern.MatchString(leading) {
 			directives[loc] = true
@@ -264,23 +255,108 @@ func extractFlagDirectives(pattern *regexp.Regexp, rawSQL string, stmts []*pg_qu
 	return directives
 }
 
-// findLeadingCommentEnd returns the byte offset where leading comments and
-// whitespace end and the statement begins. A string of nothing but comments
-// returns its length, so the offset always stays within the string.
+// findLeadingCommentEnd returns the byte offset where the whitespace and
+// comments before a statement end and the statement begins. Both comment forms
+// count, so a directive written after a `/* ... */` block is still part of the
+// leading text. A string of nothing but comments returns its length, so the
+// offset always stays within the string.
 func findLeadingCommentEnd(s string) int {
 	offset := 0
 	for offset < len(s) {
-		line := s[offset:]
-		if i := strings.IndexByte(line, '\n'); i >= 0 {
-			line = line[:i+1]
+		switch {
+		case isSQLSpace(s[offset]):
+			offset++
+		case strings.HasPrefix(s[offset:], "--"):
+			i := strings.IndexByte(s[offset:], '\n')
+			if i < 0 {
+				return len(s)
+			}
+			offset += i + 1
+		case strings.HasPrefix(s[offset:], "/*"):
+			end := blockCommentEnd(s, offset)
+			if end < 0 {
+				return len(s)
+			}
+			offset = end
+		default:
+			return offset
 		}
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
-			break
-		}
-		offset += len(line)
 	}
 	return offset
+}
+
+func isSQLSpace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'
+}
+
+// leadingDirectiveText returns the whitespace and comments before a statement,
+// with the body of every block comment blanked out. A directive inside a block
+// comment is commented out like anything else, so a scan must not see it, while
+// blanking rather than removing keeps the offsets extractExecuteDirectives
+// slices a check SQL out of.
+func leadingDirectiveText(region string) string {
+	return blankBlockComments(region[:findLeadingCommentEnd(region)])
+}
+
+// blankBlockComments replaces every byte of a block comment, its delimiters
+// included, with a space, leaving newlines in place so line-anchored patterns
+// still see the same lines.
+func blankBlockComments(s string) string {
+	if !strings.Contains(s, "/*") {
+		return s
+	}
+
+	out := []byte(s)
+	for i := 0; i < len(s); {
+		switch {
+		case strings.HasPrefix(s[i:], "--"):
+			// A line comment runs to the end of the line, so a `/*` in it
+			// opens nothing.
+			j := strings.IndexByte(s[i:], '\n')
+			if j < 0 {
+				i = len(s)
+			} else {
+				i += j + 1
+			}
+		case strings.HasPrefix(s[i:], "/*"):
+			end := blockCommentEnd(s, i)
+			if end < 0 {
+				end = len(s)
+			}
+			for k := i; k < end; k++ {
+				if out[k] != '\n' {
+					out[k] = ' '
+				}
+			}
+			i = end
+		default:
+			i++
+		}
+	}
+	return string(out)
+}
+
+// blockCommentEnd returns the offset just past the block comment that starts at
+// pos, or -1 when it is never closed. PostgreSQL nests block comments, so an
+// inner `/*` takes a `*/` of its own to close.
+func blockCommentEnd(s string, pos int) int {
+	depth := 0
+	for i := pos; i+1 < len(s); {
+		switch {
+		case s[i] == '/' && s[i+1] == '*':
+			depth++
+			i += 2
+		case s[i] == '*' && s[i+1] == '/':
+			depth--
+			i += 2
+			if depth == 0 {
+				return i
+			}
+		default:
+			i++
+		}
+	}
+	return -1
 }
 
 // inlineDirectives holds rename directives for columns and constraints within a CREATE TABLE.

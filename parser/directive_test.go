@@ -746,3 +746,103 @@ GRANT SELECT ON public.a TO someone`,
 		})
 	}
 }
+
+func TestFindLeadingCommentEnd(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want int
+	}{
+		{"empty", "", 0},
+		{"statement only", "CREATE TABLE t (id int);", 0},
+		{"indented statement", "    CREATE TABLE t (id int);", 4},
+		{"whitespace only", " \t\n", 3},
+		{"line comment", "-- c\nCREATE", 5},
+		{"line comment without newline", "-- c", 4},
+		{"blank line between comments", "-- a\n\n-- b\nCREATE", 11},
+		{"block comment", "/* c */\nCREATE", 8},
+		{"block comment on the statement line", "/* c */ CREATE", 8},
+		{"multi-line block comment", "/* a\n   b */\nCREATE", 13},
+		{"nested block comment", "/* a /* b */ c */\nCREATE", 18},
+		{"unterminated block comment", "/* a\n-- b\nCREATE", 16},
+		{"comment forms mixed", "-- a\n/* b */\n-- c\nCREATE", 18},
+		{"block comment holding a line comment", "/* -- a */\nCREATE", 11},
+		{"line comment holding a block comment", "-- /* a\nCREATE", 8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, findLeadingCommentEnd(tt.s))
+		})
+	}
+}
+
+func TestBlankBlockComments(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want string
+	}{
+		{"no block comment", "-- a\n", "-- a\n"},
+		{"block comment", "/* a */\n", "       \n"},
+		{"multi-line block comment", "/* a\nb */\n", "    \n    \n"},
+		{"nested block comment", "/* a /* b */ c */", "                 "},
+		{"unterminated block comment", "/* a\nb", "    \n "},
+		{"line comment kept", "-- a\n/* b */\n-- c\n", "-- a\n       \n-- c\n"},
+		{"block comment opened inside a line comment", "-- /* a\n-- b\n", "-- /* a\n-- b\n"},
+		{"line comment last, no newline", "/* a */\n-- b", "       \n-- b"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := blankBlockComments(tt.s)
+			assert.Equal(t, tt.want, got)
+			assert.Len(t, got, len(tt.s), "blanking must not change the length")
+		})
+	}
+}
+
+// A directive after a block comment belongs to the statement, and one inside a
+// block comment is commented out.
+func TestDirectivesAroundBlockComments(t *testing.T) {
+	t.Run("after a block comment", func(t *testing.T) {
+		r, err := parseSQLWithSchema(`/* the table this replaces */
+-- pista:renamed-from public.old_b
+CREATE TABLE public.b (id integer);`, "public", nil)
+		require.NoError(t, err)
+		b := r.Tables.Get("public.b")
+		require.NotNil(t, b.RenameFrom)
+		assert.Equal(t, "public.old_b", *b.RenameFrom)
+	})
+
+	t.Run("inside a block comment", func(t *testing.T) {
+		r, err := parseSQLWithSchema(`/*
+-- pista:renamed-from public.old_b
+*/
+CREATE TABLE public.b (id integer);`, "public", nil)
+		require.NoError(t, err)
+		assert.Nil(t, r.Tables.Get("public.b").RenameFrom)
+	})
+
+	t.Run("schema commented out with a block comment", func(t *testing.T) {
+		r, err := parseSQLWithSchema(`/*
+-- pista:ignore
+CREATE TABLE public.b (id integer);
+*/
+CREATE TABLE public.c (id integer);`, "public", nil)
+		require.NoError(t, err)
+		assert.Nil(t, r.Tables.Get("public.b"))
+		assert.False(t, r.Tables.Get("public.c").Ignore)
+	})
+
+	t.Run("check SQL after a block comment", func(t *testing.T) {
+		r, err := parseSQLWithSchema(`CREATE TABLE public.a (id integer);
+/* why */
+-- pista:execute-first SELECT count(*) = 0 FROM public.a
+GRANT SELECT ON public.a TO someone;`, "public", nil)
+		require.NoError(t, err)
+		require.Len(t, r.ExecuteStmts, 1)
+		assert.True(t, r.ExecuteStmts[0].First)
+		assert.Equal(t, "SELECT count(*) = 0 FROM public.a", r.ExecuteStmts[0].CheckSQL)
+	})
+}
