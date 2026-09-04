@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.41.1] - 2026-09-04
 
 * Wait for the apply exclusion by retrying rather than by blocking in `pg_advisory_lock`. A blocked statement holds a snapshot while it waits, and the apply it waits for may run `CREATE INDEX CONCURRENTLY`, whose build waits for every backend that holds one. The two waits close a cycle, and since advisory locks share a lock manager with table locks the deadlock detector saw it and killed the waiter: a wait died a second in with `failed to acquire the apply exclusion: ERROR: deadlock detected`, with the other apply still making progress. The wait now retries `pg_try_advisory_lock` once a second, so between attempts the session is idle and holds no snapshot and no cycle can form. The deadline, the unlimited wait and the messages are unchanged; a lock that frees is taken within a second rather than at once, and the queue is no longer first-come-first-served.
 
