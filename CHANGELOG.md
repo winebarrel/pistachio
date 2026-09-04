@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Wait for the apply exclusion by retrying rather than by blocking in `pg_advisory_lock`. A blocked statement holds a snapshot while it waits, and the apply it waits for may run `CREATE INDEX CONCURRENTLY`, whose build waits for every backend that holds one. The two waits close a cycle, and since advisory locks share a lock manager with table locks the deadlock detector saw it and killed the waiter: a wait died a second in with `failed to acquire the apply exclusion: ERROR: deadlock detected`, with the other apply still making progress. The wait now retries `pg_try_advisory_lock` once a second, so between attempts the session is idle and holds no snapshot and no cycle can form. The deadline, the unlimited wait and the messages are unchanged; a lock that frees is taken within a second rather than at once, and the queue is no longer first-come-first-served.
+
 ## [1.41.0] - 2026-09-03
 
 * Read a directive that follows a `/* ... */` comment. The scan for the comments before a statement stopped at the first block comment, so a directive written after one was never seen: a `-- pista:renamed-from` under a block comment planned a drop and a create instead of a rename, and a block comment left at the end of the line above did the same. Both comment forms are now skipped, nested block comments included, and a directive inside a block comment stays commented out. The position an error or a warning points at skips them as well, so it lands on the statement rather than on the `/*` line or on the indent.

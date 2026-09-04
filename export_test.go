@@ -5,7 +5,10 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-const ExclusiveLockClassID = exclusiveLockClassID
+const (
+	ExclusiveLockClassID  = exclusiveLockClassID
+	ExclusivePollInterval = exclusivePollInterval
+)
 
 var (
 	ResolvePreSQL             = resolvePreSQL
