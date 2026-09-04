@@ -20,4 +20,6 @@ The exclusion is a session-level [advisory lock](https://www.postgresql.org/docs
 
 Transaction boundaries do not affect a session-level lock, so it works the same with and without `--with-tx` and across `CREATE INDEX CONCURRENTLY`. The lock key includes a hash of the database name; applies to different databases on one cluster do not exclude each other.
 
+A wait retries once a second instead of blocking in the lock. A blocked statement holds a snapshot while it waits, and `CREATE INDEX CONCURRENTLY` in the apply being waited for waits for every backend that holds one. That is a cycle, and PostgreSQL breaks a cycle by killing a session in it, the waiter being the one it picks. Advisory locks share a lock manager with table locks, so the detector sees it. Between attempts the waiting session is idle and holds no snapshot, so there is no cycle. A lock that frees is taken within a second, and the queue is not first-come-first-served.
+
 Only apply runs that pass `--exclusive` or `--exclusive-wait` are excluded. DDL from any other source is not blocked.
