@@ -9,7 +9,7 @@ permissions:
   packages: write
 
 env:
-  GOLANG_CROSS_VERSION: v1.26.0
+  GOLANG_CROSS_VERSION: v1.27.1
 
 jobs:
   goreleaser:
