@@ -37,8 +37,6 @@ func newRoutine(mutate ...func(*model.Routine)) *model.Routine {
 	return r
 }
 
-func ptr[T any](v T) *T { return &v }
-
 func TestDiffRoutines_CreateNew(t *testing.T) {
 	result, err := diff.DiffRoutines(newRoutineMap(), newRoutineMap(newRoutine()), diff.AllowAllDrops{})
 	require.NoError(t, err)
@@ -48,7 +46,7 @@ func TestDiffRoutines_CreateNew(t *testing.T) {
 }
 
 func TestDiffRoutines_CreateNewWithComment(t *testing.T) {
-	desired := newRoutine(func(r *model.Routine) { r.Comment = ptr("hi") })
+	desired := newRoutine(func(r *model.Routine) { r.Comment = new("hi") })
 	result, err := diff.DiffRoutines(newRoutineMap(), newRoutineMap(desired), diff.AllowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 2)
@@ -77,7 +75,7 @@ func TestDiffRoutines_ReplaceInPlace(t *testing.T) {
 		{"security definer", func(r *model.Routine) { r.SecurityDefiner = true }},
 		{"leakproof", func(r *model.Routine) { r.Leakproof = true }},
 		{"parallel", func(r *model.Routine) { r.Parallel = "SAFE" }},
-		{"cost", func(r *model.Routine) { r.Cost = ptr(5.0) }},
+		{"cost", func(r *model.Routine) { r.Cost = new(5.0) }},
 		{"set config", func(r *model.Routine) {
 			r.Config = []*model.RoutineConfig{{Name: "search_path", Args: []string{"public"}}}
 		}},
@@ -134,10 +132,10 @@ func TestDiffRoutines_DropAndCreate(t *testing.T) {
 
 // A recreate loses the routine's comment, so the comment is re-applied with it.
 func TestDiffRoutines_DropAndCreateReappliesComment(t *testing.T) {
-	current := newRoutineMap(newRoutine(func(r *model.Routine) { r.Comment = ptr("v1") }))
+	current := newRoutineMap(newRoutine(func(r *model.Routine) { r.Comment = new("v1") }))
 	desired := newRoutineMap(newRoutine(func(r *model.Routine) {
 		r.ReturnType = "bigint"
-		r.Comment = ptr("v1")
+		r.Comment = new("v1")
 	}))
 	result, err := diff.DiffRoutines(current, desired, diff.AllowAllDrops{})
 	require.NoError(t, err)
@@ -163,9 +161,9 @@ func TestDiffRoutines_CommentChanges(t *testing.T) {
 		desired *string
 		want    string
 	}{
-		{"added", nil, ptr("v1"), "COMMENT ON FUNCTION public.f(integer) IS 'v1';"},
-		{"changed", ptr("v1"), ptr("v2"), "COMMENT ON FUNCTION public.f(integer) IS 'v2';"},
-		{"removed", ptr("v1"), nil, "COMMENT ON FUNCTION public.f(integer) IS NULL;"},
+		{"added", nil, new("v1"), "COMMENT ON FUNCTION public.f(integer) IS 'v1';"},
+		{"changed", new("v1"), new("v2"), "COMMENT ON FUNCTION public.f(integer) IS 'v2';"},
+		{"removed", new("v1"), nil, "COMMENT ON FUNCTION public.f(integer) IS NULL;"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			current := newRoutineMap(newRoutine(func(r *model.Routine) { r.Comment = tc.current }))

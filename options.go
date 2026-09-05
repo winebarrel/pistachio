@@ -69,19 +69,9 @@ type FilterOptions struct {
 // If neither is set, all types are enabled.
 func (f *FilterOptions) IsTypeEnabled(typeName string) bool {
 	if len(f.Enable) > 0 {
-		for _, t := range f.Enable {
-			if t == typeName {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(f.Enable, typeName)
 	}
-	for _, t := range f.Disable {
-		if t == typeName {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(f.Disable, typeName)
 }
 
 // regexpPattern returns the expression inside a /.../ pattern. An unquoted

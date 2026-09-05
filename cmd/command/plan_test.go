@@ -34,7 +34,7 @@ func TestPlan_Run(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
+	cmd := &command.Plan{AllowDrop: []string{"all"}, Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
@@ -52,7 +52,7 @@ func TestPlan_Run_Error(t *testing.T) {
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
+	cmd := &command.Plan{AllowDrop: []string{"all"}, Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 }
@@ -77,7 +77,7 @@ func TestPlan_Run_NoChanges(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}}}
+	cmd := &command.Plan{AllowDrop: []string{"all"}, Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- Plan for schema public (")
@@ -119,7 +119,7 @@ CREATE TABLE public.users (
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
@@ -153,7 +153,7 @@ CREATE TABLE public.legacy (
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
@@ -184,14 +184,14 @@ func TestPlan_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
 	assert.Contains(t, got, "-- skipped: DROP TABLE public.users;")
 	assert.Contains(t, got, "-- No changes")
 	// Plain DROP (no comment) must NOT appear.
-	for _, line := range strings.Split(got, "\n") {
+	for line := range strings.SplitSeq(got, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "DROP TABLE") {
 			t.Fatalf("unexpected uncommented DROP TABLE: %q", line)
@@ -228,10 +228,10 @@ func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{
+	cmd := &command.Plan{
 		Files:  []string{desiredFile},
 		PreSQL: "SELECT 1;",
-	}}
+	}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
@@ -267,7 +267,7 @@ func TestPlan_Run_CheckWithDiff(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.ErrorIs(t, err, command.ErrPlanDiff)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
@@ -294,7 +294,7 @@ func TestPlan_Run_CheckNoChanges(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- No changes")
@@ -321,7 +321,7 @@ func TestPlan_Run_CheckSkippedDropOnly(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
@@ -354,7 +354,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.ErrorIs(t, err, command.ErrPlanDiff)
 }
@@ -384,7 +384,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
 	require.NoError(t, cmd.Run(ctx, client, &buf))
 	assert.Contains(t, buf.String(), "-- No changes")
 }
@@ -415,7 +415,7 @@ CREATE TABLE public.audit_log (
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
 	// Undetermined counts as a pending change, so --check still reports a diff.
 	require.ErrorIs(t, cmd.Run(ctx, client, &buf), command.ErrPlanDiff)
 
@@ -448,7 +448,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Files: []string{desiredFile}}
 	require.NoError(t, cmd.Run(ctx, client, &buf))
 
 	got := buf.String()
@@ -478,10 +478,11 @@ func TestPlan_Run_CheckPreSQLNoChanges(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{
+	cmd := &command.Plan{
+		Check:  true,
 		Files:  []string{desiredFile},
 		PreSQL: "SELECT 1;",
-	}}
+	}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
@@ -501,7 +502,7 @@ func TestPlan_Run_CheckError(t *testing.T) {
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 	require.NotErrorIs(t, err, command.ErrPlanDiff)
@@ -532,7 +533,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()
@@ -571,7 +572,7 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	})
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{PlanOptions: pistachio.PlanOptions{Files: []string{desiredFile}}}
+	cmd := &command.Plan{Files: []string{desiredFile}}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 	got := buf.String()

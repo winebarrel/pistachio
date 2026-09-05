@@ -307,10 +307,8 @@ func TestRenameColumnKeys_NoCascadeOnChain(t *testing.T) {
 func TestRewriteColumnRefsInForeignKeys_RewritesLocalAttrs(t *testing.T) {
 	in := orderedmap.New[string, *model.ForeignKey]()
 	in.Set("fk", &model.ForeignKey{
-		Constraint: model.Constraint{
-			Name:       "fk",
-			Definition: "FOREIGN KEY (user_id) REFERENCES users(id)",
-		},
+		Name:       "fk",
+		Definition: "FOREIGN KEY (user_id) REFERENCES users(id)",
 	})
 
 	out := rewriteColumnRefsInForeignKeys(in, one("user_id", "buyer_id"))

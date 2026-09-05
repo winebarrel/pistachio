@@ -88,9 +88,9 @@ func TestOrderStatements_Fallback(t *testing.T) {
 	tblA.Constraints = orderedmap.New[string, *model.Constraint]()
 	tblA.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tblA.ForeignKeys.Set("a_b_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "a_b_fk"},
-		RefSchema:  &schemaPublic,
-		RefTable:   &refB,
+		Name:      "a_b_fk",
+		RefSchema: &schemaPublic,
+		RefTable:  &refB,
 	})
 	desiredTables.Set("public.a", tblA)
 
@@ -100,9 +100,9 @@ func TestOrderStatements_Fallback(t *testing.T) {
 	tblB.Constraints = orderedmap.New[string, *model.Constraint]()
 	tblB.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tblB.ForeignKeys.Set("b_a_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "b_a_fk"},
-		RefSchema:  &schemaPublic,
-		RefTable:   &refA,
+		Name:      "b_a_fk",
+		RefSchema: &schemaPublic,
+		RefTable:  &refA,
 	})
 	desiredTables.Set("public.b", tblB)
 
@@ -197,9 +197,9 @@ func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
 		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
 		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 		tbl.ForeignKeys.Set(cfg.name+"_fk", &model.ForeignKey{
-			Constraint: model.Constraint{Name: cfg.name + "_fk"},
-			RefSchema:  &schemaPublic,
-			RefTable:   &cfg.ref,
+			Name:      cfg.name + "_fk",
+			RefSchema: &schemaPublic,
+			RefTable:  &cfg.ref,
 		})
 		currentTables.Set("public."+cfg.name, tbl)
 	}

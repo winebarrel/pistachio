@@ -132,7 +132,7 @@ func TestPlan_WithPassword(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{DropPolicy: pistachio.DropPolicy{AllowDrop: []string{"all"}}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
 }
@@ -301,7 +301,7 @@ CREATE TABLE public.audit_log (
 	assert.Contains(t, result.SQL, "check SQL could not be evaluated at plan time")
 	assert.Contains(t, result.SQL, "apply will decide")
 	// The note must stay on one comment line so the plan is still valid SQL.
-	for _, line := range strings.Split(result.SQL, "\n") {
+	for line := range strings.SplitSeq(result.SQL, "\n") {
 		if strings.Contains(line, "could not be evaluated") {
 			assert.True(t, strings.HasPrefix(line, "-- "), "note must be a comment: %q", line)
 		}
@@ -385,16 +385,14 @@ func TestPlan(t *testing.T) {
 				dropPolicy = pistachio.DropPolicy{AllowDrop: tc.DropPolicy.AllowDrop}
 			}
 			got, err := client.Plan(ctx, &pistachio.PlanOptions{
-				DropPolicy: dropPolicy,
-				FilterOptions: pistachio.FilterOptions{
-					Include:            tc.Include,
-					Exclude:            tc.Exclude,
-					Enable:             tc.Enable,
-					Disable:            tc.Disable,
-					ManageRoutine:      tc.ManageRoutine,
-					ManageStorageParam: tc.ManageStorageParam,
-					SkipPartitionChild: tc.SkipPartitionChild,
-				},
+				DropPolicy:               dropPolicy,
+				Include:                  tc.Include,
+				Exclude:                  tc.Exclude,
+				Enable:                   tc.Enable,
+				Disable:                  tc.Disable,
+				ManageRoutine:            tc.ManageRoutine,
+				ManageStorageParam:       tc.ManageStorageParam,
+				SkipPartitionChild:       tc.SkipPartitionChild,
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,

@@ -61,7 +61,7 @@ CREATE TABLE public.posts (
 
 	splitDir := filepath.Join(t.TempDir(), "split_output")
 	var buf bytes.Buffer
-	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: splitDir}}
+	cmd := &command.Dump{Split: splitDir}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 
@@ -118,7 +118,7 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 
 	splitDir := filepath.Join(t.TempDir(), "split_output")
 	var buf bytes.Buffer
-	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: splitDir}}
+	cmd := &command.Dump{Split: splitDir}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 
@@ -145,7 +145,7 @@ func TestDump_Run_Split_Empty(t *testing.T) {
 
 	splitDir := filepath.Join(t.TempDir(), "split_output")
 	var buf bytes.Buffer
-	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: splitDir}}
+	cmd := &command.Dump{Split: splitDir}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 
@@ -174,7 +174,7 @@ CREATE TABLE public."My Table" (
 
 	splitDir := filepath.Join(t.TempDir(), "split_output")
 	var buf bytes.Buffer
-	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: splitDir}}
+	cmd := &command.Dump{Split: splitDir}
 	err := cmd.Run(ctx, client, &buf)
 	require.NoError(t, err)
 
@@ -205,7 +205,7 @@ CREATE TABLE public.users (
 	require.NoError(t, os.WriteFile(notADir, []byte("x"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: filepath.Join(notADir, "invalid")}}
+	cmd := &command.Dump{Split: filepath.Join(notADir, "invalid")}
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create directory")
@@ -237,7 +237,7 @@ CREATE TABLE public.users (
 	require.NoError(t, os.MkdirAll(filepath.Join(splitDir, "public.users.sql"), 0o755))
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{DumpOptions: pistachio.DumpOptions{Split: splitDir}}
+	cmd := &command.Dump{Split: splitDir}
 	err := cmd.Run(ctx, client, &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to write")

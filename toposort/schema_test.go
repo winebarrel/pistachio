@@ -199,9 +199,9 @@ func TestOrderFromSchema_ForeignKey(t *testing.T) {
 	posts.Constraints = orderedmap.New[string, *model.Constraint]()
 	posts.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	posts.ForeignKeys.Set("posts_user_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "posts_user_fk"},
-		RefSchema:  &refSchema,
-		RefTable:   &refTable,
+		Name:      "posts_user_fk",
+		RefSchema: &refSchema,
+		RefTable:  &refTable,
 	})
 	tables.Set("public.posts", posts)
 
@@ -242,9 +242,9 @@ func TestOrderFromSchema_SelfReferencingFK(t *testing.T) {
 	nodes.Constraints = orderedmap.New[string, *model.Constraint]()
 	nodes.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	nodes.ForeignKeys.Set("nodes_parent_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "nodes_parent_fk"},
-		RefSchema:  &refSchema,
-		RefTable:   &refNodes,
+		Name:      "nodes_parent_fk",
+		RefSchema: &refSchema,
+		RefTable:  &refNodes,
 	})
 	tables.Set("public.nodes", nodes)
 
@@ -256,8 +256,8 @@ func TestOrderFromSchema_SelfReferencingFK(t *testing.T) {
 	edges.Constraints = orderedmap.New[string, *model.Constraint]()
 	edges.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	edges.ForeignKeys.Set("edges_parent_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "edges_parent_fk"},
-		RefTable:   &refEdges,
+		Name:     "edges_parent_fk",
+		RefTable: &refEdges,
 	})
 	tables.Set("public.edges", edges)
 
@@ -378,9 +378,9 @@ func TestOrderFromSchema_CyclicFK(t *testing.T) {
 	tblA.Constraints = orderedmap.New[string, *model.Constraint]()
 	tblA.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tblA.ForeignKeys.Set("a_b_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "a_b_fk"},
-		RefSchema:  &schemaPublic,
-		RefTable:   &refB,
+		Name:      "a_b_fk",
+		RefSchema: &schemaPublic,
+		RefTable:  &refB,
 	})
 	tables.Set("public.a", tblA)
 
@@ -390,9 +390,9 @@ func TestOrderFromSchema_CyclicFK(t *testing.T) {
 	tblB.Constraints = orderedmap.New[string, *model.Constraint]()
 	tblB.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	tblB.ForeignKeys.Set("b_a_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "b_a_fk"},
-		RefSchema:  &schemaPublic,
-		RefTable:   &refA,
+		Name:      "b_a_fk",
+		RefSchema: &schemaPublic,
+		RefTable:  &refA,
 	})
 	tables.Set("public.b", tblB)
 
@@ -543,7 +543,7 @@ func TestOrderFromSchema_UnqualifiedFKInPublicFromOtherSchema(t *testing.T) {
 
 	refTable := "users"
 	posts := newTable("app", "posts", &model.Column{Name: "user_id", TypeName: "integer"})
-	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Constraint: model.Constraint{Name: "fk_user"}, RefTable: &refTable})
+	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Name: "fk_user", RefTable: &refTable})
 	tables.Set("app.posts", posts)
 
 	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
@@ -586,7 +586,7 @@ func TestOrderFromSchema_FKWithNilRefTable(t *testing.T) {
 	tables := orderedmap.New[string, *model.Table]()
 	tbl := newTable("public", "events", &model.Column{Name: "id", TypeName: "integer"})
 	tbl.ForeignKeys.Set("orphan_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "orphan_fk"},
+		Name: "orphan_fk",
 		// RefTable intentionally nil
 	})
 	tables.Set("public.events", tbl)
@@ -643,7 +643,7 @@ func TestOrderFromSchema_UnqualifiedFKInQuoteRequiringSchema(t *testing.T) {
 	users := newTable("MySchema", "users", &model.Column{Name: "id", TypeName: "integer"})
 	refTable := "users"
 	posts := newTable("MySchema", "posts", &model.Column{Name: "user_id", TypeName: "integer"})
-	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Constraint: model.Constraint{Name: "fk_user"}, RefTable: &refTable})
+	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Name: "fk_user", RefTable: &refTable})
 
 	tables := orderedmap.New[string, *model.Table]()
 	tables.Set(users.FQTN(), users)
@@ -769,9 +769,9 @@ func TestOrderFromSchema_FKWithQuotedRefTable(t *testing.T) {
 	comments.Constraints = orderedmap.New[string, *model.Constraint]()
 	comments.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	comments.ForeignKeys.Set("comments_user_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "comments_user_fk"},
-		RefSchema:  &refSchema,
-		RefTable:   &refTable,
+		Name:      "comments_user_fk",
+		RefSchema: &refSchema,
+		RefTable:  &refTable,
 	})
 	tables.Set(model.Ident("public", "Comments"), comments)
 
@@ -811,9 +811,9 @@ func TestOrderFromSchema_FKWithReservedWordRefTable(t *testing.T) {
 	items.Constraints = orderedmap.New[string, *model.Constraint]()
 	items.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	items.ForeignKeys.Set("items_order_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "items_order_fk"},
-		RefSchema:  &refSchema,
-		RefTable:   &refTable,
+		Name:      "items_order_fk",
+		RefSchema: &refSchema,
+		RefTable:  &refTable,
 	})
 	tables.Set(model.Ident("public", "Items"), items)
 
@@ -853,9 +853,9 @@ func TestOrderFromSchema_FKWithQuotedRefSchema(t *testing.T) {
 	posts.Constraints = orderedmap.New[string, *model.Constraint]()
 	posts.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	posts.ForeignKeys.Set("posts_user_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "posts_user_fk"},
-		RefSchema:  &refSchema,
-		RefTable:   &refTable,
+		Name:      "posts_user_fk",
+		RefSchema: &refSchema,
+		RefTable:  &refTable,
 	})
 	tables.Set(model.Ident("AppPublic", "posts"), posts)
 
@@ -892,9 +892,9 @@ func TestOrderFromSchema_FKWithDefaultSchema(t *testing.T) {
 	posts.Constraints = orderedmap.New[string, *model.Constraint]()
 	posts.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
 	posts.ForeignKeys.Set("posts_user_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "posts_user_fk"},
-		RefSchema:  nil, // nil schema -> defaults to "public"
-		RefTable:   &refTable,
+		Name:      "posts_user_fk",
+		RefSchema: nil, // nil schema -> defaults to "public"
+		RefTable:  &refTable,
 	})
 	tables.Set("public.posts", posts)
 

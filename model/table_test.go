@@ -285,9 +285,9 @@ func TestTable_IdxSQL_empty(t *testing.T) {
 func TestTable_FkSQL(t *testing.T) {
 	tbl := newTable("public", "orders")
 	tbl.ForeignKeys.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	assert.Contains(t, tbl.FkSQL(), "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user")
 }
@@ -328,9 +328,9 @@ func TestTablesToSQL_withIndexAndFK(t *testing.T) {
 	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
 	tbl.Indexes.Set("idx_user", &model.Index{Definition: "CREATE INDEX idx_user ON public.orders USING btree (user_id)"})
 	tbl.ForeignKeys.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	comment := "Orders table"
 	tbl.Comment = &comment

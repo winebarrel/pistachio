@@ -25,8 +25,6 @@ func newValidatableTable(name string, cols ...string) *model.Table {
 	return t
 }
 
-func ptr(s string) *string { return &s }
-
 func tablesMap(ts ...*model.Table) *orderedmap.Map[string, *model.Table] {
 	m := orderedmap.New[string, *model.Table]()
 	for _, t := range ts {
@@ -75,11 +73,9 @@ func TestValidateColumnRefs_CheckMissingColumn(t *testing.T) {
 func TestValidateColumnRefs_FKMissingLocalColumn(t *testing.T) {
 	tbl := newValidatableTable("orders", "id", "buyer_id")
 	tbl.ForeignKeys.Set("fk", &model.ForeignKey{
-		Constraint: model.Constraint{
-			Name:       "fk",
-			Type:       model.ConstraintType('f'),
-			Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
-		},
+		Name:       "fk",
+		Type:       model.ConstraintType('f'),
+		Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
 	})
 	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
@@ -91,11 +87,9 @@ func TestValidateColumnRefs_FKReferencedColumnNotChecked(t *testing.T) {
 	// referenced column name should not surface as a violation.
 	tbl := newValidatableTable("orders", "id", "user_id")
 	tbl.ForeignKeys.Set("fk", &model.ForeignKey{
-		Constraint: model.Constraint{
-			Name:       "fk",
-			Type:       model.ConstraintType('f'),
-			Definition: "FOREIGN KEY (user_id) REFERENCES public.users(nonexistent_pk)",
-		},
+		Name:       "fk",
+		Type:       model.ConstraintType('f'),
+		Definition: "FOREIGN KEY (user_id) REFERENCES public.users(nonexistent_pk)",
 	})
 	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
@@ -183,11 +177,9 @@ func TestValidateColumnRefs_FKCompositeLocalPartialMiss(t *testing.T) {
 	// FK (a, b) REFERENCES ... where a exists but b is missing locally.
 	tbl := newValidatableTable("orders", "id", "tenant_id")
 	tbl.ForeignKeys.Set("fk_buyer", &model.ForeignKey{
-		Constraint: model.Constraint{
-			Name:       "fk_buyer",
-			Type:       model.ConstraintType('f'),
-			Definition: "FOREIGN KEY (tenant_id, user_id) REFERENCES public.users(tenant_id, id)",
-		},
+		Name:       "fk_buyer",
+		Type:       model.ConstraintType('f'),
+		Definition: "FOREIGN KEY (tenant_id, user_id) REFERENCES public.users(tenant_id, id)",
 	})
 	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
@@ -201,11 +193,9 @@ func TestValidateColumnRefs_SelfReferencingFK(t *testing.T) {
 	// (id) are out of scope. Validation must pass.
 	tbl := newValidatableTable("nodes", "id", "parent_id")
 	tbl.ForeignKeys.Set("fk_parent", &model.ForeignKey{
-		Constraint: model.Constraint{
-			Name:       "fk_parent",
-			Type:       model.ConstraintType('f'),
-			Definition: "FOREIGN KEY (parent_id) REFERENCES public.nodes(id)",
-		},
+		Name:       "fk_parent",
+		Type:       model.ConstraintType('f'),
+		Definition: "FOREIGN KEY (parent_id) REFERENCES public.nodes(id)",
 	})
 	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
@@ -748,7 +738,7 @@ func TestValidateColumnRefs_GeneratedMissingColumn(t *testing.T) {
 	tbl.Columns.Set("total", &model.Column{
 		Name:      "total",
 		Generated: model.ColumnGenerated('s'),
-		Default:   ptr("qty * 2"),
+		Default:   new("qty * 2"),
 	})
 	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
@@ -757,7 +747,7 @@ func TestValidateColumnRefs_GeneratedMissingColumn(t *testing.T) {
 
 func TestValidateColumnRefs_DefaultMissingColumn(t *testing.T) {
 	tbl := newValidatableTable("items", "id", "quantity")
-	tbl.Columns.Set("label", &model.Column{Name: "label", Default: ptr("upper(nmae)")})
+	tbl.Columns.Set("label", &model.Column{Name: "label", Default: new("upper(nmae)")})
 	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "column nmae referenced in the DEFAULT expression on column label does not exist on table public.items")
@@ -768,7 +758,7 @@ func TestValidateColumnRefs_ColumnExprValid(t *testing.T) {
 	tbl.Columns.Set("total", &model.Column{
 		Name:      "total",
 		Generated: model.ColumnGenerated('s'),
-		Default:   ptr("qty * 2"),
+		Default:   new("qty * 2"),
 	})
 	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
@@ -776,8 +766,8 @@ func TestValidateColumnRefs_ColumnExprValid(t *testing.T) {
 func TestValidateColumnRefs_ColumnExprWithoutColumnRefs(t *testing.T) {
 	// A DEFAULT that names no column must not be read as referencing one.
 	tbl := newValidatableTable("items", "id")
-	tbl.Columns.Set("seq", &model.Column{Name: "seq", Default: ptr("nextval('items_seq'::regclass)")})
-	tbl.Columns.Set("made", &model.Column{Name: "made", Default: ptr("CURRENT_DATE")})
+	tbl.Columns.Set("seq", &model.Column{Name: "seq", Default: new("nextval('items_seq'::regclass)")})
+	tbl.Columns.Set("made", &model.Column{Name: "made", Default: new("CURRENT_DATE")})
 	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
 
@@ -786,7 +776,7 @@ func TestValidateColumnRefs_ColumnExprDeduplicates(t *testing.T) {
 	tbl.Columns.Set("total", &model.Column{
 		Name:      "total",
 		Generated: model.ColumnGenerated('s'),
-		Default:   ptr("qty + qty"),
+		Default:   new("qty + qty"),
 	})
 	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
@@ -797,7 +787,7 @@ func TestValidateColumnRefs_ColumnExprUnparsable(t *testing.T) {
 	// Validation degrades to a no-op rather than failing the run on an
 	// expression pg_query cannot read.
 	tbl := newValidatableTable("items", "id")
-	tbl.Columns.Set("total", &model.Column{Name: "total", Default: ptr("qty > ")})
+	tbl.Columns.Set("total", &model.Column{Name: "total", Default: new("qty > ")})
 	require.NoError(t, validateColumnRefs(tablesMap(tbl)))
 }
 
@@ -808,12 +798,12 @@ func TestValidateColumnRefs_ColumnExprReportsPerColumn(t *testing.T) {
 	tbl.Columns.Set("total", &model.Column{
 		Name:      "total",
 		Generated: model.ColumnGenerated('s'),
-		Default:   ptr("qty * 2"),
+		Default:   new("qty * 2"),
 	})
 	tbl.Columns.Set("half", &model.Column{
 		Name:      "half",
 		Generated: model.ColumnGenerated('s'),
-		Default:   ptr("qty / 2"),
+		Default:   new("qty / 2"),
 	})
 	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)
@@ -825,7 +815,7 @@ func TestValidateColumnRefs_ColumnExprQuotedName(t *testing.T) {
 	tbl.Columns.Set("total", &model.Column{
 		Name:      "total",
 		Generated: model.ColumnGenerated('s'),
-		Default:   ptr(`"Qty" * 2`),
+		Default:   new(`"Qty" * 2`),
 	})
 	err := validateColumnRefs(tablesMap(tbl))
 	require.Error(t, err)

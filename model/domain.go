@@ -36,25 +36,26 @@ func (d Domain) FQDN() string {
 }
 
 func (d Domain) SQL() string {
-	sql := "CREATE DOMAIN " + Ident(d.Schema, d.Name) + " AS " + d.BaseType
+	var sql strings.Builder
+	sql.WriteString("CREATE DOMAIN " + Ident(d.Schema, d.Name) + " AS " + d.BaseType)
 
 	if d.Collation != nil {
-		sql += " COLLATE " + *d.Collation
+		sql.WriteString(" COLLATE " + *d.Collation)
 	}
 
 	if d.Default != nil {
-		sql += " DEFAULT " + *d.Default
+		sql.WriteString(" DEFAULT " + *d.Default)
 	}
 
 	if d.NotNull {
-		sql += " NOT NULL"
+		sql.WriteString(" NOT NULL")
 	}
 
 	for _, c := range d.Constraints {
-		sql += "\n    CONSTRAINT " + Ident(c.Name) + " " + c.Definition
+		sql.WriteString("\n    CONSTRAINT " + Ident(c.Name) + " " + c.Definition)
 	}
 
-	return sql + ";"
+	return sql.String() + ";"
 }
 
 func (d Domain) CommentSQL() string {
