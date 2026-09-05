@@ -1,0 +1,40 @@
+init: |
+  CREATE TABLE public.ref (id integer NOT NULL, CONSTRAINT ref_pkey PRIMARY KEY (id));
+  CREATE TABLE public.parent (id integer);
+  CREATE TABLE public.child (extra text, ref_id integer) INHERITS (public.parent);
+desired: |
+  CREATE TABLE public.ref (
+      id integer NOT NULL,
+      CONSTRAINT ref_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.parent (
+      id integer
+  );
+  CREATE TABLE public.child (
+      extra text,
+      ref_id integer
+  )
+  INHERITS (public.parent);
+  CREATE INDEX child_extra_idx ON public.child USING btree (extra);
+  ALTER TABLE ONLY public.child ADD CONSTRAINT child_ref_fk FOREIGN KEY (ref_id) REFERENCES public.ref(id);
+applied: |
+  -- public.child
+  CREATE TABLE public.child (
+      extra text,
+      ref_id integer
+  )
+  INHERITS (public.parent);
+  CREATE INDEX child_extra_idx ON public.child USING btree (extra);
+
+  ALTER TABLE ONLY public.child ADD CONSTRAINT child_ref_fk FOREIGN KEY (ref_id) REFERENCES ref(id);
+
+  -- public.parent
+  CREATE TABLE public.parent (
+      id integer
+  );
+
+  -- public.ref
+  CREATE TABLE public.ref (
+      id integer NOT NULL,
+      CONSTRAINT ref_pkey PRIMARY KEY (id)
+  );

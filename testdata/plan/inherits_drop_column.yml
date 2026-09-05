@@ -1,0 +1,14 @@
+init: |
+  CREATE TABLE public.parent (id integer, n integer);
+  CREATE TABLE public.child (extra text, note text) INHERITS (public.parent);
+desired: |
+  CREATE TABLE public.parent (
+      id integer,
+      n integer
+  );
+  CREATE TABLE public.child (
+      extra text
+  )
+  INHERITS (public.parent);
+plan: |
+  ALTER TABLE public.child DROP COLUMN note;

@@ -41,18 +41,20 @@ An index's parameters are part of its definition and are managed either way.
 
 ## Table inheritance
 
-An `INHERITS (...)` child is managed as the columns and constraints it declares itself, which is what its `CREATE TABLE` writes and what `pg_dump` writes for it. The ones it merely inherits belong to the parent and are read from neither side, so declaring the parent's column on the child plans nothing and the child's own column is diffed the way any other table's is. A column the child redeclares is local, and PostgreSQL merges the two.
+An `INHERITS (...)` child is managed as the columns and constraints it declares itself. That is what its `CREATE TABLE` writes, and what `pg_dump` writes for it.
 
 ```sql
 CREATE TABLE public.shapes (id integer NOT NULL, name text);
 CREATE TABLE public.boxes (w integer NOT NULL) INHERITS (public.shapes);
 ```
 
-A comment on an inherited column is not managed. `dump` does not write one and a schema file that does is ignored, so nothing drifts; `pg_dump` does write it and that line is lost.
+`boxes` is managed as `w` alone. `id` and `name` belong to `shapes` and are read from neither side, so a change to them goes out against the parent and PostgreSQL carries it down. Writing an inherited column on the child plans nothing. A column the child redeclares is its own, and PostgreSQL merges the two.
 
-Only the first parent is read, so a child of more than one, `INHERITS (a, b)`, is dumped as `INHERITS (a)`. Both sides read it the same way, so a dump fed back plans clean, but reloading one gives a table that does not inherit `b`.
+A comment on an inherited column is not managed. `dump` writes none and a schema file that carries one is ignored, so nothing drifts. `pg_dump` does write it, and that line is lost.
 
-A declarative partition is a different relation. It declares nothing of its own, so `PARTITION OF` is what pistachio writes for it, and `--skip-partition-child` leaves the partitions to another tool. That flag does not reach an `INHERITS` child, which carries no partition bound.
+Only the first parent is read, so `INHERITS (a, b)` is dumped as `INHERITS (a)`. Both sides read it the same way, so a dump fed back plans clean, but reloading one gives a table that does not inherit `b`.
+
+`--skip-partition-child` does not reach an `INHERITS` child. It applies to a declarative partition, which carries a bound.
 
 ## Routines
 

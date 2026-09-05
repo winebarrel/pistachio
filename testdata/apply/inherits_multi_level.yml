@@ -1,0 +1,35 @@
+init: |
+  CREATE TABLE public.base (id integer);
+  CREATE TABLE public.mid (m integer) INHERITS (public.base);
+  CREATE TABLE public.leaf (l integer) INHERITS (public.mid);
+desired: |
+  CREATE TABLE public.base (
+      id integer
+  );
+  CREATE TABLE public.mid (
+      m integer,
+      extra text
+  )
+  INHERITS (public.base);
+  CREATE TABLE public.leaf (
+      l integer
+  )
+  INHERITS (public.mid);
+applied: |
+  -- public.base
+  CREATE TABLE public.base (
+      id integer
+  );
+
+  -- public.leaf
+  CREATE TABLE public.leaf (
+      l integer
+  )
+  INHERITS (public.mid);
+
+  -- public.mid
+  CREATE TABLE public.mid (
+      m integer,
+      extra text
+  )
+  INHERITS (public.base);

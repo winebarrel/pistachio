@@ -1,0 +1,14 @@
+init: |
+  CREATE TABLE public.parent (id integer);
+  CREATE TABLE public.child (v integer) INHERITS (public.parent);
+desired: |
+  CREATE TABLE public.parent (
+      id integer
+  );
+  CREATE TABLE public.child (
+      v integer
+  )
+  INHERITS (public.parent);
+  ALTER TABLE ONLY public.child ADD CONSTRAINT child_v_check CHECK (v > 0) NOT VALID;
+plan: |
+  ALTER TABLE public.child ADD CONSTRAINT child_v_check CHECK (v > 0) NOT VALID;

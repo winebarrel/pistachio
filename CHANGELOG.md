@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Manage an `INHERITS` child as the columns and constraints it declares itself. `dump` wrote such a child as its constraints alone, the parent's included, and dropped every column, so the output did not even reload: the constraint named a column the statement no longer declared. Fed back as the desired schema it planned a `DROP COLUMN` for every column and a `DROP CONSTRAINT` PostgreSQL rejects. Both sides now read the local half alone, `attislocal` and `conislocal`, which is what the child's `CREATE TABLE` writes and what `pg_dump` writes for it. A NOT VALID check on the child is added by its own `ALTER` rather than written inline, so a reload no longer validates it. A comment on an inherited column and a child of more than one parent stay unmanaged, both symmetric on the two sides.
+
 ## [1.42.0] - 2026-09-05
 
 * Read the storage parameters of the index a constraint owns. `ALTER TABLE ... ADD CONSTRAINT ... UNIQUE (v) WITH (fillfactor = 70)` puts them on the index, which `pg_get_constraintdef` does not print, so the two sides never matched and the constraint was dropped and re-added on every plan, rebuilding the index under an ACCESS EXCLUSIVE lock. `dump` dropped the clause the same way and now writes it. A parameter set on such an index outside the schema file shows up as a diff, the same as on a plain index. A quoted parameter value and the bare spelling, `deduplicate_items = 'off'` and `off`, also compare equal now, on a plain index too.

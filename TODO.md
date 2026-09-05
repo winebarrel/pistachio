@@ -520,10 +520,9 @@ diffs columns. An INHERITS child goes through the regular column diff, where
 an entry holding only a name and a comment would be read as a new column and
 emit `ADD COLUMN`, so the same trick does not carry over.
 
-Both sides agree, since the catalog reads an INHERITS child's local columns
-alone, so nothing drifts and `dump` feeds back clean. The comment is simply
-unmanaged: `dump` does not write one and a desired schema that does is
-ignored. `pg_dump` does write it, and that line is lost.
+The catalog reads such a child's local columns alone, so the two sides agree
+and nothing drifts. The comment is unmanaged rather than lost to a diff:
+`dump` writes none. `pg_dump` does, and that line is dropped on the way in.
 `test/fidelity/schemas/inherits.sql` notes what it leaves out.
 
 Closing this needs the inherited column set materialised on the child, kept
@@ -536,14 +535,14 @@ Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
 Priority: low.
 
-`model.Table.PartitionOf` holds one parent, and `catalog.ListTables` reads the
-one at `pg_inherits.inhseqno = 1`, so `CREATE TABLE c (z integer) INHERITS (a,
-b)` is dumped as `INHERITS (public.a)` alone. Reloading that dump gives a table
-that does not inherit `b` and so does not have its columns.
+`model.Table.PartitionOf` holds one parent, so `catalog.ListTables` reads the
+one at `pg_inherits.inhseqno = 1` and the parser reads `cs.InhRelations[0]`,
+dropping the rest without a warning. `CREATE TABLE c (z integer) INHERITS (a,
+b)` is dumped as `INHERITS (public.a)`, and reloading that gives a table
+without `b` or its columns.
 
-Both sides read the first parent alone, so the two agree and a dump fed back
-plans clean; only a reload loses anything. The parser reads
-`cs.InhRelations[0]` for the same reason and drops the rest without a warning.
+Both sides read the first parent alone, so a dump fed back plans clean. Only a
+reload loses anything.
 
 Closing it means a list rather than a single name, which the parser, the
 dependency graph and the diff all read. A declarative partition has exactly one

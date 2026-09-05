@@ -67,6 +67,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
    - Consider whether similar issues exist elsewhere in the codebase.
    - Run `make lint` to check for lint errors.
    - Run `make schema` to load sample schema SQL files into the local database (requires `psql`, `curl`, and network access), then verify behavior with `pista plan` / `pista dump` against them.
+   - Add a `CHANGELOG.md` entry under `## [Unreleased]`, creating that section above the newest release if it is not there. The release fills in the version and date.
 5. Do not run tests in parallel (`make test` uses `-p 1`).
 
 ## Code conventions
