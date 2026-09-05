@@ -1,0 +1,13 @@
+# The catalog prints a visible operator bare, so the qualification is
+# stripped from both sides, like a function name's schema.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (v WITH OPERATOR(pg_catalog.=))
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (v WITH OPERATOR(pg_catalog.=))
+  );
+plan: ""

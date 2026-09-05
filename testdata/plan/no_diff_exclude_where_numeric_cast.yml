@@ -1,0 +1,15 @@
+# The catalog stores the predicate as (price > 0::numeric); the cast the file
+# did not write is stripped from the current side only, like a CHECK body's.
+init: |
+  CREATE TABLE public.slots (
+      r int4range NOT NULL,
+      price numeric NOT NULL,
+      CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (price > 0)
+  );
+desired: |
+  CREATE TABLE public.slots (
+      r int4range NOT NULL,
+      price numeric NOT NULL,
+      CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (price > 0)
+  );
+plan: ""

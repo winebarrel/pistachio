@@ -1,0 +1,14 @@
+# The catalog stores the predicate's BETWEEN expanded to a >= 1 AND a <= 10.
+init: |
+  CREATE TABLE public.slots (
+      r int4range NOT NULL,
+      a integer NOT NULL,
+      CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (a BETWEEN 1 AND 10)
+  );
+desired: |
+  CREATE TABLE public.slots (
+      r int4range NOT NULL,
+      a integer NOT NULL,
+      CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (a BETWEEN 1 AND 10)
+  );
+plan: ""
