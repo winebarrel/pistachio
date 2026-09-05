@@ -1,0 +1,16 @@
+# A real change to the predicate still surfaces as DROP + ADD.
+init: |
+  CREATE TABLE public.slots (
+      r int4range NOT NULL,
+      a integer NOT NULL,
+      CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (a > 0)
+  );
+desired: |
+  CREATE TABLE public.slots (
+      r int4range NOT NULL,
+      a integer NOT NULL,
+      CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (a > 10)
+  );
+plan: |
+  ALTER TABLE public.slots DROP CONSTRAINT slots_excl;
+  ALTER TABLE public.slots ADD CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (a > 10);

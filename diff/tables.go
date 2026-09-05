@@ -1000,12 +1000,71 @@ func equalConstraintDef(current, desired string) bool {
 	curCon.RawExpr = normalizeCheckExpr(curCon.RawExpr)
 	desCon.RawExpr = normalizeCheckExpr(desCon.RawExpr)
 	curCon.RawExpr = alignCurrentCasts(desCon.RawExpr, curCon.RawExpr)
+	normalizeExclusion(curCon)
+	normalizeExclusion(desCon)
+	alignExclusionCasts(desCon, curCon)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
 	if deparseErrCur != nil || deparseErrDes != nil {
 		return current == desired
 	}
 	return curStr == desStr
+}
+
+// normalizeExclusion runs the symmetric normalizations over an exclusion
+// constraint's elements and predicate, which sit in Exclusions and WhereClause
+// rather than in the RawExpr a CHECK body uses. Each element is an IndexElem,
+// so it takes the same canonicalization as an index column. A non-exclusion
+// constraint holds neither field and passes through untouched.
+func normalizeExclusion(con *pg_query.Constraint) {
+	for _, ex := range con.Exclusions {
+		list := ex.GetList()
+		if list == nil {
+			continue
+		}
+		for _, item := range list.Items {
+			if ie := item.GetIndexElem(); ie != nil {
+				normalizeIndexElem(ie)
+			}
+			// The operator name list. The catalog prints a visible operator
+			// bare, so the qualification is dropped from both sides, the way
+			// stripFuncSchema treats a function name.
+			if ops := item.GetList(); ops != nil && len(ops.Items) > 1 {
+				ops.Items = ops.Items[len(ops.Items)-1:]
+			}
+		}
+	}
+	if con.WhereClause != nil {
+		con.WhereClause = normalizeCheckExpr(con.WhereClause)
+	}
+}
+
+// alignExclusionCasts strips the casts pg_get_constraintdef adds from the
+// current side of an exclusion, pairing each element expression and the
+// predicate with its desired counterpart the way a CHECK body is paired.
+// Sides whose element counts differ are left alone; the definitions differ
+// anyway.
+func alignExclusionCasts(desired, current *pg_query.Constraint) {
+	if len(desired.Exclusions) == len(current.Exclusions) {
+		for i, ex := range current.Exclusions {
+			curList := ex.GetList()
+			desList := desired.Exclusions[i].GetList()
+			if curList == nil || desList == nil || len(curList.Items) != len(desList.Items) {
+				continue
+			}
+			for j, item := range curList.Items {
+				curIe := item.GetIndexElem()
+				desIe := desList.Items[j].GetIndexElem()
+				if curIe == nil || desIe == nil || curIe.Expr == nil || desIe.Expr == nil {
+					continue
+				}
+				curIe.Expr = alignCurrentCasts(desIe.Expr, curIe.Expr)
+			}
+		}
+	}
+	if desired.WhereClause != nil && current.WhereClause != nil {
+		current.WhereClause = alignCurrentCasts(desired.WhereClause, current.WhereClause)
+	}
 }
 
 // alignCurrentCasts walks desired and current in step, stripping TypeCast
@@ -1500,34 +1559,38 @@ func normalizeIndexStmt(is *pg_query.IndexStmt) {
 		is.Relation.Schemaname = ""
 	}
 	for _, p := range is.IndexParams {
-		ie := p.GetIndexElem()
-		if ie == nil {
-			continue
-		}
-		// Canonicalise sort order: SORTBY_ASC and SORTBY_DEFAULT are equivalent.
-		if ie.Ordering == pg_query.SortByDir_SORTBY_ASC {
-			ie.Ordering = pg_query.SortByDir_SORTBY_DEFAULT
-		}
-		// Canonicalise nulls order: NULLS LAST is the default for ASC/DEFAULT,
-		// NULLS FIRST is the default for DESC.
-		switch ie.Ordering {
-		case pg_query.SortByDir_SORTBY_DEFAULT:
-			if ie.NullsOrdering == pg_query.SortByNulls_SORTBY_NULLS_LAST {
-				ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
-			}
-		case pg_query.SortByDir_SORTBY_DESC:
-			if ie.NullsOrdering == pg_query.SortByNulls_SORTBY_NULLS_FIRST {
-				ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
-			}
-		}
-		if ie.Expr != nil {
-			ie.Expr = normalizeCheckExpr(ie.Expr)
+		if ie := p.GetIndexElem(); ie != nil {
+			normalizeIndexElem(ie)
 		}
 	}
 	if is.WhereClause != nil {
 		is.WhereClause = normalizeCheckExpr(is.WhereClause)
 	}
 	normalizeStorageParams(is.Options)
+}
+
+// normalizeIndexElem canonicalises one index element in place, for an index
+// column and an exclusion element alike. An explicit ASC and the default sort
+// order compare equal, so does the NULLS order that is the default for the
+// chosen direction, and the expression takes the symmetric expression
+// normalizations.
+func normalizeIndexElem(ie *pg_query.IndexElem) {
+	if ie.Ordering == pg_query.SortByDir_SORTBY_ASC {
+		ie.Ordering = pg_query.SortByDir_SORTBY_DEFAULT
+	}
+	switch ie.Ordering {
+	case pg_query.SortByDir_SORTBY_DEFAULT:
+		if ie.NullsOrdering == pg_query.SortByNulls_SORTBY_NULLS_LAST {
+			ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
+		}
+	case pg_query.SortByDir_SORTBY_DESC:
+		if ie.NullsOrdering == pg_query.SortByNulls_SORTBY_NULLS_FIRST {
+			ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
+		}
+	}
+	if ie.Expr != nil {
+		ie.Expr = normalizeCheckExpr(ie.Expr)
+	}
 }
 
 // normalizeStorageParams canonicalises an index's WITH clause so the two

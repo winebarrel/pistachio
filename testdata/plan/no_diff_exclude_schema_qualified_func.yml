@@ -1,0 +1,11 @@
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (pg_catalog.lower(v) WITH =)
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (pg_catalog.lower(v) WITH =)
+  );
+plan: ""

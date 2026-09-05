@@ -1,0 +1,12 @@
+# EXCLUDE without USING means btree, and the catalog prints the method.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE (v WITH =)
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE (v WITH =)
+  );
+plan: ""

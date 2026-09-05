@@ -1,0 +1,13 @@
+# The catalog stores the concatenation operand cast, (v || 'x'::text), while
+# the file leaves it off.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (((v || 'x')) WITH =)
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (((v || 'x')) WITH =)
+  );
+plan: ""

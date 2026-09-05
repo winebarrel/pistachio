@@ -3747,3 +3747,67 @@ func TestDiffTables_newTable_withStorageRLSAndTrigger(t *testing.T) {
 	assert.Equal(t, "CREATE TRIGGER stamp BEFORE INSERT ON public.docs FOR EACH ROW EXECUTE FUNCTION stamp();", result.Stmts[5])
 	assert.False(t, result.HasConcurrently)
 }
+
+func TestEqualConstraintDef_exclusionSchemaQualifiedFunc(t *testing.T) {
+	// The catalog drops the schema from a function on the search_path.
+	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING btree (lower(v) WITH =)",
+		"EXCLUDE USING btree (pg_catalog.lower(v) WITH =)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionTextCast(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING btree ((v || 'x'::text) WITH =)",
+		"EXCLUDE USING btree (((v || 'x')) WITH =)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionAsc(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING btree (v WITH =)",
+		"EXCLUDE USING btree (v ASC WITH =)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionWhereBetween(t *testing.T) {
+	// The catalog stores a BETWEEN in the predicate expanded.
+	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING gist (r WITH &&) WHERE (a >= 1 AND a <= 10)",
+		"EXCLUDE USING gist (r WITH &&) WHERE (a BETWEEN 1 AND 10)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionWhereNumericCast(t *testing.T) {
+	// The cast the catalog adds is stripped from the current side only.
+	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING gist (r WITH &&) WHERE (price > 0::numeric)",
+		"EXCLUDE USING gist (r WITH &&) WHERE (price > 0)",
+	))
+	assert.False(t, equalConstraintDef(
+		"EXCLUDE USING gist (r WITH &&) WHERE (price > 0)",
+		"EXCLUDE USING gist (r WITH &&) WHERE (price > 0::numeric)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionOperatorDiff(t *testing.T) {
+	assert.False(t, equalConstraintDef(
+		"EXCLUDE USING btree (v WITH =)",
+		"EXCLUDE USING btree (v WITH <>)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionElementCountDiff(t *testing.T) {
+	assert.False(t, equalConstraintDef(
+		"EXCLUDE USING gist (r WITH &&)",
+		"EXCLUDE USING gist (r WITH &&, v WITH =)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionQualifiedOperator(t *testing.T) {
+	// The catalog prints a visible operator bare.
+	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING btree (v WITH =)",
+		"EXCLUDE USING btree (v WITH OPERATOR(pg_catalog.=))",
+	))
+}

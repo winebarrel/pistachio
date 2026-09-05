@@ -1,0 +1,12 @@
+# An explicit ASC is the default and the catalog does not print it.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (v ASC WITH =)
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (v ASC WITH =)
+  );
+plan: ""
