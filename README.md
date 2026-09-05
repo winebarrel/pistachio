@@ -31,6 +31,8 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 | Linux   | amd64, arm64 |
 | Windows | amd64        |
 
+The macOS binaries need macOS 13 or later.
+
 ## Example
 
 Create a schema file:
