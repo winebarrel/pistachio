@@ -1,0 +1,10 @@
+# A persistence change and an option change on the same sequence: the SET
+# UNLOGGED is its own statement, since the option list of ALTER SEQUENCE does
+# not take it.
+init: |
+  CREATE SEQUENCE public.jobs_seq;
+desired: |
+  CREATE UNLOGGED SEQUENCE public.jobs_seq CACHE 10;
+plan: |
+  ALTER SEQUENCE public.jobs_seq SET UNLOGGED;
+  ALTER SEQUENCE public.jobs_seq CACHE 10;

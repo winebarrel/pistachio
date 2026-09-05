@@ -5,3 +5,4 @@ CREATE SEQUENCE public.counter
     MAXVALUE 1000
     CACHE 5
     CYCLE;
+CREATE UNLOGGED SEQUENCE public.jobs_seq;

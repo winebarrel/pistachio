@@ -1,0 +1,5 @@
+init: |
+  CREATE UNLOGGED SEQUENCE public.jobs_seq;
+desired: |
+  CREATE UNLOGGED SEQUENCE public.jobs_seq;
+plan: ""

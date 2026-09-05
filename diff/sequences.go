@@ -62,6 +62,18 @@ func DiffSequences(current, desired *orderedmap.Map[string, *model.Sequence], dc
 // diffSequence emits a single ALTER SEQUENCE combining every changed option,
 // plus a separate COMMENT statement when the comment changed.
 func diffSequence(fqn string, current, desired *model.Sequence) []string {
+	var stmts []string
+
+	// SET LOGGED / SET UNLOGGED is a form of its own; the option list of
+	// ALTER SEQUENCE does not take it.
+	if current.Unlogged != desired.Unlogged {
+		if desired.Unlogged {
+			stmts = append(stmts, "ALTER SEQUENCE "+fqn+" SET UNLOGGED;")
+		} else {
+			stmts = append(stmts, "ALTER SEQUENCE "+fqn+" SET LOGGED;")
+		}
+	}
+
 	var clauses []string
 
 	if current.DataType != desired.DataType {
@@ -90,7 +102,6 @@ func diffSequence(fqn string, current, desired *model.Sequence) []string {
 		}
 	}
 
-	var stmts []string
 	if len(clauses) > 0 {
 		stmts = append(stmts, "ALTER SEQUENCE "+fqn+" "+strings.Join(clauses, " ")+";")
 	}

@@ -1,0 +1,6 @@
+init: |
+  CREATE UNLOGGED SEQUENCE public.jobs_seq;
+desired: |
+  CREATE SEQUENCE public.jobs_seq;
+plan: |
+  ALTER SEQUENCE public.jobs_seq SET LOGGED;
