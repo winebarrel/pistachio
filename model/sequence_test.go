@@ -80,3 +80,9 @@ func TestSequence_String(t *testing.T) {
 	seq := &model.Sequence{Schema: "public", Name: "users_id_seq", DataType: "bigint"}
 	assert.Contains(t, seq.String(), "users_id_seq")
 }
+
+func TestSequence_SQL_Unlogged(t *testing.T) {
+	seq := sampleSequence()
+	seq.Unlogged = true
+	assert.Contains(t, seq.SQL(), "CREATE UNLOGGED SEQUENCE public.order_seq\n")
+}

@@ -54,6 +54,7 @@ func (c *Catalog) ListSequences(ctx context.Context) ([]*model.Sequence, error) 
 			s.seqincrement,
 			s.seqcache,
 			s.seqcycle,
+			c.relpersistence = 'u' AS unlogged,
 			-- deptype 'a' covers serial columns, 'i' covers identity
 			-- columns. Both mark auto-created sequences owned by a table
 			-- column, so owner_table is non-null only for those; standalone
@@ -108,6 +109,7 @@ func (c *Catalog) ListSequences(ctx context.Context) ([]*model.Sequence, error) 
 			&s.Increment,
 			&s.Cache,
 			&s.Cycle,
+			&s.Unlogged,
 			&s.OwnerTable,
 			&s.OwnerColumn,
 			&s.Comment,

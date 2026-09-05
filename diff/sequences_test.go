@@ -65,13 +65,15 @@ func TestDiffSequences_NoDiff(t *testing.T) {
 func TestDiffSequences_AlterOptions(t *testing.T) {
 	desired := baseSeq()
 	desired.Increment = 2
+	desired.Min = 5
 	desired.Max = 5000
+	desired.Start = 100
 	desired.Cache = 10
 	desired.Cycle = true
 	result, err := diff.DiffSequences(newSeqMap(baseSeq()), newSeqMap(desired), diff.AllowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
-	assert.Equal(t, "ALTER SEQUENCE public.s INCREMENT BY 2 MAXVALUE 5000 CACHE 10 CYCLE;", result.Stmts[0])
+	assert.Equal(t, "ALTER SEQUENCE public.s INCREMENT BY 2 MINVALUE 5 MAXVALUE 5000 START WITH 100 CACHE 10 CYCLE;", result.Stmts[0])
 }
 
 func TestDiffSequences_AlterType(t *testing.T) {
@@ -154,4 +156,20 @@ func TestDiffSequences_RenameCrossSchemaError(t *testing.T) {
 	_, err := diff.DiffSequences(newSeqMap(current), newSeqMap(desired), diff.AllowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cross-schema rename")
+}
+
+func TestDiffSequences_SetUnlogged(t *testing.T) {
+	desired := baseSeq()
+	desired.Unlogged = true
+	result, err := diff.DiffSequences(newSeqMap(baseSeq()), newSeqMap(desired), diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER SEQUENCE public.s SET UNLOGGED;"}, result.Stmts)
+}
+
+func TestDiffSequences_SetLogged(t *testing.T) {
+	current := baseSeq()
+	current.Unlogged = true
+	result, err := diff.DiffSequences(newSeqMap(current), newSeqMap(baseSeq()), diff.AllowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER SEQUENCE public.s SET LOGGED;"}, result.Stmts)
 }

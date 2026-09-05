@@ -1658,6 +1658,7 @@ func parseCreateSeqStmt(cs *pg_query.CreateSeqStmt, defaultSchema string) (*mode
 	return &model.Sequence{
 		Schema:      schema,
 		Name:        cs.Sequence.Relname,
+		Unlogged:    cs.Sequence.Relpersistence == "u",
 		DataType:    p.dataType,
 		Start:       p.start,
 		Min:         p.min,

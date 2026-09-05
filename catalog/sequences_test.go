@@ -79,6 +79,22 @@ func TestListSequences(t *testing.T) {
 		assert.Nil(t, seqs[0].OwnerTable)
 	})
 
+	t.Run("unlogged sequence", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE UNLOGGED SEQUENCE public.jobs_seq;
+			CREATE SEQUENCE public.plain_seq;
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		seqs, err := cat.ListSequences(ctx)
+		require.NoError(t, err)
+		require.Len(t, seqs, 2)
+		assert.Equal(t, "jobs_seq", seqs[0].Name)
+		assert.True(t, seqs[0].Unlogged)
+		assert.Equal(t, "plain_seq", seqs[1].Name)
+		assert.False(t, seqs[1].Unlogged)
+	})
+
 	t.Run("sequence with comment", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE SEQUENCE public.my_seq;

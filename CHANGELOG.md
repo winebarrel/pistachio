@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Track `UNLOGGED` on a standalone sequence. It was read by neither side, so `dump` wrote an unlogged sequence as a plain `CREATE SEQUENCE` and a `LOGGED` <-> `UNLOGGED` change produced no diff. `dump` now writes `CREATE UNLOGGED SEQUENCE` and a change goes out as `ALTER SEQUENCE ... SET LOGGED/UNLOGGED`. Temporary sequences stay out of scope.
+
 * Restore a `NOT VALID` check constraint unvalidated. A table's checks are written inside `CREATE TABLE`, where the clause cannot be spelled, so `dump` printed such a constraint as validated and the reload scanned the table to validate it. Such a check is now left out of `CREATE TABLE` and added by its own `ALTER TABLE ... ADD CONSTRAINT ... NOT VALID`, the way a foreign key is. This also stops a plan that created the table from re-emitting the constraint on every later run.
 
 ## [1.41.1] - 2026-09-04

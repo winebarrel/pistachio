@@ -23,6 +23,7 @@ type Sequence struct {
 	Increment int64
 	Cache     int64
 	Cycle     bool
+	Unlogged  bool
 	// OwnerTable and OwnerColumn are set from the OWNED BY relationship
 	// (pg_depend deptype 'a' for serial, 'i' for identity). They are nil for
 	// standalone sequences, which are the only ones the pipeline manages.
@@ -47,8 +48,12 @@ func (seq Sequence) Owned() bool {
 }
 
 func (seq Sequence) SQL() string {
+	create := "CREATE SEQUENCE "
+	if seq.Unlogged {
+		create = "CREATE UNLOGGED SEQUENCE "
+	}
 	lines := []string{
-		"CREATE SEQUENCE " + seq.FQN(),
+		create + seq.FQN(),
 		"    AS " + seq.DataType,
 		"    START WITH " + strconv.FormatInt(seq.Start, 10),
 		"    INCREMENT BY " + strconv.FormatInt(seq.Increment, 10),

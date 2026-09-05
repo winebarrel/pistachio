@@ -3273,3 +3273,19 @@ func TestParseSQL_IdentityValueOverflow(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to parse identity options for column id")
 	assert.Contains(t, err.Error(), `invalid value "99999999999999999999" for sequence option start`)
 }
+
+func TestParseSQL_UnloggedSequence(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE UNLOGGED SEQUENCE public.jobs_seq;
+		CREATE SEQUENCE public.plain_seq;
+	`)
+	require.NoError(t, err)
+
+	seq, ok := result.Sequences.GetOk("public.jobs_seq")
+	require.True(t, ok)
+	assert.True(t, seq.Unlogged)
+
+	seq, ok = result.Sequences.GetOk("public.plain_seq")
+	require.True(t, ok)
+	assert.False(t, seq.Unlogged)
+}
