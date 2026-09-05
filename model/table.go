@@ -114,9 +114,7 @@ func (t Table) SQL() string {
 					}
 					return q
 				}),
-				t.Constraints.TransformSlice(func(_ string, con *Constraint) string {
-					return "    CONSTRAINT " + Ident(con.Name) + " " + con.Definition
-				}),
+				t.inlineConstraintDefs(),
 			),
 			",\n",
 		) +
@@ -135,6 +133,44 @@ func (t Table) SQL() string {
 	}
 
 	return sql + ";"
+}
+
+// inlineConstraintDefs renders the constraints written inside CREATE TABLE.
+// A NOT VALID check is left out, since the clause cannot be spelled there and
+// writing the constraint without it would restore it validated; NotValidConSQL
+// adds it back.
+func (t Table) inlineConstraintDefs() []string {
+	var defs []string
+	for _, con := range t.Constraints.CollectValues() {
+		if con.Type.IsCheckConstraint() && !con.Validated {
+			continue
+		}
+		defs = append(defs, "    CONSTRAINT "+Ident(con.Name)+" "+con.Definition)
+	}
+	return defs
+}
+
+// NotValidConSQL renders the table's NOT VALID check constraints, each as its
+// own ALTER TABLE after the table. ONLY is dropped on a partitioned table,
+// which rejects it once a partition exists. A partition child renders nothing:
+// its unvalidated entries are the clones the parent's statement creates. An
+// INHERITS child keeps the inline form its branch of SQL writes.
+func (t Table) NotValidConSQL() string {
+	if t.PartitionOf != nil {
+		return ""
+	}
+	only := "ONLY "
+	if t.Partitioned {
+		only = ""
+	}
+	var stmts []string
+	for _, con := range t.Constraints.CollectValues() {
+		if !con.Type.IsCheckConstraint() || con.Validated {
+			continue
+		}
+		stmts = append(stmts, "ALTER TABLE "+only+t.FQTN()+" ADD CONSTRAINT "+Ident(con.Name)+" "+con.Definition+" NOT VALID;")
+	}
+	return strings.Join(stmts, "\n")
 }
 
 func (t Table) IdxSQL() string {
@@ -275,6 +311,9 @@ func (t Table) CommentSQL() string {
 
 func TableToSQL(t *Table) string {
 	parts := []string{"-- " + t.FQTN(), t.SQL()}
+	if s := t.NotValidConSQL(); s != "" {
+		parts = append(parts, s)
+	}
 	if s := t.StorageSQL(); s != "" {
 		parts = append(parts, s)
 	}

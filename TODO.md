@@ -943,21 +943,6 @@ schema does not will plan `COMMENT ON INDEX ... IS NULL;`.
 
 Origin: discussion, 2026-08-25.
 
-## A NOT VALID CHECK constraint is restored validated
-
-`catalog.ListConstraints` reads `convalidated`, and `model.Constraint` carries
-it as `Validated`, but only `ForeignKey.SQL` writes `NOT VALID`. A table's
-check constraints are written inside `CREATE TABLE`, where the clause cannot be
-spelled, so `pista dump` prints the constraint as if it were validated and the
-reload scans the table to validate it.
-
-The work is to emit a `NOT VALID` check the way a foreign key is already
-emitted, as its own `ALTER TABLE ... ADD CONSTRAINT` after the table, and to
-leave the validated ones inline.
-
-Origin: the restore fidelity check, 2026-09-02.
-`test/fidelity/schemas/check_constraints.sql` notes what it leaves out.
-
 ## An identity column's sequence name is not managed
 
 The sequence behind an identity column is created as `<table>_<column>_seq` and

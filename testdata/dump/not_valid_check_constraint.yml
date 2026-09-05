@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id),
+      CONSTRAINT orders_id_check CHECK (id > 0)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;
+  ALTER TABLE public.orders ADD CONSTRAINT orders_id_max_check CHECK (id < 1000000) NOT VALID;
+dump: |
+  -- public.orders
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id),
+      CONSTRAINT orders_id_check CHECK (id > 0)
+  );
+  ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_id_max_check CHECK (id < 1000000) NOT VALID;
+  ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;

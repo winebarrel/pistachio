@@ -57,6 +57,25 @@ func TestDiffTables_newTable_withExtras(t *testing.T) {
 	assert.Contains(t, result.Stmts[2], "COMMENT ON TABLE")
 }
 
+func TestDiffTables_newTable_notValidCheck(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	tbl := newTable("public", "users")
+	tbl.Columns.Set("age", &model.Column{Name: "age", TypeName: "integer", NotNull: true})
+	tbl.Constraints.Set("chk_age", &model.Constraint{
+		Name: "chk_age", Type: model.ConstraintType('c'), Definition: "CHECK (age > 0)",
+	})
+	desired.Set("public.users", tbl)
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Len(t, result.Stmts, 2)
+	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.users")
+	assert.NotContains(t, result.Stmts[0], "chk_age")
+	assert.Equal(t, "ALTER TABLE ONLY public.users ADD CONSTRAINT chk_age CHECK (age > 0) NOT VALID;", result.Stmts[1])
+}
+
 func TestDiffTables_newTable_withExtras_perDirective(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()

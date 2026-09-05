@@ -485,3 +485,84 @@ func TestSortedStorageParams(t *testing.T) {
 	assert.Equal(t, []string{"a", "b", "c"}, params.CollectKeys())
 	assert.Equal(t, []string{"1", "2", "3"}, params.CollectValues())
 }
+
+func TestTable_SQL_notValidCheckLeftOut(t *testing.T) {
+	tbl := newTable("public", "orders")
+	tbl.Columns.Set("qty", &model.Column{Name: "qty", TypeName: "integer", NotNull: true})
+	tbl.Constraints.Set("orders_pkey", &model.Constraint{
+		Name: "orders_pkey", Type: model.ConstraintType('p'), Definition: "PRIMARY KEY (qty)",
+	})
+	tbl.Constraints.Set("orders_qty_check", &model.Constraint{
+		Name: "orders_qty_check", Type: model.ConstraintType('c'), Definition: "CHECK (qty > 0)",
+	})
+
+	out := tbl.SQL()
+	assert.Contains(t, out, "CONSTRAINT orders_pkey PRIMARY KEY (qty)")
+	assert.NotContains(t, out, "orders_qty_check")
+}
+
+func TestTable_NotValidConSQL(t *testing.T) {
+	tbl := newTable("public", "orders")
+	tbl.Constraints.Set("orders_qty_check", &model.Constraint{
+		Name: "orders_qty_check", Type: model.ConstraintType('c'), Definition: "CHECK (qty > 0)",
+	})
+
+	assert.Equal(t,
+		"ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;",
+		tbl.NotValidConSQL())
+}
+
+func TestTable_NotValidConSQL_validatedCheck(t *testing.T) {
+	tbl := newTable("public", "orders")
+	tbl.Constraints.Set("orders_qty_check", &model.Constraint{
+		Name: "orders_qty_check", Type: model.ConstraintType('c'), Definition: "CHECK (qty > 0)", Validated: true,
+	})
+
+	assert.Empty(t, tbl.NotValidConSQL())
+}
+
+func TestTable_NotValidConSQL_partitioned(t *testing.T) {
+	// ALTER TABLE ONLY on a partitioned table is rejected once a partition
+	// exists, so ONLY is dropped there.
+	def := "RANGE (id)"
+	tbl := newTable("public", "orders")
+	tbl.Partitioned = true
+	tbl.PartitionDef = &def
+	tbl.Constraints.Set("orders_qty_check", &model.Constraint{
+		Name: "orders_qty_check", Type: model.ConstraintType('c'), Definition: "CHECK (qty > 0)",
+	})
+
+	assert.Equal(t,
+		"ALTER TABLE public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;",
+		tbl.NotValidConSQL())
+}
+
+func TestTable_NotValidConSQL_partitionChild(t *testing.T) {
+	// A partition child's unvalidated entries are the clones the parent's
+	// statement creates, so the child renders nothing.
+	parent := "public.orders"
+	bound := "FOR VALUES FROM (0) TO (10)"
+	tbl := newTable("public", "orders_0")
+	tbl.PartitionOf = &parent
+	tbl.PartitionBound = &bound
+	tbl.Constraints.Set("orders_qty_check", &model.Constraint{
+		Name: "orders_qty_check", Type: model.ConstraintType('c'), Definition: "CHECK (qty > 0)",
+	})
+
+	assert.Empty(t, tbl.NotValidConSQL())
+}
+
+func TestTableToSQL_notValidCheck(t *testing.T) {
+	tbl := newTable("public", "orders")
+	tbl.Columns.Set("qty", &model.Column{Name: "qty", TypeName: "integer", NotNull: true})
+	tbl.Constraints.Set("orders_qty_check", &model.Constraint{
+		Name: "orders_qty_check", Type: model.ConstraintType('c'), Definition: "CHECK (qty > 0)",
+	})
+
+	expected := `-- public.orders
+CREATE TABLE public.orders (
+    qty integer NOT NULL
+);
+ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;`
+	assert.Equal(t, expected, model.TableToSQL(tbl))
+}
