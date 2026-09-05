@@ -50,18 +50,6 @@ column.
 
 Workaround: write the reference unqualified, which is what `pista dump` emits.
 
-## INHERITS table plan / apply support
-
-`model.Table.SQL` has an INHERITS branch that drops the child's own
-columns and only emits constraints. As a result, plan / apply for an
-`INHERITS (...)` child whose desired definition adds columns produces
-incorrect DDL. The validator already special-cases INHERITS children
-(skipped because the inherited column set isn't materialised on the
-child), but the SQL emitter and diff don't handle the legacy partition
-shape end-to-end.
-
-Origin: [#125](https://github.com/winebarrel/pistachio/pull/125). Plan / apply fixtures were intentionally not added.
-
 ## Silent drift on the partition shape
 
 `Table.PartitionOf`, `Table.PartitionBound` and `Table.PartitionDef` are read
@@ -521,6 +509,8 @@ Origin: bug audit, 2026-07-31.
 
 ## `COMMENT ON COLUMN` on an inherited column of an INHERITS child
 
+Priority: low.
+
 A comment on a column an `INHERITS` child inherits from its parent is dropped
 at parse time. `parseCommentStmt` needs the column to be present on the
 table, and such a child declares only its own columns. A true partition child
@@ -530,10 +520,70 @@ diffs columns. An INHERITS child goes through the regular column diff, where
 an entry holding only a name and a comment would be read as a new column and
 emit `ADD COLUMN`, so the same trick does not carry over.
 
-Closing this needs the inherited column set materialised on the child, which
-is the same prerequisite as the INHERITS plan / apply entry above.
+The catalog reads such a child's local columns alone, so the two sides agree
+and nothing drifts. The comment is unmanaged rather than lost to a diff:
+`dump` writes none. `pg_dump` does, and that line is dropped on the way in.
+`test/fidelity/schemas/inherits.sql` notes what it leaves out.
+
+Closing this needs the inherited column set materialised on the child, kept
+apart from the local one so the column diff still sees only what the child
+declares.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
+
+## Redeclaring a column on an existing INHERITS child cannot be planned
+
+Priority: low.
+
+`attislocal` separates a column the child declares from one it only inherits,
+but a desired schema can only say "declared", so a flip in either direction has
+no DDL the diff can emit and the plan emits the column statement instead. Both
+shapes fail at apply and come back on every later plan, verified on 15.
+
+With `parent (id, n)` and a child created as `child (extra) INHERITS (parent)`,
+a desired schema that redeclares the column:
+
+```sql
+CREATE TABLE public.child (n integer NOT NULL, extra text) INHERITS (public.parent);
+```
+
+plans `ALTER TABLE public.child ADD COLUMN n integer NOT NULL`, which fails with
+`column "n" of relation "child" already exists`. The reverse holds too: a child
+that redeclared `n` in the database while the desired schema omits it plans
+`ALTER TABLE public.child DROP COLUMN n` under `--allow-drop column`, which
+fails with `cannot drop inherited column "n"`. `ADD COLUMN` and `DROP COLUMN`
+neither merge with nor split off an inherited column; only `CREATE TABLE` and a
+parent-side `ADD COLUMN` do.
+
+A dump writes a redeclared column as declared, so a dump fed back plans clean
+and only a hand-written schema reaches this. Closing it needs the inherited
+column set materialised on the child, kept apart from the local one, which is
+the same prerequisite as the entry above. Erroring at plan time may fit better
+than emitting DDL that cannot work.
+
+Workaround: redeclare a column when the child is created, or leave it alone.
+
+Origin: review of [#510](https://github.com/winebarrel/pistachio/pull/510).
+
+## A child of more than one parent keeps only the first
+
+Priority: low.
+
+`model.Table.PartitionOf` holds one parent, so `catalog.ListTables` reads the
+one at `pg_inherits.inhseqno = 1` and the parser reads `cs.InhRelations[0]`,
+dropping the rest without a warning. `CREATE TABLE c (z integer) INHERITS (a,
+b)` is dumped as `INHERITS (public.a)`, and reloading that gives a table
+without `b` or its columns.
+
+Both sides read the first parent alone, so a dump fed back plans clean. Only a
+reload loses anything.
+
+Closing it means a list rather than a single name, which the parser, the
+dependency graph and the diff all read. A declarative partition has exactly one
+parent, so the field would carry a list for the INHERITS case alone.
+`test/fidelity/schemas/inherits.sql` notes what it leaves out.
+
+Origin: INHERITS local column support.
 
 ## A dump of a partitioned table with an index on the parent does not reload
 
@@ -906,17 +956,3 @@ parameters entry above, which reads the same `reloptions` column.
 Origin: the restore fidelity check, 2026-09-02.
 `test/fidelity/schemas/view_columns.sql` notes what it leaves out.
 
-## A NOT VALID check on an INHERITS child is restored validated
-
-[#505](https://github.com/winebarrel/pistachio/pull/505) fixed this for a
-plain and a partitioned table and left the INHERITS branch of `Table.SQL`
-alone: a child's constraints are all written inside `CREATE TABLE`, so a
-NOT VALID check declared directly on the child loses the clause, and the dump
-fed back plans a `VALIDATE CONSTRAINT` for it. Emitting the ALTER the way a
-plain table now does is not enough, because the child's constraint map also
-holds the unvalidated clones a NOT VALID check on the parent pushes down, and
-an ADD for one of those collides with the constraint the child already
-inherits. Telling the two apart needs `pg_constraint.conislocal`, which the
-catalog does not read.
-
-Origin: review of [#505](https://github.com/winebarrel/pistachio/pull/505).

@@ -463,7 +463,7 @@ func TestTable_SQL_storageParams_inherits(t *testing.T) {
 	tbl.StorageParams = model.SortedStorageParams(map[string]string{"fillfactor": "65"})
 
 	assert.Equal(t,
-		"CREATE TABLE public.child(\n    CONSTRAINT child_pkey PRIMARY KEY (id))\n"+
+		"CREATE TABLE public.child (\n    CONSTRAINT child_pkey PRIMARY KEY (id)\n)\n"+
 			"INHERITS (public.parent)\nWITH (fillfactor='65');",
 		tbl.SQL())
 }
@@ -565,4 +565,69 @@ CREATE TABLE public.orders (
 );
 ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;`
 	assert.Equal(t, expected, model.TableToSQL(tbl))
+}
+
+func newInheritsChild(schema, name, parent string) *model.Table {
+	tbl := newTable(schema, name)
+	tbl.PartitionOf = &parent
+	return tbl
+}
+
+func TestTable_IsInheritsChild(t *testing.T) {
+	parent := "public.parent"
+	bound := "FOR VALUES FROM (1) TO (2)"
+
+	child := newInheritsChild("public", "child", parent)
+	assert.True(t, child.IsInheritsChild())
+	assert.False(t, child.IsPartitionChild())
+
+	part := newInheritsChild("public", "part", parent)
+	part.PartitionBound = &bound
+	assert.False(t, part.IsInheritsChild())
+	assert.True(t, part.IsPartitionChild())
+
+	plain := newTable("public", "plain")
+	assert.False(t, plain.IsInheritsChild())
+	assert.False(t, plain.IsPartitionChild())
+}
+
+// An INHERITS child declares the columns and constraints that are its own, the
+// way pg_dump writes it. The catalog leaves out the ones it merely inherits.
+func TestTable_SQL_inheritsChildOwnColumns(t *testing.T) {
+	tbl := newInheritsChild("public", "child", "public.parent")
+	tbl.Columns.Set("extra", &model.Column{Name: "extra", TypeName: "text", NotNull: true})
+	tbl.Constraints.Set("child_extra_key", &model.Constraint{
+		Name: "child_extra_key", Type: model.ConstraintType('u'), Definition: "UNIQUE (extra)",
+	})
+
+	assert.Equal(t,
+		"CREATE TABLE public.child (\n"+
+			"    extra text NOT NULL,\n"+
+			"    CONSTRAINT child_extra_key UNIQUE (extra)\n"+
+			")\nINHERITS (public.parent);",
+		tbl.SQL())
+}
+
+// A child that declares nothing of its own still writes the parentheses.
+func TestTable_SQL_inheritsChildNoOwnColumns(t *testing.T) {
+	tbl := newInheritsChild("public", "child", "public.parent")
+
+	assert.Equal(t, "CREATE TABLE public.child (\n)\nINHERITS (public.parent);", tbl.SQL())
+}
+
+// A NOT VALID check on the child is left out of CREATE TABLE and added by its
+// own ALTER, so a reload does not validate it.
+func TestTable_NotValidConSQL_inheritsChild(t *testing.T) {
+	tbl := newInheritsChild("public", "child", "public.parent")
+	tbl.Columns.Set("v", &model.Column{Name: "v", TypeName: "integer"})
+	tbl.Constraints.Set("child_v_check", &model.Constraint{
+		Name: "child_v_check", Type: model.ConstraintType('c'), Definition: "CHECK (v > 0)",
+	})
+
+	assert.Equal(t,
+		"CREATE TABLE public.child (\n    v integer\n)\nINHERITS (public.parent);",
+		tbl.SQL())
+	assert.Equal(t,
+		"ALTER TABLE ONLY public.child ADD CONSTRAINT child_v_check CHECK (v > 0) NOT VALID;",
+		tbl.NotValidConSQL())
 }

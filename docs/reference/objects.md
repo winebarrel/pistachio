@@ -4,7 +4,7 @@
 - Enum types (`CREATE TYPE ... AS ENUM`, `ALTER TYPE ... ADD VALUE`)
 - Composite types (`CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME ATTRIBUTE`). Attributes are matched by name, so reordering them produces no diff (PostgreSQL cannot reorder attributes). `ALTER ATTRIBUTE ... TYPE` fails at apply while a table column uses the type; PostgreSQL does not allow it and `CASCADE` does not help.
 - Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`, including unlogged sequences). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
-- Tables (including unlogged and partitioned tables)
+- Tables (including unlogged and partitioned tables, and `INHERITS` children). See [Table inheritance](#table-inheritance).
 - Storage parameters, the `WITH (...)` clause. An index's parameters are always managed; a table's are opt-in with `--manage-storage-param`. See [Table storage parameters](#table-storage-parameters).
 - Views
 - Materialized views
@@ -37,6 +37,26 @@ Without the flag the parameters are dropped from both sides of the diff: no `SET
 With it the schema file states every parameter the table is to have. A change goes out as `ALTER TABLE ... SET (...)`, with a `RESET` for the parameters the file no longer names; neither rewrites the table. A `toast.` parameter belongs to the TOAST relation. PostgreSQL creates that relation only for a table with a toastable column and discards the setting when there is none, so such a table re-plans it on every run. A partitioned table holds no parameter, and a partition does not inherit the parent's.
 
 An index's parameters are part of its definition and are managed either way.
+
+
+## Table inheritance
+
+An `INHERITS (...)` child is managed as the columns and constraints it declares itself. That is what its `CREATE TABLE` writes, and what `pg_dump` writes for it.
+
+```sql
+CREATE TABLE public.shapes (id integer NOT NULL, name text);
+CREATE TABLE public.boxes (w integer NOT NULL) INHERITS (public.shapes);
+```
+
+`boxes` is managed as `w` alone. `id` and `name` belong to `shapes` and are read from neither side, so a change to them goes out against the parent and PostgreSQL carries it down.
+
+A column the child redeclares is its own, and PostgreSQL merges it with the inherited one. That happens at `CREATE TABLE` only. Adding the redeclaration to a child that already exists, or taking it away, has no DDL behind it: `ADD COLUMN` on an inherited column fails with `column ... already exists`, and `DROP COLUMN` with `cannot drop inherited column`. The plan emits one of the two anyway, since the desired side cannot tell a redeclared column from an inherited one. Redeclare a column when the child is created, or leave it alone.
+
+A comment on an inherited column is not managed. `dump` writes none and a schema file that carries one is ignored, so nothing drifts. `pg_dump` does write it, and that line is lost.
+
+Only the first parent is read, so `INHERITS (a, b)` is dumped as `INHERITS (a)`. Both sides read it the same way, so a dump fed back plans clean, but reloading one gives a table that does not inherit `b`.
+
+`--skip-partition-child` does not reach an `INHERITS` child. It applies to a declarative partition, which carries a bound.
 
 ## Routines
 

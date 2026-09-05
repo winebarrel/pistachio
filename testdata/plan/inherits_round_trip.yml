@@ -1,0 +1,21 @@
+init: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      n integer,
+      CONSTRAINT parent_n_check CHECK (n > 0)
+  );
+  CREATE TABLE public.child_own (extra text NOT NULL) INHERITS (public.parent);
+  ALTER TABLE public.child_own ADD CONSTRAINT child_own_extra_check CHECK (extra <> '') NOT VALID;
+desired: |
+  CREATE TABLE public.child_own (
+      extra text NOT NULL
+  )
+  INHERITS (public.parent);
+  ALTER TABLE ONLY public.child_own ADD CONSTRAINT child_own_extra_check CHECK (extra <> ''::text) NOT VALID;
+
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      n integer,
+      CONSTRAINT parent_n_check CHECK (n > 0)
+  );
+plan: ""

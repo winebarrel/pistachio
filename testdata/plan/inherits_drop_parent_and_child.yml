@@ -1,0 +1,11 @@
+init: |
+  CREATE TABLE public.parent (id integer, n integer);
+  CREATE TABLE public.child (extra text) INHERITS (public.parent);
+  CREATE TABLE public.solo (x integer);
+desired: |
+  CREATE TABLE public.solo (
+      x integer
+  );
+plan: |
+  DROP TABLE public.child;
+  DROP TABLE public.parent;

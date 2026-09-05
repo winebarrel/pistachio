@@ -215,3 +215,75 @@ func TestTables_StorageParams(t *testing.T) {
 		assert.Equal(t, []string{"off", "70", "off"}, tbl.StorageParams.CollectValues())
 	})
 }
+
+// An INHERITS child carries only what it declares itself. Reading the columns
+// and constraints it merely inherits made the desired side, which holds what
+// CREATE TABLE writes, look like it had dropped them.
+func TestTables_inheritsChildLocalOnly(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+		CREATE TABLE public.parent (
+			id integer NOT NULL,
+			n integer,
+			CONSTRAINT parent_n_check CHECK (n > 0)
+		);
+		CREATE TABLE public.child_empty () INHERITS (public.parent);
+		CREATE TABLE public.child_merge (n integer NOT NULL) INHERITS (public.parent);
+		CREATE TABLE public.child_own (extra text) INHERITS (public.parent);
+		ALTER TABLE public.child_own ADD CONSTRAINT child_own_extra_check CHECK (extra <> '') NOT VALID;
+	`)
+	cat, err := catalog.NewCatalog(conn, []string{"public"})
+	require.NoError(t, err)
+	tables, err := cat.Tables(ctx)
+	require.NoError(t, err)
+
+	parent, ok := tables.GetOk("public.parent")
+	require.True(t, ok)
+	assert.Equal(t, []string{"id", "n"}, parent.Columns.CollectKeys())
+	assert.Equal(t, []string{"parent_n_check"}, parent.Constraints.CollectKeys())
+
+	// Declares nothing, so it holds nothing.
+	empty, ok := tables.GetOk("public.child_empty")
+	require.True(t, ok)
+	assert.True(t, empty.IsInheritsChild())
+	assert.Empty(t, empty.Columns.CollectKeys())
+	assert.Empty(t, empty.Constraints.CollectKeys())
+
+	// A redeclared column is local and inherited at once, and stays.
+	merge, ok := tables.GetOk("public.child_merge")
+	require.True(t, ok)
+	assert.Equal(t, []string{"n"}, merge.Columns.CollectKeys())
+	assert.Empty(t, merge.Constraints.CollectKeys())
+
+	// Its own column and its own constraint, not the parent's.
+	own, ok := tables.GetOk("public.child_own")
+	require.True(t, ok)
+	assert.Equal(t, []string{"extra"}, own.Columns.CollectKeys())
+	assert.Equal(t, []string{"child_own_extra_check"}, own.Constraints.CollectKeys())
+}
+
+// A partition child keeps its inherited columns: its branch of the diff skips
+// the column comparison but still compares their comments.
+func TestTables_partitionChildKeepsInheritedColumns(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+		CREATE TABLE public.logs (id integer NOT NULL, at date NOT NULL) PARTITION BY RANGE (at);
+		CREATE TABLE public.logs_2026 PARTITION OF public.logs
+			FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+	`)
+	cat, err := catalog.NewCatalog(conn, []string{"public"})
+	require.NoError(t, err)
+	tables, err := cat.Tables(ctx)
+	require.NoError(t, err)
+
+	part, ok := tables.GetOk("public.logs_2026")
+	require.True(t, ok)
+	assert.True(t, part.IsPartitionChild())
+	assert.Equal(t, []string{"id", "at"}, part.Columns.CollectKeys())
+}

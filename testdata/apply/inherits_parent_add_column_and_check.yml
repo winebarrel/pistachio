@@ -1,0 +1,26 @@
+init: |
+  CREATE TABLE public.parent (id integer);
+  CREATE TABLE public.child (extra text) INHERITS (public.parent);
+desired: |
+  CREATE TABLE public.parent (
+      id integer,
+      n integer,
+      CONSTRAINT parent_n_check CHECK (n > 0)
+  );
+  CREATE TABLE public.child (
+      extra text
+  )
+  INHERITS (public.parent);
+applied: |
+  -- public.child
+  CREATE TABLE public.child (
+      extra text
+  )
+  INHERITS (public.parent);
+
+  -- public.parent
+  CREATE TABLE public.parent (
+      id integer,
+      n integer,
+      CONSTRAINT parent_n_check CHECK (n > 0)
+  );

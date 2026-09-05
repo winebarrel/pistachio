@@ -1,0 +1,28 @@
+init: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      n integer
+  );
+desired: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      n integer
+  );
+  CREATE TABLE public.child (
+      extra text
+  )
+  INHERITS (public.parent);
+  CREATE INDEX child_extra_idx ON public.child USING btree (extra);
+applied: |
+  -- public.child
+  CREATE TABLE public.child (
+      extra text
+  )
+  INHERITS (public.parent);
+  CREATE INDEX child_extra_idx ON public.child USING btree (extra);
+
+  -- public.parent
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      n integer
+  );

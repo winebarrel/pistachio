@@ -18,6 +18,12 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 		SELECT
 			a.attrelid,
 			a.attname,
+			-- False on a column an INHERITS child only inherits. Such a column
+			-- is not written by the child's CREATE TABLE, so the desired side
+			-- never holds it; reading it here planned a DROP COLUMN for it. A
+			-- column the child redeclares is local and inherited at once, and
+			-- stays.
+			a.attislocal,
 			CASE
 				WHEN s.is_serial
 				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
@@ -130,6 +136,8 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 		return map[uint32][]*model.Column{}, nil
 	}
 
+	inheritsChildren := inheritsChildOIDs(tables)
+
 	args := pgx.NamedArgs{
 		"table_oids": oids,
 	}
@@ -144,12 +152,14 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 	for rows.Next() {
 		var col model.Column
 		var tableOID uint32
+		var isLocal bool
 		// Null for every column that is not an identity column.
 		var seqStart, seqMin, seqMax, seqIncrement, seqCache *int64
 		var seqCycle *bool
 		err := rows.Scan(
 			&tableOID,
 			&col.Name,
+			&isLocal,
 			&col.TypeName,
 			&col.NotNull,
 			&col.NotNullName,
@@ -170,6 +180,13 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan column info: %w", err)
+		}
+		// Scoped to an INHERITS child. A partition child keeps its inherited
+		// columns: it declares none of its own, and the diff reaches them
+		// through a branch that skips the column comparison but still compares
+		// their comments.
+		if !isLocal && inheritsChildren[tableOID] {
+			continue
 		}
 		if seqStart != nil && seqMin != nil && seqMax != nil && seqIncrement != nil && seqCache != nil && seqCycle != nil {
 			col.IdentitySeq = &model.IdentitySequence{
