@@ -575,7 +575,6 @@ CREATE VIEW public.cascaded_items AS SELECT id, status FROM public.items WHERE s
 CREATE VIEW public.local_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
 CREATE VIEW public.bare_param WITH (check_option = local) AS SELECT id, status FROM public.items WHERE status = 'active';
 CREATE VIEW public.quoted_param WITH (security_barrier = true, check_option = 'cascaded') AS SELECT id, status FROM public.items WHERE status = 'active';
-CREATE VIEW public.both_forms WITH (check_option = local) AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
 CREATE VIEW public.none AS SELECT id, status FROM public.items WHERE status = 'active';`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -586,7 +585,6 @@ CREATE VIEW public.none AS SELECT id, status FROM public.items WHERE status = 'a
 		"local_items":    "local",
 		"bare_param":     "local",
 		"quoted_param":   "cascaded",
-		"both_forms":     "cascaded",
 		"none":           "",
 	} {
 		v, ok := result.Views.GetOk("public." + name)

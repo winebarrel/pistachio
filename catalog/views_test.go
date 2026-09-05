@@ -99,6 +99,7 @@ func TestViews(t *testing.T) {
 			CREATE VIEW public.cascaded_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH CHECK OPTION;
 			CREATE VIEW public.local_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
 			CREATE VIEW public.barrier_items WITH (security_barrier = true) AS SELECT id, status FROM public.items WHERE status = 'active';
+			CREATE VIEW public.upper_items WITH (check_option = 'CASCADED') AS SELECT id, status FROM public.items WHERE status = 'active';
 			CREATE VIEW public.plain_items AS SELECT id, status FROM public.items WHERE status = 'active';
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
@@ -108,6 +109,8 @@ func TestViews(t *testing.T) {
 
 		assert.Equal(t, "cascaded", views.Get("public.cascaded_items").CheckOption)
 		assert.Equal(t, "local", views.Get("public.local_items").CheckOption)
+		// The value is stored as written and validated case-insensitively.
+		assert.Equal(t, "cascaded", views.Get("public.upper_items").CheckOption)
 		// Another option in reloptions does not stand in for it.
 		assert.Empty(t, views.Get("public.barrier_items").CheckOption)
 		assert.Empty(t, views.Get("public.plain_items").CheckOption)

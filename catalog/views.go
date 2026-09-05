@@ -68,7 +68,7 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			c.relkind = 'm' AS materialized,
 			(
 				SELECT
-					split_part(o, '=', 2)
+					lower(split_part(o, '=', 2))
 				FROM
 					unnest(c.reloptions) AS o
 				WHERE

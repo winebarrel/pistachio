@@ -1,0 +1,17 @@
+# The value is stored as written, so a view created with an uppercase value
+# keeps it in reloptions.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items WITH (check_option = 'CASCADED') AS SELECT id, status FROM public.items WHERE status = 'active';
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH CHECK OPTION;
+plan: ""
