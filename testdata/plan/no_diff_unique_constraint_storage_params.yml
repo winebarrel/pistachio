@@ -1,0 +1,13 @@
+# The parameters sit on the index the constraint owns, which
+# pg_get_constraintdef does not print; the catalog read appends them.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 70, deduplicate_items = off)
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 70, deduplicate_items = off)
+  );
+plan: ""

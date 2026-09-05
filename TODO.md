@@ -578,31 +578,6 @@ clean and only a hand-written view reaches this.
 
 Origin: review of [#458](https://github.com/winebarrel/pistachio/pull/458).
 
-## A constraint's index storage parameters are not read
-
-Priority: low.
-
-`ALTER TABLE t ADD CONSTRAINT t_v_key UNIQUE (v) WITH (fillfactor = 70)` puts
-the parameters on the index the constraint owns. `pg_get_constraintdef` does
-not print them, so the current side reads the constraint as `UNIQUE (v)` and
-the two never match: the plan is `DROP CONSTRAINT` + `ADD CONSTRAINT` on every
-run, which rebuilds the index under an ACCESS EXCLUSIVE lock. `dump` drops the
-clause for the same reason, so a table's parameters survive a dump and a
-constraint's do not.
-
-The parameters are on `pg_class` under `pg_constraint.conindid`, next to the
-ones `ListIndexes` already reads, and appending them to the definition is what
-would make both sides agree. `normalizeStorageParams` then folds the quoting
-the way it does for a plain index.
-
-`dump` writes the catalog form, so a dump fed back plans clean and only a
-hand-written constraint reaches this.
-
-Workaround: create the index separately, `CREATE UNIQUE INDEX ... WITH
-(fillfactor = 70)`, where the parameters are read.
-
-Origin: [#458](https://github.com/winebarrel/pistachio/pull/458).
-
 ## Perpetual drift on a typed literal the catalog re-prints
 
 Priority: low.

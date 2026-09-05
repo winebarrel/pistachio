@@ -1,0 +1,12 @@
+init: ""
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 70)
+  );
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor='70')
+  );

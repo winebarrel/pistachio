@@ -1,0 +1,11 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id) WITH (fillfactor = 90)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id) WITH (fillfactor = 90)
+  );
+plan: ""

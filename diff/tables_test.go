@@ -3811,3 +3811,24 @@ func TestEqualConstraintDef_exclusionQualifiedOperator(t *testing.T) {
 		"EXCLUDE USING btree (v WITH OPERATOR(pg_catalog.=))",
 	))
 }
+
+func TestEqualConstraintDef_storageParams(t *testing.T) {
+	// The catalog quotes the value; the file writes it bare.
+	assert.True(t, equalConstraintDef(
+		"UNIQUE (v) WITH (fillfactor='70')",
+		"UNIQUE (v) WITH (fillfactor = 70)",
+	))
+	// The order the parameters were created in is not part of the setting.
+	assert.True(t, equalConstraintDef(
+		"UNIQUE (v) WITH (fillfactor='70', deduplicate_items='off')",
+		"UNIQUE (v) WITH (deduplicate_items = off, fillfactor = 70)",
+	))
+	assert.False(t, equalConstraintDef(
+		"UNIQUE (v) WITH (fillfactor='70')",
+		"UNIQUE (v) WITH (fillfactor = 80)",
+	))
+	assert.False(t, equalConstraintDef(
+		"UNIQUE (v) WITH (fillfactor='70')",
+		"UNIQUE (v)",
+	))
+}

@@ -1,0 +1,15 @@
+# A parameter the desired schema does not write is a difference now, the same
+# as on a plain index.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 70)
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v)
+  );
+plan: |
+  ALTER TABLE public.items DROP CONSTRAINT items_v_key;
+  ALTER TABLE public.items ADD CONSTRAINT items_v_key UNIQUE (v);

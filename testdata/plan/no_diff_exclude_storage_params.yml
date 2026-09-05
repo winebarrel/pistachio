@@ -1,0 +1,11 @@
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (v WITH =) WITH (fillfactor = 70)
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_excl EXCLUDE USING btree (v WITH =) WITH (fillfactor = 70)
+  );
+plan: ""

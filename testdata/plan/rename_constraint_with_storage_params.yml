@@ -1,0 +1,14 @@
+# A rename with matching parameters stays a rename; the index is not rebuilt.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 70)
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      -- pista:renamed-from items_v_key
+      CONSTRAINT items_v_uniq UNIQUE (v) WITH (fillfactor = 70)
+  );
+plan: |
+  ALTER TABLE public.items RENAME CONSTRAINT items_v_key TO items_v_uniq;

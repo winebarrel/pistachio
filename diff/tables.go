@@ -1003,6 +1003,10 @@ func equalConstraintDef(current, desired string) bool {
 	normalizeExclusion(curCon)
 	normalizeExclusion(desCon)
 	alignExclusionCasts(desCon, curCon)
+	// The WITH clause of a unique, primary key, or exclusion constraint,
+	// folded the way a plain index's is.
+	normalizeStorageParams(curCon.Options)
+	normalizeStorageParams(desCon.Options)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
 	if deparseErrCur != nil || deparseErrDes != nil {
@@ -1601,15 +1605,21 @@ func normalizeIndexElem(ie *pg_query.IndexElem) {
 // parameters were created in. Without this an index carrying a parameter was
 // dropped and recreated on every run.
 //
-// Only an integer is folded. No index storage parameter takes a fractional
-// value, and a value that reads as a bare word arrives as a String from both
-// sides already.
+// An integer is folded to its decimal string; no index storage parameter
+// takes a fractional value. A bare word, `deduplicate_items=off`, parses as a
+// single-name TypeName while the quoted spelling parses as a String, so the
+// TypeName is folded to a String too.
 func normalizeStorageParams(options []*pg_query.Node) {
 	for _, o := range options {
 		de := o.GetDefElem()
 		if i := de.GetArg().GetInteger(); i != nil {
 			sval := strconv.FormatInt(int64(i.Ival), 10)
 			de.Arg = &pg_query.Node{Node: &pg_query.Node_String_{String_: &pg_query.String{Sval: sval}}}
+		}
+		if tn := de.GetArg().GetTypeName(); tn != nil && len(tn.Names) == 1 {
+			if s := tn.Names[0].GetString_(); s != nil {
+				de.Arg = &pg_query.Node{Node: &pg_query.Node_String_{String_: &pg_query.String{Sval: s.Sval}}}
+			}
 		}
 	}
 	// No index storage parameter has a namespace, unlike a table's toast.

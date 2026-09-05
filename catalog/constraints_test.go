@@ -64,6 +64,45 @@ func TestListConstraintsByTables(t *testing.T) {
 		assert.Equal(t, []string{"email"}, con.Columns)
 	})
 
+	t.Run("index storage parameters", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.users (
+				id integer NOT NULL,
+				email text NOT NULL,
+				name text NOT NULL,
+				CONSTRAINT users_pkey PRIMARY KEY (id) WITH (fillfactor = 90),
+				CONSTRAINT users_email_key UNIQUE (email) WITH (fillfactor = 70),
+				CONSTRAINT users_email_excl EXCLUDE USING btree (email WITH =) WITH (fillfactor = 60),
+				CONSTRAINT users_name_key UNIQUE (name) WITH (fillfactor = 50) DEFERRABLE INITIALLY DEFERRED
+			);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		tbl := tables.Get("public.users")
+		pk, ok := tbl.Constraints.GetOk("users_pkey")
+		require.True(t, ok)
+		assert.Equal(t, "PRIMARY KEY (id) WITH (fillfactor='90')", pk.Definition)
+
+		uq, ok := tbl.Constraints.GetOk("users_email_key")
+		require.True(t, ok)
+		assert.Equal(t, "UNIQUE (email) WITH (fillfactor='70')", uq.Definition)
+
+		// pg_get_constraintdef prints an exclusion's parameters itself, so
+		// nothing is appended.
+		ex, ok := tbl.Constraints.GetOk("users_email_excl")
+		require.True(t, ok)
+		assert.Equal(t, "EXCLUDE USING btree (email WITH =) WITH (fillfactor='60')", ex.Definition)
+
+		// The WITH goes before the deferral clause, which the grammar takes
+		// last.
+		df, ok := tbl.Constraints.GetOk("users_name_key")
+		require.True(t, ok)
+		assert.Equal(t, "UNIQUE (name) WITH (fillfactor='50') DEFERRABLE INITIALLY DEFERRED", df.Definition)
+	})
+
 	t.Run("check", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.products (

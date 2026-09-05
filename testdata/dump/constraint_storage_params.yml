@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      v text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id) WITH (fillfactor = 90),
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 70, deduplicate_items = off)
+  );
+dump: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      v text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id) WITH (fillfactor='90'),
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor='70', deduplicate_items='off')
+  );

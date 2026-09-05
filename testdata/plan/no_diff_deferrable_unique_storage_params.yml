@@ -1,0 +1,13 @@
+# pg_get_constraintdef prints DEFERRABLE last, and the grammar takes WITH
+# before it, so the appended clause goes in between.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 70) DEFERRABLE INITIALLY DEFERRED
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 70) DEFERRABLE INITIALLY DEFERRED
+  );
+plan: ""
