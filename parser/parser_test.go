@@ -574,7 +574,7 @@ func TestParseSQL_ViewCheckOption(t *testing.T) {
 CREATE VIEW public.cascaded_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH CHECK OPTION;
 CREATE VIEW public.local_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
 CREATE VIEW public.bare_param WITH (check_option = local) AS SELECT id, status FROM public.items WHERE status = 'active';
-CREATE VIEW public.quoted_param WITH (check_option = 'cascaded') AS SELECT id, status FROM public.items WHERE status = 'active';
+CREATE VIEW public.quoted_param WITH (security_barrier = true, check_option = 'cascaded') AS SELECT id, status FROM public.items WHERE status = 'active';
 CREATE VIEW public.both_forms WITH (check_option = local) AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
 CREATE VIEW public.none AS SELECT id, status FROM public.items WHERE status = 'active';`
 

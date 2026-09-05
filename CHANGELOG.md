@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Manage a view's `WITH [LOCAL | CASCADED] CHECK OPTION`. Neither side read it, so `dump` dropped the clause and an updatable view lost the constraint on restore, and a desired schema that wrote it planned nothing. `dump` now writes the clause after the query, the way pg_dump does, and a change on a view whose definition stays goes out as `ALTER VIEW ... SET (check_option=...)` or `RESET (check_option)`. A definition change carries the clause on its `CREATE OR REPLACE VIEW`, which replaces the option along with the query. The `WITH (check_option = ...)` spelling before `AS` is read as well.
+* Manage a view's `WITH [LOCAL | CASCADED] CHECK OPTION`. Neither side read it, so `dump` dropped the clause and a reload lost the constraint, and a desired schema that wrote it planned nothing. `dump` now writes the clause after the query. A change on a view whose definition stays goes out as `ALTER VIEW ... SET (check_option=...)` or `RESET (check_option)`; a definition change carries the clause on its `CREATE OR REPLACE VIEW`. `WITH (check_option = ...)` before `AS` is read too.
 
 ## [1.43.0] - 2026-09-05
 

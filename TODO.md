@@ -614,8 +614,8 @@ A view carries `security_barrier`, a materialized view the autovacuum
 settings, and neither side reads them. `dump` drops the clause, and a desired
 schema that writes it plans nothing, the way a table's parameters behaved
 before they were read. Losing `security_barrier` from a dump is the one that
-matters, since the view is a security boundary without it. `check_option` sits
-in the same column and is managed, as the view's `WITH CHECK OPTION`.
+matters, since the view is a security boundary without it. `check_option`, in
+the same column, is managed.
 
 `pg_class.reloptions` holds them for both, next to the table's, and
 `ALTER VIEW ... SET (...)` / `RESET (...)` and the `ALTER MATERIALIZED VIEW`

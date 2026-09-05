@@ -1311,11 +1311,11 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 	}, nil
 }
 
-// viewCheckOption reads a view's check option from either place the statement
-// can carry it: the trailing WITH [LOCAL | CASCADED] CHECK OPTION, which is
-// what pg_dump and pista dump write, or a check_option entry in the WITH (...)
-// options before AS. A bare WITH CHECK OPTION is CASCADED. The trailing clause
-// wins when both are written, the way PostgreSQL resolves it.
+// viewCheckOption reads a view's check option from the trailing
+// WITH [LOCAL | CASCADED] CHECK OPTION, which pg_dump and pista dump write, or
+// from a check_option entry in the WITH (...) before AS. A bare WITH CHECK
+// OPTION is CASCADED. The trailing clause wins when both are written, as in
+// PostgreSQL.
 func viewCheckOption(vs *pg_query.ViewStmt) string {
 	switch vs.WithCheckOption {
 	case pg_query.ViewCheckOption_LOCAL_CHECK_OPTION:
