@@ -531,6 +531,40 @@ declares.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
 
+## Redeclaring a column on an existing INHERITS child cannot be planned
+
+Priority: low.
+
+`attislocal` separates a column the child declares from one it only inherits,
+but a desired schema can only say "declared", so a flip in either direction has
+no DDL the diff can emit and the plan emits the column statement instead. Both
+shapes fail at apply and come back on every later plan, verified on 15.
+
+With `parent (id, n)` and a child created as `child (extra) INHERITS (parent)`,
+a desired schema that redeclares the column:
+
+```sql
+CREATE TABLE public.child (n integer NOT NULL, extra text) INHERITS (public.parent);
+```
+
+plans `ALTER TABLE public.child ADD COLUMN n integer NOT NULL`, which fails with
+`column "n" of relation "child" already exists`. The reverse holds too: a child
+that redeclared `n` in the database while the desired schema omits it plans
+`ALTER TABLE public.child DROP COLUMN n` under `--allow-drop column`, which
+fails with `cannot drop inherited column "n"`. `ADD COLUMN` and `DROP COLUMN`
+neither merge with nor split off an inherited column; only `CREATE TABLE` and a
+parent-side `ADD COLUMN` do.
+
+A dump writes a redeclared column as declared, so a dump fed back plans clean
+and only a hand-written schema reaches this. Closing it needs the inherited
+column set materialised on the child, kept apart from the local one, which is
+the same prerequisite as the entry above. Erroring at plan time may fit better
+than emitting DDL that cannot work.
+
+Workaround: redeclare a column when the child is created, or leave it alone.
+
+Origin: review of [#510](https://github.com/winebarrel/pistachio/pull/510).
+
 ## A child of more than one parent keeps only the first
 
 Priority: low.

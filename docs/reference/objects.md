@@ -48,7 +48,9 @@ CREATE TABLE public.shapes (id integer NOT NULL, name text);
 CREATE TABLE public.boxes (w integer NOT NULL) INHERITS (public.shapes);
 ```
 
-`boxes` is managed as `w` alone. `id` and `name` belong to `shapes` and are read from neither side, so a change to them goes out against the parent and PostgreSQL carries it down. Writing an inherited column on the child plans nothing. A column the child redeclares is its own, and PostgreSQL merges the two.
+`boxes` is managed as `w` alone. `id` and `name` belong to `shapes` and are read from neither side, so a change to them goes out against the parent and PostgreSQL carries it down.
+
+A column the child redeclares is its own, and PostgreSQL merges it with the inherited one. That happens at `CREATE TABLE` only. Adding the redeclaration to a child that already exists, or taking it away, has no DDL behind it: `ADD COLUMN` on an inherited column fails with `column ... already exists`, and `DROP COLUMN` with `cannot drop inherited column`. The plan emits one of the two anyway, since the desired side cannot tell a redeclared column from an inherited one. Redeclare a column when the child is created, or leave it alone.
 
 A comment on an inherited column is not managed. `dump` writes none and a schema file that carries one is ignored, so nothing drifts. `pg_dump` does write it, and that line is lost.
 
