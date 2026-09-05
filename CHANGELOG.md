@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.42.0] - 2026-09-05
 
 * Read the storage parameters of the index a constraint owns. `ALTER TABLE ... ADD CONSTRAINT ... UNIQUE (v) WITH (fillfactor = 70)` puts them on the index, which `pg_get_constraintdef` does not print, so the two sides never matched and the constraint was dropped and re-added on every plan, rebuilding the index under an ACCESS EXCLUSIVE lock. `dump` dropped the clause the same way and now writes it. A parameter set on such an index outside the schema file shows up as a diff, the same as on a plain index. A quoted parameter value and the bare spelling, `deduplicate_items = 'off'` and `off`, also compare equal now, on a plain index too.
 
