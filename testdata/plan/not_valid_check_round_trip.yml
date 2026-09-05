@@ -1,0 +1,18 @@
+# The dump form of a NOT VALID check: the constraint left out of CREATE TABLE
+# and added back by its own ALTER TABLE. Fed back as desired it must plan
+# clean.
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      qty integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;
+plan: ""

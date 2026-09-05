@@ -1,0 +1,14 @@
+omit_schema: true
+init: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT orders_id_check CHECK (id > 0) NOT VALID;
+dump: |
+  -- orders
+  CREATE TABLE orders (
+      id integer NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY orders ADD CONSTRAINT orders_id_check CHECK (id > 0) NOT VALID;

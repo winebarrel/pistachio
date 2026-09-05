@@ -413,16 +413,10 @@ covers the full schema.
 ## Check-time flags
 
 The last field of a `SAMPLES` record holds extra flags for the `pista plan`
-step. Only gitlab uses it, with `--assume-validated`.
-
-gitlab's schema has 68 constraints that are `NOT VALID`. `pista dump` writes
-CHECK constraints inline in `CREATE TABLE`, and PostgreSQL accepts `NOT VALID`
-only on `ALTER TABLE ... ADD CONSTRAINT`, so an inline constraint necessarily
-reads back as validated and the plan asks to validate 39 constraints that are
-already in the database. `--assume-validated` ignores validation state on both
-sides, which is what the check is after here: whether the tables, columns,
-indexes, constraints, and partitions round-trip. No other sample has an
-unvalidated constraint, so no other sample needs the flag.
+step. No sample uses it today. gitlab used `--assume-validated` while `pista
+dump` wrote every CHECK constraint inline in `CREATE TABLE`, where `NOT VALID`
+cannot be spelled; dump now writes such a check as its own `ALTER TABLE`, and
+gitlab's 68 `NOT VALID` constraints round-trip without the flag.
 
 ## Adding a sample
 

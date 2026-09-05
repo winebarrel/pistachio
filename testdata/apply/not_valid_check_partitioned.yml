@@ -1,0 +1,22 @@
+# ALTER TABLE ONLY is rejected on a partitioned table, so the NOT VALID check
+# goes out without ONLY and recurses to the partitions.
+init: ""
+desired: |
+  CREATE TABLE public.measurements (
+      id integer NOT NULL,
+      val integer NOT NULL,
+      CONSTRAINT measurements_val_check CHECK (val > 0) NOT VALID
+  )
+  PARTITION BY RANGE (id);
+  CREATE TABLE public.measurements_0 PARTITION OF public.measurements FOR VALUES FROM (0) TO (100);
+applied: |
+  -- public.measurements
+  CREATE TABLE public.measurements (
+      id integer NOT NULL,
+      val integer NOT NULL
+  )
+  PARTITION BY RANGE (id);
+  ALTER TABLE public.measurements ADD CONSTRAINT measurements_val_check CHECK (val > 0) NOT VALID;
+
+  -- public.measurements_0
+  CREATE TABLE public.measurements_0 PARTITION OF public.measurements FOR VALUES FROM (0) TO (100);

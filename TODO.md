@@ -943,21 +943,6 @@ schema does not will plan `COMMENT ON INDEX ... IS NULL;`.
 
 Origin: discussion, 2026-08-25.
 
-## A NOT VALID CHECK constraint is restored validated
-
-`catalog.ListConstraints` reads `convalidated`, and `model.Constraint` carries
-it as `Validated`, but only `ForeignKey.SQL` writes `NOT VALID`. A table's
-check constraints are written inside `CREATE TABLE`, where the clause cannot be
-spelled, so `pista dump` prints the constraint as if it were validated and the
-reload scans the table to validate it.
-
-The work is to emit a `NOT VALID` check the way a foreign key is already
-emitted, as its own `ALTER TABLE ... ADD CONSTRAINT` after the table, and to
-leave the validated ones inline.
-
-Origin: the restore fidelity check, 2026-09-02.
-`test/fidelity/schemas/check_constraints.sql` notes what it leaves out.
-
 ## An identity column's sequence name is not managed
 
 The sequence behind an identity column is created as `<table>_<column>_seq` and
@@ -986,3 +971,18 @@ parameters entry above, which reads the same `reloptions` column.
 
 Origin: the restore fidelity check, 2026-09-02.
 `test/fidelity/schemas/view_columns.sql` notes what it leaves out.
+
+## A NOT VALID check on an INHERITS child is restored validated
+
+[#505](https://github.com/winebarrel/pistachio/pull/505) fixed this for a
+plain and a partitioned table and left the INHERITS branch of `Table.SQL`
+alone: a child's constraints are all written inside `CREATE TABLE`, so a
+NOT VALID check declared directly on the child loses the clause, and the dump
+fed back plans a `VALIDATE CONSTRAINT` for it. Emitting the ALTER the way a
+plain table now does is not enough, because the child's constraint map also
+holds the unvalidated clones a NOT VALID check on the parent pushes down, and
+an ADD for one of those collides with the constraint the child already
+inherits. Telling the two apart needs `pg_constraint.conislocal`, which the
+catalog does not read.
+
+Origin: review of [#505](https://github.com/winebarrel/pistachio/pull/505).

@@ -108,6 +108,9 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 
 // newTableExtras returns non-FK extras and FK statements separately.
 func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcurrently bool, err error) {
+	if notValidSQL := t.NotValidConSQL(); notValidSQL != "" {
+		stmts = append(stmts, strings.Split(notValidSQL, "\n")...)
+	}
 	if storageSQL := t.StorageSQL(); storageSQL != "" {
 		stmts = append(stmts, strings.Split(storageSQL, "\n")...)
 	}
