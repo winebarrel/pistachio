@@ -652,7 +652,8 @@ normalization of any kind beyond the walk.
 
 A function moved between two schemas is the cost of the symmetric strip:
 `a.f(v)` and `b.f(v)` compare equal, so the move produces no diff. This is the
-tradeoff a view body's table reference already carries. Telling them apart
+tradeoff a view body's table reference already carries, and an exclusion
+element's `OPERATOR(a.=)` carries it too since #507. Telling them apart
 means the search_path-aware stripping described in the cross-schema user-type
 entry above, which the diff cannot do today because it does not thread the
 schema list.
