@@ -28,7 +28,7 @@ applied: |
   SELECT items.id,
       items.status
      FROM items
-    WHERE (items.status = 'active'::text);
+    WHERE items.status = 'active'::text;
 applied_pg16: &applied_pg16plus |
   -- public.items
   CREATE TABLE public.items (

@@ -20,7 +20,7 @@ dump: |
   SELECT items.id,
       items.status
      FROM items
-    WHERE (items.status = 'active'::text)
+    WHERE items.status = 'active'::text
     WITH CASCADED CHECK OPTION;
 
   -- public.local_items
@@ -28,7 +28,7 @@ dump: |
   SELECT items.id,
       items.status
      FROM items
-    WHERE (items.status = 'active'::text)
+    WHERE items.status = 'active'::text
     WITH LOCAL CHECK OPTION;
   COMMENT ON VIEW public.local_items IS 'Local only';
 dump_pg16: &dump_pg16plus |

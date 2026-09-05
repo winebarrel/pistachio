@@ -25,7 +25,7 @@ applied: |
   SELECT items.id,
       items.status
      FROM items
-    WHERE (items.status = 'active'::text)
+    WHERE items.status = 'active'::text
     WITH CASCADED CHECK OPTION;
 
   -- public.local_items
@@ -33,7 +33,7 @@ applied: |
   SELECT items.id,
       items.status
      FROM items
-    WHERE (items.status = 'active'::text)
+    WHERE items.status = 'active'::text
     WITH LOCAL CHECK OPTION;
 applied_pg16: &applied_pg16plus |
   -- public.items
