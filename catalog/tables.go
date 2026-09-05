@@ -212,6 +212,19 @@ func tableOIDs(tables []*model.Table) []uint32 {
 	return oids
 }
 
+// inheritsChildOIDs returns the OIDs of the INHERITS children among the tables.
+// The column and constraint readers drop the entries such a child only
+// inherits, so that both sides of the diff hold what its CREATE TABLE writes.
+func inheritsChildOIDs(tables []*model.Table) map[uint32]bool {
+	oids := map[uint32]bool{}
+	for _, t := range tables {
+		if t.IsInheritsChild() {
+			oids[t.OID] = true
+		}
+	}
+	return oids
+}
+
 // tablesByOID indexes the tables by OID, for readers that need the schema and
 // name of the table a row belongs to.
 func tablesByOID(tables []*model.Table) map[uint32]*model.Table {

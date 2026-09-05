@@ -48,6 +48,10 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 			con.condeferrable,
 			con.condeferred,
 			con.convalidated,
+			-- False on a constraint an INHERITS child only inherits. The
+			-- child's CREATE TABLE does not write one, so reading it planned a
+			-- DROP CONSTRAINT that PostgreSQL rejects anyway.
+			con.conislocal,
 			-- The storage parameters of the index the constraint owns.
 			-- pg_get_constraintdef does not print them for a primary key or a
 			-- unique constraint, so they are appended to the definition below.
@@ -94,6 +98,7 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 	}
 
 	tableByOID := tablesByOID(tables)
+	inheritsChildren := inheritsChildOIDs(tables)
 	args := pgx.NamedArgs{
 		"table_oids": oids,
 	}
@@ -107,6 +112,7 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 	for rows.Next() {
 		var con model.Constraint
 		var tableOID uint32
+		var isLocal bool
 		var indexOptions []string
 		var refSchema, refTable *string
 
@@ -120,12 +126,19 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 			&con.Deferrable,
 			&con.Deferred,
 			&con.Validated,
+			&isLocal,
 			&indexOptions,
 			&refSchema,
 			&refTable,
 		)
 		if err != nil {
 			return nil, nil, fmt.Errorf("catalog: failed to scan constraint info: %w", err)
+		}
+
+		// Scoped to an INHERITS child. A partition child keeps the clones the
+		// parent pushes down, since its branch of the diff never compares them.
+		if !isLocal && inheritsChildren[tableOID] {
+			continue
 		}
 
 		// pg_get_constraintdef includes "NOT VALID" in the definition string

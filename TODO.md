@@ -50,18 +50,6 @@ column.
 
 Workaround: write the reference unqualified, which is what `pista dump` emits.
 
-## INHERITS table plan / apply support
-
-`model.Table.SQL` has an INHERITS branch that drops the child's own
-columns and only emits constraints. As a result, plan / apply for an
-`INHERITS (...)` child whose desired definition adds columns produces
-incorrect DDL. The validator already special-cases INHERITS children
-(skipped because the inherited column set isn't materialised on the
-child), but the SQL emitter and diff don't handle the legacy partition
-shape end-to-end.
-
-Origin: [#125](https://github.com/winebarrel/pistachio/pull/125). Plan / apply fixtures were intentionally not added.
-
 ## Silent drift on the partition shape
 
 `Table.PartitionOf`, `Table.PartitionBound` and `Table.PartitionDef` are read
@@ -521,6 +509,8 @@ Origin: bug audit, 2026-07-31.
 
 ## `COMMENT ON COLUMN` on an inherited column of an INHERITS child
 
+Priority: low.
+
 A comment on a column an `INHERITS` child inherits from its parent is dropped
 at parse time. `parseCommentStmt` needs the column to be present on the
 table, and such a child declares only its own columns. A true partition child
@@ -530,10 +520,37 @@ diffs columns. An INHERITS child goes through the regular column diff, where
 an entry holding only a name and a comment would be read as a new column and
 emit `ADD COLUMN`, so the same trick does not carry over.
 
-Closing this needs the inherited column set materialised on the child, which
-is the same prerequisite as the INHERITS plan / apply entry above.
+Both sides agree, since the catalog reads an INHERITS child's local columns
+alone, so nothing drifts and `dump` feeds back clean. The comment is simply
+unmanaged: `dump` does not write one and a desired schema that does is
+ignored. `pg_dump` does write it, and that line is lost.
+`test/fidelity/schemas/inherits.sql` notes what it leaves out.
+
+Closing this needs the inherited column set materialised on the child, kept
+apart from the local one so the column diff still sees only what the child
+declares.
 
 Origin: review of [#340](https://github.com/winebarrel/pistachio/pull/340).
+
+## A child of more than one parent keeps only the first
+
+Priority: low.
+
+`model.Table.PartitionOf` holds one parent, and `catalog.ListTables` reads the
+one at `pg_inherits.inhseqno = 1`, so `CREATE TABLE c (z integer) INHERITS (a,
+b)` is dumped as `INHERITS (public.a)` alone. Reloading that dump gives a table
+that does not inherit `b` and so does not have its columns.
+
+Both sides read the first parent alone, so the two agree and a dump fed back
+plans clean; only a reload loses anything. The parser reads
+`cs.InhRelations[0]` for the same reason and drops the rest without a warning.
+
+Closing it means a list rather than a single name, which the parser, the
+dependency graph and the diff all read. A declarative partition has exactly one
+parent, so the field would carry a list for the INHERITS case alone.
+`test/fidelity/schemas/inherits.sql` notes what it leaves out.
+
+Origin: INHERITS local column support.
 
 ## A dump of a partitioned table with an index on the parent does not reload
 
@@ -906,17 +923,3 @@ parameters entry above, which reads the same `reloptions` column.
 Origin: the restore fidelity check, 2026-09-02.
 `test/fidelity/schemas/view_columns.sql` notes what it leaves out.
 
-## A NOT VALID check on an INHERITS child is restored validated
-
-[#505](https://github.com/winebarrel/pistachio/pull/505) fixed this for a
-plain and a partitioned table and left the INHERITS branch of `Table.SQL`
-alone: a child's constraints are all written inside `CREATE TABLE`, so a
-NOT VALID check declared directly on the child loses the clause, and the dump
-fed back plans a `VALIDATE CONSTRAINT` for it. Emitting the ALTER the way a
-plain table now does is not enough, because the child's constraint map also
-holds the unvalidated clones a NOT VALID check on the parent pushes down, and
-an ADD for one of those collides with the constraint the child already
-inherits. Telling the two apart needs `pg_constraint.conislocal`, which the
-catalog does not read.
-
-Origin: review of [#505](https://github.com/winebarrel/pistachio/pull/505).
