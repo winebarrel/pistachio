@@ -1,0 +1,14 @@
+# A parameter change is a definition change: DROP + ADD, like any other.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 70)
+  );
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL,
+      CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor = 80)
+  );
+plan: |
+  ALTER TABLE public.items DROP CONSTRAINT items_v_key;
+  ALTER TABLE public.items ADD CONSTRAINT items_v_key UNIQUE (v) WITH (fillfactor=80);

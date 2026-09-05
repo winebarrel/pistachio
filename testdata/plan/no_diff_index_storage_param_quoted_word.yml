@@ -1,0 +1,13 @@
+# The file quotes the value and pg_get_indexdef prints it bare; the quoted
+# spelling parses as a String and the bare one as a TypeName.
+init: |
+  CREATE TABLE public.items (
+      v text NOT NULL
+  );
+  CREATE INDEX items_v_idx ON public.items (v) WITH (deduplicate_items = 'off');
+desired: |
+  CREATE TABLE public.items (
+      v text NOT NULL
+  );
+  CREATE INDEX items_v_idx ON public.items (v) WITH (deduplicate_items = 'off');
+plan: ""

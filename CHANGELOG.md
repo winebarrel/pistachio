@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Read the storage parameters of the index a constraint owns. `ALTER TABLE ... ADD CONSTRAINT ... UNIQUE (v) WITH (fillfactor = 70)` puts them on the index, which `pg_get_constraintdef` does not print, so the two sides never matched and the constraint was dropped and re-added on every plan, rebuilding the index under an ACCESS EXCLUSIVE lock. `dump` dropped the clause the same way and now writes it. A parameter set on such an index outside the schema file shows up as a diff, the same as on a plain index. A quoted parameter value and the bare spelling, `deduplicate_items = 'off'` and `off`, also compare equal now, on a plain index too.
+
 * Normalize an EXCLUDE constraint's elements and predicate the way a CHECK body is normalized. They were compared as written, so a hand-written exclusion drifted on a schema-qualified function or operator, a cast the catalog adds, a BETWEEN in the predicate, or an explicit ASC, and was dropped and re-added on every plan. A dump fed back was already clean; only a desired schema written another way hit this.
 
 * Track `UNLOGGED` on a standalone sequence. It was read by neither side, so `dump` wrote an unlogged sequence as a plain `CREATE SEQUENCE` and a `LOGGED` <-> `UNLOGGED` change produced no diff. `dump` now writes `CREATE UNLOGGED SEQUENCE` and a change goes out as `ALTER SEQUENCE ... SET LOGGED/UNLOGGED`. Temporary sequences stay out of scope.

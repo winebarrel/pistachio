@@ -48,6 +48,13 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 			con.condeferrable,
 			con.condeferred,
 			con.convalidated,
+			-- The storage parameters of the index the constraint owns.
+			-- pg_get_constraintdef does not print them for a primary key or a
+			-- unique constraint, so they are appended to the definition below.
+			-- It does print them for an exclusion constraint, and a foreign
+			-- key's conindid names the referenced table's index, whose
+			-- parameters are not part of the key, so the CASE keeps both out.
+			CASE WHEN con.contype = ANY ('{p,u}'::"char"[]) THEN ci.reloptions END AS index_options,
 			rn.nspname AS ref_schema,
 			rc.relname AS ref_table
 		FROM
@@ -55,6 +62,7 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 			pg_catalog.pg_constraint con
 			LEFT JOIN pg_catalog.pg_class rc ON rc.oid = con.confrelid
 			LEFT JOIN pg_catalog.pg_namespace rn ON rn.oid = rc.relnamespace
+			LEFT JOIN pg_catalog.pg_class ci ON ci.oid = con.conindid
 			LEFT JOIN column_t col ON col.con_oid = con.oid
 		WHERE
 			con.conrelid = ANY(@table_oids::oid[])
@@ -99,6 +107,7 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 	for rows.Next() {
 		var con model.Constraint
 		var tableOID uint32
+		var indexOptions []string
 		var refSchema, refTable *string
 
 		err := rows.Scan(
@@ -111,6 +120,7 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 			&con.Deferrable,
 			&con.Deferred,
 			&con.Validated,
+			&indexOptions,
 			&refSchema,
 			&refTable,
 		)
@@ -122,6 +132,30 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 		// for unvalidated constraints. Strip it so Definition only contains
 		// the constraint body; validation state is tracked via Validated.
 		con.Definition = strings.TrimSuffix(con.Definition, " NOT VALID")
+
+		// Append the owned index's storage parameters, which
+		// pg_get_constraintdef leaves out. Values are quoted the way
+		// pg_get_indexdef quotes an index's, so a dump reloads. The grammar
+		// takes WITH before the deferral clause and pg_get_constraintdef
+		// prints DEFERRABLE last, so the clause goes in between.
+		if len(indexOptions) > 0 {
+			opts := make([]string, 0, len(indexOptions))
+			for _, o := range indexOptions {
+				name, value, _ := strings.Cut(o, "=")
+				opts = append(opts, name+"="+model.QuoteLiteral(value))
+			}
+			deferral := ""
+			if con.Deferrable {
+				for _, s := range []string{" DEFERRABLE INITIALLY DEFERRED", " DEFERRABLE"} {
+					if strings.HasSuffix(con.Definition, s) {
+						deferral = s
+						break
+					}
+				}
+			}
+			con.Definition = strings.TrimSuffix(con.Definition, deferral) +
+				" WITH (" + strings.Join(opts, ", ") + ")" + deferral
+		}
 
 		if con.Type.IsForeignKeyConstraint() {
 			table := tableByOID[tableOID]
