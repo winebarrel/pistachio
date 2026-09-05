@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.43.0] - 2026-09-05
 
 * Manage an `INHERITS` child as the columns and constraints it declares itself. `dump` wrote such a child as its constraints alone, the parent's included, and dropped every column, so the output did not even reload: the constraint named a column the statement no longer declared. Fed back as the desired schema it planned a `DROP COLUMN` for every column and a `DROP CONSTRAINT` PostgreSQL rejects. Both sides now read the local half alone, `attislocal` and `conislocal`, which is what the child's `CREATE TABLE` writes and what `pg_dump` writes for it. A NOT VALID check on the child is added by its own `ALTER` rather than written inline, so a reload no longer validates it. A comment on an inherited column and a child of more than one parent stay unmanaged, both symmetric on the two sides.
 
