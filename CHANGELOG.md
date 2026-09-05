@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.44.1] - 2026-09-06
 
 * Build the macOS release binaries against a deployment target of 13.0. The cross toolchain aimed at 10.9 on amd64 and 11.0 on arm64 while Go stamped its object with 13.0, so the release build warned on every link. Go binaries need macOS 13 either way.
 
