@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Build the macOS release binaries against a deployment target of 13.0. The cross toolchain aimed at 10.9 on amd64 and 11.0 on arm64 while Go stamped its object with 13.0, so the release build warned on every link. Go binaries need macOS 13 either way.
+
 ## [1.44.0] - 2026-09-06
 
 * Manage a view's `WITH [LOCAL | CASCADED] CHECK OPTION`. Neither side read it, so `dump` dropped the clause and a reload lost the constraint, and a desired schema that wrote it planned nothing. `dump` now writes the clause after the query. A change on a view whose definition stays goes out as `ALTER VIEW ... SET (check_option=...)` or `RESET (check_option)`; a definition change carries the clause on its `CREATE OR REPLACE VIEW`. `WITH (check_option = ...)` before `AS` is read too.

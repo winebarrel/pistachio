@@ -14,6 +14,11 @@ builds:
       - CGO_ENABLED=1
       - CC=o64-clang
       - CXX=o64-clang++
+      # Go stamps its object with 13.0, the oldest macOS it supports, while
+      # osxcross clang aims at 10.9 here and 11.0 on arm64. clang and ld both
+      # read this variable, so it lines them up. Raise it when Go does. The
+      # arm64 build repeats it: the anchored env is replaced, not merged.
+      - MACOSX_DEPLOYMENT_TARGET=13.0
     ldflags:
       - -X main.version={{.Version}}
     goos: [darwin]
@@ -24,6 +29,7 @@ builds:
       - CGO_ENABLED=1
       - CC=oa64-clang
       - CXX=oa64-clang++
+      - MACOSX_DEPLOYMENT_TARGET=13.0
     goos: [darwin]
     goarch: [arm64]
   - <<: *build
