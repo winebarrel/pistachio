@@ -1,0 +1,62 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH CHECK OPTION;
+  CREATE VIEW public.local_items WITH (check_option = local) AS SELECT id, status FROM public.items WHERE status = 'active';
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_items
+  CREATE OR REPLACE VIEW public.active_items AS
+  SELECT items.id,
+      items.status
+     FROM items
+    WHERE items.status = 'active'::text
+    WITH CASCADED CHECK OPTION;
+
+  -- public.local_items
+  CREATE OR REPLACE VIEW public.local_items AS
+  SELECT items.id,
+      items.status
+     FROM items
+    WHERE items.status = 'active'::text
+    WITH LOCAL CHECK OPTION;
+applied_pg16: &applied_pg16plus |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_items
+  CREATE OR REPLACE VIEW public.active_items AS
+  SELECT id,
+      status
+     FROM items
+    WHERE status = 'active'::text
+    WITH CASCADED CHECK OPTION;
+
+  -- public.local_items
+  CREATE OR REPLACE VIEW public.local_items AS
+  SELECT id,
+      status
+     FROM items
+    WHERE status = 'active'::text
+    WITH LOCAL CHECK OPTION;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

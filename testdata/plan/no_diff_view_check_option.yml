@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH CHECK OPTION;
+  CREATE VIEW public.local_items WITH (check_option = local) AS SELECT id, status FROM public.items WHERE status = 'active';
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items WITH (check_option = 'cascaded') AS SELECT id, status FROM public.items WHERE status = 'active';
+  CREATE VIEW public.local_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
+plan: ""

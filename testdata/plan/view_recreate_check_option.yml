@@ -1,0 +1,24 @@
+# A view recreated for a column change is created with its clause.
+drop_policy:
+  allow_drop: [view]
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      note text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id, status, note FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      note text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+plan: |
+  DROP VIEW public.active_items;
+  CREATE OR REPLACE VIEW public.active_items AS
+  SELECT id, status FROM public.items WHERE status = 'active'
+    WITH CASCADED CHECK OPTION;

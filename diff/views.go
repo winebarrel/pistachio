@@ -353,6 +353,12 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			if viewIdxHasConcurrently {
 				result.HasConcurrently = true
 			}
+		} else if currentView.CheckOption != desiredView.CheckOption {
+			// Definition unchanged, check option changed. A replaced
+			// definition carries the clause on its CREATE OR REPLACE VIEW,
+			// which replaces the options as a whole, so only this branch
+			// needs an ALTER.
+			result.CreateStmts = append(result.CreateStmts, model.SetCheckOptionSQL(k, desiredView.CheckOption))
 		}
 
 		// A view that stayed in place, whether its definition was replaced or

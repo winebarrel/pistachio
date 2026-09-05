@@ -1302,12 +1302,41 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 	}
 
 	return &model.View{
-		Schema:     schema,
-		Name:       vs.View.Relname,
-		Definition: def,
-		Indexes:    orderedmap.New[string, *model.Index](),
-		Triggers:   orderedmap.New[string, *model.Trigger](),
+		Schema:      schema,
+		Name:        vs.View.Relname,
+		Definition:  def,
+		CheckOption: viewCheckOption(vs),
+		Indexes:     orderedmap.New[string, *model.Index](),
+		Triggers:    orderedmap.New[string, *model.Trigger](),
 	}, nil
+}
+
+// viewCheckOption reads a view's check option from the trailing
+// WITH [LOCAL | CASCADED] CHECK OPTION, which pg_dump and pista dump write, or
+// from a check_option entry in the WITH (...) before AS. A bare WITH CHECK
+// OPTION is CASCADED. PostgreSQL rejects a statement that writes both, so the
+// order here does not matter.
+func viewCheckOption(vs *pg_query.ViewStmt) string {
+	switch vs.WithCheckOption {
+	case pg_query.ViewCheckOption_LOCAL_CHECK_OPTION:
+		return "local"
+	case pg_query.ViewCheckOption_CASCADED_CHECK_OPTION:
+		return "cascaded"
+	}
+	for _, opt := range vs.Options {
+		de := opt.GetDefElem()
+		if de == nil || de.Defname != "check_option" || de.Arg == nil {
+			continue
+		}
+		// A quoted value arrives as a string, a bare one as a type name.
+		if s := de.Arg.GetString_(); s != nil {
+			return strings.ToLower(s.Sval)
+		}
+		if tn := de.Arg.GetTypeName(); tn != nil && len(tn.Names) > 0 {
+			return strings.ToLower(tn.Names[len(tn.Names)-1].GetString_().GetSval())
+		}
+	}
+	return ""
 }
 
 func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string) (*model.View, error) {

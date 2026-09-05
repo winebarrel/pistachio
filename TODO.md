@@ -610,11 +610,12 @@ Origin: [#459](https://github.com/winebarrel/pistachio/pull/459).
 
 Priority: low.
 
-A view carries `security_barrier` and `check_option`, a materialized view the
-autovacuum settings, and neither side reads them. `dump` drops the clause, and
-a desired schema that writes it plans nothing, the way a table's parameters
-behaved before they were read. Losing `security_barrier` from a dump is the
-one that matters, since the view is a security boundary without it.
+A view carries `security_barrier`, a materialized view the autovacuum
+settings, and neither side reads them. `dump` drops the clause, and a desired
+schema that writes it plans nothing, the way a table's parameters behaved
+before they were read. Losing `security_barrier` from a dump is the one that
+matters, since the view is a security boundary without it. `check_option`, in
+the same column, is managed.
 
 `pg_class.reloptions` holds them for both, next to the table's, and
 `ALTER VIEW ... SET (...)` / `RESET (...)` and the `ALTER MATERIALIZED VIEW`
@@ -941,18 +942,3 @@ and pistachio takes a rename from a `-- pista:renamed-from` directive rather
 than inferring one, so a directive would have to reach a column's sequence.
 
 Origin: identity sequence options, 2026-09-02.
-
-## `WITH CHECK OPTION` on a view is not managed
-
-Nothing reads `pg_class.reloptions` `check_option` or parses the trailing
-`WITH [CASCADED | LOCAL] CHECK OPTION`, so the clause is dropped from a view in
-the desired schema without an error and `pista dump` does not emit one. An
-updatable view loses the constraint on restore.
-
-The work is a field on `model.View`, a catalog read, the parser clause, and
-emission from the create and replace paths. Related to the view storage
-parameters entry above, which reads the same `reloptions` column.
-
-Origin: the restore fidelity check, 2026-09-02.
-`test/fidelity/schemas/view_columns.sql` notes what it leaves out.
-

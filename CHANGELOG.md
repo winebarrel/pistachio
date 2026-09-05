@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Manage a view's `WITH [LOCAL | CASCADED] CHECK OPTION`. Neither side read it, so `dump` dropped the clause and a reload lost the constraint, and a desired schema that wrote it planned nothing. `dump` now writes the clause after the query. A change on a view whose definition stays goes out as `ALTER VIEW ... SET (check_option=...)` or `RESET (check_option)`; a definition change carries the clause on its `CREATE OR REPLACE VIEW`. `WITH (check_option = ...)` before `AS` is read too.
+
 ## [1.43.0] - 2026-09-05
 
 * Manage an `INHERITS` child as the columns and constraints it declares itself. `dump` wrote such a child as its constraints alone, the parent's included, and dropped every column, so the output did not even reload: the constraint named a column the statement no longer declared. Fed back as the desired schema it planned a `DROP COLUMN` for every column and a `DROP CONSTRAINT` PostgreSQL rejects. Both sides now read the local half alone, `attislocal` and `conislocal`, which is what the child's `CREATE TABLE` writes and what `pg_dump` writes for it. A NOT VALID check on the child is added by its own `ALTER` rather than written inline, so a reload no longer validates it. A comment on an inherited column and a child of more than one parent stay unmanaged, both symmetric on the two sides.

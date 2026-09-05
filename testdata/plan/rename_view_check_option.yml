@@ -1,0 +1,18 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  -- pista:renamed-from public.active_items
+  CREATE VIEW public.live_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
+plan: |
+  ALTER VIEW public.active_items RENAME TO live_items;
+  ALTER VIEW public.live_items SET (check_option='local');

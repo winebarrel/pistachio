@@ -76,3 +76,15 @@ func TestViewToSQL_materializedWithIndex(t *testing.T) {
 	assert.Contains(t, got, "CREATE MATERIALIZED VIEW")
 	assert.Contains(t, got, "CREATE INDEX idx_mv_n")
 }
+
+func TestView_SQL_checkOption(t *testing.T) {
+	v := model.View{Schema: "public", Name: "v1", Definition: "SELECT id FROM t WHERE ok", CheckOption: "cascaded"}
+	assert.Equal(t, "CREATE OR REPLACE VIEW public.v1 AS\nSELECT id FROM t WHERE ok\n  WITH CASCADED CHECK OPTION;", v.SQL())
+	v.CheckOption = "local"
+	assert.Equal(t, "CREATE OR REPLACE VIEW public.v1 AS\nSELECT id FROM t WHERE ok\n  WITH LOCAL CHECK OPTION;", v.SQL())
+}
+
+func TestSetCheckOptionSQL(t *testing.T) {
+	assert.Equal(t, "ALTER VIEW public.v1 SET (check_option='local');", model.SetCheckOptionSQL("public.v1", "local"))
+	assert.Equal(t, "ALTER VIEW public.v1 RESET (check_option);", model.SetCheckOptionSQL("public.v1", ""))
+}
