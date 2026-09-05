@@ -569,6 +569,36 @@ COMMENT ON VIEW public.active_users IS 'Active users';`
 	assert.Equal(t, expected, got)
 }
 
+func TestParseSQL_ViewCheckOption(t *testing.T) {
+	sql := `CREATE TABLE public.items (id integer NOT NULL, status text NOT NULL);
+CREATE VIEW public.cascaded_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH CHECK OPTION;
+CREATE VIEW public.local_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
+CREATE VIEW public.bare_param WITH (check_option = local) AS SELECT id, status FROM public.items WHERE status = 'active';
+CREATE VIEW public.quoted_param WITH (check_option = 'cascaded') AS SELECT id, status FROM public.items WHERE status = 'active';
+CREATE VIEW public.both_forms WITH (check_option = local) AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+CREATE VIEW public.none AS SELECT id, status FROM public.items WHERE status = 'active';`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	for name, want := range map[string]string{
+		"cascaded_items": "cascaded",
+		"local_items":    "local",
+		"bare_param":     "local",
+		"quoted_param":   "cascaded",
+		"both_forms":     "cascaded",
+		"none":           "",
+	} {
+		v, ok := result.Views.GetOk("public." + name)
+		require.True(t, ok, name)
+		assert.Equal(t, want, v.CheckOption, name)
+		assert.Equal(t, "SELECT id, status FROM public.items WHERE status = 'active'", v.Definition, name)
+	}
+
+	v := result.Views.Get("public.local_items")
+	assert.Equal(t, "CREATE OR REPLACE VIEW public.local_items AS\nSELECT id, status FROM public.items WHERE status = 'active'\n  WITH LOCAL CHECK OPTION;", v.SQL())
+}
+
 func TestParseSQL_ViewCommentOnColumn(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,

@@ -1,0 +1,20 @@
+# A definition change goes out as CREATE OR REPLACE VIEW, which replaces the
+# view's options as a whole, so the clause rides on it and no ALTER follows.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_items AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
+plan: |
+  CREATE OR REPLACE VIEW public.active_items AS
+  SELECT id, status FROM public.items WHERE status = 'active'
+    WITH LOCAL CHECK OPTION;

@@ -1,0 +1,22 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.added AS SELECT id, status FROM public.items WHERE status = 'active';
+  CREATE VIEW public.changed AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+  CREATE VIEW public.removed AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.added AS SELECT id, status FROM public.items WHERE status = 'active' WITH CHECK OPTION;
+  CREATE VIEW public.changed AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
+  CREATE VIEW public.removed AS SELECT id, status FROM public.items WHERE status = 'active';
+plan: |
+  ALTER VIEW public.added SET (check_option='cascaded');
+  ALTER VIEW public.changed SET (check_option='local');
+  ALTER VIEW public.removed RESET (check_option);

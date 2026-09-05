@@ -97,6 +97,53 @@ func TestDiffViews_formattingDifferenceIgnored(t *testing.T) {
 	assert.Empty(t, result.DropStmts)
 }
 
+func TestDiffViews_checkOptionSet(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", CheckOption: "local"})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER VIEW public.v1 SET (check_option='local');"}, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
+}
+
+func TestDiffViews_checkOptionReset(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", CheckOption: "cascaded"})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER VIEW public.v1 RESET (check_option);"}, result.CreateStmts)
+}
+
+func TestDiffViews_checkOptionNoChange(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", CheckOption: "cascaded"})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", CheckOption: "cascaded"})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.CreateStmts)
+}
+
+// A definition change carries the clause on CREATE OR REPLACE VIEW, which
+// replaces the options as a whole, so no ALTER follows it.
+func TestDiffViews_checkOptionWithDefinitionChange(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", CheckOption: "cascaded"})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 2", CheckOption: "local"})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"CREATE OR REPLACE VIEW public.v1 AS\nSELECT 2\n  WITH LOCAL CHECK OPTION;"}, result.CreateStmts)
+}
+
 func TestDiffViews_commentAdd(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})

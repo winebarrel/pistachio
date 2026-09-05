@@ -1,0 +1,80 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.added AS SELECT id, status FROM public.items WHERE status = 'active';
+  CREATE VIEW public.changed AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+  CREATE VIEW public.removed AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.added AS SELECT id, status FROM public.items WHERE status = 'active' WITH CHECK OPTION;
+  CREATE VIEW public.changed AS SELECT id, status FROM public.items WHERE status = 'active' WITH LOCAL CHECK OPTION;
+  CREATE VIEW public.removed AS SELECT id, status FROM public.items WHERE status = 'active';
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.added
+  CREATE OR REPLACE VIEW public.added AS
+  SELECT items.id,
+      items.status
+     FROM items
+    WHERE (items.status = 'active'::text)
+    WITH CASCADED CHECK OPTION;
+
+  -- public.changed
+  CREATE OR REPLACE VIEW public.changed AS
+  SELECT items.id,
+      items.status
+     FROM items
+    WHERE (items.status = 'active'::text)
+    WITH LOCAL CHECK OPTION;
+
+  -- public.removed
+  CREATE OR REPLACE VIEW public.removed AS
+  SELECT items.id,
+      items.status
+     FROM items
+    WHERE (items.status = 'active'::text);
+applied_pg16: &applied_pg16plus |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.added
+  CREATE OR REPLACE VIEW public.added AS
+  SELECT id,
+      status
+     FROM items
+    WHERE status = 'active'::text
+    WITH CASCADED CHECK OPTION;
+
+  -- public.changed
+  CREATE OR REPLACE VIEW public.changed AS
+  SELECT id,
+      status
+     FROM items
+    WHERE status = 'active'::text
+    WITH LOCAL CHECK OPTION;
+
+  -- public.removed
+  CREATE OR REPLACE VIEW public.removed AS
+  SELECT id,
+      status
+     FROM items
+    WHERE status = 'active'::text;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

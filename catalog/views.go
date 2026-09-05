@@ -66,6 +66,14 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			c.relname,
 			pg_catalog.pg_get_viewdef(c.oid, true) AS definition,
 			c.relkind = 'm' AS materialized,
+			(
+				SELECT
+					split_part(o, '=', 2)
+				FROM
+					unnest(c.reloptions) AS o
+				WHERE
+					o LIKE 'check_option=%'
+			) AS check_option,
 			d.description
 		FROM
 			pg_catalog.pg_class c
@@ -95,16 +103,21 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 	var views []*model.View
 	for rows.Next() {
 		var v model.View
+		var checkOption *string
 		err := rows.Scan(
 			&v.OID,
 			&v.Schema,
 			&v.Name,
 			&v.Definition,
 			&v.Materialized,
+			&checkOption,
 			&v.Comment,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan view info: %w", err)
+		}
+		if checkOption != nil {
+			v.CheckOption = *checkOption
 		}
 		v.Indexes = orderedmap.New[string, *model.Index]()
 		v.Triggers = orderedmap.New[string, *model.Trigger]()
