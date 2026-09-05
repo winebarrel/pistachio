@@ -376,7 +376,7 @@ func TestDiffPolicies_RenameOrderFollowsDesired(t *testing.T) {
 		want[i] = "ALTER POLICY old_" + n + " ON public.documents RENAME TO new_" + n + ";"
 	}
 
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		cur := orderedmap.New[string, *model.Policy]()
 		des := orderedmap.New[string, *model.Policy]()
 		for _, n := range names {

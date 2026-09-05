@@ -133,9 +133,9 @@ func TestDiffTables_dropTable_withFK(t *testing.T) {
 
 	posts := newTable("public", "posts")
 	posts.ForeignKeys.Set("posts_user_id_fkey", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "posts_user_id_fkey", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)"},
-		Schema:     "public",
-		Table:      "posts",
+		Name: "posts_user_id_fkey", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)",
+		Schema: "public",
+		Table:  "posts",
 	})
 	current.Set("public.posts", posts)
 
@@ -154,9 +154,9 @@ func TestDiffTables_dropTable_withFK_denied(t *testing.T) {
 
 	posts := newTable("public", "posts")
 	posts.ForeignKeys.Set("posts_user_id_fkey", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "posts_user_id_fkey", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)"},
-		Schema:     "public",
-		Table:      "posts",
+		Name: "posts_user_id_fkey", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)",
+		Schema: "public",
+		Table:  "posts",
 	})
 	current.Set("public.posts", posts)
 
@@ -1122,9 +1122,9 @@ func TestDiffForeignKeys_add(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	_, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1138,9 +1138,9 @@ func TestDiffForeignKeys_addNotValid(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false,
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	_, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1153,9 +1153,9 @@ func TestDiffForeignKeys_addNotValid(t *testing.T) {
 func TestDiffForeignKeys_drop(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
@@ -1170,9 +1170,9 @@ func TestDiffForeignKeys_drop_denied(t *testing.T) {
 	// honor --allow-drop=foreign_key.
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
@@ -1188,15 +1188,15 @@ func TestDiffForeignKeys_change_denied_alwaysExecutes(t *testing.T) {
 	// drops are denied.
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", current, desired, denyAllDrops{})
@@ -1213,15 +1213,15 @@ func TestDiffForeignKeys_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
 	// suppress it.
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_old", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true, RenameFrom: new("fk_old")},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true, RenameFrom: new("fk_old"),
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", current, desired, denyAllDrops{})
@@ -1513,9 +1513,9 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 	tbl := newTable("public", "orders")
 	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
 	tbl.ForeignKeys.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired.Set("public.orders", tbl)
 
@@ -1566,15 +1566,15 @@ func TestEqualViewDef_parseError(t *testing.T) {
 func TestDiffForeignKeys_change(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1587,15 +1587,15 @@ func TestDiffForeignKeys_change(t *testing.T) {
 func TestDiffForeignKeys_validatedToNotValid(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false,
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1609,15 +1609,15 @@ func TestDiffForeignKeys_validatedToNotValid(t *testing.T) {
 func TestDiffForeignKeys_notValidToValidated(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1630,15 +1630,15 @@ func TestDiffForeignKeys_notValidToValidated(t *testing.T) {
 func TestDiffForeignKeys_bothNotValid_noChange(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false,
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1650,15 +1650,15 @@ func TestDiffForeignKeys_bothNotValid_noChange(t *testing.T) {
 func TestDiffForeignKeys_changeDefinitionAndValidated(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: false},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: false,
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1673,15 +1673,15 @@ func TestDiffForeignKeys_changeDefinitionAndValidated(t *testing.T) {
 func TestDiffForeignKeys_renameAndValidate(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_old", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true, RenameFrom: new("fk_old")},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true, RenameFrom: new("fk_old"),
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1695,15 +1695,15 @@ func TestDiffForeignKeys_renameAndValidate(t *testing.T) {
 func TestDiffForeignKeys_renameOnly(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_old", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true, RenameFrom: new("fk_old")},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true, RenameFrom: new("fk_old"),
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1716,15 +1716,15 @@ func TestDiffForeignKeys_renameOnly(t *testing.T) {
 func TestDiffForeignKeys_renameAndNotValid(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_old", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: new("fk_old")},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: new("fk_old"),
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1741,15 +1741,15 @@ func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
 	// Desired still has RenameFrom but also changes Validated.
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: new("fk_old")},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: false, RenameFrom: new("fk_old"),
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1764,15 +1764,15 @@ func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
 func TestDiffForeignKeys_renameAndChangeDefinition(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk_old", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_old", Definition: "FOREIGN KEY (user_id) REFERENCES users(id)", Validated: true,
+		Schema: "public",
+		Table:  "orders",
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true, RenameFrom: new("fk_old")},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_new", Definition: "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", Validated: true, RenameFrom: new("fk_old"),
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -1902,9 +1902,9 @@ func TestDiffTable_partitionChild_fkRenameError(t *testing.T) {
 	desired.PartitionBound = &bound
 	oldName := "nonexistent"
 	desired.ForeignKeys.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", RenameFrom: &oldName, Definition: "FOREIGN KEY (id) REFERENCES public.events(id)"},
-		Schema:     "public",
-		Table:      "events_2024",
+		Name: "fk_new", RenameFrom: &oldName, Definition: "FOREIGN KEY (id) REFERENCES public.events(id)",
+		Schema: "public",
+		Table:  "events_2024",
 	})
 
 	_, err := diffTable(current, desired, allowAllDrops{})
@@ -1948,9 +1948,9 @@ func TestDiffTable_fkRenameError(t *testing.T) {
 	desired.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	oldName := "nonexistent"
 	desired.ForeignKeys.Set("fk_new", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_new", RenameFrom: &oldName, Definition: "FOREIGN KEY (id) REFERENCES public.other(id)"},
-		Schema:     "public",
-		Table:      "users",
+		Name: "fk_new", RenameFrom: &oldName, Definition: "FOREIGN KEY (id) REFERENCES public.other(id)",
+		Schema: "public",
+		Table:  "users",
 	})
 
 	_, err := diffTable(current, desired, allowAllDrops{})
@@ -2835,17 +2835,17 @@ func TestDiffIndexes_rename_selfRename_skipped(t *testing.T) {
 func TestDiffForeignKeys_rename_selfRename_skipped(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	oldName := "fk"
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -2905,9 +2905,9 @@ func TestDiffTables_renameTable_withFK(t *testing.T) {
 	ct.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	ct.Columns.Set("user_id", &model.Column{Name: "user_id", TypeName: "integer"})
 	ct.ForeignKeys.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 	current.Set("public.orders", ct)
 
@@ -2917,9 +2917,9 @@ func TestDiffTables_renameTable_withFK(t *testing.T) {
 	dt.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
 	dt.Columns.Set("user_id", &model.Column{Name: "user_id", TypeName: "integer"})
 	dt.ForeignKeys.Set("fk_user", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "purchases",
+		Name: "fk_user", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "purchases",
 	})
 	desired.Set("public.purchases", dt)
 
@@ -3089,17 +3089,17 @@ func TestDiffIndexes_rename_sourceNotFound(t *testing.T) {
 func TestDiffForeignKeys_rename(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("old_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "old_fk", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "old_fk", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	oldName := "old_fk"
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("new_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "new_fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "new_fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -3111,17 +3111,17 @@ func TestDiffForeignKeys_rename(t *testing.T) {
 func TestDiffForeignKeys_rename_alreadyApplied(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("new_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "new_fk", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "new_fk", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	oldName := "old_fk"
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("new_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "new_fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "new_fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	_, _, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -3134,9 +3134,9 @@ func TestDiffForeignKeys_rename_sourceNotFound(t *testing.T) {
 	oldName := "nonexistent"
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("new_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "new_fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "new_fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	_, _, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -3175,22 +3175,22 @@ func TestDiffIndexes_rename_destinationExists_error(t *testing.T) {
 func TestDiffForeignKeys_rename_destinationExists_error(t *testing.T) {
 	current := orderedmap.New[string, *model.ForeignKey]()
 	current.Set("old_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "old_fk", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "old_fk", Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 	current.Set("new_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "new_fk", Definition: "FOREIGN KEY (item_id) REFERENCES public.items(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "new_fk", Definition: "FOREIGN KEY (item_id) REFERENCES public.items(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	oldName := "old_fk"
 	desired := orderedmap.New[string, *model.ForeignKey]()
 	desired.Set("new_fk", &model.ForeignKey{
-		Constraint: model.Constraint{Name: "new_fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "new_fk", RenameFrom: &oldName, Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Schema: "public",
+		Table:  "orders",
 	})
 
 	_, _, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
@@ -3607,9 +3607,9 @@ func TestDiffConstraints_RenameSuppressionKeepsOtherRenames(t *testing.T) {
 func TestDiffForeignKeys_RenameSuppressionKeepsOtherRenames(t *testing.T) {
 	fk := func(name, refTable, renameFrom string) *model.ForeignKey {
 		f := &model.ForeignKey{
-			Constraint: model.Constraint{Name: name, Definition: "FOREIGN KEY (pid) REFERENCES " + refTable + "(id)", Validated: true},
-			Schema:     "public",
-			Table:      "t",
+			Name: name, Definition: "FOREIGN KEY (pid) REFERENCES " + refTable + "(id)", Validated: true,
+			Schema: "public",
+			Table:  "t",
 		}
 		if renameFrom != "" {
 			f.RenameFrom = new(renameFrom)

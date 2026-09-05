@@ -1987,19 +1987,17 @@ func parseAlterTableConstraints(as *pg_query.AlterTableStmt, defaultSchema strin
 			}
 
 			fks = append(fks, &model.ForeignKey{
-				Constraint: model.Constraint{
-					Name:       con.Conname,
-					Type:       model.ConstraintType('f'),
-					Definition: def,
-					Columns:    columns,
-					Deferrable: con.Deferrable,
-					Deferred:   con.Initdeferred,
-					Validated:  !con.SkipValidation,
-				},
-				Schema:    schema,
-				Table:     as.Relation.Relname,
-				RefSchema: refSchema,
-				RefTable:  refTable,
+				Name:       con.Conname,
+				Type:       model.ConstraintType('f'),
+				Definition: def,
+				Columns:    columns,
+				Deferrable: con.Deferrable,
+				Deferred:   con.Initdeferred,
+				Validated:  !con.SkipValidation,
+				Schema:     schema,
+				Table:      as.Relation.Relname,
+				RefSchema:  refSchema,
+				RefTable:   refTable,
 			})
 
 			continue
@@ -2048,19 +2046,17 @@ func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchem
 	}
 
 	return &model.ForeignKey{
-		Constraint: model.Constraint{
-			Name:       con.Conname,
-			Type:       model.ConstraintType('f'),
-			Definition: def,
-			Columns:    columns,
-			Deferrable: con.Deferrable,
-			Deferred:   con.Initdeferred,
-			Validated:  !con.SkipValidation,
-		},
-		Schema:    schema,
-		Table:     table,
-		RefSchema: refSchema,
-		RefTable:  refTable,
+		Name:       con.Conname,
+		Type:       model.ConstraintType('f'),
+		Definition: def,
+		Columns:    columns,
+		Deferrable: con.Deferrable,
+		Deferred:   con.Initdeferred,
+		Validated:  !con.SkipValidation,
+		Schema:     schema,
+		Table:      table,
+		RefSchema:  refSchema,
+		RefTable:   refTable,
 	}, nil
 }
 
@@ -2094,11 +2090,10 @@ func deparseTypeName(tn *pg_query.TypeName) (string, error) {
 	}
 
 	const marker = "_c "
-	idx := strings.Index(sql, marker)
-	if idx == -1 {
+	_, rest, ok := strings.Cut(sql, marker)
+	if !ok {
 		return "", fmt.Errorf("unexpected deparse output for type: %s", sql)
 	}
-	rest := sql[idx+len(marker):]
 	lastParen := strings.LastIndex(rest, ")")
 	if lastParen < 0 {
 		return "", fmt.Errorf("unexpected deparse output for type: %s", sql)
@@ -2304,9 +2299,9 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 
 	if con.Conname != "" {
 		marker := "CONSTRAINT " + model.Ident(con.Conname) + " "
-		idx := strings.Index(sql, marker)
-		if idx != -1 {
-			return restorePlaceholders(strings.TrimSpace(sql[idx+len(marker):])), nil
+		_, after, ok := strings.Cut(sql, marker)
+		if ok {
+			return restorePlaceholders(strings.TrimSpace(after)), nil
 		}
 	}
 
@@ -2339,11 +2334,11 @@ func deparsePartitionSpec(cs *pg_query.CreateStmt) (string, error) {
 		return "", fmt.Errorf("failed to deparse partition spec: %w", err)
 	}
 	const prefix = "PARTITION BY "
-	idx := strings.Index(sql, prefix)
-	if idx == -1 {
+	_, after, ok := strings.Cut(sql, prefix)
+	if !ok {
 		return "", fmt.Errorf("could not extract partition spec from: %s", sql)
 	}
-	return strings.TrimSpace(sql[idx+len(prefix):]), nil
+	return strings.TrimSpace(after), nil
 }
 
 func deparsePartitionBound(cs *pg_query.CreateStmt) (string, error) {
@@ -2364,11 +2359,11 @@ func deparsePartitionBound(cs *pg_query.CreateStmt) (string, error) {
 		return "", fmt.Errorf("failed to deparse partition bound: %w", err)
 	}
 	const prefix = "PARTITION OF _parent "
-	idx := strings.Index(sql, prefix)
-	if idx == -1 {
+	_, after, ok := strings.Cut(sql, prefix)
+	if !ok {
 		return "", fmt.Errorf("could not extract partition bound from: %s", sql)
 	}
-	return strings.TrimSpace(sql[idx+len(prefix):]), nil
+	return strings.TrimSpace(after), nil
 }
 
 // parseStorageParams reads the WITH clause of a CREATE TABLE. A parameter of

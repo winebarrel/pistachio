@@ -206,7 +206,7 @@ CREATE TABLE public.posts (
 	})
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{
-		FilterOptions: pistachio.FilterOptions{Exclude: []string{"posts"}},
+		Exclude: []string{"posts"},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, got.Count.Tables)
@@ -672,15 +672,13 @@ func TestDumpResult_SortByDeps_NilMaps(t *testing.T) {
 	child := newTable("child")
 	refSchema, refTable := "public", "parent"
 	child.ForeignKeys.Set("child_parent_fkey", &model.ForeignKey{
-		Constraint: model.Constraint{
-			Name:       "child_parent_fkey",
-			Definition: "FOREIGN KEY (id) REFERENCES parent(id)",
-			Validated:  true,
-		},
-		Schema:    "public",
-		Table:     "child",
-		RefSchema: &refSchema,
-		RefTable:  &refTable,
+		Name:       "child_parent_fkey",
+		Definition: "FOREIGN KEY (id) REFERENCES parent(id)",
+		Validated:  true,
+		Schema:     "public",
+		Table:      "child",
+		RefSchema:  &refSchema,
+		RefTable:   &refTable,
 	})
 
 	tables := orderedmap.New[string, *model.Table]()
@@ -719,15 +717,13 @@ func TestDumpResult_SortByDeps_CycleFallsBackInString(t *testing.T) {
 		refSchema := "public"
 		ref := refTable
 		tbl.ForeignKeys.Set(name+"_fkey", &model.ForeignKey{
-			Constraint: model.Constraint{
-				Name:       name + "_fkey",
-				Definition: "FOREIGN KEY (id) REFERENCES " + refTable + "(id)",
-				Validated:  true,
-			},
-			Schema:    "public",
-			Table:     name,
-			RefSchema: &refSchema,
-			RefTable:  &ref,
+			Name:       name + "_fkey",
+			Definition: "FOREIGN KEY (id) REFERENCES " + refTable + "(id)",
+			Validated:  true,
+			Schema:     "public",
+			Table:      name,
+			RefSchema:  &refSchema,
+			RefTable:   &ref,
 		})
 		return tbl
 	}
@@ -869,17 +865,15 @@ func TestDump(t *testing.T) {
 				Schemas:    []string{"public"},
 			})
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{
-				OmitSchema: tc.OmitSchema,
-				SortByDeps: tc.SortByDeps,
-				FilterOptions: pistachio.FilterOptions{
-					Include:            tc.Include,
-					Exclude:            tc.Exclude,
-					Enable:             tc.Enable,
-					Disable:            tc.Disable,
-					ManageRoutine:      tc.ManageRoutine,
-					ManageStorageParam: tc.ManageStorageParam,
-					SkipPartitionChild: tc.SkipPartitionChild,
-				},
+				OmitSchema:         tc.OmitSchema,
+				SortByDeps:         tc.SortByDeps,
+				Include:            tc.Include,
+				Exclude:            tc.Exclude,
+				Enable:             tc.Enable,
+				Disable:            tc.Disable,
+				ManageRoutine:      tc.ManageRoutine,
+				ManageStorageParam: tc.ManageStorageParam,
+				SkipPartitionChild: tc.SkipPartitionChild,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.expectedDump(pgMajor)), strings.TrimSpace(got.String()))
@@ -905,7 +899,7 @@ CREATE PROCEDURE public.p() LANGUAGE sql AS $$ SELECT $$;`)
 	})
 
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{
-		FilterOptions: pistachio.FilterOptions{ManageRoutine: true},
+		ManageRoutine: true,
 	})
 	require.NoError(t, err)
 

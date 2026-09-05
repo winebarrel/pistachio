@@ -27,9 +27,9 @@ func TestConstraint_String(t *testing.T) {
 
 func TestForeignKey_String(t *testing.T) {
 	fk := &model.ForeignKey{
-		Constraint: model.Constraint{Name: "fk_user", Type: model.ConstraintType('f'), Definition: "FOREIGN KEY (user_id) REFERENCES users(id)"},
-		Schema:     "public",
-		Table:      "orders",
+		Name: "fk_user", Type: model.ConstraintType('f'), Definition: "FOREIGN KEY (user_id) REFERENCES users(id)",
+		Schema: "public",
+		Table:  "orders",
 	}
 	s := fk.String()
 	assert.Contains(t, s, "fk_user")
@@ -37,28 +37,24 @@ func TestForeignKey_String(t *testing.T) {
 
 func TestForeignKey_SQL(t *testing.T) {
 	fk := model.ForeignKey{
-		Constraint: model.Constraint{
-			Name:       "fk_user",
-			Type:       model.ConstraintType('f'),
-			Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
-			Validated:  true,
-		},
-		Schema: "public",
-		Table:  "orders",
+		Name:       "fk_user",
+		Type:       model.ConstraintType('f'),
+		Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Validated:  true,
+		Schema:     "public",
+		Table:      "orders",
 	}
 	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);", fk.SQL())
 }
 
 func TestForeignKey_SQL_NotValid(t *testing.T) {
 	fk := model.ForeignKey{
-		Constraint: model.Constraint{
-			Name:       "fk_user",
-			Type:       model.ConstraintType('f'),
-			Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
-			Validated:  false,
-		},
-		Schema: "public",
-		Table:  "orders",
+		Name:       "fk_user",
+		Type:       model.ConstraintType('f'),
+		Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Validated:  false,
+		Schema:     "public",
+		Table:      "orders",
 	}
 	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) NOT VALID;", fk.SQL())
 }

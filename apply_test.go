@@ -121,16 +121,14 @@ func TestApply(t *testing.T) {
 			}
 			var buf bytes.Buffer
 			result, err := client.Apply(ctx, &pistachio.ApplyOptions{
-				DropPolicy: dropPolicy,
-				FilterOptions: pistachio.FilterOptions{
-					Include:            tc.Include,
-					Exclude:            tc.Exclude,
-					Enable:             tc.Enable,
-					Disable:            tc.Disable,
-					ManageRoutine:      tc.ManageRoutine,
-					ManageStorageParam: tc.ManageStorageParam,
-					SkipPartitionChild: tc.SkipPartitionChild,
-				},
+				DropPolicy:               dropPolicy,
+				Include:                  tc.Include,
+				Exclude:                  tc.Exclude,
+				Enable:                   tc.Enable,
+				Disable:                  tc.Disable,
+				ManageRoutine:            tc.ManageRoutine,
+				ManageStorageParam:       tc.ManageStorageParam,
+				SkipPartitionChild:       tc.SkipPartitionChild,
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
@@ -150,26 +148,22 @@ func TestApply(t *testing.T) {
 
 			// Verify
 			got, err := client.Dump(ctx, &pistachio.DumpOptions{
-				FilterOptions: pistachio.FilterOptions{
-					ManageRoutine:      tc.ManageRoutine,
-					ManageStorageParam: tc.ManageStorageParam,
-				},
+				ManageRoutine:      tc.ManageRoutine,
+				ManageStorageParam: tc.ManageStorageParam,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.expectedApplied(pgMajor)), strings.TrimSpace(got.String()))
 
 			if !tc.SkipDriftCheck {
 				plan, err := client.Plan(ctx, &pistachio.PlanOptions{
-					DropPolicy: dropPolicy,
-					FilterOptions: pistachio.FilterOptions{
-						Include:            tc.Include,
-						Exclude:            tc.Exclude,
-						Enable:             tc.Enable,
-						Disable:            tc.Disable,
-						ManageRoutine:      tc.ManageRoutine,
-						ManageStorageParam: tc.ManageStorageParam,
-						SkipPartitionChild: tc.SkipPartitionChild,
-					},
+					DropPolicy:               dropPolicy,
+					Include:                  tc.Include,
+					Exclude:                  tc.Exclude,
+					Enable:                   tc.Enable,
+					Disable:                  tc.Disable,
+					ManageRoutine:            tc.ManageRoutine,
+					ManageStorageParam:       tc.ManageStorageParam,
+					SkipPartitionChild:       tc.SkipPartitionChild,
 					Files:                    []string{desiredFile},
 					DisableIndexConcurrently: tc.DisableIndexConcurrently,
 					ForceIndexConcurrently:   tc.ForceIndexConcurrently,

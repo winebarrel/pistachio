@@ -6,6 +6,7 @@ linters:
     - errorlint
     - fatcontext
     - makezero
+    - modernize
     - nilerr
     - nilnesserr
     - reassign
@@ -18,6 +19,9 @@ linters:
       - linters:
           - errcheck
         path: _test\.go
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
 formatters:
   enable:
     - gofumpt
