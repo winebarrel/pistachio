@@ -176,9 +176,9 @@ ALTER TABLE public.orders ALTER CONSTRAINT orders_user_id_fkey DEFERRABLE INITIA
 
 That rewrites a catalog row rather than rescanning the table. PostgreSQL takes the statement on a foreign key alone, so the same change to a unique, primary key or exclusion constraint still drops and adds, rebuilding the index.
 
-A partition holds a copy of every key its parent declares. The copy takes no statement of its own, whatever changed: PostgreSQL rejects a `DROP` or an `ALTER CONSTRAINT` on it, and every statement the parent's key takes settles the copy as well. The parent's `DROP` takes the copy with it, its `ADD` puts a new copy back, and its `ALTER CONSTRAINT` and `VALIDATE CONSTRAINT` recurse. `dump` leaves the copy out for the same reason, as `pg_dump` does. A key the partition declares itself is not a copy and is managed like any other.
+A partition holds a copy of every foreign key its parent declares, and the copy takes no statement of its own. PostgreSQL rejects one, and the parent's settles the copy as well: its `DROP` takes the copy with it, its `ADD` puts a new copy back, and its `ALTER CONSTRAINT` and `VALIDATE CONSTRAINT` recurse. `dump` leaves the copy out for the same reason, as `pg_dump` does. A key the partition declares itself is not a copy and is managed like any other.
 
-A foreign key on a partitioned table is added without `ONLY`, which PostgreSQL rejects there. A foreign key is not inherited, so the word decides nothing anywhere else; it is kept on a plain table because that is what `pg_dump` writes.
+A foreign key on a partitioned table is added without `ONLY`, which PostgreSQL rejects there. Nothing inherits a foreign key, so the word decides nothing on a plain table either; it is kept there because that is what `pg_dump` writes.
 
 A key that is also being validated takes `VALIDATE CONSTRAINT` next to the `ALTER CONSTRAINT`. A validated key the desired schema writes `NOT VALID` is added back, because nothing takes the flag away.
 

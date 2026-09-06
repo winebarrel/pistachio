@@ -1817,6 +1817,20 @@ func TestDiffForeignKeys_partitionCopy(t *testing.T) {
 		assert.Empty(t, add)
 		assert.Empty(t, disallowed)
 	})
+
+	t.Run("dropped with drops denied", func(t *testing.T) {
+		// The copy is not a drop the policy has to allow or skip, so it is
+		// not reported as one either.
+		current := orderedmap.New[string, *model.ForeignKey]()
+		current.Set("fk_user", copyFk())
+		desired := orderedmap.New[string, *model.ForeignKey]()
+
+		drop, add, disallowed, err := diffForeignKeys("public.orders_2025", "public", false, current, desired, denyAllDrops{})
+		require.NoError(t, err)
+		assert.Empty(t, drop)
+		assert.Empty(t, add)
+		assert.Empty(t, disallowed)
+	})
 }
 
 // The deferral half of compareFKDef: the clause alone separates two

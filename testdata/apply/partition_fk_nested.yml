@@ -1,0 +1,55 @@
+# A partition that is itself partitioned takes no ONLY either, and the leaf's
+# copy of its key takes no statement.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL,
+      user_id integer,
+      CONSTRAINT logs_pkey PRIMARY KEY (id, at)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025_h1 PARTITION OF public.logs_2025 FOR VALUES FROM ('2025-01-01') TO ('2025-07-01');
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL,
+      user_id integer,
+      CONSTRAINT logs_pkey PRIMARY KEY (id, at)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025_h1 PARTITION OF public.logs_2025 FOR VALUES FROM ('2025-01-01') TO ('2025-07-01');
+  ALTER TABLE ONLY public.logs_2025 ADD CONSTRAINT mid_fk FOREIGN KEY (user_id) REFERENCES public.users(id);
+applied_sql: |
+  ALTER TABLE public.logs_2025 ADD CONSTRAINT mid_fk FOREIGN KEY (user_id) REFERENCES public.users (id);
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL,
+      user_id integer,
+      CONSTRAINT logs_pkey PRIMARY KEY (id, at)
+  )
+  PARTITION BY RANGE (at);
+
+  -- public.logs_2025
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')
+  PARTITION BY RANGE (at);
+
+  ALTER TABLE public.logs_2025 ADD CONSTRAINT mid_fk FOREIGN KEY (user_id) REFERENCES users(id);
+
+  -- public.logs_2025_h1
+  CREATE TABLE public.logs_2025_h1 PARTITION OF public.logs_2025 FOR VALUES FROM ('2025-01-01') TO ('2025-07-01');
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
