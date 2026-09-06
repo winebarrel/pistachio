@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.45.0] - 2026-09-06
 
 * Manage the storage parameters of a view and a materialized view, the `WITH (...)` clause before `AS`. Neither side read them, so `dump` dropped the clause and a schema file that wrote one was applied without it. A plain view holds `security_barrier` and `security_invoker` and nothing else. Both decide what the view means rather than how it is stored, so they are managed without a flag: a dump that dropped them restored a view that leaks rows, or one that reads the base table with the wrong privileges. A materialized view holds what a table holds, tuning included, so it sits behind `--manage-storage-param` with the table. A change to a view whose definition stays goes out as `ALTER [MATERIALIZED] VIEW ... SET (...)` / `RESET (...)`; a definition change carries the clause on its own statement, which replaces the view's options as a whole. Two things that used to plan nothing now plan something: a view carrying `security_barrier` the schema file does not name is reset, and, under the flag, a materialized view's parameters are diffed like a table's.
 
