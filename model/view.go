@@ -17,11 +17,11 @@ type View struct {
 	// empty when the view has none. A materialized view never has one.
 	CheckOption string
 	// StorageParams holds the view's storage parameters, pg_class.reloptions,
-	// keyed by parameter name and ordered by it. check_option is not among
-	// them: it sits in the same column but is read and written as the view's
-	// WITH CHECK OPTION. A plain view takes security_barrier and
-	// security_invoker, a materialized view what a table takes, including a
-	// `toast.` prefixed parameter of its TOAST relation.
+	// keyed by parameter name and ordered by it. check_option sits in the same
+	// column but is read as the view's WITH CHECK OPTION, so it is not here. A
+	// plain view takes security_barrier and security_invoker, a materialized
+	// view what a table takes, including a `toast.` parameter of its TOAST
+	// relation.
 	StorageParams *orderedmap.Map[string, string]
 	Indexes       *orderedmap.Map[string, *Index]
 	Triggers      *orderedmap.Map[string, *Trigger]
@@ -55,9 +55,9 @@ func (v View) SQL() string {
 }
 
 // storageParamsClause renders the WITH clause that precedes AS, or nothing for
-// a view without parameters. Every value is quoted, the way the table renderer
-// writes them. A replaced view carries the clause too: CREATE OR REPLACE VIEW
-// replaces the options as a whole, so one left off is reset.
+// a view without parameters. Every value is quoted, as the table renderer does.
+// A replaced view carries the clause too: CREATE OR REPLACE VIEW replaces the
+// options as a whole, so a parameter left off it is reset.
 func (v View) storageParamsClause() string {
 	if v.StorageParams == nil || v.StorageParams.Len() == 0 {
 		return ""

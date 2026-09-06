@@ -33,9 +33,8 @@ func diffStorageParams(fqtn string, current, desired *model.Table) []string {
 
 // diffViewStorageParams is diffStorageParams for a view, which takes the same
 // two statements under its own keyword. It is reached only when the definition
-// is left alone: a view the plan replaces or recreates carries the parameters
-// on that statement, and CREATE OR REPLACE VIEW replaces the options as a
-// whole, so nothing is left over to reset.
+// is left alone. A view the plan replaces or recreates carries the parameters
+// on that statement, which replaces the options as a whole.
 func diffViewStorageParams(fqvn string, current, desired *model.View) []string {
 	set, reset := storageParamChanges(current.StorageParams, desired.StorageParams)
 
@@ -50,9 +49,7 @@ func diffViewStorageParams(fqvn string, current, desired *model.View) []string {
 }
 
 // storageParamChanges reads two parameter maps and returns the name=value
-// entries a SET carries and the names a RESET carries. A nil map stands in as
-// an empty one: the catalog and the parser always set it, other callers may
-// not, and clearing it is what leaves the parameters unmanaged.
+// entries a SET carries and the names a RESET carries.
 func storageParamChanges(current, desired *orderedmap.Map[string, string]) (set, reset []string) {
 	currentParams := nonNilParams(current)
 	desiredParams := nonNilParams(desired)
@@ -70,6 +67,9 @@ func storageParamChanges(current, desired *orderedmap.Map[string, string]) (set,
 	return set, reset
 }
 
+// nonNilParams stands an empty map in for one built without any. The catalog
+// and the parser always set it, other callers may not, and clearing it is what
+// leaves the parameters unmanaged.
 func nonNilParams(params *orderedmap.Map[string, string]) *orderedmap.Map[string, string] {
 	if params == nil {
 		return orderedmap.New[string, string]()

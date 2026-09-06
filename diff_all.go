@@ -338,9 +338,8 @@ func clearStorageParams(tableMaps ...*orderedmap.Map[string, *model.Table]) {
 
 // clearMatViewStorageParams does the same for a materialized view, which
 // carries the parameters a table carries and is left unmanaged with it. A plain
-// view is not touched: all it can hold is security_barrier and
-// security_invoker, which say what the view means rather than how it is stored,
-// so they are managed the way the check option beside them is.
+// view is not touched: it holds only security_barrier and security_invoker,
+// which decide what the view means rather than how it is stored.
 func clearMatViewStorageParams(viewMaps ...*orderedmap.Map[string, *model.View]) {
 	for _, views := range viewMaps {
 		for _, v := range views.CollectValues() {

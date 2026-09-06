@@ -38,7 +38,7 @@ With it the schema file states every parameter the relation is to have. A change
 
 An index's parameters are part of its definition and are managed either way.
 
-A plain view is managed either way too. All it can hold is `security_barrier` and `security_invoker`, which say what the view means rather than how it is stored, so they belong in the schema file the way the check option beside them does. The clause precedes `AS`:
+A plain view is managed either way. It holds only `security_barrier` and `security_invoker`, which decide what the view means rather than how it is stored. The clause precedes `AS`:
 
 ```sql
 CREATE VIEW public.my_accounts WITH (security_barrier = true, security_invoker = true) AS

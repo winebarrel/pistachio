@@ -50,13 +50,13 @@ type FilterOptions struct {
 	// routines the desired schema does not declare, and reading pg_proc
 	// unasked would report every one of them as a drop.
 	ManageRoutine bool `env:"PISTA_MANAGE_ROUTINE" help:"Manage functions and procedures. Off by default; --allow-drop routine still gates dropping them."`
-	// ManageStorageParam opts into the storage parameters of a table and of a
+	// ManageStorageParam opts into the storage parameters of a table and a
 	// materialized view, the WITH clause. They are unmanaged by default: the
 	// autovacuum settings a relation is tuned with are usually set on the
 	// database, not written in the schema file, and reading them unasked would
 	// RESET every parameter the desired schema does not name. A plain view's
-	// parameters, security_barrier and security_invoker, are managed either
-	// way: they say what the view means rather than how it is stored.
+	// two parameters are managed either way; they decide what the view means
+	// rather than how it is stored.
 	ManageStorageParam bool `env:"PISTA_MANAGE_STORAGE_PARAM" help:"Manage the storage parameters of a table and a materialized view, the WITH (...) clause. Off by default; without it the clause is ignored on both sides and dump does not write it. A plain view's security_barrier and security_invoker are managed either way."`
 	// SkipPartitionChild leaves the partitions of a partitioned table
 	// unmanaged. Where another tool creates them, their names follow no

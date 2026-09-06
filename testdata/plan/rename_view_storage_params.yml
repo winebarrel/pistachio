@@ -1,0 +1,20 @@
+# A renamed view keeps its parameters, so only the ones that differ are
+# altered, and the ALTER names the view the rename left behind.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users WITH (security_barrier = true) AS SELECT id, name FROM public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:renamed-from public.active_users
+  CREATE VIEW public.user_list WITH (security_barrier = true, security_invoker = true) AS SELECT id, name FROM public.users;
+plan: |
+  ALTER VIEW public.active_users RENAME TO user_list;
+  ALTER VIEW public.user_list SET (security_invoker='true');
