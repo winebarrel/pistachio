@@ -117,10 +117,18 @@ func (v View) TrigSQL() string {
 }
 
 func (v View) CommentSQL() string {
+	var stmts []string
 	if v.Comment != nil {
-		return "COMMENT ON " + v.ObjType() + " " + Ident(v.Schema, v.Name) + " IS " + QuoteLiteral(*v.Comment) + ";"
+		stmts = append(stmts, "COMMENT ON "+v.ObjType()+" "+Ident(v.Schema, v.Name)+" IS "+QuoteLiteral(*v.Comment)+";")
 	}
-	return ""
+	if v.Indexes != nil {
+		for _, idx := range v.Indexes.CollectValues() {
+			if s := idx.CommentSQL(); s != "" {
+				stmts = append(stmts, s)
+			}
+		}
+	}
+	return strings.Join(stmts, "\n")
 }
 
 func ViewToSQL(v *View) string {

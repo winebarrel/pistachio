@@ -299,9 +299,22 @@ func TestTable_CommentSQL(t *testing.T) {
 	colComment := "User name"
 	tbl.Columns.Set("name", &model.Column{Name: "name", TypeName: "text", Comment: &colComment})
 
+	idxComment := "Lookup by name"
+	tbl.Indexes.Set("idx_users_name", &model.Index{
+		Schema: "public", Name: "idx_users_name", Table: "users",
+		Definition: "CREATE INDEX idx_users_name ON public.users USING btree (name)",
+		Comment:    &idxComment,
+	})
+	tbl.Indexes.Set("idx_users_id", &model.Index{
+		Schema: "public", Name: "idx_users_id", Table: "users",
+		Definition: "CREATE INDEX idx_users_id ON public.users USING btree (id)",
+	})
+
 	sql := tbl.CommentSQL()
 	assert.Contains(t, sql, "COMMENT ON TABLE public.users IS 'Main users table';")
 	assert.Contains(t, sql, "COMMENT ON COLUMN public.users.name IS 'User name';")
+	assert.Contains(t, sql, "COMMENT ON INDEX public.idx_users_name IS 'Lookup by name';")
+	assert.NotContains(t, sql, "idx_users_id")
 }
 
 func TestTable_CommentSQL_noComments(t *testing.T) {

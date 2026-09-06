@@ -75,6 +75,23 @@ func TestViewToSQL_materializedWithIndex(t *testing.T) {
 	got := model.ViewToSQL(v)
 	assert.Contains(t, got, "CREATE MATERIALIZED VIEW")
 	assert.Contains(t, got, "CREATE INDEX idx_mv_n")
+	assert.NotContains(t, got, "COMMENT ON INDEX")
+}
+
+func TestView_CommentSQL_indexComment(t *testing.T) {
+	indexes := orderedmap.New[string, *model.Index]()
+	comment := "Lookup by n"
+	indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+		Comment:    &comment,
+	})
+	v := model.View{Schema: "public", Name: "mv", Materialized: true, Indexes: indexes}
+	assert.Equal(t, "COMMENT ON INDEX public.idx_mv_n IS 'Lookup by n';", v.CommentSQL())
+
+	viewComment := "stats"
+	v.Comment = &viewComment
+	assert.Equal(t, "COMMENT ON MATERIALIZED VIEW public.mv IS 'stats';\nCOMMENT ON INDEX public.idx_mv_n IS 'Lookup by n';", v.CommentSQL())
 }
 
 func TestView_SQL_checkOption(t *testing.T) {

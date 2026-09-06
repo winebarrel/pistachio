@@ -39,6 +39,33 @@ func TestListIndexes(t *testing.T) {
 		assert.Contains(t, idx.Definition, "btree")
 	})
 
+	t.Run("index comment", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.users (
+				id integer NOT NULL,
+				name text NOT NULL,
+				CONSTRAINT users_pkey PRIMARY KEY (id)
+			);
+			CREATE INDEX idx_users_name ON public.users USING btree (name);
+			CREATE INDEX idx_users_id ON public.users USING btree (id);
+			COMMENT ON INDEX public.idx_users_name IS 'Lookup by name';
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		tbl := tables.Get("public.users")
+		idx, ok := tbl.Indexes.GetOk("idx_users_name")
+		require.True(t, ok)
+		require.NotNil(t, idx.Comment)
+		assert.Equal(t, "Lookup by name", *idx.Comment)
+
+		bare, ok := tbl.Indexes.GetOk("idx_users_id")
+		require.True(t, ok)
+		assert.Nil(t, bare.Comment)
+	})
+
 	t.Run("unique index", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.users (

@@ -311,6 +311,11 @@ func (t Table) CommentSQL() string {
 			stmts = append(stmts, "COMMENT ON COLUMN "+Ident(t.Schema, t.Name)+"."+Ident(col.Name)+" IS "+QuoteLiteral(*col.Comment)+";")
 		}
 	}
+	for _, idx := range t.Indexes.CollectValues() {
+		if s := idx.CommentSQL(); s != "" {
+			stmts = append(stmts, s)
+		}
+	}
 	return strings.Join(stmts, "\n")
 }
 

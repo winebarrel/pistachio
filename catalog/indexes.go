@@ -35,7 +35,8 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			ci.relname AS name,
 			ct.relname AS table,
 			pg_catalog.pg_get_indexdef(i.indexrelid) AS definition,
-			ts.spcname
+			ts.spcname,
+			descr.description AS comment
 		FROM
 			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
 			pg_catalog.pg_index i
@@ -43,6 +44,10 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			JOIN pg_catalog.pg_class ct ON ct.oid = i.indrelid
 			JOIN pg_catalog.pg_namespace n ON n.oid = ci.relnamespace
 			LEFT JOIN pg_catalog.pg_tablespace ts ON ts.oid = ci.reltablespace
+			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
+			LEFT JOIN pg_catalog.pg_description descr ON descr.objoid = ci.oid
+			AND descr.classoid = 'pg_class'::regclass
+			AND descr.objsubid = 0
 			LEFT JOIN dependency_extension de ON de.objid = ci.oid
 			LEFT JOIN constraint_t con ON con.conindid = ci.oid
 		WHERE
@@ -76,6 +81,7 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			&idx.Table,
 			&idx.Definition,
 			&idx.TableSpace,
+			&idx.Comment,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan index info: %w", err)

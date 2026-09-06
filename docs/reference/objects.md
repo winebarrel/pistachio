@@ -11,7 +11,7 @@
 - Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression). An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed; a change goes out as `ALTER TABLE ... ALTER COLUMN ... SET`. No `RESTART` is planned, the same as `ALTER SEQUENCE`, so a change that puts the sequence's current value outside the new range fails at apply with the server's error.
 - Constraints (primary key, unique, check, exclusion, foreign key)
 - Indexes (unique, partial, expression, hash, multi-column)
-- Comments (on tables, columns, views, types, domains, composite types, composite attributes, sequences)
+- Comments (on tables, columns, views, materialized views, indexes, types, domains, composite types, composite attributes, sequences, routines). See [Comments](#comments).
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
 - Triggers (`CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER`, `INSTEAD OF` triggers on views, and the enable state via `ALTER TABLE ... ENABLE/DISABLE TRIGGER`); see [Triggers](#triggers)
 - Routines (`CREATE FUNCTION`, `CREATE PROCEDURE`), opt-in with `--manage-routine`. An overload set is several objects, keyed by argument type. See [Routines](#routines).
@@ -19,7 +19,7 @@
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 
-pistachio parses only the statements above. It drops any other statement in a schema file, such as `SET`, `GRANT`, or `CREATE EXTENSION`, and prints a `pistachio: <file>:<line>:<column>: ignored unsupported statement:` warning to standard error for each one. The same warning covers the parts it does not read of a statement it does parse, such as the `ALTER TABLE ... ADD COLUMN` and `ALTER COLUMN ... SET DEFAULT` a `pg_dump` file carries, or `COMMENT ON INDEX`. The `ALTER COLUMN ... SET STORAGE` and `SET COMPRESSION` such a file carries are read. To keep an unsupported statement in the file and run it during `apply`, mark it with `-- pista:execute`, which also silences the warning. A `BEGIN` or `COMMIT` warning points at `--with-tx` and `--try-tx`, which wrap the apply in a transaction.
+pistachio parses only the statements above. It drops any other statement in a schema file, such as `SET`, `GRANT`, or `CREATE EXTENSION`, and prints a `pistachio: <file>:<line>:<column>: ignored unsupported statement:` warning to standard error for each one. The same warning covers the parts it does not read of a statement it does parse, such as the `ALTER TABLE ... ADD COLUMN` and `ALTER COLUMN ... SET DEFAULT` a `pg_dump` file carries, or `COMMENT ON CONSTRAINT`. The `ALTER COLUMN ... SET STORAGE` and `SET COMPRESSION` such a file carries are read. To keep an unsupported statement in the file and run it during `apply`, mark it with `-- pista:execute`, which also silences the warning. A `BEGIN` or `COMMIT` warning points at `--with-tx` and `--try-tx`, which wrap the apply in a transaction.
 
 
 ## Storage parameters
@@ -165,6 +165,21 @@ A trigger on a partitioned table is cloned onto every partition. pistachio reads
 
 The `ALL` and `USER` forms of `ENABLE TRIGGER` name no single trigger and are ignored, as are event triggers, which belong to the database rather than to a schema.
 
+
+## Comments
+
+`dump` writes a comment after the object it belongs to, and a comment the schema file drops is cleared with `COMMENT ON ... IS NULL`.
+
+`COMMENT ON INDEX` names the index without the relation it sits on, so the index is found by name, which PostgreSQL keeps unique within a schema:
+
+```sql
+CREATE INDEX users_email_idx ON public.users USING btree (email);
+COMMENT ON INDEX public.users_email_idx IS 'Lookup by email';
+```
+
+Recreating an index drops its comment, so a definition change writes the comment again after the `CREATE INDEX`.
+
+A comment on a constraint, a trigger or a policy is not managed, and the index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE` constraint owns belongs to the constraint. A `COMMENT ON INDEX` naming one of those, or an index no schema file declares, is dropped without a warning. `pg_dump` writes such lines and they are lost on the way in.
 
 ## Constraint and index naming
 

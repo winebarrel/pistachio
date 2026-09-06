@@ -1,0 +1,20 @@
+# The comment sits on the parent index. PostgreSQL does not copy it to the
+# index it creates on the partition, and neither side reports one there.
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_at_idx ON ONLY public.logs USING btree (at);
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at);
+  COMMENT ON INDEX public.logs_at_idx IS 'by date';
+plan: |
+  COMMENT ON INDEX public.logs_at_idx IS 'by date';

@@ -1,0 +1,22 @@
+# A definition change drops and recreates the index, which takes its comment
+# with it, so the comment is emitted again.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_email ON public.users USING btree (email);
+  COMMENT ON INDEX public.idx_users_email IS 'Lookup by email';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_email ON public.users USING btree (lower(email));
+  COMMENT ON INDEX public.idx_users_email IS 'Lookup by email';
+plan: |
+  DROP INDEX public.idx_users_email;
+  CREATE INDEX idx_users_email ON public.users USING btree (lower(email));
+  COMMENT ON INDEX public.idx_users_email IS 'Lookup by email';

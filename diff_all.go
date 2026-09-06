@@ -451,6 +451,7 @@ func orderStatements(
 	for i, name := range createOrder {
 		createPosMap[name] = i
 	}
+	addIndexPositions(createPosMap, desiredTables, desiredViews)
 
 	// Build topological order from current schema for drops.
 	// Dropped objects are not in the desired schema, so we need the current
@@ -466,6 +467,7 @@ func orderStatements(
 	for i, name := range dropOrder {
 		dropPosMap[name] = i
 	}
+	addIndexPositions(dropPosMap, currentTables, currentViews)
 
 	// Phase 1: Creates/modifications in topological order.
 	// Statements whose owning object cannot be identified (pos < 0) are placed
@@ -573,6 +575,31 @@ func fallbackOrder(
 	return stmts
 }
 
+// addIndexPositions gives every index the position of the relation it sits on.
+// COMMENT ON INDEX names the index alone, so without this it would sort as an
+// unidentified statement and run before the CREATE INDEX it comments on.
+func addIndexPositions(
+	posMap map[string]int,
+	tables *orderedmap.Map[string, *model.Table],
+	views *orderedmap.Map[string, *model.View],
+) {
+	add := func(key string, indexes *orderedmap.Map[string, *model.Index]) {
+		pos, ok := posMap[key]
+		if !ok || indexes == nil {
+			return
+		}
+		for _, idx := range indexes.CollectValues() {
+			posMap[model.Ident(idx.Schema, idx.Name)] = pos
+		}
+	}
+	for k, t := range tables.All() {
+		add(k, t.Indexes)
+	}
+	for k, v := range views.All() {
+		add(k, v.Indexes)
+	}
+}
+
 // taggedStmt pairs a SQL statement with a sort position derived from
 // the topological order of the object it affects.
 type taggedStmt struct {
@@ -678,6 +705,7 @@ func extractObjectName(sql string) string {
 		{"COMMENT ON TYPE "},
 		{"COMMENT ON DOMAIN "},
 		{"COMMENT ON COLUMN "}, // schema.table.column -> take schema.table
+		{"COMMENT ON INDEX "},  // schema.index, positioned by addIndexPositions
 	}
 
 	upper := strings.ToUpper(sql)
