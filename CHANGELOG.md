@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.46.0] - 2026-09-06
 
 * Manage a foreign key on a partitioned table. `ALTER TABLE ONLY` is rejected there, so adding a key to one failed with `cannot use ONLY for foreign key on partitioned table`; the word is left off now, and nothing inherits a foreign key anyway. A partition's copy of its parent's key was dropped and added on its own, which PostgreSQL rejects and the parent's statements settle regardless, so the copy now takes none. `dump` wrote the copy too, which made its output fail to reload; it is left out, as pg_dump leaves it out.
 
