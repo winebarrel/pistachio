@@ -1,0 +1,27 @@
+# The key stays, so the deferral clause and the NOT VALID flag are each
+# settled in place.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) NOT VALID;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id),
+      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) DEFERRABLE INITIALLY DEFERRED
+  );
+plan: |
+  ALTER TABLE public.orders ALTER CONSTRAINT fk_user DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE public.orders VALIDATE CONSTRAINT fk_user;

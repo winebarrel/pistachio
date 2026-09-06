@@ -117,18 +117,26 @@ diff has no reason to walk otherwise.
 
 Origin: review of [#442](https://github.com/winebarrel/pistachio/pull/442).
 
-## Constraint `Deferrable` / `Deferred` granularity
+## A foreign key's definition change does not apply on a partitioned table
 
-`Constraint.Deferrable` / `Constraint.Deferred` are read from the
-catalog but not compared directly in the diff. Changes are still
-detected because they end up in the `pg_get_constraintdef` Definition
-string, which means a deferrable toggle currently triggers DROP+ADD
-of the constraint. PostgreSQL supports
-`ALTER TABLE ... ALTER CONSTRAINT ... [NOT] DEFERRABLE [INITIALLY ...]`
-for in-place changes; using it would avoid the round-trip.
+A partition holds a copy of every key its parent declares, and `dump` writes
+both, so a definition change is planned for each. The parent's
+`DROP CONSTRAINT` takes the copy with it, and the partition's own drop then
+fails with `constraint "fk_user" of relation "orders_2025" does not exist`
+(SQLSTATE 42704). Verified on 15.
 
-Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit. Optimisation rather than a bug; current
-behaviour is correct, just heavier than necessary.
+The deferral change added in [#522](https://github.com/winebarrel/pistachio/pull/522) already leaves such a copy alone, using
+the `Inherited` flag `catalog.ListConstraintsByTables` reads from
+`conislocal`. Closing this means the drop and the add loops reading the same
+flag: a copy takes no statement of its own, whatever changed, because every
+statement on the parent reaches it. A key the partition declares itself is
+local and stays as it is today.
+
+The same holds for a check constraint a partition copies, which
+`diffConstraints` never reaches: the partition branch of `diffTable` returns
+before the constraint diff.
+
+Origin: [#522](https://github.com/winebarrel/pistachio/pull/522).
 
 ## Table rename: cross-table dependents
 

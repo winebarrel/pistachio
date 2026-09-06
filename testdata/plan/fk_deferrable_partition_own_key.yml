@@ -1,0 +1,30 @@
+# A key the partition declares itself is not a copy of the parent's, so it
+# takes its own statement.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      at date NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id, at)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  ALTER TABLE public.orders_2025 ADD CONSTRAINT own_fk FOREIGN KEY (user_id) REFERENCES public.users(id);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      at date NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id, at)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  ALTER TABLE ONLY public.orders_2025 ADD CONSTRAINT own_fk FOREIGN KEY (user_id) REFERENCES public.users(id) DEFERRABLE INITIALLY DEFERRED;
+plan: |
+  ALTER TABLE public.orders_2025 ALTER CONSTRAINT own_fk DEFERRABLE INITIALLY DEFERRED;

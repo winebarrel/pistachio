@@ -323,6 +323,46 @@ func TestListConstraintsByTables(t *testing.T) {
 		assert.Equal(t, []string{"z", "y"}, fk.Columns)
 	})
 
+	// A partition holds a copy of every key its parent declares. The copy is
+	// marked so the diff leaves it alone, while a key the partition declares
+	// itself is not.
+	t.Run("partition copy of a foreign key", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.users (
+				id integer NOT NULL,
+				CONSTRAINT users_pkey PRIMARY KEY (id)
+			);
+			CREATE TABLE public.orders (
+				id integer NOT NULL,
+				at date NOT NULL,
+				user_id integer,
+				CONSTRAINT orders_pkey PRIMARY KEY (id, at),
+				CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id)
+			) PARTITION BY RANGE (at);
+			CREATE TABLE public.orders_2025 PARTITION OF public.orders
+				FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+			ALTER TABLE public.orders_2025 ADD CONSTRAINT own_fk
+				FOREIGN KEY (user_id) REFERENCES public.users(id);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		parentFk, ok := tables.Get("public.orders").ForeignKeys.GetOk("fk_user")
+		require.True(t, ok)
+		assert.False(t, parentFk.Inherited)
+
+		child := tables.Get("public.orders_2025")
+		childFk, ok := child.ForeignKeys.GetOk("fk_user")
+		require.True(t, ok)
+		assert.True(t, childFk.Inherited)
+
+		ownFk, ok := child.ForeignKeys.GetOk("own_fk")
+		require.True(t, ok)
+		assert.False(t, ownFk.Inherited)
+	})
+
 	// CHECK constraints with multiple column references must aggregate every
 	// referenced column in conkey order. The previous attrelid-grouped CTE
 	// would have produced the same union for any other constraint on the

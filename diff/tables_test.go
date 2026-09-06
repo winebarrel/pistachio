@@ -1552,16 +1552,19 @@ func TestEqualDefault_customNumericNamedTypeNotCoerced(t *testing.T) {
 	))
 }
 
-func TestEqualFKDef(t *testing.T) {
+func TestCompareFKDef_formatting(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES users (id)"
-	assert.True(t, equalFKDef(a, b, "public"))
+	equal, _ := compareFKDef(a, b, "public")
+	assert.True(t, equal)
 }
 
-func TestEqualFKDef_different(t *testing.T) {
+func TestCompareFKDef_different(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES orders(id)"
-	assert.False(t, equalFKDef(a, b, "public"))
+	equal, deferralOnly := compareFKDef(a, b, "public")
+	assert.False(t, equal)
+	assert.False(t, deferralOnly)
 }
 
 func TestDiffTables_newTable_withForeignKey(t *testing.T) {
@@ -1585,28 +1588,35 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 	assert.Contains(t, result.FKAddStmts[0], "ADD CONSTRAINT fk_user")
 }
 
-func TestEqualFKDef_implicitPublicSchema(t *testing.T) {
+func TestCompareFKDef_implicitPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES public.users(id)"
-	assert.True(t, equalFKDef(a, b, "public"))
+	equal, _ := compareFKDef(a, b, "public")
+	assert.True(t, equal)
 }
 
-func TestEqualFKDef_implicitNonPublicSchema(t *testing.T) {
+func TestCompareFKDef_implicitNonPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
 	b := "FOREIGN KEY (item_id) REFERENCES myapp.items(id)"
-	assert.True(t, equalFKDef(a, b, "myapp"))
+	equal, _ := compareFKDef(a, b, "myapp")
+	assert.True(t, equal)
 }
 
-func TestEqualFKDef_implicitNonPublicSchema_different(t *testing.T) {
+func TestCompareFKDef_implicitNonPublicSchema_different(t *testing.T) {
 	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
 	b := "FOREIGN KEY (item_id) REFERENCES other.items(id)"
-	assert.False(t, equalFKDef(a, b, "myapp"))
+	equal, _ := compareFKDef(a, b, "myapp")
+	assert.False(t, equal)
 }
 
-func TestEqualFKDef_parseError(t *testing.T) {
+func TestCompareFKDef_parseError(t *testing.T) {
 	// When both fail to parse, falls back to string comparison
-	assert.True(t, equalFKDef("not sql", "not sql", "public"))
-	assert.False(t, equalFKDef("not sql", "other", "public"))
+	equal, deferralOnly := compareFKDef("not sql", "not sql", "public")
+	assert.True(t, equal)
+	assert.False(t, deferralOnly)
+
+	equal, _ = compareFKDef("not sql", "other", "public")
+	assert.False(t, equal)
 }
 
 func TestEqualDefault_parseError(t *testing.T) {
@@ -1683,6 +1693,111 @@ func TestDiffForeignKeys_notValidToValidated(t *testing.T) {
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders VALIDATE CONSTRAINT fk_user;", addStmts[0])
+}
+
+func TestDiffForeignKeys_deferral(t *testing.T) {
+	const plain = "FOREIGN KEY (user_id) REFERENCES users(id)"
+	const deferred = "FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED"
+
+	fk := func(def string, deferrable, deferredMode, validated, inherited bool) *model.ForeignKey {
+		f := &model.ForeignKey{Schema: "public", Table: "orders"}
+		f.Name = "fk_user"
+		f.Definition = def
+		f.Deferrable = deferrable
+		f.Deferred = deferredMode
+		f.Validated = validated
+		f.Inherited = inherited
+		return f
+	}
+	run := func(currentFk, desiredFk *model.ForeignKey) (drop, add []string) {
+		current := orderedmap.New[string, *model.ForeignKey]()
+		current.Set("fk_user", currentFk)
+		desired := orderedmap.New[string, *model.ForeignKey]()
+		desired.Set("fk_user", desiredFk)
+		dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		return dropStmts, addStmts
+	}
+
+	t.Run("added", func(t *testing.T) {
+		drop, add := run(fk(plain, false, false, true, false), fk(deferred, true, true, true, false))
+		assert.Empty(t, drop)
+		assert.Equal(t, []string{"ALTER TABLE public.orders ALTER CONSTRAINT fk_user DEFERRABLE INITIALLY DEFERRED;"}, add)
+	})
+
+	t.Run("removed", func(t *testing.T) {
+		drop, add := run(fk(deferred, true, true, true, false), fk(plain, false, false, true, false))
+		assert.Empty(t, drop)
+		assert.Equal(t, []string{"ALTER TABLE public.orders ALTER CONSTRAINT fk_user NOT DEFERRABLE;"}, add)
+	})
+
+	t.Run("initially immediate", func(t *testing.T) {
+		immediate := "FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE"
+		drop, add := run(fk(deferred, true, true, true, false), fk(immediate, true, false, true, false))
+		assert.Empty(t, drop)
+		assert.Equal(t, []string{"ALTER TABLE public.orders ALTER CONSTRAINT fk_user DEFERRABLE;"}, add)
+	})
+
+	t.Run("validated alongside", func(t *testing.T) {
+		drop, add := run(fk(plain, false, false, false, false), fk(deferred, true, true, true, false))
+		assert.Empty(t, drop)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.orders ALTER CONSTRAINT fk_user DEFERRABLE INITIALLY DEFERRED;",
+			"ALTER TABLE public.orders VALIDATE CONSTRAINT fk_user;",
+		}, add)
+	})
+
+	t.Run("becomes not valid", func(t *testing.T) {
+		drop, add := run(fk(plain, false, false, true, false), fk(deferred, true, true, false, false))
+		assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, drop)
+		require.Len(t, add, 1)
+		assert.Contains(t, add[0], "ADD CONSTRAINT fk_user")
+		assert.Contains(t, add[0], "NOT VALID")
+	})
+
+	t.Run("partition copy is left alone", func(t *testing.T) {
+		drop, add := run(fk(plain, false, false, true, true), fk(deferred, true, true, true, false))
+		assert.Empty(t, drop)
+		assert.Empty(t, add)
+	})
+
+	t.Run("partition copy is left alone when it is also validated", func(t *testing.T) {
+		// A NOT VALID key on a partitioned table needs 18. The parent's
+		// VALIDATE reaches the copy the way its ALTER does, so the copy takes
+		// neither statement.
+		drop, add := run(fk(plain, false, false, false, true), fk(deferred, true, true, true, false))
+		assert.Empty(t, drop)
+		assert.Empty(t, add)
+	})
+
+	t.Run("definition change still recreates", func(t *testing.T) {
+		cascade := "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED"
+		drop, add := run(fk(plain, false, false, true, false), fk(cascade, true, true, true, false))
+		assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, drop)
+		require.Len(t, add, 1)
+		assert.Contains(t, add[0], "ADD CONSTRAINT fk_user")
+	})
+}
+
+// The deferral half of compareFKDef: the clause alone separates two
+// definitions, or something else does.
+func TestCompareFKDef_deferralOnly(t *testing.T) {
+	const plain = "FOREIGN KEY (user_id) REFERENCES users(id)"
+	const deferred = "FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED"
+
+	equal, deferralOnly := compareFKDef(plain, deferred, "public")
+	assert.False(t, equal)
+	assert.True(t, deferralOnly)
+
+	equal, deferralOnly = compareFKDef(plain, "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE DEFERRABLE", "public")
+	assert.False(t, equal)
+	assert.False(t, deferralOnly)
+
+	// Two identical definitions are equal, which is not the same answer as
+	// the deferral clause being all that differs.
+	equal, deferralOnly = compareFKDef(deferred, deferred, "public")
+	assert.True(t, equal)
+	assert.False(t, deferralOnly)
 }
 
 func TestDiffForeignKeys_bothNotValid_noChange(t *testing.T) {

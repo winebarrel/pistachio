@@ -1121,7 +1121,7 @@ func alignCastNode(ctx pgast.Ctx, desired, current *pg_query.Node) *pg_query.Nod
 }
 
 // definitionChange records how one constraint or foreign key present on both
-// sides differs. equalConstraintDef and equalFKDef parse both definitions,
+// sides differs. equalConstraintDef and compareFKDef parse both definitions,
 // which is the most expensive thing a table diff does, and the rename, drop and
 // add loops below each ask the same question: comparing once and reading the
 // answer three times is what keeps a large schema off three parses per object.
@@ -1132,6 +1132,10 @@ type definitionChange struct {
 	// validateOnly says the definitions match and only the NOT VALID flag
 	// differs, which VALIDATE CONSTRAINT settles in place.
 	validateOnly bool
+	// deferralOnly says the definitions match apart from the deferral clause,
+	// which ALTER CONSTRAINT settles in place. Foreign keys only: PostgreSQL
+	// rejects ALTER CONSTRAINT on every other constraint type.
+	deferralOnly bool
 }
 
 // renameConstraintSQL renders the rename a constraint and a foreign key share;
@@ -1176,7 +1180,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	// Determine which renamed constraints need recreation instead of just rename
 	needsRecreation := map[string]bool{}
 	for name := range renamedFrom {
-		if ch := changes[name]; ch.changed && !ch.validateOnly {
+		if ch := changes[name]; ch.changed && !ch.validateOnly && !ch.deferralOnly {
 			needsRecreation[name] = true
 		}
 	}
@@ -1200,7 +1204,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	for name := range current.Keys() {
 		_, ok := desired.GetOk(name)
 		ch := changes[name]
-		if ok && (!ch.changed || ch.validateOnly) {
+		if ok && (!ch.changed || ch.validateOnly || ch.deferralOnly) {
 			continue
 		}
 		dropName := name
@@ -1400,11 +1404,42 @@ func foreignKeyChanges(current, desired *orderedmap.Map[string, *model.ForeignKe
 		if !ok {
 			continue
 		}
-		changes[name] = newDefinitionChange(
-			equalFKDef(currentFk.Definition, desiredFk.Definition, schema),
-			currentFk.Validated, desiredFk.Validated)
+		sameDef, deferralOnly := compareFKDef(currentFk.Definition, desiredFk.Definition, schema)
+		change := newDefinitionChange(sameDef, currentFk.Validated, desiredFk.Validated)
+		switch {
+		case !deferralOnly:
+		case currentFk.Inherited:
+			// The partition's copy of the parent's key takes no statement of
+			// its own: PostgreSQL rejects one, whatever it says. Both the
+			// parent's ALTER CONSTRAINT and its VALIDATE CONSTRAINT reach the
+			// copy, so leaving it out settles it either way.
+			change = definitionChange{}
+		case currentFk.Validated && !desiredFk.Validated:
+			// Nothing takes the validated flag away, so the key is added back
+			// and the ADD carries the deferral clause with it.
+		default:
+			change.deferralOnly = true
+			// The key stays, so a NOT VALID one the desired schema validates
+			// takes VALIDATE CONSTRAINT next to the ALTER.
+			change.validateOnly = !currentFk.Validated && desiredFk.Validated
+		}
+		changes[name] = change
 	}
 	return changes
+}
+
+// alterFKDeferralSQL renders the ALTER CONSTRAINT that moves a foreign key to
+// the desired deferral mode. The clause is spelled the way
+// pg_get_constraintdef prints it, and NOT DEFERRABLE clears both flags.
+func alterFKDeferralSQL(fqtn, name string, deferrable, deferred bool) string {
+	clause := "NOT DEFERRABLE"
+	switch {
+	case deferrable && deferred:
+		clause = "DEFERRABLE INITIALLY DEFERRED"
+	case deferrable:
+		clause = "DEFERRABLE"
+	}
+	return "ALTER TABLE " + fqtn + " ALTER CONSTRAINT " + model.Ident(name) + " " + clause + ";"
 }
 
 // diffForeignKeys returns (dropStmts, addStmts, disallowed, error).
@@ -1426,7 +1461,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	// Determine which renamed FKs need recreation (drop+add) instead of just rename
 	needsRecreation := map[string]bool{}
 	for name := range renamedFrom {
-		if ch := changes[name]; ch.changed && !ch.validateOnly {
+		if ch := changes[name]; ch.changed && !ch.validateOnly && !ch.deferralOnly {
 			needsRecreation[name] = true
 		}
 	}
@@ -1448,7 +1483,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	for name := range current.Keys() {
 		_, ok := desired.GetOk(name)
 		ch := changes[name]
-		if ok && (!ch.changed || ch.validateOnly) {
+		if ok && (!ch.changed || ch.validateOnly || ch.deferralOnly) {
 			continue
 		}
 		dropName := name
@@ -1470,8 +1505,15 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 		if ok && !ch.changed {
 			continue
 		}
-		if ch.validateOnly {
-			addStmts = append(addStmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
+		if ch.deferralOnly || ch.validateOnly {
+			// The key stays in place. Each statement settles one half, and a
+			// change that needs both takes both.
+			if ch.deferralOnly {
+				addStmts = append(addStmts, alterFKDeferralSQL(fqtn, name, desiredFk.Deferrable, desiredFk.Deferred))
+			}
+			if ch.validateOnly {
+				addStmts = append(addStmts, "ALTER TABLE "+fqtn+" VALIDATE CONSTRAINT "+model.Ident(name)+";")
+			}
 			continue
 		}
 		addStmts = append(addStmts, desiredFk.SQL())
@@ -1729,19 +1771,32 @@ func normalizeFKSchema(con *pg_query.Constraint, schema string) {
 	}
 }
 
-// equalFKDef compares two FK constraint definitions by their parse trees,
-// so that formatting differences do not cause false diffs.
-// schema is the schema of the table that owns the FK constraint and is used
-// to fill in an implicit (empty) schema on the referenced table.
-func equalFKDef(a, b, schema string) bool {
+// compareFKDef compares two FK constraint definitions by their parse trees, so
+// that formatting differences do not cause false diffs. schema is the schema of
+// the table that owns the FK constraint and is used to fill in an implicit
+// (empty) schema on the referenced table.
+//
+// deferralOnly reports that the deferral clause is the only thing between the
+// two, which routes the change to ALTER CONSTRAINT rather than a drop and an
+// add that rescans the table.
+func compareFKDef(a, b, schema string) (equal, deferralOnly bool) {
 	nodeA, errA := parseFKDef(a)
 	nodeB, errB := parseFKDef(b)
 	if errA != nil || errB != nil {
-		return a == b
+		return a == b, false
 	}
 	normalizeFKSchema(nodeA, schema)
 	normalizeFKSchema(nodeB, schema)
-	return proto.Equal(nodeA, nodeB)
+	if proto.Equal(nodeA, nodeB) {
+		return true, false
+	}
+	strippedA := proto.Clone(nodeA).(*pg_query.Constraint)
+	strippedB := proto.Clone(nodeB).(*pg_query.Constraint)
+	for _, c := range []*pg_query.Constraint{strippedA, strippedB} {
+		c.Deferrable = false
+		c.Initdeferred = false
+	}
+	return false, proto.Equal(strippedA, strippedB)
 }
 
 // serialBaseTypes maps serial type names to their base types.

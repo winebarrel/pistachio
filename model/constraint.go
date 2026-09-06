@@ -40,6 +40,11 @@ type Constraint struct {
 	Deferrable bool
 	Deferred   bool
 	Validated  bool
+	// Inherited marks a constraint a partition child holds only because its
+	// parent has one. PostgreSQL refuses to alter or drop such a copy, and a
+	// statement on the parent reaches it, so the diff leaves it alone. Only
+	// the catalog sets it: a desired schema declares what it writes.
+	Inherited bool
 }
 
 func (con *Constraint) String() string {

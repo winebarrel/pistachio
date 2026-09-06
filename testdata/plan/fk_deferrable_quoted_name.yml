@@ -1,0 +1,26 @@
+# The key's name is quoted in the statement, the same as every other name
+# pistachio writes.
+init: |
+  CREATE TABLE public."user" (
+      id integer NOT NULL,
+      CONSTRAINT user_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id),
+      CONSTRAINT "fk user" FOREIGN KEY (user_id) REFERENCES public."user"(id)
+  );
+desired: |
+  CREATE TABLE public."user" (
+      id integer NOT NULL,
+      CONSTRAINT user_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id),
+      CONSTRAINT "fk user" FOREIGN KEY (user_id) REFERENCES public."user"(id) DEFERRABLE INITIALLY DEFERRED
+  );
+plan: |
+  ALTER TABLE public.orders ALTER CONSTRAINT "fk user" DEFERRABLE INITIALLY DEFERRED;
