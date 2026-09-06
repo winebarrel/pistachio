@@ -1121,7 +1121,7 @@ func alignCastNode(ctx pgast.Ctx, desired, current *pg_query.Node) *pg_query.Nod
 }
 
 // definitionChange records how one constraint or foreign key present on both
-// sides differs. equalConstraintDef and equalFKDef parse both definitions,
+// sides differs. equalConstraintDef and compareFKDef parse both definitions,
 // which is the most expensive thing a table diff does, and the rename, drop and
 // add loops below each ask the same question: comparing once and reading the
 // answer three times is what keeps a large schema off three parses per object.
@@ -1771,19 +1771,14 @@ func normalizeFKSchema(con *pg_query.Constraint, schema string) {
 	}
 }
 
-// equalFKDef compares two FK constraint definitions by their parse trees,
-// so that formatting differences do not cause false diffs.
-// schema is the schema of the table that owns the FK constraint and is used
-// to fill in an implicit (empty) schema on the referenced table.
-func equalFKDef(a, b, schema string) bool {
-	equal, _ := compareFKDef(a, b, schema)
-	return equal
-}
-
-// compareFKDef reports whether two foreign key definitions are equal, and
-// whether the only thing between them is the deferral clause. The second
-// answer routes the change to ALTER CONSTRAINT, which leaves the key in place
-// rather than rescanning the table to add it back.
+// compareFKDef compares two FK constraint definitions by their parse trees, so
+// that formatting differences do not cause false diffs. schema is the schema of
+// the table that owns the FK constraint and is used to fill in an implicit
+// (empty) schema on the referenced table.
+//
+// deferralOnly reports that the deferral clause is the only thing between the
+// two, which routes the change to ALTER CONSTRAINT rather than a drop and an
+// add that rescans the table.
 func compareFKDef(a, b, schema string) (equal, deferralOnly bool) {
 	nodeA, errA := parseFKDef(a)
 	nodeB, errB := parseFKDef(b)

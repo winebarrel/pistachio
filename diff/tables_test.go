@@ -1552,16 +1552,19 @@ func TestEqualDefault_customNumericNamedTypeNotCoerced(t *testing.T) {
 	))
 }
 
-func TestEqualFKDef(t *testing.T) {
+func TestCompareFKDef_formatting(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES users (id)"
-	assert.True(t, equalFKDef(a, b, "public"))
+	equal, _ := compareFKDef(a, b, "public")
+	assert.True(t, equal)
 }
 
-func TestEqualFKDef_different(t *testing.T) {
+func TestCompareFKDef_different(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES orders(id)"
-	assert.False(t, equalFKDef(a, b, "public"))
+	equal, deferralOnly := compareFKDef(a, b, "public")
+	assert.False(t, equal)
+	assert.False(t, deferralOnly)
 }
 
 func TestDiffTables_newTable_withForeignKey(t *testing.T) {
@@ -1585,28 +1588,35 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 	assert.Contains(t, result.FKAddStmts[0], "ADD CONSTRAINT fk_user")
 }
 
-func TestEqualFKDef_implicitPublicSchema(t *testing.T) {
+func TestCompareFKDef_implicitPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES public.users(id)"
-	assert.True(t, equalFKDef(a, b, "public"))
+	equal, _ := compareFKDef(a, b, "public")
+	assert.True(t, equal)
 }
 
-func TestEqualFKDef_implicitNonPublicSchema(t *testing.T) {
+func TestCompareFKDef_implicitNonPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
 	b := "FOREIGN KEY (item_id) REFERENCES myapp.items(id)"
-	assert.True(t, equalFKDef(a, b, "myapp"))
+	equal, _ := compareFKDef(a, b, "myapp")
+	assert.True(t, equal)
 }
 
-func TestEqualFKDef_implicitNonPublicSchema_different(t *testing.T) {
+func TestCompareFKDef_implicitNonPublicSchema_different(t *testing.T) {
 	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
 	b := "FOREIGN KEY (item_id) REFERENCES other.items(id)"
-	assert.False(t, equalFKDef(a, b, "myapp"))
+	equal, _ := compareFKDef(a, b, "myapp")
+	assert.False(t, equal)
 }
 
-func TestEqualFKDef_parseError(t *testing.T) {
+func TestCompareFKDef_parseError(t *testing.T) {
 	// When both fail to parse, falls back to string comparison
-	assert.True(t, equalFKDef("not sql", "not sql", "public"))
-	assert.False(t, equalFKDef("not sql", "other", "public"))
+	equal, deferralOnly := compareFKDef("not sql", "not sql", "public")
+	assert.True(t, equal)
+	assert.False(t, deferralOnly)
+
+	equal, _ = compareFKDef("not sql", "other", "public")
+	assert.False(t, equal)
 }
 
 func TestEqualDefault_parseError(t *testing.T) {
@@ -1760,18 +1770,13 @@ func TestDiffForeignKeys_deferral(t *testing.T) {
 	})
 }
 
-// compareFKDef answers both questions the FK diff asks of a pair of
-// definitions: whether they are equal, and whether the deferral clause is all
-// that separates them.
-func TestCompareFKDef(t *testing.T) {
+// The deferral half of compareFKDef: the clause alone separates two
+// definitions, or something else does.
+func TestCompareFKDef_deferralOnly(t *testing.T) {
 	const plain = "FOREIGN KEY (user_id) REFERENCES users(id)"
 	const deferred = "FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED"
 
-	equal, deferralOnly := compareFKDef(plain, plain, "public")
-	assert.True(t, equal)
-	assert.False(t, deferralOnly)
-
-	equal, deferralOnly = compareFKDef(plain, deferred, "public")
+	equal, deferralOnly := compareFKDef(plain, deferred, "public")
 	assert.False(t, equal)
 	assert.True(t, deferralOnly)
 
@@ -1779,9 +1784,9 @@ func TestCompareFKDef(t *testing.T) {
 	assert.False(t, equal)
 	assert.False(t, deferralOnly)
 
-	// A definition neither side can parse falls back to a string comparison,
-	// which says nothing about the deferral clause.
-	equal, deferralOnly = compareFKDef("not sql", "not sql", "public")
+	// Two identical definitions are equal, which is not the same answer as
+	// the deferral clause being all that differs.
+	equal, deferralOnly = compareFKDef(deferred, deferred, "public")
 	assert.True(t, equal)
 	assert.False(t, deferralOnly)
 }

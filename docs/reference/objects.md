@@ -168,13 +168,15 @@ The `ALL` and `USER` forms of `ENABLE TRIGGER` name no single trigger and are ig
 
 ## Constraints
 
-A change to a constraint's definition is a drop and an add, since PostgreSQL has no ALTER for one. A foreign key whose deferral clause is all that differs is the exception:
+PostgreSQL has no ALTER for a constraint's definition, so a change to one is a drop and an add. A foreign key whose deferral clause is all that differs is the exception:
 
 ```sql
 ALTER TABLE public.orders ALTER CONSTRAINT orders_user_id_fkey DEFERRABLE INITIALLY DEFERRED;
 ```
 
-That rewrites a catalog row instead of rescanning the table. PostgreSQL takes the statement on a foreign key alone, so the same change to a unique, primary key or exclusion constraint is still a drop and an add, which rebuilds the index. A partition holds a copy of every key its parent declares, and the copy takes no statement of its own: PostgreSQL rejects one, and the parent's reaches it.
+That rewrites a catalog row rather than rescanning the table. PostgreSQL takes the statement on a foreign key alone, so the same change to a unique, primary key or exclusion constraint still drops and adds, rebuilding the index.
+
+A partition holds a copy of every key its parent declares. The copy takes no statement of its own, since PostgreSQL rejects one and the parent's reaches it.
 
 A key that is also being validated takes `VALIDATE CONSTRAINT` next to the `ALTER CONSTRAINT`. A validated key the desired schema writes `NOT VALID` is added back, because nothing takes the flag away.
 
