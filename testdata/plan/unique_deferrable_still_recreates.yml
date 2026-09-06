@@ -1,0 +1,19 @@
+# ALTER CONSTRAINT reaches a foreign key alone, so a unique constraint's
+# deferral change is still a drop and an add.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_code_key UNIQUE (code)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_code_key UNIQUE (code) DEFERRABLE INITIALLY DEFERRED
+  );
+plan: |
+  ALTER TABLE public.users DROP CONSTRAINT users_code_key;
+  ALTER TABLE public.users ADD CONSTRAINT users_code_key UNIQUE (code) DEFERRABLE INITIALLY DEFERRED;

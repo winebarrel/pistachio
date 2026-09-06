@@ -140,6 +140,7 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 		if !isLocal && inheritsChildren[tableOID] {
 			continue
 		}
+		con.Inherited = !isLocal
 
 		// pg_get_constraintdef includes "NOT VALID" in the definition string
 		// for unvalidated constraints. Strip it so Definition only contains

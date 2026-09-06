@@ -1,0 +1,24 @@
+init: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      pid integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_pid_fkey FOREIGN KEY (pid) REFERENCES public.parent(id) DEFERRABLE INITIALLY DEFERRED
+  );
+desired: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      pid integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_pid_fkey FOREIGN KEY (pid) REFERENCES public.parent(id)
+  );
+plan: |
+  ALTER TABLE public.child ALTER CONSTRAINT child_pid_fkey NOT DEFERRABLE;

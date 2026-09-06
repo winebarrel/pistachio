@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Change a foreign key's deferral clause in place. `DEFERRABLE` and `INITIALLY DEFERRED` were compared only as part of the definition string, so a toggle dropped the key and added it back, rescanning the table to validate it again. When nothing else about the key differs it now goes out as `ALTER TABLE ... ALTER CONSTRAINT`, which rewrites a catalog row, and a key that is also being validated takes `VALIDATE CONSTRAINT` next to it. PostgreSQL accepts the statement on a foreign key alone, so a unique, primary key or exclusion constraint is still dropped and added. A partition's copy of its parent's key takes no statement, since PostgreSQL rejects one and the parent's reaches the copy.
+
 * Manage a comment on an index. `COMMENT ON INDEX` was read by neither side, so `dump` dropped the line `pg_dump` writes and a schema file that carried one was warned about and ignored. A change now goes out as `COMMENT ON INDEX ... IS ...` or `IS NULL`, and a recreate writes the comment again, since PostgreSQL drops it with the index. A comment on a constraint, a trigger or a policy, and one on the index a constraint owns, stays unmanaged.
 
 ## [1.45.0] - 2026-09-06

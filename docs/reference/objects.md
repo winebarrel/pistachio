@@ -9,7 +9,7 @@
 - Views, including `WITH [LOCAL | CASCADED] CHECK OPTION`, `security_barrier` and `security_invoker`.
 - Materialized views
 - Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression). An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed; a change goes out as `ALTER TABLE ... ALTER COLUMN ... SET`. No `RESTART` is planned, the same as `ALTER SEQUENCE`, so a change that puts the sequence's current value outside the new range fails at apply with the server's error.
-- Constraints (primary key, unique, check, exclusion, foreign key)
+- Constraints (primary key, unique, check, exclusion, foreign key). See [Constraints](#constraints).
 - Indexes (unique, partial, expression, hash, multi-column)
 - Comments (on tables, columns, views, materialized views, indexes, types, domains, composite types, composite attributes, sequences, routines). See [Comments](#comments).
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
@@ -165,6 +165,18 @@ A trigger on a partitioned table is cloned onto every partition. pistachio reads
 
 The `ALL` and `USER` forms of `ENABLE TRIGGER` name no single trigger and are ignored, as are event triggers, which belong to the database rather than to a schema.
 
+
+## Constraints
+
+A change to a constraint's definition is a drop and an add, since PostgreSQL has no ALTER for one. A foreign key whose deferral clause is all that differs is the exception:
+
+```sql
+ALTER TABLE public.orders ALTER CONSTRAINT orders_user_id_fkey DEFERRABLE INITIALLY DEFERRED;
+```
+
+That rewrites a catalog row instead of rescanning the table. PostgreSQL takes the statement on a foreign key alone, so the same change to a unique, primary key or exclusion constraint is still a drop and an add, which rebuilds the index. A partition holds a copy of every key its parent declares, and the copy takes no statement of its own: PostgreSQL rejects one, and the parent's reaches it.
+
+A key that is also being validated takes `VALIDATE CONSTRAINT` next to the `ALTER CONSTRAINT`. A validated key the desired schema writes `NOT VALID` is added back, because nothing takes the flag away.
 
 ## Comments
 

@@ -1,0 +1,32 @@
+# A partition carries its own copy of the parent's key, which dump writes and
+# the desired schema declares. PostgreSQL rejects an ALTER CONSTRAINT on such a
+# copy and the parent's statement reaches it, so only the parent's is planned.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      at date NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id, at),
+      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      at date NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id, at),
+      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) DEFERRABLE INITIALLY DEFERRED
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  ALTER TABLE ONLY public.orders_2025 ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) DEFERRABLE INITIALLY DEFERRED;
+plan: |
+  ALTER TABLE public.orders ALTER CONSTRAINT fk_user DEFERRABLE INITIALLY DEFERRED;
