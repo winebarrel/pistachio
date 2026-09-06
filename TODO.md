@@ -87,23 +87,6 @@ emit `ALTER TABLE ... SET TABLESPACE <new>` and
 
 Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit.
 
-## Persistence on a partitioned table is ignored
-
-`ALTER TABLE ... SET LOGGED` on a partitioned table reports success and changes
-neither the parent nor the partitions under it, verified on 15, 16 and 17.
-Emitting it would replan forever, so `diffPersistence` skips a partitioned
-table, and a desired schema that flips one there is silently ignored.
-
-There is nothing to reach anyway. The parent holds no storage for the value to
-describe, and it does not reach the children either: a partition created under
-an unlogged parent is permanent unless it says `UNLOGGED` itself. PostgreSQL 18
-removed the form for that reason, so the shape cannot arise there at all.
-Erroring at plan time, the way a domain base-type change does, would fail a
-whole run over a value that means nothing, on a form a dump of a 15 to 17
-database carries routinely. Recorded as a deliberate choice, not a bug.
-
-Origin: [#384](https://github.com/winebarrel/pistachio/pull/384).
-
 ## `SET COMPRESSION` does not reach the partitions that already exist
 
 `ALTER TABLE ... ALTER COLUMN ... SET COMPRESSION` never recurses: `ATPrepCmd`
@@ -146,21 +129,6 @@ subqueries (uncommon; PostgreSQL discourages them).
 
 Origin: post-RLS-support audit. Workaround: avoid subqueries in policy
 expressions, or use a function that wraps the subquery.
-
-## TO CURRENT_USER / SESSION_USER / CURRENT_ROLE in CREATE POLICY
-
-PostgreSQL resolves these reserved role specs at policy creation time
-and stores the resolved role OID in `pg_policy.polroles`. As a result,
-desired SQL written as `TO current_user` cannot round-trip through the
-catalog: subsequent plans see the resolved role name (e.g. `postgres`)
-and emit a spurious `ALTER POLICY ... TO`.
-
-Recommendation is to use literal role names in desired SQL. The parser
-accepts the reserved specs for convenience but the limitation should be
-documented prominently.
-
-Origin: post-RLS-support audit. No fix planned. This is a PostgreSQL
-behavior that affects the catalog round-trip, not a pistachio bug.
 
 ## Named NOT NULL constraints: name add/remove on existing columns
 
@@ -224,20 +192,6 @@ pre-step.
 Origin: known limitation documented inline at `diff/views.go`
 (`canCreateOrReplaceView`).
 
-## Plan-time error promotion: forgotten dependent reference
-
-When desired SQL references the new column name in a dependent
-definition but forgets to add `-- pista:renamed-from` on the column
-itself, current behavior is to produce DDL that fails at apply time.
-The `ValidateColumnRefs` pass added in [#124](https://github.com/winebarrel/pistachio/pull/124) already catches the
-inverse case (renamed column with stale dependent reference). The
-forgotten-rename direction could in principle also be caught (e.g. by
-detecting "column X is in current but not desired AND a column with a
-similar name exists in desired") but the heuristic has false positives
-and is not pursued.
-
-Origin: discussion during [#124](https://github.com/winebarrel/pistachio/pull/124). No current plan to implement.
-
 ## Amazon Aurora DSQL is not supported
 
 A DSQL-targeted schema never holds what DSQL cannot create, so what stands in
@@ -263,17 +217,6 @@ already error at plan time; composite attribute type changes could do the
 same, but that needs the diff to know which composite types are referenced by
 a table column (cross-object awareness the composite diff does not have
 today). For now the limitation is documented in the README.
-
-Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
-
-## Composite type: attribute reordering is not diffed
-
-Attributes are matched by name, so a desired schema that only reorders
-attributes produces no diff. This matches PostgreSQL, which has no operation
-to reorder composite type attributes (`ADD ATTRIBUTE` always appends). A
-mid-list `ADD` therefore appends the new attribute; the result is
-order-independent and stable across plans. Recorded as a deliberate choice,
-not a bug.
 
 Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
 
@@ -573,24 +516,6 @@ walks the expression to pick a function name, a column name or `?column?`.
 for an index element, so the shared half of the work is in the tree.
 
 Workaround: write the alias the way `pista dump` emits it.
-
-Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
-
-## Deparsed SQL/JSON query functions carry stray spaces
-
-libpg_query's deparser puts a space where a `JsonFuncExpr` needs none, in
-three places:
-
-- before the comma, `JSON_VALUE(t.a , '$."x"')`
-- before the closing parenthesis of a `RETURNING` clause with nothing after
-  it, `JSON_VALUE(t.a , '$."x"' RETURNING text )`
-- twice between a `RETURNING` type and what follows it, `JSON_QUERY(t.a ,
-  '$."x"' RETURNING jsonb  WITHOUT WRAPPER KEEP QUOTES)`
-
-All of it is valid SQL and only shows up in emitted DDL, so it costs nothing
-beyond looking wrong in a plan that re-emits a view holding one of the
-PostgreSQL 17 query functions. The shapes are pinned by
-testdata/plan/alter_json_query_clauses.yml. The fix belongs upstream.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 
