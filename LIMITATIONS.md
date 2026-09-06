@@ -141,9 +141,10 @@ following transitions are no-ops in v1:
   the current name in place.
 
 Both require PG18's standalone `ALTER TABLE ... ADD CONSTRAINT name NOT NULL col`
-syntax, which `pg_query_go` does not yet parse (libpg_query PR #317 is
-still in draft as of 2026-05). Once that lands, the parser can accept
-the standalone form and the diff can drop the no-op branches.
+syntax, which the parser cannot read: `pg_query_go` v6 embeds PostgreSQL 17.7
+and has no 18 release. libpg_query, the C library under it, shipped 18 on
+2026-05-21, so the Go binding is what is waited on. Once it lands, the parser
+can accept the standalone form and the diff can drop the no-op branches.
 
 A second limitation: `catalog.ListColumnsByTables` strips any constraint
 name with the `_not_null` suffix to mask PG18's auto-naming (which does
