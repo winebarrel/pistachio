@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/orderedmap/v2"
@@ -74,10 +75,13 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 				WHERE
 					o LIKE 'check_option=%'
 			) AS check_option,
+			c.reloptions,
+			tc.reloptions AS toast_reloptions,
 			d.description
 		FROM
 			pg_catalog.pg_class c
 			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+			LEFT JOIN pg_catalog.pg_class tc ON tc.oid = c.reltoastrelid
 			LEFT JOIN dependency_extension de ON de.objid = c.oid
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = c.oid
 			AND d.objsubid = 0
@@ -104,6 +108,7 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 	for rows.Next() {
 		var v model.View
 		var checkOption *string
+		var reloptions, toastReloptions []string
 		err := rows.Scan(
 			&v.OID,
 			&v.Schema,
@@ -111,6 +116,8 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			&v.Definition,
 			&v.Materialized,
 			&checkOption,
+			&reloptions,
+			&toastReloptions,
 			&v.Comment,
 		)
 		if err != nil {
@@ -119,6 +126,7 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 		if checkOption != nil {
 			v.CheckOption = *checkOption
 		}
+		v.StorageParams = viewStorageParams(reloptions, toastReloptions)
 		v.Indexes = orderedmap.New[string, *model.Index]()
 		v.Triggers = orderedmap.New[string, *model.Trigger]()
 		views = append(views, &v)
@@ -129,4 +137,20 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 	}
 
 	return views, nil
+}
+
+// viewStorageParams turns a view's reloptions into the parameter map, leaving
+// check_option out: it sits in the same array but is read on its own and
+// written as the view's WITH CHECK OPTION, so keeping it here would compare it
+// twice and write it twice. A plain view has no TOAST relation, so the second
+// array is empty for one; a materialized view carries it the way a table does.
+func viewStorageParams(reloptions, toastReloptions []string) *orderedmap.Map[string, string] {
+	rest := make([]string, 0, len(reloptions))
+	for _, e := range reloptions {
+		if name, _, _ := strings.Cut(e, "="); name == "check_option" {
+			continue
+		}
+		rest = append(rest, e)
+	}
+	return storageParams(rest, toastReloptions)
 }

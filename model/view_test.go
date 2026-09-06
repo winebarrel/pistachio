@@ -84,6 +84,52 @@ func TestView_SQL_checkOption(t *testing.T) {
 	assert.Equal(t, "CREATE OR REPLACE VIEW public.v1 AS\nSELECT id FROM t WHERE ok\n  WITH LOCAL CHECK OPTION;", v.SQL())
 }
 
+func TestView_SQL_storageParams(t *testing.T) {
+	v := model.View{
+		Schema: "public", Name: "v1", Definition: "SELECT id FROM t",
+		StorageParams: model.SortedStorageParams(map[string]string{"security_invoker": "true", "security_barrier": "true"}),
+		CheckOption:   "local",
+	}
+	// The clause precedes AS, the check option follows the query, and the
+	// parameters come out in name order.
+	assert.Equal(t,
+		"CREATE OR REPLACE VIEW public.v1 WITH (security_barrier='true', security_invoker='true') AS\nSELECT id FROM t\n  WITH LOCAL CHECK OPTION;",
+		v.SQL())
+
+	mv := model.View{
+		Schema: "public", Name: "mv1", Definition: "SELECT id FROM t", Materialized: true,
+		StorageParams: model.SortedStorageParams(map[string]string{"fillfactor": "70"}),
+	}
+	assert.Equal(t, "CREATE MATERIALIZED VIEW public.mv1 WITH (fillfactor='70') AS\nSELECT id FROM t;", mv.SQL())
+}
+
+func TestView_SQL_storageParamsEmpty(t *testing.T) {
+	v := model.View{Schema: "public", Name: "v1", Definition: "SELECT id FROM t"}
+	assert.Equal(t, "CREATE OR REPLACE VIEW public.v1 AS\nSELECT id FROM t;", v.SQL())
+	v.StorageParams = model.SortedStorageParams(nil)
+	assert.Equal(t, "CREATE OR REPLACE VIEW public.v1 AS\nSELECT id FROM t;", v.SQL())
+}
+
+func TestView_ObjType(t *testing.T) {
+	assert.Equal(t, "VIEW", model.View{}.ObjType())
+	assert.Equal(t, "MATERIALIZED VIEW", model.View{Materialized: true}.ObjType())
+}
+
+func TestViewStorageParamsSQL(t *testing.T) {
+	assert.Equal(t,
+		"ALTER VIEW public.v1 SET (security_barrier='true');",
+		model.SetViewStorageParamsSQL("public.v1", "VIEW", []string{"security_barrier='true'"}))
+	assert.Equal(t,
+		"ALTER MATERIALIZED VIEW public.mv1 SET (autovacuum_enabled='off', fillfactor='90');",
+		model.SetViewStorageParamsSQL("public.mv1", "MATERIALIZED VIEW", []string{"autovacuum_enabled='off'", "fillfactor='90'"}))
+	assert.Equal(t,
+		"ALTER VIEW public.v1 RESET (security_invoker);",
+		model.ResetViewStorageParamsSQL("public.v1", "VIEW", []string{"security_invoker"}))
+	assert.Equal(t,
+		"ALTER MATERIALIZED VIEW public.mv1 RESET (fillfactor);",
+		model.ResetViewStorageParamsSQL("public.mv1", "MATERIALIZED VIEW", []string{"fillfactor"}))
+}
+
 func TestSetCheckOptionSQL(t *testing.T) {
 	assert.Equal(t, "ALTER VIEW public.v1 SET (check_option='local');", model.SetCheckOptionSQL("public.v1", "local"))
 	assert.Equal(t, "ALTER VIEW public.v1 RESET (check_option);", model.SetCheckOptionSQL("public.v1", ""))

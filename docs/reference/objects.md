@@ -5,8 +5,8 @@
 - Composite types (`CREATE TYPE ... AS (...)`, `ALTER TYPE ... ADD/DROP/ALTER ATTRIBUTE`, `RENAME ATTRIBUTE`). Attributes are matched by name, so reordering them produces no diff (PostgreSQL cannot reorder attributes). `ALTER ATTRIBUTE ... TYPE` fails at apply while a table column uses the type; PostgreSQL does not allow it and `CASCADE` does not help.
 - Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`, including unlogged sequences). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
 - Tables (including unlogged and partitioned tables, and `INHERITS` children). See [Table inheritance](#table-inheritance).
-- Storage parameters, the `WITH (...)` clause. An index's parameters are always managed; a table's are opt-in with `--manage-storage-param`. See [Table storage parameters](#table-storage-parameters).
-- Views, including `WITH [LOCAL | CASCADED] CHECK OPTION`. `security_barrier` is not managed.
+- Storage parameters, the `WITH (...)` clause. An index's parameters and a plain view's are always managed; a table's and a materialized view's are opt-in with `--manage-storage-param`. See [Storage parameters](#storage-parameters).
+- Views, including `WITH [LOCAL | CASCADED] CHECK OPTION`, `security_barrier` and `security_invoker`.
 - Materialized views
 - Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression). An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed; a change goes out as `ALTER TABLE ... ALTER COLUMN ... SET`. No `RESTART` is planned, the same as `ALTER SEQUENCE`, so a change that puts the sequence's current value outside the new range fails at apply with the server's error.
 - Constraints (primary key, unique, check, exclusion, foreign key)
@@ -22,9 +22,9 @@
 pistachio parses only the statements above. It drops any other statement in a schema file, such as `SET`, `GRANT`, or `CREATE EXTENSION`, and prints a `pistachio: <file>:<line>:<column>: ignored unsupported statement:` warning to standard error for each one. The same warning covers the parts it does not read of a statement it does parse, such as the `ALTER TABLE ... ADD COLUMN` and `ALTER COLUMN ... SET DEFAULT` a `pg_dump` file carries, or `COMMENT ON INDEX`. The `ALTER COLUMN ... SET STORAGE` and `SET COMPRESSION` such a file carries are read. To keep an unsupported statement in the file and run it during `apply`, mark it with `-- pista:execute`, which also silences the warning. A `BEGIN` or `COMMIT` warning points at `--with-tx` and `--try-tx`, which wrap the apply in a transaction.
 
 
-## Table storage parameters
+## Storage parameters
 
-A table's storage parameters, the `WITH (...)` clause, are managed only when `--manage-storage-param` is passed (also `$PISTA_MANAGE_STORAGE_PARAM`). They are off by default because the autovacuum settings a table is tuned with are usually set on the database, not written in the schema file.
+A table's storage parameters, the `WITH (...)` clause, are managed only when `--manage-storage-param` is passed (also `$PISTA_MANAGE_STORAGE_PARAM`). They are off by default because the autovacuum settings a table is tuned with are usually set on the database, not written in the schema file. A materialized view takes the same parameters and sits behind the same flag.
 
 ```bash
 pista dump --manage-storage-param
@@ -32,11 +32,20 @@ pista plan --manage-storage-param schema.sql
 pista apply --manage-storage-param schema.sql
 ```
 
-Without the flag the parameters are dropped from both sides of the diff: no `SET` or `RESET` is planned, the clause a schema file writes is left off the `CREATE TABLE`, and `dump` does not write one.
+Without the flag the parameters are dropped from both sides of the diff: no `SET` or `RESET` is planned, the clause a schema file writes is left off the `CREATE TABLE` or `CREATE MATERIALIZED VIEW`, and `dump` does not write one.
 
-With it the schema file states every parameter the table is to have. A change goes out as `ALTER TABLE ... SET (...)`, with a `RESET` for the parameters the file no longer names; neither rewrites the table. A `toast.` parameter belongs to the TOAST relation. PostgreSQL creates that relation only for a table with a toastable column and discards the setting when there is none, so such a table re-plans it on every run. A partitioned table holds no parameter, and a partition does not inherit the parent's.
+With it the schema file states every parameter the relation is to have. A change goes out as `ALTER TABLE ... SET (...)` or `ALTER MATERIALIZED VIEW ... SET (...)`, with a `RESET` for the parameters the file no longer names; neither rewrites the relation. A `toast.` parameter belongs to the TOAST relation. PostgreSQL creates that relation only for a table with a toastable column and discards the setting when there is none, so such a table re-plans it on every run. A partitioned table holds no parameter, and a partition does not inherit the parent's.
 
 An index's parameters are part of its definition and are managed either way.
+
+A plain view is managed either way too. All it can hold is `security_barrier` and `security_invoker`, which say what the view means rather than how it is stored, so they belong in the schema file the way the check option beside them does. The clause precedes `AS`:
+
+```sql
+CREATE VIEW public.my_accounts WITH (security_barrier = true, security_invoker = true) AS
+  SELECT id, balance FROM public.accounts WHERE owner = CURRENT_USER;
+```
+
+A change to a view whose definition stays goes out as `ALTER VIEW ... SET (...)` / `RESET (...)`. A definition change carries the clause on its `CREATE OR REPLACE VIEW`, which replaces the view's options as a whole.
 
 
 ## Table inheritance

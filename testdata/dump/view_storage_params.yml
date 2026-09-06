@@ -1,0 +1,54 @@
+# A view's parameters and a materialized view's, all of which pg_dump writes
+# and none of which used to survive a dump. The clause precedes AS, and the
+# check option stays where it is, after the query.
+manage_storage_param: true
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.safe_items WITH (security_barrier = true, security_invoker = true) AS SELECT id, status FROM public.items WITH CASCADED CHECK OPTION;
+  CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor = 70, toast.autovacuum_enabled = off) AS SELECT id, status FROM public.items;
+dump: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.item_bodies
+  CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor='70', toast.autovacuum_enabled='off') AS
+  SELECT items.id,
+      items.status
+     FROM items;
+
+  -- public.safe_items
+  CREATE OR REPLACE VIEW public.safe_items WITH (security_barrier='true', security_invoker='true') AS
+  SELECT items.id,
+      items.status
+     FROM items
+    WITH CASCADED CHECK OPTION;
+dump_pg16: &dump_pg16plus |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.item_bodies
+  CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor='70', toast.autovacuum_enabled='off') AS
+  SELECT id,
+      status
+     FROM items;
+
+  -- public.safe_items
+  CREATE OR REPLACE VIEW public.safe_items WITH (security_barrier='true', security_invoker='true') AS
+  SELECT id,
+      status
+     FROM items
+    WITH CASCADED CHECK OPTION;
+dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus

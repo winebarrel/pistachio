@@ -1,0 +1,19 @@
+# The parameters both sides write, in either spelling and in either order,
+# compare equal. A bare value and a quoted one are the same to PostgreSQL,
+# which stores what it was handed.
+manage_storage_param: true
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.safe_items WITH (security_invoker = true, security_barrier = true) AS SELECT id FROM public.items;
+  CREATE MATERIALIZED VIEW public.item_stats WITH (fillfactor = 70, toast.autovacuum_enabled = false) AS SELECT id, repeat('x', id) AS pad FROM public.items;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.safe_items WITH (security_barrier = 'true', security_invoker = true) AS SELECT id FROM public.items;
+  CREATE MATERIALIZED VIEW public.item_stats WITH (toast.autovacuum_enabled = 'false', fillfactor = 70) AS SELECT id, repeat('x', id) AS pad FROM public.items;
+plan: ""

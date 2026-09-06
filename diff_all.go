@@ -182,6 +182,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 
 	if !options.ManageStorageParam {
 		clearStorageParams(filteredTables, desiredTables)
+		clearMatViewStorageParams(filteredViews, desiredViews)
 	}
 
 	switch {
@@ -331,6 +332,21 @@ func clearStorageParams(tableMaps ...*orderedmap.Map[string, *model.Table]) {
 	for _, tables := range tableMaps {
 		for _, t := range tables.CollectValues() {
 			t.StorageParams = nil
+		}
+	}
+}
+
+// clearMatViewStorageParams does the same for a materialized view, which
+// carries the parameters a table carries and is left unmanaged with it. A plain
+// view is not touched: all it can hold is security_barrier and
+// security_invoker, which say what the view means rather than how it is stored,
+// so they are managed the way the check option beside them is.
+func clearMatViewStorageParams(viewMaps ...*orderedmap.Map[string, *model.View]) {
+	for _, views := range viewMaps {
+		for _, v := range views.CollectValues() {
+			if v.Materialized {
+				v.StorageParams = nil
+			}
 		}
 	}
 }

@@ -1,0 +1,22 @@
+# A materialized view's definition cannot be replaced in place, so the change
+# goes through DROP and CREATE, and the CREATE carries the parameters: the new
+# relation would otherwise come up at the defaults.
+manage_storage_param: true
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.item_stats WITH (fillfactor = 70) AS SELECT id FROM public.items;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.item_stats WITH (fillfactor = 90) AS SELECT id, status FROM public.items;
+plan: |
+  DROP MATERIALIZED VIEW public.item_stats;
+  CREATE MATERIALIZED VIEW public.item_stats WITH (fillfactor='90') AS
+  SELECT id, status FROM public.items;

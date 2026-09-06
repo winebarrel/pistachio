@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Manage the storage parameters of a view and a materialized view, the `WITH (...)` clause before `AS`. Neither side read them, so `dump` dropped the clause and a schema file that wrote one was applied without it. A plain view holds `security_barrier` and `security_invoker` and nothing else. Both say what the view means rather than how it is stored, so they are managed without a flag, the way the `check_option` beside them in `reloptions` is: a dump that dropped them restored a view that leaks rows or reads the base table with the wrong privileges. A materialized view holds what a table holds, tuning included, so it sits behind `--manage-storage-param` with the table. A change to a view whose definition stays goes out as `ALTER [MATERIALIZED] VIEW ... SET (...)` / `RESET (...)`; a definition change carries the clause on its own statement, which replaces the view's options as a whole. Two things that used to plan nothing now plan something: a view carrying `security_barrier` that the schema file does not name is reset, and, under the flag, a materialized view's parameters are diffed like a table's.
+
 ## [1.44.1] - 2026-09-06
 
 * Build the macOS release binaries against a deployment target of 13.0. The cross toolchain aimed at 10.9 on amd64 and 11.0 on arm64 while Go stamped its object with 13.0, so the release build warned on every link. Go binaries need macOS 13 either way.

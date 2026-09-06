@@ -1,0 +1,24 @@
+# Without --manage-storage-param a materialized view's parameters are off both
+# sides of the diff, the same as a table's. A plain view's are not: all it can
+# hold is security_barrier and security_invoker, which say what the view means
+# rather than how it is stored, so they are managed the way the check option
+# beside them in reloptions is.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.barrier WITH (security_barrier = true) AS SELECT id FROM public.items;
+  CREATE VIEW public.plain AS SELECT id FROM public.items;
+  CREATE MATERIALIZED VIEW public.tuned WITH (fillfactor = 70) AS SELECT id FROM public.items;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.barrier AS SELECT id FROM public.items;
+  CREATE VIEW public.plain WITH (security_invoker = true) AS SELECT id FROM public.items;
+  CREATE MATERIALIZED VIEW public.tuned WITH (fillfactor = 90) AS SELECT id FROM public.items;
+plan: |
+  ALTER VIEW public.barrier RESET (security_barrier);
+  ALTER VIEW public.plain SET (security_invoker='true');

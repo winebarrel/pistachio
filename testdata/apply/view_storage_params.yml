@@ -1,0 +1,52 @@
+# A plain view's parameters apply without the flag and the re-plan comes out
+# clean. security_invoker arrives, security_barrier is handed back to its
+# default, and the check option beside them in reloptions is left alone.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.safe_items WITH (security_barrier = true) AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.safe_items WITH (security_invoker = true) AS SELECT id, status FROM public.items WHERE status = 'active' WITH CASCADED CHECK OPTION;
+applied_sql: |
+  ALTER VIEW public.safe_items SET (security_invoker='true');
+  ALTER VIEW public.safe_items RESET (security_barrier);
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.safe_items
+  CREATE OR REPLACE VIEW public.safe_items WITH (security_invoker='true') AS
+  SELECT items.id,
+      items.status
+     FROM items
+    WHERE items.status = 'active'::text
+    WITH CASCADED CHECK OPTION;
+applied_pg16: &applied_pg16plus |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.safe_items
+  CREATE OR REPLACE VIEW public.safe_items WITH (security_invoker='true') AS
+  SELECT id,
+      status
+     FROM items
+    WHERE status = 'active'::text
+    WITH CASCADED CHECK OPTION;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

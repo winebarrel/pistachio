@@ -1,0 +1,26 @@
+# A view's parameters and a materialized view's, each with the definition left
+# alone, so the change goes out as an ALTER rather than as a replaced view.
+manage_storage_param: true
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.added AS SELECT id FROM public.items;
+  CREATE VIEW public.changed WITH (security_barrier = true) AS SELECT id FROM public.items;
+  CREATE VIEW public.removed WITH (security_invoker = true) AS SELECT id FROM public.items;
+  CREATE MATERIALIZED VIEW public.tuned WITH (fillfactor = 70) AS SELECT id FROM public.items;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.added WITH (security_barrier = true) AS SELECT id FROM public.items;
+  CREATE VIEW public.changed WITH (security_barrier = true, security_invoker = true) AS SELECT id FROM public.items;
+  CREATE VIEW public.removed AS SELECT id FROM public.items;
+  CREATE MATERIALIZED VIEW public.tuned WITH (fillfactor = 90, autovacuum_enabled = off) AS SELECT id FROM public.items;
+plan: |
+  ALTER VIEW public.added SET (security_barrier='true');
+  ALTER VIEW public.changed SET (security_invoker='true');
+  ALTER VIEW public.removed RESET (security_invoker);
+  ALTER MATERIALIZED VIEW public.tuned SET (autovacuum_enabled='off', fillfactor='90');

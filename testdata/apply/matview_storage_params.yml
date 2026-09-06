@@ -1,0 +1,49 @@
+# A materialized view's parameters apply and the re-plan comes out clean. The
+# view holds a text column so that it has a TOAST relation for the toast.*
+# parameter to land on.
+manage_storage_param: true
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor = 70, autovacuum_enabled = off) AS SELECT id, body FROM public.items;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor = 90, toast.autovacuum_enabled = off) AS SELECT id, body FROM public.items;
+applied_sql: |
+  ALTER MATERIALIZED VIEW public.item_bodies SET (fillfactor='90', toast.autovacuum_enabled='off');
+  ALTER MATERIALIZED VIEW public.item_bodies RESET (autovacuum_enabled);
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.item_bodies
+  CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor='90', toast.autovacuum_enabled='off') AS
+  SELECT items.id,
+      items.body
+     FROM items;
+applied_pg16: &applied_pg16plus |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.item_bodies
+  CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor='90', toast.autovacuum_enabled='off') AS
+  SELECT id,
+      body
+     FROM items;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

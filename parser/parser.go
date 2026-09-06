@@ -1302,13 +1302,28 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 	}
 
 	return &model.View{
-		Schema:      schema,
-		Name:        vs.View.Relname,
-		Definition:  def,
-		CheckOption: viewCheckOption(vs),
-		Indexes:     orderedmap.New[string, *model.Index](),
-		Triggers:    orderedmap.New[string, *model.Trigger](),
+		Schema:        schema,
+		Name:          vs.View.Relname,
+		Definition:    def,
+		CheckOption:   viewCheckOption(vs),
+		StorageParams: parseViewStorageParams(vs.Options),
+		Indexes:       orderedmap.New[string, *model.Index](),
+		Triggers:      orderedmap.New[string, *model.Trigger](),
 	}, nil
+}
+
+// parseViewStorageParams reads the WITH (...) that precedes AS in a CREATE VIEW
+// or CREATE MATERIALIZED VIEW. check_option is left out: it is read as the
+// view's check option instead, which is also where the catalog side puts it.
+func parseViewStorageParams(options []*pg_query.Node) *orderedmap.Map[string, string] {
+	rest := make([]*pg_query.Node, 0, len(options))
+	for _, o := range options {
+		if o.GetDefElem().GetDefname() == "check_option" {
+			continue
+		}
+		rest = append(rest, o)
+	}
+	return parseStorageParams(rest)
 }
 
 // viewCheckOption reads a view's check option from the trailing
@@ -1362,12 +1377,13 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 	}
 
 	return &model.View{
-		Schema:       schema,
-		Name:         into.Rel.Relname,
-		Definition:   def,
-		Materialized: true,
-		Indexes:      orderedmap.New[string, *model.Index](),
-		Triggers:     orderedmap.New[string, *model.Trigger](),
+		Schema:        schema,
+		Name:          into.Rel.Relname,
+		Definition:    def,
+		Materialized:  true,
+		StorageParams: parseViewStorageParams(into.Options),
+		Indexes:       orderedmap.New[string, *model.Index](),
+		Triggers:      orderedmap.New[string, *model.Trigger](),
 	}, nil
 }
 

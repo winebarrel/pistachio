@@ -1,0 +1,21 @@
+# A definition change carries the parameters on its CREATE OR REPLACE VIEW.
+# The statement replaces the view's options as a whole, so the one the desired
+# schema drops needs no RESET of its own, and the one it keeps has to be
+# written again or it would be lost.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.safe_items WITH (security_barrier = true, security_invoker = true) AS SELECT id FROM public.items;
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.safe_items WITH (security_barrier = true) AS SELECT id, status FROM public.items;
+plan: |
+  CREATE OR REPLACE VIEW public.safe_items WITH (security_barrier='true') AS
+  SELECT id, status FROM public.items;

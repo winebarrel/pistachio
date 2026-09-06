@@ -541,6 +541,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 
 	if !options.ManageStorageParam {
 		clearStorageParams(filteredTables)
+		clearMatViewStorageParams(filteredViews)
 	}
 
 	// Validate the dependency order up front so a cycle is a hard error rather

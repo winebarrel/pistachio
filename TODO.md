@@ -606,29 +606,6 @@ plus `ATTACH`, are the two shapes. The first changes the order of every dump.
 
 Origin: [#459](https://github.com/winebarrel/pistachio/pull/459).
 
-## View and materialized view storage parameters are not read
-
-Priority: low.
-
-A view carries `security_barrier`, a materialized view the autovacuum
-settings, and neither side reads them. `dump` drops the clause, and a desired
-schema that writes it plans nothing, the way a table's parameters behaved
-before they were read. Losing `security_barrier` from a dump is the one that
-matters, since the view is a security boundary without it. `check_option`, in
-the same column, is managed.
-
-`pg_class.reloptions` holds them for both, next to the table's, and
-`ALTER VIEW ... SET (...)` / `RESET (...)` and the `ALTER MATERIALIZED VIEW`
-forms are what a change goes out as. The table work put the reading and the
-rendering in `SortedStorageParams` and `Table.StorageParamsSQL`, which the view
-model can use as they are, and `--manage-storage-param` is the gate they would
-sit behind.
-
-`dump` writes no clause and the parser reads none, so a dump fed back plans
-clean and only a hand-written view reaches this.
-
-Origin: review of [#458](https://github.com/winebarrel/pistachio/pull/458).
-
 ## Perpetual drift on a typed literal the catalog re-prints
 
 Priority: low.
