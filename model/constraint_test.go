@@ -44,7 +44,20 @@ func TestForeignKey_SQL(t *testing.T) {
 		Schema:     "public",
 		Table:      "orders",
 	}
-	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);", fk.SQL())
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);", fk.SQL(false))
+}
+
+// A partitioned table takes no ONLY: PostgreSQL rejects the word there.
+func TestForeignKey_SQL_onPartitioned(t *testing.T) {
+	fk := model.ForeignKey{
+		Name:       "fk_user",
+		Type:       model.ConstraintType('f'),
+		Definition: "FOREIGN KEY (user_id) REFERENCES public.users(id)",
+		Validated:  true,
+		Schema:     "public",
+		Table:      "orders",
+	}
+	assert.Equal(t, "ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id);", fk.SQL(true))
 }
 
 func TestForeignKey_SQL_NotValid(t *testing.T) {
@@ -56,5 +69,5 @@ func TestForeignKey_SQL_NotValid(t *testing.T) {
 		Schema:     "public",
 		Table:      "orders",
 	}
-	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) NOT VALID;", fk.SQL())
+	assert.Equal(t, "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) NOT VALID;", fk.SQL(false))
 }

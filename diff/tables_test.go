@@ -1185,7 +1185,7 @@ func TestDiffForeignKeys_add(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	_, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, addStmts, 1)
 	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
@@ -1201,7 +1201,7 @@ func TestDiffForeignKeys_addNotValid(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	_, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, addStmts, 1)
 	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
@@ -1217,7 +1217,7 @@ func TestDiffForeignKeys_drop(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, dropStmts)
 	assert.Empty(t, addStmts)
@@ -1234,7 +1234,7 @@ func TestDiffForeignKeys_drop_denied(t *testing.T) {
 	})
 	desired := orderedmap.New[string, *model.ForeignKey]()
 
-	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", current, desired, denyAllDrops{})
+	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", false, current, desired, denyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Empty(t, addStmts)
@@ -1257,7 +1257,7 @@ func TestDiffForeignKeys_change_denied_alwaysExecutes(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", current, desired, denyAllDrops{})
+	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", false, current, desired, denyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, disallowed)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_user;"}, dropStmts)
@@ -1282,7 +1282,7 @@ func TestDiffForeignKeys_renamedAndChanged_denied_alwaysExecutes(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", current, desired, denyAllDrops{})
+	dropStmts, addStmts, disallowed, err := diffForeignKeys("public.orders", "public", false, current, desired, denyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, disallowed)
 	assert.Equal(t, []string{"ALTER TABLE public.orders DROP CONSTRAINT fk_old;"}, dropStmts)
@@ -1645,7 +1645,7 @@ func TestDiffForeignKeys_change(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, append(dropStmts, addStmts...), 2)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
@@ -1666,7 +1666,7 @@ func TestDiffForeignKeys_validatedToNotValid(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
@@ -1688,7 +1688,7 @@ func TestDiffForeignKeys_notValidToValidated(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 1)
@@ -1714,7 +1714,7 @@ func TestDiffForeignKeys_deferral(t *testing.T) {
 		current.Set("fk_user", currentFk)
 		desired := orderedmap.New[string, *model.ForeignKey]()
 		desired.Set("fk_user", desiredFk)
-		dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+		dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 		require.NoError(t, err)
 		return dropStmts, addStmts
 	}
@@ -1779,6 +1779,60 @@ func TestDiffForeignKeys_deferral(t *testing.T) {
 	})
 }
 
+// A partition's copy of the parent's key takes no statement, whether the
+// definition changed or the desired schema dropped the key altogether.
+func TestDiffForeignKeys_partitionCopy(t *testing.T) {
+	copyFk := func() *model.ForeignKey {
+		f := &model.ForeignKey{Schema: "public", Table: "orders_2025"}
+		f.Name = "fk_user"
+		f.Definition = "FOREIGN KEY (user_id) REFERENCES users(id)"
+		f.Validated = true
+		f.Inherited = true
+		return f
+	}
+
+	t.Run("definition change", func(t *testing.T) {
+		current := orderedmap.New[string, *model.ForeignKey]()
+		current.Set("fk_user", copyFk())
+		desired := orderedmap.New[string, *model.ForeignKey]()
+		changed := copyFk()
+		changed.Inherited = false
+		changed.Definition = "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+		desired.Set("fk_user", changed)
+
+		drop, add, _, err := diffForeignKeys("public.orders_2025", "public", false, current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Empty(t, drop)
+		assert.Empty(t, add)
+	})
+
+	t.Run("dropped", func(t *testing.T) {
+		current := orderedmap.New[string, *model.ForeignKey]()
+		current.Set("fk_user", copyFk())
+		desired := orderedmap.New[string, *model.ForeignKey]()
+
+		drop, add, disallowed, err := diffForeignKeys("public.orders_2025", "public", false, current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Empty(t, drop)
+		assert.Empty(t, add)
+		assert.Empty(t, disallowed)
+	})
+
+	t.Run("dropped with drops denied", func(t *testing.T) {
+		// The copy is not a drop the policy has to allow or skip, so it is
+		// not reported as one either.
+		current := orderedmap.New[string, *model.ForeignKey]()
+		current.Set("fk_user", copyFk())
+		desired := orderedmap.New[string, *model.ForeignKey]()
+
+		drop, add, disallowed, err := diffForeignKeys("public.orders_2025", "public", false, current, desired, denyAllDrops{})
+		require.NoError(t, err)
+		assert.Empty(t, drop)
+		assert.Empty(t, add)
+		assert.Empty(t, disallowed)
+	})
+}
+
 // The deferral half of compareFKDef: the clause alone separates two
 // definitions, or something else does.
 func TestCompareFKDef_deferralOnly(t *testing.T) {
@@ -1814,7 +1868,7 @@ func TestDiffForeignKeys_bothNotValid_noChange(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Empty(t, addStmts)
@@ -1834,7 +1888,7 @@ func TestDiffForeignKeys_changeDefinitionAndValidated(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_user;", dropStmts[0])
@@ -1857,7 +1911,7 @@ func TestDiffForeignKeys_renameAndValidate(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 2)
@@ -1879,7 +1933,7 @@ func TestDiffForeignKeys_renameOnly(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Len(t, addStmts, 1)
@@ -1900,7 +1954,7 @@ func TestDiffForeignKeys_renameAndNotValid(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_old;", dropStmts[0])
@@ -1925,7 +1979,7 @@ func TestDiffForeignKeys_renameAlreadyAppliedAndNotValid(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_new;", dropStmts[0])
@@ -1948,7 +2002,7 @@ func TestDiffForeignKeys_renameAndChangeDefinition(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, dropStmts, 1)
 	assert.Equal(t, "ALTER TABLE public.orders DROP CONSTRAINT fk_old;", dropStmts[0])
@@ -3021,7 +3075,7 @@ func TestDiffForeignKeys_rename_selfRename_skipped(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Empty(t, addStmts)
@@ -3275,7 +3329,7 @@ func TestDiffForeignKeys_rename(t *testing.T) {
 		Table:  "orders",
 	})
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, dropStmts)
 	assert.Equal(t, []string{"ALTER TABLE public.orders RENAME CONSTRAINT old_fk TO new_fk;"}, addStmts)
@@ -3297,7 +3351,7 @@ func TestDiffForeignKeys_rename_alreadyApplied(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, _, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	_, _, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 }
 
@@ -3312,7 +3366,7 @@ func TestDiffForeignKeys_rename_sourceNotFound(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, _, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	_, _, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -3366,7 +3420,7 @@ func TestDiffForeignKeys_rename_destinationExists_error(t *testing.T) {
 		Table:  "orders",
 	})
 
-	_, _, _, err := diffForeignKeys("public.orders", "public", current, desired, allowAllDrops{})
+	_, _, _, err := diffForeignKeys("public.orders", "public", false, current, desired, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -3801,7 +3855,7 @@ func TestDiffForeignKeys_RenameSuppressionKeepsOtherRenames(t *testing.T) {
 	current.Set("xa", fk("xa", "p", ""))
 	desired.Set("by", fk("by", "p", "xa"))
 
-	dropStmts, addStmts, _, err := diffForeignKeys("public.t", "public", current, desired, allowAllDrops{})
+	dropStmts, addStmts, _, err := diffForeignKeys("public.t", "public", false, current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER TABLE public.t DROP CONSTRAINT a;"}, dropStmts)
 	assert.Equal(t, []string{

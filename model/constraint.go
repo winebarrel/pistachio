@@ -63,8 +63,15 @@ func (fk *ForeignKey) String() string {
 	return fmt.Sprintf("%#v", *fk)
 }
 
-func (fk ForeignKey) SQL() string {
-	sql := "ALTER TABLE ONLY " + Ident(fk.Schema, fk.Table) +
+// SQL renders the ALTER TABLE that adds the key. onPartitioned says the owning
+// table is partitioned, where PostgreSQL rejects ONLY outright; a foreign key
+// is not inherited either way, so the word only tracks what pg_dump writes.
+func (fk ForeignKey) SQL(onPartitioned bool) string {
+	only := "ONLY "
+	if onPartitioned {
+		only = ""
+	}
+	sql := "ALTER TABLE " + only + Ident(fk.Schema, fk.Table) +
 		" ADD CONSTRAINT " + Ident(fk.Name) + " " + fk.Definition
 	if !fk.Validated {
 		sql += " NOT VALID"

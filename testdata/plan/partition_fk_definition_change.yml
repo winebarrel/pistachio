@@ -1,0 +1,36 @@
+# The parent's DROP takes the partition's copy with it and its ADD puts a new
+# copy back, so the copy takes neither statement. Emitting them failed at
+# apply: PostgreSQL rejects DROP CONSTRAINT on a copy, and by then the copy is
+# gone anyway.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      at date NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id, at),
+      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      at date NOT NULL,
+      user_id integer,
+      CONSTRAINT orders_pkey PRIMARY KEY (id, at),
+      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  ALTER TABLE ONLY public.orders_2025 ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+plan: |
+  ALTER TABLE public.orders DROP CONSTRAINT fk_user;
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users (id) ON DELETE CASCADE;
