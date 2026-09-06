@@ -1,6 +1,7 @@
-# The parent's ALTER reaches the partition's copy of the key. A statement on
-# the copy itself is rejected, whether it alters or drops the key, so none is
-# planned and the apply leaves no drift.
+# Emitting the copy's own statements failed at apply, since the parent's DROP
+# already took the copy. The parent's two statements settle both.
+drop_policy:
+  allow_drop: [all]
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,
@@ -24,12 +25,13 @@ desired: |
       at date NOT NULL,
       user_id integer,
       CONSTRAINT orders_pkey PRIMARY KEY (id, at),
-      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) DEFERRABLE INITIALLY DEFERRED
+      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
   ) PARTITION BY RANGE (at);
   CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
-  ALTER TABLE ONLY public.orders_2025 ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE ONLY public.orders_2025 ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 applied_sql: |
-  ALTER TABLE public.orders ALTER CONSTRAINT fk_user DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE public.orders DROP CONSTRAINT fk_user;
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users (id) ON DELETE CASCADE;
 applied: |
   -- public.orders
   CREATE TABLE public.orders (
@@ -40,7 +42,7 @@ applied: |
   )
   PARTITION BY RANGE (at);
 
-  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
   -- public.orders_2025
   CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');

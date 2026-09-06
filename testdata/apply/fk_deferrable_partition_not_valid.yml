@@ -41,12 +41,10 @@ applied: |
   )
   PARTITION BY RANGE (at);
 
-  ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED;
 
   -- public.orders_2025
   CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
-
-  ALTER TABLE ONLY public.orders_2025 ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED;
 
   -- public.users
   CREATE TABLE public.users (

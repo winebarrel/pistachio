@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Manage a foreign key on a partitioned table. Three things stood between one and an apply that works. `ALTER TABLE ONLY` is rejected on a partitioned table, so adding a key to one failed with `cannot use ONLY for foreign key on partitioned table`; the word is now left off there, and a foreign key is not inherited either way. A partition holds a copy of every key its parent declares, and the copy was dropped and added on its own, which PostgreSQL rejects and the parent's statements settle anyway; the copy now takes no statement. `dump` wrote the copy as well, so its output did not reload: the parent's statement creates the copy, and pg_dump leaves it out for the same reason.
+
 * Change a foreign key's deferral clause in place. `DEFERRABLE` and `INITIALLY DEFERRED` were compared only as part of the definition string, so a toggle dropped the key and added it back, rescanning the table to validate it again. When nothing else about the key differs it now goes out as `ALTER TABLE ... ALTER CONSTRAINT`, with `VALIDATE CONSTRAINT` next to it when the key is also being validated. PostgreSQL takes the statement on a foreign key alone, so a unique, primary key or exclusion constraint is still dropped and added, and a partition's copy of its parent's key takes no statement at all.
 
 * Manage a comment on an index. `COMMENT ON INDEX` was read by neither side, so `dump` dropped the line `pg_dump` writes and a schema file that carried one was warned about and ignored. A change now goes out as `COMMENT ON INDEX ... IS ...` or `IS NULL`, and a recreate writes the comment again, since PostgreSQL drops it with the index. A comment on a constraint, a trigger or a policy, and one on the index a constraint owns, stays unmanaged.

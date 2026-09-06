@@ -292,6 +292,30 @@ func TestTable_FkSQL(t *testing.T) {
 	assert.Contains(t, tbl.FkSQL(), "ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user")
 }
 
+// A partitioned table takes no ONLY, and the copy a partition holds is left
+// out: the parent's statement creates it.
+func TestTable_FkSQL_partition(t *testing.T) {
+	parent := newTable("public", "orders")
+	parent.Partitioned = true
+	parentFk := &model.ForeignKey{Schema: "public", Table: "orders"}
+	parentFk.Name = "fk_user"
+	parentFk.Definition = "FOREIGN KEY (user_id) REFERENCES users(id)"
+	parentFk.Validated = true
+	parent.ForeignKeys.Set("fk_user", parentFk)
+	assert.Equal(t,
+		"ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);",
+		parent.FkSQL())
+
+	child := newTable("public", "orders_2025")
+	childFk := &model.ForeignKey{Schema: "public", Table: "orders_2025"}
+	childFk.Name = "fk_user"
+	childFk.Definition = "FOREIGN KEY (user_id) REFERENCES users(id)"
+	childFk.Validated = true
+	childFk.Inherited = true
+	child.ForeignKeys.Set("fk_user", childFk)
+	assert.Empty(t, child.FkSQL())
+}
+
 func TestTable_CommentSQL(t *testing.T) {
 	tbl := newTable("public", "users")
 	comment := "Main users table"

@@ -1,6 +1,4 @@
-# The parent's ALTER reaches the partition's copy of the key. A statement on
-# the copy itself is rejected, whether it alters or drops the key, so none is
-# planned and the apply leaves no drift.
+# ONLY is rejected on a partitioned table, so the key is added without it.
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,
@@ -10,8 +8,7 @@ init: |
       id integer NOT NULL,
       at date NOT NULL,
       user_id integer,
-      CONSTRAINT orders_pkey PRIMARY KEY (id, at),
-      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id)
+      CONSTRAINT orders_pkey PRIMARY KEY (id, at)
   ) PARTITION BY RANGE (at);
   CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
 desired: |
@@ -24,12 +21,11 @@ desired: |
       at date NOT NULL,
       user_id integer,
       CONSTRAINT orders_pkey PRIMARY KEY (id, at),
-      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) DEFERRABLE INITIALLY DEFERRED
+      CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id)
   ) PARTITION BY RANGE (at);
   CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
-  ALTER TABLE ONLY public.orders_2025 ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users(id) DEFERRABLE INITIALLY DEFERRED;
 applied_sql: |
-  ALTER TABLE public.orders ALTER CONSTRAINT fk_user DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES public.users (id);
 applied: |
   -- public.orders
   CREATE TABLE public.orders (
@@ -40,7 +36,7 @@ applied: |
   )
   PARTITION BY RANGE (at);
 
-  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);
 
   -- public.orders_2025
   CREATE TABLE public.orders_2025 PARTITION OF public.orders FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');

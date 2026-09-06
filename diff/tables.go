@@ -125,7 +125,7 @@ func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcur
 		}
 	}
 	for _, fk := range t.ForeignKeys.CollectValues() {
-		fkStmts = append(fkStmts, fk.SQL())
+		fkStmts = append(fkStmts, fk.SQL(t.Partitioned))
 	}
 	if rlsSQL := t.RLSSQL(); rlsSQL != "" {
 		stmts = append(stmts, strings.Split(rlsSQL, "\n")...)
@@ -167,7 +167,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		if idxResult.HasConcurrently {
 			result.HasConcurrently = true
 		}
-		fkDrops, fkAdds, fkDisallowed, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys, dc)
+		fkDrops, fkAdds, fkDisallowed, err := diffForeignKeys(fqtn, desired.Schema, desired.Partitioned, current.ForeignKeys, desired.ForeignKeys, dc)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +236,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		result.HasConcurrently = true
 	}
 
-	fkDrops, fkAdds, fkDisallowed, err := diffForeignKeys(fqtn, desired.Schema, current.ForeignKeys, desired.ForeignKeys, dc)
+	fkDrops, fkAdds, fkDisallowed, err := diffForeignKeys(fqtn, desired.Schema, desired.Partitioned, current.ForeignKeys, desired.ForeignKeys, dc)
 	if err != nil {
 		return nil, err
 	}
@@ -1404,16 +1404,21 @@ func foreignKeyChanges(current, desired *orderedmap.Map[string, *model.ForeignKe
 		if !ok {
 			continue
 		}
+		// A partition's copy of the parent's key changes with the parent and
+		// takes no statement of its own. PostgreSQL rejects a DROP or an
+		// ALTER CONSTRAINT on a copy, and every statement the parent's key
+		// takes reaches it: the parent's DROP takes the copy with it, its ADD
+		// puts a new copy back, and its ALTER CONSTRAINT and VALIDATE
+		// CONSTRAINT recurse. A rename is the exception the diff still emits,
+		// since a copy carries a name of its own.
+		if currentFk.Inherited {
+			changes[name] = definitionChange{}
+			continue
+		}
 		sameDef, deferralOnly := compareFKDef(currentFk.Definition, desiredFk.Definition, schema)
 		change := newDefinitionChange(sameDef, currentFk.Validated, desiredFk.Validated)
 		switch {
 		case !deferralOnly:
-		case currentFk.Inherited:
-			// The partition's copy of the parent's key takes no statement of
-			// its own: PostgreSQL rejects one, whatever it says. Both the
-			// parent's ALTER CONSTRAINT and its VALIDATE CONSTRAINT reach the
-			// copy, so leaving it out settles it either way.
-			change = definitionChange{}
 		case currentFk.Validated && !desiredFk.Validated:
 			// Nothing takes the validated flag away, so the key is added back
 			// and the ADD carries the deferral clause with it.
@@ -1447,7 +1452,7 @@ func alterFKDeferralSQL(fqtn, name string, deferrable, deferred bool) string {
 // Pure FK removals (FK absent from desired while the owning table stays) honor
 // --allow-drop=foreign_key; FK drops emitted because the owning table is being
 // dropped follow the table policy (handled in DiffTables).
-func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[string, *model.ForeignKey], dc DropChecker) (dropStmts, addStmts, disallowed []string, err error) {
+func diffForeignKeys(fqtn, schema string, partitioned bool, current, desired *orderedmap.Map[string, *model.ForeignKey], dc DropChecker) (dropStmts, addStmts, disallowed []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames (renames go into addStmts since they may depend on table renames)
@@ -1480,10 +1485,15 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 	// Drop removed or changed FKs. A NOT VALID -> validated key keeps its
 	// definition, so it is left to VALIDATE CONSTRAINT below.
 	fkAllowed := dc.IsDropAllowed("foreign_key")
-	for name := range current.Keys() {
+	for name, currentFk := range current.All() {
 		_, ok := desired.GetOk(name)
 		ch := changes[name]
 		if ok && (!ch.changed || ch.validateOnly || ch.deferralOnly) {
+			continue
+		}
+		// A key the desired schema drops altogether reaches this with no entry
+		// in changes, so the copy is tested here as well as above.
+		if currentFk.Inherited {
 			continue
 		}
 		dropName := name
@@ -1516,7 +1526,7 @@ func diffForeignKeys(fqtn, schema string, current, desired *orderedmap.Map[strin
 			}
 			continue
 		}
-		addStmts = append(addStmts, desiredFk.SQL())
+		addStmts = append(addStmts, desiredFk.SQL(partitioned))
 	}
 
 	return dropStmts, addStmts, disallowed, nil

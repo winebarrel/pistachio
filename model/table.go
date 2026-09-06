@@ -185,11 +185,19 @@ func (t Table) IdxSQL() string {
 	)
 }
 
+// FkSQL renders the table's foreign keys. A partition's copy of a key its
+// parent declares is left out: the parent's statement creates the copy, so
+// writing it as well gives a file that does not reload. pg_dump leaves it out
+// the same way.
 func (t Table) FkSQL() string {
-	return strings.Join(
-		t.ForeignKeys.TransformSlice(func(_ string, fk *ForeignKey) string { return fk.SQL() }),
-		"\n",
-	)
+	var stmts []string
+	for _, fk := range t.ForeignKeys.CollectValues() {
+		if fk.Inherited {
+			continue
+		}
+		stmts = append(stmts, fk.SQL(t.Partitioned))
+	}
+	return strings.Join(stmts, "\n")
 }
 
 func (t Table) RLSSQL() string {
