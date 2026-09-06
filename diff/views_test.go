@@ -662,6 +662,55 @@ func TestDiffViews_newMatviewWithIndex(t *testing.T) {
 	assert.Contains(t, result.CreateStmts[1], "CREATE INDEX idx_mv_n")
 }
 
+func TestDiffViews_matviewIndexComment(t *testing.T) {
+	const def = "CREATE INDEX idx_mv_n ON public.mv USING btree (n)"
+	matview := func(comment *string) *model.View {
+		mv := &model.View{
+			Schema: "public", Name: "mv", Materialized: true,
+			Definition: "SELECT 1 AS n",
+			Indexes:    orderedmap.New[string, *model.Index](),
+		}
+		mv.Indexes.Set("idx_mv_n", &model.Index{
+			Schema: "public", Name: "idx_mv_n", Table: "mv",
+			Definition: def, Comment: comment,
+		})
+		return mv
+	}
+
+	t.Run("changed", func(t *testing.T) {
+		current := orderedmap.New[string, *model.View]()
+		current.Set("public.mv", matview(new("old")))
+		desired := orderedmap.New[string, *model.View]()
+		desired.Set("public.mv", matview(new("new")))
+
+		result, err := DiffViews(current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"COMMENT ON INDEX public.idx_mv_n IS 'new';"}, result.CreateStmts)
+	})
+
+	t.Run("unchanged", func(t *testing.T) {
+		current := orderedmap.New[string, *model.View]()
+		current.Set("public.mv", matview(new("same")))
+		desired := orderedmap.New[string, *model.View]()
+		desired.Set("public.mv", matview(new("same")))
+
+		result, err := DiffViews(current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Empty(t, result.CreateStmts)
+	})
+
+	t.Run("new matview", func(t *testing.T) {
+		current := orderedmap.New[string, *model.View]()
+		desired := orderedmap.New[string, *model.View]()
+		desired.Set("public.mv", matview(new("fresh")))
+
+		result, err := DiffViews(current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		require.Len(t, result.CreateStmts, 3)
+		assert.Equal(t, "COMMENT ON INDEX public.idx_mv_n IS 'fresh';", result.CreateStmts[2])
+	})
+}
+
 func TestDiffViews_dropMatview(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.mv", &model.View{

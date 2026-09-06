@@ -1301,7 +1301,10 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc Drop
 
 	// Add new or changed indexes
 	for name, desiredIdx := range desired.All() {
-		if _, ok := current.GetOk(name); ok && sameDef[name] {
+		currentIdx, ok := current.GetOk(name)
+		if ok && sameDef[name] {
+			// The index stays, so only a comment that differs is emitted.
+			result.Stmts = append(result.Stmts, indexCommentStmts(currentIdx.Comment, desiredIdx)...)
 			continue
 		}
 		stmt, err := createIndexSQL(desiredIdx.Definition, desiredIdx.Concurrently)
@@ -1312,9 +1315,24 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc Drop
 		if desiredIdx.Concurrently {
 			result.HasConcurrently = true
 		}
+		// A recreated index carries no comment, so the desired one is emitted
+		// against nothing rather than against what the old index had.
+		result.Stmts = append(result.Stmts, indexCommentStmts(nil, desiredIdx)...)
 	}
 
 	return result, nil
+}
+
+// indexCommentStmts returns the COMMENT ON INDEX the index needs to reach the
+// desired comment, or nothing when the two already agree.
+func indexCommentStmts(currentComment *string, desired *model.Index) []string {
+	if equalPtr(currentComment, desired.Comment) {
+		return nil
+	}
+	if desired.Comment != nil {
+		return []string{desired.CommentSQL()}
+	}
+	return []string{"COMMENT ON INDEX " + model.Ident(desired.Schema, desired.Name) + " IS NULL;"}
 }
 
 // dropIndexSQL builds a DROP INDEX statement, optionally with CONCURRENTLY

@@ -281,6 +281,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					if idx.Concurrently {
 						result.HasConcurrently = true
 					}
+					result.CreateStmts = append(result.CreateStmts, indexCommentStmts(nil, idx)...)
 				}
 			}
 		} else if !equalViewDef(currentView.Definition, desiredView.Definition) || currentView.Materialized != desiredView.Materialized {
@@ -327,6 +328,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 							if idx.Concurrently {
 								result.HasConcurrently = true
 							}
+							result.CreateStmts = append(result.CreateStmts, indexCommentStmts(nil, idx)...)
 						}
 					}
 					recreated[k] = true
@@ -488,7 +490,9 @@ func diffViewIndexes(current, desired *model.View, dc DropChecker) (stmts []stri
 
 	// Add new or changed indexes
 	for name, desiredIdx := range desiredIndexes.All() {
-		if _, ok := currentIndexes.GetOk(name); ok && sameDef[name] {
+		currentIdx, ok := currentIndexes.GetOk(name)
+		if ok && sameDef[name] {
+			stmts = append(stmts, indexCommentStmts(currentIdx.Comment, desiredIdx)...)
 			continue
 		}
 		stmt, err := createIndexSQL(desiredIdx.Definition, desiredIdx.Concurrently)
@@ -499,6 +503,8 @@ func diffViewIndexes(current, desired *model.View, dc DropChecker) (stmts []stri
 		if desiredIdx.Concurrently {
 			hasConcurrently = true
 		}
+		// A recreated index carries no comment of its own.
+		stmts = append(stmts, indexCommentStmts(nil, desiredIdx)...)
 	}
 
 	return stmts, disallowed, hasConcurrently, nil

@@ -591,6 +591,36 @@ CREATE INDEX users_name_idx ON myschema.users (name);
 	assert.Contains(t, output, "users_name_idx")
 }
 
+// An index comment is written under the mapped schema, the same as the index
+// itself.
+func TestDump_WithSchemaMap_IndexComment(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX users_name_idx ON myschema.users (name);
+COMMENT ON INDEX myschema.users_name_idx IS 'Lookup by name';
+`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "COMMENT ON INDEX public.users_name_idx IS 'Lookup by name';")
+}
+
 func TestDump_WithSchemaMap_UnmappedSchema(t *testing.T) {
 	ctx := context.Background()
 

@@ -1,0 +1,16 @@
+omit_schema: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_id ON public.users (id);
+  COMMENT ON INDEX public.idx_users_id IS 'Lookup by id';
+dump: |
+  -- users
+  CREATE TABLE users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_id ON users USING btree (id);
+  COMMENT ON INDEX idx_users_id IS 'Lookup by id';

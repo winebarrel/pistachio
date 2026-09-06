@@ -1,0 +1,28 @@
+# The matview is dropped and recreated, which takes its index and the index's
+# comment with it, so both are written again.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS SELECT id, name FROM public.users;
+  CREATE INDEX idx_user_names ON public.user_names USING btree (name);
+  COMMENT ON INDEX public.idx_user_names IS 'Lookup by name';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS SELECT id, upper(name) AS name FROM public.users;
+  CREATE INDEX idx_user_names ON public.user_names USING btree (name);
+  COMMENT ON INDEX public.idx_user_names IS 'Lookup by name';
+plan: |
+  DROP MATERIALIZED VIEW public.user_names;
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, upper(name) AS name FROM public.users;
+  CREATE INDEX idx_user_names ON public.user_names USING btree (name);
+  COMMENT ON INDEX public.idx_user_names IS 'Lookup by name';

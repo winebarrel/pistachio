@@ -1,0 +1,19 @@
+# The comment follows the index, which is built outside a transaction.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:concurrently
+  CREATE INDEX idx_users_email ON public.users USING btree (email);
+  COMMENT ON INDEX public.idx_users_email IS 'Lookup by email';
+plan: |
+  CREATE INDEX CONCURRENTLY idx_users_email ON public.users USING btree (email);
+  COMMENT ON INDEX public.idx_users_email IS 'Lookup by email';

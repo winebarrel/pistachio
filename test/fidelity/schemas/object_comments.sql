@@ -21,4 +21,6 @@ COMMENT ON DOMAIN public.pos IS 'a domain';
 COMMENT ON SEQUENCE public.ticker IS 'a sequence';
 COMMENT ON FUNCTION public.answer() IS 'a function';
 COMMENT ON PROCEDURE public.tick() IS 'a procedure';
+CREATE INDEX thing_count_n_idx ON public.thing_count USING btree (n);
 COMMENT ON MATERIALIZED VIEW public.thing_count IS 'a materialized view';
+COMMENT ON INDEX public.thing_count_n_idx IS 'an index on a materialized view';

@@ -881,29 +881,27 @@ symmetric. `CREATE AGGREGATE` has a shape `model.Routine` does not cover.
 
 Origin: routine support.
 
-## `COMMENT ON INDEX` is not managed
+## A comment on a constraint, a trigger or a policy is not managed
 
 Priority: low.
 
-Comments are managed for tables, columns, views, materialized views, sequences,
-enums, composite types, domains and routines. Indexes, constraints, triggers and
-policies have no `Comment` field and no case in `parseCommentStmt`, so a
-`COMMENT ON INDEX` in the desired schema is dropped without an error or a diff.
-`pista dump` does not emit one either, so a dump feeds back clean. `pg_dump`
-does emit them, and those lines are lost.
+Comments are managed for tables, columns, views, materialized views, indexes,
+sequences, enums, composite types, domains and routines. `model.Constraint`,
+`model.Trigger` and `model.Policy` have no `Comment` field and no case in
+`parseCommentStmt`, so a `COMMENT ON CONSTRAINT`, `COMMENT ON TRIGGER` or
+`COMMENT ON POLICY` in the desired schema warns and is dropped. `pista dump`
+writes none either, so a dump feeds back clean. `pg_dump` does write them, and
+those lines are lost.
 
-The work is a `Comment` field on `model.Index`, a `pg_description` join in
-`catalog.ListIndexes`, an `OBJECT_INDEX` case in the parser, and emission from
-`diffIndexes` and the create path, since recreating an index drops its comment.
-`COMMENT ON INDEX` names only the schema and the index, so the parser has to
-scan `Table.Indexes` and `View.Indexes` by name. Index names are unique per
-schema, and constraint-backed indexes are already excluded from `ListIndexes`.
+The work is the same shape the index comment took: a `Comment` field on the
+model, a `pg_description` join in the catalog read, a case in the parser, and
+emission from the diff and the create path, since an object that is dropped
+and recreated loses its comment. Each of the three names its relation, so the parser finds the
+owner without scanning. The index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE`
+constraint owns carries its comment as the constraint's, which is why a
+`COMMENT ON INDEX` naming one is dropped today.
 
-Better done together with constraint, trigger and policy comments. Shipping it
-makes `dump` emit index comments, so a database that has one where the desired
-schema does not will plan `COMMENT ON INDEX ... IS NULL;`.
-
-Origin: discussion, 2026-08-25.
+Origin: discussion, 2026-08-25. Narrowed once index comments shipped.
 
 ## An identity column's sequence name is not managed
 

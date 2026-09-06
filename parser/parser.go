@@ -117,6 +117,7 @@ var commentTargetSupported = map[pg_query.ObjectType]bool{
 	pg_query.ObjectType_OBJECT_VIEW:      true,
 	pg_query.ObjectType_OBJECT_MATVIEW:   true,
 	pg_query.ObjectType_OBJECT_COLUMN:    true,
+	pg_query.ObjectType_OBJECT_INDEX:     true,
 	pg_query.ObjectType_OBJECT_SEQUENCE:  true,
 	pg_query.ObjectType_OBJECT_TYPE:      true,
 	pg_query.ObjectType_OBJECT_DOMAIN:    true,
@@ -1893,6 +1894,24 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 				}
 			}
 		}
+	case pg_query.ObjectType_OBJECT_INDEX:
+		schema := defaultSchema
+		idxName := names[0]
+		if len(names) >= 2 {
+			schema = names[0]
+			idxName = names[1]
+		}
+		// COMMENT ON INDEX names the index alone, so the relation it sits on
+		// is found by scanning. An index name is unique within its schema, and
+		// the index a constraint owns is not in the model on either side.
+		if idx := findIndex(tables, views, schema, idxName); idx != nil {
+			if cs.Comment != "" {
+				c := cs.Comment
+				idx.Comment = &c
+			} else {
+				idx.Comment = nil
+			}
+		}
 	case pg_query.ObjectType_OBJECT_SEQUENCE:
 		schema := defaultSchema
 		seqName := names[0]
@@ -1910,6 +1929,23 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 			}
 		}
 	}
+}
+
+// findIndex returns the index of the given schema and name from the tables and
+// views that carry one, or nil when no relation declares it. Every table and
+// view the parser builds holds an index map, so neither is checked for nil.
+func findIndex(tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], schema, name string) *model.Index {
+	for _, t := range tables.CollectValues() {
+		if idx, ok := t.Indexes.GetOk(name); ok && idx.Schema == schema {
+			return idx
+		}
+	}
+	for _, v := range views.CollectValues() {
+		if idx, ok := v.Indexes.GetOk(name); ok && idx.Schema == schema {
+			return idx
+		}
+	}
+	return nil
 }
 
 func parseCommentOnType(cs *pg_query.CommentStmt, defaultSchema string, enums *orderedmap.Map[string, *model.Enum], compositeTypes *orderedmap.Map[string, *model.CompositeType]) {

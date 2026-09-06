@@ -360,7 +360,6 @@ func TestParseSQL_NoWarnForAlterTableOnIgnoredTable(t *testing.T) {
 // dropped, so it warns like any other unsupported statement.
 func TestParseSQL_WarnsUnsupportedCommentTarget(t *testing.T) {
 	for _, stmt := range []string{
-		`COMMENT ON INDEX public.t_idx IS 'i';`,
 		`COMMENT ON CONSTRAINT t_id_check ON public.t IS 'c';`,
 		`COMMENT ON SCHEMA public IS 's';`,
 		`COMMENT ON TRIGGER trg ON public.t IS 'g';`,
@@ -388,6 +387,7 @@ func TestParseSQL_NoWarnForSupportedCommentTargets(t *testing.T) {
 		CREATE DOMAIN public.d AS text;
 		CREATE SEQUENCE public.s;
 		CREATE TABLE public.t (id integer);
+		CREATE INDEX t_id_idx ON public.t (id);
 		CREATE VIEW public.v AS SELECT id FROM public.t;
 		CREATE MATERIALIZED VIEW public.mv AS SELECT id FROM public.t;
 		CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
@@ -401,9 +401,102 @@ func TestParseSQL_NoWarnForSupportedCommentTargets(t *testing.T) {
 		COMMENT ON DOMAIN public.d IS 'd';
 		COMMENT ON FUNCTION public.f() IS 'f';
 		COMMENT ON PROCEDURE public.p() IS 'p';
+		COMMENT ON INDEX public.t_id_idx IS 'i';
 	`)
 	require.NoError(t, err)
 	assert.Empty(t, buf.String())
+}
+
+// COMMENT ON INDEX names the index alone, so the relation carrying it is found
+// by scanning the tables and the views.
+func TestParseSQL_CommentOnIndex(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer, n text);
+		CREATE INDEX t_n_idx ON public.t (n);
+		CREATE MATERIALIZED VIEW public.mv AS SELECT id FROM public.t;
+		CREATE INDEX mv_id_idx ON public.mv (id);
+		COMMENT ON INDEX public.t_n_idx IS 'on a table';
+		COMMENT ON INDEX public.mv_id_idx IS 'on a materialized view';
+	`)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.t")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("t_n_idx")
+	require.True(t, ok)
+	require.NotNil(t, idx.Comment)
+	assert.Equal(t, "on a table", *idx.Comment)
+
+	mv, ok := result.Views.GetOk("public.mv")
+	require.True(t, ok)
+	mvIdx, ok := mv.Indexes.GetOk("mv_id_idx")
+	require.True(t, ok)
+	require.NotNil(t, mvIdx.Comment)
+	assert.Equal(t, "on a materialized view", *mvIdx.Comment)
+}
+
+// An index name written without a schema takes the default schema, which is
+// the one the run works in rather than public.
+func TestParseSQL_CommentOnIndexUnqualified(t *testing.T) {
+	result, err := parser.ParseSQLWithSchema(`
+		CREATE TABLE myschema.t (id integer, n text);
+		CREATE INDEX t_n_idx ON myschema.t (n);
+		COMMENT ON INDEX t_n_idx IS 'unqualified';
+	`, "myschema")
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("myschema.t")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("t_n_idx")
+	require.True(t, ok)
+	require.NotNil(t, idx.Comment)
+	assert.Equal(t, "unqualified", *idx.Comment)
+}
+
+// An empty comment clears the one the index carries, the same as every other
+// COMMENT ON target, and one naming an index no relation declares is dropped.
+// Index names are unique per schema, not per database, so the schema decides
+// which of two same-named indexes the comment lands on.
+func TestParseSQL_CommentOnIndexSameNameOtherSchema(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (n text);
+		CREATE INDEX n_idx ON public.t (n);
+		CREATE TABLE other.t (n text);
+		CREATE INDEX n_idx ON other.t (n);
+		COMMENT ON INDEX other.n_idx IS 'the other one';
+	`)
+	require.NoError(t, err)
+
+	pub, ok := result.Tables.GetOk("public.t")
+	require.True(t, ok)
+	pubIdx, ok := pub.Indexes.GetOk("n_idx")
+	require.True(t, ok)
+	assert.Nil(t, pubIdx.Comment)
+
+	other, ok := result.Tables.GetOk("other.t")
+	require.True(t, ok)
+	otherIdx, ok := other.Indexes.GetOk("n_idx")
+	require.True(t, ok)
+	require.NotNil(t, otherIdx.Comment)
+	assert.Equal(t, "the other one", *otherIdx.Comment)
+}
+
+func TestParseSQL_CommentOnIndexEmptyAndUnknown(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer, n text);
+		CREATE INDEX t_n_idx ON public.t (n);
+		COMMENT ON INDEX public.t_n_idx IS 'kept for a moment';
+		COMMENT ON INDEX public.t_n_idx IS '';
+		COMMENT ON INDEX public.nope IS 'no such index';
+		COMMENT ON INDEX other.t_n_idx IS 'another schema';
+	`)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.t")
+	require.True(t, ok)
+	idx, ok := tbl.Indexes.GetOk("t_n_idx")
+	require.True(t, ok)
+	assert.Nil(t, idx.Comment)
 }
 
 // COMMENT ON COLUMN names a composite type attribute as well as a table

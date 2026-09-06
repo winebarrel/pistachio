@@ -1,0 +1,21 @@
+# The column rename rewrites the index definition on the current side, and the
+# comment survives that rewrite, so only the rename is planned.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_name ON public.users (name);
+  COMMENT ON INDEX public.idx_users_name IS 'Lookup by name';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:renamed-from name
+      display_name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_name ON public.users (display_name);
+  COMMENT ON INDEX public.idx_users_name IS 'Lookup by name';
+plan: |
+  ALTER TABLE public.users RENAME COLUMN name TO display_name;

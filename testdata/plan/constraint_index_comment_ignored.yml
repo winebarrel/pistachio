@@ -1,0 +1,14 @@
+# The index a constraint owns is the constraint's, not an index pistachio
+# holds, so a comment naming it is dropped and nothing is planned.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON INDEX public.users_pkey IS 'the primary key index';
+plan: ""

@@ -971,6 +971,64 @@ func TestDiffIndexes_change(t *testing.T) {
 	assert.Equal(t, "CREATE INDEX idx_name ON public.users USING hash (name);", idxResult.Stmts[1])
 }
 
+func TestDiffIndexes_comment(t *testing.T) {
+	const def = "CREATE INDEX idx_name ON public.users USING btree (name)"
+
+	t.Run("added", func(t *testing.T) {
+		current := orderedmap.New[string, *model.Index]()
+		current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def})
+		desired := orderedmap.New[string, *model.Index]()
+		desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def, Comment: new("Lookup by name")})
+
+		idxResult, err := diffIndexes(current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"COMMENT ON INDEX public.idx_name IS 'Lookup by name';"}, idxResult.Stmts)
+	})
+
+	t.Run("removed", func(t *testing.T) {
+		current := orderedmap.New[string, *model.Index]()
+		current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def, Comment: new("Lookup by name")})
+		desired := orderedmap.New[string, *model.Index]()
+		desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def})
+
+		idxResult, err := diffIndexes(current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"COMMENT ON INDEX public.idx_name IS NULL;"}, idxResult.Stmts)
+	})
+
+	t.Run("unchanged", func(t *testing.T) {
+		current := orderedmap.New[string, *model.Index]()
+		current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def, Comment: new("Lookup by name")})
+		desired := orderedmap.New[string, *model.Index]()
+		desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def, Comment: new("Lookup by name")})
+
+		idxResult, err := diffIndexes(current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Empty(t, idxResult.Stmts)
+	})
+
+	t.Run("recreated", func(t *testing.T) {
+		// The recreate takes the comment with it, so the same comment on both
+		// sides still has to be applied again.
+		current := orderedmap.New[string, *model.Index]()
+		current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def, Comment: new("Lookup by name")})
+		desired := orderedmap.New[string, *model.Index]()
+		desired.Set("idx_name", &model.Index{
+			Schema: "public", Name: "idx_name",
+			Definition: "CREATE INDEX idx_name ON public.users USING hash (name)",
+			Comment:    new("Lookup by name"),
+		})
+
+		idxResult, err := diffIndexes(current, desired, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"DROP INDEX public.idx_name;",
+			"CREATE INDEX idx_name ON public.users USING hash (name);",
+			"COMMENT ON INDEX public.idx_name IS 'Lookup by name';",
+		}, idxResult.Stmts)
+	})
+}
+
 func TestDiffIndexes_add_uniqueConcurrently_perDirective(t *testing.T) {
 	current := orderedmap.New[string, *model.Index]()
 	desired := orderedmap.New[string, *model.Index]()
