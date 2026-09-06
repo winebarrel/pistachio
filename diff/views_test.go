@@ -131,6 +131,44 @@ func TestDiffViews_checkOptionNoChange(t *testing.T) {
 	assert.Empty(t, result.CreateStmts)
 }
 
+func TestDiffViews_storageParams(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{
+		Schema: "public", Name: "v1", Definition: "SELECT 1",
+		StorageParams: model.SortedStorageParams(map[string]string{"security_barrier": "true"}),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v1", &model.View{
+		Schema: "public", Name: "v1", Definition: "SELECT 1",
+		StorageParams: model.SortedStorageParams(map[string]string{"security_invoker": "true"}),
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"ALTER VIEW public.v1 SET (security_invoker='true');",
+		"ALTER VIEW public.v1 RESET (security_barrier);",
+	}, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
+}
+
+func TestDiffViews_matViewStorageParams(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv1", &model.View{
+		Schema: "public", Name: "mv1", Definition: "SELECT 1", Materialized: true,
+		StorageParams: model.SortedStorageParams(map[string]string{"fillfactor": "70"}),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv1", &model.View{
+		Schema: "public", Name: "mv1", Definition: "SELECT 1", Materialized: true,
+		StorageParams: model.SortedStorageParams(map[string]string{"fillfactor": "90"}),
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER MATERIALIZED VIEW public.mv1 SET (fillfactor='90');"}, result.CreateStmts)
+}
+
 // A definition change carries the clause on CREATE OR REPLACE VIEW, which
 // replaces the options as a whole, so no ALTER follows it.
 func TestDiffViews_checkOptionWithDefinitionChange(t *testing.T) {
