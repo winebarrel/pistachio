@@ -257,7 +257,7 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 // (called from diffTable), so a plain rename does not produce redundant
 // drop/recreate operations on those dependents. View definitions and
 // foreign-key references in *other* tables are still not rewritten; see
-// TODO.md "A rename is not carried into another object's reference".
+// LIMITATIONS.md "A rename is not carried into another object's reference".
 func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Column]) ([]string, *orderedmap.Map[string, *model.Column], error) {
 	var stmts []string
 	adjusted := cloneMap(current)

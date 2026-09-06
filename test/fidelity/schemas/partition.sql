@@ -1,7 +1,7 @@
 -- No index on the partitioned parent: `dump` writes each table with its own
 -- indexes, so the parent's index is created before the partitions, and
 -- PostgreSQL then creates the partition's copy itself under the name the dump
--- goes on to declare. TODO.md records it.
+-- goes on to declare. LIMITATIONS.md records it.
 CREATE TABLE public.logs (
     id bigint NOT NULL,
     at date NOT NULL,

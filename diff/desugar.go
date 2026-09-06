@@ -17,7 +17,7 @@ import (
 // reaches the DDL: the diff emits the node it parsed.
 //
 // A typed literal is re-printed in its type's output form and still drifts.
-// TODO.md covers it.
+// LIMITATIONS.md covers it.
 
 // desugarBetween expands BETWEEN into the comparisons parse analysis defines it
 // as, and returns nil for anything else. The four shapes follow
