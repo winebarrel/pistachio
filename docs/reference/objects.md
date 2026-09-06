@@ -176,7 +176,7 @@ ALTER TABLE public.orders ALTER CONSTRAINT orders_user_id_fkey DEFERRABLE INITIA
 
 That rewrites a catalog row rather than rescanning the table. PostgreSQL takes the statement on a foreign key alone, so the same change to a unique, primary key or exclusion constraint still drops and adds, rebuilding the index.
 
-A partition holds a copy of every key its parent declares. The copy takes no statement of its own, since PostgreSQL rejects one and the parent's reaches it.
+A partition holds a copy of every key its parent declares. The copy takes no statement of its own, since PostgreSQL rejects one, and it needs none: the parent's `ALTER CONSTRAINT` and `VALIDATE CONSTRAINT` both reach it.
 
 A key that is also being validated takes `VALIDATE CONSTRAINT` next to the `ALTER CONSTRAINT`. A validated key the desired schema writes `NOT VALID` is added back, because nothing takes the flag away.
 

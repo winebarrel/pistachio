@@ -1761,6 +1761,15 @@ func TestDiffForeignKeys_deferral(t *testing.T) {
 		assert.Empty(t, add)
 	})
 
+	t.Run("partition copy is left alone when it is also validated", func(t *testing.T) {
+		// A NOT VALID key on a partitioned table needs 18. The parent's
+		// VALIDATE reaches the copy the way its ALTER does, so the copy takes
+		// neither statement.
+		drop, add := run(fk(plain, false, false, false, true), fk(deferred, true, true, true, false))
+		assert.Empty(t, drop)
+		assert.Empty(t, add)
+	})
+
 	t.Run("definition change still recreates", func(t *testing.T) {
 		cascade := "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED"
 		drop, add := run(fk(plain, false, false, true, false), fk(cascade, true, true, true, false))

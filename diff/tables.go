@@ -1406,13 +1406,13 @@ func foreignKeyChanges(current, desired *orderedmap.Map[string, *model.ForeignKe
 		}
 		sameDef, deferralOnly := compareFKDef(currentFk.Definition, desiredFk.Definition, schema)
 		change := newDefinitionChange(sameDef, currentFk.Validated, desiredFk.Validated)
-		sameValidation := currentFk.Validated == desiredFk.Validated
 		switch {
 		case !deferralOnly:
-		case currentFk.Inherited && sameValidation:
+		case currentFk.Inherited:
 			// The partition's copy of the parent's key takes no statement of
-			// its own: PostgreSQL rejects one, and the parent's ALTER reaches
-			// the copy.
+			// its own: PostgreSQL rejects one, whatever it says. Both the
+			// parent's ALTER CONSTRAINT and its VALIDATE CONSTRAINT reach the
+			// copy, so leaving it out settles it either way.
 			change = definitionChange{}
 		case currentFk.Validated && !desiredFk.Validated:
 			// Nothing takes the validated flag away, so the key is added back
@@ -1421,7 +1421,7 @@ func foreignKeyChanges(current, desired *orderedmap.Map[string, *model.ForeignKe
 			change.deferralOnly = true
 			// The key stays, so a NOT VALID one the desired schema validates
 			// takes VALIDATE CONSTRAINT next to the ALTER.
-			change.validateOnly = !sameValidation
+			change.validateOnly = !currentFk.Validated && desiredFk.Validated
 		}
 		changes[name] = change
 	}
