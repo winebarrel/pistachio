@@ -22,3 +22,20 @@ dump: |
      FROM users;
   CREATE INDEX idx_user_names ON public.user_names USING btree (name);
   COMMENT ON INDEX public.idx_user_names IS 'Lookup by name';
+dump_pg16: &dump_pg16plus |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_names
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id,
+      name
+     FROM users;
+  CREATE INDEX idx_user_names ON public.user_names USING btree (name);
+  COMMENT ON INDEX public.idx_user_names IS 'Lookup by name';
+dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus
