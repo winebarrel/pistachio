@@ -7,28 +7,33 @@ An entry marked `Priority: low` is drift that a `pista dump` output fed back
 as the desired schema does not hit. Only a desired schema written some other
 way reaches it, and writing it the way `dump` does avoids it.
 
-## Auto-rewrite of column references in views and cross-table FKs
+## A rename is not carried into another object's reference
 
-When a column is renamed via `-- pista:renamed-from`, the rewriter only
-updates same-table dependents (indexes, constraints, FKs, triggers,
-policies and generated expressions on the same table). The following
-references are **not** rewritten and may produce a redundant `DROP/CREATE`
-on the first plan (the second run after applying the rename is clean):
+`-- pista:renamed-from` adjusts the current side so the change is planned as a
+rename rather than a drop and a create. The adjustment reaches the renamed
+object's own dependents alone: a column's indexes, constraints, foreign keys,
+triggers, policies and generated expressions on the same table, and a table's
+own indexes and foreign keys. Two references are left as they were:
 
-- View / materialized view definitions that `SELECT` the renamed column.
-- Foreign keys in *other* tables whose `REFERENCES this_table(renamed_col)`
-  points at the renamed column (PkAttrs side).
+- A view or materialized view definition that names the renamed table or
+  selects the renamed column.
+- A foreign key in another table whose `REFERENCES` names the renamed table or
+  column.
 
-Resolving these requires cross-object awareness in the diff phase.
+PostgreSQL updates such a reference itself on RENAME, so the second run is
+clean and only the first plan carries a redundant drop and create for the
+dependent object. Closing it needs cross-object awareness in the diff phase.
 
-The rewrite does not reach a partition child. `diffTable` takes a separate
-branch for one, which returns before the rewrite block, and a `PARTITION OF`
-child declares no columns, so its own rename map is empty. A trigger or policy
-created directly on a child is in the model, since the catalog excludes only
-the clones the parent pushes down, so a rename on the parent leaves a redundant
-statement on such a child. Carrying the rename there needs the parent's map.
+A column rename does not reach a partition child either. `diffTable` takes a
+separate branch for one, which returns before the rewrite block, and a
+`PARTITION OF` child declares no columns, so its own rename map is empty. A
+trigger or policy created directly on a child is in the model, since the
+catalog excludes only the clones the parent pushes down, so a rename on the
+parent leaves a redundant statement on such a child. Carrying the rename there
+needs the parent's map.
 
-Origin: [#123](https://github.com/winebarrel/pistachio/pull/123).
+Origin: [#123](https://github.com/winebarrel/pistachio/pull/123) for the column
+half, a NOTE in `diff/rename.go:detectTableRenames` for the table half.
 
 ## Perpetual failure on a qualified reference in a generated expression
 
@@ -116,19 +121,6 @@ Closing it means emitting the statement once per partition, which the column
 diff has no reason to walk otherwise.
 
 Origin: review of [#442](https://github.com/winebarrel/pistachio/pull/442).
-
-## Table rename: cross-table dependents
-
-`detectTableRenames` rewrites the renamed table's own indexes and FKs
-in the adjusted current state, but other tables' `FOREIGN KEY ... REFERENCES old_table(...)`
-and view definitions that reference the old table name are not rewritten.
-PostgreSQL auto-updates these on RENAME, so a second plan/apply comes out
-clean, but the first plan can emit redundant drop/recreate operations for
-the dependent objects. Same scope as the existing column-rename TODO above
-("Auto-rewrite of column references in views and cross-table FKs"),
-extended to table-level renames.
-
-Origin: pre-existing NOTE in `diff/rename.go:detectTableRenames`.
 
 ## Policy USING / WITH CHECK normalization for subquery column refs
 
