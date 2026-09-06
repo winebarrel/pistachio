@@ -9,7 +9,7 @@
 #
 # The sub-query in v_nested_sub writes AS max because PostgreSQL names a
 # sub-select's output column on its own and pg_get_viewdef then prints the name
-# it chose. That drift is unrelated to qualification and is recorded in TODO.md.
+# it chose. That drift is unrelated to qualification and is recorded in LIMITATIONS.md.
 init: |
   CREATE TABLE public.t (
       a text,

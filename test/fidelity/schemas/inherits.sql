@@ -1,9 +1,9 @@
 -- No comment on an inherited column: such a comment is dropped at parse time,
 -- since an INHERITS child carries only the columns it declares itself.
--- TODO.md records it.
+-- LIMITATIONS.md records it.
 --
 -- No child of more than one parent: only the first is read, so the dump names
--- that one alone. TODO.md records it.
+-- that one alone. LIMITATIONS.md records it.
 CREATE TABLE public.shapes (
     id integer NOT NULL,
     name text,

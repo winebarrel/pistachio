@@ -12,7 +12,7 @@ on:
       - hooks.py
       - requirements-docs.txt
       - CHANGELOG.md
-      - TODO.md
+      - LIMITATIONS.md
       - .github/workflows/docs.yml
   pull_request:
     paths:
@@ -21,7 +21,7 @@ on:
       - hooks.py
       - requirements-docs.txt
       - CHANGELOG.md
-      - TODO.md
+      - LIMITATIONS.md
       - .github/workflows/docs.yml
 
 permissions:

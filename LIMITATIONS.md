@@ -1,11 +1,10 @@
-# TODO
+# Known limitations
 
-Items intentionally deferred from prior PRs. Each entry notes the originating
-PR for context.
+What pistachio does not handle, and what closing each one would take. Each
+entry notes where it came from.
 
-An entry marked `Priority: low` is drift that a `pista dump` output fed back
-as the desired schema does not hit. Only a desired schema written some other
-way reaches it, and writing it the way `dump` does avoids it.
+An entry marked `Priority: low` is drift a `pista dump` output does not hit.
+Writing the schema the way `dump` writes it avoids it.
 
 ## A rename is not carried into another object's reference
 

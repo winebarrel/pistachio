@@ -212,7 +212,7 @@ func collectColumnRefsInFKDef(def string) []string {
 //
 // Only unqualified names are read, as they are for an index or a constraint.
 // A generated expression may write one qualified, which the diff cannot
-// compare at all; TODO.md records that.
+// compare at all; LIMITATIONS.md records that.
 func collectColumnRefsInColumnExpr(expr string) []string {
 	_, target, err := pgast.ParseExpr(expr)
 	if err != nil {
