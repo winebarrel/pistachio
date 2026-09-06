@@ -10,6 +10,8 @@ Pistachio is a declarative schema management tool for PostgreSQL, written in Go.
 
 Drift that appears only with a desired schema written some other way is low priority, since matching what `dump` writes avoids it.
 
+`pg_dump` output is not the workflow, so do not force a fix for a statement it writes that pistachio does not read.
+
 `CREATE EXTENSION`, `CREATE ROLE` and `GRANT` are out of scope. They sit at a different privilege layer, so manage them where the rest of the infrastructure is managed, Terraform for example.
 
 Avoid normalization that makes the diff complex.
