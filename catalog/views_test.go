@@ -2,6 +2,7 @@ package catalog_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -114,6 +115,38 @@ func TestViews(t *testing.T) {
 		// Another option in reloptions does not stand in for it.
 		assert.Empty(t, views.Get("public.barrier_items").CheckOption)
 		assert.Empty(t, views.Get("public.plain_items").CheckOption)
+	})
+
+	t.Run("view storage params", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.items (
+				id integer NOT NULL,
+				body text,
+				CONSTRAINT items_pkey PRIMARY KEY (id)
+			);
+			CREATE VIEW public.safe_items WITH (security_invoker = true, security_barrier = true) AS SELECT id FROM public.items WITH CASCADED CHECK OPTION;
+			CREATE VIEW public.plain_items AS SELECT id FROM public.items;
+			CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor = 70, toast.autovacuum_enabled = off) AS SELECT id, body FROM public.items;
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		views, err := cat.Views(ctx)
+		require.NoError(t, err)
+
+		// Keyed in name order whatever order reloptions kept, and the check
+		// option is not among them: it is read on its own.
+		safe := views.Get("public.safe_items")
+		assert.Equal(t, []string{"security_barrier", "security_invoker"}, slices.Collect(safe.StorageParams.Keys()))
+		assert.Equal(t, "true", safe.StorageParams.Get("security_barrier"))
+		assert.Equal(t, "cascaded", safe.CheckOption)
+
+		assert.Equal(t, 0, views.Get("public.plain_items").StorageParams.Len())
+
+		// A materialized view carries the TOAST relation's parameters too.
+		bodies := views.Get("public.item_bodies")
+		assert.Equal(t, []string{"fillfactor", "toast.autovacuum_enabled"}, slices.Collect(bodies.StorageParams.Keys()))
+		assert.Equal(t, "70", bodies.StorageParams.Get("fillfactor"))
+		assert.Equal(t, "off", bodies.StorageParams.Get("toast.autovacuum_enabled"))
 	})
 
 	t.Run("view comment", func(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -595,6 +596,35 @@ CREATE VIEW public.none AS SELECT id, status FROM public.items WHERE status = 'a
 
 	v := result.Views.Get("public.local_items")
 	assert.Equal(t, "CREATE OR REPLACE VIEW public.local_items AS\nSELECT id, status FROM public.items WHERE status = 'active'\n  WITH LOCAL CHECK OPTION;", v.SQL())
+
+	// The check option is not read as a storage parameter as well, whichever
+	// way it was written.
+	assert.Equal(t, 0, result.Views.Get("public.bare_param").StorageParams.Len())
+	assert.Equal(t, []string{"security_barrier"}, slices.Collect(result.Views.Get("public.quoted_param").StorageParams.Keys()))
+}
+
+func TestParseSQL_ViewStorageParams(t *testing.T) {
+	sql := `CREATE TABLE public.items (id integer NOT NULL, body text);
+CREATE VIEW public.safe_items WITH (security_invoker = true, security_barrier) AS SELECT id FROM public.items;
+CREATE VIEW public.plain_items AS SELECT id FROM public.items;
+CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor = 70, toast.autovacuum_enabled = off) AS SELECT id, body FROM public.items;`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	// Keyed in name order whatever order the file kept, and a parameter
+	// written without a value asks for true.
+	safe := result.Views.Get("public.safe_items")
+	assert.Equal(t, []string{"security_barrier", "security_invoker"}, slices.Collect(safe.StorageParams.Keys()))
+	assert.Equal(t, "true", safe.StorageParams.Get("security_barrier"))
+	assert.Equal(t, "CREATE OR REPLACE VIEW public.safe_items WITH (security_barrier='true', security_invoker='true') AS\nSELECT id FROM public.items;", safe.SQL())
+
+	assert.Equal(t, 0, result.Views.Get("public.plain_items").StorageParams.Len())
+
+	bodies := result.Views.Get("public.item_bodies")
+	assert.Equal(t, "70", bodies.StorageParams.Get("fillfactor"))
+	assert.Equal(t, "off", bodies.StorageParams.Get("toast.autovacuum_enabled"))
+	assert.Equal(t, "CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor='70', toast.autovacuum_enabled='off') AS\nSELECT id, body FROM public.items;", bodies.SQL())
 }
 
 func TestParseSQL_ViewCommentOnColumn(t *testing.T) {

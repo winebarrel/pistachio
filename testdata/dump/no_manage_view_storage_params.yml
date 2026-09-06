@@ -1,0 +1,52 @@
+# Without --manage-storage-param the materialized view's clause is left out,
+# the way a table's is. The plain view keeps its own: security_barrier and
+# security_invoker are what the view means, and a dump that dropped them would
+# restore a view that leaks rows or reads with the wrong privileges.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.safe_items WITH (security_barrier = true) AS SELECT id, status FROM public.items;
+  CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor = 70) AS SELECT id, status FROM public.items;
+dump: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.item_bodies
+  CREATE MATERIALIZED VIEW public.item_bodies AS
+  SELECT items.id,
+      items.status
+     FROM items;
+
+  -- public.safe_items
+  CREATE OR REPLACE VIEW public.safe_items WITH (security_barrier='true') AS
+  SELECT items.id,
+      items.status
+     FROM items;
+dump_pg16: &dump_pg16plus |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+
+  -- public.item_bodies
+  CREATE MATERIALIZED VIEW public.item_bodies AS
+  SELECT id,
+      status
+     FROM items;
+
+  -- public.safe_items
+  CREATE OR REPLACE VIEW public.safe_items WITH (security_barrier='true') AS
+  SELECT id,
+      status
+     FROM items;
+dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus

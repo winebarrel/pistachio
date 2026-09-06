@@ -342,23 +342,27 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				// Regular view: CREATE OR REPLACE
 				result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 			}
-		} else if desiredView.Materialized {
-			// Definition unchanged, diff indexes
-			viewIdxStmts, viewIdxDisallowed, viewIdxHasConcurrently, err := diffViewIndexes(currentView, desiredView, dc)
-			if err != nil {
-				return nil, err
+		} else {
+			// Definition unchanged. What sits beside it is diffed on its own:
+			// a materialized view's indexes, a plain view's check option, and
+			// the storage parameters of either. A replaced or recreated
+			// definition carries all of that on its own statement, which
+			// replaces the options as a whole, so only these branches need an
+			// ALTER.
+			if desiredView.Materialized {
+				viewIdxStmts, viewIdxDisallowed, viewIdxHasConcurrently, err := diffViewIndexes(currentView, desiredView, dc)
+				if err != nil {
+					return nil, err
+				}
+				result.CreateStmts = append(result.CreateStmts, viewIdxStmts...)
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, viewIdxDisallowed...)
+				if viewIdxHasConcurrently {
+					result.HasConcurrently = true
+				}
+			} else if currentView.CheckOption != desiredView.CheckOption {
+				result.CreateStmts = append(result.CreateStmts, model.SetCheckOptionSQL(k, desiredView.CheckOption))
 			}
-			result.CreateStmts = append(result.CreateStmts, viewIdxStmts...)
-			result.DisallowedDropStmts = append(result.DisallowedDropStmts, viewIdxDisallowed...)
-			if viewIdxHasConcurrently {
-				result.HasConcurrently = true
-			}
-		} else if currentView.CheckOption != desiredView.CheckOption {
-			// Definition unchanged, check option changed. A replaced
-			// definition carries the clause on its CREATE OR REPLACE VIEW,
-			// which replaces the options as a whole, so only this branch
-			// needs an ALTER.
-			result.CreateStmts = append(result.CreateStmts, model.SetCheckOptionSQL(k, desiredView.CheckOption))
+			result.CreateStmts = append(result.CreateStmts, diffViewStorageParams(k, currentView, desiredView)...)
 		}
 
 		// A view that stayed in place, whether its definition was replaced or
