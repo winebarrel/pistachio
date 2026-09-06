@@ -176,7 +176,7 @@ ALTER TABLE public.orders ALTER CONSTRAINT orders_user_id_fkey DEFERRABLE INITIA
 
 That rewrites a catalog row rather than rescanning the table. PostgreSQL takes the statement on a foreign key alone, so the same change to a unique, primary key or exclusion constraint still drops and adds, rebuilding the index.
 
-A partition holds a copy of every foreign key its parent declares, and the copy takes no statement of its own. PostgreSQL rejects one, and the parent's settles the copy as well: its `DROP` takes the copy with it, its `ADD` puts a new copy back, and its `ALTER CONSTRAINT` and `VALIDATE CONSTRAINT` recurse. `dump` leaves the copy out for the same reason, as `pg_dump` does. A key the partition declares itself is not a copy and is managed like any other.
+A partition holds a copy of every foreign key its parent declares, and the copy takes no statement of its own. PostgreSQL rejects one, and the parent's settles the copy as well: its `DROP` takes the copy with it, its `ADD` puts a new copy back, and its `ALTER CONSTRAINT` and `VALIDATE CONSTRAINT` recurse. `dump` leaves the copy out for the same reason, as `pg_dump` does. A rename is the one statement that does not reach the copy: it keeps its old name while a partition attached later takes the new one, and since the copy is neither written nor compared, nothing drifts. A key the partition declares itself is not a copy and is managed like any other.
 
 A foreign key on a partitioned table is added without `ONLY`, which PostgreSQL rejects there. Nothing inherits a foreign key, so the word decides nothing on a plain table either; it is kept there because that is what `pg_dump` writes.
 
