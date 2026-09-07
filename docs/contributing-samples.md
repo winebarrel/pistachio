@@ -36,9 +36,12 @@ checking them one at a time, use `make schema`.
 
 ## What the check does
 
-The runner starts with `make clean-schema`, so a schema left behind by an
-earlier run cannot make a load fail on objects that already exist. Then, for
-each sample, it:
+The runner starts with `make clean-schema`, which drops every extension and
+then every user schema, so neither a schema nor an extension left behind by an
+earlier run can make a load fail on objects that already exist. The extensions
+go first because a table an extension owns, PostGIS's `spatial_ref_sys` among
+them, cannot be dropped while the extension is there. Then, for each sample,
+it:
 
 1. Runs `make reset-db`, which drops and recreates `public` and drops every
    extension. The samples that load into `public` are the only ones that can
