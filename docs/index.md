@@ -15,7 +15,9 @@ schema in SQL; pistachio generates the DDL diff.
 
 ![pistachio workflow](workflow.svg)
 
-![](https://github.com/user-attachments/assets/8ceaef33-7d4e-4bd8-bf94-1a79342cf1e1)
+<video src="https://github.com/user-attachments/assets/7db0e761-2446-47cd-9e00-f37b1152dcff"
+       width="800" style="max-width: 100%"
+       controls autoplay muted loop playsinline></video>
 
 ## Try it with Docker
 
