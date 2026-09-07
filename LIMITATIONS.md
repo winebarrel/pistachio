@@ -620,6 +620,8 @@ Origin: discussion, 2026-08-25. Narrowed once index comments shipped.
 
 ## An identity column's sequence name is not managed
 
+Priority: low.
+
 The sequence behind an identity column is created as `<table>_<column>_seq` and
 `pista dump` never writes the `SEQUENCE NAME` that `pg_dump` does, so a
 sequence renamed by hand restores under the default name. The options the
@@ -630,5 +632,8 @@ Reading it is one more column in the identity read, and `CREATE TABLE` takes
 not: changing the name on an existing column is `ALTER SEQUENCE ... RENAME TO`,
 and pistachio takes a rename from a `-- pista:renamed-from` directive rather
 than inferring one, so a directive would have to reach a column's sequence.
+
+Managing the name also means `dump` writes `SEQUENCE NAME` on every identity
+column. No plan to close this.
 
 Origin: identity sequence options, 2026-09-02.
