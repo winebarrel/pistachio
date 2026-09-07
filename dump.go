@@ -8,6 +8,7 @@ import (
 
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/catalog"
+	"github.com/winebarrel/pistachio/format"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/toposort"
 )
@@ -18,6 +19,7 @@ type DumpOptions struct {
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
 	SortByDeps bool   `xor:"split-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle. Cannot be used with --split."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
+	NoFormat   bool   `env:"PISTA_NO_FORMAT" help:"Write the dump as the model renders it, without the layout pista fmt applies."`
 }
 
 type DumpResult struct {
@@ -30,6 +32,7 @@ type DumpResult struct {
 	Routines       *orderedmap.Map[string, *model.Routine]
 	OmitSchema     bool
 	SortByDeps     bool
+	NoFormat       bool
 	Count          ObjectCount
 }
 
@@ -243,7 +246,7 @@ func (r *DumpResult) String() string {
 			return sql
 		}
 	}
-	return formatSchemaSQL(r.enums(), r.domains(), r.compositeTypes(), r.sequences(), r.routines(), r.tables(), r.views())
+	return r.formatSchemaSQL(r.enums(), r.domains(), r.compositeTypes(), r.sequences(), r.routines(), r.tables(), r.views())
 }
 
 // dumpItem carries an object's rendered SQL together with its position in the
@@ -321,7 +324,7 @@ func (r *DumpResult) dependencyOrderedSQL() (string, bool) {
 	for i, it := range items {
 		parts[i] = it.sql
 	}
-	return strings.Join(parts, "\n\n"), true
+	return strings.TrimSuffix(r.formatSQL(strings.Join(parts, "\n\n")), "\n"), true
 }
 
 // appendDumpItems zips the original schema-qualified map (source of the
@@ -369,7 +372,7 @@ func orEmpty[V any](m *orderedmap.Map[string, V]) *orderedmap.Map[string, V] {
 // Order: enums -> domains -> composite types -> sequences -> tables -> views
 // (enums/domains/composite types first since later objects may depend on them;
 // sequences before tables since column defaults may reference them).
-func formatSchemaSQL(
+func (r *DumpResult) formatSchemaSQL(
 	enums *orderedmap.Map[string, *model.Enum],
 	domains *orderedmap.Map[string, *model.Domain],
 	compositeTypes *orderedmap.Map[string, *model.CompositeType],
@@ -400,7 +403,28 @@ func formatSchemaSQL(
 	if views != nil && views.Len() > 0 {
 		parts = append(parts, model.ViewsToSQL(views))
 	}
-	return strings.Join(parts, "\n\n")
+	return strings.TrimSuffix(r.formatSQL(strings.Join(parts, "\n\n")), "\n")
+}
+
+// formatSQL lays the dump out with the formatter pista fmt uses, so the two
+// agree on where the lines break and how far they are indented. --no-format
+// leaves the model's own rendering alone.
+//
+// A model read from a catalog renders SQL that parses, so the error path is
+// not reached by a real dump. A model built by hand can render something that
+// does not parse, an empty sequence type for one, and that is returned as it
+// was rather than failing the dump.
+func (r *DumpResult) formatSQL(sql string) string {
+	if r.NoFormat {
+		return sql
+	}
+
+	out, err := format.Format(sql)
+	if err != nil {
+		return sql
+	}
+
+	return out
 }
 
 func (r *DumpResult) Files() map[string]string {
@@ -408,39 +432,39 @@ func (r *DumpResult) Files() map[string]string {
 	seen := make(map[string]bool)
 	for _, e := range r.enums().CollectValues() {
 		name := uniqueFileName(seen, toFileName(e.Schema, e.Name))
-		files[name] = model.EnumToSQL(e) + "\n"
+		files[name] = r.formatSQL(model.EnumToSQL(e) + "\n")
 		seen[strings.ToLower(name)] = true
 	}
 	for _, d := range r.domains().CollectValues() {
 		name := uniqueFileName(seen, toFileName(d.Schema, d.Name))
-		files[name] = model.DomainToSQL(d) + "\n"
+		files[name] = r.formatSQL(model.DomainToSQL(d) + "\n")
 		seen[strings.ToLower(name)] = true
 	}
 	for _, ct := range r.compositeTypes().CollectValues() {
 		name := uniqueFileName(seen, toFileName(ct.Schema, ct.Name))
-		files[name] = model.CompositeTypeToSQL(ct) + "\n"
+		files[name] = r.formatSQL(model.CompositeTypeToSQL(ct) + "\n")
 		seen[strings.ToLower(name)] = true
 	}
 	for _, s := range r.sequences().CollectValues() {
 		name := uniqueFileName(seen, toFileName(s.Schema, s.Name))
-		files[name] = model.SequenceToSQL(s) + "\n"
+		files[name] = r.formatSQL(model.SequenceToSQL(s) + "\n")
 		seen[strings.ToLower(name)] = true
 	}
 	for _, rt := range r.routines().CollectValues() {
 		// Overloads share a schema-qualified name, so uniqueFileName gives
 		// the second one a _2 suffix, the same as any other collision.
 		name := uniqueFileName(seen, toFileName(rt.Schema, rt.Name))
-		files[name] = model.RoutineToSQL(rt) + "\n"
+		files[name] = r.formatSQL(model.RoutineToSQL(rt) + "\n")
 		seen[strings.ToLower(name)] = true
 	}
 	for _, t := range r.tables().CollectValues() {
 		name := uniqueFileName(seen, toFileName(t.Schema, t.Name))
-		files[name] = model.TableToSQL(t) + "\n"
+		files[name] = r.formatSQL(model.TableToSQL(t) + "\n")
 		seen[strings.ToLower(name)] = true
 	}
 	for _, v := range r.views().CollectValues() {
 		name := uniqueFileName(seen, toFileName(v.Schema, v.Name))
-		files[name] = model.ViewToSQL(v) + "\n"
+		files[name] = r.formatSQL(model.ViewToSQL(v) + "\n")
 		seen[strings.ToLower(name)] = true
 	}
 	return files
@@ -565,6 +589,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		Routines:       filteredRoutines,
 		OmitSchema:     options.OmitSchema,
 		SortByDeps:     options.SortByDeps,
+		NoFormat:       options.NoFormat,
 		Count: ObjectCount{
 			Schemas:        client.Schemas,
 			Tables:         filteredTables.Len(),

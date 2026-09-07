@@ -22,6 +22,7 @@ var cli struct {
 	Apply command.Apply `cmd:"" help:"Apply schema changes to the database."`
 	Plan  command.Plan  `cmd:"" help:"Print the schema diff SQL without applying it."`
 	Dump  command.Dump  `cmd:"" help:"Dump the current database schema as SQL."`
+	Fmt   command.Fmt   `cmd:"" help:"Format schema SQL files in place."`
 }
 
 func main() {
@@ -46,9 +47,9 @@ func main() {
 	client := pistachio.NewClient(&cli.Options)
 	err = kctx.Run(client)
 	closePager()
-	// plan --check reports diffs as exit code 2 instead of a fatal error.
-	// The plan output has already been written.
-	if errors.Is(err, command.ErrPlanDiff) {
+	// plan --check and fmt --check report a difference as exit code 2 instead
+	// of a fatal error. The output has already been written.
+	if errors.Is(err, command.ErrPlanDiff) || errors.Is(err, command.ErrFormatDiff) {
 		kctx.Exit(2)
 	}
 	kctx.FatalIfErrorf(err)

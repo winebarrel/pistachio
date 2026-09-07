@@ -75,6 +75,13 @@ pista plan ./schema/*.sql          # review the diff
 pista apply ./schema/*.sql         # apply it
 ```
 
+Lay the files out:
+
+```bash
+pista fmt ./schema/*.sql           # rewrite them in place
+pista fmt --check ./schema/*.sql   # exit 2 when a file is not formatted
+```
+
 
 ## Demo
 

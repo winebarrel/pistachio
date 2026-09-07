@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+* Add `pista fmt`, which lays out schema SQL files in place. It works on the token stream, so only the whitespace moves: the keyword case, the identifier spelling and the line breaks are left as they were written, and no schema name is added. The definition list of a `CREATE TABLE` and a `CREATE TYPE` is written one element per line, a line inside parentheses is indented four spaces past the line that opened them, a routine's clauses take one level, and the space before a comma, just inside a parenthesis, and around a subscript or a cast is closed up. A quoted identifier loses its quotes when the statement parses to the same thing without them. A view body and a routine body are left alone. The result is checked to carry the same tokens as the input, and a file that fails the check or does not parse is not written. `--check` reports the files that are not formatted and exits with code 2.
+
+* Write `dump` through the same formatter, so its output is what `pista fmt` writes. No dump changes today, since the model already renders that layout; `--no-format` turns the pass off.
+
 ## [1.46.0] - 2026-09-06
 
 * Manage a foreign key on a partitioned table. `ALTER TABLE ONLY` is rejected there, so adding a key to one failed with `cannot use ONLY for foreign key on partitioned table`; the word is left off now, and nothing inherits a foreign key anyway. A partition's copy of its parent's key was dropped and added on its own, which PostgreSQL rejects and the parent's statements settle regardless, so the copy now takes none. `dump` wrote the copy too, which made its output fail to reload; it is left out, as pg_dump leaves it out.
