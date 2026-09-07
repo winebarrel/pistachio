@@ -119,10 +119,11 @@ jobs:
           flags: windows
       # Uploaded even when the tests failed, since a failed test is what the
       # report is there to describe.
-      - uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1.2.1
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         if: ${{ !cancelled() }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
           files: junit.xml
           disable_search: true
           flags: windows
@@ -180,10 +181,11 @@ jobs:
           # counted as covered when any matrix entry exercises them.
       # Uploaded even when the tests failed, since a failed test is what the
       # report is there to describe.
-      - uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1.2.1
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         if: ${{ !cancelled() }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
           files: junit.xml
           disable_search: true
           flags: pg${{ matrix.postgres }}
