@@ -533,9 +533,81 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. T
 
 ## dump
 
-Dump the current database schema as SQL. Output can be used directly as a schema file.
+Dump the current database schema as SQL. The output is a schema file: feeding it back to `plan` produces no changes, which is the property the rest of pistachio is built around.
 
 ```bash
-pista dump
+pista dump > schema.sql
 ```
+
+The dump opens with the connection it read and a count of what it found, then writes each object under a header comment naming it:
+
+```sql
+-- Connected to postgres://postgres@localhost:5415/postgres
+-- Dump of schema public (1 table, 1 view, 1 enum, 0 domains, 0 composite types, 0 sequences)
+-- public.status
+CREATE TYPE public.status AS ENUM (
+    'active',
+    'inactive'
+);
+
+-- public.users
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    state status,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX users_name_idx ON public.users USING btree (name);
+COMMENT ON TABLE public.users IS 'app users';
+
+-- public.active_users
+CREATE OR REPLACE VIEW public.active_users AS
+SELECT users.id,
+    users.name
+   FROM users
+  WHERE users.state = 'active'::status;
+```
+
+An index, a comment, a policy and a trigger are written with the table they belong to rather than in a section of their own. `status` appears unqualified because the catalog reports an object that `search_path` reaches without its schema; `--search-path=` qualifies everything.
+
+Objects are ordered by type and then by name. `--sort-by-deps` orders them so each one follows what it depends on, which makes the file loadable from top to bottom, and errors when the dependencies form a cycle. `--split` writes one file per object into a directory instead:
+
+```bash
+pista dump --sort-by-deps > schema.sql
+pista dump --split ./schema/
+```
+
+See [Splitting the schema across files](../guides/splitting.md).
+
+What is dumped follows the same options as `plan`: `-n` chooses the schemas, `-I` / `-E` and `--enable` / `--disable` filter the objects, and `--manage-routine`, `--manage-storage-param` and `--skip-partition-child` decide whether routines, storage parameters and partition children are read at all. `--omit-schema` writes every name unqualified, for a dump that is loaded into a schema of another name.
+
+```bash
+pista dump -n myschema
+pista dump -E 'tmp_*' --manage-routine
+pista dump --omit-schema
+```
+
+The output goes through the formatter that `pista fmt` runs, so a dump needs no formatting. `--no-format` writes the layout the model renders on its own. See [Formatting schema files](../guides/formatting.md).
+
+`GRANT`, `CREATE EXTENSION` and roles are out of scope and are not written. A dump loaded into an empty database therefore restores the schema, not the privileges on it.
+
+
+## fmt
+
+Lay out schema SQL files. Each file is rewritten in place and the names of the ones that changed are printed. No database is read.
+
+```bash
+pista fmt schema/*.sql
+```
+
+`--check` writes nothing and reports the files that are not formatted, exiting with 2 when there are any, 0 when every file is already formatted, and 1 on error. Also available as `$PISTA_FMT_CHECK`.
+
+```bash
+pista fmt --check schema/*.sql
+echo $?  # 0: formatted, 2: not formatted, 1: error
+```
+
+The statements themselves are left alone: only the whitespace between the tokens moves, and a quoted identifier loses its quotes when it reads the same without them. A file that does not parse is reported and left as it was, and so is one whose result would not carry the same tokens as the input.
+
+See [Formatting schema files](../guides/formatting.md) for the layout rules.
 
