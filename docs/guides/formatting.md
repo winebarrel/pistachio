@@ -15,19 +15,87 @@ pista fmt --check schema/*.sql
 The command reads no database.
 
 
+## An example
+
+A hand-written table:
+
+```sql
+create table "public"."items" (id bigserial
+  , "email" text not null
+  , tags text [ ]
+  , price numeric(10,2) check ( price > 0 )
+  , constraint items_pkey primary key ( id ));
+```
+
+after `pista fmt`:
+
+```sql
+create table public.items (
+    id bigserial,
+    email text not null,
+    tags text[],
+    price numeric(10,2) check (price > 0),
+    constraint items_pkey primary key (id)
+);
+```
+
+The definition list is broken up, the commas move to the end of their lines, the quotes the identifiers do not need are gone, and the spaces inside the parentheses and the array brackets are closed up. The lower-case keywords stay lower-case.
+
+
 ## What it changes
 
 Only the whitespace between the tokens moves. Keywords keep their case, identifiers keep their spelling, expressions are left as written, and no schema name is added to a reference that does not carry one.
 
 The definition list of `CREATE TABLE` and `CREATE TYPE` is written one element per line, with the comma at the end of the line and the closing parenthesis on a line of its own. A clause after that parenthesis, `INHERITS` or `PARTITION BY` for example, starts a new line too.
 
+```sql
+CREATE TABLE public.events (id bigint, at timestamptz) PARTITION BY RANGE (at);
+```
+
+```sql
+CREATE TABLE public.events (
+    id bigint,
+    at timestamptz
+)
+PARTITION BY RANGE (at);
+```
+
 A line inside parentheses is indented four spaces past the line that opened them, and the closing parenthesis lines up with that line again. The clauses of `CREATE FUNCTION` and `CREATE PROCEDURE` are indented one level.
+
+```sql
+ALTER TABLE public.items
+  ADD CONSTRAINT items_note_check CHECK (
+length ( note ) < 100
+      );
+```
+
+```sql
+ALTER TABLE public.items
+  ADD CONSTRAINT items_note_check CHECK (
+      length (note) < 100
+  );
+```
+
+The `ADD CONSTRAINT` line is outside the parentheses, so it keeps the two spaces it was written with, and the body hangs off it.
 
 Consecutive spaces collapse to one, and the space before a comma or a semicolon, just inside a parenthesis, around an array subscript, and around a cast is closed up. Consecutive blank lines collapse to one, trailing whitespace goes, and a statement that shares a line with another moves to its own line.
 
 A quoted identifier that reads the same without its quotes loses them, so `"items"` becomes `items` while `"Value"`, `"select"` and `"left"` keep theirs.
 
 Everything else stays where it was written. A statement written on one line stays on one line, and one broken across several keeps its breaks; the definition lists above are the only thing `fmt` breaks up on its own. The body of a view is left alone, since PostgreSQL writes it back with an indentation of its own, and so is the body of a routine, which is a single quoted token. A statement pistachio does not manage, a `GRANT` for example, is formatted like any other.
+
+```sql
+CREATE OR REPLACE VIEW public.recent AS
+ SELECT items.id
+   FROM public.items
+  WHERE (items.price > 0);
+
+CREATE FUNCTION public.norm(e text) RETURNS text
+    LANGUAGE sql
+    AS $$   SELECT lower(e)   $$;
+```
+
+The view keeps the layout PostgreSQL gave its body. The routine's clauses are indented, and the spacing inside `$$ ... $$` is left as it is.
 
 Line endings are written as newlines, so a file that uses CRLF comes back with LF.
 
