@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,6 +55,10 @@ func TestFmt_Run_AlreadyFormatted(t *testing.T) {
 }
 
 func TestFmt_Run_KeepsFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not carry the Unix permission bits")
+	}
+
 	path := writeSQLFile(t, "schema.sql", unformattedSQL)
 	require.NoError(t, os.Chmod(path, 0o600))
 
@@ -132,6 +137,9 @@ func TestFmt_Run_SeveralFiles(t *testing.T) {
 }
 
 func TestFmt_Run_UnwritableDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a read-only directory does not stop a write on Windows")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root writes into a read-only directory")
 	}
