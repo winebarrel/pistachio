@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.47.0] - 2026-09-07
 
 * Add `pista fmt`, which lays out schema SQL files in place. It works on the token stream, so only the whitespace moves: the keyword case, the identifier spelling and the line breaks are left as they were written, and no schema name is added. The definition list of a `CREATE TABLE` and a `CREATE TYPE` is written one element per line, a line inside parentheses is indented four spaces past the line that opened them, a routine's clauses take one level, and the space before a comma, just inside a parenthesis, and around a subscript or a cast is closed up. A quoted identifier loses its quotes when the statement parses to the same thing without them. A view body and a routine body are left alone. The result is checked to carry the same tokens as the input, and a file that fails the check or does not parse is not written. `--check` reports the files that are not formatted and exits with code 2.
 
