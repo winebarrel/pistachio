@@ -397,21 +397,40 @@ sample-db-harbor:
 test-samples:
 	bash test/samples/run.sh
 
+# Drop every extension outside pg_catalog. An extension owns tables of its own,
+# PostGIS's spatial_ref_sys among them, and neither DROP TABLE nor DROP SCHEMA
+# will touch one while the extension is there, so a wipe has to drop the
+# extensions before it starts.
+#
+# Dropping them is also what makes a sample loadable after the one before it:
+# an extension is visible to the next sample whichever schema it sits in, so a
+# schema that says CREATE EXTENSION IF NOT EXISTS gets nothing when the
+# extension already exists in some other sample's schema, and then its types
+# and operator classes do not resolve. icingadb and sourcegraph both install
+# citext, and sourcegraph and gitlab both install pg_trgm.
+.PHONY: drop-extensions
+drop-extensions:
+	psql -X -q -At -v ON_ERROR_STOP=1 -c "SELECT quote_ident(extname) FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE n.nspname <> 'pg_catalog'" \
+	  | while read -r e; do \
+	      psql -X -q -v ON_ERROR_STOP=1 -c "SET client_min_messages TO warning; DROP EXTENSION IF EXISTS $$e CASCADE" || exit 1; \
+	    done
+
 # Wipe every user schema. Used by `schema` and `demo` to start from an empty
 # database, by test-samples once before its first sample, and by `test` and
 # `test-scenario`, which reset only `public` on their own.
 #
-# The tables go first, a batch at a time, and only then the schemas. A single
-# DROP SCHEMA ... CASCADE takes locks on every object it reaches, and the
-# larger samples do not fit: gitlab owns 1,400 tables and their indexes, which
-# runs the server out of lock table space at the default
+# The extensions go first, since a table one of them owns stops both of the
+# statements below. Then the tables, a batch at a time, and only then the
+# schemas. A single DROP SCHEMA ... CASCADE takes locks on every object it
+# reaches, and the larger samples do not fit: gitlab owns 1,400 tables and
+# their indexes, which runs the server out of lock table space at the default
 # max_locks_per_transaction. Each batch is a statement of its own, so its locks
 # are released before the next one starts, and the schemas are empty by the
 # time they are dropped.
 DROP_TABLE_BATCH = 50
 
 .PHONY: clean-schema
-clean-schema:
+clean-schema: drop-extensions
 	while :; do \
 	  batch=$$(psql -X -q -At -v ON_ERROR_STOP=1 -c "SELECT string_agg(format('%I.%I', schemaname, tablename), ', ') FROM (SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT LIKE 'pg_%' AND schemaname <> 'information_schema' LIMIT $(DROP_TABLE_BATCH)) t") || exit 1; \
 	  [ -n "$$batch" ] || break; \
@@ -432,16 +451,9 @@ clean-schema:
 # objects are close behind.
 #
 # Extensions are the exception, because they are visible to the next sample
-# whichever schema they sit in: a dump that says CREATE EXTENSION IF NOT EXISTS
-# does nothing when the extension already exists in some other sample's schema,
-# and then its types and operator classes do not resolve. icingadb and
-# sourcegraph both install citext, and sourcegraph and gitlab both install
-# pg_trgm. So drop the extensions too, before the next sample runs.
+# whichever schema they sit in; drop-extensions says why. They go first, so a
+# table one of them owns cannot stop the DROP SCHEMA below either.
 .PHONY: reset-db
-reset-db:
+reset-db: drop-extensions
 	psql -X -q -v ON_ERROR_STOP=1 -c 'SET client_min_messages TO warning; DROP SCHEMA IF EXISTS public CASCADE'
-	psql -X -q -At -v ON_ERROR_STOP=1 -c "SELECT quote_ident(extname) FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE n.nspname <> 'pg_catalog'" \
-	  | while read -r e; do \
-	      psql -X -q -v ON_ERROR_STOP=1 -c "SET client_min_messages TO warning; DROP EXTENSION IF EXISTS $$e CASCADE" || exit 1; \
-	    done
 	psql -X -q -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA public'
