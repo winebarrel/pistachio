@@ -1,8 +1,8 @@
 # Performance
 
 This page reports how pistachio scales as the number of tables grows. The
-numbers come from measuring the `plan` and `dump` commands against synthetic
-schemas of increasing size.
+numbers come from measuring the `plan`, `dump` and `fmt` commands against
+synthetic schemas of increasing size.
 
 ## What is measured
 
@@ -10,7 +10,7 @@ Each run parses the desired schema from SQL, reads the current schema from the
 PostgreSQL system catalogs, and computes the DDL diff. All three costs grow with
 the number of objects, so the table count is the main driver of runtime.
 
-Four cases are measured:
+Five cases are measured:
 
 - **create plan**: `plan` of the full schema against an empty database. Every
   table is a create, so this covers parsing and diff generation with no catalog
@@ -23,13 +23,16 @@ Four cases are measured:
   three ALTER/CREATE statements per table. This measures diff generation and SQL
   output.
 - **dump**: `dump` of the full schema. This reads the catalog and serializes it
-  back to SQL, with no parsing or diffing.
+  back to SQL, with no parsing or diffing. The output goes through the
+  formatter, the same one `fmt` runs.
+- **fmt**: `fmt` of the schema file, rewritten in place. This parses the file
+  and lays it out again, and reads no database.
 
 ## Environment
 
 - Apple M4 Pro (14 cores), 64 GB RAM
 - PostgreSQL 15.18 (Docker, connected over `localhost`)
-- pistachio built from `fafe754` (after v1.38.1)
+- pistachio built from `be2c79e` (after v1.46.0)
 
 The database runs on the same host, so client/server latency is negligible.
 Times over a network connection will be higher because reading the catalog adds
@@ -47,14 +50,14 @@ primary keys, 2N secondary indexes, and N-1 foreign keys.
 
 Each value is the median of three runs, in seconds.
 
-| Tables | create plan | noop plan | modify plan | dump  |
-|-------:|------------:|----------:|------------:|------:|
-|     10 |       0.033 |     0.036 |       0.037 | 0.034 |
-|     50 |       0.041 |     0.055 |       0.057 | 0.041 |
-|    100 |       0.053 |     0.078 |       0.083 | 0.052 |
-|    250 |       0.090 |     0.142 |       0.150 | 0.076 |
-|    500 |       0.148 |     0.263 |       0.273 | 0.122 |
-|  1,000 |       0.269 |     0.489 |       0.497 | 0.218 |
+| Tables | create plan | noop plan | modify plan | dump  |   fmt |
+|-------:|------------:|----------:|------------:|------:|------:|
+|     10 |       0.045 |     0.048 |       0.047 | 0.045 | 0.012 |
+|     50 |       0.050 |     0.078 |       0.074 | 0.075 | 0.015 |
+|    100 |       0.069 |     0.105 |       0.111 | 0.089 | 0.019 |
+|    250 |       0.113 |     0.198 |       0.197 | 0.147 | 0.037 |
+|    500 |       0.187 |     0.284 |       0.299 | 0.200 | 0.085 |
+|  1,000 |       0.306 |     0.527 |       0.580 | 0.374 | 0.141 |
 
 The modify plan emits three DDL statements per table, so its output grows from
 30 lines at 10 tables to 3,000 lines at 1,000 tables. The create plan output
@@ -63,22 +66,33 @@ grows the same way, from 160 to 16,000 lines.
 ## Analysis
 
 Runtime scales close to linearly with the table count. A fixed overhead of about
-30 ms (process startup and connecting to PostgreSQL) sets the floor, which is
+40 ms (process startup and connecting to PostgreSQL) sets the floor, which is
 why the smallest schemas do not get proportionally faster. Above it, 10 times
 the tables costs 8 to 10 times the time.
 
 No single stage dominates. The create plan parses the SQL file and diffs it
 without reading the catalog; dump reads the catalog and serializes it without
-parsing. At 1,000 tables the two cost about the same, 0.27s and 0.22s, and the
+parsing. At 1,000 tables the two cost about the same, 0.31s and 0.37s, and the
 noop plan, which does both, costs roughly their sum. The catalog read used to
 cost a round trip per object and outweighed the rest; 1.39.0, which this build
 includes, made it a fixed number of queries.
 
-The modify plan is 8 ms slower than the noop plan at 1,000 tables. Reading the
+The modify plan is 53 ms slower than the noop plan at 1,000 tables. Reading the
 catalog and parsing the desired schema are the bulk of the work, so emitting
-3,000 DDL statements on top costs little. Every case stays under half a second
-at that size, so pistachio is not a bottleneck for schemas of typical size.
-Larger schemas were not measured.
+3,000 DDL statements on top costs little. Every case stays under 0.6s at that
+size, so pistachio is not a bottleneck for schemas of typical size. Larger
+schemas were not measured.
+
+`fmt` is the cheapest of the five, since it neither connects to the database nor
+builds a model: it parses the file, lays the tokens out again, and checks the
+result carries the same tokens. At 1,000 tables it takes 0.14s, and the work
+itself is 0.10s of that.
+
+The layout pass costs `dump` 0.11s at 1,000 tables, a little under a third of
+its 0.37s: `dump --no-format`, which skips it, takes 0.26s. At 500 tables the
+difference is 0.06s. Measured on its own against files of 100 to 2,000 tables,
+the formatter runs in 16 ms to 205 ms, which is linear in the size of the
+input.
 
 ## Reproducing
 
@@ -117,6 +131,11 @@ sed -e 's/qty integer/qty bigint/' \
     -e 's/\(CREATE INDEX idx_t_\([0-9]*\)_created_at ON t_\2 (created_at);\)/\1\nCREATE INDEX idx_t_\2_name ON t_\2 (name);/' \
     schema.sql > modified.sql
 time pista plan modified.sql # modify plan (diff on every table)
+
+# fmt: lay the schema file out again. Copy it first, since fmt rewrites the
+# file it is given and a second run on the formatted file does no work.
+cp schema.sql copy.sql
+time pista fmt copy.sql      # fmt (no database)
 ```
 
 The foreign key has to sit on the column. pistachio does not read a standalone

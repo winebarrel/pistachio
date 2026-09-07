@@ -61,6 +61,7 @@ nav:
       - guides/exclusive-apply.md
       - guides/executing-sql.md
       - guides/splitting.md
+      - guides/formatting.md
   - Reference:
       - reference/commands.md
       - reference/directives.md

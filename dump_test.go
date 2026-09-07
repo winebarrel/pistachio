@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio"
+	"github.com/winebarrel/pistachio/format"
 	"github.com/winebarrel/pistachio/internal/testutil"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -162,6 +163,40 @@ func TestDump_NoReadOnly(t *testing.T) {
 	got, err := client.Dump(ctx, &pistachio.DumpOptions{NoReadOnly: true})
 	require.NoError(t, err)
 	assert.Equal(t, 1, got.Count.Tables)
+}
+
+// TestDump_NoFormat covers the flag and the property behind it: the model
+// renders what the formatter would write, so turning the formatter off changes
+// nothing. A rule that broke this would put dump and pista fmt at odds.
+func TestDump_NoFormat(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    tags text[],
+    meta jsonb DEFAULT '{}'::jsonb NOT NULL,
+    state public.status NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id, state)
+) PARTITION BY LIST (state);
+CREATE TABLE public.users_active PARTITION OF public.users FOR VALUES IN ('active');
+CREATE VIEW public.v AS SELECT u.id, (SELECT max(x.id) FROM public.users x WHERE x.id <> u.id) AS peak FROM public.users u;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	formatted, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	require.NoError(t, err)
+
+	raw, err := client.Dump(ctx, &pistachio.DumpOptions{NoFormat: true})
+	require.NoError(t, err)
+
+	assert.Equal(t, formatted.String(), raw.String())
+	assert.Equal(t, formatted.Files(), raw.Files())
 }
 
 func TestDump_Count_Empty(t *testing.T) {
@@ -876,7 +911,15 @@ func TestDump(t *testing.T) {
 				SkipPartitionChild: tc.SkipPartitionChild,
 			})
 			require.NoError(t, err)
-			assert.Equal(t, strings.TrimSpace(tc.expectedDump(pgMajor)), strings.TrimSpace(got.String()))
+			expected := strings.TrimSpace(tc.expectedDump(pgMajor))
+			assert.Equal(t, expected, strings.TrimSpace(got.String()))
+
+			// dump writes through the formatter, so its output has to be what
+			// the formatter leaves alone. A rule that moved it would be a
+			// difference between dump and pista fmt.
+			formatted, err := format.Format(expected + "\n")
+			require.NoError(t, err)
+			assert.Equal(t, expected, strings.TrimSpace(formatted), "the dump is not what pista fmt writes")
 		})
 	}
 }

@@ -35,6 +35,9 @@ Commands:
   dump [flags]
     Dump the current database schema as SQL.
 
+  fmt <files> ... [flags]
+    Format schema SQL files in place.
+
 Run "pista <command> --help" for more information on a command.
 ```
 
@@ -327,6 +330,33 @@ Flags:
       --no-read-only            Open the database connection read-write.
                                 By default dump uses a read-only connection
                                 ($PISTA_NO_READ_ONLY).
+      --no-format               Write the dump as the model renders it, without
+                                the layout pista fmt applies ($PISTA_NO_FORMAT).
+```
+
+</details>
+
+<details>
+<summary><code>pista fmt --help</code></summary>
+
+```
+Usage: pista fmt <files> ... [flags]
+
+Format schema SQL files in place.
+
+Arguments:
+  <files> ...    Path to the schema SQL file(s).
+
+Flags:
+  -h, --help                  Show context-sensitive help.
+  -C, --config=FILE           Load options from a YAML file ($PISTA_CONFIG).
+      --version
+      --[no-]pager            Force paging via $PISTA_PAGER even when stdout is
+                              not a TTY. PISTA_PAGER must be set.
+
+      --check                 Report the files that are not formatted instead of
+                              writing them. Exits with code 2 when there are any
+                              ($PISTA_FMT_CHECK).
 ```
 
 </details>
