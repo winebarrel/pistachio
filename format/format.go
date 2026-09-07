@@ -9,6 +9,7 @@ package format
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -159,18 +160,14 @@ func split(sql string) ([]stmt, error) {
 	return stmts, nil
 }
 
+// tokenRange returns the tokens of one statement, from the first that starts
+// at or after it to the first that starts after it ends. The tokens are in
+// order, so the ends are found by binary search: a linear scan per statement
+// makes formatting quadratic in the size of the file, which a dump of a few
+// thousand tables notices.
 func tokenRange(toks []*token, s stmt) (int, int) {
-	lo, hi := len(toks), len(toks)
-
-	for i, t := range toks {
-		if t.start >= s.start && i < lo {
-			lo = i
-		}
-		if t.start >= s.end {
-			hi = i
-			break
-		}
-	}
+	lo := sort.Search(len(toks), func(i int) bool { return toks[i].start >= s.start })
+	hi := sort.Search(len(toks), func(i int) bool { return toks[i].start >= s.end })
 
 	return lo, hi
 }
