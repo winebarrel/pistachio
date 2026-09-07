@@ -21,6 +21,13 @@ Declarative schema management tool for PostgreSQL with a Terraform-like plan/app
 brew install winebarrel/pistachio/pistachio
 ```
 
+### mise
+
+```bash
+mise use github:winebarrel/pistachio            # latest
+mise use github:winebarrel/pistachio@<version>  # a specific version
+```
+
 ### Download binary
 
 Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).

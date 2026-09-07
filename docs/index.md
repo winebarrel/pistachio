@@ -50,6 +50,13 @@ The source for the image is under [`demo/`](https://github.com/winebarrel/pistac
 brew install winebarrel/pistachio/pistachio
 ```
 
+### mise
+
+```bash
+mise use github:winebarrel/pistachio            # latest
+mise use github:winebarrel/pistachio@<version>  # a specific version
+```
+
 ### Download binary
 
 Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
