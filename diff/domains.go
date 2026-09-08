@@ -68,9 +68,11 @@ func diffDomain(fqdn string, current, desired *model.Domain) ([]string, error) {
 	var stmts []string
 
 	// Base type change is not supported by PostgreSQL ALTER DOMAIN. The
-	// modifier is folded first, so a base type the catalog reports in mixed
-	// case (geometry(Polygon,4326)) matches the declaration it was read from.
-	if foldTypeMod(current.BaseType) != foldTypeMod(desired.BaseType) {
+	// comparison folds the modifier, so a base type the catalog reports in
+	// mixed case (geometry(Polygon,4326)) matches the declaration it was read
+	// from, and strips the domain's own schema, since format_type writes a base
+	// type on the search path unqualified while a file may name it in full.
+	if !equalTypeName(current.BaseType, desired.BaseType, current.Schema) {
 		return nil, fmt.Errorf("cannot change base type of domain %s from %s to %s: PostgreSQL does not support this", fqdn, current.BaseType, desired.BaseType)
 	}
 

@@ -86,16 +86,24 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	// Dropped tables: drop FKs on dropped tables first to avoid dependency errors.
 	// When the table-drop policy disallows it, emit the same DROPs as comments
 	// (with "-- skipped: " prefix) into DisallowedDropStmts for visibility.
+	// A partition's copy of its parent's key takes no statement: PostgreSQL
+	// rejects dropping it on its own, and it goes with the partition anyway.
 	tableAllowed := dc.IsDropAllowed("table")
 	for k, tbl := range current.All() {
 		if _, ok := desired.GetOk(k); !ok {
 			if tableAllowed {
-				for name := range tbl.ForeignKeys.Keys() {
+				for name, fk := range tbl.ForeignKeys.All() {
+					if fk.Inherited {
+						continue
+					}
 					result.FKDropStmts = append(result.FKDropStmts, "ALTER TABLE "+k+" DROP CONSTRAINT "+model.Ident(name)+";")
 				}
 				result.DropStmts = append(result.DropStmts, "DROP TABLE "+k+";")
 			} else {
-				for name := range tbl.ForeignKeys.Keys() {
+				for name, fk := range tbl.ForeignKeys.All() {
+					if fk.Inherited {
+						continue
+					}
 					result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: ALTER TABLE "+k+" DROP CONSTRAINT "+model.Ident(name)+";")
 				}
 				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP TABLE "+k+";")

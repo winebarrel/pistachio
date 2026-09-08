@@ -9,20 +9,25 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
+// Each anchored pattern ends with \r? so a file written with CRLF line
+// endings reads the same as one written with LF. The carriage return belongs
+// to the line ending, not to the directive, and without this a directive on
+// such a file was silently ignored: it still carries a known name, so
+// validateDirectives raised nothing either.
 var (
-	renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]+(.+?)[ \t]*$`)
+	renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]+(.+?)[ \t]*\r?$`)
 	// execute-first shares a prefix with execute. The execute pattern accepts
 	// only whitespace or end-of-line after the name, so an execute-first
 	// comment never matches it.
-	executeDirectivePattern      = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute(?:[ \t]+(.+?))?[ \t]*$`)
-	executeFirstDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute-first(?:[ \t]+(.+?))?[ \t]*$`)
-	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]*$`)
+	executeDirectivePattern      = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute(?:[ \t]+(.+?))?[ \t]*\r?$`)
+	executeFirstDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:execute-first(?:[ \t]+(.+?))?[ \t]*\r?$`)
+	concurrentlyDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]*\r?$`)
 	// Matches -- pista:concurrently with trailing content (invalid usage).
 	concurrentlyWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:concurrently[ \t]+\S`)
-	bulkAlterDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]*$`)
+	bulkAlterDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]*\r?$`)
 	// Matches -- pista:bulk-alter with trailing content (invalid usage).
 	bulkAlterWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]+\S`)
-	ignoreDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]*$`)
+	ignoreDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]*\r?$`)
 	// Matches -- pista:ignore with trailing content (invalid usage).
 	ignoreWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]+\S`)
 	// Matches any -- pista: directive, capturing the name (if any) after the colon.

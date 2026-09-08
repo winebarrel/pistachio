@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+* Read a primary key added by `ALTER TABLE` as implying `NOT NULL`. PostgreSQL sets the flag whichever way the key arrives, but only the inline form was read that way, so a schema file that adds the key in a later statement planned `DROP NOT NULL` on every run, and applying it failed with `column is in a primary key`.
+
+* Read a `serial` column as `NOT NULL`. The type expands to a `NOT NULL` column, and the catalog reports it as one, so a declaration that left the words off planned `DROP NOT NULL` right after the table was created. Applying it took the constraint away.
+
+* Read a column type and a `DEFAULT` the way PostgreSQL stores them. A `numeric` with only a precision gains a scale of zero, an array forgets its dimensions and bounds, and `DEFAULT NULL` is no default at all, so `numeric(5)`, `integer[][]`, `integer[3]` and `DEFAULT NULL` each re-issued the same `ALTER` on every plan.
+
+* Drop a partition that carries a copy of its parent's foreign key. The copy was dropped first, which PostgreSQL rejects with `cannot drop inherited constraint`, and the copy goes with the partition anyway. Dropping the whole partitioned table failed the same way.
+
+* Compare a domain's base type the way a column's type is compared. `format_type` writes a base type on the search path unqualified, so a domain written over `public.status` was read as a base type change and every plan failed rather than reporting no changes.
+
+* Read only the collation a domain or a composite attribute sets itself. One typed over a collated domain inherits that collation, and reading the inherited one as declared made the desired side look like a collation change, which cannot be altered, so every plan failed.
+
+* Read a `-- pista:` directive on a file written with CRLF line endings. The carriage return was taken as trailing content, which turned `ignore`, `concurrently`, `bulk-alter` and `execute` off silently, since the name is still a known one and nothing was reported.
+
 * Read `CREATE INDEX IF NOT EXISTS` as the index it describes. The clause was kept in the stored definition, which `pg_get_indexdef` never writes, so an index a schema file spelled that way was dropped and created again on every plan.
 
 * Read an enum that has no labels. `CREATE TYPE ... AS ENUM ()` has no `pg_enum` row, and the catalog reached the labels through an inner join, so the type read as absent: every plan created it again and the second apply failed with `type already exists`. `dump` writes it now as well.

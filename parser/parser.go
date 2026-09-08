@@ -490,6 +490,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				if err := setUnique(t.Constraints, con.Name, "constraint", con, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
+				applyPrimaryKeyNotNull(t, con)
 			}
 
 		case node.GetCreatePolicyStmt() != nil:
@@ -674,14 +675,7 @@ func parseCreateStmt(cs *pg_query.CreateStmt, defaultSchema string) (*model.Tabl
 					if err := setUnique(table.Constraints, constraint.Name, "constraint", constraint, table.FQTN(), con.Location); err != nil {
 						return nil, err
 					}
-					// PK implies NOT NULL on all key columns
-					if constraint.Type.IsPrimaryKeyConstraint() {
-						for _, colName := range constraint.Columns {
-							if col, ok := table.Columns.GetOk(colName); ok {
-								col.NotNull = true
-							}
-						}
-					}
+					applyPrimaryKeyNotNull(table, constraint)
 				}
 			}
 		}
@@ -713,6 +707,46 @@ func collationFromClause(cc *pg_query.CollateClause) *string {
 	return &collation
 }
 
+// serialTypes lists the pseudo-types that expand to a column plus a sequence.
+var serialTypes = map[string]bool{
+	"serial":      true,
+	"bigserial":   true,
+	"smallserial": true,
+}
+
+// isNullDefault reports whether a DEFAULT expression is the null constant,
+// with or without a cast. PostgreSQL drops such a default rather than storing
+// it, so the desired side has to drop it too.
+func isNullDefault(expr *pg_query.Node) bool {
+	for {
+		if c := expr.GetAConst(); c != nil {
+			return c.Isnull
+		}
+		tc := expr.GetTypeCast()
+		if tc == nil || tc.Arg == nil {
+			return false
+		}
+		expr = tc.Arg
+	}
+}
+
+// applyPrimaryKeyNotNull marks the key columns of a primary key NOT NULL.
+// PostgreSQL sets the flag itself whichever way the key arrives, inline with
+// the table or in a later ALTER TABLE, and the catalog reports it, so the
+// desired side has to read both forms the same way. Reading only the inline
+// one planned a DROP NOT NULL that PostgreSQL then refuses with "column is in
+// a primary key".
+func applyPrimaryKeyNotNull(table *model.Table, con *model.Constraint) {
+	if !con.Type.IsPrimaryKeyConstraint() {
+		return
+	}
+	for _, colName := range con.Columns {
+		if col, ok := table.Columns.GetOk(colName); ok {
+			col.NotNull = true
+		}
+	}
+}
+
 func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 	col := &model.Column{
 		Name: cd.Colname,
@@ -724,6 +758,14 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 			return nil, fmt.Errorf("failed to deparse type for column %s: %w", cd.Colname, err)
 		}
 		col.TypeName = typeName
+	}
+
+	// serial expands to a NOT NULL column plus a sequence and a default, so a
+	// declaration that leaves the words off still describes a NOT NULL column.
+	// The catalog reports it that way, so reading it as nullable planned a
+	// DROP NOT NULL right after the table was created.
+	if serialTypes[col.TypeName] {
+		col.NotNull = true
 	}
 
 	col.Collation = collationFromClause(cd.CollClause)
@@ -743,7 +785,10 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 				col.NotNullName = &name
 			}
 		case pg_query.ConstrType_CONSTR_DEFAULT:
-			if con.RawExpr != nil {
+			// DEFAULT NULL is what a column without a default already does, and
+			// PostgreSQL stores no pg_attrdef row for it, so keeping it would
+			// plan SET DEFAULT NULL on every run.
+			if con.RawExpr != nil && !isNullDefault(con.RawExpr) {
 				def, err := deparseExpr(con.RawExpr)
 				if err != nil {
 					return nil, fmt.Errorf("failed to deparse default for column %s: %w", cd.Colname, err)
@@ -2254,9 +2299,52 @@ func normalizeTypeName(name string) string {
 	suffix = strings.ReplaceAll(suffix, ", ", ",")
 
 	if canonical, ok := typeAliases[base]; ok {
-		return canonical + suffix
+		base = canonical
 	}
-	return base + suffix
+
+	mod, array := splitTypeSuffix(suffix)
+	if base == "numeric" {
+		mod = fillNumericScale(mod)
+	}
+	// PostgreSQL keeps neither the dimension count nor a bound: every array
+	// column reads back from format_type as a single "[]". Written any other
+	// way, the two sides would never compare equal.
+	if array != "" {
+		array = "[]"
+	}
+
+	return base + mod + array
+}
+
+// splitTypeSuffix separates a type's modifier from its array marker:
+// "(10,2)[]" becomes "(10,2)" and "[]".
+func splitTypeSuffix(suffix string) (mod, array string) {
+	if strings.HasPrefix(suffix, "(") {
+		if end := strings.Index(suffix, ")"); end != -1 {
+			return suffix[:end+1], suffix[end+1:]
+		}
+		return suffix, ""
+	}
+	return "", suffix
+}
+
+// fillNumericScale writes the scale a numeric modifier leaves out. PostgreSQL
+// takes "numeric(5)" as "numeric(5,0)" and format_type prints both digits, so
+// without this the declaration and the catalog never compare equal.
+func fillNumericScale(mod string) string {
+	if mod == "" || strings.Contains(mod, ",") {
+		return mod
+	}
+	precision := strings.TrimSuffix(strings.TrimPrefix(mod, "("), ")")
+	if precision == "" {
+		return mod
+	}
+	for _, r := range precision {
+		if r < '0' || r > '9' {
+			return mod
+		}
+	}
+	return "(" + precision + ",0)"
 }
 
 func deparseExpr(node *pg_query.Node) (string, error) {

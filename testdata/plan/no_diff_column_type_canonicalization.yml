@@ -1,0 +1,23 @@
+# PostgreSQL canonicalizes each of these as it stores the column: a numeric
+# with only a precision gains a scale of zero, an array forgets its dimensions
+# and bounds, and DEFAULT NULL is no default at all. The desired side has to
+# read them the same way or every plan re-issues the same ALTER.
+init: |
+  CREATE TABLE public.t (
+      a numeric(5),
+      b decimal(7),
+      c integer[][],
+      d integer[3],
+      e text DEFAULT NULL,
+      f numeric(10,2)[]
+  );
+desired: |
+  CREATE TABLE public.t (
+      a numeric(5),
+      b decimal(7),
+      c integer[][],
+      d integer[3],
+      e text DEFAULT NULL,
+      f numeric(10,2)[]
+  );
+plan: ""

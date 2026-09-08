@@ -747,6 +747,83 @@ GRANT SELECT ON public.a TO someone`,
 	}
 }
 
+// A file written on Windows ends each line with CRLF. The carriage return
+// belongs to the line ending, not to the directive, so a directive has to read
+// the same either way. Reading it as trailing content silently turned the
+// directive off, since validateDirectives still saw a known name and raised
+// nothing.
+func TestDirectivesWithCRLFLineEndings(t *testing.T) {
+	tests := []struct {
+		name  string
+		sql   string
+		check func(t *testing.T, r *ParseResult)
+	}{
+		{
+			name: "ignore",
+			sql: "CREATE TABLE public.a (id integer);\n" +
+				"-- pista:ignore\r\n" +
+				"CREATE TABLE public.b (id integer);\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.True(t, r.Tables.Get("public.b").Ignore)
+			},
+		},
+		{
+			name: "concurrently",
+			sql: "CREATE TABLE public.a (id integer);\n" +
+				"-- pista:concurrently\r\n" +
+				"CREATE INDEX idx ON public.a (id);\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.True(t, r.Tables.Get("public.a").Indexes.Get("idx").Concurrently)
+			},
+		},
+		{
+			name: "bulk-alter",
+			sql: "-- pista:bulk-alter\r\n" +
+				"CREATE TABLE public.a (id integer);\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.True(t, r.Tables.Get("public.a").BulkAlter)
+			},
+		},
+		{
+			name: "execute",
+			sql: "CREATE TABLE public.a (id integer);\n" +
+				"-- pista:execute\r\n" +
+				"GRANT SELECT ON public.a TO someone;\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				require.Len(t, r.ExecuteStmts, 1)
+				assert.Contains(t, r.ExecuteStmts[0].SQL, "GRANT")
+			},
+		},
+		{
+			name: "renamed-from",
+			sql: "CREATE TABLE public.a (id integer);\n" +
+				"-- pista:renamed-from public.old_b\r\n" +
+				"CREATE TABLE public.b (id integer);\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				b := r.Tables.Get("public.b")
+				require.NotNil(t, b.RenameFrom)
+				assert.Equal(t, "public.old_b", *b.RenameFrom)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var warnings bytes.Buffer
+			defer SetWarnWriter(&warnings)()
+
+			r, err := parseSQLWithSchema(tt.sql, "public", nil)
+			require.NoError(t, err)
+			tt.check(t, r)
+		})
+	}
+}
+
 func TestFindLeadingCommentEnd(t *testing.T) {
 	tests := []struct {
 		name string

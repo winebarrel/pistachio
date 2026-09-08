@@ -1,0 +1,10 @@
+# format_type writes a base type that is on the search path unqualified, so a
+# domain written over public.status was compared as "status" against
+# "public.status". A base type cannot be altered, so every plan failed.
+init: |
+  CREATE TYPE public.status AS ENUM ('draft', 'published');
+  CREATE DOMAIN public.status_dom AS public.status;
+desired: |
+  CREATE TYPE public.status AS ENUM ('draft', 'published');
+  CREATE DOMAIN public.status_dom AS public.status;
+plan: ""
