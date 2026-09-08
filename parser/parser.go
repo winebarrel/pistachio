@@ -1255,6 +1255,11 @@ func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt, defaultSc
 	concurrent := is.Concurrent
 	is.Concurrent = false
 
+	// IF NOT EXISTS says how to run the statement, not what the index is.
+	// pg_get_indexdef never writes it, so leaving it in would make the two
+	// sides differ and plan a drop and a create on every run.
+	is.IfNotExists = false
+
 	// Name the index before deparsing so the stored Definition carries the
 	// name PostgreSQL would have picked.
 	if is.Idxname == "" {

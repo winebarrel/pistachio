@@ -33,13 +33,17 @@ func (b ColumnGenerated) IsVirtualGeneratedColumn() bool {
 }
 
 type Column struct {
-	Name        string
-	RenameFrom  *string
-	TypeName    string
-	NotNull     bool
-	NotNullName *string
-	Default     *string
-	Identity    ColumnIdentity
+	Name       string
+	RenameFrom *string
+	TypeName   string
+	// SerialSequence names the sequence a serial column owns, schema
+	// qualified. Only the catalog fills it: a type name says the column is a
+	// serial, but not what PostgreSQL called its sequence. nil otherwise.
+	SerialSequence *string
+	NotNull        bool
+	NotNullName    *string
+	Default        *string
+	Identity       ColumnIdentity
 	// IdentitySeq holds the sequence parameters of an identity column. It is
 	// nil when the column is not an identity column.
 	IdentitySeq *IdentitySequence

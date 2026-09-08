@@ -319,6 +319,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 	}
 
 	// Alter existing columns
+	var seqStmts []string
 	for name, desiredCol := range desired.All() {
 		if currentCol, ok := current.GetOk(name); ok {
 			cur := currentCol.Generated.IsStoredGeneratedColumn()
@@ -344,8 +345,18 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 					fqtn, model.Ident(name))
 			}
 			stmts = append(stmts, alterColumnSQL(fqtn, currentCol, desiredCol)...)
+			if seqSQL := alterSerialSequenceSQL(fqtn, currentCol, desiredCol); seqSQL != "" {
+				seqStmts = append(seqStmts, seqSQL)
+			}
 		}
 	}
+
+	// The sequence statements go after every ALTER TABLE rather than next to
+	// the column they belong to. --bulk-alter merges a run of consecutive
+	// ALTER TABLE statements on one table, and one of these in the middle
+	// would break the run in two. The sort puts them ahead of the ALTER TABLE
+	// again, since the table's default draws from the sequence.
+	stmts = append(stmts, seqStmts...)
 
 	// Drop removed columns. When the column-drop policy disallows it, emit
 	// the same DROP as a comment for visibility. Two passes: generated
@@ -409,7 +420,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// SET DATA TYPE without COLLATE reverts to the type's default collation.
 	retyped := !equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) || !equalCollation(current.Collation, desired.Collation)
 	if retyped {
-		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + desired.TypeName
+		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + alterTypeName(desired.TypeName)
 		if desired.Collation != nil {
 			sql += " COLLATE " + *desired.Collation
 		}
@@ -604,6 +615,49 @@ func identityKind(id model.ColumnIdentity) string {
 func isSerialType(typeName string) bool {
 	_, ok := serialBaseTypes[typeName]
 	return ok
+}
+
+// alterTypeName renders a type name for SET DATA TYPE. PostgreSQL accepts a
+// serial pseudo-type only in CREATE TABLE and ADD COLUMN, so naming one in an
+// ALTER fails with "type bigserial does not exist".
+func alterTypeName(typeName string) string {
+	if base, ok := serialBaseTypes[typeName]; ok {
+		return base
+	}
+	return typeName
+}
+
+// alterSerialSequenceSQL keeps the sequence a serial column owns in step with
+// the column's type. serial is an integer column and an integer sequence,
+// bigserial a bigint one of each, and ALTER TABLE reaches only the column, so
+// widening the column alone leaves the numbers stopping at the old type's
+// maximum. PostgreSQL moves the bounds with the type when they are the old
+// type's defaults.
+//
+// Returns "" for a column that owns no sequence, for one whose type is not
+// changing, and for a type a sequence cannot hold.
+func alterSerialSequenceSQL(fqtn string, current, desired *model.Column) string {
+	if current.SerialSequence == nil {
+		return ""
+	}
+	// Only a type change reaches the sequence. Without this the statement
+	// would go out on every plan for every serial column, since the column
+	// itself is compared elsewhere.
+	if equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) {
+		return ""
+	}
+	base := alterTypeName(desired.TypeName)
+	if !sequenceTypes[base] {
+		return ""
+	}
+	return "ALTER SEQUENCE " + *current.SerialSequence + " AS " + base + ";"
+}
+
+// sequenceTypes lists the types a sequence can be declared AS.
+var sequenceTypes = map[string]bool{
+	"smallint": true,
+	"integer":  true,
+	"bigint":   true,
 }
 
 // normalizeCheckExpr normalizes an expression so that semantically equivalent

@@ -28,6 +28,10 @@ func (e Enum) FQEN() string {
 }
 
 func (e Enum) SQL() string {
+	if len(e.Values) == 0 {
+		return "CREATE TYPE " + Ident(e.Schema, e.Name) + " AS ENUM (\n);"
+	}
+
 	quoted := make([]string, len(e.Values))
 	for i, v := range e.Values {
 		quoted[i] = QuoteLiteral(v)

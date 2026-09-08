@@ -1,0 +1,15 @@
+# CREATE INDEX IF NOT EXISTS describes the same index as CREATE INDEX, and
+# pg_get_indexdef never writes the clause.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS users_name_idx ON public.users USING btree (name);
+plan: ""

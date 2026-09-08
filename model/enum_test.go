@@ -32,6 +32,11 @@ func TestEnum_SQL(t *testing.T) {
 	assert.Equal(t, expected, e.SQL())
 }
 
+func TestEnum_SQL_NoValues(t *testing.T) {
+	e := &model.Enum{Schema: "public", Name: "mood"}
+	assert.Equal(t, "CREATE TYPE public.mood AS ENUM (\n);", e.SQL())
+}
+
 func TestEnum_CommentSQL(t *testing.T) {
 	comment := "User status"
 	e := &model.Enum{

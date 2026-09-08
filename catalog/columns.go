@@ -34,6 +34,14 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 				END
 				ELSE pg_catalog.format_type(a.atttypid, a.atttypmod)
 			END AS type_name,
+			-- The sequence a serial column owns. The diff needs its name to
+			-- keep its type in step with the column's: bigserial is a bigint
+			-- column and a bigint sequence, and ALTER TABLE reaches only the
+			-- column. NULL for every other column.
+			CASE
+				WHEN s.is_serial
+				THEN pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)
+			END AS serial_sequence,
 			a.attnotnull,
 			-- PG18 stores per-column NOT NULL as pg_constraint rows with
 			-- contype='n' and a single conkey entry. Pre-PG18 has no such row,
@@ -161,6 +169,7 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			&col.Name,
 			&isLocal,
 			&col.TypeName,
+			&col.SerialSequence,
 			&col.NotNull,
 			&col.NotNullName,
 			&col.Default,

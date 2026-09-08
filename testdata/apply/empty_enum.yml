@@ -1,0 +1,10 @@
+# An enum with no labels is a real type: it can be a column's type and gain
+# labels later. The catalog has to read it back, or a second apply fails with
+# "type already exists".
+init: ""
+desired: |
+  CREATE TYPE public.mood AS ENUM ();
+applied: |
+  -- public.mood
+  CREATE TYPE public.mood AS ENUM (
+  );

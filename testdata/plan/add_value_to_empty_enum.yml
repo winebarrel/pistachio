@@ -1,0 +1,12 @@
+# Labels are added to an enum that has none the same way they are added to one
+# that already has some.
+init: |
+  CREATE TYPE public.mood AS ENUM ();
+desired: |
+  CREATE TYPE public.mood AS ENUM (
+      'happy',
+      'sad'
+  );
+plan: |
+  ALTER TYPE public.mood ADD VALUE 'happy';
+  ALTER TYPE public.mood ADD VALUE 'sad' AFTER 'happy';

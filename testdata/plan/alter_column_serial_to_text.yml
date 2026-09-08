@@ -1,0 +1,12 @@
+# A sequence holds an integer type and nothing else, so a column leaving the
+# integer types takes the ALTER TABLE alone.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+desired: |
+  CREATE TABLE public.t (
+      id text NOT NULL
+  );
+plan: |
+  ALTER TABLE public.t ALTER COLUMN id SET DATA TYPE text;
