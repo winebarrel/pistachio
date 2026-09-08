@@ -13,7 +13,7 @@ import (
 
 var version string
 
-var cli struct {
+type cli struct {
 	pistachio.Options
 	Config  kong.ConfigFlag `short:"C" name:"config" placeholder:"FILE" env:"PISTA_CONFIG" help:"Load options from a YAML file."`
 	Version kong.VersionFlag
@@ -26,21 +26,37 @@ var cli struct {
 }
 
 func main() {
+	run(os.Args[1:], os.Stdout, os.Stderr, os.Exit)
+}
+
+// run parses args and runs the command. The command writes to stdout, which
+// is also where the pager writes when one is started, and stderr takes the
+// usage and error messages. exit stands in for os.Exit and is not expected
+// to return; a test passes one that panics.
+func run(args []string, stdout, stderr io.Writer, exit func(int)) {
+	var cli cli
 	ctx := context.Background()
-	kctx := kong.Parse(&cli,
+	parser, err := kong.New(&cli,
 		kong.Vars{"version": version},
 		kong.Configuration(pistachio.YAMLConfig),
+		kong.Writers(stdout, stderr),
+		kong.Exit(exit),
 		kong.BindTo(ctx, (*context.Context)(nil)),
-		kong.BindTo(os.Stdout, (*io.Writer)(nil)),
+		kong.BindTo(stdout, (*io.Writer)(nil)),
 	)
+	if err != nil {
+		panic(err)
+	}
+	kctx, err := parser.Parse(args)
+	parser.FatalIfErrorf(err)
 
-	w, closePager, err := command.StartPager(os.Stdout, cli.Pager)
+	w, closePager, err := command.StartPager(stdout, cli.Pager)
 	kctx.FatalIfErrorf(err)
 	// Defer covers panics; the explicit closePager() below covers the
 	// os.Exit path inside FatalIfErrorf so the pager always finishes
 	// flushing before the parent exits.
 	defer closePager()
-	if w != io.Writer(os.Stdout) {
+	if w != stdout {
 		kctx.BindTo(w, (*io.Writer)(nil))
 	}
 
@@ -51,6 +67,7 @@ func main() {
 	// of a fatal error. The output has already been written.
 	if errors.Is(err, command.ErrPlanDiff) || errors.Is(err, command.ErrFormatDiff) {
 		kctx.Exit(2)
+		return
 	}
 	kctx.FatalIfErrorf(err)
 }
