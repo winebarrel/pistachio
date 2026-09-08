@@ -6,7 +6,7 @@
 
 * Read a `serial` column as `NOT NULL`. The type expands to a `NOT NULL` column, and the catalog reports it as one, so a declaration that left the words off planned `DROP NOT NULL` right after the table was created. Applying it took the constraint away.
 
-* Read a column type the way PostgreSQL stores it. A `numeric` with only a precision gains a scale of zero, and an array forgets its dimensions and bounds, so `numeric(5)`, `integer[][]` and `integer[3]` each re-issued the same `ALTER` on every plan.
+* Read a `numeric` written with only a precision. PostgreSQL stores `numeric(5)` as `numeric(5,0)` and `format_type` prints both digits, so the declaration and the catalog never compared equal and every plan re-issued the same `ALTER`.
 
 * Drop a partition that carries a copy of its parent's foreign key. The copy was dropped first, which PostgreSQL rejects with `cannot drop inherited constraint`, and the copy goes with the partition anyway. Dropping the whole partitioned table failed the same way.
 

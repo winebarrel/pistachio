@@ -2283,15 +2283,11 @@ func normalizeTypeName(name string) string {
 		base = canonical
 	}
 
+	// The array marker is separated so a modifier on an array type is reached:
+	// numeric(5)[] is stored as numeric(5,0)[].
 	mod, array := splitTypeSuffix(suffix)
 	if base == "numeric" {
 		mod = fillNumericScale(mod)
-	}
-	// PostgreSQL keeps neither the dimension count nor a bound: every array
-	// column reads back from format_type as a single "[]". Written any other
-	// way, the two sides would never compare equal.
-	if array != "" {
-		array = "[]"
 	}
 
 	return base + mod + array

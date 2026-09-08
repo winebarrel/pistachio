@@ -671,3 +671,24 @@ Closing it means gating the serial test on the type, so a column a sequence
 cannot type keeps its default and its sequence surfaces as a standalone one.
 
 Origin: review of the serial retype fix, 2026-09-08.
+
+## Perpetual drift on an array written with dimensions or a bound
+
+Priority: low.
+
+PostgreSQL accepts `integer[3]` and `integer[][]` for SQL standard
+compatibility and enforces neither: a column declared `integer[3]` takes an
+array of any length, one declared `integer[][]` takes an array of any number of
+dimensions, and `format_type` prints both as `integer[]`. The desired side
+keeps what the file wrote, so the two never compare equal and the column is
+retyped on every plan. The statement is harmless to the data and takes an
+ACCESS EXCLUSIVE lock; `plan --check` stays non-zero.
+
+Folding every `[...]` to a single `[]` closes it, but the spelling means
+nothing to PostgreSQL either, so a schema carrying one has already lost what it
+was trying to say. `dump` writes `integer[]`, and none of the sample schemas
+declares a column this way.
+
+Workaround: write `integer[]`, which is what `pista dump` emits.
+
+Origin: review of the column type canonicalization, 2026-09-08.
