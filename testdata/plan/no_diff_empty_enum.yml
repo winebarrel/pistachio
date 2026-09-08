@@ -1,0 +1,10 @@
+# An enum with no labels has no pg_enum row, so the catalog has to reach it
+# through an outer join. Missing it, the type reads as absent and every plan
+# creates it again.
+init: |
+  CREATE TYPE public.mood AS ENUM ();
+desired: |
+  CREATE TYPE public.mood AS ENUM ();
+plan: ""
+count:
+  enums: 1

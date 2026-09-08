@@ -1,0 +1,15 @@
+# serial and its siblings are pseudo-types PostgreSQL accepts only in
+# CREATE TABLE and ADD COLUMN. Widening such a column has to name the base
+# type; SET DATA TYPE bigserial fails with "type bigserial does not exist".
+init: |
+  CREATE TABLE public.users (
+      id serial NOT NULL,
+      name text NOT NULL
+  );
+desired: |
+  CREATE TABLE public.users (
+      id bigserial NOT NULL,
+      name text NOT NULL
+  );
+plan: |
+  ALTER TABLE public.users ALTER COLUMN id SET DATA TYPE bigint;

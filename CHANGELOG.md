@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+* Read `CREATE INDEX IF NOT EXISTS` as the index it describes. The clause was kept in the stored definition, which `pg_get_indexdef` never writes, so an index a schema file spelled that way was dropped and created again on every plan.
+
+* Read an enum that has no labels. `CREATE TYPE ... AS ENUM ()` has no `pg_enum` row, and the catalog reached the labels through an inner join, so the type read as absent: every plan created it again and the second apply failed with `type already exists`. `dump` writes it now as well.
+
+* Fold a routine's `SET` name to lower case. GUC names are case-insensitive and `pg_get_functiondef` writes the spelling PostgreSQL keeps, so a routine created with `SET timezone` read back as `SET "TimeZone"` and was replaced on every plan. `DateStyle` and `IntervalStyle` behaved the same way.
+
+* Widen a `serial` column to `bigserial`. The change went out as `SET DATA TYPE bigserial`, which fails with `type bigserial does not exist`, since PostgreSQL takes a serial pseudo-type only in `CREATE TABLE` and `ADD COLUMN`. The base type is named instead; the column keeps the sequence it owns, and widening that sequence stays a separate change.
+
 * Test the `pista` entrypoint. `main` now hands the arguments, the output streams and the exit function to a `run` function, so the argument parsing, the pager hookup and the exit codes are covered by `go test`, and `cmd/pista` is no longer left out of the coverage report. No change in behavior.
 
 ## [1.47.0] - 2026-09-07

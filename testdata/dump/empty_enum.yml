@@ -1,0 +1,6 @@
+init: |
+  CREATE TYPE public.mood AS ENUM ();
+dump: |
+  -- public.mood
+  CREATE TYPE public.mood AS ENUM (
+  );

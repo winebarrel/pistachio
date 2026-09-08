@@ -38,12 +38,15 @@ func (c *Catalog) ListEnums(ctx context.Context) ([]*model.Enum, error) {
 			t.oid,
 			n.nspname,
 			t.typname,
-			array_agg(e.enumlabel ORDER BY e.enumsortorder) AS vals,
+			array_remove(array_agg(e.enumlabel ORDER BY e.enumsortorder), NULL) AS vals,
 			d.description
 		FROM
 			pg_catalog.pg_type t
 			JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-			JOIN pg_catalog.pg_enum e ON e.enumtypid = t.oid
+			-- An enum with no labels has no pg_enum row. An inner join would
+			-- drop the type from the result, so every plan would create it
+			-- again and the second apply would fail.
+			LEFT JOIN pg_catalog.pg_enum e ON e.enumtypid = t.oid
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = t.oid
 			AND d.classoid = 'pg_type'::regclass
 			AND d.objsubid = 0

@@ -409,7 +409,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// SET DATA TYPE without COLLATE reverts to the type's default collation.
 	retyped := !equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) || !equalCollation(current.Collation, desired.Collation)
 	if retyped {
-		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + desired.TypeName
+		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + alterTypeName(desired.TypeName)
 		if desired.Collation != nil {
 			sql += " COLLATE " + *desired.Collation
 		}
@@ -604,6 +604,18 @@ func identityKind(id model.ColumnIdentity) string {
 func isSerialType(typeName string) bool {
 	_, ok := serialBaseTypes[typeName]
 	return ok
+}
+
+// alterTypeName renders a type name for SET DATA TYPE. PostgreSQL accepts a
+// serial pseudo-type only in CREATE TABLE and ADD COLUMN, where it stands for
+// the base type plus a sequence and a default; naming it in an ALTER fails
+// with "type bigserial does not exist". The column keeps the sequence it
+// already owns, so the base type is the whole change.
+func alterTypeName(typeName string) string {
+	if base, ok := serialBaseTypes[typeName]; ok {
+		return base
+	}
+	return typeName
 }
 
 // normalizeCheckExpr normalizes an expression so that semantically equivalent

@@ -297,7 +297,11 @@ func parseRoutineConfig(arg *pg_query.Node) (*model.RoutineConfig, error) {
 		return nil, fmt.Errorf("%w: SET %s", errRoutineConfigFromCurrent, vss.Name)
 	}
 
-	cfg := &model.RoutineConfig{Name: vss.Name}
+	// GUC names are case-insensitive, and PostgreSQL keeps its own spelling:
+	// pg_get_functiondef writes SET "TimeZone" for a routine created with
+	// SET timezone. Both sides reach this function, so folding the name here
+	// makes a written name and a read-back one compare equal.
+	cfg := &model.RoutineConfig{Name: strings.ToLower(vss.Name)}
 	for _, a := range vss.Args {
 		c := a.GetAConst()
 		if c == nil {

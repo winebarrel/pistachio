@@ -1,0 +1,18 @@
+# GUC names are case-insensitive, and pg_get_functiondef writes the canonical
+# spelling PostgreSQL keeps in proconfig ("TimeZone"), not the one the file
+# used. Both sides are parsed by the same code, so folding the name to lower
+# case there makes the two compare equal.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql
+      SET timezone TO 'UTC'
+      SET datestyle TO 'ISO, MDY'
+      AS $$ SELECT 1 $$;
+desired: |
+  CREATE FUNCTION public.f() RETURNS integer
+      LANGUAGE sql
+      SET timezone TO 'UTC'
+      SET datestyle TO 'ISO, MDY'
+      AS $$ SELECT 1 $$;
+plan: ""
