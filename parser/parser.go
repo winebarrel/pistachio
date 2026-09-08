@@ -714,22 +714,6 @@ var serialTypes = map[string]bool{
 	"smallserial": true,
 }
 
-// isNullDefault reports whether a DEFAULT expression is the null constant,
-// with or without a cast. PostgreSQL drops such a default rather than storing
-// it, so the desired side has to drop it too.
-func isNullDefault(expr *pg_query.Node) bool {
-	for {
-		if c := expr.GetAConst(); c != nil {
-			return c.Isnull
-		}
-		tc := expr.GetTypeCast()
-		if tc == nil || tc.Arg == nil {
-			return false
-		}
-		expr = tc.Arg
-	}
-}
-
 // applyPrimaryKeyNotNull marks the key columns of a primary key NOT NULL.
 // PostgreSQL sets the flag itself whichever way the key arrives, inline with
 // the table or in a later ALTER TABLE, and the catalog reports it, so the
@@ -785,10 +769,7 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 				col.NotNullName = &name
 			}
 		case pg_query.ConstrType_CONSTR_DEFAULT:
-			// DEFAULT NULL is what a column without a default already does, and
-			// PostgreSQL stores no pg_attrdef row for it, so keeping it would
-			// plan SET DEFAULT NULL on every run.
-			if con.RawExpr != nil && !isNullDefault(con.RawExpr) {
+			if con.RawExpr != nil {
 				def, err := deparseExpr(con.RawExpr)
 				if err != nil {
 					return nil, fmt.Errorf("failed to deparse default for column %s: %w", cd.Colname, err)
