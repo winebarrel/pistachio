@@ -1,7 +1,7 @@
 # A numeric written with only a precision is stored with a scale of zero, and
-# format_type prints both digits. The desired side has to read it the same way
-# or every plan re-issues the same ALTER. The marker is separated from the
-# modifier so an array of the type is reached as well.
+# format_type prints both digits, so the two sides have to read it the same way
+# or every plan re-issues the same ALTER. The array marker is separated from
+# the modifier so an array of the type is reached as well.
 init: |
   CREATE TABLE public.t (
       a numeric(5),

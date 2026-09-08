@@ -707,13 +707,6 @@ func collationFromClause(cc *pg_query.CollateClause) *string {
 	return &collation
 }
 
-// serialTypes lists the pseudo-types that expand to a column plus a sequence.
-var serialTypes = map[string]bool{
-	"serial":      true,
-	"bigserial":   true,
-	"smallserial": true,
-}
-
 // applyPrimaryKeyNotNull marks the key columns of a primary key NOT NULL.
 // PostgreSQL sets the flag itself whichever way the key arrives, inline with
 // the table or in a later ALTER TABLE, and the catalog reports it, so the
@@ -729,6 +722,13 @@ func applyPrimaryKeyNotNull(table *model.Table, con *model.Constraint) {
 			col.NotNull = true
 		}
 	}
+}
+
+// serialTypes lists the pseudo-types that expand to a column plus a sequence.
+var serialTypes = map[string]bool{
+	"serial":      true,
+	"bigserial":   true,
+	"smallserial": true,
 }
 
 func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
