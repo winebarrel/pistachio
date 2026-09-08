@@ -1,0 +1,20 @@
+# The clause says how to run the statement, so it is not part of the index and
+# the emitted CREATE INDEX leaves it off.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS users_name_idx ON public.users USING btree (name);
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name);

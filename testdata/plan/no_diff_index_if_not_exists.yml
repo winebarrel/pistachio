@@ -1,7 +1,5 @@
-# CREATE INDEX IF NOT EXISTS describes the same index as CREATE INDEX.
-# pg_get_indexdef never writes the clause, so keeping it in the stored
-# definition would make the two sides differ and plan a drop and a create on
-# every run.
+# CREATE INDEX IF NOT EXISTS describes the same index as CREATE INDEX, and
+# pg_get_indexdef never writes the clause.
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,

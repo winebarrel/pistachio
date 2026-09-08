@@ -1,6 +1,5 @@
 # The column widens to bigint and keeps the sequence it owns, so the catalog
-# reads it back as bigserial. The sequence itself stays as it was created;
-# widening it is a separate change the column type does not imply.
+# reads it back as bigserial.
 init: |
   CREATE TABLE public.users (
       id serial NOT NULL,

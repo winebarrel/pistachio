@@ -37,9 +37,8 @@ type Column struct {
 	RenameFrom *string
 	TypeName   string
 	// SerialSequence names the sequence a serial column owns, schema
-	// qualified. Only the catalog fills it: the desired side knows the column
-	// is a serial from its type name, but not what PostgreSQL called the
-	// sequence. nil on every other column.
+	// qualified. Only the catalog fills it: a type name says the column is a
+	// serial, but not what PostgreSQL called its sequence. nil otherwise.
 	SerialSequence *string
 	NotNull        bool
 	NotNullName    *string

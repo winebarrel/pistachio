@@ -1,4 +1,6 @@
 CREATE TYPE public.status AS ENUM ('active', 'inactive', 'banned');
+CREATE TYPE public.empty_enum AS ENUM (
+);
 CREATE TYPE public.address AS (city text, zip text);
 CREATE DOMAIN public.email AS text NOT NULL DEFAULT 'x@example.com'::text CONSTRAINT email_check CHECK ((VALUE ~ '@'::text));
 CREATE TABLE public.accounts (

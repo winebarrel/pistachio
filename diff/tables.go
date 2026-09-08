@@ -610,10 +610,8 @@ func isSerialType(typeName string) bool {
 }
 
 // alterTypeName renders a type name for SET DATA TYPE. PostgreSQL accepts a
-// serial pseudo-type only in CREATE TABLE and ADD COLUMN, where it stands for
-// the base type plus a sequence and a default; naming it in an ALTER fails
-// with "type bigserial does not exist". The column keeps the sequence it
-// already owns, so the base type is the whole change.
+// serial pseudo-type only in CREATE TABLE and ADD COLUMN, so naming one in an
+// ALTER fails with "type bigserial does not exist".
 func alterTypeName(typeName string) string {
 	if base, ok := serialBaseTypes[typeName]; ok {
 		return base
@@ -622,17 +620,14 @@ func alterTypeName(typeName string) string {
 }
 
 // alterSerialSequenceSQL keeps the sequence a serial column owns in step with
-// the column's type. serial means an integer column and an integer sequence,
-// bigserial a bigint one of each, and ALTER TABLE reaches only the column: a
-// widened column left with its old sequence stops handing out numbers at the
-// old type's maximum, which is not the state the schema declares. PostgreSQL
-// adjusts the bounds along with the type when they are the old type's
-// defaults.
+// the column's type. serial is an integer column and an integer sequence,
+// bigserial a bigint one of each, and ALTER TABLE reaches only the column, so
+// widening the column alone leaves the numbers stopping at the old type's
+// maximum. PostgreSQL moves the bounds with the type when they are the old
+// type's defaults.
 //
-// It returns "" unless the current column is a serial the catalog named a
-// sequence for, and the new type is one a sequence can hold. A column that is
-// not a serial owns no sequence, and one being retyped to something a
-// sequence cannot hold fails on the column anyway.
+// Returns "" for a column that owns no sequence, and for a type a sequence
+// cannot hold.
 func alterSerialSequenceSQL(current, desired *model.Column) string {
 	if current.SerialSequence == nil {
 		return ""

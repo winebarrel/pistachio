@@ -1,7 +1,6 @@
-# GUC names are case-insensitive, and pg_get_functiondef writes the canonical
-# spelling PostgreSQL keeps in proconfig ("TimeZone"), not the one the file
-# used. Both sides are parsed by the same code, so folding the name to lower
-# case there makes the two compare equal.
+# GUC names are case-insensitive, and pg_get_functiondef writes the spelling
+# PostgreSQL keeps in proconfig ("TimeZone"), not the one the file used. Both
+# sides parse through the same code, so folding the name there settles it.
 manage_routine: true
 init: |
   CREATE FUNCTION public.f() RETURNS integer

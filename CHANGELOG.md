@@ -8,7 +8,7 @@
 
 * Fold a routine's `SET` name to lower case. GUC names are case-insensitive and `pg_get_functiondef` writes the spelling PostgreSQL keeps, so a routine created with `SET timezone` read back as `SET "TimeZone"` and was replaced on every plan. `DateStyle` and `IntervalStyle` behaved the same way.
 
-* Widen a `serial` column to `bigserial`. The change went out as `SET DATA TYPE bigserial`, which fails with `type bigserial does not exist`, since PostgreSQL takes a serial pseudo-type only in `CREATE TABLE` and `ADD COLUMN`. The base type is named instead, and the sequence the column owns follows it with `ALTER SEQUENCE ... AS`: `bigserial` is a `bigint` column and a `bigint` sequence, so widening the column alone left the numbers stopping at 2147483647. A column that owns no sequence takes the one statement it always did.
+* Widen a `serial` column to `bigserial`. The change went out as `SET DATA TYPE bigserial`, which fails: PostgreSQL takes a serial pseudo-type only in `CREATE TABLE` and `ADD COLUMN`. The base type goes out instead, with `ALTER SEQUENCE ... AS` for the sequence the column owns. `bigserial` is a `bigint` column and a `bigint` sequence, and widening the column alone left the numbers stopping at 2147483647. A column that owns no sequence takes the one statement it always did.
 
 * Test the `pista` entrypoint. `main` now hands the arguments, the output streams and the exit function to a `run` function, so the argument parsing, the pager hookup and the exit codes are covered by `go test`, and `cmd/pista` is no longer left out of the coverage report. No change in behavior.
 
