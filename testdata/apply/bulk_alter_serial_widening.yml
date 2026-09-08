@@ -1,0 +1,30 @@
+# The sequence statement goes after every ALTER TABLE rather than next to the
+# column it belongs to. --bulk-alter merges a run of consecutive ALTER TABLE
+# statements on one table, and one of these in the middle would break the run
+# in two.
+bulk_alter: true
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL,
+      a smallint,
+      b smallint
+  );
+desired: |
+  CREATE TABLE public.t (
+      id bigserial NOT NULL,
+      a integer,
+      b integer
+  );
+applied_sql: |
+  ALTER SEQUENCE public.t_id_seq AS bigint;
+  ALTER TABLE public.t
+    ALTER COLUMN id SET DATA TYPE bigint,
+    ALTER COLUMN a SET DATA TYPE integer,
+    ALTER COLUMN b SET DATA TYPE integer;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id bigserial NOT NULL,
+      a integer,
+      b integer
+  );

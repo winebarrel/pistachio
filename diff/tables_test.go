@@ -4076,34 +4076,41 @@ func TestAlterSerialSequenceSQL(t *testing.T) {
 	t.Run("serial column widening", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq}
 		desired := &model.Column{Name: "id", TypeName: "bigserial"}
-		assert.Equal(t, "ALTER SEQUENCE public.t_id_seq AS bigint;", alterSerialSequenceSQL(current, desired))
+		assert.Equal(t, "ALTER SEQUENCE public.t_id_seq AS bigint;", alterSerialSequenceSQL("public.t", current, desired))
 	})
 
 	t.Run("base type named directly", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq}
 		desired := &model.Column{Name: "id", TypeName: "bigint"}
-		assert.Equal(t, "ALTER SEQUENCE public.t_id_seq AS bigint;", alterSerialSequenceSQL(current, desired))
+		assert.Equal(t, "ALTER SEQUENCE public.t_id_seq AS bigint;", alterSerialSequenceSQL("public.t", current, desired))
+	})
+
+	t.Run("type unchanged", func(t *testing.T) {
+		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq}
+		desired := &model.Column{Name: "id", TypeName: "serial"}
+		assert.Empty(t, alterSerialSequenceSQL("public.t", current, desired))
 	})
 
 	t.Run("column owns no sequence", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "integer"}
 		desired := &model.Column{Name: "id", TypeName: "bigint"}
-		assert.Empty(t, alterSerialSequenceSQL(current, desired))
+		assert.Empty(t, alterSerialSequenceSQL("public.t", current, desired))
 	})
 
 	t.Run("type a sequence cannot hold", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq}
 		desired := &model.Column{Name: "id", TypeName: "text"}
-		assert.Empty(t, alterSerialSequenceSQL(current, desired))
+		assert.Empty(t, alterSerialSequenceSQL("public.t", current, desired))
 	})
 }
 
+// The sequence statement is not part of what alterColumnSQL returns; it is
+// collected separately so a --bulk-alter run of ALTER TABLE stays unbroken.
 func TestAlterColumnSQL_SerialWidening(t *testing.T) {
 	seq := "public.users_id_seq"
 	current := &model.Column{Name: "id", TypeName: "serial", NotNull: true, SerialSequence: &seq}
 	desired := &model.Column{Name: "id", TypeName: "bigserial", NotNull: true}
 	assert.Equal(t, []string{
 		"ALTER TABLE public.users ALTER COLUMN id SET DATA TYPE bigint;",
-		"ALTER SEQUENCE public.users_id_seq AS bigint;",
 	}, alterColumnSQL("public.users", current, desired))
 }

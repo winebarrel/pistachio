@@ -319,6 +319,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 	}
 
 	// Alter existing columns
+	var seqStmts []string
 	for name, desiredCol := range desired.All() {
 		if currentCol, ok := current.GetOk(name); ok {
 			cur := currentCol.Generated.IsStoredGeneratedColumn()
@@ -344,8 +345,18 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 					fqtn, model.Ident(name))
 			}
 			stmts = append(stmts, alterColumnSQL(fqtn, currentCol, desiredCol)...)
+			if seqSQL := alterSerialSequenceSQL(fqtn, currentCol, desiredCol); seqSQL != "" {
+				seqStmts = append(seqStmts, seqSQL)
+			}
 		}
 	}
+
+	// The sequence statements go after every ALTER TABLE rather than next to
+	// the column they belong to. --bulk-alter merges a run of consecutive
+	// ALTER TABLE statements on one table, and one of these in the middle
+	// would break the run in two. The sort puts them ahead of the ALTER TABLE
+	// again, since the table's default draws from the sequence.
+	stmts = append(stmts, seqStmts...)
 
 	// Drop removed columns. When the column-drop policy disallows it, emit
 	// the same DROP as a comment for visibility. Two passes: generated
@@ -414,9 +425,6 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 			sql += " COLLATE " + *desired.Collation
 		}
 		stmts = append(stmts, sql+";")
-		if seqSQL := alterSerialSequenceSQL(current, desired); seqSQL != "" {
-			stmts = append(stmts, seqSQL)
-		}
 	}
 
 	curIsIdent := current.Identity.IsIdentityColumn()
@@ -626,10 +634,16 @@ func alterTypeName(typeName string) string {
 // maximum. PostgreSQL moves the bounds with the type when they are the old
 // type's defaults.
 //
-// Returns "" for a column that owns no sequence, and for a type a sequence
-// cannot hold.
-func alterSerialSequenceSQL(current, desired *model.Column) string {
+// Returns "" for a column that owns no sequence, for one whose type is not
+// changing, and for a type a sequence cannot hold.
+func alterSerialSequenceSQL(fqtn string, current, desired *model.Column) string {
 	if current.SerialSequence == nil {
+		return ""
+	}
+	// Only a type change reaches the sequence. Without this the statement
+	// would go out on every plan for every serial column, since the column
+	// itself is compared elsewhere.
+	if equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) {
 		return ""
 	}
 	base := alterTypeName(desired.TypeName)
