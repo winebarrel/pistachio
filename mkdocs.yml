@@ -39,6 +39,11 @@ plugins:
 hooks:
   - hooks.py
 
+extra:
+  analytics:
+    provider: google
+    property: G-L2YHGE2CEF
+
 extra_css:
   - stylesheets/extra.css
 
