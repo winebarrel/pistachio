@@ -1,6 +1,11 @@
 # serial and its siblings are pseudo-types PostgreSQL accepts only in
 # CREATE TABLE and ADD COLUMN. Widening such a column has to name the base
 # type; SET DATA TYPE bigserial fails with "type bigserial does not exist".
+#
+# The sequence the column owns goes with it: bigserial means a bigint column
+# and a bigint sequence, so widening only the column leaves the numbers
+# stopping at 2147483647. ALTER SEQUENCE ... AS is what reaches the rest, and
+# the sort puts it first because the table's default draws from the sequence.
 init: |
   CREATE TABLE public.users (
       id serial NOT NULL,
@@ -12,4 +17,5 @@ desired: |
       name text NOT NULL
   );
 plan: |
+  ALTER SEQUENCE public.users_id_seq AS bigint;
   ALTER TABLE public.users ALTER COLUMN id SET DATA TYPE bigint;

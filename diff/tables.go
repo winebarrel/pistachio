@@ -414,6 +414,9 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 			sql += " COLLATE " + *desired.Collation
 		}
 		stmts = append(stmts, sql+";")
+		if seqSQL := alterSerialSequenceSQL(current, desired); seqSQL != "" {
+			stmts = append(stmts, seqSQL)
+		}
 	}
 
 	curIsIdent := current.Identity.IsIdentityColumn()
@@ -616,6 +619,36 @@ func alterTypeName(typeName string) string {
 		return base
 	}
 	return typeName
+}
+
+// alterSerialSequenceSQL keeps the sequence a serial column owns in step with
+// the column's type. serial means an integer column and an integer sequence,
+// bigserial a bigint one of each, and ALTER TABLE reaches only the column: a
+// widened column left with its old sequence stops handing out numbers at the
+// old type's maximum, which is not the state the schema declares. PostgreSQL
+// adjusts the bounds along with the type when they are the old type's
+// defaults.
+//
+// It returns "" unless the current column is a serial the catalog named a
+// sequence for, and the new type is one a sequence can hold. A column that is
+// not a serial owns no sequence, and one being retyped to something a
+// sequence cannot hold fails on the column anyway.
+func alterSerialSequenceSQL(current, desired *model.Column) string {
+	if current.SerialSequence == nil {
+		return ""
+	}
+	base := alterTypeName(desired.TypeName)
+	if !sequenceTypes[base] {
+		return ""
+	}
+	return "ALTER SEQUENCE " + *current.SerialSequence + " AS " + base + ";"
+}
+
+// sequenceTypes lists the types a sequence can be declared AS.
+var sequenceTypes = map[string]bool{
+	"smallint": true,
+	"integer":  true,
+	"bigint":   true,
 }
 
 // normalizeCheckExpr normalizes an expression so that semantically equivalent
