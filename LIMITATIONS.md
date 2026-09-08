@@ -637,3 +637,37 @@ Managing the name also means `dump` writes `SEQUENCE NAME` on every identity
 column. No plan to close this.
 
 Origin: identity sequence options, 2026-09-02.
+
+## A `nextval` default is dropped from a column a sequence cannot type
+
+A column is read as a serial when it owns a sequence and its default draws from
+that sequence. The type is not part of the test, while the rendering is: the
+type name reads back as `serial` only for `integer`, `bigint` and `smallint`,
+and the default is dropped either way. A column of any other type that owns its
+sequence therefore loses its default:
+
+```sql
+CREATE TABLE public.t (id serial);
+ALTER TABLE public.t ALTER COLUMN id SET DATA TYPE text;
+```
+
+`pista dump` writes `id text NOT NULL`, though the column still carries
+`nextval('t_id_seq'::regclass)`, and the plan of that dump reports no changes,
+so nothing says the default was lost. Loading the dump gives a table without
+it.
+
+The same happens to a column whose sequence was attached by hand, and there the
+sequence goes too, since an owned one is left to the column that owns it:
+
+```sql
+CREATE SEQUENCE public.s;
+CREATE TABLE public.t (id numeric DEFAULT nextval('public.s'));
+ALTER SEQUENCE public.s OWNED BY public.t.id;
+```
+
+`pista dump` writes `id numeric` and no `CREATE SEQUENCE`.
+
+Closing it means gating the serial test on the type, so a column a sequence
+cannot type keeps its default and its sequence surfaces as a standalone one.
+
+Origin: review of the serial retype fix, 2026-09-08.
