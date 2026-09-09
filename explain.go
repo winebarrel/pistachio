@@ -20,7 +20,7 @@ import (
 // read off each statement, whether it scans or rewrites the table and what
 // the lock it takes stops, and the table's size is added from pg_class:
 //
-//	-- rewrite, blocks reads and writes: public.events (~120000000 rows, 9629 MB, 5 indexes rebuilt)
+//	-- rewrite, blocks reads and writes: public.events (~120,000,000 rows, 9629 MB, 5 indexes rebuilt)
 //	ALTER TABLE public.events ALTER COLUMN amount SET DATA TYPE numeric(12,2);
 //
 // A statement that only changes the catalog takes no comment, whatever lock
@@ -813,7 +813,11 @@ func (ex *explainer) renderTarget(tg explainTarget) string {
 
 	var details []string
 	if analyzed {
-		details = append(details, "~"+pluralize(int(rows), "row"), sizePretty(bytes))
+		noun := "rows"
+		if rows == 1 {
+			noun = "row"
+		}
+		details = append(details, "~"+groupDigits(rows)+" "+noun, sizePretty(bytes))
 	} else {
 		details = append(details, "not analyzed")
 	}
@@ -832,6 +836,26 @@ func plural(n int, singular, pluralForm string) string {
 		return fmt.Sprintf("%d %s", n, singular)
 	}
 	return fmt.Sprintf("%d %s", n, pluralForm)
+}
+
+// groupDigits writes a count with a comma between every three digits, so a
+// row estimate in the hundreds of millions reads at a glance. The byte count
+// needs none: sizePretty keeps it under five digits.
+func groupDigits(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	if len(s) <= 3 {
+		return s
+	}
+	var b strings.Builder
+	head := len(s) % 3
+	b.WriteString(s[:head])
+	for i := head; i < len(s); i += 3 {
+		if b.Len() > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(s[i : i+3])
+	}
+	return b.String()
 }
 
 // sizePretty writes a byte count the way pg_size_pretty does: in bytes up to

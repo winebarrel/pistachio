@@ -1,0 +1,18 @@
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.users SELECT g, 'n' FROM generate_series(1, 1234) g;
+  ANALYZE public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  -- scan, blocks reads and writes: public.users (~1,234 rows, 48 kB)
+  ALTER TABLE public.users ALTER COLUMN name SET NOT NULL;
