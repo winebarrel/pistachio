@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.49.0] - 2026-09-10
 
 * Add `--explain` to `plan` (`$PISTA_EXPLAIN`). It writes a comment before each statement that scans or rewrites a table that already holds data: what the statement does to the rows, what its lock blocks, and the table's row and byte estimate from `pg_class`, with the number of indexes a rewrite builds again and the partitions or `INHERITS` children it recurses into. A foreign key names the referenced table next to the referencing one, and a domain change names every table with a column of the domain. A statement that changes the catalog alone takes no comment, and neither does one on a table the same plan creates. The estimates are what VACUUM and ANALYZE last wrote, the TOAST relation's pages included; a table neither has visited reads as not analyzed. Whether a type change is a relabel or a conversion, and whether a default calls a volatile function, is one catalog read each, made only when the plan holds such a statement, and a plan with no statements makes none.
 
