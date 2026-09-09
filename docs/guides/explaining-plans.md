@@ -2,7 +2,7 @@
 
 A plan says what will run, not what it costs. `--explain` writes a comment before each statement that reads or rewrites a table that already holds data.
 
-```
+```sql
 $ pista plan --explain schema.sql
 -- rewrite, blocks reads and writes: public.orders (~2000000 rows, 210 MB, 3 indexes rebuilt)
 ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE numeric(12,2);
