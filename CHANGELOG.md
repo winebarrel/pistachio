@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.48.0] - 2026-09-09
 
 * Read a primary key added by `ALTER TABLE` as implying `NOT NULL`. PostgreSQL sets the flag whichever way the key arrives, and only the inline form was read that way. A file that adds the key in a later statement planned `DROP NOT NULL` on every run, and applying it failed with `column is in a primary key`.
 
