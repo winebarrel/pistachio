@@ -11,6 +11,14 @@ var (
 	AnnotateError      = annotateError
 )
 
+// The type name normalization runs on every column, so it is tested on its
+// own rather than only through the schemas that reach it.
+var (
+	NormalizeTypeName = normalizeTypeName
+	SplitTypeSuffix   = splitTypeSuffix
+	FillNumericScale  = fillNumericScale
+)
+
 // ParseSQLWithSchema parses SQL that came from no file, which is how most
 // parser tests call in. A warning then names no position.
 func ParseSQLWithSchema(sql string, defaultSchema string) (*ParseResult, error) {

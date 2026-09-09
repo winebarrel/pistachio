@@ -4114,3 +4114,38 @@ func TestAlterColumnSQL_SerialWidening(t *testing.T) {
 		"ALTER TABLE public.users ALTER COLUMN id SET DATA TYPE bigint;",
 	}, alterColumnSQL("public.users", current, desired))
 }
+
+// A partition holds a copy of its parent's foreign key that PostgreSQL refuses
+// to drop on its own, and the copy goes with the partition, so dropping the
+// partition takes one statement. A key the table owns still takes its own.
+func TestDiffTables_dropTableWithInheritedForeignKey(t *testing.T) {
+	build := func() *orderedmap.Map[string, *model.Table] {
+		m := orderedmap.New[string, *model.Table]()
+		tbl := newTable("public", "logs_2024")
+		tbl.ForeignKeys.Set("logs_user_id_fkey", &model.ForeignKey{
+			Schema: "public", Table: "logs_2024", Name: "logs_user_id_fkey", Inherited: true,
+		})
+		tbl.ForeignKeys.Set("logs_own_fkey", &model.ForeignKey{
+			Schema: "public", Table: "logs_2024", Name: "logs_own_fkey",
+		})
+		m.Set("public.logs_2024", tbl)
+		return m
+	}
+
+	t.Run("drop allowed", func(t *testing.T) {
+		result, err := DiffTables(build(), orderedmap.New[string, *model.Table](), allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"ALTER TABLE public.logs_2024 DROP CONSTRAINT logs_own_fkey;"}, result.FKDropStmts)
+		assert.Equal(t, []string{"DROP TABLE public.logs_2024;"}, result.DropStmts)
+	})
+
+	t.Run("drop disallowed", func(t *testing.T) {
+		result, err := DiffTables(build(), orderedmap.New[string, *model.Table](), denyAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"-- skipped: ALTER TABLE public.logs_2024 DROP CONSTRAINT logs_own_fkey;",
+			"-- skipped: DROP TABLE public.logs_2024;",
+		}, result.DisallowedDropStmts)
+		assert.Empty(t, result.DropStmts)
+	})
+}
