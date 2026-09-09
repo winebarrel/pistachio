@@ -1,0 +1,11 @@
+# A file an earlier pista dump wrote restates the collation the domain
+# inherits, since the old reading wrote it on both sides. The catalog reports
+# none for it now, so the file looks like a collation change, which cannot be
+# altered. Running pista dump again rewrites the file without the clause.
+init: |
+  CREATE DOMAIN public.ctext AS text COLLATE "C";
+  CREATE DOMAIN public.ctext2 AS public.ctext;
+desired: |
+  CREATE DOMAIN public.ctext AS text COLLATE "C";
+  CREATE DOMAIN public.ctext2 AS ctext COLLATE pg_catalog."C";
+error: cannot change collation of domain public.ctext2

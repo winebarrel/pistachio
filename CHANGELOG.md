@@ -12,7 +12,9 @@
 
 * Compare a domain's base type the way a column's type is compared. `format_type` writes a base type on the search path unqualified, so a domain written over `public.status` read as a base type change, which cannot be altered, and every plan failed.
 
-* Read only the collation a domain or a composite attribute sets itself. One typed over a collated domain inherits that collation without declaring it, and reading the inherited one as declared made the desired side, which writes none, look like a collation change. A domain's collation cannot be altered, so every plan failed. `dump` no longer writes the inherited clause either, which is what `pg_dump` does.
+* **BREAKING**: Read only the collation a domain or a composite attribute sets itself. One typed over a collated domain inherits that collation without declaring it, and reading the inherited one as declared made the desired side, which writes none, look like a collation change. A domain's collation cannot be altered, so every plan failed. `dump` no longer writes the inherited clause either, which is what `pg_dump` does.
+
+  A file an earlier `pista dump` wrote restates the inherited clause, since the old reading wrote it on both sides. Such a file no longer plans: a domain fails with `cannot change collation of domain`, which stops the whole plan, and a composite attribute drifts on every run. Run `pista dump` again to rewrite the file; the new output plans clean. Only a domain or an attribute over a collated type is affected.
 
 * Read a `-- pista:` directive on a file written with CRLF line endings. The carriage return was taken as trailing content, so `ignore`, `concurrently`, `bulk-alter` and `execute` turned off silently: the name is still a known one, so nothing was reported.
 
