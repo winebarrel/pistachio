@@ -7,6 +7,8 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  # Holds partials/integrations/analytics/custom.html, the analytics snippet.
+  custom_dir: overrides
   favicon: assets/favicon.ico
   # The header draws the logo at 24px next to site_name, so this is the nut
   # mark on its own. The full logo carries the wordmark, which would be
@@ -40,22 +42,8 @@ hooks:
   - hooks.py
 
 extra:
-  # Google Analytics sets first-party cookies, which are not strictly necessary
-  # to serve the documentation, so the banner asks before the tag is loaded.
-  # Material holds the tag back until the visitor accepts.
-  consent:
-    title: Cookies
-    description: >-
-      This site uses Google Analytics to see which pages get read, so the
-      documentation can be improved where it is needed. Nothing is loaded
-      until you accept, and rejecting costs you nothing.
-    actions:
-      - accept
-      - reject
-      - manage
   analytics:
-    provider: google
-    property: G-L2YHGE2CEF
+    provider: custom
 
 extra_css:
   - stylesheets/extra.css

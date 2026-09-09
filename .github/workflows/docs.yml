@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - docs/**
+      - overrides/**
       - mkdocs.yml
       - hooks.py
       - requirements-docs.txt
@@ -17,6 +18,7 @@ on:
   pull_request:
     paths:
       - docs/**
+      - overrides/**
       - mkdocs.yml
       - hooks.py
       - requirements-docs.txt
