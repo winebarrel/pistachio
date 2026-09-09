@@ -1,0 +1,25 @@
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code character varying(50) NOT NULL,
+      note character varying(20),
+      stamp timestamp(3) without time zone,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_code_idx ON public.users USING btree (code);
+  INSERT INTO public.users SELECT g, 'c' || g, NULL, NULL FROM generate_series(1, 3) g;
+  ANALYZE public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code text NOT NULL,
+      note text,
+      stamp timestamp without time zone,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_code_idx ON public.users USING btree (code);
+plan: |
+  ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE text;
+  ALTER TABLE public.users ALTER COLUMN note SET DATA TYPE text;
+  ALTER TABLE public.users ALTER COLUMN stamp SET DATA TYPE timestamp without time zone;

@@ -1,0 +1,49 @@
+explain: true
+init: |
+  CREATE DOMAIN public.email AS text;
+  ALTER DOMAIN public.email ADD CONSTRAINT email_short CHECK (length(VALUE) < 100) NOT VALID;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email public.email,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.invites (
+      id integer NOT NULL,
+      addresses public.email[],
+      CONSTRAINT invites_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.plain (
+      id integer NOT NULL,
+      note text,
+      CONSTRAINT plain_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.users SELECT g, 'a@b' FROM generate_series(1, 3) g;
+  INSERT INTO public.invites VALUES (1, ARRAY['a@b']::public.email[]), (2, ARRAY['c@d']::public.email[]);
+  ANALYZE public.users;
+  ANALYZE public.invites;
+desired: |
+  CREATE DOMAIN public.email AS text NOT NULL
+      CONSTRAINT email_short CHECK (length(VALUE) < 100)
+      CONSTRAINT email_check CHECK (VALUE ~ '@');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email public.email,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.invites (
+      id integer NOT NULL,
+      addresses public.email[],
+      CONSTRAINT invites_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.plain (
+      id integer NOT NULL,
+      note text,
+      CONSTRAINT plain_pkey PRIMARY KEY (id)
+  );
+plan: |
+  -- scan, blocks writes: public.invites (~2 rows, 8192 bytes), public.users (~3 rows, 8192 bytes)
+  ALTER DOMAIN public.email SET NOT NULL;
+  -- scan, blocks writes: public.invites (~2 rows, 8192 bytes), public.users (~3 rows, 8192 bytes)
+  ALTER DOMAIN public.email VALIDATE CONSTRAINT email_short;
+  -- scan, blocks writes: public.invites (~2 rows, 8192 bytes), public.users (~3 rows, 8192 bytes)
+  ALTER DOMAIN public.email ADD CONSTRAINT email_check CHECK (value ~ '@');

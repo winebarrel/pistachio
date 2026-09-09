@@ -50,6 +50,10 @@ type planTestCase struct {
 	// ConcurrentlyPreSQLFile holds SQL content; the runner writes it to a temp
 	// file and passes the path to PlanOptions.ConcurrentlyPreSQLFile.
 	ConcurrentlyPreSQLFile string `yaml:"concurrently_pre_sql_file,omitempty"`
+	// Explain sets --explain, so the plan carries a comment before each
+	// statement that scans or rewrites a table. The row and page counts it
+	// prints come from pg_class, so an init that wants them runs ANALYZE.
+	Explain bool `yaml:"explain,omitempty"`
 }
 
 type planDropPolicy struct {
@@ -402,6 +406,7 @@ func TestPlan(t *testing.T) {
 				PreSQLFile:               preSQLFile,
 				ConcurrentlyPreSQL:       tc.ConcurrentlyPreSQL,
 				ConcurrentlyPreSQLFile:   concurrentlyPreSQLFile,
+				Explain:                  tc.Explain,
 			})
 			if tc.Error != "" {
 				require.Error(t, err)

@@ -1,0 +1,25 @@
+explain: true
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      n integer,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.t ADD CONSTRAINT t_n_small CHECK (n < 100) NOT VALID;
+  INSERT INTO public.t SELECT g, g FROM generate_series(1, 3) g;
+  ANALYZE public.t;
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      n integer,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_n_small CHECK (n < 100),
+      CONSTRAINT t_n_positive CHECK (n > 0),
+      CONSTRAINT t_n_not_five CHECK (n <> 5) NOT VALID
+  );
+plan: |
+  -- scan, blocks nothing: public.t (~3 rows, 8192 bytes)
+  ALTER TABLE public.t VALIDATE CONSTRAINT t_n_small;
+  -- scan, blocks reads and writes: public.t (~3 rows, 8192 bytes)
+  ALTER TABLE public.t ADD CONSTRAINT t_n_positive CHECK (n > 0);
+  ALTER TABLE public.t ADD CONSTRAINT t_n_not_five CHECK (n <> 5) NOT VALID;

@@ -1,0 +1,24 @@
+explain: true
+init: |
+  CREATE TABLE public.shapes (
+      id integer NOT NULL,
+      name text
+  );
+  CREATE TABLE public.boxes (
+      w integer NOT NULL
+  ) INHERITS (public.shapes);
+  INSERT INTO public.shapes VALUES (1, 'a'), (2, 'b');
+  INSERT INTO public.boxes VALUES (3, 'c', 1), (4, 'd', 2), (5, 'e', 3);
+  ANALYZE public.shapes;
+  ANALYZE public.boxes;
+desired: |
+  CREATE TABLE public.shapes (
+      id integer NOT NULL,
+      name text NOT NULL
+  );
+  CREATE TABLE public.boxes (
+      w integer NOT NULL
+  ) INHERITS (public.shapes);
+plan: |
+  -- scan, blocks reads and writes: public.shapes (~5 rows, 16 kB, 1 child table)
+  ALTER TABLE public.shapes ALTER COLUMN name SET NOT NULL;

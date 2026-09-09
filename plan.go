@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/parser"
 )
 
@@ -21,6 +22,7 @@ type PlanOptions struct {
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
 	NoReadOnly               bool     `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default plan uses a read-only connection."`
+	Explain                  bool     `env:"PISTA_EXPLAIN" help:"Comment each statement that scans or rewrites a table with what it does, what its lock blocks, and the table's row and byte estimate from pg_class."`
 }
 
 // ObjectCount holds the number of objects inspected by type.
@@ -108,6 +110,19 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// The type names --explain resolves were printed under the connection's
+	// search_path, so this runs before the SET below changes it.
+	if options.Explain {
+		cat, err := catalog.NewCatalog(conn, client.Schemas)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create catalog: %w", err)
+		}
+		result.Stmts, err = client.explainStmts(ctx, cat, result.Stmts, result.CurrentTables, result.DesiredTables, result.DesiredDomains)
+		if err != nil {
+			return nil, fmt.Errorf("failed to explain plan: %w", err)
+		}
 	}
 
 	// A check SQL is evaluated under the same search_path apply gives it, so an

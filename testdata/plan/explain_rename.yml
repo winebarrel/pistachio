@@ -1,0 +1,22 @@
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.users SELECT g, 'n' FROM generate_series(1, 3) g;
+  ANALYZE public.users;
+desired: |
+  -- pista:renamed-from public.users
+  CREATE TABLE public.accounts (
+      id integer NOT NULL,
+      -- pista:renamed-from name
+      label text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.users RENAME TO accounts;
+  ALTER TABLE public.accounts RENAME COLUMN name TO label;
+  -- scan, blocks reads and writes: public.accounts (~3 rows, 8192 bytes)
+  ALTER TABLE public.accounts ALTER COLUMN label SET NOT NULL;
