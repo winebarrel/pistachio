@@ -113,8 +113,10 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	}
 
 	// The type names --explain resolves were printed under the connection's
-	// search_path, so this runs before the SET below changes it.
-	if options.Explain {
+	// search_path, so this runs before the SET below changes it. A plan with
+	// no statements is left alone, so the common no-drift run pays for no
+	// catalog read.
+	if options.Explain && len(result.Stmts) > 0 {
 		cat, err := catalog.NewCatalog(conn, client.Schemas)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create catalog: %w", err)

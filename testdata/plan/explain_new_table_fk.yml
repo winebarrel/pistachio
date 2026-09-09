@@ -1,0 +1,43 @@
+explain: true
+init: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      author_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.posts SELECT g, NULL FROM generate_series(1, 3) g;
+  ANALYZE public.posts;
+desired: |
+  CREATE TABLE public.authors (
+      id integer NOT NULL,
+      org_id integer,
+      CONSTRAINT authors_pkey PRIMARY KEY (id),
+      CONSTRAINT authors_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.orgs (id)
+  );
+  ALTER TABLE public.authors ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.authors FORCE ROW LEVEL SECURITY;
+  CREATE TABLE public.orgs (
+      id integer NOT NULL,
+      CONSTRAINT orgs_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      author_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id),
+      CONSTRAINT posts_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.authors (id)
+  );
+plan: |
+  CREATE TABLE public.orgs (
+      id integer NOT NULL,
+      CONSTRAINT orgs_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.authors (
+      id integer NOT NULL,
+      org_id integer,
+      CONSTRAINT authors_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.authors ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.authors FORCE ROW LEVEL SECURITY;
+  ALTER TABLE ONLY public.authors ADD CONSTRAINT authors_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.orgs (id);
+  -- scan, blocks writes: public.posts (~3 rows, 8192 bytes), public.authors
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.authors (id);

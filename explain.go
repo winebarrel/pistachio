@@ -238,9 +238,10 @@ func parseOneStmt(sql string) *pg_query.Node {
 
 // currentTable resolves a name the plan uses to the table the catalog read,
 // through a rename directive when the plan renamed it first. A table the plan
-// creates has no current entry and resolves to nil.
+// creates has no current entry and resolves to nil, and so does a statement
+// with no relation at all.
 func (ex *explainer) currentTable(rv *pg_query.RangeVar) (string, *model.Table) {
-	key := model.Ident(rv.Schemaname, rv.Relname)
+	key := model.Ident(rv.GetSchemaname(), rv.GetRelname())
 	if old, ok := ex.tableAlias[key]; ok {
 		if t, ok := ex.current.GetOk(old); ok {
 			return key, t
@@ -330,13 +331,11 @@ func (ex *explainer) classifyAlterTable(as *pg_query.AlterTableStmt) explainEffe
 		return explainEffect{}
 	}
 
+	// Every node of Cmds is an AlterTableCmd, and a nil one would read as the
+	// undefined subtype, which the table below does not name.
 	var eff explainEffect
 	for _, n := range as.Cmds {
-		cmd := n.GetAlterTableCmd()
-		if cmd == nil {
-			continue
-		}
-		eff.merge(ex.classifyAlterTableCmd(key, t, as.Relation.Inh, cmd))
+		eff.merge(ex.classifyAlterTableCmd(key, t, as.Relation.Inh, n.GetAlterTableCmd()))
 	}
 	if eff.touch == touchNone {
 		return explainEffect{}
@@ -355,17 +354,17 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 		return explainEffect{touch: touch, block: block, targets: []explainTarget{tg}}
 	}
 
-	switch cmd.Subtype {
+	switch cmd.GetSubtype() {
 	case pg_query.AlterTableType_AT_AddColumn:
-		return self(ex.addColumnTouch(cmd.Def.GetColumnDef()), blockAll)
+		return self(ex.addColumnTouch(cmd.GetDef().GetColumnDef()), blockAll)
 
 	case pg_query.AlterTableType_AT_AlterColumnType:
-		col := ex.currentColumn(key, t, cmd.Name)
-		cd := cmd.Def.GetColumnDef()
-		if col == nil || cd == nil || cd.TypeName == nil {
+		col := ex.currentColumn(key, t, cmd.GetName())
+		tn := cmd.GetDef().GetColumnDef().GetTypeName()
+		if col == nil || tn == nil {
 			return explainEffect{}
 		}
-		return self(ex.alterTypeTouch(col.TypeName, cd.TypeName), blockAll)
+		return self(ex.alterTypeTouch(col.TypeName, tn), blockAll)
 
 	case pg_query.AlterTableType_AT_SetNotNull:
 		return self(touchScan, blockAll)
@@ -377,36 +376,34 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 		return self(touchScan, blockNothing)
 
 	case pg_query.AlterTableType_AT_AddConstraint:
-		con := cmd.Def.GetConstraint()
-		if con == nil {
-			return explainEffect{}
-		}
-		switch con.Contype {
+		con := cmd.GetDef().GetConstraint()
+		switch con.GetContype() {
 		case pg_query.ConstrType_CONSTR_CHECK, pg_query.ConstrType_CONSTR_NOTNULL:
-			if con.SkipValidation {
+			if con.GetSkipValidation() {
 				return explainEffect{}
 			}
 			return self(touchScan, blockAll)
 		case pg_query.ConstrType_CONSTR_PRIMARY, pg_query.ConstrType_CONSTR_UNIQUE, pg_query.ConstrType_CONSTR_EXCLUSION:
-			if con.Indexname != "" {
+			// USING INDEX takes an index that already exists rather than
+			// building one. pistachio does not emit it today.
+			if con.GetIndexname() != "" {
 				return explainEffect{}
 			}
 			return self(touchScan, blockAll)
 		case pg_query.ConstrType_CONSTR_FOREIGN:
-			if con.SkipValidation {
+			if con.GetSkipValidation() {
 				return explainEffect{}
 			}
 			// Both tables take SHARE ROW EXCLUSIVE. The referencing table
 			// is scanned; the referenced one is probed through its key,
-			// and every partition of it is locked.
+			// and every partition of it is locked. A referenced table the
+			// same plan creates is named without a size.
 			eff := self(touchScan, blockWrites)
-			if con.Pktable != nil {
-				refKey, ref := ex.currentTable(con.Pktable)
-				if ref != nil {
-					eff.addTarget(ex.target(refKey, ref, ref.Partitioned))
-				} else {
-					eff.addTarget(explainTarget{key: refKey})
-				}
+			refKey, ref := ex.currentTable(con.GetPktable())
+			if ref != nil {
+				eff.addTarget(ex.target(refKey, ref, ref.Partitioned))
+			} else {
+				eff.addTarget(explainTarget{key: refKey})
 			}
 			return eff
 		}
@@ -420,27 +417,21 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 // is a rewrite. A NOT NULL without a default is checked against every row.
 // Anything else is stored as a missing value in the catalog.
 func (ex *explainer) addColumnTouch(cd *pg_query.ColumnDef) touchKind {
-	if cd == nil {
-		return touchNone
-	}
-	if isSerialTypeName(cd.TypeName) || ex.isConstrainedDomain(cd.TypeName) {
+	if isSerialTypeName(cd.GetTypeName()) || ex.isConstrainedDomain(cd.GetTypeName()) {
 		return touchRewrite
 	}
 	notNull := false
 	hasDefault := false
-	for _, n := range cd.Constraints {
+	for _, n := range cd.GetConstraints() {
 		con := n.GetConstraint()
-		if con == nil {
-			continue
-		}
-		switch con.Contype {
+		switch con.GetContype() {
 		case pg_query.ConstrType_CONSTR_IDENTITY, pg_query.ConstrType_CONSTR_GENERATED:
 			return touchRewrite
 		case pg_query.ConstrType_CONSTR_NOTNULL:
 			notNull = true
 		case pg_query.ConstrType_CONSTR_DEFAULT:
 			hasDefault = true
-			for _, f := range funcNamesOf(con.RawExpr) {
+			for _, f := range funcNamesOf(con.GetRawExpr()) {
 				if ex.volatile[f] {
 					return touchRewrite
 				}
@@ -456,7 +447,7 @@ func (ex *explainer) addColumnTouch(cd *pg_query.ColumnDef) touchKind {
 // isConstrainedDomain reports whether the type names a desired domain that
 // carries a NOT NULL or a CHECK.
 func (ex *explainer) isConstrainedDomain(tn *pg_query.TypeName) bool {
-	if tn == nil || ex.domains == nil {
+	if ex.domains == nil {
 		return false
 	}
 	name := typeNameString(tn)
@@ -565,10 +556,11 @@ func baseTypeString(typeName string) string {
 
 // typeNameString spells a parsed type name the way to_regtype reads it: the
 // name without its modifier or array bound, and without the pg_catalog prefix
-// the grammar puts on a built-in type.
+// the grammar puts on a built-in type. A nil type name gives "", which
+// to_regtype answers with NULL rather than an error.
 func typeNameString(tn *pg_query.TypeName) string {
 	var parts []string
-	for _, n := range tn.Names {
+	for _, n := range tn.GetNames() {
 		if s := n.GetString_(); s != nil {
 			parts = append(parts, s.Sval)
 		}
@@ -580,9 +572,6 @@ func typeNameString(tn *pg_query.TypeName) string {
 }
 
 func isSerialTypeName(tn *pg_query.TypeName) bool {
-	if tn == nil {
-		return false
-	}
 	switch typeNameString(tn) {
 	case "serial", "serial4", "bigserial", "serial8", "smallserial", "serial2":
 		return true
@@ -604,15 +593,15 @@ func (ex *explainer) typeChangesOf(node *pg_query.Node) []catalog.TypeChange {
 	var changes []catalog.TypeChange
 	for _, n := range as.Cmds {
 		cmd := n.GetAlterTableCmd()
-		if cmd == nil || cmd.Subtype != pg_query.AlterTableType_AT_AlterColumnType {
+		if cmd.GetSubtype() != pg_query.AlterTableType_AT_AlterColumnType {
 			continue
 		}
-		col := ex.currentColumn(key, t, cmd.Name)
-		cd := cmd.Def.GetColumnDef()
-		if col == nil || cd == nil || cd.TypeName == nil {
+		col := ex.currentColumn(key, t, cmd.GetName())
+		tn := cmd.GetDef().GetColumnDef().GetTypeName()
+		if col == nil || tn == nil {
 			continue
 		}
-		changes = append(changes, catalog.TypeChange{Src: baseTypeString(col.TypeName), Dst: typeNameString(cd.TypeName)})
+		changes = append(changes, catalog.TypeChange{Src: baseTypeString(col.TypeName), Dst: typeNameString(tn)})
 	}
 	return changes
 }
@@ -627,16 +616,12 @@ func defaultFuncsOf(node *pg_query.Node) []string {
 	var funcs []string
 	for _, n := range as.Cmds {
 		cmd := n.GetAlterTableCmd()
-		if cmd == nil || cmd.Subtype != pg_query.AlterTableType_AT_AddColumn {
+		if cmd.GetSubtype() != pg_query.AlterTableType_AT_AddColumn {
 			continue
 		}
-		cd := cmd.Def.GetColumnDef()
-		if cd == nil {
-			continue
-		}
-		for _, c := range cd.Constraints {
-			if con := c.GetConstraint(); con != nil && con.Contype == pg_query.ConstrType_CONSTR_DEFAULT {
-				funcs = append(funcs, funcNamesOf(con.RawExpr)...)
+		for _, c := range cmd.GetDef().GetColumnDef().GetConstraints() {
+			if con := c.GetConstraint(); con.GetContype() == pg_query.ConstrType_CONSTR_DEFAULT {
+				funcs = append(funcs, funcNamesOf(con.GetRawExpr())...)
 			}
 		}
 	}
@@ -658,10 +643,7 @@ func funcNamesOf(expr *pg_query.Node) []string {
 }
 
 func (ex *explainer) classifyIndex(is *pg_query.IndexStmt) explainEffect {
-	if is.Relation == nil {
-		return explainEffect{}
-	}
-	key, t := ex.currentTable(is.Relation)
+	key, t := ex.currentTable(is.GetRelation())
 	if t == nil {
 		return explainEffect{}
 	}
@@ -672,7 +654,7 @@ func (ex *explainer) classifyIndex(is *pg_query.IndexStmt) explainEffect {
 	return explainEffect{
 		touch:   touchScan,
 		block:   block,
-		targets: []explainTarget{ex.target(key, t, is.Relation.Inh && t.Partitioned)},
+		targets: []explainTarget{ex.target(key, t, is.GetRelation().GetInh() && t.Partitioned)},
 	}
 }
 
@@ -836,13 +818,12 @@ func sizePretty(bytes int64) string {
 	if bytes < limit {
 		return strconv.FormatInt(bytes, 10) + " bytes"
 	}
-	units := []string{"kB", "MB", "GB", "TB", "PB"}
 	n := bytes
-	for i, unit := range units {
+	for _, unit := range []string{"kB", "MB", "GB", "TB"} {
 		n = (n + 512) / 1024
-		if n < limit || i == len(units)-1 {
+		if n < limit {
 			return strconv.FormatInt(n, 10) + " " + unit
 		}
 	}
-	return ""
+	return strconv.FormatInt((n+512)/1024, 10) + " PB"
 }
