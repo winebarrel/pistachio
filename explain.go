@@ -201,10 +201,10 @@ func (client *Client) explainStmts(
 		}
 	}
 
+	// The type and volatility answers decide what a statement does to the
+	// rows, so they come before the classification. Each is skipped when the
+	// plan holds nothing that needs it.
 	var err error
-	if ex.stats, err = cat.TableStats(ctx); err != nil {
-		return nil, err
-	}
 	if ex.types, err = cat.TypeChanges(ctx, changes); err != nil {
 		return nil, err
 	}
@@ -212,13 +212,29 @@ func (client *Client) explainStmts(
 		return nil, err
 	}
 
+	effects := make([]explainEffect, len(stmts))
+	sized := false
+	for i, node := range parsed {
+		if node == nil {
+			continue
+		}
+		effects[i] = ex.classify(node)
+		sized = sized || len(effects[i].targets) > 0
+	}
+
+	// The sizes are read only once a statement is known to want one, so a plan
+	// that creates and drops alone touches pg_class no more than plan does
+	// without the flag.
+	if sized {
+		if ex.stats, err = cat.TableStats(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	out := make([]string, len(stmts))
 	for i, sql := range stmts {
 		out[i] = sql
-		if parsed[i] == nil {
-			continue
-		}
-		if line := ex.render(ex.classify(parsed[i])); line != "" {
+		if line := ex.render(effects[i]); line != "" {
 			out[i] = line + "\n" + sql
 		}
 	}
@@ -685,8 +701,15 @@ func (ex *explainer) classifyAlterDomain(ad *pg_query.AlterDomainStmt) explainEf
 	domain := model.Ident(parts...)
 	bare := parts[len(parts)-1]
 
+	// A partition is left to the parent, which sums it in. It carries the
+	// parent's columns, so it matches the domain on its own and would be
+	// counted a second time. An INHERITS child is listed, since its parent is
+	// not summed and each side holds its own rows.
 	eff := explainEffect{touch: touchScan, block: blockWrites}
 	for key, t := range ex.current.All() {
+		if t.IsPartitionChild() {
+			continue
+		}
 		for _, col := range t.Columns.CollectValues() {
 			typ := strings.TrimSuffix(col.TypeName, "[]")
 			if typ == domain || typ == bare {

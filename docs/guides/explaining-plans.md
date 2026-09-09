@@ -4,13 +4,15 @@ A plan says what will run, not what it costs. `--explain` writes a comment befor
 
 ```
 $ pista plan --explain schema.sql
--- rewrite, blocks reads and writes: public.events (~120000000 rows, 9629 MB, 5 indexes rebuilt)
-ALTER TABLE public.events ALTER COLUMN amount SET DATA TYPE numeric(12,2);
+-- rewrite, blocks reads and writes: public.orders (~2000000 rows, 210 MB, 3 indexes rebuilt)
+ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE numeric(12,2);
 -- scan, blocks writes: public.orders (~2000000 rows, 210 MB), public.customers (~50000 rows, 6280 kB)
 ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers (id);
--- scan, blocks nothing: public.events (~120000000 rows, 9629 MB, 24 partitions)
-CREATE INDEX CONCURRENTLY events_at_idx ON public.events USING btree (at);
-ALTER TABLE public.events ALTER COLUMN note SET DEFAULT '';
+-- scan, blocks nothing: public.orders (~2000000 rows, 210 MB)
+CREATE INDEX CONCURRENTLY orders_created_at_idx ON public.orders USING btree (created_at);
+-- scan, blocks writes: public.events (~120000000 rows, 9629 MB, 24 partitions)
+CREATE INDEX events_at_idx ON public.events USING btree (at);
+ALTER TABLE public.orders ALTER COLUMN note SET DEFAULT '';
 ```
 
 Also available as `$PISTA_EXPLAIN`. The comments are SQL comments, so the output still pipes into `psql`.
@@ -40,7 +42,7 @@ Everything else changes the catalog alone and takes no comment: `DROP COLUMN`, `
 
 ## What it reads
 
-The classification comes from a table in pistachio, applied to the statement it is about to print. Three things cannot be decided that way and are asked of the server: the rows and bytes, one read of `pg_class`; whether a column type change is a binary-coercible relabel or a conversion, one read of `pg_cast`; and whether a column default calls a volatile function, one read of `pg_proc`. The last two run only when the plan holds such a statement, and a plan with no statements reads none of the three, so a run that finds no drift costs nothing extra.
+The classification comes from a table in pistachio, applied to the statement it is about to print. Three things cannot be decided that way and are asked of the server: whether a column type change is a binary-coercible relabel or a conversion, one read of `pg_cast`; whether a column default calls a volatile function, one read of `pg_proc`; and the rows and bytes, one read of `pg_class`. Each is skipped when nothing in the plan needs it, so a plan that only creates and drops tables, and a plan with no statements at all, read no more than they would without the flag.
 
 
 ## What it does not say
