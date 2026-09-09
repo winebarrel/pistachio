@@ -1,0 +1,30 @@
+# A PRIMARY KEY implies NOT NULL on its columns, and PostgreSQL sets the flag
+# whether the key arrives with the table or in a later ALTER. Reading it only
+# from the inline form planned DROP NOT NULL on every run, and applying that
+# fails with "column is in a primary key". Every key column is reached, not
+# just the first.
+init: |
+  CREATE TABLE public.users (
+      id integer,
+      name text
+  );
+  ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+  CREATE TABLE public.memberships (
+      user_id integer,
+      group_id integer,
+      role text
+  );
+  ALTER TABLE public.memberships ADD CONSTRAINT memberships_pkey PRIMARY KEY (user_id, group_id);
+desired: |
+  CREATE TABLE public.users (
+      id integer,
+      name text
+  );
+  ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+  CREATE TABLE public.memberships (
+      user_id integer,
+      group_id integer,
+      role text
+  );
+  ALTER TABLE public.memberships ADD CONSTRAINT memberships_pkey PRIMARY KEY (user_id, group_id);
+plan: ""

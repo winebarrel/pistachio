@@ -42,11 +42,16 @@ func (c *Catalog) ListDomains(ctx context.Context) ([]*model.Domain, error) {
 			pg_catalog.format_type(t.typbasetype, t.typtypmod) AS base_type,
 			t.typnotnull,
 			pg_catalog.pg_get_expr(t.typdefaultbin, 0) AS default_value,
-			(SELECT quote_ident(cn.nspname) || '.' || quote_ident(c.collname) FROM pg_catalog.pg_collation c JOIN pg_catalog.pg_namespace cn ON cn.oid = c.collnamespace WHERE c.oid = t.typcollation AND t.typcollation <> 0 AND c.collname <> 'default') AS collation,
+			-- A domain over a collated type inherits that collation rather than
+			-- declaring one, and a schema file writes only what was declared.
+			-- Comparing against the base type's collation, the way columns.go
+			-- does, reports only a collation the domain itself sets.
+			(SELECT quote_ident(cn.nspname) || '.' || quote_ident(c.collname) FROM pg_catalog.pg_collation c JOIN pg_catalog.pg_namespace cn ON cn.oid = c.collnamespace WHERE c.oid = t.typcollation AND t.typcollation <> bt.typcollation) AS collation,
 			d.description
 		FROM
 			pg_catalog.pg_type t
 			JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+			JOIN pg_catalog.pg_type bt ON bt.oid = t.typbasetype
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = t.oid
 			AND d.classoid = 'pg_type'::regclass
 			AND d.objsubid = 0

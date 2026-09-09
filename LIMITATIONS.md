@@ -671,3 +671,63 @@ Closing it means gating the serial test on the type, so a column a sequence
 cannot type keeps its default and its sequence surfaces as a standalone one.
 
 Origin: review of the serial retype fix, 2026-09-08.
+
+## Perpetual drift on an array written with dimensions or a bound
+
+Priority: low.
+
+PostgreSQL accepts `integer[3]` and `integer[][]` for SQL standard
+compatibility and enforces neither: a column declared `integer[3]` takes an
+array of any length, one declared `integer[][]` takes an array of any number of
+dimensions, and `format_type` prints both as `integer[]`. The desired side
+keeps what the file wrote, so the two never compare equal and the column is
+retyped on every plan. The statement is harmless to the data and takes an
+ACCESS EXCLUSIVE lock; `plan --check` stays non-zero.
+
+Folding every `[...]` to a single `[]` closes it, but the spelling means
+nothing to PostgreSQL either, so a schema carrying one has already lost what it
+was trying to say. `dump` writes `integer[]`, and none of the sample schemas
+declares a column this way.
+
+Workaround: write `integer[]`, which is what `pista dump` emits.
+
+Origin: review of the column type canonicalization, 2026-09-08.
+
+## `PRIMARY KEY USING INDEX` in a schema file does not converge
+
+Priority: low.
+
+A primary key can take its columns from an existing unique index rather than
+from a column list:
+
+```sql
+CREATE UNIQUE INDEX t_idx ON public.t (id);
+ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+```
+
+PostgreSQL takes the index over as the constraint's index and renames it to the
+constraint's name, so afterwards there is one object where the file wrote two.
+The desired side keeps both, so every plan drops the constraint, adds it again
+and creates the index, and the run does not converge:
+
+```
+ALTER TABLE public.t ALTER COLUMN id DROP NOT NULL;
+ALTER TABLE public.t DROP CONSTRAINT t_pkey;
+ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+CREATE UNIQUE INDEX t_idx ON public.t USING btree (id);
+```
+
+The `DROP NOT NULL` is part of the same gap. A primary key marks its columns
+NOT NULL whichever way it arrives, but this form carries no column list, so the
+key columns are not reached and the statement goes out. Applying it fails with
+`column "id" is in a primary key`.
+
+Closing it means resolving the constraint's columns through the index it names,
+and reading the index the constraint took over as the constraint rather than as
+an index of its own.
+
+`pista dump` writes the key inline, as `CONSTRAINT t_pkey PRIMARY KEY (id)`
+with no separate index, and that output plans clean. Only a file that writes
+`USING INDEX` reaches this.
+
+Origin: review of the primary key NOT NULL fix, 2026-09-09.

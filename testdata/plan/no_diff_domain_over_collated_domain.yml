@@ -1,0 +1,17 @@
+# A domain over a collated domain inherits its collation rather than declaring
+# one. Reading the inherited collation as explicit made the desired side, which
+# writes none, look like a collation change, and a domain's collation cannot be
+# altered, so every plan failed instead of merely drifting. A collation the
+# domain or the attribute sets itself, whether over an uncollated type or over
+# a collated one, is still read.
+init: |
+  CREATE DOMAIN public.ctext AS text COLLATE "C";
+  CREATE DOMAIN public.ctext2 AS public.ctext;
+  CREATE DOMAIN public.ctext3 AS public.ctext COLLATE "POSIX";
+  CREATE TYPE public.addr AS (zip public.ctext, city text, note text COLLATE "C");
+desired: |
+  CREATE DOMAIN public.ctext AS text COLLATE "C";
+  CREATE DOMAIN public.ctext2 AS ctext;
+  CREATE DOMAIN public.ctext3 AS ctext COLLATE "POSIX";
+  CREATE TYPE public.addr AS (zip ctext, city text, note text COLLATE "C");
+plan: ""

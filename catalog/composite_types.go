@@ -114,10 +114,14 @@ func (c *Catalog) listCompositeAttributes(ctx context.Context, relids []uint32) 
 			a.attrelid,
 			a.attname,
 			pg_catalog.format_type(a.atttypid, a.atttypmod) AS type,
-			(SELECT quote_ident(cn.nspname) || '.' || quote_ident(coll.collname) FROM pg_catalog.pg_collation coll JOIN pg_catalog.pg_namespace cn ON cn.oid = coll.collnamespace WHERE coll.oid = a.attcollation AND a.attcollation <> 0 AND coll.collname <> 'default') AS collation,
+			-- An attribute typed as a collated domain inherits that collation
+			-- rather than declaring one, so compare against the attribute type's
+			-- own collation the way columns.go does.
+			(SELECT quote_ident(cn.nspname) || '.' || quote_ident(coll.collname) FROM pg_catalog.pg_collation coll JOIN pg_catalog.pg_namespace cn ON cn.oid = coll.collnamespace WHERE coll.oid = a.attcollation AND a.attcollation <> at.typcollation) AS collation,
 			d.description
 		FROM
 			pg_catalog.pg_attribute a
+			JOIN pg_catalog.pg_type at ON at.oid = a.atttypid
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = a.attrelid
 			AND d.classoid = 'pg_class'::regclass
 			AND d.objsubid = a.attnum

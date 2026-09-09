@@ -1,0 +1,29 @@
+# The other half of the shape an earlier pista dump wrote. An attribute takes
+# the softer failure than a domain does: the collation is a type change rather
+# than a refusal, so the statement goes out, applying it leaves the catalog
+# reading unchanged, and the same statement comes back on the next run.
+# Running pista dump again rewrites the file without the clause.
+skip_drift_check: true
+init: |
+  CREATE DOMAIN public.ctext AS text COLLATE "C";
+  CREATE TYPE public.addr AS (
+      zip public.ctext,
+      city text
+  );
+desired: |
+  CREATE DOMAIN public.ctext AS text COLLATE "C";
+  CREATE TYPE public.addr AS (
+      zip ctext COLLATE pg_catalog."C",
+      city text
+  );
+applied_sql: |
+  ALTER TYPE public.addr ALTER ATTRIBUTE zip TYPE ctext COLLATE pg_catalog."C";
+applied: |
+  -- public.ctext
+  CREATE DOMAIN public.ctext AS text COLLATE pg_catalog."C";
+
+  -- public.addr
+  CREATE TYPE public.addr AS (
+      zip ctext,
+      city text
+  );

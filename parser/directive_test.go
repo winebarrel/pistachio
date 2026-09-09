@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -743,6 +744,120 @@ GRANT SELECT ON public.a TO someone`,
 					}
 				})
 			}
+		})
+	}
+}
+
+// A file written on Windows ends each line with CRLF. The carriage return
+// belongs to the line ending, not to the directive, so a directive has to read
+// the same either way. Reading it as trailing content silently turned the
+// directive off, since validateDirectives still saw a known name and raised
+// nothing. Trailing spaces are covered alongside, since they reach the same
+// part of each pattern.
+func TestDirectivesAcrossLineEndings(t *testing.T) {
+	bodies := []struct {
+		name  string
+		sql   string
+		check func(t *testing.T, r *ParseResult)
+	}{
+		{
+			name: "ignore",
+			sql:  "-- pista:ignore%s\nCREATE TABLE public.b (id integer);\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.True(t, r.Tables.Get("public.b").Ignore)
+			},
+		},
+		{
+			name: "concurrently",
+			sql:  "CREATE TABLE public.a (id integer);\n-- pista:concurrently%s\nCREATE INDEX idx ON public.a (id);\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.True(t, r.Tables.Get("public.a").Indexes.Get("idx").Concurrently)
+			},
+		},
+		{
+			name: "bulk-alter",
+			sql:  "-- pista:bulk-alter%s\nCREATE TABLE public.a (id integer);\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				assert.True(t, r.Tables.Get("public.a").BulkAlter)
+			},
+		},
+		{
+			name: "execute",
+			sql:  "CREATE TABLE public.a (id integer);\n-- pista:execute%s\nGRANT SELECT ON public.a TO someone;\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				require.Len(t, r.ExecuteStmts, 1)
+				assert.False(t, r.ExecuteStmts[0].First)
+				assert.Empty(t, r.ExecuteStmts[0].CheckSQL)
+			},
+		},
+		{
+			name: "execute with check",
+			sql:  "CREATE TABLE public.a (id integer);\n-- pista:execute SELECT true%s\nGRANT SELECT ON public.a TO someone;\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				require.Len(t, r.ExecuteStmts, 1)
+				assert.Equal(t, "SELECT true", r.ExecuteStmts[0].CheckSQL)
+			},
+		},
+		{
+			name: "execute-first",
+			sql:  "CREATE TABLE public.a (id integer);\n-- pista:execute-first%s\nGRANT SELECT ON public.a TO someone;\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				require.Len(t, r.ExecuteStmts, 1)
+				assert.True(t, r.ExecuteStmts[0].First)
+			},
+		},
+		{
+			name: "renamed-from",
+			sql:  "-- pista:renamed-from public.old_b%s\nCREATE TABLE public.b (id integer);\n",
+			check: func(t *testing.T, r *ParseResult) {
+				t.Helper()
+				b := r.Tables.Get("public.b")
+				require.NotNil(t, b.RenameFrom)
+				assert.Equal(t, "public.old_b", *b.RenameFrom)
+			},
+		},
+	}
+
+	endings := []struct{ name, text string }{
+		{"lf", ""},
+		{"crlf", "\r"},
+		{"trailing space, lf", "   "},
+		{"trailing space, crlf", "  \r"},
+	}
+
+	for _, body := range bodies {
+		t.Run(body.name, func(t *testing.T) {
+			for _, ending := range endings {
+				t.Run(ending.name, func(t *testing.T) {
+					r, err := parseSQLWithSchema(strings.ReplaceAll(body.sql, "%s", ending.text), "public", nil)
+					require.NoError(t, err)
+					body.check(t, r)
+				})
+			}
+		})
+	}
+}
+
+// The carriage return is part of the line ending, so it is not an argument.
+// The patterns that reject an argument look for a space or a tab and then a
+// non-space, which a bare CRLF directive does not match.
+func TestValidateDirectivesAcrossLineEndings(t *testing.T) {
+	for _, ending := range []struct{ name, text string }{{"lf", ""}, {"crlf", "\r"}} {
+		t.Run(ending.name, func(t *testing.T) {
+			require.NoError(t, validateDirectives("-- pista:ignore"+ending.text))
+			require.NoError(t, validateDirectives("-- pista:concurrently"+ending.text))
+			require.NoError(t, validateDirectives("-- pista:bulk-alter"+ending.text))
+
+			require.Error(t, validateDirectives("-- pista:ignore extra"+ending.text))
+			require.Error(t, validateDirectives("-- pista:concurrently extra"+ending.text))
+			require.Error(t, validateDirectives("-- pista:bulk-alter extra"+ending.text))
+			require.Error(t, validateDirectives("-- pista:unknown"+ending.text))
 		})
 	}
 }

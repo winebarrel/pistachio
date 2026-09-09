@@ -1,0 +1,18 @@
+# serial expands to a NOT NULL column, so a file that leaves the words off
+# still describes a NOT NULL column. Reading it as nullable planned
+# DROP NOT NULL right after the table was created.
+init: |
+  CREATE TABLE public.users (
+      id serial,
+      big bigserial,
+      small smallserial,
+      name text
+  );
+desired: |
+  CREATE TABLE public.users (
+      id serial,
+      big bigserial,
+      small smallserial,
+      name text
+  );
+plan: ""

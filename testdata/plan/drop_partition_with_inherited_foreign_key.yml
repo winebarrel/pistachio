@@ -1,0 +1,33 @@
+# A partition carries a copy of its parent's foreign key, and PostgreSQL
+# refuses to drop that copy on its own: it goes with the partition. Emitting a
+# DROP CONSTRAINT for it failed with "cannot drop inherited constraint", and
+# the same plan came back on every run.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      at date NOT NULL,
+      CONSTRAINT logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2024 PARTITION OF public.logs FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      at date NOT NULL,
+      CONSTRAINT logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+plan: |
+  DROP TABLE public.logs_2024;

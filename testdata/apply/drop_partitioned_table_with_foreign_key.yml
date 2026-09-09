@@ -1,0 +1,31 @@
+# Dropping the whole partitioned table takes the parent's key and the
+# partitions. The parent's key is its own, so it goes out; the partition's copy
+# of it does not, and PostgreSQL would refuse it anyway.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.logs (
+      uid integer NOT NULL,
+      at date NOT NULL,
+      CONSTRAINT logs_uid_fkey FOREIGN KEY (uid) REFERENCES public.users (id)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2024 PARTITION OF public.logs FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER TABLE public.logs DROP CONSTRAINT logs_uid_fkey;
+  DROP TABLE public.logs_2024;
+  DROP TABLE public.logs;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
