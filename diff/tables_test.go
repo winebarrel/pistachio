@@ -238,6 +238,27 @@ func TestDiffTables_noChange(t *testing.T) {
 	assert.Empty(t, result.Stmts)
 }
 
+// The sequence statement lands after every column statement, so a --bulk-alter
+// run of ALTER TABLE on one table stays in a single statement.
+func TestDiffColumns_serialWideningOrder(t *testing.T) {
+	seq := "public.t_id_seq"
+	current := orderedmap.New[string, *model.Column]()
+	current.Set("id", &model.Column{Name: "id", TypeName: "serial", NotNull: true, SerialSequence: &seq})
+	current.Set("a", &model.Column{Name: "a", TypeName: "smallint"})
+
+	desired := orderedmap.New[string, *model.Column]()
+	desired.Set("id", &model.Column{Name: "id", TypeName: "bigserial", NotNull: true})
+	desired.Set("a", &model.Column{Name: "a", TypeName: "integer"})
+
+	stmts, _, _, err := diffColumns("public.t", current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"ALTER TABLE public.t ALTER COLUMN id SET DATA TYPE bigint;",
+		"ALTER TABLE public.t ALTER COLUMN a SET DATA TYPE integer;",
+		"ALTER SEQUENCE public.t_id_seq AS bigint;",
+	}, stmts)
+}
+
 func TestDiffColumns_generatedToggle(t *testing.T) {
 	// One side STORED GENERATED, the other not, must error; PostgreSQL
 	// has no in-place toggle for GENERATED.
