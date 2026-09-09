@@ -850,14 +850,14 @@ func TestDirectivesAcrossLineEndings(t *testing.T) {
 func TestValidateDirectivesAcrossLineEndings(t *testing.T) {
 	for _, ending := range []struct{ name, text string }{{"lf", ""}, {"crlf", "\r"}} {
 		t.Run(ending.name, func(t *testing.T) {
-			assert.NoError(t, validateDirectives("-- pista:ignore"+ending.text))
-			assert.NoError(t, validateDirectives("-- pista:concurrently"+ending.text))
-			assert.NoError(t, validateDirectives("-- pista:bulk-alter"+ending.text))
+			require.NoError(t, validateDirectives("-- pista:ignore"+ending.text))
+			require.NoError(t, validateDirectives("-- pista:concurrently"+ending.text))
+			require.NoError(t, validateDirectives("-- pista:bulk-alter"+ending.text))
 
-			assert.Error(t, validateDirectives("-- pista:ignore extra"+ending.text))
-			assert.Error(t, validateDirectives("-- pista:concurrently extra"+ending.text))
-			assert.Error(t, validateDirectives("-- pista:bulk-alter extra"+ending.text))
-			assert.Error(t, validateDirectives("-- pista:unknown"+ending.text))
+			require.Error(t, validateDirectives("-- pista:ignore extra"+ending.text))
+			require.Error(t, validateDirectives("-- pista:concurrently extra"+ending.text))
+			require.Error(t, validateDirectives("-- pista:bulk-alter extra"+ending.text))
+			require.Error(t, validateDirectives("-- pista:unknown"+ending.text))
 		})
 	}
 }
