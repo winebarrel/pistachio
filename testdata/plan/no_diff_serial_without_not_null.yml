@@ -4,11 +4,15 @@
 init: |
   CREATE TABLE public.users (
       id serial,
+      big bigserial,
+      small smallserial,
       name text
   );
 desired: |
   CREATE TABLE public.users (
       id serial,
+      big bigserial,
+      small smallserial,
       name text
   );
 plan: ""
