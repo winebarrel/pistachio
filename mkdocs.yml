@@ -40,6 +40,19 @@ hooks:
   - hooks.py
 
 extra:
+  # Google Analytics sets first-party cookies, which are not strictly necessary
+  # to serve the documentation, so the banner asks before the tag is loaded.
+  # Material holds the tag back until the visitor accepts.
+  consent:
+    title: Cookies
+    description: >-
+      This site uses Google Analytics to see which pages get read, so the
+      documentation can be improved where it is needed. Nothing is loaded
+      until you accept, and rejecting costs you nothing.
+    actions:
+      - accept
+      - reject
+      - manage
   analytics:
     provider: google
     property: G-L2YHGE2CEF
