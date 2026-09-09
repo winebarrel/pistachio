@@ -4,13 +4,13 @@ A plan says what will run, not what it costs. `--explain` writes a comment befor
 
 ```sql
 $ pista plan --explain schema.sql
--- rewrite, blocks reads and writes: public.orders (~2000000 rows, 210 MB, 3 indexes rebuilt)
+-- rewrite, blocks reads and writes: public.orders (~2,000,000 rows, 210 MB, 3 indexes rebuilt)
 ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE numeric(12,2);
--- scan, blocks writes: public.orders (~2000000 rows, 210 MB), public.customers (~50000 rows, 6280 kB)
+-- scan, blocks writes: public.orders (~2,000,000 rows, 210 MB), public.customers (~50,000 rows, 6280 kB)
 ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers (id);
--- scan, blocks nothing: public.orders (~2000000 rows, 210 MB)
+-- scan, blocks nothing: public.orders (~2,000,000 rows, 210 MB)
 CREATE INDEX CONCURRENTLY orders_created_at_idx ON public.orders USING btree (created_at);
--- scan, blocks writes: public.events (~120000000 rows, 9629 MB, 24 partitions)
+-- scan, blocks writes: public.events (~120,000,000 rows, 9629 MB, 24 partitions)
 CREATE INDEX events_at_idx ON public.events USING btree (at);
 ALTER TABLE public.orders ALTER COLUMN note SET DEFAULT '';
 ```

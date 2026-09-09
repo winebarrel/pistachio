@@ -27,6 +27,25 @@ func TestSizePretty(t *testing.T) {
 	}
 }
 
+func TestGroupDigits(t *testing.T) {
+	tests := []struct {
+		n    int64
+		want string
+	}{
+		{0, "0"},
+		{3, "3"},
+		{999, "999"},
+		{1000, "1,000"},
+		{12345, "12,345"},
+		{123456, "123,456"},
+		{1234567, "1,234,567"},
+		{120000000, "120,000,000"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, groupDigits(tt.n), "%d", tt.n)
+	}
+}
+
 func TestTypmodOf(t *testing.T) {
 	assert.Nil(t, typmodOf("text"))
 	assert.Equal(t, []int64{50}, typmodOf("character varying(50)"))
