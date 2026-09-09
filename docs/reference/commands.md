@@ -390,22 +390,11 @@ pista plan --check schema.sql
 echo $?  # 0: no changes, 2: changes, 1: error
 ```
 
-Use `--explain` to see which statements cost time in proportion to the table. A comment goes before each statement that reads or rewrites a table that already holds data, saying whether it scans the table or rewrites it, whether its lock stops writes or reads too, and how big the table is. Also available as `$PISTA_EXPLAIN`.
+Use `--explain` to comment each statement that scans or rewrites a table that already holds data, with what its lock blocks and how big the table is. Also available as `$PISTA_EXPLAIN`. See [Explaining a plan](../guides/explaining-plans.md).
 
+```bash
+pista plan --explain schema.sql
 ```
-$ pista plan --explain schema.sql
--- rewrite, blocks reads and writes: public.events (~120000000 rows, 9629 MB, 5 indexes rebuilt)
-ALTER TABLE public.events ALTER COLUMN amount SET DATA TYPE numeric(12,2);
--- scan, blocks writes: public.orders (~2000000 rows, 210 MB), public.customers (~50000 rows, 6280 kB)
-ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers (id);
--- scan, blocks nothing: public.events (~120000000 rows, 9629 MB, 24 partitions)
-CREATE INDEX CONCURRENTLY events_at_idx ON public.events USING btree (at);
-ALTER TABLE public.events ALTER COLUMN note SET DEFAULT '';
-```
-
-`rewrite` copies the table into a new file and builds every index on it again. `scan` reads every row once: a constraint validation, an index build, a NOT NULL check. `blocks reads and writes` is an ACCESS EXCLUSIVE lock, `blocks writes` a SHARE or SHARE ROW EXCLUSIVE lock, and `blocks nothing` a lock that only another DDL waits on. The rows and bytes are the estimates VACUUM and ANALYZE last wrote to `pg_class`, TOAST included, so the comment costs no read of the table itself; a table neither has visited reads as `not analyzed`. A partitioned table shows the sum of its partitions and their number, an `INHERITS` parent its own rows plus its children's. A foreign key names the referenced table next to the referencing one, and a domain change names every table with a column of the domain.
-
-A statement that only changes the catalog takes no comment, whatever lock it holds for the instant it runs: `ADD COLUMN` with a constant default, `DROP COLUMN`, `SET DEFAULT`, `RENAME`, a `NOT VALID` constraint, a wider `varchar` or `numeric`, a `varchar` to `text`. Neither does a statement on a table the same plan creates. Whether a column type change is a relabel or a conversion, and whether a default calls a volatile function, is asked of the server in one small catalog read each, only when the plan holds such a statement. The comments are SQL comments, so the output still pipes into `psql`.
 
 `plan` and `dump` open a read-only connection, so they cannot write to the database. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) to use a read-write connection.
 
