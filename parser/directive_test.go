@@ -734,7 +734,7 @@ GRANT SELECT ON public.a TO someone`,
 			for _, ending := range endings {
 				t.Run(ending.name, func(t *testing.T) {
 					var warnings bytes.Buffer
-					defer SetWarnWriter(&warnings)()
+					defer setWarnWriter(&warnings)()
 
 					r, err := parseSQLWithSchema(tt.sql+ending.suffix, "public", nil)
 					require.NoError(t, err)

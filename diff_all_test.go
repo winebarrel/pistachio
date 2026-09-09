@@ -1,4 +1,4 @@
-package pistachio_test
+package pistachio
 
 import (
 	"testing"
@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
-	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -65,7 +64,7 @@ func TestExtractObjectName(t *testing.T) {
 			name = name[:40]
 		}
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, pistachio.ExtractObjectName(tt.sql))
+			assert.Equal(t, tt.expected, extractObjectName(tt.sql))
 		})
 	}
 }
@@ -116,7 +115,7 @@ func TestOrderStatements_Fallback(t *testing.T) {
 	currentTables := orderedmap.New[string, *model.Table]()
 	currentViews := orderedmap.New[string, *model.View]()
 
-	result := pistachio.OrderStatements(
+	result := orderStatements(
 		currentEnums, currentDomains, orderedmap.New[string, *model.CompositeType](), currentTables, currentViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		desiredEnums, desiredDomains, orderedmap.New[string, *model.CompositeType](), desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		enumDiff, domainDiff, &diff.CompositeTypeDiffResult{}, tableDiff, viewDiff, &diff.SequenceDiffResult{}, &diff.RoutineDiffResult{},
@@ -168,7 +167,7 @@ func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
 		},
 	}
 
-	result := pistachio.OrderStatements(
+	result := orderStatements(
 		currentEnums, currentDomains, orderedmap.New[string, *model.CompositeType](), currentTables, currentViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		desiredEnums, desiredDomains, orderedmap.New[string, *model.CompositeType](), desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		enumDiff, domainDiff, &diff.CompositeTypeDiffResult{}, tableDiff, viewDiff, &diff.SequenceDiffResult{}, &diff.RoutineDiffResult{},
@@ -216,7 +215,7 @@ func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
 	}
 	viewDiff := &diff.ViewDiffResult{}
 
-	result := pistachio.OrderStatements(
+	result := orderStatements(
 		currentEnums, currentDomains, orderedmap.New[string, *model.CompositeType](), currentTables, currentViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		desiredEnums, desiredDomains, orderedmap.New[string, *model.CompositeType](), desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		enumDiff, domainDiff, &diff.CompositeTypeDiffResult{}, tableDiff, viewDiff, &diff.SequenceDiffResult{}, &diff.RoutineDiffResult{},
@@ -265,7 +264,7 @@ func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {
 	}
 	viewDiff := &diff.ViewDiffResult{}
 
-	result := pistachio.OrderStatements(
+	result := orderStatements(
 		currentEnums, currentDomains, orderedmap.New[string, *model.CompositeType](), currentTables, currentViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		desiredEnums, desiredDomains, orderedmap.New[string, *model.CompositeType](), desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		enumDiff, domainDiff, &diff.CompositeTypeDiffResult{}, tableDiff, viewDiff, &diff.SequenceDiffResult{}, &diff.RoutineDiffResult{},
@@ -309,7 +308,7 @@ func TestOrderStatements_CreateUniqueIndexAfterTable(t *testing.T) {
 	}
 	viewDiff := &diff.ViewDiffResult{}
 
-	result := pistachio.OrderStatements(
+	result := orderStatements(
 		currentEnums, currentDomains, orderedmap.New[string, *model.CompositeType](), currentTables, currentViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		desiredEnums, desiredDomains, orderedmap.New[string, *model.CompositeType](), desiredTables, desiredViews, orderedmap.New[string, *model.Sequence](), orderedmap.New[string, *model.Routine](),
 		enumDiff, domainDiff, &diff.CompositeTypeDiffResult{}, tableDiff, viewDiff, &diff.SequenceDiffResult{}, &diff.RoutineDiffResult{},
@@ -322,28 +321,28 @@ func TestOrderStatements_CreateUniqueIndexAfterTable(t *testing.T) {
 
 func TestExtractObjectName_QuotedWithEscapedQuote(t *testing.T) {
 	// COMMENT ON COLUMN with escaped quotes in identifier
-	got := pistachio.ExtractObjectName(`COMMENT ON COLUMN "My""Schema"."My""Table".col IS 'x';`)
+	got := extractObjectName(`COMMENT ON COLUMN "My""Schema"."My""Table".col IS 'x';`)
 	assert.Equal(t, `"My""Schema"."My""Table"`, got)
 }
 
 func TestCompareTaggedPos(t *testing.T) {
 	// Both unknown: preserve original order via stable sort
-	assert.False(t, pistachio.CompareTaggedPos(-1, -1, false))
-	assert.False(t, pistachio.CompareTaggedPos(-1, -1, true))
+	assert.False(t, compareTaggedPos(-1, -1, false))
+	assert.False(t, compareTaggedPos(-1, -1, true))
 
 	// Only i unknown: unknown sorts before known
-	assert.True(t, pistachio.CompareTaggedPos(-1, 0, false))
-	assert.True(t, pistachio.CompareTaggedPos(-1, 5, true))
+	assert.True(t, compareTaggedPos(-1, 0, false))
+	assert.True(t, compareTaggedPos(-1, 5, true))
 
 	// Only j unknown: known never precedes unknown
-	assert.False(t, pistachio.CompareTaggedPos(0, -1, false))
-	assert.False(t, pistachio.CompareTaggedPos(5, -1, true))
+	assert.False(t, compareTaggedPos(0, -1, false))
+	assert.False(t, compareTaggedPos(5, -1, true))
 
 	// Both known: forward sort
-	assert.True(t, pistachio.CompareTaggedPos(1, 2, false))
-	assert.False(t, pistachio.CompareTaggedPos(2, 1, false))
+	assert.True(t, compareTaggedPos(1, 2, false))
+	assert.False(t, compareTaggedPos(2, 1, false))
 
 	// Both known: reverse sort
-	assert.True(t, pistachio.CompareTaggedPos(2, 1, true))
-	assert.False(t, pistachio.CompareTaggedPos(1, 2, true))
+	assert.True(t, compareTaggedPos(2, 1, true))
+	assert.False(t, compareTaggedPos(1, 2, true))
 }

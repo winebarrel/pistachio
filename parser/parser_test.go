@@ -1,4 +1,4 @@
-package parser_test
+package parser
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/model"
-	"github.com/winebarrel/pistachio/parser"
 	"gopkg.in/yaml.v3"
 )
 
@@ -49,7 +48,7 @@ func TestReadSQLFile(t *testing.T) {
 	sql := "SELECT 1;"
 	require.NoError(t, os.WriteFile(tmpFile, []byte(sql), 0o644))
 
-	got, err := parser.ReadSQLFile(tmpFile)
+	got, err := readSQLFile(tmpFile)
 	require.NoError(t, err)
 	assert.Equal(t, sql, got)
 }
@@ -72,7 +71,7 @@ func TestReadSQLFile_Stdin(t *testing.T) {
 		w.Close()
 	}()
 
-	got, err := parser.ReadSQLFile("-")
+	got, err := readSQLFile("-")
 	require.NoError(t, err)
 	assert.Equal(t, sql, got)
 }
@@ -90,7 +89,7 @@ func TestReadSQLFile_Stdin_ReadAll(t *testing.T) {
 		r.Close()
 	}()
 
-	got, err := parser.ReadSQLFile("-")
+	got, err := readSQLFile("-")
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
@@ -102,10 +101,10 @@ func TestParseSQL_InvalidSQL(t *testing.T) {
 
 func TestParseSQL_WarnsUnsupportedStmt(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
-	_, err := parser.ParseSQLWithSchema("CREATE EXTENSION pgcrypto;", "public")
+	_, err := parseSQLNoFile("CREATE EXTENSION pgcrypto;", "public")
 	require.NoError(t, err)
 
 	out := buf.String()
@@ -117,11 +116,11 @@ func TestParseSQL_WarnsUnsupportedStmt(t *testing.T) {
 // around it, and a supported statement before it is still parsed.
 func TestParseSQL_WarnsUnsupportedStmt_StripsComments(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	sql := "CREATE TABLE t (id integer);\n-- a leading comment\nSET foo = 1;"
-	result, err := parser.ParseSQLWithSchema(sql, "public")
+	result, err := parseSQLNoFile(sql, "public")
 	require.NoError(t, err)
 
 	_, ok := result.Tables.GetOk("public.t")
@@ -136,11 +135,11 @@ func TestParseSQL_WarnsUnsupportedStmt_StripsComments(t *testing.T) {
 // semicolon, is not folded into the warning.
 func TestParseSQL_WarnsUnsupportedStmt_LastNoSemicolon(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	sql := "CREATE TABLE t (id integer);\nGRANT SELECT ON t TO PUBLIC\n-- trailing comment"
-	_, err := parser.ParseSQLWithSchema(sql, "public")
+	_, err := parseSQLNoFile(sql, "public")
 	require.NoError(t, err)
 
 	out := buf.String()
@@ -152,12 +151,12 @@ func TestParseSQL_WarnsUnsupportedStmt_LastNoSemicolon(t *testing.T) {
 // warning stays short and valid UTF-8 even for multibyte input.
 func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	// U+3042 is a 3-byte rune; the escape keeps this source file ASCII.
 	body := strings.Repeat("\u3042", 250)
-	_, err := parser.ParseSQLWithSchema("SELECT '"+body+"';", "public")
+	_, err := parseSQLNoFile("SELECT '"+body+"';", "public")
 	require.NoError(t, err)
 
 	out := buf.String()
@@ -172,11 +171,11 @@ func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {
 // CREATE FUNCTION is no longer unsupported.
 func TestParseSQL_WarnsUnsupportedStmt_CollapsesMultiline(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	sql := "DO $$\nBEGIN\n  PERFORM 1;\nEND\n$$;"
-	_, err := parser.ParseSQLWithSchema(sql, "public")
+	_, err := parseSQLNoFile(sql, "public")
 	require.NoError(t, err)
 
 	out := buf.String()
@@ -190,7 +189,7 @@ func TestParseSQL_WarnsUnsupportedStmt_CollapsesMultiline(t *testing.T) {
 // silently read as absent and the plan would propose dropping it.
 func TestParseSQL_WarnsIgnoredAlterTableAction(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	result, err := parseSQLWithPublicSchema(`
@@ -214,7 +213,7 @@ func TestParseSQL_WarnsIgnoredAlterTableAction(t *testing.T) {
 // dropped one.
 func TestParseSQL_WarnsIgnoredAlterTableAction_KeepsSupportedAction(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	result, err := parseSQLWithPublicSchema(`
@@ -239,7 +238,7 @@ func TestParseSQL_WarnsIgnoredAlterTableAction_KeepsSupportedAction(t *testing.T
 // reaches the warning that covers the actions the parser drops.
 func TestParseSQL_ColumnStorageActionNotWarned(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	result, err := parseSQLWithPublicSchema(`
@@ -262,7 +261,7 @@ func TestParseSQL_ColumnStorageActionNotWarned(t *testing.T) {
 // Several dropped actions in one statement are reported together, on one line.
 func TestParseSQL_WarnsIgnoredAlterTableAction_MultipleActions(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	_, err := parseSQLWithPublicSchema(`
@@ -280,7 +279,7 @@ func TestParseSQL_WarnsIgnoredAlterTableAction_MultipleActions(t *testing.T) {
 // The actions the parser does read must stay silent.
 func TestParseSQL_NoWarnForSupportedAlterTableActions(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	_, err := parseSQLWithPublicSchema(`
@@ -299,7 +298,7 @@ func TestParseSQL_NoWarnForSupportedAlterTableActions(t *testing.T) {
 // IF EXISTS is part of the statement, so it survives into the warning.
 func TestParseSQL_WarnsIgnoredAlterTableAction_IfExists(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	_, err := parseSQLWithPublicSchema(`
@@ -314,7 +313,7 @@ func TestParseSQL_WarnsIgnoredAlterTableAction_IfExists(t *testing.T) {
 // diffed, so it must not warn.
 func TestParseSQL_ExecuteDirectiveSilencesAlterTableWarning(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	result, err := parseSQLWithPublicSchema(`
@@ -332,7 +331,7 @@ func TestParseSQL_ExecuteDirectiveSilencesAlterTableWarning(t *testing.T) {
 // stays silent.
 func TestParseSQL_NoWarnForAlterTableOnUndeclaredRelation(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	_, err := parseSQLWithPublicSchema(`ALTER TABLE public.nosuch ADD COLUMN x text;`)
@@ -344,7 +343,7 @@ func TestParseSQL_NoWarnForAlterTableOnUndeclaredRelation(t *testing.T) {
 // from it cannot mislead the plan and the warning would be noise.
 func TestParseSQL_NoWarnForAlterTableOnIgnoredTable(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	_, err := parseSQLWithPublicSchema(`
@@ -366,7 +365,7 @@ func TestParseSQL_WarnsUnsupportedCommentTarget(t *testing.T) {
 	} {
 		t.Run(stmt, func(t *testing.T) {
 			var buf bytes.Buffer
-			restore := parser.SetWarnWriter(&buf)
+			restore := setWarnWriter(&buf)
 			defer restore()
 
 			_, err := parseSQLWithPublicSchema("CREATE TABLE public.t (id integer);\n" + stmt)
@@ -379,7 +378,7 @@ func TestParseSQL_WarnsUnsupportedCommentTarget(t *testing.T) {
 // The comment targets the parser does model must stay silent.
 func TestParseSQL_NoWarnForSupportedCommentTargets(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	_, err := parseSQLWithPublicSchema(`
@@ -438,7 +437,7 @@ func TestParseSQL_CommentOnIndex(t *testing.T) {
 // An index name written without a schema takes the default schema, which is
 // the one the run works in rather than public.
 func TestParseSQL_CommentOnIndexUnqualified(t *testing.T) {
-	result, err := parser.ParseSQLWithSchema(`
+	result, err := parseSQLNoFile(`
 		CREATE TABLE myschema.t (id integer, n text);
 		CREATE INDEX t_n_idx ON myschema.t (n);
 		COMMENT ON INDEX t_n_idx IS 'unqualified';
@@ -532,10 +531,10 @@ func TestParseSQL_CommentIsNullClearsComment(t *testing.T) {
 
 func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
-	_, err := parser.ParseSQLWithSchema("CREATE TABLE t (id integer);", "public")
+	_, err := parseSQLNoFile("CREATE TABLE t (id integer);", "public")
 	require.NoError(t, err)
 	assert.Empty(t, buf.String())
 }
@@ -545,11 +544,11 @@ func TestParseSQL_NoWarnForSupportedStmt(t *testing.T) {
 // The table between them is still parsed.
 func TestParseSQL_WarnsTransactionStmt(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	sql := "BEGIN;\nCREATE TABLE t (id integer);\nCOMMIT;\nSTART TRANSACTION;"
-	result, err := parser.ParseSQLWithSchema(sql, "public")
+	result, err := parseSQLNoFile(sql, "public")
 	require.NoError(t, err)
 
 	_, ok := result.Tables.GetOk("public.t")
@@ -565,10 +564,10 @@ func TestParseSQL_WarnsTransactionStmt(t *testing.T) {
 // A non-transaction statement gets no transaction hint.
 func TestParseSQL_WarnNoTxHintForOtherStmt(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
-	_, err := parser.ParseSQLWithSchema("SET foo = 1;", "public")
+	_, err := parseSQLNoFile("SET foo = 1;", "public")
 	require.NoError(t, err)
 	assert.NotContains(t, buf.String(), "--with-tx")
 }
@@ -577,10 +576,10 @@ func TestParseSQL_WarnNoTxHintForOtherStmt(t *testing.T) {
 // apply does not answer them, so they warn without the hint.
 func TestParseSQL_WarnNoTxHintForRollback(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
-	_, err := parser.ParseSQLWithSchema("ROLLBACK;\nSAVEPOINT sp;", "public")
+	_, err := parseSQLNoFile("ROLLBACK;\nSAVEPOINT sp;", "public")
 	require.NoError(t, err)
 
 	out := buf.String()
@@ -593,11 +592,11 @@ func TestParseSQL_WarnNoTxHintForRollback(t *testing.T) {
 // unsupported statement carrying it does not warn.
 func TestParseSQL_NoWarnForExecuteStmt(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	sql := "CREATE TABLE t (id integer);\n-- pista:execute\nGRANT SELECT ON t TO PUBLIC;"
-	_, err := parser.ParseSQLWithSchema(sql, "public")
+	_, err := parseSQLNoFile(sql, "public")
 	require.NoError(t, err)
 	assert.Empty(t, buf.String())
 }
@@ -608,7 +607,7 @@ func TestParseSQL_NoWarnForExecuteStmt(t *testing.T) {
 func TestIgnoredStmtSnippet_DeparseFallback(t *testing.T) {
 	sql := "  GRANT  SELECT\n  ON t  "
 	rs := &pg_query.RawStmt{StmtLocation: 0, StmtLen: 0}
-	assert.Equal(t, sql, parser.IgnoredStmtSnippet(sql, rs))
+	assert.Equal(t, sql, ignoredStmtSnippet(sql, rs))
 }
 
 func TestParseSQLFilesWithSchema(t *testing.T) {
@@ -620,7 +619,7 @@ func TestParseSQLFilesWithSchema(t *testing.T) {
 	require.NoError(t, os.WriteFile(a, []byte("CREATE TABLE t1 (id integer NOT NULL);"), 0o644))
 	require.NoError(t, os.WriteFile(b, []byte("CREATE TABLE public.t2 (id integer NOT NULL);"), 0o644))
 
-	result, err := parser.ParseSQLFilesWithSchema([]string{a, b}, "public")
+	result, err := ParseSQLFilesWithSchema([]string{a, b}, "public")
 	require.NoError(t, err)
 	_, ok := result.Tables.GetOk("public.t1")
 	assert.True(t, ok, "unqualified t1 should be schema-qualified to public.t1")
@@ -629,7 +628,7 @@ func TestParseSQLFilesWithSchema(t *testing.T) {
 }
 
 func TestParseSQLFilesWithSchema_MissingFile(t *testing.T) {
-	_, err := parser.ParseSQLFilesWithSchema([]string{filepath.Join(t.TempDir(), "missing.sql")}, "public")
+	_, err := ParseSQLFilesWithSchema([]string{filepath.Join(t.TempDir(), "missing.sql")}, "public")
 	require.ErrorIs(t, err, fs.ErrNotExist)
 	assert.Contains(t, err.Error(), "failed to read SQL file")
 }
@@ -1986,7 +1985,7 @@ CREATE VIEW active_users AS SELECT id, name FROM users;
 COMMENT ON TABLE users IS 'User accounts';
 COMMENT ON COLUMN users.name IS 'User name';`
 
-	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	result, err := parseSQLNoFile(sql, "myschema")
 	require.NoError(t, err)
 
 	// Table defaults to myschema
@@ -2027,7 +2026,7 @@ CREATE TABLE orders (
 );
 ALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);`
 
-	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	result, err := parseSQLNoFile(sql, "myschema")
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("myschema.orders")
@@ -2046,7 +2045,7 @@ func TestParseSQLWithSchema_InheritedTable(t *testing.T) {
 CREATE TABLE events_2024 PARTITION OF events
     FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');`
 
-	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	result, err := parseSQLNoFile(sql, "myschema")
 	require.NoError(t, err)
 
 	tbl, ok := result.Tables.GetOk("myschema.events_2024")
@@ -2138,7 +2137,7 @@ CREATE INDEX idx_users_name ON public.users USING btree (name) TABLESPACE fast_s
 
 func TestParseSQL_AlterTableNonAddConstraint(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	// ALTER TABLE with non-ADD CONSTRAINT commands is skipped, with a warning
@@ -2315,7 +2314,7 @@ func TestParseSQLWithSchema_ViewComment(t *testing.T) {
 	sql := `CREATE VIEW active_users AS SELECT 1;
 COMMENT ON VIEW active_users IS 'Active users';`
 
-	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	result, err := parseSQLNoFile(sql, "myschema")
 	require.NoError(t, err)
 
 	v, ok := result.Views.GetOk("myschema.active_users")
@@ -2377,7 +2376,7 @@ func TestParseSQLWithSchema_Enum(t *testing.T) {
 	sql := `CREATE TYPE status AS ENUM ('active', 'inactive');
 COMMENT ON TYPE status IS 'User status';`
 
-	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	result, err := parseSQLNoFile(sql, "myschema")
 	require.NoError(t, err)
 
 	e, ok := result.Enums.GetOk("myschema.status")
@@ -2829,7 +2828,7 @@ CREATE TABLE users (
 -- pista:renamed-from old_view
 CREATE VIEW new_view AS SELECT 1;`
 
-	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	result, err := parseSQLNoFile(sql, "myschema")
 	require.NoError(t, err)
 
 	e, ok := result.Enums.GetOk("myschema.new_status")
@@ -2893,7 +2892,7 @@ COMMENT ON DOMAIN public.pos_int IS 'Positive integer';`
 func TestParseSQLWithSchema_Domain(t *testing.T) {
 	sql := `CREATE DOMAIN pos_int AS integer;`
 
-	result, err := parser.ParseSQLWithSchema(sql, "myschema")
+	result, err := parseSQLNoFile(sql, "myschema")
 	require.NoError(t, err)
 
 	d, ok := result.Domains.GetOk("myschema.pos_int")
@@ -3326,7 +3325,7 @@ func TestReadSQLFile_Stdin_ReadError(t *testing.T) {
 		os.Stdin = origStdin
 	}()
 
-	_, err = parser.ReadSQLFile("-")
+	_, err = readSQLFile("-")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read SQL from stdin")
 }

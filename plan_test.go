@@ -1,4 +1,4 @@
-package pistachio_test
+package pistachio
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
@@ -73,7 +72,7 @@ type expectedCount struct {
 	Routines       *int `yaml:"routines,omitempty"`
 }
 
-func assertExpectedCount(t *testing.T, want *expectedCount, got pistachio.ObjectCount) {
+func assertExpectedCount(t *testing.T, want *expectedCount, got ObjectCount) {
 	t.Helper()
 	if want == nil {
 		return
@@ -105,7 +104,7 @@ func assertExpectedCount(t *testing.T, want *expectedCount, got pistachio.Object
 
 func TestPlan_InvalidConnString(t *testing.T) {
 	ctx := context.Background()
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: "invalid://connection",
 		Schemas:    []string{"public"},
 	})
@@ -113,7 +112,7 @@ func TestPlan_InvalidConnString(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	_, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 	require.Error(t, err)
 }
 
@@ -130,13 +129,13 @@ func TestPlan_WithPassword(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Password:   "dummy",
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
 }
@@ -156,12 +155,12 @@ func TestPlan_NoReadOnly(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{NoReadOnly: true, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &PlanOptions{NoReadOnly: true, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
 }
@@ -171,12 +170,12 @@ func TestPlan_InvalidDesiredFile(t *testing.T) {
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{"/nonexistent/file.sql"}})
+	_, err := client.Plan(ctx, &PlanOptions{Files: []string{"/nonexistent/file.sql"}})
 	require.Error(t, err)
 }
 
@@ -188,12 +187,12 @@ func TestPlan_EmptySchemas(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{},
 	})
 
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	_, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "at least one schema must be specified")
 }
@@ -208,12 +207,12 @@ func TestPlan_BlankSchemaName(t *testing.T) {
 
 	for _, name := range []string{"", "   "} {
 		t.Run(fmt.Sprintf("%q", name), func(t *testing.T) {
-			client := pistachio.NewClient(&pistachio.Options{
+			client := NewClient(&Options{
 				ConnString: conn.Config().ConnString(),
 				Schemas:    []string{name},
 			})
 
-			_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+			_, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "must not contain empty or whitespace-only entries")
 		})
@@ -233,12 +232,12 @@ func TestPlan_InvalidConcurrentlyPreSQLFile(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{
+	_, err := client.Plan(ctx, &PlanOptions{
 		Files:                  []string{desiredFile},
 		ConcurrentlyPreSQLFile: "/nonexistent/file.sql",
 	})
@@ -259,12 +258,12 @@ func TestPlan_WithPreSQLFile_InvalidFile(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{
+	_, err := client.Plan(ctx, &PlanOptions{
 		Files:      []string{desiredFile},
 		PreSQLFile: "/nonexistent/pre.sql",
 	})
@@ -292,12 +291,12 @@ CREATE TABLE public.audit_log (
 );
 `), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	result, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	result, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.True(t, result.HasChanges)
 	assert.Contains(t, result.SQL, "CREATE TABLE public.audit_log")
@@ -333,12 +332,12 @@ CREATE INDEX idx_events_time ON myschema.events (occurred_at);
 );
 CREATE INDEX idx_events_time ON myschema.events (event_time);`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Equal(t, "ALTER TABLE myschema.events RENAME COLUMN occurred_at TO event_time;", strings.TrimSpace(got.SQL))
 }
@@ -379,16 +378,16 @@ func TestPlan(t *testing.T) {
 				concurrentlyPreSQLFile = filepath.Join(tmpDir, "concurrently-pre.sql")
 				require.NoError(t, os.WriteFile(concurrentlyPreSQLFile, []byte(tc.ConcurrentlyPreSQLFile), 0o644))
 			}
-			client := pistachio.NewClient(&pistachio.Options{
+			client := NewClient(&Options{
 				ConnString: conn.Config().ConnString(),
 				Schemas:    []string{"public"},
 			})
 
-			dropPolicy := pistachio.DropPolicy{AllowDrop: []string{"all"}}
+			dropPolicy := DropPolicy{AllowDrop: []string{"all"}}
 			if tc.DropPolicy != nil {
-				dropPolicy = pistachio.DropPolicy{AllowDrop: tc.DropPolicy.AllowDrop}
+				dropPolicy = DropPolicy{AllowDrop: tc.DropPolicy.AllowDrop}
 			}
-			got, err := client.Plan(ctx, &pistachio.PlanOptions{
+			got, err := client.Plan(ctx, &PlanOptions{
 				DropPolicy:               dropPolicy,
 				Include:                  tc.Include,
 				Exclude:                  tc.Exclude,
@@ -447,12 +446,12 @@ INSERT INTO myschema.flags (id) VALUES (1);
 INSERT INTO myschema.flags (id) VALUES (2);
 `), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.False(t, got.HasChanges)
 	assert.Empty(t, got.SQL)
@@ -500,12 +499,12 @@ INSERT INTO public.docs SELECT g, repeat(md5(g::text), 20000) FROM generate_seri
     CONSTRAINT docs_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Explain: true, Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &PlanOptions{Explain: true, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	line, _, _ := strings.Cut(got.SQL, "\n")

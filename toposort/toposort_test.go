@@ -1,15 +1,14 @@
-package toposort_test
+package toposort
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/pistachio/toposort"
 )
 
 func TestGraph_Sort_Simple(t *testing.T) {
-	g := toposort.NewGraph()
+	g := newGraph()
 	g.AddNode("a")
 	g.AddNode("b")
 	g.AddNode("c")
@@ -22,7 +21,7 @@ func TestGraph_Sort_Simple(t *testing.T) {
 }
 
 func TestGraph_Sort_Independent(t *testing.T) {
-	g := toposort.NewGraph()
+	g := newGraph()
 	g.AddNode("c")
 	g.AddNode("a")
 	g.AddNode("b")
@@ -34,7 +33,7 @@ func TestGraph_Sort_Independent(t *testing.T) {
 }
 
 func TestGraph_Sort_Cycle(t *testing.T) {
-	g := toposort.NewGraph()
+	g := newGraph()
 	g.AddEdge("a", "b")
 	g.AddEdge("b", "a")
 
@@ -44,7 +43,7 @@ func TestGraph_Sort_Cycle(t *testing.T) {
 }
 
 func TestGraph_Sort_Diamond(t *testing.T) {
-	g := toposort.NewGraph()
+	g := newGraph()
 	g.AddEdge("d", "b") // d depends on b
 	g.AddEdge("d", "c") // d depends on c
 	g.AddEdge("b", "a") // b depends on a
