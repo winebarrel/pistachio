@@ -1,0 +1,21 @@
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code character varying(50) NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_code_idx ON public.users USING btree (code);
+  INSERT INTO public.users SELECT g, 'c' || g FROM generate_series(1, 3) g;
+  ANALYZE public.users;
+desired: |
+  CREATE TABLE public.users (
+      id bigint NOT NULL,
+      code character varying(100) NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_code_idx ON public.users USING btree (code);
+plan: |
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, 2 indexes rebuilt)
+  ALTER TABLE public.users ALTER COLUMN id SET DATA TYPE bigint;
+  ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE character varying(100);

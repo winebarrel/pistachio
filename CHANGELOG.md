@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Add `--explain` to `plan` (`$PISTA_EXPLAIN`). It writes a comment before each statement that scans or rewrites a table that already holds data: what the statement does to the rows, what its lock blocks, and the table's row and byte estimate from `pg_class`, with the number of indexes a rewrite builds again and the partitions or `INHERITS` children it recurses into. A foreign key names the referenced table next to the referencing one, and a domain change names every table with a column of the domain. A statement that changes the catalog alone takes no comment, and neither does one on a table the same plan creates. The estimates are what VACUUM and ANALYZE last wrote, the TOAST relation's pages included; a table neither has visited reads as not analyzed. Whether a type change is a relabel or a conversion, and whether a default calls a volatile function, is one catalog read each, made only when the plan holds such a statement, and a plan with no statements makes none.
+
 ## [1.48.0] - 2026-09-09
 
 * Read a primary key added by `ALTER TABLE` as implying `NOT NULL`. PostgreSQL sets the flag whichever way the key arrives, and only the inline form was read that way. A file that adds the key in a later statement planned `DROP NOT NULL` on every run, and applying it failed with `column is in a primary key`.

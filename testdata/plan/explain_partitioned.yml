@@ -1,0 +1,29 @@
+explain: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL,
+      note text,
+      CONSTRAINT events_pkey PRIMARY KEY (at, id)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  INSERT INTO public.events VALUES (1, '2024-03-01', 'a'), (2, '2024-04-01', 'b'), (3, '2025-03-01', 'c'), (4, '2025-04-01', 'd');
+  ANALYZE public.events;
+  ANALYZE public.events_2024;
+  ANALYZE public.events_2025;
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL,
+      note text NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (at, id)
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX events_note_idx ON public.events USING btree (note);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+plan: |
+  -- scan, blocks reads and writes: public.events (~4 rows, 16 kB, 2 partitions)
+  ALTER TABLE public.events ALTER COLUMN note SET NOT NULL;
+  -- scan, blocks writes: public.events (~4 rows, 16 kB, 2 partitions)
+  CREATE INDEX events_note_idx ON public.events USING btree (note);

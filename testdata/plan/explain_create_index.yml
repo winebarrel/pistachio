@@ -1,0 +1,37 @@
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      code text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.users SELECT g, 'n', 'c' FROM generate_series(1, 3) g;
+  ANALYZE public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      code text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name);
+  -- pista:concurrently
+  CREATE INDEX users_code_idx ON public.users USING btree (code);
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT tags_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX tags_name_idx ON public.tags USING btree (name);
+plan: |
+  CREATE TABLE public.tags (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT tags_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX tags_name_idx ON public.tags USING btree (name);
+  -- scan, blocks writes: public.users (~3 rows, 8192 bytes)
+  CREATE INDEX users_name_idx ON public.users USING btree (name);
+  -- scan, blocks nothing: public.users (~3 rows, 8192 bytes)
+  CREATE INDEX CONCURRENTLY users_code_idx ON public.users USING btree (code);

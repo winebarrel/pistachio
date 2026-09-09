@@ -140,6 +140,10 @@ Flags:
       --no-read-only            Open the database connection read-write.
                                 By default plan uses a read-only connection
                                 ($PISTA_NO_READ_ONLY).
+      --explain                 Comment each statement that scans or rewrites a
+                                table with what it does, what its lock blocks,
+                                and the table's row and byte estimate from
+                                pg_class ($PISTA_EXPLAIN).
       --check                   Exit with code 2 when the plan contains
                                 executable changes ($PISTA_CHECK).
 ```
@@ -384,6 +388,12 @@ Use `--check` to detect schema drift from the exit code. The exit code is 2 if t
 ```bash
 pista plan --check schema.sql
 echo $?  # 0: no changes, 2: changes, 1: error
+```
+
+Use `--explain` to comment each statement that scans or rewrites a table that already holds data, with what its lock blocks and how big the table is. Also available as `$PISTA_EXPLAIN`. See [Explaining a plan](../guides/explaining-plans.md).
+
+```bash
+pista plan --explain schema.sql
 ```
 
 `plan` and `dump` open a read-only connection, so they cannot write to the database. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) to use a read-write connection.

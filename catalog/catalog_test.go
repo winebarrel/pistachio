@@ -65,6 +65,14 @@ func TestCatalog_ClosedConnection(t *testing.T) {
 		{"ListColumnsByTables", func() error { _, err := cat.ListColumnsByTables(ctx, tbls); return err }},
 		{"ListConstraintsByTables", func() error { _, _, err := cat.ListConstraintsByTables(ctx, tbls); return err }},
 		{"ListPoliciesByTables", func() error { _, err := cat.ListPoliciesByTables(ctx, tbls); return err }},
+		{"TableStats", func() error { _, err := cat.TableStats(ctx); return err }},
+		// TypeChanges and VolatileFunctions answer an empty request without
+		// reaching the connection, so each is given one entry to look up.
+		{"TypeChanges", func() error {
+			_, err := cat.TypeChanges(ctx, []catalog.TypeChange{{Src: "integer", Dst: "bigint"}})
+			return err
+		}},
+		{"VolatileFunctions", func() error { _, err := cat.VolatileFunctions(ctx, []string{"now"}); return err }},
 	}
 
 	for _, tt := range tests {

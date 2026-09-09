@@ -50,6 +50,10 @@ type planTestCase struct {
 	// ConcurrentlyPreSQLFile holds SQL content; the runner writes it to a temp
 	// file and passes the path to PlanOptions.ConcurrentlyPreSQLFile.
 	ConcurrentlyPreSQLFile string `yaml:"concurrently_pre_sql_file,omitempty"`
+	// Explain sets --explain, so the plan carries a comment before each
+	// statement that scans or rewrites a table. The row and page counts it
+	// prints come from pg_class, so an init that wants them runs ANALYZE.
+	Explain bool `yaml:"explain,omitempty"`
 }
 
 type planDropPolicy struct {
@@ -402,6 +406,7 @@ func TestPlan(t *testing.T) {
 				PreSQLFile:               preSQLFile,
 				ConcurrentlyPreSQL:       tc.ConcurrentlyPreSQL,
 				ConcurrentlyPreSQLFile:   concurrentlyPreSQLFile,
+				Explain:                  tc.Explain,
 			})
 			if tc.Error != "" {
 				require.Error(t, err)
@@ -451,4 +456,59 @@ INSERT INTO myschema.flags (id) VALUES (2);
 	require.NoError(t, err)
 	assert.False(t, got.HasChanges)
 	assert.Empty(t, got.SQL)
+}
+
+// --explain adds the TOAST relation's pages to the table's size, since a
+// rewrite copies them too, and writes the total the way pg_size_pretty does.
+// This is a Go test rather than a fixture because only VACUUM sets the TOAST
+// relation's relpages and it cannot run inside the implicit transaction the
+// fixture harness loads its init SQL in. Both expectations are read back from
+// the server, so neither depends on how it compressed the value.
+func TestPlan_ExplainCountsToastPages(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.docs (
+    id integer NOT NULL,
+    body text,
+    CONSTRAINT docs_pkey PRIMARY KEY (id)
+);
+INSERT INTO public.docs SELECT g, repeat(md5(g::text), 20000) FROM generate_series(1, 5) g;`)
+
+	// VACUUM writes both relations' relpages; ANALYZE leaves the TOAST
+	// relation's at zero.
+	_, err := conn.Exec(ctx, "VACUUM ANALYZE public.docs")
+	require.NoError(t, err)
+
+	var mainBytes, toastBytes int64
+	var wantSize string
+	require.NoError(t, conn.QueryRow(ctx, `
+		SELECT
+			c.relpages::bigint * 8192,
+			COALESCE(t.relpages, 0)::bigint * 8192,
+			pg_size_pretty((c.relpages + COALESCE(t.relpages, 0))::bigint * 8192)
+		FROM pg_class c LEFT JOIN pg_class t ON t.oid = c.reltoastrelid
+		WHERE c.relname = 'docs'
+	`).Scan(&mainBytes, &toastBytes, &wantSize))
+	require.Positive(t, toastBytes, "the value must be large enough to be TOASTed")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.docs (
+    id bigint NOT NULL,
+    body text,
+    CONSTRAINT docs_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Explain: true, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	line, _, _ := strings.Cut(got.SQL, "\n")
+	require.True(t, strings.HasPrefix(line, "-- rewrite,"), "want a rewrite comment, got %q", line)
+	assert.Contains(t, line, "~5 rows, "+wantSize+",", "the TOAST pages belong in the size, printed as pg_size_pretty writes it")
 }

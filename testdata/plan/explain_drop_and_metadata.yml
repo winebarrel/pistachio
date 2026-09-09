@@ -1,0 +1,27 @@
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      note text DEFAULT 'x',
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_name_key UNIQUE (name)
+  );
+  CREATE INDEX users_note_idx ON public.users USING btree (note);
+  CREATE TABLE public.old (
+      id integer NOT NULL
+  );
+  INSERT INTO public.users SELECT g, 'n' || g, 'x' FROM generate_series(1, 3) g;
+  ANALYZE public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      note text DEFAULT 'y',
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  DROP INDEX public.users_note_idx;
+  ALTER TABLE public.users ALTER COLUMN note SET DEFAULT 'y';
+  ALTER TABLE public.users DROP CONSTRAINT users_name_key;
+  ALTER TABLE public.users DROP COLUMN name;
+  DROP TABLE public.old;

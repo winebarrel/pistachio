@@ -76,6 +76,14 @@ type diffAllResult struct {
 	Count                ObjectCount
 	ExecuteStmts         []*parser.ExecuteStmt
 	HasConcurrentlyIndex bool
+	// CurrentTables is every table the catalog read, before the filters, and
+	// DesiredTables and DesiredDomains the desired side after them. --explain
+	// reads the current side for the tables the statements touch, including a
+	// partition a filter left out, and the desired side for the rename
+	// directives and the domain constraints.
+	CurrentTables  *orderedmap.Map[string, *model.Table]
+	DesiredTables  *orderedmap.Map[string, *model.Table]
+	DesiredDomains *orderedmap.Map[string, *model.Domain]
 }
 
 // diffAll performs the common catalog fetch, parse, diff, and statement
@@ -269,6 +277,9 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		Count:                count,
 		ExecuteStmts:         desired.ExecuteStmts,
 		HasConcurrentlyIndex: tableDiff.HasConcurrently || viewDiff.HasConcurrently,
+		CurrentTables:        currentTables,
+		DesiredTables:        desiredTables,
+		DesiredDomains:       desiredDomains,
 	}, nil
 }
 
