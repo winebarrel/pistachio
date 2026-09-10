@@ -18,8 +18,8 @@ desired: |
       CONSTRAINT t_n_not_five CHECK (n <> 5) NOT VALID
   );
 plan: |
-  -- scan, blocks nothing: public.t (~3 rows, 8192 bytes)
+  -- scan, blocks nothing: public.t (~3 rows, 8192 bytes, as of {{today}})
   ALTER TABLE public.t VALIDATE CONSTRAINT t_n_small;
-  -- scan, blocks reads and writes: public.t (~3 rows, 8192 bytes)
+  -- scan, blocks reads and writes: public.t (~3 rows, 8192 bytes, as of {{today}})
   ALTER TABLE public.t ADD CONSTRAINT t_n_positive CHECK (n > 0);
   ALTER TABLE public.t ADD CONSTRAINT t_n_not_five CHECK (n <> 5) NOT VALID;

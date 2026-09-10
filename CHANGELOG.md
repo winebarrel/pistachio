@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.49.2] - 2026-09-10
+
+* Date the size an `--explain` comment prints, `~120,000,000 rows, 9629 MB, as of 2026-09-08`. It is when a VACUUM or an ANALYZE last wrote the estimate, so a plan says how stale the numbers are. A size the server can no longer date is printed without it.
+
 ## [1.49.1] - 2026-09-10
 
 * Write the row estimate in an `--explain` comment with a comma between every three digits, `~120,000,000 rows` rather than `~120000000 rows`.

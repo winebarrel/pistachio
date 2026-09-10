@@ -390,7 +390,7 @@ pista plan --check schema.sql
 echo $?  # 0: no changes, 2: changes, 1: error
 ```
 
-Use `--explain` to comment each statement that scans or rewrites a table that already holds data, with what its lock blocks and how big the table is. Also available as `$PISTA_EXPLAIN`. See [Explaining a plan](../guides/explaining-plans.md).
+Use `--explain` to comment each statement that scans or rewrites a table that already holds data, with what its lock blocks, how big the table is and when that size was last measured. Also available as `$PISTA_EXPLAIN`. See [Explaining a plan](../guides/explaining-plans.md).
 
 ```bash
 pista plan --explain schema.sql

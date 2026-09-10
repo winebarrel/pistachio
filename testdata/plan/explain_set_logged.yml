@@ -14,5 +14,5 @@ desired: |
       CONSTRAINT sessions_pkey PRIMARY KEY (id)
   );
 plan: |
-  -- rewrite, blocks reads and writes: public.sessions (~3 rows, 8192 bytes, 1 index rebuilt)
+  -- rewrite, blocks reads and writes: public.sessions (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
   ALTER TABLE public.sessions SET LOGGED;

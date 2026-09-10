@@ -14,7 +14,7 @@ desired: |
       CONSTRAINT users_email_key UNIQUE (email)
   );
 plan: |
-  -- scan, blocks reads and writes: public.users (~3 rows, 8192 bytes)
+  -- scan, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}})
   ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-  -- scan, blocks reads and writes: public.users (~3 rows, 8192 bytes)
+  -- scan, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}})
   ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE (email);

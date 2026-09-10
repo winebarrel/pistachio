@@ -39,5 +39,5 @@ plan: |
   ALTER TABLE public.authors ENABLE ROW LEVEL SECURITY;
   ALTER TABLE public.authors FORCE ROW LEVEL SECURITY;
   ALTER TABLE ONLY public.authors ADD CONSTRAINT authors_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.orgs (id);
-  -- scan, blocks writes: public.posts (~3 rows, 8192 bytes), public.authors
+  -- scan, blocks writes: public.posts (~3 rows, 8192 bytes, as of {{today}}), public.authors
   ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.authors (id);

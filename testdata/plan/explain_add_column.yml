@@ -21,9 +21,9 @@ plan: |
   ALTER TABLE public.users ADD COLUMN a integer;
   ALTER TABLE public.users ADD COLUMN b integer DEFAULT 0 NOT NULL;
   ALTER TABLE public.users ADD COLUMN c timestamp with time zone DEFAULT now();
-  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, 1 index rebuilt)
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
   ALTER TABLE public.users ADD COLUMN d uuid DEFAULT gen_random_uuid();
-  -- scan, blocks reads and writes: public.users (~3 rows, 8192 bytes)
+  -- scan, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}})
   ALTER TABLE public.users ADD COLUMN e integer NOT NULL;
-  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, 1 index rebuilt)
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
   ALTER TABLE public.users ADD COLUMN f bigserial NOT NULL;

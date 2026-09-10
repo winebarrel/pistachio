@@ -41,9 +41,9 @@ desired: |
       CONSTRAINT plain_pkey PRIMARY KEY (id)
   );
 plan: |
-  -- scan, blocks writes: public.invites (~2 rows, 8192 bytes), public.users (~3 rows, 8192 bytes)
+  -- scan, blocks writes: public.invites (~2 rows, 8192 bytes, as of {{today}}), public.users (~3 rows, 8192 bytes, as of {{today}})
   ALTER DOMAIN public.email SET NOT NULL;
-  -- scan, blocks writes: public.invites (~2 rows, 8192 bytes), public.users (~3 rows, 8192 bytes)
+  -- scan, blocks writes: public.invites (~2 rows, 8192 bytes, as of {{today}}), public.users (~3 rows, 8192 bytes, as of {{today}})
   ALTER DOMAIN public.email VALIDATE CONSTRAINT email_short;
-  -- scan, blocks writes: public.invites (~2 rows, 8192 bytes), public.users (~3 rows, 8192 bytes)
+  -- scan, blocks writes: public.invites (~2 rows, 8192 bytes, as of {{today}}), public.users (~3 rows, 8192 bytes, as of {{today}})
   ALTER DOMAIN public.email ADD CONSTRAINT email_check CHECK (value ~ '@');

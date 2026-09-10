@@ -18,6 +18,6 @@ desired: |
 plan: |
   CREATE OR REPLACE VIEW public.user_names AS
   SELECT name FROM public.users;
-  -- scan, blocks nothing: public.users (~3 rows, 8192 bytes)
+  -- scan, blocks nothing: public.users (~3 rows, 8192 bytes, as of {{today}})
   CREATE MATERIALIZED VIEW public.user_stats AS
   SELECT count(*) AS cnt FROM public.users;

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/pistachio/model"
@@ -13,9 +14,17 @@ import (
 // the planner's estimates, written by VACUUM, ANALYZE and CREATE INDEX rather
 // than counted on demand, so reading them costs nothing on the table itself.
 // Rows is -1 for a table none of those has visited yet.
+//
+// StatsAt is how old the estimate is: the last time a VACUUM or an ANALYZE,
+// by hand or by the autovacuum daemon, visited the table. It is the zero time
+// when neither has, and also when the statistics have been reset, since the
+// server remembers the times no longer than the counters. CREATE INDEX writes
+// reltuples without a time of its own, so an estimate can be newer than this
+// says.
 type TableStat struct {
-	Rows  int64
-	Bytes int64
+	Rows    int64
+	Bytes   int64
+	StatsAt time.Time
 }
 
 // TableStats reads the size estimate of every table in the managed schemas,
@@ -23,6 +32,11 @@ type TableStat struct {
 // relation's pages count toward the table's bytes, since a rewrite copies them
 // too. A partitioned parent holds no rows of its own; the caller sums its
 // partitions.
+//
+// The times come from the same functions pg_stat_all_tables calls, rather
+// than from the view, which groups over every table in the database before a
+// join can narrow it to the managed schemas. Each is a lookup in the shared
+// statistics, made for the tables read here alone.
 func (c *Catalog) TableStats(ctx context.Context) (map[string]TableStat, error) {
 	q := `
 		SELECT
@@ -30,7 +44,13 @@ func (c *Catalog) TableStats(ctx context.Context) (map[string]TableStat, error) 
 			c.relname,
 			c.reltuples::float8,
 			GREATEST(c.relpages, 0) + GREATEST(COALESCE(t.relpages, 0), 0),
-			pg_catalog.current_setting('block_size')::bigint
+			pg_catalog.current_setting('block_size')::bigint,
+			GREATEST(
+				pg_catalog.pg_stat_get_last_vacuum_time(c.oid),
+				pg_catalog.pg_stat_get_last_autovacuum_time(c.oid),
+				pg_catalog.pg_stat_get_last_analyze_time(c.oid),
+				pg_catalog.pg_stat_get_last_autoanalyze_time(c.oid)
+			)
 		FROM
 			pg_catalog.pg_class c
 			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -51,12 +71,16 @@ func (c *Catalog) TableStats(ctx context.Context) (map[string]TableStat, error) 
 		var schema, name string
 		var tuples float64
 		var pages, blockSize int64
-		if err := rows.Scan(&schema, &name, &tuples, &pages, &blockSize); err != nil {
+		var statsAt *time.Time
+		if err := rows.Scan(&schema, &name, &tuples, &pages, &blockSize, &statsAt); err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan table stats: %w", err)
 		}
 		st := TableStat{Rows: -1, Bytes: pages * blockSize}
 		if tuples >= 0 {
 			st.Rows = int64(math.Round(tuples))
+		}
+		if statsAt != nil {
+			st.StatsAt = *statsAt
 		}
 		stats[model.Ident(schema, name)] = st
 	}

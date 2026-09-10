@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
@@ -18,9 +19,11 @@ import (
 // rewrites a table that already holds data, so a plan pasted into a review
 // says which of its lines cost time in proportion to the table. Two facts are
 // read off each statement, whether it scans or rewrites the table and what
-// the lock it takes stops, and the table's size is added from pg_class:
+// the lock it takes stops, and the table's size is added from pg_class. The
+// size is an estimate the server keeps rather than a count, so the date it
+// was last written is printed next to it:
 //
-//	-- rewrite, blocks reads and writes: public.events (~120,000,000 rows, 9629 MB, 5 indexes rebuilt)
+//	-- rewrite, blocks reads and writes: public.events (~120,000,000 rows, 9629 MB, as of 2026-09-08, 5 indexes rebuilt)
 //	ALTER TABLE public.events ALTER COLUMN amount SET DATA TYPE numeric(12,2);
 //
 // A statement that only changes the catalog takes no comment, whatever lock
@@ -782,6 +785,11 @@ func (ex *explainer) render(eff explainEffect) string {
 // nothing itself; an INHERITS parent holds its own rows next to its
 // children's. A table no VACUUM or ANALYZE has visited reads as not analyzed,
 // and a table outside the managed schemas is named alone.
+//
+// The "as of" date is when the estimate was last written, in the local time
+// zone, and over several relations it is the oldest of them, since the sum is
+// no fresher than its stalest part. It is left out when the server no longer
+// remembers a time.
 func (ex *explainer) renderTarget(tg explainTarget) string {
 	t, ok := ex.current.GetOk(tg.key)
 	if !ok {
@@ -799,6 +807,7 @@ func (ex *explainer) renderTarget(tg explainTarget) string {
 	}
 	var rows, bytes int64
 	analyzed := false
+	var statsAt time.Time
 	for _, r := range relations {
 		st, ok := ex.stats[r.FQTN()]
 		if !ok || r.Partitioned {
@@ -809,6 +818,9 @@ func (ex *explainer) renderTarget(tg explainTarget) string {
 			rows += st.Rows
 			analyzed = true
 		}
+		if !st.StatsAt.IsZero() && (statsAt.IsZero() || st.StatsAt.Before(statsAt)) {
+			statsAt = st.StatsAt
+		}
 	}
 
 	var details []string
@@ -818,6 +830,9 @@ func (ex *explainer) renderTarget(tg explainTarget) string {
 			noun = "row"
 		}
 		details = append(details, "~"+groupDigits(rows)+" "+noun, sizePretty(bytes))
+		if !statsAt.IsZero() {
+			details = append(details, "as of "+statsAt.Local().Format(time.DateOnly))
+		}
 	} else {
 		details = append(details, "not analyzed")
 	}

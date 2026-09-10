@@ -20,5 +20,5 @@ desired: |
       w integer NOT NULL
   ) INHERITS (public.shapes);
 plan: |
-  -- scan, blocks reads and writes: public.shapes (~5 rows, 16 kB, 1 child table)
+  -- scan, blocks reads and writes: public.shapes (~5 rows, 16 kB, as of {{today}}, 1 child table)
   ALTER TABLE public.shapes ALTER COLUMN name SET NOT NULL;

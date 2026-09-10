@@ -28,6 +28,6 @@ desired: |
       CONSTRAINT posts_editor_id_fkey FOREIGN KEY (editor_id) REFERENCES public.users (id) NOT VALID
   );
 plan: |
-  -- scan, blocks writes: public.posts (~2 rows, 8192 bytes), public.users (~3 rows, 8192 bytes)
+  -- scan, blocks writes: public.posts (~2 rows, 8192 bytes, as of {{today}}), public.users (~3 rows, 8192 bytes, as of {{today}})
   ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id);
   ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_editor_id_fkey FOREIGN KEY (editor_id) REFERENCES public.users (id) NOT VALID;
