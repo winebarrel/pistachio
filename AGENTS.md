@@ -72,8 +72,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 
 ## Code conventions
 
-- A package whose tests never need an unexported identifier uses an external test package, so the tests go through the API a caller sees: `package catalog_test`, `package model_test`, `package format_test`, `package pgast_test`.
-- Everywhere else the tests live in the package itself: `package pistachio`, `package diff`, `package parser`, and the same-package files under `cmd/command` and `toposort`. Do not re-export an internal through a bridge file to keep a test outside the package. A helper shared across a package's test files pins the whole package to one side, so pick the side the helpers need.
+- Package-level tests generally use external test packages (e.g., `package catalog_test`, `package model_test`). Use same-package tests only when access to unexported identifiers is required (e.g., `package diff`).
 - Root-level integration tests use `package pistachio`.
 - Test fixtures are YAML files in `testdata/`. Required fields vary by test suite: `apply` uses `init`/`desired`/`applied`, `plan` uses `init`/`desired`/`plan`/`error`, `dump` uses `init`/`dump`, and `parser` uses `input`/`expected`. The plan/apply/dump harnesses also accept optional fields, but **the set differs per suite** (the lists below are not interchangeable):
   - `dump`: `min_pg`, `omit_schema`, `sort_by_deps`, `manage_routine`, `skip_partition_child`, `include`/`exclude`/`enable`/`disable`, `dump_pg16`/`dump_pg17`/`dump_pg18`.
