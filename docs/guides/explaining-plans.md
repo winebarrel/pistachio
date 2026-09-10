@@ -44,7 +44,7 @@ Everything else changes the catalog alone and takes no comment: `DROP COLUMN`, `
 
 ## What it reads
 
-The classification comes from a table in pistachio, applied to the statement it is about to print. Three things cannot be decided that way and are asked of the server: whether a column type change is a binary-coercible relabel or a conversion, one read of `pg_cast`; whether a column default calls a volatile function, one read of `pg_proc`; and the rows and bytes with the date they were written, one read of `pg_class` joined to `pg_stat_all_tables`. Each is skipped when nothing in the plan needs it, so a plan that only creates and drops tables, and a plan with no statements at all, read no more than they would without the flag.
+The classification comes from a table in pistachio, applied to the statement it is about to print. Three things cannot be decided that way and are asked of the server: whether a column type change is a binary-coercible relabel or a conversion, one read of `pg_cast`; whether a column default calls a volatile function, one read of `pg_proc`; and the rows and bytes with the date they were written, one read of `pg_class`, with the vacuum and analyze times the server keeps in its statistics. Each is skipped when nothing in the plan needs it, so a plan that only creates and drops tables, and a plan with no statements at all, read no more than they would without the flag.
 
 
 ## What it does not say
