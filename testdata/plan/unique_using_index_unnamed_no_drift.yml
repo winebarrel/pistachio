@@ -1,0 +1,16 @@
+# ADD UNIQUE USING INDEX without CONSTRAINT names the constraint after the
+# index, the way PostgreSQL does.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email);
+  ALTER TABLE ONLY public.users ADD UNIQUE USING INDEX users_email_key;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  ALTER TABLE ONLY public.users ADD UNIQUE USING INDEX users_email_key;
+plan: ""

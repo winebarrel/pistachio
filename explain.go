@@ -404,7 +404,7 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 			return self(touchScan, blockAll)
 		case pg_query.ConstrType_CONSTR_PRIMARY, pg_query.ConstrType_CONSTR_UNIQUE, pg_query.ConstrType_CONSTR_EXCLUSION:
 			// USING INDEX takes an index that already exists rather than
-			// building one. pistachio does not emit it today.
+			// building one, so nothing is scanned.
 			if con.GetIndexname() != "" {
 				return explainEffect{}
 			}

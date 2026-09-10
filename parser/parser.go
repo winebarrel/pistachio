@@ -1220,11 +1220,17 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 
 func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Constraint, error) {
 	if con.Conname == "" {
-		cols := constraintKeyCols(con)
-		if con.Contype == pg_query.ConstrType_CONSTR_CHECK {
-			cols = checkExprCols(con.RawExpr)
+		if con.Indexname != "" {
+			// ADD UNIQUE USING INDEX without CONSTRAINT: PostgreSQL names
+			// the constraint after the index.
+			con.Conname = con.Indexname
+		} else {
+			cols := constraintKeyCols(con)
+			if con.Contype == pg_query.ConstrType_CONSTR_CHECK {
+				cols = checkExprCols(con.RawExpr)
+			}
+			con.Conname = autoNameConstraint(tableName, cols, con.Contype)
 		}
-		con.Conname = autoNameConstraint(tableName, cols, con.Contype)
 	}
 
 	var conType model.ConstraintType
@@ -1261,6 +1267,7 @@ func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Co
 		Deferrable: con.Deferrable,
 		Deferred:   con.Initdeferred,
 		Validated:  !con.SkipValidation,
+		IndexName:  con.Indexname,
 	}, nil
 }
 

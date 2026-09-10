@@ -45,6 +45,13 @@ type Constraint struct {
 	// statement on the parent reaches it, so the diff leaves it alone. Only
 	// the catalog sets it: a desired schema declares what it writes.
 	Inherited bool
+	// IndexName is the index a desired constraint written
+	// ADD CONSTRAINT ... USING INDEX takes over. Only the parser sets it:
+	// the promotion renames the index to the constraint's name, so the
+	// catalog has no such name to report. The diff keeps that index out of
+	// the index drops and adds, and takes an existing constraint of the same
+	// name, type and deferral as satisfying the declaration.
+	IndexName string
 }
 
 func (con *Constraint) String() string {

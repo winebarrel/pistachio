@@ -1,0 +1,22 @@
+# Promoting a unique index to a unique constraint with USING INDEX. The
+# re-plan after the apply must find no drift while the desired schema still
+# spells the constraint in the USING INDEX form.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  ALTER TABLE ONLY public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_email_key UNIQUE (email)
+  );

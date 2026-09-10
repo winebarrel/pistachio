@@ -1,0 +1,19 @@
+# The ALTER TABLE reference builds the index under a scratch name and lets
+# the promotion rename it to the constraint's name. A file that keeps the
+# CREATE UNIQUE INDEX line next to the USING INDEX constraint plans clean:
+# the index the constraint took over is neither missing nor left to drop.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email);
+  ALTER TABLE ONLY public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_idx;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email);
+  ALTER TABLE ONLY public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_idx;
+plan: ""

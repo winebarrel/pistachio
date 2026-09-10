@@ -1,0 +1,24 @@
+# The recipe from the ALTER TABLE reference: build a unique index under a
+# scratch name, then promote it to the primary key, which renames the index.
+# The re-plan must find no drift while the desired schema still declares the
+# scratch index and the USING INDEX form.
+init: |
+  CREATE TABLE public.distributors (
+      dist_id integer NOT NULL,
+      name text
+  );
+  CREATE UNIQUE INDEX dist_id_temp_idx ON public.distributors USING btree (dist_id);
+desired: |
+  CREATE TABLE public.distributors (
+      dist_id integer NOT NULL,
+      name text
+  );
+  CREATE UNIQUE INDEX dist_id_temp_idx ON public.distributors USING btree (dist_id);
+  ALTER TABLE ONLY public.distributors ADD CONSTRAINT distributors_pkey PRIMARY KEY USING INDEX dist_id_temp_idx;
+applied: |
+  -- public.distributors
+  CREATE TABLE public.distributors (
+      dist_id integer NOT NULL,
+      name text,
+      CONSTRAINT distributors_pkey PRIMARY KEY (dist_id)
+  );
