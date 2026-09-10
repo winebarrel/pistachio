@@ -166,7 +166,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// auto-inherit them), so they're still diffed here, mirroring how
 	// indexes and FKs work.
 	if desired.IsPartitionChild() {
-		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, dc)
+		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, usingIndexNames(desired.Constraints), dc)
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +234,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	result.Stmts = append(result.Stmts, conStmts...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, conDisallowed...)
 
-	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, dc)
+	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, usingIndexNames(desired.Constraints), dc)
 	if err != nil {
 		return nil, err
 	}
@@ -1222,10 +1222,27 @@ func constraintChanges(current, desired *orderedmap.Map[string, *model.Constrain
 			continue
 		}
 		changes[name] = newDefinitionChange(
-			equalConstraintDef(currentCon.Definition, desiredCon.Definition),
+			sameConstraintDef(currentCon, desiredCon),
 			currentCon.Validated, desiredCon.Validated)
 	}
 	return changes
+}
+
+// sameConstraintDef says whether the two sides describe the same constraint.
+// A desired constraint written ADD CONSTRAINT ... USING INDEX carries no
+// column list, only an index name, and the promotion renames that index to
+// the constraint's name, so once the constraint exists there is nothing left
+// to compare the name to: the catalog renders what it created as a plain
+// UNIQUE (col). The form is transitional, like NOT VALID, so an existing
+// constraint of the same name, type and deferral satisfies it; the columns
+// are pinned down when the file is rewritten the way dump writes it.
+func sameConstraintDef(current, desired *model.Constraint) bool {
+	if desired.IndexName != "" {
+		return desired.Type == current.Type &&
+			desired.Deferrable == current.Deferrable &&
+			desired.Deferred == current.Deferred
+	}
+	return equalConstraintDef(current.Definition, desired.Definition)
 }
 
 func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, disallowed []string, err error) {
@@ -1321,7 +1338,22 @@ type diffIndexesResult struct {
 	HasConcurrently     bool
 }
 
-func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc DropChecker) (*diffIndexesResult, error) {
+// usingIndexNames collects the index names the desired constraints take over
+// via ADD CONSTRAINT ... USING INDEX.
+func usingIndexNames(cons *orderedmap.Map[string, *model.Constraint]) map[string]bool {
+	var names map[string]bool
+	for _, con := range cons.All() {
+		if con.IndexName != "" {
+			if names == nil {
+				names = map[string]bool{}
+			}
+			names[con.IndexName] = true
+		}
+	}
+	return names
+}
+
+func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consumed map[string]bool, dc DropChecker) (*diffIndexesResult, error) {
 	dc = normalizeDropChecker(dc)
 	result := &diffIndexesResult{}
 
@@ -1340,6 +1372,12 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc Drop
 	idxAllowed := dc.IsDropAllowed("index")
 	for name, currentIdx := range current.All() {
 		desiredIdx, ok := desired.GetOk(name)
+		if !ok && consumed[name] {
+			// The index is not going away: a desired USING INDEX constraint
+			// takes it over, so dropping it would pull the index out from
+			// under the ADD CONSTRAINT.
+			continue
+		}
 		if !ok || !sameDef[name] {
 			// Use CONCURRENTLY when the desired index (when it exists and is
 			// being changed) has the per-index directive. For pure drops the
@@ -1368,6 +1406,12 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], dc Drop
 	// Add new or changed indexes
 	for name, desiredIdx := range desired.All() {
 		currentIdx, ok := current.GetOk(name)
+		if !ok && consumed[name] {
+			// A desired USING INDEX constraint owns this index, and an owned
+			// index is not read as a plain one, so declaring it next to the
+			// constraint is not a missing index.
+			continue
+		}
 		if ok && sameDef[name] {
 			// The index stays, so only a comment that differs is emitted.
 			result.Stmts = append(result.Stmts, indexCommentStmts(currentIdx.Comment, desiredIdx)...)

@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Read a constraint added with `UNIQUE USING INDEX` or `PRIMARY KEY USING INDEX`. The form never compared equal to the constraint it created, so every plan re-issued DROP and ADD, and the index it takes over was planned as a DROP, which ran first under `--allow-drop index` and broke the ADD. The index now stays, the file plans clean, and a constraint written without a name takes the index's name, the way PostgreSQL names it.
+
 ## [1.49.2] - 2026-09-10
 
 * Date the size an `--explain` comment prints, `~120,000,000 rows, 9629 MB, as of 2026-09-08`. It is when a VACUUM or an ANALYZE last wrote the estimate, so a plan says how stale the numbers are. A size the server can no longer date is printed without it.

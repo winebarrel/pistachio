@@ -1,0 +1,17 @@
+# ADD CONSTRAINT ... UNIQUE USING INDEX promotes an existing unique index to
+# a constraint. The index the constraint consumes must not be dropped, even
+# though the desired schema no longer declares it.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  ALTER TABLE ONLY public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;
+plan: |
+  ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;

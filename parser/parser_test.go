@@ -1382,6 +1382,33 @@ ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);`
 	assert.True(t, ok)
 }
 
+func TestParseSQL_AlterTableUsingIndex(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    code text NOT NULL
+);
+ALTER TABLE ONLY public.items ADD CONSTRAINT items_code_key UNIQUE USING INDEX items_code_key;
+ALTER TABLE ONLY public.items ADD PRIMARY KEY USING INDEX items_pkey;`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.items")
+	require.NotNil(t, tbl)
+
+	con, ok := tbl.Constraints.GetOk("items_code_key")
+	require.True(t, ok)
+	assert.True(t, con.Type.IsUniqueConstraint())
+	assert.Equal(t, "items_code_key", con.IndexName)
+
+	// Written without CONSTRAINT, the constraint takes the index's name, the
+	// way PostgreSQL names it.
+	pk, ok := tbl.Constraints.GetOk("items_pkey")
+	require.True(t, ok)
+	assert.True(t, pk.Type.IsPrimaryKeyConstraint())
+	assert.Equal(t, "items_pkey", pk.IndexName)
+}
+
 func TestParseSQL_AlterTableUnknownTable(t *testing.T) {
 	// ALTER TABLE referencing a table not in parsed result is silently skipped
 	sql := `ALTER TABLE public.nonexistent ADD CONSTRAINT fk FOREIGN KEY (id) REFERENCES public.other(id);`
