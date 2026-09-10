@@ -74,6 +74,20 @@ pista plan --allow-drop all schema.sql # review the diff (with drops)
 pista apply schema.sql                 # apply it
 ```
 
+See what each statement costs before it runs:
+
+```sql
+$ pista plan --explain schema.sql
+-- rewrite, blocks reads and writes: public.orders (~2,000,000 rows, 210 MB, as of 2026-09-09, 3 indexes rebuilt)
+ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE numeric(12,2);
+-- scan, blocks writes: public.orders (~2,000,000 rows, 210 MB, as of 2026-09-09), public.customers (~50,000 rows, 6280 kB, as of 2026-07-21)
+ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers (id);
+-- scan, blocks nothing: public.orders (~2,000,000 rows, 210 MB, as of 2026-09-09)
+CREATE INDEX CONCURRENTLY orders_created_at_idx ON public.orders USING btree (created_at);
+```
+
+The rows and bytes are the estimates the last VACUUM or ANALYZE wrote, with the date it wrote them, so the comment costs no read of the table. See [Explaining a plan](https://winebarrel.github.io/pistachio/guides/explaining-plans/).
+
 Or split the schema across multiple files:
 
 ```bash
