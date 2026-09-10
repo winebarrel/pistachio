@@ -4,13 +4,13 @@ A plan says what will run, not what it costs. `--explain` writes a comment befor
 
 ```sql
 $ pista plan --explain schema.sql
--- rewrite, blocks reads and writes: public.orders (~2,000,000 rows, 210 MB, 3 indexes rebuilt)
+-- rewrite, blocks reads and writes: public.orders (~2,000,000 rows, 210 MB, as of 2026-09-09, 3 indexes rebuilt)
 ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE numeric(12,2);
--- scan, blocks writes: public.orders (~2,000,000 rows, 210 MB), public.customers (~50,000 rows, 6280 kB)
+-- scan, blocks writes: public.orders (~2,000,000 rows, 210 MB, as of 2026-09-09), public.customers (~50,000 rows, 6280 kB, as of 2026-07-21)
 ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers (id);
--- scan, blocks nothing: public.orders (~2,000,000 rows, 210 MB)
+-- scan, blocks nothing: public.orders (~2,000,000 rows, 210 MB, as of 2026-09-09)
 CREATE INDEX CONCURRENTLY orders_created_at_idx ON public.orders USING btree (created_at);
--- scan, blocks writes: public.events (~120,000,000 rows, 9629 MB, 24 partitions)
+-- scan, blocks writes: public.events (~120,000,000 rows, 9629 MB, as of 2026-09-08, 24 partitions)
 CREATE INDEX events_at_idx ON public.events USING btree (at);
 ALTER TABLE public.orders ALTER COLUMN note SET DEFAULT '';
 ```
@@ -25,6 +25,8 @@ The first word is what the statement does to the rows that already exist. `rewri
 The phrase after it is what the statement's lock stops while it runs. `blocks reads and writes` is ACCESS EXCLUSIVE, where even a `SELECT` waits. `blocks writes` is SHARE or SHARE ROW EXCLUSIVE. `blocks nothing` is SHARE UPDATE EXCLUSIVE or weaker, where only another DDL on the same table waits.
 
 Then come the tables the statement touches, each with its size. The rows and bytes are the estimates VACUUM and ANALYZE last wrote to `pg_class`, the TOAST relation's pages included, so the comment costs no read of the table itself. A table neither has visited reads as `not analyzed`.
+
+`as of` is the date of that last VACUUM or ANALYZE, autovacuum's included, so a plan says how much the numbers next to it are worth. A table written heavily since then is larger than it reads, and one loaded and never analyzed since reads as a year old. The date is in the local time zone, and over several tables it is the oldest of them. It is left out when the server no longer has the time, after a statistics reset or a `pg_upgrade`. `CREATE INDEX` writes the row estimate too and keeps no time of its own, so an estimate is sometimes newer than the date says.
 
 A rewrite also names how many indexes it builds again. A partitioned table shows the sum of its partitions and their number, an `INHERITS` parent its own rows plus its children's. A foreign key names the referenced table next to the referencing one, since both are locked, and a domain change names every table with a column of the domain.
 
@@ -42,7 +44,7 @@ Everything else changes the catalog alone and takes no comment: `DROP COLUMN`, `
 
 ## What it reads
 
-The classification comes from a table in pistachio, applied to the statement it is about to print. Three things cannot be decided that way and are asked of the server: whether a column type change is a binary-coercible relabel or a conversion, one read of `pg_cast`; whether a column default calls a volatile function, one read of `pg_proc`; and the rows and bytes, one read of `pg_class`. Each is skipped when nothing in the plan needs it, so a plan that only creates and drops tables, and a plan with no statements at all, read no more than they would without the flag.
+The classification comes from a table in pistachio, applied to the statement it is about to print. Three things cannot be decided that way and are asked of the server: whether a column type change is a binary-coercible relabel or a conversion, one read of `pg_cast`; whether a column default calls a volatile function, one read of `pg_proc`; and the rows and bytes with the date they were written, one read of `pg_class` joined to `pg_stat_all_tables`. Each is skipped when nothing in the plan needs it, so a plan that only creates and drops tables, and a plan with no statements at all, read no more than they would without the flag.
 
 
 ## What it does not say

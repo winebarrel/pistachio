@@ -16,5 +16,5 @@ desired: |
   );
 plan: |
   ALTER TABLE public.users RENAME COLUMN amount TO total;
-  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, 1 index rebuilt)
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
   ALTER TABLE public.users ALTER COLUMN total SET DATA TYPE bigint;

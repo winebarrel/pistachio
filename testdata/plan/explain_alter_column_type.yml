@@ -16,6 +16,6 @@ desired: |
   );
   CREATE INDEX users_code_idx ON public.users USING btree (code);
 plan: |
-  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, 2 indexes rebuilt)
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 2 indexes rebuilt)
   ALTER TABLE public.users ALTER COLUMN id SET DATA TYPE bigint;
   ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE character varying(100);

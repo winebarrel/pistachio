@@ -31,7 +31,7 @@ plan: |
       CONSTRAINT tags_pkey PRIMARY KEY (id)
   );
   CREATE INDEX tags_name_idx ON public.tags USING btree (name);
-  -- scan, blocks writes: public.users (~3 rows, 8192 bytes)
+  -- scan, blocks writes: public.users (~3 rows, 8192 bytes, as of {{today}})
   CREATE INDEX users_name_idx ON public.users USING btree (name);
-  -- scan, blocks nothing: public.users (~3 rows, 8192 bytes)
+  -- scan, blocks nothing: public.users (~3 rows, 8192 bytes, as of {{today}})
   CREATE INDEX CONCURRENTLY users_code_idx ON public.users USING btree (code);

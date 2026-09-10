@@ -18,5 +18,5 @@ desired: |
 plan: |
   ALTER TABLE public.users RENAME TO accounts;
   ALTER TABLE public.accounts RENAME COLUMN name TO label;
-  -- scan, blocks reads and writes: public.accounts (~3 rows, 8192 bytes)
+  -- scan, blocks reads and writes: public.accounts (~3 rows, 8192 bytes, as of {{today}})
   ALTER TABLE public.accounts ALTER COLUMN label SET NOT NULL;

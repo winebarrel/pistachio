@@ -23,7 +23,7 @@ desired: |
   CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
   CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
 plan: |
-  -- scan, blocks reads and writes: public.events (~4 rows, 16 kB, 2 partitions)
+  -- scan, blocks reads and writes: public.events (~4 rows, 16 kB, as of {{today}}, 2 partitions)
   ALTER TABLE public.events ALTER COLUMN note SET NOT NULL;
-  -- scan, blocks writes: public.events (~4 rows, 16 kB, 2 partitions)
+  -- scan, blocks writes: public.events (~4 rows, 16 kB, as of {{today}}, 2 partitions)
   CREATE INDEX events_note_idx ON public.events USING btree (note);

@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,6 +35,30 @@ func TestTableStats(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, int64(3), st.Rows)
 		assert.Equal(t, int64(8192), st.Bytes)
+		assert.WithinDuration(t, time.Now(), st.StatsAt, time.Hour)
+	})
+
+	// VACUUM writes reltuples too, so it is as good as ANALYZE for the age of
+	// the estimate.
+	t.Run("vacuumed table", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.users (
+				id integer NOT NULL,
+				CONSTRAINT users_pkey PRIMARY KEY (id)
+			);
+			INSERT INTO public.users SELECT g FROM generate_series(1, 3) g;
+		`)
+		_, err := conn.Exec(ctx, "VACUUM public.users")
+		require.NoError(t, err)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		stats, err := cat.TableStats(ctx)
+		require.NoError(t, err)
+
+		st, ok := stats["public.users"]
+		require.True(t, ok)
+		assert.Equal(t, int64(3), st.Rows)
+		assert.WithinDuration(t, time.Now(), st.StatsAt, time.Hour)
 	})
 
 	t.Run("table never analyzed reports -1 rows", func(t *testing.T) {
@@ -52,6 +77,7 @@ func TestTableStats(t *testing.T) {
 		st, ok := stats["public.users"]
 		require.True(t, ok)
 		assert.Equal(t, int64(-1), st.Rows)
+		assert.True(t, st.StatsAt.IsZero())
 	})
 
 	// A partitioned table holds no rows of its own; each partition carries its

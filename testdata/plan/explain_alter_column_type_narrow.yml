@@ -20,11 +20,11 @@ desired: |
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 plan: |
-  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, 1 index rebuilt)
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
   ALTER TABLE public.users ALTER COLUMN note SET DATA TYPE character varying(20);
-  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, 1 index rebuilt)
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
   ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE character varying(50);
-  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, 1 index rebuilt)
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
   ALTER TABLE public.users ALTER COLUMN amount SET DATA TYPE numeric(12,3);
-  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, 1 index rebuilt)
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
   ALTER TABLE public.users ALTER COLUMN tags SET DATA TYPE text[];

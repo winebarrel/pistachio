@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,7 +53,15 @@ type planTestCase struct {
 	// Explain sets --explain, so the plan carries a comment before each
 	// statement that scans or rewrites a table. The row and page counts it
 	// prints come from pg_class, so an init that wants them runs ANALYZE.
+	// That also dates the estimate, which the comment prints; write {{today}}
+	// in the expected plan for it.
 	Explain bool `yaml:"explain,omitempty"`
+}
+
+// expandToday puts today's date where an expected plan writes {{today}}, for
+// the date --explain prints next to a size the init SQL has just analyzed.
+func expandToday(plan string) string {
+	return strings.ReplaceAll(plan, "{{today}}", time.Now().Format(time.DateOnly))
 }
 
 type planDropPolicy struct {
@@ -413,7 +422,7 @@ func TestPlan(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, strings.TrimSpace(tc.Plan), strings.TrimSpace(got.SQL))
+			assert.Equal(t, strings.TrimSpace(expandToday(tc.Plan)), strings.TrimSpace(got.SQL))
 			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(got.DisallowedDrops))
 			assert.Equal(t, strings.TrimSpace(tc.Ignored), strings.TrimSpace(got.Ignored))
 			assert.Equal(t, got.SQL != "", got.HasChanges, "HasChanges must match presence of executable SQL")

@@ -16,6 +16,6 @@ desired: |
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 plan: |
-  -- scan, blocks reads and writes: public.users (~3 rows, 8192 bytes)
+  -- scan, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}})
   ALTER TABLE public.users ALTER COLUMN name SET NOT NULL;
   ALTER TABLE public.users ALTER COLUMN note DROP NOT NULL;
