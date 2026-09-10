@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.49.1] - 2026-09-10
 
 * Write the row estimate in an `--explain` comment with a comma between every three digits, `~120,000,000 rows` rather than `~120000000 rows`.
 
