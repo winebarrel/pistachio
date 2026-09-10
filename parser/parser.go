@@ -27,7 +27,7 @@ type ParseResult struct {
 }
 
 // warnWriter receives warnings about statements pistachio does not support and
-// silently ignores. Tests swap it via SetWarnWriter.
+// silently ignores. Tests swap it via setWarnWriter.
 var warnWriter io.Writer = os.Stderr
 
 // ignoredStmtSnippet returns the raw text of the ignored statement. Deparsing

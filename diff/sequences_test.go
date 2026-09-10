@@ -1,4 +1,4 @@
-package diff_test
+package diff
 
 import (
 	"testing"
@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
-	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -32,7 +31,7 @@ func baseSeq() *model.Sequence {
 }
 
 func TestDiffSequences_CreateNew(t *testing.T) {
-	result, err := diff.DiffSequences(newSeqMap(), newSeqMap(baseSeq()), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(), newSeqMap(baseSeq()), allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Contains(t, result.Stmts[0], "CREATE SEQUENCE public.s")
@@ -40,7 +39,7 @@ func TestDiffSequences_CreateNew(t *testing.T) {
 }
 
 func TestDiffSequences_DropExisting(t *testing.T) {
-	result, err := diff.DiffSequences(newSeqMap(baseSeq()), newSeqMap(), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(baseSeq()), newSeqMap(), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	require.Len(t, result.DropStmts, 1)
@@ -48,7 +47,7 @@ func TestDiffSequences_DropExisting(t *testing.T) {
 }
 
 func TestDiffSequences_DropDenied(t *testing.T) {
-	result, err := diff.DiffSequences(newSeqMap(baseSeq()), newSeqMap(), diff.DenyAllDrops{})
+	result, err := DiffSequences(newSeqMap(baseSeq()), newSeqMap(), denyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.DropStmts)
 	require.Len(t, result.DisallowedDropStmts, 1)
@@ -56,7 +55,7 @@ func TestDiffSequences_DropDenied(t *testing.T) {
 }
 
 func TestDiffSequences_NoDiff(t *testing.T) {
-	result, err := diff.DiffSequences(newSeqMap(baseSeq()), newSeqMap(baseSeq()), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(baseSeq()), newSeqMap(baseSeq()), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -70,7 +69,7 @@ func TestDiffSequences_AlterOptions(t *testing.T) {
 	desired.Start = 100
 	desired.Cache = 10
 	desired.Cycle = true
-	result, err := diff.DiffSequences(newSeqMap(baseSeq()), newSeqMap(desired), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(baseSeq()), newSeqMap(desired), allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Equal(t, "ALTER SEQUENCE public.s INCREMENT BY 2 MINVALUE 5 MAXVALUE 5000 START WITH 100 CACHE 10 CYCLE;", result.Stmts[0])
@@ -83,7 +82,7 @@ func TestDiffSequences_AlterType(t *testing.T) {
 	desired := baseSeq()
 	desired.DataType = "integer"
 	desired.Max = 100
-	result, err := diff.DiffSequences(newSeqMap(current), newSeqMap(desired), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(current), newSeqMap(desired), allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Equal(t, "ALTER SEQUENCE public.s AS integer;", result.Stmts[0])
@@ -92,7 +91,7 @@ func TestDiffSequences_AlterType(t *testing.T) {
 func TestDiffSequences_NoCycle(t *testing.T) {
 	current := baseSeq()
 	current.Cycle = true
-	result, err := diff.DiffSequences(newSeqMap(current), newSeqMap(baseSeq()), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(current), newSeqMap(baseSeq()), allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Equal(t, "ALTER SEQUENCE public.s NO CYCLE;", result.Stmts[0])
@@ -102,7 +101,7 @@ func TestDiffSequences_AddComment(t *testing.T) {
 	desired := baseSeq()
 	comment := "id generator"
 	desired.Comment = &comment
-	result, err := diff.DiffSequences(newSeqMap(baseSeq()), newSeqMap(desired), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(baseSeq()), newSeqMap(desired), allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Equal(t, "COMMENT ON SEQUENCE public.s IS 'id generator';", result.Stmts[0])
@@ -112,7 +111,7 @@ func TestDiffSequences_RemoveComment(t *testing.T) {
 	current := baseSeq()
 	comment := "id generator"
 	current.Comment = &comment
-	result, err := diff.DiffSequences(newSeqMap(current), newSeqMap(baseSeq()), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(current), newSeqMap(baseSeq()), allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, result.Stmts, 1)
 	assert.Equal(t, "COMMENT ON SEQUENCE public.s IS NULL;", result.Stmts[0])
@@ -125,7 +124,7 @@ func TestDiffSequences_Rename(t *testing.T) {
 	desired.Name = "new"
 	renameFrom := "public.old"
 	desired.RenameFrom = &renameFrom
-	result, err := diff.DiffSequences(newSeqMap(current), newSeqMap(desired), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(current), newSeqMap(desired), allowAllDrops{})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Stmts)
 	assert.Equal(t, "ALTER SEQUENCE public.old RENAME TO new;", result.Stmts[0])
@@ -142,7 +141,7 @@ func TestDiffSequences_RenameAlreadyApplied(t *testing.T) {
 	desired.Name = "new"
 	renameFrom := "public.old"
 	desired.RenameFrom = &renameFrom
-	result, err := diff.DiffSequences(newSeqMap(current), newSeqMap(desired), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(current), newSeqMap(desired), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Empty(t, result.DropStmts)
@@ -153,7 +152,7 @@ func TestDiffSequences_RenameCrossSchemaError(t *testing.T) {
 	desired := &model.Sequence{Schema: "public", Name: "new", DataType: "bigint", Max: 1, Cache: 1, Increment: 1}
 	renameFrom := "other.old"
 	desired.RenameFrom = &renameFrom
-	_, err := diff.DiffSequences(newSeqMap(current), newSeqMap(desired), diff.AllowAllDrops{})
+	_, err := DiffSequences(newSeqMap(current), newSeqMap(desired), allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cross-schema rename")
 }
@@ -161,7 +160,7 @@ func TestDiffSequences_RenameCrossSchemaError(t *testing.T) {
 func TestDiffSequences_SetUnlogged(t *testing.T) {
 	desired := baseSeq()
 	desired.Unlogged = true
-	result, err := diff.DiffSequences(newSeqMap(baseSeq()), newSeqMap(desired), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(baseSeq()), newSeqMap(desired), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER SEQUENCE public.s SET UNLOGGED;"}, result.Stmts)
 }
@@ -169,7 +168,7 @@ func TestDiffSequences_SetUnlogged(t *testing.T) {
 func TestDiffSequences_SetLogged(t *testing.T) {
 	current := baseSeq()
 	current.Unlogged = true
-	result, err := diff.DiffSequences(newSeqMap(current), newSeqMap(baseSeq()), diff.AllowAllDrops{})
+	result, err := DiffSequences(newSeqMap(current), newSeqMap(baseSeq()), allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER SEQUENCE public.s SET LOGGED;"}, result.Stmts)
 }

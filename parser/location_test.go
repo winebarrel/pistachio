@@ -1,4 +1,4 @@
-package parser_test
+package parser
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/pistachio/parser"
 )
 
 func writeSQLFiles(t *testing.T, files map[string]string) []string {
@@ -36,7 +35,7 @@ CREATE TABEL public.items (
 `,
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `failed to parse SQL: syntax error at or near "TABEL"
  --> `+paths[0]+`:6:8
@@ -52,7 +51,7 @@ func TestParseSQLFiles_SyntaxErrorInSecondFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(first, []byte("CREATE TABLE public.users (\n    id integer NOT NULL\n);\n"), 0o644))
 	require.NoError(t, os.WriteFile(second, []byte("-- items\nCREATE TABLE public.items (\n    id integer x\n);\n"), 0o644))
 
-	_, err := parser.ParseSQLFilesWithSchema([]string{first, second}, "public")
+	_, err := ParseSQLFilesWithSchema([]string{first, second}, "public")
 	require.Error(t, err)
 	assert.Equal(t, `failed to parse SQL: syntax error at or near "x"
  --> `+second+`:3:16
@@ -68,7 +67,7 @@ func TestParseSQLFiles_SyntaxErrorAtFileStart(t *testing.T) {
 	require.NoError(t, os.WriteFile(first, []byte("CREATE TABLE public.a (id integer);\n"), 0o644))
 	require.NoError(t, os.WriteFile(second, []byte(");\n"), 0o644))
 
-	_, err := parser.ParseSQLFilesWithSchema([]string{first, second}, "public")
+	_, err := ParseSQLFilesWithSchema([]string{first, second}, "public")
 	require.Error(t, err)
 	assert.Equal(t, `failed to parse SQL: syntax error at or near ")"
  --> `+second+`:1:1
@@ -86,7 +85,7 @@ func TestParseSQLFiles_SyntaxErrorInMiddleFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(second, []byte("CREATE TABLE public.b (id integer x);\n"), 0o644))
 	require.NoError(t, os.WriteFile(third, []byte("CREATE TABLE public.c (id integer);\n"), 0o644))
 
-	_, err := parser.ParseSQLFilesWithSchema([]string{first, second, third}, "public")
+	_, err := ParseSQLFilesWithSchema([]string{first, second, third}, "public")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), second+":1:35")
 }
@@ -96,7 +95,7 @@ func TestParseSQLFiles_SyntaxErrorTabIndent(t *testing.T) {
 		"tab.sql": "CREATE TABLE public.items (\n\tid integer x\n);\n",
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `failed to parse SQL: syntax error at or near "x"
  --> `+paths[0]+`:2:13
@@ -111,7 +110,7 @@ func TestParseSQLFiles_SyntaxErrorMultibyteColumn(t *testing.T) {
 		"mb.sql": "CREATE TABLE public.items (\n    note text DEFAULT '\u00e9\u00e9' x\n);\n",
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, "failed to parse SQL: syntax error at or near \"x\"\n"+
 		" --> "+paths[0]+":2:28\n"+
@@ -125,7 +124,7 @@ func TestParseSQLFiles_SyntaxErrorAtEndOfInput(t *testing.T) {
 		"eof.sql": "CREATE TABLE public.items (",
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "syntax error at end of input")
 	assert.Contains(t, err.Error(), paths[0]+":1:28")
@@ -144,7 +143,7 @@ CREATE TABLE public.new_items (
 `,
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `unknown directive: -- pista:renmaed-from
  --> `+paths[0]+`:5:10
@@ -158,7 +157,7 @@ func TestParseSQLFiles_DirectiveWithArgsLocation(t *testing.T) {
 		"dir.sql": "-- pista:concurrently 123\nCREATE INDEX idx ON public.items (id);\n",
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `-- pista:concurrently does not accept arguments
  --> `+paths[0]+`:1:1
@@ -177,7 +176,7 @@ func TestParseSQLFiles_DuplicateColumnLocation(t *testing.T) {
 `,
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `duplicate column: id on public.users
  --> `+paths[0]+`:4:5
@@ -196,7 +195,7 @@ func TestParseSQLFiles_DuplicateConstraintLocation(t *testing.T) {
 `,
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `duplicate constraint: users_check on public.users
  --> `+paths[0]+`:4:5
@@ -216,7 +215,7 @@ func TestParseSQLFiles_DuplicateColumnConstraintLocation(t *testing.T) {
 `,
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `duplicate constraint: users_key on public.users
  --> `+paths[0]+`:3:15
@@ -236,7 +235,7 @@ CREATE TABLE public.users (id integer);
 `,
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `duplicate table: public.users
  --> `+paths[0]+`:4:1
@@ -252,7 +251,7 @@ func TestParseSQLFiles_DuplicateTableLocationWithoutTrailingSemicolon(t *testing
 		"users.sql": "CREATE TABLE public.users (id integer);\n\n-- again\nCREATE TABLE public.users (id integer)",
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `duplicate table: public.users
  --> `+paths[0]+`:4:1
@@ -268,7 +267,7 @@ func TestParseSQLFiles_DuplicateTableInSecondFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(first, []byte("CREATE TABLE public.users (id integer);\n"), 0o644))
 	require.NoError(t, os.WriteFile(second, []byte("CREATE TABLE public.items (id integer);\nCREATE TABLE public.users (id bigint);\n"), 0o644))
 
-	_, err := parser.ParseSQLFilesWithSchema([]string{first, second}, "public")
+	_, err := ParseSQLFilesWithSchema([]string{first, second}, "public")
 	require.Error(t, err)
 	assert.Equal(t, `duplicate table: public.users
  --> `+second+`:2:1
@@ -285,7 +284,7 @@ CREATE POLICY p ON public.users USING (false);
 `,
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
 	assert.Equal(t, `duplicate policy: p on public.users
  --> `+paths[0]+`:3:1
@@ -310,7 +309,7 @@ func TestParseSQLFiles_SyntaxErrorOnStdin(t *testing.T) {
 		w.Close()
 	}()
 
-	_, err = parser.ParseSQLFilesWithSchema([]string{"-"}, "public")
+	_, err = ParseSQLFilesWithSchema([]string{"-"}, "public")
 	require.Error(t, err)
 	assert.Equal(t, `failed to parse SQL: syntax error at or near "TABEL"
  --> <stdin>:1:8
@@ -321,14 +320,14 @@ func TestParseSQLFiles_SyntaxErrorOnStdin(t *testing.T) {
 
 func TestAnnotateError_NoPosition(t *testing.T) {
 	err := assert.AnError
-	got := parser.AnnotateError(err, "CREATE TABLE t (id int);", []parser.FileSpan{parser.NewFileSpan("a.sql", 0)})
+	got := annotateError(err, "CREATE TABLE t (id int);", []fileSpan{{path: "a.sql", start: 0}})
 	assert.Same(t, err, got)
 }
 
 func TestAnnotateError_CursorPastInput(t *testing.T) {
 	sql := "CREATE"
-	err := parser.NewLocatedError("boom", 100)
-	got := parser.AnnotateError(err, sql, []parser.FileSpan{parser.NewFileSpan("a.sql", 0)})
+	err := &locatedError{msg: "boom", offset: 100}
+	got := annotateError(err, sql, []fileSpan{{path: "a.sql", start: 0}})
 	assert.Equal(t, `boom
  --> a.sql:1:7
   |
@@ -338,8 +337,8 @@ func TestAnnotateError_CursorPastInput(t *testing.T) {
 
 func TestAnnotateError_WideGutter(t *testing.T) {
 	sql := "-- 1\n-- 2\n-- 3\n-- 4\n-- 5\n-- 6\n-- 7\n-- 8\n-- 9\nCREATE x"
-	err := parser.NewLocatedError("boom", len(sql)-1)
-	got := parser.AnnotateError(err, sql, []parser.FileSpan{parser.NewFileSpan("a.sql", 0)})
+	err := &locatedError{msg: "boom", offset: len(sql) - 1}
+	got := annotateError(err, sql, []fileSpan{{path: "a.sql", start: 0}})
 	assert.Equal(t, `boom
   --> a.sql:10:8
    |
@@ -349,7 +348,7 @@ func TestAnnotateError_WideGutter(t *testing.T) {
 
 func TestParseSQLFiles_IgnoredStatementWarningLocation(t *testing.T) {
 	var buf bytes.Buffer
-	defer parser.SetWarnWriter(&buf)()
+	defer setWarnWriter(&buf)()
 
 	paths := writeSQLFiles(t, map[string]string{
 		"items.sql": `CREATE TABLE public.items (id integer);
@@ -359,7 +358,7 @@ DROP TABLE public.items;
 `,
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.NoError(t, err)
 	assert.Equal(t,
 		"pistachio: "+paths[0]+":4:1: ignored unsupported statement: DROP TABLE public.items\n",
@@ -368,7 +367,7 @@ DROP TABLE public.items;
 
 func TestParseSQLFiles_IgnoredStatementWarningInSecondFile(t *testing.T) {
 	var buf bytes.Buffer
-	defer parser.SetWarnWriter(&buf)()
+	defer setWarnWriter(&buf)()
 
 	dir := t.TempDir()
 	first := filepath.Join(dir, "a.sql")
@@ -376,7 +375,7 @@ func TestParseSQLFiles_IgnoredStatementWarningInSecondFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(first, []byte("CREATE TABLE public.items (id integer);\n"), 0o644))
 	require.NoError(t, os.WriteFile(second, []byte("CREATE TABLE public.users (id integer);\nGRANT SELECT ON public.users TO someone;\n"), 0o644))
 
-	_, err := parser.ParseSQLFilesWithSchema([]string{first, second}, "public")
+	_, err := ParseSQLFilesWithSchema([]string{first, second}, "public")
 	require.NoError(t, err)
 	assert.Equal(t,
 		"pistachio: "+second+":2:1: ignored unsupported statement: GRANT select ON public.users TO someone\n",
@@ -387,13 +386,13 @@ func TestParseSQLFiles_IgnoredStatementWarningInSecondFile(t *testing.T) {
 // position of the statement it came from.
 func TestParseSQLFiles_IgnoredAlterTableActionWarningLocation(t *testing.T) {
 	var buf bytes.Buffer
-	defer parser.SetWarnWriter(&buf)()
+	defer setWarnWriter(&buf)()
 
 	paths := writeSQLFiles(t, map[string]string{
 		"items.sql": "CREATE TABLE public.items (id integer);\nALTER TABLE public.items ALTER COLUMN id SET STATISTICS 100;\n",
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "pistachio: "+paths[0]+":2:1: ignored unsupported statement: ALTER TABLE public.items ALTER COLUMN id SET STATISTICS 100")
 }
@@ -402,9 +401,9 @@ func TestParseSQLFiles_IgnoredAlterTableActionWarningLocation(t *testing.T) {
 // positions were added.
 func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {
 	var buf bytes.Buffer
-	defer parser.SetWarnWriter(&buf)()
+	defer setWarnWriter(&buf)()
 
-	_, err := parser.ParseSQLWithSchema("CREATE TABLE public.items (id integer);\nDROP TABLE public.items;\n", "public")
+	_, err := parseSQLNoFile("CREATE TABLE public.items (id integer);\nDROP TABLE public.items;\n", "public")
 	require.NoError(t, err)
 	assert.Equal(t, "pistachio: ignored unsupported statement: DROP TABLE public.items\n", buf.String())
 }
@@ -413,7 +412,7 @@ func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {
 // indent, a block comment, and whatever shares the line before it.
 func TestParseSQLFiles_IgnoredStatementWarningSkipsToTheStatement(t *testing.T) {
 	var buf bytes.Buffer
-	defer parser.SetWarnWriter(&buf)()
+	defer setWarnWriter(&buf)()
 
 	paths := writeSQLFiles(t, map[string]string{
 		"items.sql": `CREATE TABLE public.items (id integer); DROP TABLE public.items;
@@ -423,7 +422,7 @@ DROP TABLE public.items;
 `,
 	})
 
-	_, err := parser.ParseSQLFilesWithSchema(paths, "public")
+	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.NoError(t, err)
 	assert.Equal(t,
 		"pistachio: "+paths[0]+":1:41: ignored unsupported statement: DROP TABLE public.items\n"+

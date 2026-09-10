@@ -1,4 +1,4 @@
-package pistachio_test
+package pistachio
 
 import (
 	"os"
@@ -8,14 +8,13 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/pistachio"
 )
 
 // testCLI mirrors the global options plus the meta flags (--config, --version,
 // --pager) so the YAML configuration loader can be exercised without a running
 // database. --help is added by kong automatically.
 type testCLI struct {
-	pistachio.Options
+	Options
 	Config  kong.ConfigFlag `name:"config" short:"C" env:"PISTA_CONFIG"`
 	Version kong.VersionFlag
 	Pager   *bool `name:"pager" negatable:""`
@@ -35,7 +34,7 @@ func parseWithConfig(t *testing.T, args ...string) (*testCLI, error) {
 	parser, err := kong.New(&cli,
 		kong.Name("pista"),
 		kong.Vars{"version": "test"},
-		kong.Configuration(pistachio.YAMLConfig),
+		kong.Configuration(YAMLConfig),
 		kong.Exit(func(int) {}),
 	)
 	require.NoError(t, err)
@@ -72,7 +71,7 @@ func TestOptions_SearchPathDefault(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, cli.SearchPath)
-	assert.Equal(t, pistachio.DefaultSearchPath, *cli.SearchPath)
+	assert.Equal(t, DefaultSearchPath, *cli.SearchPath)
 	assert.Equal(t, "public", *cli.SearchPath)
 }
 
@@ -215,13 +214,13 @@ func TestYAMLConfig_InvalidYAMLIsError(t *testing.T) {
 // commandCLI mirrors the real CLI closely enough to exercise command-specific
 // flags loaded from a shared config file.
 type commandCLI struct {
-	pistachio.Options
+	Options
 	Config kong.ConfigFlag `name:"config" short:"C"`
 	Plan   struct {
-		pistachio.PlanOptions
+		PlanOptions
 	} `cmd:""`
 	Dump struct {
-		pistachio.DumpOptions
+		DumpOptions
 	} `cmd:""`
 }
 
@@ -230,7 +229,7 @@ func parseCommandCLI(t *testing.T, args ...string) (*commandCLI, error) {
 	var cli commandCLI
 	parser, err := kong.New(&cli,
 		kong.Name("pista"),
-		kong.Configuration(pistachio.YAMLConfig),
+		kong.Configuration(YAMLConfig),
 		kong.Exit(func(int) {}),
 	)
 	require.NoError(t, err)

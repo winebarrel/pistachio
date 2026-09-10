@@ -1,4 +1,4 @@
-package pistachio_test
+package pistachio
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -50,12 +49,12 @@ func TestDump_ServerSideSearchPath(t *testing.T) {
 
 	t.Setenv("PGOPTIONS", searchPathServerSide)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -80,12 +79,12 @@ func TestPlan_ServerSideSearchPath(t *testing.T) {
 
 	t.Setenv("PGOPTIONS", searchPathServerSide)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 	})
 
-	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	assert.Empty(t, got.SQL)
@@ -99,13 +98,13 @@ func TestDump_SearchPathOption(t *testing.T) {
 	connString := setupSchemaDB(t, ctx, "myschema", searchPathInitSchema)
 
 	searchPath := "myschema"
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: connString,
 		Schemas:    []string{"myschema"},
 		SearchPath: &searchPath,
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -136,13 +135,13 @@ CREATE TABLE public.users (
 CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 
 	searchPath := ""
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 		SearchPath: &searchPath,
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 
 	output := got.String()
@@ -172,23 +171,23 @@ CREATE TABLE `+model.Ident(role)+`.users (
 );
 CREATE VIEW `+model.Ident(role)+`.active_users AS SELECT id FROM `+model.Ident(role)+`.users;`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	client := NewClient(&Options{
 		ConnString: connString,
 		Schemas:    []string{role},
 	})
 
-	got, err := client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err := client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "FROM "+model.Ident(role)+".users")
 
 	searchPath := `"$user", public`
-	client = pistachio.NewClient(&pistachio.Options{
+	client = NewClient(&Options{
 		ConnString: connString,
 		Schemas:    []string{role},
 		SearchPath: &searchPath,
 	})
 
-	got, err = client.Dump(ctx, &pistachio.DumpOptions{})
+	got, err = client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "FROM users")
 }

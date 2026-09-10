@@ -1,10 +1,9 @@
-package parser_test
+package parser
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/winebarrel/pistachio/parser"
 )
 
 // The normalization reaches the diff through every column, so an alias or a
@@ -48,7 +47,7 @@ func TestNormalizeTypeName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, parser.NormalizeTypeName(tt.in))
+			assert.Equal(t, tt.want, normalizeTypeName(tt.in))
 		})
 	}
 }
@@ -71,7 +70,7 @@ func TestSplitTypeSuffix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mod, array := parser.SplitTypeSuffix(tt.suffix)
+			mod, array := splitTypeSuffix(tt.suffix)
 			assert.Equal(t, tt.wantMod, mod)
 			assert.Equal(t, tt.wantArr, array)
 			assert.Equal(t, tt.suffix, mod+array, "the two halves rejoin to the input")
@@ -80,11 +79,11 @@ func TestSplitTypeSuffix(t *testing.T) {
 }
 
 func TestFillNumericScale(t *testing.T) {
-	assert.Equal(t, "(5,0)", parser.FillNumericScale("(5)"))
-	assert.Equal(t, "(10,2)", parser.FillNumericScale("(10,2)"))
-	assert.Empty(t, parser.FillNumericScale(""))
-	assert.Equal(t, "()", parser.FillNumericScale("()"))
+	assert.Equal(t, "(5,0)", fillNumericScale("(5)"))
+	assert.Equal(t, "(10,2)", fillNumericScale("(10,2)"))
+	assert.Empty(t, fillNumericScale(""))
+	assert.Equal(t, "()", fillNumericScale("()"))
 	// Not a plain precision, so it is left alone rather than guessed at.
-	assert.Equal(t, "(Polygon)", parser.FillNumericScale("(Polygon)"))
-	assert.Equal(t, "(5 )", parser.FillNumericScale("(5 )"))
+	assert.Equal(t, "(Polygon)", fillNumericScale("(Polygon)"))
+	assert.Equal(t, "(5 )", fillNumericScale("(5 )"))
 }

@@ -1,4 +1,4 @@
-package pistachio_test
+package pistachio
 
 import (
 	"os"

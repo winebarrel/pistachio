@@ -18,7 +18,7 @@ import (
 // out, and a model the parser accepts but the builders cannot render is just
 // as broken as a parse that crashes.
 func FuzzParseSQLWithSchema(f *testing.F) {
-	f.Cleanup(SetWarnWriter(io.Discard))
+	f.Cleanup(setWarnWriter(io.Discard))
 
 	seeds, err := fuzzseed.Schemas()
 	if err != nil {

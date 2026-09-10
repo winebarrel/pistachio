@@ -1,4 +1,4 @@
-package command_test
+package command
 
 import (
 	"bytes"
@@ -6,13 +6,11 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/winebarrel/pistachio/cmd/command"
 )
 
 func TestStartPager_NoPagerFlag(t *testing.T) {
 	t.Setenv("PISTA_PAGER", "cat")
-	restore := command.SetIsTerminalForTest(func(*os.File) bool { return true })
+	restore := setIsTerminalForTest(func(*os.File) bool { return true })
 	defer restore()
 
 	f, err := os.CreateTemp(t.TempDir(), "out")
@@ -22,7 +20,7 @@ func TestStartPager_NoPagerFlag(t *testing.T) {
 	t.Cleanup(func() { f.Close() })
 
 	disabled := false
-	w, closer, err := command.StartPager(f, &disabled)
+	w, closer, err := StartPager(f, &disabled)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -34,11 +32,11 @@ func TestStartPager_NoPagerFlag(t *testing.T) {
 
 func TestStartPager_NonFileWriter(t *testing.T) {
 	t.Setenv("PISTA_PAGER", "cat")
-	restore := command.SetIsTerminalForTest(func(*os.File) bool { return true })
+	restore := setIsTerminalForTest(func(*os.File) bool { return true })
 	defer restore()
 
 	var buf bytes.Buffer
-	w, closer, err := command.StartPager(&buf, nil)
+	w, closer, err := StartPager(&buf, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -50,7 +48,7 @@ func TestStartPager_NonFileWriter(t *testing.T) {
 
 func TestStartPager_NotATerminal(t *testing.T) {
 	t.Setenv("PISTA_PAGER", "cat")
-	restore := command.SetIsTerminalForTest(func(*os.File) bool { return false })
+	restore := setIsTerminalForTest(func(*os.File) bool { return false })
 	defer restore()
 
 	f, err := os.CreateTemp(t.TempDir(), "out")
@@ -59,7 +57,7 @@ func TestStartPager_NotATerminal(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := command.StartPager(f, nil)
+	w, closer, err := StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -72,7 +70,7 @@ func TestStartPager_NotATerminal(t *testing.T) {
 func TestStartPager_ForcedSkipsTTYCheck(t *testing.T) {
 	// --pager forces paging even when stdout is not a TTY.
 	t.Setenv("PISTA_PAGER", "cat")
-	restore := command.SetIsTerminalForTest(func(*os.File) bool { return false })
+	restore := setIsTerminalForTest(func(*os.File) bool { return false })
 	defer restore()
 
 	f, err := os.CreateTemp(t.TempDir(), "out")
@@ -82,7 +80,7 @@ func TestStartPager_ForcedSkipsTTYCheck(t *testing.T) {
 	t.Cleanup(func() { f.Close() })
 
 	forced := true
-	w, closer, err := command.StartPager(f, &forced)
+	w, closer, err := StartPager(f, &forced)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -95,7 +93,7 @@ func TestStartPager_ForcedSkipsTTYCheck(t *testing.T) {
 func TestStartPager_ForcedButEnvUnset(t *testing.T) {
 	// --pager with PISTA_PAGER unset still does nothing; env gates everything.
 	t.Setenv("PISTA_PAGER", "")
-	restore := command.SetIsTerminalForTest(func(*os.File) bool { return false })
+	restore := setIsTerminalForTest(func(*os.File) bool { return false })
 	defer restore()
 
 	f, err := os.CreateTemp(t.TempDir(), "out")
@@ -105,7 +103,7 @@ func TestStartPager_ForcedButEnvUnset(t *testing.T) {
 	t.Cleanup(func() { f.Close() })
 
 	forced := true
-	w, closer, err := command.StartPager(f, &forced)
+	w, closer, err := StartPager(f, &forced)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -117,7 +115,7 @@ func TestStartPager_ForcedButEnvUnset(t *testing.T) {
 
 func TestStartPager_EnvUnset(t *testing.T) {
 	t.Setenv("PISTA_PAGER", "")
-	restore := command.SetIsTerminalForTest(func(*os.File) bool { return true })
+	restore := setIsTerminalForTest(func(*os.File) bool { return true })
 	defer restore()
 
 	f, err := os.CreateTemp(t.TempDir(), "out")
@@ -126,7 +124,7 @@ func TestStartPager_EnvUnset(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := command.StartPager(f, nil)
+	w, closer, err := StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -138,7 +136,7 @@ func TestStartPager_EnvUnset(t *testing.T) {
 
 func TestStartPager_SpawnsAndPipesThrough(t *testing.T) {
 	t.Setenv("PISTA_PAGER", "tr '[:lower:]' '[:upper:]'")
-	restore := command.SetIsTerminalForTest(func(*os.File) bool { return true })
+	restore := setIsTerminalForTest(func(*os.File) bool { return true })
 	defer restore()
 
 	f, err := os.CreateTemp(t.TempDir(), "out")
@@ -147,7 +145,7 @@ func TestStartPager_SpawnsAndPipesThrough(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := command.StartPager(f, nil)
+	w, closer, err := StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -176,7 +174,7 @@ func TestStartPager_CloserIsIdempotent(t *testing.T) {
 	// Caller-side pattern: defer + explicit close. Calling closer twice
 	// must not panic, double-close the pipe, or double-wait on the child.
 	t.Setenv("PISTA_PAGER", "cat")
-	restore := command.SetIsTerminalForTest(func(*os.File) bool { return true })
+	restore := setIsTerminalForTest(func(*os.File) bool { return true })
 	defer restore()
 
 	f, err := os.CreateTemp(t.TempDir(), "out")
@@ -185,7 +183,7 @@ func TestStartPager_CloserIsIdempotent(t *testing.T) {
 	}
 	t.Cleanup(func() { f.Close() })
 
-	w, closer, err := command.StartPager(f, nil)
+	w, closer, err := StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager: %v", err)
 	}
@@ -209,7 +207,7 @@ func TestStartPager_CloserIsIdempotent(t *testing.T) {
 }
 
 func TestIsTerminalDefault(t *testing.T) {
-	if command.IsTerminalDefault(nil) {
+	if isTerminalDefault(nil) {
 		t.Errorf("nil *os.File should not look like a terminal")
 	}
 
@@ -218,7 +216,7 @@ func TestIsTerminalDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { f.Close() })
-	if command.IsTerminalDefault(f) {
+	if isTerminalDefault(f) {
 		t.Errorf("a regular file should not look like a terminal")
 	}
 
@@ -227,7 +225,7 @@ func TestIsTerminalDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { r.Close(); w.Close() })
-	if command.IsTerminalDefault(r) || command.IsTerminalDefault(w) {
+	if isTerminalDefault(r) || isTerminalDefault(w) {
 		t.Errorf("a pipe should not look like a terminal")
 	}
 
@@ -238,7 +236,7 @@ func TestIsTerminalDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	closed.Close()
-	if command.IsTerminalDefault(closed) {
+	if isTerminalDefault(closed) {
 		t.Errorf("a closed file should not look like a terminal")
 	}
 }
@@ -248,7 +246,7 @@ func TestStartPager_FailsOnBadCommand(t *testing.T) {
 	// at a non-existent executable path that exec.Command can resolve
 	// and fail on directly.
 	t.Setenv("PISTA_PAGER", "/no/such/pager/binary-zzz9999")
-	restore := command.SetIsTerminalForTest(func(*os.File) bool { return true })
+	restore := setIsTerminalForTest(func(*os.File) bool { return true })
 	defer restore()
 
 	f, err := os.CreateTemp(t.TempDir(), "out")
@@ -260,7 +258,7 @@ func TestStartPager_FailsOnBadCommand(t *testing.T) {
 	// `sh -c` will start successfully and the missing binary surfaces as
 	// a non-zero exit on Wait, not an error from Start. Verify StartPager
 	// still returns a usable writer and tolerates the pager exiting early.
-	w, closer, err := command.StartPager(f, nil)
+	w, closer, err := StartPager(f, nil)
 	if err != nil {
 		t.Fatalf("StartPager unexpectedly errored: %v", err)
 	}
@@ -270,4 +268,12 @@ func TestStartPager_FailsOnBadCommand(t *testing.T) {
 	// Write may EPIPE once the subprocess dies; that's fine, ignore error.
 	io.WriteString(w, "data")
 	closer()
+}
+
+// setIsTerminalForTest swaps the TTY check StartPager uses and returns a
+// function that restores the previous implementation.
+func setIsTerminalForTest(fn func(*os.File) bool) func() {
+	old := isTerminalFn
+	isTerminalFn = fn
+	return func() { isTerminalFn = old }
 }

@@ -1,4 +1,4 @@
-package parser_test
+package parser
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/model"
-	"github.com/winebarrel/pistachio/parser"
 )
 
 func TestParseSQL_Function(t *testing.T) {
@@ -223,7 +222,7 @@ func TestParseSQL_UnmanagedRoutinesWarn(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			restore := parser.SetWarnWriter(&buf)
+			restore := setWarnWriter(&buf)
 			defer restore()
 
 			result, err := parseSQLWithPublicSchema(tc.sql)
@@ -293,7 +292,7 @@ func TestParseRoutineDef_Errors(t *testing.T) {
 		{"not a routine", "SELECT 1;", "not a CREATE FUNCTION statement"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := parser.ParseRoutineDef(tc.sql, "public")
+			_, err := ParseRoutineDef(tc.sql, "public")
 			assert.ErrorContains(t, err, tc.want)
 		})
 	}
@@ -321,7 +320,7 @@ func TestParseSQL_FunctionUnsupportedOption(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			restore := parser.SetWarnWriter(&buf)
+			restore := setWarnWriter(&buf)
 			defer restore()
 
 			result, err := parseSQLWithPublicSchema(tc.sql)
@@ -338,7 +337,7 @@ func TestParseSQL_FunctionUnsupportedOption(t *testing.T) {
 // schema file declares.
 func TestParseSQL_FunctionSetFromCurrent(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	result, err := parseSQLWithPublicSchema(`CREATE FUNCTION public.f() RETURNS text
@@ -375,7 +374,7 @@ func TestParseSQL_FunctionSetFromCurrentWithIgnoreDirective(t *testing.T) {
 // The same statements must not fail a plan for someone who never opted in.
 func TestParseSQL_UnsupportedRoutineDoesNotFailTheFile(t *testing.T) {
 	var buf bytes.Buffer
-	restore := parser.SetWarnWriter(&buf)
+	restore := setWarnWriter(&buf)
 	defer restore()
 
 	result, err := parseSQLWithPublicSchema(`
@@ -500,7 +499,7 @@ func TestParseSQL_FunctionSecurityDefinerAndLeakproof(t *testing.T) {
 }
 
 func TestParseRoutineDef(t *testing.T) {
-	r, err := parser.ParseRoutineDef(
+	r, err := ParseRoutineDef(
 		"CREATE FUNCTION public.add(a integer, b integer) RETURNS integer LANGUAGE sql AS $$ SELECT a + b $$;",
 		"public",
 	)
