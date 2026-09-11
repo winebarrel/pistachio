@@ -38,6 +38,9 @@ Commands:
   fmt <files> ... [flags]
     Format schema SQL files in place.
 
+  parse <files> ... [flags]
+    Parse schema SQL files and print the result as JSON.
+
 Run "pista <command> --help" for more information on a command.
 ```
 
@@ -621,3 +624,13 @@ The statements themselves are left alone: only the whitespace between the tokens
 
 See [Formatting schema files](../guides/formatting.md) for the layout rules.
 
+
+## parse
+
+Parse schema SQL files and print the objects they declare as JSON. The files go through the same parser `plan` and `apply` use. No database is read.
+
+```bash
+pista parse schema/*.sql
+```
+
+See [Parsing schema files](../guides/parsing.md) for the shape of the output.

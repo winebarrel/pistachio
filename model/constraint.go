@@ -6,6 +6,27 @@ import "fmt"
 
 type ConstraintType byte
 
+// MarshalJSON writes the constraint kind as a word instead of the
+// pg_constraint character, since the JSON is read outside pistachio.
+func (b ConstraintType) MarshalJSON() ([]byte, error) {
+	switch b {
+	case 'c':
+		return []byte(`"check"`), nil
+	case 'f':
+		return []byte(`"foreign_key"`), nil
+	case 'n':
+		return []byte(`"not_null"`), nil
+	case 'p':
+		return []byte(`"primary_key"`), nil
+	case 'u':
+		return []byte(`"unique"`), nil
+	case 'x':
+		return []byte(`"exclusion"`), nil
+	default:
+		return []byte(`""`), nil
+	}
+}
+
 func (b ConstraintType) IsCheckConstraint() bool {
 	return b == 'c'
 }
@@ -31,27 +52,27 @@ func (b ConstraintType) IsExclusionConstraint() bool {
 }
 
 type Constraint struct {
-	OID        uint32
-	Name       string
-	RenameFrom *string
-	Type       ConstraintType
-	Definition string
-	Columns    []string
-	Deferrable bool
-	Deferred   bool
-	Validated  bool
+	OID        uint32         `json:"oid"`
+	Name       string         `json:"name"`
+	RenameFrom *string        `json:"rename_from"`
+	Type       ConstraintType `json:"type"`
+	Definition string         `json:"definition"`
+	Columns    []string       `json:"columns"`
+	Deferrable bool           `json:"deferrable"`
+	Deferred   bool           `json:"deferred"`
+	Validated  bool           `json:"validated"`
 	// Inherited marks a constraint a partition child holds only because its
 	// parent has one. PostgreSQL refuses to alter or drop such a copy, and a
 	// statement on the parent reaches it, so the diff leaves it alone. Only
 	// the catalog sets it: a desired schema declares what it writes.
-	Inherited bool
+	Inherited bool `json:"inherited"`
 	// IndexName is the index a desired constraint written
 	// ADD CONSTRAINT ... USING INDEX takes over. Only the parser sets it:
 	// the promotion renames the index to the constraint's name, so the
 	// catalog has no such name to report. The diff keeps that index out of
 	// the index drops and adds, and takes an existing constraint of the same
 	// name, type and deferral as satisfying the declaration.
-	IndexName string
+	IndexName string `json:"index_name"`
 }
 
 func (con *Constraint) String() string {
@@ -60,10 +81,10 @@ func (con *Constraint) String() string {
 
 type ForeignKey struct {
 	Constraint
-	Schema    string
-	Table     string
-	RefSchema *string
-	RefTable  *string
+	Schema    string  `json:"schema"`
+	Table     string  `json:"table"`
+	RefSchema *string `json:"ref_schema"`
+	RefTable  *string `json:"ref_table"`
 }
 
 func (fk *ForeignKey) String() string {

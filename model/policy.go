@@ -29,16 +29,22 @@ func (c PolicyCommand) String() string {
 
 func (c PolicyCommand) IsAll() bool { return c == '*' }
 
+// MarshalJSON writes the command keyword instead of the pg_policy character,
+// since the JSON is read outside pistachio.
+func (c PolicyCommand) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + c.String() + `"`), nil
+}
+
 type Policy struct {
-	Name       string
-	RenameFrom *string
-	Schema     string
-	Table      string
-	Permissive bool
-	Command    PolicyCommand
-	Roles      []string
-	Using      *string
-	WithCheck  *string
+	Name       string        `json:"name"`
+	RenameFrom *string       `json:"rename_from"`
+	Schema     string        `json:"schema"`
+	Table      string        `json:"table"`
+	Permissive bool          `json:"permissive"`
+	Command    PolicyCommand `json:"command"`
+	Roles      []string      `json:"roles"`
+	Using      *string       `json:"using"`
+	WithCheck  *string       `json:"with_check"`
 }
 
 func (p *Policy) String() string {

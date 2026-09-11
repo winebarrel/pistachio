@@ -13,28 +13,28 @@ import (
 // column). Sequences owned by a table column are handled as column attributes
 // and are excluded from the sequence diff pipeline.
 type Sequence struct {
-	OID       uint32
-	Schema    string
-	Name      string
-	DataType  string
-	Start     int64
-	Min       int64
-	Max       int64
-	Increment int64
-	Cache     int64
-	Cycle     bool
-	Unlogged  bool
+	OID       uint32 `json:"oid"`
+	Schema    string `json:"schema"`
+	Name      string `json:"name"`
+	DataType  string `json:"data_type"`
+	Start     int64  `json:"start"`
+	Min       int64  `json:"min"`
+	Max       int64  `json:"max"`
+	Increment int64  `json:"increment"`
+	Cache     int64  `json:"cache"`
+	Cycle     bool   `json:"cycle"`
+	Unlogged  bool   `json:"unlogged"`
 	// OwnerTable and OwnerColumn are set from the OWNED BY relationship
 	// (pg_depend deptype 'a' for serial, 'i' for identity). They are nil for
 	// standalone sequences, which are the only ones the pipeline manages.
-	OwnerTable  *string
-	OwnerColumn *string
-	RenameFrom  *string
-	Comment     *string
+	OwnerTable  *string `json:"owner_table"`
+	OwnerColumn *string `json:"owner_column"`
+	RenameFrom  *string `json:"rename_from"`
+	Comment     *string `json:"comment"`
 	// Ignore marks the sequence as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the catalog
 	// side.
-	Ignore bool
+	Ignore bool `json:"ignore"`
 }
 
 func (seq Sequence) FQN() string {

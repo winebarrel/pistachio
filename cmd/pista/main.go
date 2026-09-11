@@ -23,6 +23,7 @@ type cli struct {
 	Plan  command.Plan  `cmd:"" help:"Print the schema diff SQL without applying it."`
 	Dump  command.Dump  `cmd:"" help:"Dump the current database schema as SQL."`
 	Fmt   command.Fmt   `cmd:"" help:"Format schema SQL files in place."`
+	Parse command.Parse `cmd:"" help:"Parse schema SQL files and print the result as JSON."`
 }
 
 func main() {

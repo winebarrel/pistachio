@@ -1,0 +1,1487 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://winebarrel.github.io/pistachio/json/schema-1.0.json",
+  "$defs": {
+    "Column": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "type": "string"
+        },
+        "serial_sequence": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "not_null": {
+          "type": "boolean"
+        },
+        "not_null_name": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "identity": {
+          "type": "string",
+          "enum": [
+            "",
+            "always",
+            "by_default"
+          ]
+        },
+        "identity_sequence": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/IdentitySequence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generated": {
+          "type": "string",
+          "enum": [
+            "",
+            "stored",
+            "virtual"
+          ]
+        },
+        "collation": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_type": {
+          "type": "string"
+        },
+        "type_storage": {
+          "type": "string"
+        },
+        "compression": {
+          "type": "string"
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "rename_from",
+        "type",
+        "serial_sequence",
+        "not_null",
+        "not_null_name",
+        "default",
+        "identity",
+        "identity_sequence",
+        "generated",
+        "collation",
+        "storage_type",
+        "type_storage",
+        "compression",
+        "comment"
+      ]
+    },
+    "CompositeAttribute": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "collation": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "collation",
+        "rename_from",
+        "comment"
+      ]
+    },
+    "CompositeType": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attributes": {
+          "items": {
+            "$ref": "#/$defs/CompositeAttribute"
+          },
+          "type": "array"
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ignore": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "schema",
+        "name",
+        "rename_from",
+        "attributes",
+        "comment",
+        "ignore"
+      ]
+    },
+    "Constraint": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "",
+            "check",
+            "foreign_key",
+            "not_null",
+            "primary_key",
+            "unique",
+            "exclusion"
+          ]
+        },
+        "definition": {
+          "type": "string"
+        },
+        "columns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "deferrable": {
+          "type": "boolean"
+        },
+        "deferred": {
+          "type": "boolean"
+        },
+        "validated": {
+          "type": "boolean"
+        },
+        "inherited": {
+          "type": "boolean"
+        },
+        "index_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "name",
+        "rename_from",
+        "type",
+        "definition",
+        "columns",
+        "deferrable",
+        "deferred",
+        "validated",
+        "inherited",
+        "index_name"
+      ]
+    },
+    "Domain": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "base_type": {
+          "type": "string"
+        },
+        "not_null": {
+          "type": "boolean"
+        },
+        "default": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collation": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "constraints": {
+          "items": {
+            "$ref": "#/$defs/DomainConstraint"
+          },
+          "type": "array"
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ignore": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "schema",
+        "name",
+        "rename_from",
+        "base_type",
+        "not_null",
+        "default",
+        "collation",
+        "constraints",
+        "comment",
+        "ignore"
+      ]
+    },
+    "DomainConstraint": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "validated": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "definition",
+        "validated"
+      ]
+    },
+    "Enum": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "value_rename_from": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ignore": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "schema",
+        "name",
+        "rename_from",
+        "values",
+        "value_rename_from",
+        "comment",
+        "ignore"
+      ]
+    },
+    "ExecuteStmt": {
+      "properties": {
+        "sql": {
+          "type": "string"
+        },
+        "check_sql": {
+          "type": "string"
+        },
+        "first": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "sql",
+        "check_sql",
+        "first"
+      ]
+    },
+    "ForeignKey": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "",
+            "check",
+            "foreign_key",
+            "not_null",
+            "primary_key",
+            "unique",
+            "exclusion"
+          ]
+        },
+        "definition": {
+          "type": "string"
+        },
+        "columns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "deferrable": {
+          "type": "boolean"
+        },
+        "deferred": {
+          "type": "boolean"
+        },
+        "validated": {
+          "type": "boolean"
+        },
+        "inherited": {
+          "type": "boolean"
+        },
+        "index_name": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "ref_schema": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ref_table": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "name",
+        "rename_from",
+        "type",
+        "definition",
+        "columns",
+        "deferrable",
+        "deferred",
+        "validated",
+        "inherited",
+        "index_name",
+        "schema",
+        "table",
+        "ref_schema",
+        "ref_table"
+      ]
+    },
+    "IdentitySequence": {
+      "properties": {
+        "start": {
+          "type": "integer"
+        },
+        "min": {
+          "type": "integer"
+        },
+        "max": {
+          "type": "integer"
+        },
+        "increment": {
+          "type": "integer"
+        },
+        "cache": {
+          "type": "integer"
+        },
+        "cycle": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "start",
+        "min",
+        "max",
+        "increment",
+        "cache",
+        "cycle"
+      ]
+    },
+    "Index": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "table": {
+          "type": "string"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "table_space": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "concurrently": {
+          "type": "boolean"
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "schema",
+        "name",
+        "rename_from",
+        "table",
+        "definition",
+        "table_space",
+        "concurrently",
+        "comment"
+      ]
+    },
+    "Policy": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "permissive": {
+          "type": "boolean"
+        },
+        "command": {
+          "type": "string",
+          "enum": [
+            "",
+            "ALL",
+            "INSERT",
+            "DELETE",
+            "SELECT",
+            "UPDATE"
+          ]
+        },
+        "roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "using": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "with_check": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "rename_from",
+        "schema",
+        "table",
+        "permissive",
+        "command",
+        "roles",
+        "using",
+        "with_check"
+      ]
+    },
+    "Routine": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "procedure": {
+          "type": "boolean"
+        },
+        "args": {
+          "items": {
+            "$ref": "#/$defs/RoutineArg"
+          },
+          "type": "array"
+        },
+        "return_type": {
+          "type": "string"
+        },
+        "returns_set": {
+          "type": "boolean"
+        },
+        "language": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "obj_file": {
+          "type": "string"
+        },
+        "volatility": {
+          "type": "string"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "security_definer": {
+          "type": "boolean"
+        },
+        "leakproof": {
+          "type": "boolean"
+        },
+        "parallel": {
+          "type": "string"
+        },
+        "cost": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "items": {
+            "$ref": "#/$defs/RoutineConfig"
+          },
+          "type": "array"
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ignore": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "schema",
+        "name",
+        "procedure",
+        "args",
+        "return_type",
+        "returns_set",
+        "language",
+        "body",
+        "obj_file",
+        "volatility",
+        "strict",
+        "security_definer",
+        "leakproof",
+        "parallel",
+        "cost",
+        "rows",
+        "config",
+        "comment",
+        "ignore"
+      ]
+    },
+    "RoutineArg": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "mode",
+        "name",
+        "type",
+        "default"
+      ]
+    },
+    "RoutineConfig": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "args"
+      ]
+    },
+    "Sequence": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "data_type": {
+          "type": "string"
+        },
+        "start": {
+          "type": "integer"
+        },
+        "min": {
+          "type": "integer"
+        },
+        "max": {
+          "type": "integer"
+        },
+        "increment": {
+          "type": "integer"
+        },
+        "cache": {
+          "type": "integer"
+        },
+        "cycle": {
+          "type": "boolean"
+        },
+        "unlogged": {
+          "type": "boolean"
+        },
+        "owner_table": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "owner_column": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ignore": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "schema",
+        "name",
+        "data_type",
+        "start",
+        "min",
+        "max",
+        "increment",
+        "cache",
+        "cycle",
+        "unlogged",
+        "owner_table",
+        "owner_column",
+        "rename_from",
+        "comment",
+        "ignore"
+      ]
+    },
+    "Table": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bulk_alter": {
+          "type": "boolean"
+        },
+        "ignore": {
+          "type": "boolean"
+        },
+        "table_space": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_params": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unlogged": {
+          "type": "boolean"
+        },
+        "partitioned": {
+          "type": "boolean"
+        },
+        "partition_def": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_of": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_bound": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "row_security": {
+          "type": "boolean"
+        },
+        "force_row_security": {
+          "type": "boolean"
+        },
+        "columns": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Column"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "constraints": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Constraint"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "foreign_keys": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/ForeignKey"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "indexes": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Index"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policies": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Policy"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "triggers": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Trigger"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "schema",
+        "name",
+        "rename_from",
+        "bulk_alter",
+        "ignore",
+        "table_space",
+        "storage_params",
+        "unlogged",
+        "partitioned",
+        "partition_def",
+        "partition_of",
+        "partition_bound",
+        "row_security",
+        "force_row_security",
+        "columns",
+        "constraints",
+        "foreign_keys",
+        "indexes",
+        "policies",
+        "triggers",
+        "comment"
+      ]
+    },
+    "Trigger": {
+      "properties": {
+        "schema": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "definition": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "always",
+            "disabled",
+            "replica"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema",
+        "table",
+        "name",
+        "rename_from",
+        "definition",
+        "state"
+      ]
+    },
+    "View": {
+      "properties": {
+        "oid": {
+          "type": "integer"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rename_from": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "definition": {
+          "type": "string"
+        },
+        "materialized": {
+          "type": "boolean"
+        },
+        "check_option": {
+          "type": "string"
+        },
+        "storage_params": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "indexes": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Index"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "triggers": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Trigger"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "comment": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ignore": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "oid",
+        "schema",
+        "name",
+        "rename_from",
+        "definition",
+        "materialized",
+        "check_option",
+        "storage_params",
+        "indexes",
+        "triggers",
+        "comment",
+        "ignore"
+      ]
+    }
+  },
+  "properties": {
+    "tables": {
+      "oneOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Table"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "views": {
+      "oneOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/View"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "enums": {
+      "oneOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Enum"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "domains": {
+      "oneOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Domain"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "composite_types": {
+      "oneOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/CompositeType"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sequences": {
+      "oneOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Sequence"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "routines": {
+      "oneOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Routine"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "execute_stmts": {
+      "items": {
+        "$ref": "#/$defs/ExecuteStmt"
+      },
+      "type": "array"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "tables",
+    "views",
+    "enums",
+    "domains",
+    "composite_types",
+    "sequences",
+    "routines",
+    "execute_stmts"
+  ],
+  "title": "pistachio schema document",
+  "description": "The PostgreSQL schema objects pistachio manages, as it writes them in JSON."
+}

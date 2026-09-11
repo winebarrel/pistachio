@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+* Add `pista parse`. It parses schema SQL files with the same parser `plan` and `apply` use and prints the objects as JSON, without reading a database, so other tools can consume the schema.
+
+* Publish the JSON Schema of that document at `https://winebarrel.github.io/pistachio/json/schema-1.0.json`. It is reflected off the structs, so it follows what the command writes.
+
 ## [1.50.0] - 2026-09-10
 
 * Read a constraint added with `UNIQUE USING INDEX` or `PRIMARY KEY USING INDEX`. The form never compared equal to the constraint it created, so every plan re-issued DROP and ADD, and the index it takes over was planned as a DROP, which ran first under `--allow-drop index` and broke the ADD. The index now stays, the file plans clean, and a constraint written without a name takes the index's name, the way PostgreSQL names it.

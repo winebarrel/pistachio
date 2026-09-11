@@ -9,34 +9,34 @@ import (
 )
 
 type Table struct {
-	OID        uint32
-	Schema     string
-	Name       string
-	RenameFrom *string
-	BulkAlter  bool
+	OID        uint32  `json:"oid"`
+	Schema     string  `json:"schema"`
+	Name       string  `json:"name"`
+	RenameFrom *string `json:"rename_from"`
+	BulkAlter  bool    `json:"bulk_alter"`
 	// Ignore marks the table as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the
 	// catalog side.
-	Ignore     bool
-	TableSpace *string
+	Ignore     bool    `json:"ignore"`
+	TableSpace *string `json:"table_space"`
 	// StorageParams holds the table's storage parameters, pg_class.reloptions,
 	// keyed by parameter name and ordered by it. A `toast.` prefix names a
 	// parameter of the TOAST relation, which is where pg_dump writes it too.
-	StorageParams    *orderedmap.Map[string, string]
-	Unlogged         bool
-	Partitioned      bool
-	PartitionDef     *string
-	PartitionOf      *string
-	PartitionBound   *string
-	RowSecurity      bool
-	ForceRowSecurity bool
-	Columns          *orderedmap.Map[string, *Column]
-	Constraints      *orderedmap.Map[string, *Constraint]
-	ForeignKeys      *orderedmap.Map[string, *ForeignKey]
-	Indexes          *orderedmap.Map[string, *Index]
-	Policies         *orderedmap.Map[string, *Policy]
-	Triggers         *orderedmap.Map[string, *Trigger]
-	Comment          *string
+	StorageParams    *orderedmap.Map[string, string]      `json:"storage_params"`
+	Unlogged         bool                                 `json:"unlogged"`
+	Partitioned      bool                                 `json:"partitioned"`
+	PartitionDef     *string                              `json:"partition_def"`
+	PartitionOf      *string                              `json:"partition_of"`
+	PartitionBound   *string                              `json:"partition_bound"`
+	RowSecurity      bool                                 `json:"row_security"`
+	ForceRowSecurity bool                                 `json:"force_row_security"`
+	Columns          *orderedmap.Map[string, *Column]     `json:"columns"`
+	Constraints      *orderedmap.Map[string, *Constraint] `json:"constraints"`
+	ForeignKeys      *orderedmap.Map[string, *ForeignKey] `json:"foreign_keys"`
+	Indexes          *orderedmap.Map[string, *Index]      `json:"indexes"`
+	Policies         *orderedmap.Map[string, *Policy]     `json:"policies"`
+	Triggers         *orderedmap.Map[string, *Trigger]    `json:"triggers"`
+	Comment          *string                              `json:"comment"`
 }
 
 // IsPartitionChild reports whether the table is a partition of a declarative

@@ -18,6 +18,21 @@ func (s TriggerState) IsDefault() bool {
 	return s == 0 || s == TriggerStateDefault
 }
 
+// MarshalJSON writes the state as a word instead of the pg_trigger character,
+// since the JSON is read outside pistachio.
+func (s TriggerState) MarshalJSON() ([]byte, error) {
+	switch s {
+	case 'D':
+		return []byte(`"disabled"`), nil
+	case 'R':
+		return []byte(`"replica"`), nil
+	case 'A':
+		return []byte(`"always"`), nil
+	default:
+		return []byte(`"enabled"`), nil
+	}
+}
+
 // Action returns the ALTER TABLE action that puts a trigger in the state.
 func (s TriggerState) Action() string {
 	switch s {
@@ -33,17 +48,17 @@ func (s TriggerState) Action() string {
 }
 
 type Trigger struct {
-	Schema     string
-	Table      string
-	Name       string
-	RenameFrom *string
+	Schema     string  `json:"schema"`
+	Table      string  `json:"table"`
+	Name       string  `json:"name"`
+	RenameFrom *string `json:"rename_from"`
 	// Definition is the whole CREATE TRIGGER statement without its
 	// terminator: what pg_get_triggerdef writes on the catalog side, and what
 	// pg_query deparses on the desired side. The two renderings differ in
 	// places, so the diff cannot compare this text directly; see
 	// diff.equalTriggerDef.
-	Definition string
-	State      TriggerState
+	Definition string       `json:"definition"`
+	State      TriggerState `json:"state"`
 }
 
 func (trg *Trigger) String() string {

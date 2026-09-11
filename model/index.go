@@ -1,15 +1,15 @@
 package model
 
 type Index struct {
-	OID          uint32
-	Schema       string
-	Name         string
-	RenameFrom   *string
-	Table        string
-	Definition   string
-	TableSpace   *string
-	Concurrently bool
-	Comment      *string
+	OID          uint32  `json:"oid"`
+	Schema       string  `json:"schema"`
+	Name         string  `json:"name"`
+	RenameFrom   *string `json:"rename_from"`
+	Table        string  `json:"table"`
+	Definition   string  `json:"definition"`
+	TableSpace   *string `json:"table_space"`
+	Concurrently bool    `json:"concurrently"`
+	Comment      *string `json:"comment"`
 }
 
 func (idx Index) FQTN() string {
