@@ -6,12 +6,6 @@
 pista parse schema/*.sql
 ```
 
-The output is meant for other tools: a code generator, a linter, `jq`.
-
-```bash
-pista parse schema/*.sql | jq -r '.tables | keys[]'
-```
-
 
 ## An example
 
@@ -89,7 +83,7 @@ Expressions stay SQL text. A default, a check clause, a view body or an index de
 
 ## Fields
 
-Every field is written, whatever it holds. A key is there whether the value is a name, an empty string, `false` or `null`, so a consumer reads the same keys off every object of a kind rather than testing for their presence, and an absent value is never confused with an unsupported one.
+Every field is written, whatever it holds: a name, an empty string, `false` or `null`.
 
 Some fields only a database can fill, so `parse` leaves them at their zero value: `oid`, a column's `serial_sequence` and `type_storage`, a constraint's `inherited`. A schema file does not say what PostgreSQL named the sequence behind a `bigserial`, what a type's default storage is, or whether a partition holds a constraint of its own.
 
@@ -102,18 +96,13 @@ Directives show up as fields. `-- pista:renamed-from` becomes `rename_from`, `--
 
 ## The JSON Schema
 
-The document has a JSON Schema, published at
+The document has a JSON Schema. It sits at `docs/json/schema-1.0.json`, and the
+documentation site carries it at
 [https://winebarrel.github.io/pistachio/json/schema-1.0.json](https://winebarrel.github.io/pistachio/json/schema-1.0.json).
 
-```bash
-check-jsonschema --schemafile https://winebarrel.github.io/pistachio/json/schema-1.0.json out.json
-```
-
 It is reflected off the structs the parser fills, so it says what the command writes rather than what a description beside it claims. `make json-schema` regenerates it, and a test fails when the committed file is not what the generator produces.
-
-Its version is its own, not a pistachio release. A published file is never rewritten: a new field is a minor bump, and dropping a field or changing a type gets a new major published beside the old one, so a consumer that pinned a URL keeps the document it validated against.
 
 
 ## What it is not
 
-`parse` reports what the files say, not what a database holds. Filters such as `--include` do not apply, and nothing is compared or diffed. For the current state of a database, use `dump`.
+`parse` reports what the files say, not what a database holds. Nothing is compared or diffed. For the current state of a database, use `dump`.

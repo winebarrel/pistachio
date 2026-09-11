@@ -13,16 +13,12 @@ import (
 	"github.com/winebarrel/pistachio/parser"
 )
 
-// Version is the schema's own version, which does not track the pistachio
-// release. Adding a field is a minor bump; removing one or changing a type
-// needs a new major, published beside this one rather than over it.
 const Version = "1.0"
 
 // Path is where the file sits in the repository and on the documentation site.
 const Path = "docs/json/schema-" + Version + ".json"
 
-// ID is the identity a consumer refers to. A published schema is never
-// rewritten, so this string names one fixed document.
+// ID is the URL the documentation site carries the schema at.
 const ID = "https://winebarrel.github.io/pistachio/json/schema-" + Version + ".json"
 
 const (

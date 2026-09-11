@@ -63,14 +63,14 @@ func TestParse_Run(t *testing.T) {
 	status := enums["public.status"].(map[string]any)
 	assert.Equal(t, []any{"active", "archived"}, status["values"])
 
-	// Objects the files do not declare still appear as empty maps, so a
-	// consumer can index them without checking for presence.
+	// An object kind the files do not declare is an empty map rather than
+	// absent.
 	assert.Equal(t, map[string]any{}, result["views"])
 	assert.Equal(t, map[string]any{}, result["domains"])
 }
 
-// Every field is written whatever it holds, so a consumer reads the same keys
-// off every object of a kind rather than testing for their presence.
+// Every field is written whatever it holds, so one object of a kind carries
+// the same keys as the next.
 func TestParse_Run_WritesEveryField(t *testing.T) {
 	path := writeSQLFile(t, "schema.sql", "create table t (note text);")
 

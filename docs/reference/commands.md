@@ -633,6 +633,4 @@ Parse schema SQL files and print the objects they declare as JSON. The files go 
 pista parse schema/*.sql
 ```
 
-The output is for other tools: a code generator, a linter, `jq`.
-
 See [Parsing schema files](../guides/parsing.md) for the shape of the output.

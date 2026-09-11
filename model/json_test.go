@@ -60,9 +60,9 @@ func TestTriggerState_MarshalJSON(t *testing.T) {
 	assert.JSONEq(t, `"always"`, marshalJSON(t, model.TriggerState('A')))
 }
 
-// The goldens below pin the field names and the shape of the output, which is
-// what a consumer of `pista parse` reads. Every field is written, whatever it
-// holds, so a key never appears or disappears with the input.
+// The goldens below pin the field names and the shape of the output. Every
+// field is written, whatever it holds, so a key does not appear or disappear
+// with the input.
 
 func TestColumn_MarshalJSON(t *testing.T) {
 	def := "0"
