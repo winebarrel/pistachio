@@ -339,6 +339,8 @@ Flags:
                                 ($PISTA_NO_READ_ONLY).
       --no-format               Write the dump as the model renders it, without
                                 the layout pista fmt applies ($PISTA_NO_FORMAT).
+      --json                    Write the dump as JSON instead of SQL
+                                ($PISTA_DUMP_JSON).
 ```
 
 </details>
@@ -603,6 +605,8 @@ pista dump --omit-schema
 The output goes through the formatter that `pista fmt` runs, so a dump needs no formatting. `--no-format` writes the layout the model renders on its own. See [Formatting schema files](../guides/formatting.md).
 
 `GRANT`, `CREATE EXTENSION` and roles are out of scope and are not written. A dump loaded into an empty database therefore restores the schema, not the privileges on it.
+
+`--json` writes the document `pista parse` writes instead of SQL. Also available as `$PISTA_DUMP_JSON`. `--split`, `--sort-by-deps` and `--no-format` lay SQL out and are refused with it. See [Parsing schema files](../guides/parsing.md) for the shape of the document.
 
 
 ## fmt

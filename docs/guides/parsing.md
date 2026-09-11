@@ -103,6 +103,11 @@ documentation site carries it at
 It is reflected off the structs the parser fills, so it says what the command writes rather than what a description beside it claims. `make json-schema` regenerates it, and a test fails when the committed file is not what the generator produces.
 
 
+## From a database
+
+`pista dump --json` writes the same document for a database. The fields `parse` leaves at their zero value are the ones the catalog fills: `oid`, a column's `serial_sequence` and `type_storage`, a constraint's `inherited`. A database holds no `-- pista:execute` statements, so `execute_stmts` is empty.
+
+
 ## What it is not
 
-`parse` reports what the files say, not what a database holds. Nothing is compared or diffed. For the current state of a database, use `dump`.
+`parse` reports what the files say, not what a database holds. Nothing is compared or diffed. For the current state of a database, use `dump --json`.

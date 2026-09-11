@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Add `--json` to `dump` (`$PISTA_DUMP_JSON`). It writes the document `pista parse` writes, read from the database rather than from files, so the published JSON Schema describes both.
+
 * Add `pista parse`. It parses schema SQL files with the same parser `plan` and `apply` use and prints the objects as JSON, without reading a database, so other tools can consume the schema.
 
 * Publish the JSON Schema of that document at `https://winebarrel.github.io/pistachio/json/schema-1.0.json`. It is reflected off the structs, so it follows what the command writes.

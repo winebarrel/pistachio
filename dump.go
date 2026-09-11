@@ -10,6 +10,7 @@ import (
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/format"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 	"github.com/winebarrel/pistachio/toposort"
 )
 
@@ -20,6 +21,9 @@ type DumpOptions struct {
 	SortByDeps bool   `xor:"split-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle. Cannot be used with --split."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
 	NoFormat   bool   `env:"PISTA_NO_FORMAT" help:"Write the dump as the model renders it, without the layout pista fmt applies."`
+	// JSON writes the document `pista parse` writes rather than SQL, so the
+	// same schema describes both.
+	JSON bool `env:"PISTA_DUMP_JSON" help:"Write the dump as JSON instead of SQL."`
 }
 
 type DumpResult struct {
@@ -238,6 +242,21 @@ func (r *DumpResult) routines() *orderedmap.Map[string, *model.Routine] {
 		routines.Set(copied.FQRN(), &copied)
 	}
 	return routines
+}
+
+// Document returns what the dump holds as the document `pista parse` writes,
+// so one JSON Schema describes both. The accessors carry --omit-schema, and a
+// database holds no `-- pista:execute` statements, so that half is empty.
+func (r *DumpResult) Document() *parser.ParseResult {
+	return &parser.ParseResult{
+		Tables:         r.tables(),
+		Views:          r.views(),
+		Enums:          r.enums(),
+		Domains:        r.domains(),
+		CompositeTypes: r.compositeTypes(),
+		Sequences:      r.sequences(),
+		Routines:       r.routines(),
+	}
 }
 
 func (r *DumpResult) String() string {
