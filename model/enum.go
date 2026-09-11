@@ -7,20 +7,20 @@ import (
 )
 
 type Enum struct {
-	OID        uint32
-	Schema     string
-	Name       string
-	RenameFrom *string
-	Values     []string
+	OID        uint32   `json:"-"`
+	Schema     string   `json:"schema"`
+	Name       string   `json:"name"`
+	RenameFrom *string  `json:"rename_from,omitempty"`
+	Values     []string `json:"values"`
 	// ValueRenameFrom maps a desired value to the current value it renames.
 	// Set by the parser from -- pista:renamed-from directives inside the
 	// value list; always empty on the catalog side.
-	ValueRenameFrom map[string]string
-	Comment         *string
+	ValueRenameFrom map[string]string `json:"value_rename_from,omitempty"`
+	Comment         *string           `json:"comment,omitempty"`
 	// Ignore marks the enum as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the
 	// catalog side.
-	Ignore bool
+	Ignore bool `json:"ignore,omitzero"`
 }
 
 func (e Enum) FQEN() string {

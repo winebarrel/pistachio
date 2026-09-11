@@ -16,14 +16,14 @@ import (
 )
 
 type ParseResult struct {
-	Tables         *orderedmap.Map[string, *model.Table]
-	Views          *orderedmap.Map[string, *model.View]
-	Enums          *orderedmap.Map[string, *model.Enum]
-	Domains        *orderedmap.Map[string, *model.Domain]
-	CompositeTypes *orderedmap.Map[string, *model.CompositeType]
-	Sequences      *orderedmap.Map[string, *model.Sequence]
-	Routines       *orderedmap.Map[string, *model.Routine]
-	ExecuteStmts   []*ExecuteStmt
+	Tables         *orderedmap.Map[string, *model.Table]         `json:"tables"`
+	Views          *orderedmap.Map[string, *model.View]          `json:"views"`
+	Enums          *orderedmap.Map[string, *model.Enum]          `json:"enums"`
+	Domains        *orderedmap.Map[string, *model.Domain]        `json:"domains"`
+	CompositeTypes *orderedmap.Map[string, *model.CompositeType] `json:"composite_types"`
+	Sequences      *orderedmap.Map[string, *model.Sequence]      `json:"sequences"`
+	Routines       *orderedmap.Map[string, *model.Routine]       `json:"routines"`
+	ExecuteStmts   []*ExecuteStmt                                `json:"execute_stmts,omitempty"`
 }
 
 // warnWriter receives warnings about statements pistachio does not support and

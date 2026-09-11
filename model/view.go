@@ -7,29 +7,29 @@ import (
 )
 
 type View struct {
-	OID          uint32
-	Schema       string
-	Name         string
-	RenameFrom   *string
-	Definition   string
-	Materialized bool
+	OID          uint32  `json:"-"`
+	Schema       string  `json:"schema"`
+	Name         string  `json:"name"`
+	RenameFrom   *string `json:"rename_from,omitempty"`
+	Definition   string  `json:"definition"`
+	Materialized bool    `json:"materialized,omitzero"`
 	// CheckOption is the view's WITH CHECK OPTION, "local" or "cascaded", and
 	// empty when the view has none. A materialized view never has one.
-	CheckOption string
+	CheckOption string `json:"check_option,omitempty"`
 	// StorageParams holds the view's storage parameters, pg_class.reloptions,
 	// keyed by parameter name and ordered by it. check_option sits in the same
 	// column but is read as the view's WITH CHECK OPTION, so it is not here. A
 	// plain view takes security_barrier and security_invoker, a materialized
 	// view what a table takes, including a `toast.` parameter of its TOAST
 	// relation.
-	StorageParams *orderedmap.Map[string, string]
-	Indexes       *orderedmap.Map[string, *Index]
-	Triggers      *orderedmap.Map[string, *Trigger]
-	Comment       *string
+	StorageParams *orderedmap.Map[string, string]   `json:"storage_params,omitempty"`
+	Indexes       *orderedmap.Map[string, *Index]   `json:"indexes"`
+	Triggers      *orderedmap.Map[string, *Trigger] `json:"triggers"`
+	Comment       *string                           `json:"comment,omitempty"`
 	// Ignore marks the view as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the
 	// catalog side.
-	Ignore bool
+	Ignore bool `json:"ignore,omitzero"`
 }
 
 func (v View) FQVN() string {

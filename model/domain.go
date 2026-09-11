@@ -7,28 +7,29 @@ import (
 )
 
 type DomainConstraint struct {
-	Name       string
-	Definition string
-	Validated  bool
+	Name       string `json:"name"`
+	Definition string `json:"definition"`
+	// Validated is written even when true, like Constraint.Validated.
+	Validated bool `json:"validated"`
 }
 
 type Domain struct {
-	OID        uint32
-	Schema     string
-	Name       string
-	RenameFrom *string
-	BaseType   string
-	NotNull    bool
-	Default    *string
+	OID        uint32  `json:"-"`
+	Schema     string  `json:"schema"`
+	Name       string  `json:"name"`
+	RenameFrom *string `json:"rename_from,omitempty"`
+	BaseType   string  `json:"base_type"`
+	NotNull    bool    `json:"not_null,omitzero"`
+	Default    *string `json:"default,omitempty"`
 	// Collation in quoted SQL form, ready to follow COLLATE
 	// (e.g. `pg_catalog."C"`). nil for the default collation.
-	Collation   *string
-	Constraints []*DomainConstraint
-	Comment     *string
+	Collation   *string             `json:"collation,omitempty"`
+	Constraints []*DomainConstraint `json:"constraints,omitempty"`
+	Comment     *string             `json:"comment,omitempty"`
 	// Ignore marks the domain as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the
 	// catalog side.
-	Ignore bool
+	Ignore bool `json:"ignore,omitzero"`
 }
 
 func (d Domain) FQDN() string {

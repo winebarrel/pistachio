@@ -69,6 +69,7 @@ nav:
       - guides/executing-sql.md
       - guides/splitting.md
       - guides/formatting.md
+      - guides/parsing.md
   - Reference:
       - reference/commands.md
       - reference/directives.md

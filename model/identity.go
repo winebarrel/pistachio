@@ -13,12 +13,12 @@ import (
 // PostgreSQL derives from the column type and the increment, so the diff is a
 // plain comparison. It is nil for a column that is not an identity column.
 type IdentitySequence struct {
-	Start     int64
-	Min       int64
-	Max       int64
-	Increment int64
-	Cache     int64
-	Cycle     bool
+	Start     int64 `json:"start"`
+	Min       int64 `json:"min"`
+	Max       int64 `json:"max"`
+	Increment int64 `json:"increment"`
+	Cache     int64 `json:"cache"`
+	Cycle     bool  `json:"cycle,omitzero"`
 }
 
 // seqTypeBounds returns the min and max value of a sequence data type. An

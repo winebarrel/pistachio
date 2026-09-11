@@ -77,12 +77,12 @@ func validateDirectives(rawSQL string) error {
 // ExecuteStmt represents an arbitrary SQL statement marked with
 // -- pista:execute or -- pista:execute-first.
 type ExecuteStmt struct {
-	SQL      string // The SQL statement to execute
-	CheckSQL string // Optional condition check SQL (empty = always execute)
+	SQL      string `json:"sql"`                 // The SQL statement to execute
+	CheckSQL string `json:"check_sql,omitempty"` // Optional condition check SQL (empty = always execute)
 	// First reports whether the statement came from -- pista:execute-first,
 	// which runs before the managed DDL instead of after it. Its check SQL is
 	// therefore evaluated against the pre-change schema.
-	First bool
+	First bool `json:"first,omitzero"`
 }
 
 // extractExecuteDirectives scans raw SQL for `-- pista:execute [<check SQL>]`
