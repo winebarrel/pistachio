@@ -36,3 +36,19 @@ make FUZZTIME=10m fuzz
 
 An input that fails is written under the package's `testdata/fuzz/`, and every
 ordinary `make test` replays it from then on, so commit it with the fix.
+
+
+## The JSON Schema
+
+`docs/json/schema-1.0.json` describes the document `pista parse` writes. It is
+generated from the structs rather than written by hand.
+
+```sh
+make json-schema
+```
+
+A test fails when the committed file is not what the generator produces, so run
+it after changing a field of `model` or `parser.ParseResult` and commit the
+result. A published schema is never rewritten: adding a field is a minor bump
+of the version in the file name, while dropping one or changing a type needs a
+new major published beside the old file.

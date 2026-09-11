@@ -100,6 +100,20 @@ A generated column keeps its expression in `default`, next to `"generated": "sto
 Directives show up as fields. `-- pista:renamed-from` becomes `rename_from`, `-- pista:ignore` becomes `"ignore": true`.
 
 
+## The JSON Schema
+
+The document has a JSON Schema, published at
+[https://winebarrel.github.io/pistachio/json/schema-1.0.json](https://winebarrel.github.io/pistachio/json/schema-1.0.json).
+
+```bash
+check-jsonschema --schemafile https://winebarrel.github.io/pistachio/json/schema-1.0.json out.json
+```
+
+It is reflected off the structs the parser fills, so it says what the command writes rather than what a description beside it claims. `make json-schema` regenerates it, and a test fails when the committed file is not what the generator produces.
+
+Its version is its own, not a pistachio release. A published file is never rewritten: a new field is a minor bump, and dropping a field or changing a type gets a new major published beside the old one, so a consumer that pinned a URL keeps the document it validated against.
+
+
 ## What it is not
 
 `parse` reports what the files say, not what a database holds. Filters such as `--include` do not apply, and nothing is compared or diffed. For the current state of a database, use `dump`.
