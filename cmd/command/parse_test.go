@@ -246,3 +246,44 @@ func TestParse_Run_MatchesJSONSchema(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, schema.Validate(inst))
 }
+
+const renamedEnumSQL = `
+CREATE TYPE status AS ENUM (
+    -- pista:renamed-from 'a1'
+    'alpha',
+    -- pista:renamed-from 'b1'
+    'bravo',
+    -- pista:renamed-from 'c1'
+    'charlie',
+    -- pista:renamed-from 'd1'
+    'delta',
+    -- pista:renamed-from 'e1'
+    'echo',
+    -- pista:renamed-from 'f1'
+    'foxtrot'
+);
+`
+
+// TestParse_Run_IsDeterministic pins the output of one schema to one set of
+// bytes. An enum's value_rename_from is a Go map, whose order a run does not
+// otherwise repeat, and a document that differs run to run cannot be committed
+// or diffed.
+func TestParse_Run_IsDeterministic(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", renamedEnumSQL)
+
+	var first string
+	for i := range 8 {
+		var buf bytes.Buffer
+		cmd := &command.Parse{Files: []string{path}}
+		require.NoError(t, cmd.Run(parseClient(), &buf))
+
+		if i == 0 {
+			first = buf.String()
+			require.Contains(t, first, `"value_rename_from"`)
+
+			continue
+		}
+
+		assert.Equal(t, first, buf.String(), "run %d differs", i)
+	}
+}

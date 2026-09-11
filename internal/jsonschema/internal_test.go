@@ -77,17 +77,51 @@ func TestOrderedMapValue_OtherTypes(t *testing.T) {
 }
 
 func TestRefFor(t *testing.T) {
-	assert.Equal(t, "#/$defs/Column", refFor(reflect.TypeFor[*model.Column]()).Ref)
-	assert.Equal(t, "string", refFor(reflect.TypeFor[string]()).Type)
+	ref, err := refFor(reflect.TypeFor[*model.Column]())
+	require.NoError(t, err)
+	assert.Equal(t, "#/$defs/Column", ref.Ref)
+
+	scalar, err := refFor(reflect.TypeFor[string]())
+	require.NoError(t, err)
+	assert.Equal(t, "string", scalar.Type)
+
+	_, err = refFor(reflect.TypeFor[[]string]())
+	require.Error(t, err, "a value type with no JSON type fails rather than being guessed")
 }
 
 func TestJSONType(t *testing.T) {
-	assert.Equal(t, "string", jsonType(reflect.TypeFor[string]()))
-	assert.Equal(t, "boolean", jsonType(reflect.TypeFor[bool]()))
-	assert.Equal(t, "number", jsonType(reflect.TypeFor[float64]()))
-	assert.Equal(t, "number", jsonType(reflect.TypeFor[float32]()))
-	assert.Equal(t, "integer", jsonType(reflect.TypeFor[int64]()))
-	assert.Equal(t, "integer", jsonType(reflect.TypeFor[uint32]()))
+	for _, c := range []struct {
+		typ  reflect.Type
+		want string
+	}{
+		{reflect.TypeFor[string](), "string"},
+		{reflect.TypeFor[bool](), "boolean"},
+		{reflect.TypeFor[float64](), "number"},
+		{reflect.TypeFor[float32](), "number"},
+		{reflect.TypeFor[int64](), "integer"},
+		{reflect.TypeFor[int](), "integer"},
+		{reflect.TypeFor[uint32](), "integer"},
+		{reflect.TypeFor[uint8](), "integer"},
+	} {
+		got, err := jsonType(c.typ)
+		require.NoError(t, err)
+		assert.Equal(t, c.want, got, c.typ.String())
+	}
+}
+
+// A kind jsonType does not name fails the generator rather than being written
+// as an integer.
+func TestJSONType_Unknown(t *testing.T) {
+	for _, typ := range []reflect.Type{
+		reflect.TypeFor[[]string](),
+		reflect.TypeFor[map[string]string](),
+		reflect.TypeFor[complex128](),
+		reflect.TypeFor[any](),
+	} {
+		_, err := jsonType(typ)
+		require.Error(t, err, typ.String())
+		assert.Contains(t, err.Error(), "no JSON type")
+	}
 }
 
 func TestJSONName(t *testing.T) {

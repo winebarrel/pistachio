@@ -121,10 +121,15 @@ func mapper(t reflect.Type) *jsonschema.Schema {
 	}
 
 	if valueType, ok := orderedMapValue(t); ok {
-		return &jsonschema.Schema{
-			Type:                 "object",
-			AdditionalProperties: refFor(valueType),
+		value, err := refFor(valueType)
+		if err != nil {
+			// The mapper cannot fail, so a value type it does not know is
+			// left to the reflector, which describes it as best it can. Build
+			// catches it: the definition the $ref would have named is missing.
+			return nil
 		}
+
+		return &jsonschema.Schema{Type: "object", AdditionalProperties: value}
 	}
 
 	return nil
@@ -211,29 +216,39 @@ func deref(t reflect.Type) reflect.Type {
 	return t
 }
 
-// refFor names the definition of a type the way the reflector does.
-func refFor(t reflect.Type) *jsonschema.Schema {
-	for t.Kind() == reflect.Pointer {
-		t = t.Elem()
+// refFor names the definition of a type the way the reflector does, or the
+// JSON type a scalar is written as.
+func refFor(t reflect.Type) (*jsonschema.Schema, error) {
+	t = deref(t)
+
+	if t.Kind() == reflect.Struct {
+		return &jsonschema.Schema{Ref: "#/$defs/" + t.Name()}, nil
 	}
 
-	if t.Kind() != reflect.Struct {
-		return &jsonschema.Schema{Type: jsonType(t)}
+	name, err := jsonType(t)
+	if err != nil {
+		return nil, err
 	}
 
-	return &jsonschema.Schema{Ref: "#/$defs/" + t.Name()}
+	return &jsonschema.Schema{Type: name}, nil
 }
 
-func jsonType(t reflect.Type) string {
+// jsonType is the JSON type a Go scalar is written as. A kind it does not name
+// is an error rather than a guess: calling it an integer would put a wrong
+// type in a published schema, which is worse than failing the generator.
+func jsonType(t reflect.Type) (string, error) {
 	switch t.Kind() {
 	case reflect.String:
-		return "string"
+		return "string", nil
 	case reflect.Bool:
-		return "boolean"
+		return "boolean", nil
 	case reflect.Float32, reflect.Float64:
-		return "number"
+		return "number", nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "integer", nil
 	default:
-		return "integer"
+		return "", fmt.Errorf("jsonschema: no JSON type for %s", t)
 	}
 }
 
