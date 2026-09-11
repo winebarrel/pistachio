@@ -372,30 +372,6 @@ func TestDump_Run_JSON_OmitSchema(t *testing.T) {
 	assert.Empty(t, table["schema"], "--omit-schema reaches the document")
 }
 
-// The flags that lay SQL out have nothing to change in a JSON document, so
-// they are refused rather than ignored. The check runs before the database is
-// read, so no connection is needed.
-func TestDump_Run_JSON_RejectsSQLFlags(t *testing.T) {
-	for name, set := range map[string]func(*command.Dump){
-		"--split":        func(c *command.Dump) { c.Split = t.TempDir() },
-		"--sort-by-deps": func(c *command.Dump) { c.SortByDeps = true },
-		"--no-format":    func(c *command.Dump) { c.NoFormat = true },
-	} {
-		t.Run(name, func(t *testing.T) {
-			cmd := &command.Dump{}
-			cmd.JSON = true
-			set(cmd)
-
-			var buf bytes.Buffer
-			err := cmd.Run(context.Background(), pistachio.NewClient(&pistachio.Options{}), &buf)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), name)
-			assert.Contains(t, err.Error(), "--json")
-			assert.Empty(t, buf.String())
-		})
-	}
-}
-
 // The filters and --manage-routine decide what the dump holds, so they decide
 // what the document holds.
 func TestDump_Run_JSON_FiltersAndRoutines(t *testing.T) {

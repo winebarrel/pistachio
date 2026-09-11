@@ -16,14 +16,15 @@ import (
 
 type DumpOptions struct {
 	FilterOptions
-	Split      string `xor:"split-sort-by-deps" help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
+	Split      string `xor:"split-sort-by-deps,json-split" help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
-	SortByDeps bool   `xor:"split-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle. Cannot be used with --split."`
+	SortByDeps bool   `xor:"split-sort-by-deps,json-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle. Cannot be used with --split."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
-	NoFormat   bool   `env:"PISTA_NO_FORMAT" help:"Write the dump as the model renders it, without the layout pista fmt applies."`
+	NoFormat   bool   `xor:"json-no-format" env:"PISTA_NO_FORMAT" help:"Write the dump as the model renders it, without the layout pista fmt applies."`
 	// JSON writes the document `pista parse` writes rather than SQL, so the
-	// same schema describes both.
-	JSON bool `env:"PISTA_DUMP_JSON" help:"Write the dump as JSON instead of SQL."`
+	// same schema describes both. The flags that lay SQL out have nothing to
+	// change in it, so kong refuses them alongside it.
+	JSON bool `xor:"json-split,json-sort-by-deps,json-no-format" env:"PISTA_DUMP_JSON" help:"Write the dump as JSON instead of SQL."`
 }
 
 type DumpResult struct {

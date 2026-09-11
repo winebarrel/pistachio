@@ -16,10 +16,6 @@ type Dump struct {
 }
 
 func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {
-	if err := cmd.checkJSON(); err != nil {
-		return err
-	}
-
 	result, err := client.Dump(ctx, &cmd.DumpOptions)
 	if err != nil {
 		return err
@@ -55,32 +51,6 @@ func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 	}
 
 	fmt.Fprintf(w, "-- Wrote %d file(s) to %s\n", count, cmd.Split) //nolint:errcheck
-	return nil
-}
-
-// checkJSON rejects the flags that lay out SQL alongside --json, which has no
-// layout of its own to change: the JSON is one document, written in the order
-// the catalog reports, whatever the model would render.
-func (cmd *Dump) checkJSON() error {
-	if !cmd.JSON {
-		return nil
-	}
-
-	var named []string
-	if cmd.Split != "" {
-		named = append(named, "--split")
-	}
-	if cmd.SortByDeps {
-		named = append(named, "--sort-by-deps")
-	}
-	if cmd.NoFormat {
-		named = append(named, "--no-format")
-	}
-
-	if len(named) > 0 {
-		return fmt.Errorf("%s cannot be used with --json", strings.Join(named, " and "))
-	}
-
 	return nil
 }
 
