@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Add `--json` to `dump` (`$PISTA_DUMP_JSON`). It writes the document `pista parse` writes, read from the database rather than from files, so the published JSON Schema describes both.
+* Add `--json` to `dump` (`$PISTA_DUMP_JSON`). It writes JSON in the same shape `pista parse` writes, read from the database rather than from files, so the published JSON Schema describes both.
 
 * Write a relation's storage parameters as an empty object rather than null in that document when `--manage-storage-param` is off, the way unread routines are written. The SQL is unaffected.
 

@@ -21,8 +21,8 @@ type DumpOptions struct {
 	SortByDeps bool   `xor:"split-sort-by-deps,json-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle. Cannot be used with --split."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
 	NoFormat   bool   `xor:"json-no-format" env:"PISTA_NO_FORMAT" help:"Write the dump as the model renders it, without the layout pista fmt applies."`
-	// JSON writes the document `pista parse` writes rather than SQL, so the
-	// same schema describes both. The flags that lay SQL out have nothing to
+	// JSON writes the dump as JSON rather than SQL, in the shape `pista parse`
+	// writes, so the same schema describes both. The flags that lay SQL out have nothing to
 	// change in it, so kong refuses them alongside it.
 	JSON bool `xor:"json-split,json-sort-by-deps,json-no-format" env:"PISTA_DUMP_JSON" help:"Write the dump as JSON instead of SQL."`
 }
@@ -245,8 +245,8 @@ func (r *DumpResult) routines() *orderedmap.Map[string, *model.Routine] {
 	return routines
 }
 
-// Document returns what the dump holds as the document `pista parse` writes,
-// so one JSON Schema describes both. The accessors carry --omit-schema, and a
+// Document returns what the dump holds in the shape `pista parse` writes, so
+// one JSON Schema describes both. The accessors carry --omit-schema, and a
 // database holds no `-- pista:execute` statements, so that half is empty.
 func (r *DumpResult) Document() *parser.ParseResult {
 	return &parser.ParseResult{

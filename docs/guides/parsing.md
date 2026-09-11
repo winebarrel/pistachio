@@ -105,7 +105,7 @@ It is reflected off the structs the parser fills, so it says what the command wr
 
 ## From a database
 
-`pista dump --json` writes the same document for a database.
+`pista dump --json` writes a document of this shape for a database.
 
 The two do not agree field for field, because a database knows things a schema file does not state. `parse` fills a field from what the file writes and leaves the rest at its zero value, while the catalog reports the effective value whether or not anyone wrote it. A column's `storage_type` is the clearest case: the catalog gives every column one, `plain` or `extended` or another, and `parse` fills it only where the file writes `SET STORAGE`. `oid`, a column's `type_storage` and `serial_sequence`, a constraint's `columns` and `inherited`, and an identity column's `not_null` go the same way.
 
