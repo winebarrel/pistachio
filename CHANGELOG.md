@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.51.0] - 2026-09-11
 
 * Add `--json` to `dump` (`$PISTA_DUMP_JSON`). It writes JSON in the same shape `pista parse` writes, read from the database rather than from files, so the published JSON Schema describes both.
 
