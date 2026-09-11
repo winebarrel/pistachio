@@ -145,6 +145,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | joomla | joomla | [joomla/joomla-cms](https://github.com/joomla/joomla-cms) |
 | harbor | harbor | [goharbor/harbor](https://github.com/goharbor/harbor) |
 | bigbluebutton | bigbluebutton | [bigbluebutton/bigbluebutton](https://github.com/bigbluebutton/bigbluebutton) |
+| listmonk | listmonk | [knadh/listmonk](https://github.com/knadh/listmonk) |
 
 ## Coverage
 
@@ -154,11 +155,12 @@ last counted 2026-08-24; the Sequences column was counted on 15.18 throughout,
 Triggers, added 2026-08-24, and Routines, added 2026-08-25, on 15.18 for every
 sample; wso2is, nightingale, and danbooru were counted 2026-08-29 on 15.17;
 openolat and inaturalist 2026-08-30 on 16.13; joomla and harbor 2026-09-01 on
-16.13; bigbluebutton 2026-09-11 on 16.13). "Constraints" excludes foreign
+16.13; bigbluebutton and listmonk 2026-09-11 on 16.13). "Constraints"
+excludes foreign
 keys; "Types" counts enums and domains; "Sequences" counts standalone sequences
 only, since pistachio manages the sequence behind a serial or identity column as
 an attribute of that column rather than as an object of its own. Counting those
-too would add 2,209 more, 886 of them gitlab's and 210 chado's. "Triggers"
+too would add 2,221 more, 886 of them gitlab's and 210 chado's. "Triggers"
 excludes the internal triggers a foreign key installs and the clones PostgreSQL
 puts on each partition of a partitioned table's trigger, the same as what
 pistachio reads and dump writes. "Routines" counts what `--manage-routine`
@@ -225,9 +227,10 @@ schema and pistachio does not read them either.
 | joomla | 76 | 830 | 287 | 0 | 84 | 0 | 0 | 0 | 0 | 1 |
 | harbor | 48 | 390 | 119 | 13 | 90 | 0 | 0 | 0 | 10 | 1 |
 | bigbluebutton | 54 | 532 | 147 | 65 | 51 | 86 | 0 | 0 | 25 | 26 |
-| **Total** | **5,833** | **49,729** | **18,097** | **7,166** | **10,117** | **2,046** | **71** | **421** | **590** | **817** |
+| listmonk | 16 | 126 | 65 | 19 | 25 | 3 | 14 | 0 | 0 | 0 |
+| **Total** | **5,849** | **49,855** | **18,162** | **7,185** | **10,142** | **2,049** | **85** | **421** | **590** | **817** |
 
-The 55 dumps come to about 166,000 lines of SQL. chado is 43,700 of them, the
+The 56 dumps come to about 166,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about 40 percent
 of the constraints, more than a third of the indexes, and roughly a third of the
 columns and foreign keys, over a quarter of the tables; musicbrainz, openolat,
@@ -248,14 +251,16 @@ own that calls `unaccent`), enums and
 domains (dvdrental, pagila, employees, mediawiki, and icingadb, whose 13 types
 are 6 enums and 7 domains, each domain carrying a named CHECK, plus
 icinga_director, whose 20 enums are more than any other sample and whose one
-domain carries two anonymous CHECKs, and guacamole's 5 enums), foreign keys
+domain carries two anonymous CHECKs, guacamole's 5 enums, and listmonk's 14
+over 16 tables), foreign keys
 that all declare their referential actions (all 171 of icinga_director's name
 both ON UPDATE and ON DELETE, in six combinations), unique indexes
 over an expression and a gin index over `to_tsvector` (rt), columns typed by a
 contrib extension (sourcegraph, with 49 `citext` columns, and six extensions
 installed at once), two gist indexes that name an `inet_ops` operator class and
 one over four columns, which needs `btree_gist` (osm), materialized
-views (adventureworks, pagila), tsvector
+views (adventureworks, pagila, and listmonk, whose three views are all
+materialized), tsvector
 columns (dvdrental, pagila), a non-default
 collation (musicbrainz), composite types (ovirt declares 10 of them, more than
 any other sample, and sourcegraph and chado 2 each), standalone sequences
@@ -297,7 +302,7 @@ partitions is attached across one; and triggers
 state; kea's 81 outnumber its 64 tables; bigbluebutton's 25 and ledgersmb's 11
 come next).
 
-Routines are concentrated the same way. Twenty-two of the 55 samples declare
+Routines are concentrated the same way. Twenty-two of the 56 samples declare
 one at all, and gitlab's 337, kea's and musicbrainz's 130 each, and chado's 94
 are 691 of the 817. Two thirds of them, 546, return `trigger`, though not
 every one of those has a trigger to call it: musicbrainz's 89 do not, since its
@@ -391,19 +396,21 @@ strip only what is irrelevant to a schema round trip:
   themselves, and every table name carries the literal `#__` prefix Joomla
   substitutes at install time; quoted, it is just an ordinary identifier and
   needs no rewriting.
-- **kea**, **dolphinscheduler**, **wso2apim**, **wso2is**: each dump drops what
-  it is about to create with `IF EXISTS`, so `client_min_messages` is raised to
-  `warning` for the load. wso2is is also where five index names run past the 63
-  character identifier limit, and the server says so as it truncates them.
+- **kea**, **dolphinscheduler**, **wso2apim**, **wso2is**, **listmonk**: each
+  dump drops what it is about to create with `IF EXISTS`, so
+  `client_min_messages` is raised to `warning` for the load. wso2is is also
+  where five index names run past the 63 character identifier limit, and the
+  server says so as it truncates them.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
   **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,
   **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
-  **nightingale**, **openolat**: these dumps name no schema at all, so whichever
-  schema comes first in `search_path` gets them. Each is loaded into a schema of
-  its own instead of `public`, so that `make schema`, which puts every sample in
-  one database, does not stack them on top of the other public samples
-  (mediawiki and pagila both define `actor` and `category`). gitlab creates
+  **nightingale**, **openolat**, **listmonk**: these dumps name no schema at
+  all, so whichever schema comes first in `search_path` gets them. Each is
+  loaded into a schema of its own instead of `public`, so that `make schema`,
+  which puts every sample in one database, does not stack them on top of the
+  other public samples (mediawiki and pagila both define `actor` and
+  `category`). gitlab creates
   `gitlab_partitions_static` and `gitlab_partitions_dynamic` itself and never
   qualifies anything with `public`, so its 1,083 top-level tables follow
   `search_path` into `gitlab` while its partitions stay in the two schemas it

@@ -72,6 +72,7 @@ inaturalist|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/inatur
 joomla|sample-db-joomla||joomla
 harbor|sample-db-harbor||harbor
 bigbluebutton|sample-db-bigbluebutton|URL=https://raw.githubusercontent.com/bigbluebutton/bigbluebutton/4c3a477fe3e34a7da6854c491be2c8d02e83c083/bbb-graphql-server/bbb_schema.sql SCHEMA=bigbluebutton|bigbluebutton
+listmonk|sample-db-url-schema|URL=https://raw.githubusercontent.com/knadh/listmonk/594b74056dd8a0d3a7621a32898ee38bfbe10e96/schema.sql SCHEMA=listmonk CLIENT_MIN_MESSAGES=warning|listmonk
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -137,11 +138,11 @@ sample-db-mimiciv:
 #
 # CLIENT_MIN_MESSAGES defaults to notice, the server default; a sample whose
 # dump is noisy on a fresh database can raise it from its SAMPLES record. kea,
-# dolphinscheduler, wso2apim, and wso2is raise it to warning, since each drops
-# what it is about to create with IF EXISTS, wso2is also because five of its
-# index names are over 63 characters and the server says so as it truncates
-# them, and ranger to error, since it drops the same way and commits outside a
-# transaction, which adds a warning per statement.
+# dolphinscheduler, wso2apim, wso2is, and listmonk raise it to warning, since
+# each drops what it is about to create with IF EXISTS, wso2is also because
+# five of its index names are over 63 characters and the server says so as it
+# truncates them, and ranger to error, since it drops the same way and commits
+# outside a transaction, which adds a warning per statement.
 CLIENT_MIN_MESSAGES ?= notice
 
 .PHONY: sample-db-url-schema
