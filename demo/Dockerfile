@@ -16,7 +16,7 @@ ARG PISTA_VERSION
 RUN CGO_ENABLED=1 go build -o /out/pista -ldflags "-X main.version=${PISTA_VERSION#v}" ./cmd/pista
 
 FROM postgres:18-alpine
-RUN apk add --no-cache bash sudo vim less bat && \
+RUN apk add --no-cache bash sudo vim less bat jq && \
     echo 'postgres ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/postgres-nopasswd && \
     chmod 0440 /etc/sudoers.d/postgres-nopasswd && \
     printf "alias ll='ls -lF'\nalias vi='vim'\nexport LESSOPEN='| bat --color=always -pp %%s'\nexport LESS='-R'\n" > /var/lib/postgresql/.bashrc && \
