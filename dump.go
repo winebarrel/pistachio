@@ -18,7 +18,7 @@ type DumpOptions struct {
 	FilterOptions
 	Split      string `xor:"split-sort-by-deps,json-split" help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
-	SortByDeps bool   `xor:"split-sort-by-deps,json-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle. Cannot be used with --split."`
+	SortByDeps bool   `xor:"split-sort-by-deps,json-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
 	NoFormat   bool   `xor:"json-no-format" env:"PISTA_NO_FORMAT" help:"Write the dump as the model renders it, without the layout pista fmt applies."`
 	// JSON writes the dump as JSON rather than SQL, in the shape `pista parse`

@@ -21,7 +21,7 @@ type ApplyOptions struct {
 	WithTx                   bool     `xor:"tx-mode,tx-choice" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
 	TryTx                    bool     `xor:"tx-choice" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. A diff containing CONCURRENTLY index DDL runs without a transaction instead of failing."`
 	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
-	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops. Cannot be combined with --with-tx."`
+	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
 	Exclusive                bool     `xor:"exclusive" env:"PISTA_EXCLUSIVE" help:"Make apply runs on the same database mutually exclusive: fail immediately when another exclusive apply is running."`

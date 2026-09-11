@@ -245,9 +245,8 @@ Flags:
                                    inline) and emit plain CREATE/DROP INDEX
                                    ($PISTA_DISABLE_INDEX_CONCURRENTLY).
       --force-index-concurrently
-                                   Force CONCURRENTLY on every CREATE/DROP
-                                   INDEX, including pure drops.
-                                   Cannot be combined with --with-tx
+                                   Force CONCURRENTLY on every
+                                   CREATE/DROP INDEX, including pure drops
                                    ($PISTA_FORCE_INDEX_CONCURRENTLY).
       --bulk-alter                 Combine consecutive ALTER TABLE actions on
                                    the same table into a single statement.
@@ -333,7 +332,7 @@ Flags:
       --omit-schema             Omit schema name from the dump output.
       --sort-by-deps            Order the dump output by object dependency
                                 instead of by name. Errors when the dependency
-                                graph has a cycle. Cannot be used with --split.
+                                graph has a cycle.
       --no-read-only            Open the database connection read-write.
                                 By default dump uses a read-only connection
                                 ($PISTA_NO_READ_ONLY).
