@@ -21,6 +21,12 @@ func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer)
 		return err
 	}
 
+	// The JSON carries no header: a comment naming the connection and the
+	// object count would not parse, and the count is in the document itself.
+	if cmd.JSON {
+		return writeJSON(w, result.Document())
+	}
+
 	if cmd.Split == "" {
 		if connInfo, err := client.ConnInfoComment(); err == nil {
 			fmt.Fprintln(w, connInfo) //nolint:errcheck

@@ -154,3 +154,20 @@ func TestRun_Pager(t *testing.T) {
 	assert.True(t, strings.HasPrefix(string(got), "-- Connected to "), "got: %q", got)
 	assert.Contains(t, string(got), "CREATE TABLE public.users")
 }
+
+// The flags that lay SQL out have nothing to change in a JSON document, so
+// kong refuses them alongside --json. The parser rejects them before a
+// database is reached, so no connection is needed.
+func TestRun_DumpJSONExclusiveFlags(t *testing.T) {
+	for _, flag := range []string{"--split=/tmp", "--sort-by-deps", "--no-format"} {
+		t.Run(flag, func(t *testing.T) {
+			var stdout bytes.Buffer
+			code, stderr := runCLI(t, &stdout, "dump", "--json", flag)
+			// kong exits with 80 on a usage error.
+			assert.Equal(t, 80, code)
+			assert.Contains(t, stderr, "can't be used together")
+			assert.Contains(t, stderr, "--json")
+			assert.Empty(t, stdout.String())
+		})
+	}
+}

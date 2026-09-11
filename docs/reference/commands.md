@@ -245,9 +245,8 @@ Flags:
                                    inline) and emit plain CREATE/DROP INDEX
                                    ($PISTA_DISABLE_INDEX_CONCURRENTLY).
       --force-index-concurrently
-                                   Force CONCURRENTLY on every CREATE/DROP
-                                   INDEX, including pure drops.
-                                   Cannot be combined with --with-tx
+                                   Force CONCURRENTLY on every
+                                   CREATE/DROP INDEX, including pure drops
                                    ($PISTA_FORCE_INDEX_CONCURRENTLY).
       --bulk-alter                 Combine consecutive ALTER TABLE actions on
                                    the same table into a single statement.
@@ -333,12 +332,14 @@ Flags:
       --omit-schema             Omit schema name from the dump output.
       --sort-by-deps            Order the dump output by object dependency
                                 instead of by name. Errors when the dependency
-                                graph has a cycle. Cannot be used with --split.
+                                graph has a cycle.
       --no-read-only            Open the database connection read-write.
                                 By default dump uses a read-only connection
                                 ($PISTA_NO_READ_ONLY).
       --no-format               Write the dump as the model renders it, without
                                 the layout pista fmt applies ($PISTA_NO_FORMAT).
+      --json                    Write the dump as JSON instead of SQL
+                                ($PISTA_DUMP_JSON).
 ```
 
 </details>
@@ -603,6 +604,8 @@ pista dump --omit-schema
 The output goes through the formatter that `pista fmt` runs, so a dump needs no formatting. `--no-format` writes the layout the model renders on its own. See [Formatting schema files](../guides/formatting.md).
 
 `GRANT`, `CREATE EXTENSION` and roles are out of scope and are not written. A dump loaded into an empty database therefore restores the schema, not the privileges on it.
+
+`--json` writes JSON instead of SQL, in the same shape `pista parse` writes. Also available as `$PISTA_DUMP_JSON`. `--split`, `--sort-by-deps` and `--no-format` lay SQL out and cannot be used with it. See [Parsing schema files](../guides/parsing.md) for the shape of the document.
 
 
 ## fmt

@@ -1084,3 +1084,95 @@ func TestDumpResult_SortByDeps_OmitSchemaCollisionFallsBackInString(t *testing.T
 		})
 	}
 }
+
+// Document carries every object kind the dump holds, so a JSON dump reports
+// what a SQL one does.
+func TestDumpResult_Document(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TYPE public.status AS ENUM ('active', 'inactive');
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+CREATE TYPE public.addr AS (street text, city text);
+CREATE SEQUENCE public.counter;
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	result, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	doc := result.Document()
+	assert.Equal(t, 1, doc.Tables.Len())
+	assert.Equal(t, 1, doc.Views.Len())
+	assert.Equal(t, 1, doc.Enums.Len())
+	assert.Equal(t, 1, doc.Domains.Len())
+	assert.Equal(t, 1, doc.CompositeTypes.Len())
+	assert.Equal(t, 1, doc.Sequences.Len())
+	assert.Equal(t, 0, doc.Routines.Len())
+
+	// A database holds no execute statements.
+	assert.Empty(t, doc.ExecuteStmts)
+}
+
+// --omit-schema reaches the document, the way it reaches the SQL.
+func TestDumpResult_Document_OmitSchema(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer);`)
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	result, err := client.Dump(ctx, &DumpOptions{OmitSchema: true})
+	require.NoError(t, err)
+
+	doc := result.Document()
+	table, ok := doc.Tables.GetOk("users")
+	require.True(t, ok, "the key loses the schema")
+	assert.Empty(t, table.Schema)
+}
+
+// A dump that read nothing still carries every object kind, as an empty map.
+func TestDumpResult_Document_Empty(t *testing.T) {
+	doc := (&DumpResult{}).Document()
+
+	assert.Equal(t, 0, doc.Tables.Len())
+	assert.Equal(t, 0, doc.Views.Len())
+	assert.Equal(t, 0, doc.Enums.Len())
+	assert.Equal(t, 0, doc.Domains.Len())
+	assert.Equal(t, 0, doc.CompositeTypes.Len())
+	assert.Equal(t, 0, doc.Sequences.Len())
+	assert.Equal(t, 0, doc.Routines.Len())
+}
+
+// Two schemas share one document, each object under its qualified name.
+func TestDumpResult_Document_MultipleSchemas(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer);`)
+	connStr := setupSchemaDB(t, ctx, "other", `CREATE TABLE other.items (id integer);`)
+
+	client := NewClient(&Options{ConnString: connStr, Schemas: []string{"public", "other"}})
+
+	result, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	doc := result.Document()
+	assert.ElementsMatch(t, []string{"public.users", "other.items"}, doc.Tables.CollectKeys())
+}
