@@ -625,7 +625,6 @@ The statements themselves are left alone: only the whitespace between the tokens
 See [Formatting schema files](../guides/formatting.md) for the layout rules.
 
 
-
 ## parse
 
 Parse schema SQL files and print the objects they declare as JSON. The files go through the same parser `plan` and `apply` use. No database is read.

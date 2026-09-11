@@ -60,35 +60,35 @@ func (b ColumnGenerated) IsVirtualGeneratedColumn() bool {
 
 type Column struct {
 	Name       string  `json:"name"`
-	RenameFrom *string `json:"rename_from,omitempty"`
+	RenameFrom *string `json:"rename_from"`
 	TypeName   string  `json:"type"`
 	// SerialSequence names the sequence a serial column owns, schema
 	// qualified. Only the catalog fills it: a type name says the column is a
 	// serial, but not what PostgreSQL called its sequence. nil otherwise.
-	SerialSequence *string        `json:"serial_sequence,omitempty"`
-	NotNull        bool           `json:"not_null,omitzero"`
-	NotNullName    *string        `json:"not_null_name,omitempty"`
-	Default        *string        `json:"default,omitempty"`
-	Identity       ColumnIdentity `json:"identity,omitzero"`
+	SerialSequence *string        `json:"serial_sequence"`
+	NotNull        bool           `json:"not_null"`
+	NotNullName    *string        `json:"not_null_name"`
+	Default        *string        `json:"default"`
+	Identity       ColumnIdentity `json:"identity"`
 	// IdentitySeq holds the sequence parameters of an identity column. It is
 	// nil when the column is not an identity column.
-	IdentitySeq *IdentitySequence `json:"identity_sequence,omitempty"`
-	Generated   ColumnGenerated   `json:"generated,omitzero"`
+	IdentitySeq *IdentitySequence `json:"identity_sequence"`
+	Generated   ColumnGenerated   `json:"generated"`
 	// Collation in quoted SQL form, ready to follow COLLATE
 	// (e.g. `pg_catalog."C"`). nil for the default collation.
-	Collation *string `json:"collation,omitempty"`
+	Collation *string `json:"collation"`
 	// StorageType is the column's TOAST strategy: plain, external, extended
 	// or main. The desired side holds what the definition wrote, empty when
 	// it wrote nothing or wrote DEFAULT.
-	StorageType string `json:"storage_type,omitempty"`
+	StorageType string `json:"storage_type"`
 	// TypeStorage is the strategy the column's type defaults to. Only the
 	// catalog fills it, since the desired side cannot know it, and the diff
 	// resolves an unwritten StorageType against it.
-	TypeStorage string `json:"type_storage,omitempty"`
+	TypeStorage string `json:"type_storage"`
 	// Compression is the column's TOAST compression method (pglz, lz4), empty
 	// when the column carries none and default_toast_compression decides.
-	Compression string  `json:"compression,omitempty"`
-	Comment     *string `json:"comment,omitempty"`
+	Compression string  `json:"compression"`
+	Comment     *string `json:"comment"`
 }
 
 func (col *Column) String() string {

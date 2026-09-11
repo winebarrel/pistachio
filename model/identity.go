@@ -18,7 +18,7 @@ type IdentitySequence struct {
 	Max       int64 `json:"max"`
 	Increment int64 `json:"increment"`
 	Cache     int64 `json:"cache"`
-	Cycle     bool  `json:"cycle,omitzero"`
+	Cycle     bool  `json:"cycle"`
 }
 
 // seqTypeBounds returns the min and max value of a sequence data type. An

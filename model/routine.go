@@ -14,51 +14,51 @@ import (
 // BEGIN ATOMIC form: such a body records real pg_depend entries on the tables
 // it reads, which contradicts the create order pistachio uses for routines.
 type Routine struct {
-	OID       uint32        `json:"-"`
+	OID       uint32        `json:"oid"`
 	Schema    string        `json:"schema"`
 	Name      string        `json:"name"`
-	Procedure bool          `json:"procedure,omitzero"`
-	Args      []*RoutineArg `json:"args,omitempty"`
+	Procedure bool          `json:"procedure"`
+	Args      []*RoutineArg `json:"args"`
 	// ReturnType is empty for a procedure. RETURNS TABLE is stored as "record"
 	// with ReturnsSet true; the columns live in Args with mode TABLE.
-	ReturnType string `json:"return_type,omitempty"`
-	ReturnsSet bool   `json:"returns_set,omitzero"`
+	ReturnType string `json:"return_type"`
+	ReturnsSet bool   `json:"returns_set"`
 	Language   string `json:"language"`
 	// Body is the string in the AS clause. For LANGUAGE c the AS clause names
 	// two strings, and Body holds the link symbol while ObjFile holds the
 	// object file.
 	Body            string `json:"body"`
-	ObjFile         string `json:"obj_file,omitempty"`
+	ObjFile         string `json:"obj_file"`
 	Volatility      string `json:"volatility"` // IMMUTABLE, STABLE or VOLATILE
-	Strict          bool   `json:"strict,omitzero"`
-	SecurityDefiner bool   `json:"security_definer,omitzero"`
-	Leakproof       bool   `json:"leakproof,omitzero"`
+	Strict          bool   `json:"strict"`
+	SecurityDefiner bool   `json:"security_definer"`
+	Leakproof       bool   `json:"leakproof"`
 	Parallel        string `json:"parallel"` // SAFE, RESTRICTED or UNSAFE
 	// Cost and Rows are nil when the routine carries the default for its
 	// language, matching pg_get_functiondef, which prints neither.
-	Cost   *float64         `json:"cost,omitempty"`
-	Rows   *float64         `json:"rows,omitempty"`
-	Config []*RoutineConfig `json:"config,omitempty"`
+	Cost   *float64         `json:"cost"`
+	Rows   *float64         `json:"rows"`
+	Config []*RoutineConfig `json:"config"`
 	// Comment is read from pg_description on the catalog side and from
 	// COMMENT ON FUNCTION / PROCEDURE on the desired side.
-	Comment *string `json:"comment,omitempty"`
+	Comment *string `json:"comment"`
 	// Ignore marks the routine as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the
 	// catalog side.
-	Ignore bool `json:"ignore,omitzero"`
+	Ignore bool `json:"ignore"`
 }
 
 // RoutineArg is one entry of a routine's parameter list.
 type RoutineArg struct {
 	// Mode is "", "OUT", "INOUT", "VARIADIC" or "TABLE". An empty Mode is IN.
-	Mode string `json:"mode,omitempty"`
-	Name string `json:"name,omitempty"`
+	Mode string `json:"mode"`
+	Name string `json:"name"`
 	// Type carries no type modifier: PostgreSQL discards one on a parameter,
 	// so keeping it would differ from what the catalog reports back.
 	Type string `json:"type"`
 	// Default is the deparsed default expression, empty when the parameter
 	// has none.
-	Default string `json:"default,omitempty"`
+	Default string `json:"default"`
 }
 
 // RoutineConfig is one SET clause on a routine (pg_proc.proconfig).

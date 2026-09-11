@@ -63,10 +63,62 @@ func TestParse_Run(t *testing.T) {
 	// consumer can index them without checking for presence.
 	assert.Equal(t, map[string]any{}, result["views"])
 	assert.Equal(t, map[string]any{}, result["domains"])
+}
 
-	// Internal fields stay out of the output.
-	assert.NotContains(t, buf.String(), "OID")
-	assert.NotContains(t, buf.String(), "oid")
+// Every field is written whatever it holds, so a consumer reads the same keys
+// off every object of a kind rather than testing for their presence.
+func TestParse_Run_WritesEveryField(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", "create table t (note text);")
+
+	var buf bytes.Buffer
+	cmd := &command.Parse{Files: []string{path}}
+	require.NoError(t, cmd.Run(parseClient(), &buf))
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+
+	table := result["tables"].(map[string]any)["public.t"].(map[string]any)
+	for _, key := range []string{
+		"oid", "schema", "name", "rename_from", "bulk_alter", "ignore",
+		"table_space", "storage_params", "unlogged", "partitioned",
+		"partition_def", "partition_of", "partition_bound", "row_security",
+		"force_row_security", "columns", "constraints", "foreign_keys",
+		"indexes", "policies", "triggers", "comment",
+	} {
+		assert.Contains(t, table, key)
+	}
+
+	col := table["columns"].(map[string]any)["note"].(map[string]any)
+	for _, key := range []string{
+		"name", "rename_from", "type", "serial_sequence", "not_null",
+		"not_null_name", "default", "identity", "identity_sequence",
+		"generated", "collation", "storage_type", "type_storage",
+		"compression", "comment",
+	} {
+		assert.Contains(t, col, key)
+	}
+
+	// The top level carries every object kind, and the execute statements.
+	for _, key := range []string{
+		"tables", "views", "enums", "domains", "composite_types", "sequences",
+		"routines", "execute_stmts",
+	} {
+		assert.Contains(t, result, key)
+	}
+	assert.Equal(t, []any{}, result["execute_stmts"])
+}
+
+// A check expression carries characters encoding/json v1 escapes. The command
+// writes with v2, which leaves them alone.
+func TestParse_Run_NoHTMLEscape(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", "create table t (amt numeric, check (amt > 0));")
+
+	var buf bytes.Buffer
+	cmd := &command.Parse{Files: []string{path}}
+	require.NoError(t, cmd.Run(parseClient(), &buf))
+
+	assert.Contains(t, buf.String(), "CHECK (amt > 0)")
+	assert.NotContains(t, buf.String(), "\\u003e")
 }
 
 func TestParse_Run_Directives(t *testing.T) {

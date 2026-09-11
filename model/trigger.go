@@ -51,7 +51,7 @@ type Trigger struct {
 	Schema     string  `json:"schema"`
 	Table      string  `json:"table"`
 	Name       string  `json:"name"`
-	RenameFrom *string `json:"rename_from,omitempty"`
+	RenameFrom *string `json:"rename_from"`
 	// Definition is the whole CREATE TRIGGER statement without its
 	// terminator: what pg_get_triggerdef writes on the catalog side, and what
 	// pg_query deparses on the desired side. The two renderings differ in

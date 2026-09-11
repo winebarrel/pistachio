@@ -23,7 +23,7 @@ type ParseResult struct {
 	CompositeTypes *orderedmap.Map[string, *model.CompositeType] `json:"composite_types"`
 	Sequences      *orderedmap.Map[string, *model.Sequence]      `json:"sequences"`
 	Routines       *orderedmap.Map[string, *model.Routine]       `json:"routines"`
-	ExecuteStmts   []*ExecuteStmt                                `json:"execute_stmts,omitempty"`
+	ExecuteStmts   []*ExecuteStmt                                `json:"execute_stmts"`
 }
 
 // warnWriter receives warnings about statements pistachio does not support and

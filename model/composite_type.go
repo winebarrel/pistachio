@@ -12,25 +12,25 @@ type CompositeAttribute struct {
 	TypeName string `json:"type"`
 	// Collation in quoted SQL form, ready to follow COLLATE
 	// (e.g. `pg_catalog."C"`). nil for the default collation.
-	Collation *string `json:"collation,omitempty"`
+	Collation *string `json:"collation"`
 	// RenameFrom maps the attribute to the current attribute it renames. Set by
 	// the parser from an inline -- pista:renamed-from directive; always nil on
 	// the catalog side.
-	RenameFrom *string `json:"rename_from,omitempty"`
-	Comment    *string `json:"comment,omitempty"`
+	RenameFrom *string `json:"rename_from"`
+	Comment    *string `json:"comment"`
 }
 
 type CompositeType struct {
-	OID        uint32                `json:"-"`
+	OID        uint32                `json:"oid"`
 	Schema     string                `json:"schema"`
 	Name       string                `json:"name"`
-	RenameFrom *string               `json:"rename_from,omitempty"`
+	RenameFrom *string               `json:"rename_from"`
 	Attributes []*CompositeAttribute `json:"attributes"`
-	Comment    *string               `json:"comment,omitempty"`
+	Comment    *string               `json:"comment"`
 	// Ignore marks the composite type as unmanaged (set by -- pista:ignore).
 	// Ignored objects are not created, altered, or dropped; always false on the
 	// catalog side.
-	Ignore bool `json:"ignore,omitzero"`
+	Ignore bool `json:"ignore"`
 }
 
 func (ct CompositeType) FQCN() string {

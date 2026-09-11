@@ -36,17 +36,15 @@ func (c PolicyCommand) MarshalJSON() ([]byte, error) {
 }
 
 type Policy struct {
-	Name       string  `json:"name"`
-	RenameFrom *string `json:"rename_from,omitempty"`
-	Schema     string  `json:"schema"`
-	Table      string  `json:"table"`
-	// Permissive is written even when true: a permissive policy is the normal
-	// case, so an absent field could not mean false.
+	Name       string        `json:"name"`
+	RenameFrom *string       `json:"rename_from"`
+	Schema     string        `json:"schema"`
+	Table      string        `json:"table"`
 	Permissive bool          `json:"permissive"`
 	Command    PolicyCommand `json:"command"`
-	Roles      []string      `json:"roles,omitempty"`
-	Using      *string       `json:"using,omitempty"`
-	WithCheck  *string       `json:"with_check,omitempty"`
+	Roles      []string      `json:"roles"`
+	Using      *string       `json:"using"`
+	WithCheck  *string       `json:"with_check"`
 }
 
 func (p *Policy) String() string {
