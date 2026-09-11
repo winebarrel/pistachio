@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -286,4 +287,34 @@ func TestParse_Run_IsDeterministic(t *testing.T) {
 
 		assert.Equal(t, first, buf.String(), "run %d differs", i)
 	}
+}
+
+// Deterministic sorts the keys of a Go map, so value_rename_from comes out in
+// that order while the values keep the one the file writes.
+func TestParse_Run_ValueRenameFromIsSorted(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", `
+CREATE TYPE s AS ENUM (
+    -- pista:renamed-from 'z1'
+    'zulu',
+    -- pista:renamed-from 'y1'
+    'yankee',
+    -- pista:renamed-from 'a1'
+    'alpha'
+);
+`)
+
+	var buf bytes.Buffer
+	cmd := &command.Parse{Files: []string{path}}
+	require.NoError(t, cmd.Run(parseClient(), &buf))
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+	enum := result["enums"].(map[string]any)["public.s"].(map[string]any)
+	assert.Equal(t, []any{"zulu", "yankee", "alpha"}, enum["values"], "the file's order")
+
+	// Unmarshaling into a map loses the order, so read the written bytes.
+	written := buf.String()
+	renames := written[strings.Index(written, `"value_rename_from"`):]
+	assert.Less(t, strings.Index(renames, `"alpha"`), strings.Index(renames, `"yankee"`))
+	assert.Less(t, strings.Index(renames, `"yankee"`), strings.Index(renames, `"zulu"`))
 }

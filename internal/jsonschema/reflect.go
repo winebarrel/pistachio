@@ -13,6 +13,7 @@ import (
 	"github.com/winebarrel/pistachio/parser"
 )
 
+// Version is the version the schema's file name and URL carry.
 const Version = "1.0"
 
 // Path is where the file sits in the repository and on the documentation site.

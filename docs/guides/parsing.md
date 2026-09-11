@@ -91,7 +91,7 @@ What PostgreSQL stores as a character code is written as a word. A constraint's 
 
 A generated column keeps its expression in `default`, next to `"generated": "stored"`, which is where the model holds it.
 
-Directives show up as fields. `-- pista:renamed-from` becomes `rename_from`, `-- pista:ignore` becomes `"ignore": true`.
+Directives show up as fields. `-- pista:renamed-from` becomes `rename_from`, `-- pista:ignore` becomes `"ignore": true`. On an enum value the rename lands in the enum's `value_rename_from`, keyed by the new value and sorted by it, while `values` stays in the order the file writes.
 
 
 ## The JSON Schema
