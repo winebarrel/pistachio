@@ -444,3 +444,80 @@ func TestDump_Run_JSON_Empty(t *testing.T) {
 
 	assert.NoError(t, validateAgainstJSONSchema(t, buf.Bytes()))
 }
+
+// Storage parameters are unmanaged without --manage-storage-param, and so are
+// routines without --manage-routine. Both are written as an empty object, so
+// one document does not spell the same fact two ways.
+func TestDump_Run_JSON_UnmanagedAreEmptyObjects(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.docs (id integer) WITH (fillfactor = 70);
+CREATE MATERIALIZED VIEW public.recent AS SELECT id FROM public.docs;
+CREATE FUNCTION public.noop() RETURNS void LANGUAGE sql AS 'SELECT';`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Dump{}
+	cmd.JSON = true
+	require.NoError(t, cmd.Run(ctx, client, &buf))
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+
+	table := result["tables"].(map[string]any)["public.docs"].(map[string]any)
+	assert.Equal(t, map[string]any{}, table["storage_params"], "the table's fillfactor was not read")
+
+	view := result["views"].(map[string]any)["public.recent"].(map[string]any)
+	assert.Equal(t, map[string]any{}, view["storage_params"])
+
+	assert.Equal(t, map[string]any{}, result["routines"])
+
+	// With the flag the parameters are there, so the empty object above is the
+	// unmanaged case rather than a table that carries none.
+	buf.Reset()
+	managed := &command.Dump{}
+	managed.JSON = true
+	managed.ManageStorageParam = true
+	require.NoError(t, managed.Run(ctx, client, &buf))
+
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+	table = result["tables"].(map[string]any)["public.docs"].(map[string]any)
+	assert.Equal(t, "70", table["storage_params"].(map[string]any)["fillfactor"])
+}
+
+// The catalog reports a column's storage for every column, while the parser
+// fills it only where the file writes SET STORAGE. The guide says so, and this
+// is the case it describes.
+func TestDump_Run_JSON_StorageTypeIsCatalogWide(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.docs (id integer, body text, note text);
+ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;`)
+
+	client := pistachio.NewClient(&pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	cmd := &command.Dump{}
+	cmd.JSON = true
+	require.NoError(t, cmd.Run(ctx, client, &buf))
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+	columns := result["tables"].(map[string]any)["public.docs"].(map[string]any)["columns"].(map[string]any)
+
+	// Every column carries one, written or not.
+	assert.Equal(t, "plain", columns["id"].(map[string]any)["storage_type"])
+	assert.Equal(t, "external", columns["body"].(map[string]any)["storage_type"])
+	assert.Equal(t, "extended", columns["note"].(map[string]any)["storage_type"])
+}

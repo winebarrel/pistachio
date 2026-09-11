@@ -339,10 +339,15 @@ func clearConcurrentlyDirectives(
 // sides is what leaves them unmanaged: no SET or RESET is planned, a WITH
 // clause a desired schema writes is not carried into the CREATE TABLE, and
 // dump does not write one.
+//
+// The map is emptied rather than dropped, so a JSON dump writes {} for a table
+// whose parameters were not read, the way it writes {} for the routines it did
+// not read. The SQL is the same either way: the renderer and the diff both
+// take a nil map for an empty one.
 func clearStorageParams(tableMaps ...*orderedmap.Map[string, *model.Table]) {
 	for _, tables := range tableMaps {
 		for _, t := range tables.CollectValues() {
-			t.StorageParams = nil
+			t.StorageParams = orderedmap.New[string, string]()
 		}
 	}
 }
@@ -355,7 +360,7 @@ func clearMatViewStorageParams(viewMaps ...*orderedmap.Map[string, *model.View])
 	for _, views := range viewMaps {
 		for _, v := range views.CollectValues() {
 			if v.Materialized {
-				v.StorageParams = nil
+				v.StorageParams = orderedmap.New[string, string]()
 			}
 		}
 	}
