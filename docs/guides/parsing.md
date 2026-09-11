@@ -107,11 +107,7 @@ It is reflected off the structs the parser fills, so it says what the command wr
 
 `pista dump --json` writes a document of this shape for a database.
 
-The two do not agree field for field, because a database knows things a schema file does not state. `parse` fills a field from what the file writes and leaves the rest at its zero value, while the catalog reports the effective value whether or not anyone wrote it. A column's `storage_type` is the clearest case: the catalog gives every column one, `plain` or `extended` or another, and `parse` fills it only where the file writes `SET STORAGE`. `oid`, a column's `type_storage` and `serial_sequence`, a constraint's `columns` and `inherited`, and an identity column's `not_null` go the same way.
-
-PostgreSQL also spells an expression back its own way, so a view's `definition`, a trigger's, a column's `default` and a policy's `using` read differently from the file they came from. A partition's inherited columns and constraints are in the catalog and not in the file that creates the partition.
-
-A database holds no `-- pista:execute` statements, so `execute_stmts` is empty.
+Some values can differ. A database knows what a schema file does not state: the catalog gives every column a `storage_type` while `parse` fills it only where the file writes `SET STORAGE`, and it spells an expression its own way, so a view's `definition` reads differently. A database also holds no `-- pista:execute` statements, so `execute_stmts` is empty.
 
 
 ## What it is not
