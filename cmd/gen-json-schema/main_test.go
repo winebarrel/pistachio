@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,25 +12,23 @@ import (
 	"github.com/winebarrel/pistachio/internal/jsonschema"
 )
 
-func TestRun_Stdout(t *testing.T) {
-	var out, errOut bytes.Buffer
-	require.Equal(t, 0, run(nil, &out, &errOut))
-	assert.Empty(t, errOut.String())
+// schemaDir makes the directory the schema is kept in, under a temporary
+// working directory, so a run writes there rather than into the repository.
+func schemaDir(t *testing.T) {
+	t.Helper()
 
-	want, err := jsonschema.Marshal()
-	require.NoError(t, err)
-	assert.Equal(t, string(want), out.String())
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(filepath.Dir(jsonschema.Path), 0o755))
 }
 
-func TestRun_File(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "schema.json")
+func TestRun(t *testing.T) {
+	schemaDir(t)
 
-	var out, errOut bytes.Buffer
-	require.Equal(t, 0, run([]string{"-o", path}, &out, &errOut))
-	assert.Empty(t, out.String(), "the schema goes to the file, not stdout")
+	var errOut bytes.Buffer
+	require.Equal(t, 0, run(&errOut))
 	assert.Empty(t, errOut.String())
 
-	got, err := os.ReadFile(path)
+	got, err := os.ReadFile(jsonschema.Path)
 	require.NoError(t, err)
 
 	want, err := jsonschema.Marshal()
@@ -39,16 +36,26 @@ func TestRun_File(t *testing.T) {
 	assert.Equal(t, string(want), string(got))
 }
 
-func TestRun_FileOverwrites(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "schema.json")
-	require.NoError(t, os.WriteFile(path, []byte("stale"), 0o644))
+func TestRun_Overwrites(t *testing.T) {
+	schemaDir(t)
+	require.NoError(t, os.WriteFile(jsonschema.Path, []byte("stale"), 0o644))
 
-	var out, errOut bytes.Buffer
-	require.Equal(t, 0, run([]string{"-o", path}, &out, &errOut))
+	var errOut bytes.Buffer
+	require.Equal(t, 0, run(&errOut))
 
-	got, err := os.ReadFile(path)
+	got, err := os.ReadFile(jsonschema.Path)
 	require.NoError(t, err)
 	assert.NotContains(t, string(got), "stale")
+}
+
+// A run from a directory that does not hold the schema's own fails rather than
+// writing somewhere else.
+func TestRun_MissingDir(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	var errOut bytes.Buffer
+	assert.Equal(t, 1, run(&errOut))
+	assert.Contains(t, errOut.String(), "pistachio:")
 }
 
 func TestRun_UnwritableFile(t *testing.T) {
@@ -59,31 +66,12 @@ func TestRun_UnwritableFile(t *testing.T) {
 		t.Skip("root writes into a read-only directory")
 	}
 
-	dir := t.TempDir()
+	schemaDir(t)
+	dir := filepath.Dir(jsonschema.Path)
 	require.NoError(t, os.Chmod(dir, 0o500))
 	t.Cleanup(func() { os.Chmod(dir, 0o700) }) //nolint:errcheck
 
-	var out, errOut bytes.Buffer
-	assert.Equal(t, 1, run([]string{"-o", filepath.Join(dir, "schema.json")}, &out, &errOut))
-	assert.Contains(t, errOut.String(), "pistachio:")
-}
-
-// errWriter fails on the first write, standing in for a closed pipe.
-type errWriter struct{}
-
-func (errWriter) Write([]byte) (int, error) {
-	return 0, errors.New("broken pipe")
-}
-
-func TestRun_WriteError(t *testing.T) {
 	var errOut bytes.Buffer
-	assert.Equal(t, 1, run(nil, errWriter{}, &errOut))
+	assert.Equal(t, 1, run(&errOut))
 	assert.Contains(t, errOut.String(), "pistachio:")
-}
-
-func TestRun_BadFlag(t *testing.T) {
-	var out, errOut bytes.Buffer
-	assert.Equal(t, 2, run([]string{"-nope"}, &out, &errOut))
-	assert.Empty(t, out.String())
-	assert.Contains(t, errOut.String(), "-nope")
 }

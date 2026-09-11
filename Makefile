@@ -33,10 +33,12 @@ install:
 	go install ./cmd/pista
 
 # The JSON Schema of the document pista parse writes, reflected off the model
-# structs. A test fails when the committed file is not what this writes.
+# structs. The generator knows where the file goes, so the version in its name
+# is not repeated here. A test fails when the committed file is not what this
+# writes.
 .PHONY: json-schema
 json-schema:
-	go run ./cmd/gen-json-schema -o docs/json/schema-1.0.json
+	go run ./cmd/gen-json-schema
 
 .PHONY: vet
 vet:
