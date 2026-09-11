@@ -71,6 +71,7 @@ openolat|sample-db-url-schema|URL=https://raw.githubusercontent.com/OpenOLAT/Ope
 inaturalist|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/inaturalist/inaturalist/e52c649d2f0e8e260c2dce6fcf6448d971100415/db/structure.sql SCHEMA=inaturalist|inaturalist
 joomla|sample-db-joomla||joomla
 harbor|sample-db-harbor||harbor
+bigbluebutton|sample-db-bigbluebutton|URL=https://raw.githubusercontent.com/bigbluebutton/bigbluebutton/4c3a477fe3e34a7da6854c491be2c8d02e83c083/bbb-graphql-server/bbb_schema.sql SCHEMA=bigbluebutton|bigbluebutton
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -392,6 +393,21 @@ sample-db-harbor:
 	  echo ';'; \
 	done | PGOPTIONS='-c search_path=harbor -c client_min_messages=warning' $(PSQL)
 	$(PSQL) -c 'SET search_path = harbor; DROP TABLE schema_migrations'
+
+# BigBlueButton (bigbluebutton/bigbluebutton, LGPL-3.0). The schema belongs in
+# a schema of its own like the sample-db-url-schema dumps, and names none for
+# almost everything it creates, but three of its views are qualified with
+# `public`. Those three would land outside the sample's schema, and the views
+# that select from them would then not resolve, so the qualifier is stripped
+# and search_path places them with the rest. The file also installs unaccent,
+# which a function behind three of its generated columns calls; it is contrib,
+# so the official image already has it.
+.PHONY: sample-db-bigbluebutton
+sample-db-bigbluebutton:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | sed -E 's/^(CREATE OR REPLACE VIEW )public\./\1/' \
+	  | PGOPTIONS='-c search_path=$(SCHEMA)' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
