@@ -144,6 +144,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | inaturalist | inaturalist | [inaturalist/inaturalist](https://github.com/inaturalist/inaturalist) |
 | joomla | joomla | [joomla/joomla-cms](https://github.com/joomla/joomla-cms) |
 | harbor | harbor | [goharbor/harbor](https://github.com/goharbor/harbor) |
+| bigbluebutton | bigbluebutton | [bigbluebutton/bigbluebutton](https://github.com/bigbluebutton/bigbluebutton) |
 
 ## Coverage
 
@@ -153,11 +154,11 @@ last counted 2026-08-24; the Sequences column was counted on 15.18 throughout,
 Triggers, added 2026-08-24, and Routines, added 2026-08-25, on 15.18 for every
 sample; wso2is, nightingale, and danbooru were counted 2026-08-29 on 15.17;
 openolat and inaturalist 2026-08-30 on 16.13; joomla and harbor 2026-09-01 on
-16.13). "Constraints" excludes foreign
+16.13; bigbluebutton 2026-09-11 on 16.13). "Constraints" excludes foreign
 keys; "Types" counts enums and domains; "Sequences" counts standalone sequences
 only, since pistachio manages the sequence behind a serial or identity column as
 an attribute of that column rather than as an object of its own. Counting those
-too would add 2,206 more, 886 of them gitlab's and 210 chado's. "Triggers"
+too would add 2,209 more, 886 of them gitlab's and 210 chado's. "Triggers"
 excludes the internal triggers a foreign key installs and the clones PostgreSQL
 puts on each partition of a partitioned table's trigger, the same as what
 pistachio reads and dump writes. "Routines" counts what `--manage-routine`
@@ -223,9 +224,10 @@ schema and pistachio does not read them either.
 | inaturalist | 186 | 1,673 | 580 | 1 | 159 | 0 | 0 | 0 | 0 | 4 |
 | joomla | 76 | 830 | 287 | 0 | 84 | 0 | 0 | 0 | 0 | 1 |
 | harbor | 48 | 390 | 119 | 13 | 90 | 0 | 0 | 0 | 10 | 1 |
-| **Total** | **5,779** | **49,197** | **17,950** | **7,101** | **10,066** | **1,960** | **71** | **421** | **565** | **791** |
+| bigbluebutton | 54 | 532 | 147 | 65 | 51 | 86 | 0 | 0 | 25 | 26 |
+| **Total** | **5,833** | **49,729** | **18,097** | **7,166** | **10,117** | **2,046** | **71** | **421** | **590** | **817** |
 
-The 54 dumps come to about 163,000 lines of SQL. chado is 43,700 of them, the
+The 55 dumps come to about 166,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about 40 percent
 of the constraints, more than a third of the indexes, and roughly a third of the
 columns and foreign keys, over a quarter of the tables; musicbrainz, openolat,
@@ -239,7 +241,10 @@ why `reset-db` resets only `public` between samples, too.
 Beyond size, the samples bring in shapes the hand-written fixtures do not
 always reach: partial and expression indexes and gin, gist, hash, and brin
 methods (musicbrainz, plus 12 partial and 2 gin indexes in synapse), exclusion
-constraints and unlogged tables (demodb, which needs `btree_gist`), enums and
+constraints and unlogged tables (demodb, which needs `btree_gist`, and
+bigbluebutton, where every one of the 54 tables is unlogged), stored
+generated columns (bigbluebutton's 17, three of them over a function of its
+own that calls `unaccent`), enums and
 domains (dvdrental, pagila, employees, mediawiki, and icingadb, whose 13 types
 are 6 enums and 7 domains, each domain carrying a named CHECK, plus
 icinga_director, whose 20 enums are more than any other sample and whose one
@@ -258,7 +263,9 @@ rather than serial columns (ranger, whose 85 tables come with 84 of them,
 wso2apim, which mixes 104 of them in with serial columns, and wso2is, which
 declares 92 for its 172 tables and wires 87 of them into a column DEFAULT), a
 schema written entirely in quoted mixed-case identifiers, so every name is
-case-sensitive (hive's 84 tables, where chinook has 11), index-heavy schemas
+case-sensitive (hive's 84 tables, where chinook has 11, and bigbluebutton,
+where 451 of 532 columns and half the tables and views are camelCase),
+index-heavy schemas
 (danbooru's 456 indexes over 66 tables are seven to a table, denser than any
 other sample, 55 of them gin, 29 of those over an expression and 17 naming
 `gin_trgm_ops`, and 49 partial; mediawiki's 192 over 64, only one of them
@@ -270,10 +277,12 @@ declares 100 of them and attaches 2,054 partitions, all of which live in
 schemas of their own), table
 inheritance (ledgersmb attaches 21 children with INHERITS, the only sample that
 does), four unique indexes declared `NULLS NOT DISTINCT` and one index with an
-`INCLUDE` column (discourse), views at scale (chado's 1,864 are more than
-twenty times every other sample put together, and 1,832 of them are the
+`INCLUDE` column (discourse), views at scale (chado's 1,864 are nearly ten
+times every other sample put together, and 1,832 of them are the
 Sequence Ontology views in its `so` schema, each selecting from tables in
-`chado`), gist indexes over a function the schema defines itself (chado's three
+`chado`, and bigbluebutton's 86 over 54 tables are the most of any other
+sample, five of them selecting from another view), gist
+indexes over a function the schema defines itself (chado's three
 name `boxrange`, one of them partial and declared from another schema), columns
 typed by an extension that is not contrib (discourse's three `halfvec` columns,
 which need pgvector, and the `geometry` columns that need PostGIS: osm's one
@@ -285,15 +294,15 @@ five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into `mimiciv_hosp`,
 4 of chado's 472 point from `frange` into `chado`, and every one of gitlab's
 partitions is attached across one; and triggers
 (gitlab's 388, more than any other sample, one of them held in `ENABLE ALWAYS`
-state; kea's 81 outnumber its 64 tables; ledgersmb's 11 and dotcms's 10 come
-next).
+state; kea's 81 outnumber its 64 tables; bigbluebutton's 25 and ledgersmb's 11
+come next).
 
-Routines are concentrated the same way. Twenty-one of the 54 samples declare
+Routines are concentrated the same way. Twenty-two of the 55 samples declare
 one at all, and gitlab's 337, kea's and musicbrainz's 130 each, and chado's 94
-are 691 of the 791. Two thirds of them, 524, return `trigger`, though not
+are 691 of the 817. Two thirds of them, 546, return `trigger`, though not
 every one of those has a trigger to call it: musicbrainz's 89 do not, since its
-loader concatenates a file list that leaves triggers out. 714 are written in
-plpgsql and 77 in sql. sourcegraph declares the only procedure any sample has,
+loader concatenates a file list that leaves triggers out. 739 are written in
+plpgsql and 78 in sql. sourcegraph declares the only procedure any sample has,
 and inaturalist the only aggregate, which `--manage-routine` does not read and
 so is in neither count. Only chado and kea overload a name, 11 of them and 3,
 though danbooru's three, all sql, include a `lower(text[])` that shadows a
@@ -308,6 +317,13 @@ strip only what is irrelevant to a schema round trip:
 - **adventureworks**: `\copy` lines are dropped (the data lives in CSVs that are
   not fetched), along with the inline `Production.ProductReview` INSERT, whose
   foreign key targets would be missing.
+- **bigbluebutton**: the file names no schema for almost everything it
+  creates, so `search_path` places it, but three of its views are qualified
+  with `public`. Those three would land outside the sample's schema and the
+  views that select from them would then not resolve, so the qualifier is
+  stripped. The file also installs `unaccent`, which a function behind three
+  of its stored generated columns calls; it is contrib, so the official image
+  already has it.
 - **camunda**: the schema ships as one file per engine component and none of
   them create a schema, so `camunda` is created up front and the files are
   concatenated in dependency order (process engine, history, identity, then the
