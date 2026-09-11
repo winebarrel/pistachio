@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/cmd/command"
+	pistaschema "github.com/winebarrel/pistachio/internal/jsonschema"
 )
 
 const parseSchemaSQL = `
@@ -215,4 +219,30 @@ func TestParse_Run_SeveralFiles(t *testing.T) {
 	tables := result["tables"].(map[string]any)
 	assert.Contains(t, tables, "public.t1")
 	assert.Contains(t, tables, "public.t2")
+}
+
+// TestParse_Run_MatchesJSONSchema validates what the command itself writes,
+// rather than a document rebuilt beside it, against the published schema.
+func TestParse_Run_MatchesJSONSchema(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", parseSchemaSQL)
+
+	var buf bytes.Buffer
+	cmd := &command.Parse{Files: []string{path}}
+	require.NoError(t, cmd.Run(parseClient(), &buf))
+
+	f, err := os.Open(filepath.Join("..", "..", filepath.FromSlash(pistaschema.Path)))
+	require.NoError(t, err)
+	defer f.Close() //nolint:errcheck
+
+	doc, err := jsonschema.UnmarshalJSON(f)
+	require.NoError(t, err)
+
+	c := jsonschema.NewCompiler()
+	require.NoError(t, c.AddResource(pistaschema.ID, doc))
+	schema, err := c.Compile(pistaschema.ID)
+	require.NoError(t, err)
+
+	inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(buf.Bytes()))
+	require.NoError(t, err)
+	assert.NoError(t, schema.Validate(inst))
 }
