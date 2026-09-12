@@ -113,6 +113,14 @@ pista fmt ./schema/*.sql           # rewrite them in place
 pista fmt --check ./schema/*.sql   # exit 2 when a file is not formatted
 ```
 
+Or read the schema as JSON:
+
+```bash
+pista parse ./schema/*.sql         # print the objects the files declare as JSON
+```
+
+It uses the same parser `plan` and `apply` use and reads no database, so another tool can consume the schema. `pista dump --json` writes the same shape, read from the database. See [Parsing schema files](https://winebarrel.github.io/pistachio/guides/parsing/).
+
 
 ## Demo
 
