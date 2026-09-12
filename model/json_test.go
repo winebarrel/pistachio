@@ -10,12 +10,12 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// marshalJSON encodes with json/v2, which is what the parse command writes
-// with. v1 escapes <, > and & in a string, so a golden taken through it would
-// not be the bytes the command produces.
+// marshalJSON encodes with json/v2 and the marshalers the parse command
+// writes with. v1 escapes <, > and & in a string, so a golden taken through it
+// would not be the bytes the command produces.
 func marshalJSON(t *testing.T, v any) string {
 	t.Helper()
-	b, err := json.Marshal(v)
+	b, err := json.Marshal(v, model.JSONMarshalers)
 	require.NoError(t, err)
 
 	return string(b)
@@ -220,7 +220,7 @@ func TestTable_MarshalJSON(t *testing.T) {
 		"partition_bound": null,
 		"row_security": false,
 		"force_row_security": false,
-		"columns": {},
+		"columns": [],
 		"constraints": {},
 		"foreign_keys": {},
 		"indexes": {},
@@ -228,6 +228,29 @@ func TestTable_MarshalJSON(t *testing.T) {
 		"triggers": {},
 		"comment": null
 	}`, marshalJSON(t, tbl))
+}
+
+// Columns write as a JSON array, in the order the table holds them. That
+// order is the physical column order, which a JSON object does not promise to
+// keep, and the key an object would carry is already the column's name.
+func TestTable_MarshalJSON_ColumnsAreAnOrderedArray(t *testing.T) {
+	columns := orderedmap.New[string, *model.Column]()
+	columns.Set("z_id", &model.Column{Name: "z_id", TypeName: "bigint"})
+	columns.Set("a_col", &model.Column{Name: "a_col", TypeName: "text"})
+	tbl := &model.Table{Schema: "public", Name: "items", Columns: columns}
+
+	var doc struct {
+		Columns []struct {
+			Name string `json:"name"`
+		} `json:"columns"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(marshalJSON(t, tbl)), &doc))
+
+	names := make([]string, 0, len(doc.Columns))
+	for _, column := range doc.Columns {
+		names = append(names, column.Name)
+	}
+	assert.Equal(t, []string{"z_id", "a_col"}, names)
 }
 
 func TestPolicy_MarshalJSON(t *testing.T) {

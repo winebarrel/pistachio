@@ -34,8 +34,8 @@ create table public.items (
       "partition_bound": null,
       "row_security": false,
       "force_row_security": false,
-      "columns": {
-        "id": {
+      "columns": [
+        {
           "name": "id",
           "rename_from": null,
           "type": "bigint",
@@ -52,7 +52,7 @@ create table public.items (
           "compression": "",
           "comment": null
         }
-      },
+      ],
       "constraints": {},
       "foreign_keys": {},
       "indexes": {},
@@ -75,6 +75,8 @@ create table public.items (
 ## The shape of the output
 
 The top level holds one object per managed type: `tables`, `views`, `enums`, `domains`, `composite_types`, `sequences` and `routines`. Each is keyed by the qualified name, in the order the files declare it. A name written without a schema is qualified with the first schema in `--schemas`, the way `plan` reads it. A routine's key carries its identity argument types, `public.add(bigint, bigint)`, since two routines can share a name.
+
+A table's `columns` is an array rather than an object. The order is the column order, which a JSON object does not promise to keep, and the name an object would key on is in the column's `name` field. Everything else a table holds, `constraints`, `foreign_keys`, `indexes`, `policies` and `triggers`, is an object keyed by name. Their order is the order the files declare them, and the catalog's name order under `dump`, but nothing is lost by reading them in another order.
 
 Statements from `-- pista:execute` follow the objects, in `execute_stmts`.
 

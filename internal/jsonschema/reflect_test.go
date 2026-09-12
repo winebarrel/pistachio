@@ -64,6 +64,30 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+// A table's columns are written as an array, in the physical column order.
+// Everything else an ordered map holds stays an object keyed by name.
+func TestBuild_ColumnsAreAnArray(t *testing.T) {
+	schema, err := jsonschema.Build()
+	require.NoError(t, err)
+
+	table, ok := schema.Definitions["Table"]
+	require.True(t, ok)
+
+	columns, ok := table.Properties.Get("columns")
+	require.True(t, ok)
+	require.Len(t, columns.OneOf, 2, "a pointer property is a choice of the type and null")
+	assert.Equal(t, "array", columns.OneOf[0].Type)
+	require.NotNil(t, columns.OneOf[0].Items)
+	assert.Equal(t, "#/$defs/Column", columns.OneOf[0].Items.Ref)
+
+	indexes, ok := table.Properties.Get("indexes")
+	require.True(t, ok)
+	require.Len(t, indexes.OneOf, 2)
+	assert.Equal(t, "object", indexes.OneOf[0].Type)
+	require.NotNil(t, indexes.OneOf[0].AdditionalProperties)
+	assert.Equal(t, "#/$defs/Index", indexes.OneOf[0].AdditionalProperties.Ref)
+}
+
 // The words a byte enum marshals as are read off the marshaler, so the schema
 // cannot name a value the output never holds, or miss one it does.
 func TestBuild_EnumValues(t *testing.T) {

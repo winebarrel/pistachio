@@ -25,3 +25,18 @@ func firstLine(s string) string {
 	}
 	return s
 }
+
+// columnsByName indexes a table's columns by name. The document writes them as
+// an array, so a test that wants one column looks it up rather than keying
+// into a map.
+func columnsByName(t *testing.T, table map[string]any) map[string]map[string]any {
+	t.Helper()
+
+	columns := map[string]map[string]any{}
+	for _, c := range table["columns"].([]any) {
+		column := c.(map[string]any)
+		columns[column["name"].(string)] = column
+	}
+
+	return columns
+}

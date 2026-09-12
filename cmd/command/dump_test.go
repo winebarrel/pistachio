@@ -298,9 +298,9 @@ CREATE VIEW public.live AS SELECT id FROM public.users;`)
 	table := result["tables"].(map[string]any)["public.users"].(map[string]any)
 	assert.Equal(t, "users", table["name"])
 
-	columns := table["columns"].(map[string]any)
-	assert.Equal(t, "always", columns["id"].(map[string]any)["identity"])
-	assert.Equal(t, true, columns["email"].(map[string]any)["not_null"])
+	columns := columnsByName(t, table)
+	assert.Equal(t, "always", columns["id"]["identity"])
+	assert.Equal(t, true, columns["email"]["not_null"])
 
 	assert.Contains(t, table["indexes"], "idx_users_email")
 	assert.Contains(t, result["views"], "public.live")
@@ -312,7 +312,7 @@ CREATE VIEW public.live AS SELECT id FROM public.users;`)
 
 	// The catalog fills what a schema file cannot say.
 	assert.NotEqual(t, float64(0), table["oid"], "the catalog reports an OID")
-	assert.Equal(t, "extended", columns["email"].(map[string]any)["type_storage"])
+	assert.Equal(t, "extended", columns["email"]["type_storage"])
 }
 
 // The document dump writes is the one the published schema describes, which is
@@ -514,10 +514,10 @@ ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;`)
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
-	columns := result["tables"].(map[string]any)["public.docs"].(map[string]any)["columns"].(map[string]any)
+	columns := columnsByName(t, result["tables"].(map[string]any)["public.docs"].(map[string]any))
 
 	// Every column carries one, written or not.
-	assert.Equal(t, "plain", columns["id"].(map[string]any)["storage_type"])
-	assert.Equal(t, "external", columns["body"].(map[string]any)["storage_type"])
-	assert.Equal(t, "extended", columns["note"].(map[string]any)["storage_type"])
+	assert.Equal(t, "plain", columns["id"]["storage_type"])
+	assert.Equal(t, "external", columns["body"]["storage_type"])
+	assert.Equal(t, "extended", columns["note"]["storage_type"])
 }

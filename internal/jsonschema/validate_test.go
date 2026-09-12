@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	pistaschema "github.com/winebarrel/pistachio/internal/jsonschema"
+	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
 )
 
@@ -38,15 +39,16 @@ func compileSchema(t *testing.T) *jsonschema.Schema {
 }
 
 // parseDocument parses the files and returns the document as an any tree, the
-// way a consumer reads it. The marshaling matches command.Parse: json/v2, so
-// the field presence is what the command writes.
+// way a consumer reads it. The marshaling matches command.Parse: json/v2 with
+// the model's marshalers, so the field presence and the shape are what the
+// command writes.
 func parseDocument(t *testing.T, files ...string) any {
 	t.Helper()
 
 	result, err := parser.ParseSQLFilesWithSchema(files, "public")
 	require.NoError(t, err)
 
-	b, err := json.Marshal(result)
+	b, err := json.Marshal(result, model.JSONMarshalers)
 	require.NoError(t, err)
 
 	var doc any
@@ -159,7 +161,7 @@ func TestSchema_RejectsMalformed(t *testing.T) {
 		return doc.(map[string]any)["tables"].(map[string]any)["public.t"].(map[string]any)
 	}
 	column := func(doc any) map[string]any {
-		return table(doc)["columns"].(map[string]any)["id"].(map[string]any)
+		return table(doc)["columns"].([]any)[0].(map[string]any)
 	}
 
 	for name, break_ := range map[string]func(doc any){
@@ -170,6 +172,7 @@ func TestSchema_RejectsMalformed(t *testing.T) {
 		"a missing field":               func(doc any) { delete(column(doc), "not_null") },
 		"a missing object kind":         func(doc any) { delete(doc.(map[string]any), "views") },
 		"an object where a map belongs": func(doc any) { doc.(map[string]any)["tables"] = []any{} },
+		"a map where an array belongs":  func(doc any) { table(doc)["columns"] = map[string]any{} },
 		"a null where a string belongs": func(doc any) { table(doc)["name"] = nil },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -189,7 +192,7 @@ func TestSchema_AcceptsNullForAnUnsetPointer(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("create table t (id bigint);\n"), 0o644))
 
 	doc := parseDocument(t, path)
-	column := doc.(map[string]any)["tables"].(map[string]any)["public.t"].(map[string]any)["columns"].(map[string]any)["id"].(map[string]any)
+	column := doc.(map[string]any)["tables"].(map[string]any)["public.t"].(map[string]any)["columns"].([]any)[0].(map[string]any)
 	require.Nil(t, column["default"], "an unset default reaches the reader as null")
 
 	assert.NoError(t, schema.Validate(doc))
