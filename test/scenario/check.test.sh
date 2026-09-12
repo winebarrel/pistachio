@@ -81,7 +81,7 @@ fi
 # --- Step 7: error -> exit 1 ---
 step "07 check exits 1 on error"
 rc=0
-"$PISTA" -c postgres://invalid@localhost:1/none plan --check "$DATA/steps/01_add_column.sql" >/dev/null 2>&1 || rc=$?
+"$PISTA" plan -c postgres://invalid@localhost:1/none --check "$DATA/steps/01_add_column.sql" >/dev/null 2>&1 || rc=$?
 if [ "$rc" = "1" ]; then
   pass
 else

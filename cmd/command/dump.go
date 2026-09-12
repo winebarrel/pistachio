@@ -12,10 +12,13 @@ import (
 )
 
 type Dump struct {
+	pistachio.Options
 	pistachio.DumpOptions
 }
 
-func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {
+func (cmd *Dump) Run(ctx context.Context, w io.Writer) error {
+	client := pistachio.NewClient(&cmd.Options)
+
 	result, err := client.Dump(ctx, &cmd.DumpOptions)
 	if err != nil {
 		return err

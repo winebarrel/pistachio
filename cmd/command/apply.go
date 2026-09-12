@@ -11,10 +11,13 @@ import (
 )
 
 type Apply struct {
+	pistachio.Options
 	pistachio.ApplyOptions
 }
 
-func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {
+func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
+	client := pistachio.NewClient(&cmd.Options)
+
 	var buf bytes.Buffer
 	result, err := client.Apply(ctx, &cmd.ApplyOptions, &buf)
 	if err != nil {

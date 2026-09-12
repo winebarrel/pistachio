@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/cmd/command"
 )
 
@@ -23,16 +22,12 @@ create index idx_items_name on items (name);
 create type status as enum ('active', 'archived');
 `
 
-func parseClient() *pistachio.Client {
-	return pistachio.NewClient(&pistachio.Options{Schemas: []string{"public"}})
-}
-
 func TestParse_Run(t *testing.T) {
 	path := writeSQLFile(t, "schema.sql", parseSchemaSQL)
 
 	var buf bytes.Buffer
-	cmd := &command.Parse{Files: []string{path}}
-	require.NoError(t, cmd.Run(parseClient(), &buf))
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	require.NoError(t, cmd.Run(&buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
@@ -72,8 +67,8 @@ func TestParse_Run_WritesEveryField(t *testing.T) {
 	path := writeSQLFile(t, "schema.sql", "create table t (note text);")
 
 	var buf bytes.Buffer
-	cmd := &command.Parse{Files: []string{path}}
-	require.NoError(t, cmd.Run(parseClient(), &buf))
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	require.NoError(t, cmd.Run(&buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
@@ -115,8 +110,8 @@ func TestParse_Run_NoHTMLEscape(t *testing.T) {
 	path := writeSQLFile(t, "schema.sql", "create table t (amt numeric, check (amt > 0));")
 
 	var buf bytes.Buffer
-	cmd := &command.Parse{Files: []string{path}}
-	require.NoError(t, cmd.Run(parseClient(), &buf))
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	require.NoError(t, cmd.Run(&buf))
 
 	assert.Contains(t, buf.String(), "CHECK (amt > 0)")
 	assert.NotContains(t, buf.String(), "\\u003e")
@@ -135,8 +130,8 @@ update items set id = id;
 `)
 
 	var buf bytes.Buffer
-	cmd := &command.Parse{Files: []string{path}}
-	require.NoError(t, cmd.Run(parseClient(), &buf))
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	require.NoError(t, cmd.Run(&buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
@@ -165,8 +160,8 @@ create function noop() returns void language sql as 'select';
 `)
 
 	var buf bytes.Buffer
-	cmd := &command.Parse{Files: []string{path}}
-	require.NoError(t, cmd.Run(parseClient(), &buf))
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	require.NoError(t, cmd.Run(&buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
@@ -188,8 +183,8 @@ func (errWriter) Write([]byte) (int, error) {
 func TestParse_Run_WriteError(t *testing.T) {
 	path := writeSQLFile(t, "schema.sql", "create table t (id integer);")
 
-	cmd := &command.Parse{Files: []string{path}}
-	err := cmd.Run(parseClient(), errWriter{})
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	err := cmd.Run(errWriter{})
 	require.Error(t, err)
 }
 
@@ -197,8 +192,8 @@ func TestParse_Run_ParseError(t *testing.T) {
 	path := writeSQLFile(t, "broken.sql", "CREATE TABLE (;")
 
 	var buf bytes.Buffer
-	cmd := &command.Parse{Files: []string{path}}
-	err := cmd.Run(parseClient(), &buf)
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	err := cmd.Run(&buf)
 	require.Error(t, err)
 	assert.Empty(t, buf.String())
 }
@@ -208,8 +203,8 @@ func TestParse_Run_SeveralFiles(t *testing.T) {
 	two := writeSQLFile(t, "two.sql", "create table t2 (id integer);")
 
 	var buf bytes.Buffer
-	cmd := &command.Parse{Files: []string{one, two}}
-	require.NoError(t, cmd.Run(parseClient(), &buf))
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{one, two}}
+	require.NoError(t, cmd.Run(&buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
@@ -224,8 +219,8 @@ func TestParse_Run_MatchesJSONSchema(t *testing.T) {
 	path := writeSQLFile(t, "schema.sql", parseSchemaSQL)
 
 	var buf bytes.Buffer
-	cmd := &command.Parse{Files: []string{path}}
-	require.NoError(t, cmd.Run(parseClient(), &buf))
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	require.NoError(t, cmd.Run(&buf))
 
 	assert.NoError(t, validateAgainstJSONSchema(t, buf.Bytes()))
 }
@@ -257,8 +252,8 @@ func TestParse_Run_IsDeterministic(t *testing.T) {
 	var first string
 	for i := range 8 {
 		var buf bytes.Buffer
-		cmd := &command.Parse{Files: []string{path}}
-		require.NoError(t, cmd.Run(parseClient(), &buf))
+		cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+		require.NoError(t, cmd.Run(&buf))
 
 		if i == 0 {
 			first = buf.String()
@@ -286,8 +281,8 @@ CREATE TYPE s AS ENUM (
 `)
 
 	var buf bytes.Buffer
-	cmd := &command.Parse{Files: []string{path}}
-	require.NoError(t, cmd.Run(parseClient(), &buf))
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	require.NoError(t, cmd.Run(&buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))

@@ -171,3 +171,39 @@ func TestRun_DumpJSONExclusiveFlags(t *testing.T) {
 		})
 	}
 }
+
+// The connection flags belong to the commands that open a connection, so they
+// follow the command instead of preceding it. fmt reads no database and takes
+// none of them; parse takes --schemas alone. kong rejects the rest before a
+// database is reached, so no connection is needed.
+func TestRun_ConnFlagPlacement(t *testing.T) {
+	for _, args := range [][]string{
+		{"-c", "postgres://postgres@localhost/postgres", "plan", "x.sql"},
+		{"-n", "myschema", "dump"},
+		{"fmt", "-c", "postgres://postgres@localhost/postgres", "x.sql"},
+		{"fmt", "-n", "myschema", "x.sql"},
+		{"parse", "-c", "postgres://postgres@localhost/postgres", "x.sql"},
+		{"parse", "-m", "old=new", "x.sql"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stdout bytes.Buffer
+			code, stderr := runCLI(t, &stdout, args...)
+			// kong exits with 80 on a usage error.
+			assert.Equal(t, 80, code)
+			assert.Contains(t, stderr, "unknown flag")
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+// parse keeps --schemas: it opens no connection, but the parser qualifies an
+// unqualified name with it.
+func TestRun_ParseSchemasFlag(t *testing.T) {
+	path := writeFile(t, "schema.sql", "CREATE TABLE users (id integer);")
+
+	var stdout bytes.Buffer
+	code, stderr := runCLI(t, &stdout, "parse", "-n", "myschema", path)
+	assert.Equal(t, 0, code)
+	assert.Empty(t, stderr)
+	assert.Contains(t, stdout.String(), `"myschema.users"`)
+}

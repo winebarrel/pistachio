@@ -15,11 +15,14 @@ import (
 var ErrPlanDiff = errors.New("plan contains changes")
 
 type Plan struct {
+	pistachio.Options
 	pistachio.PlanOptions
 	Check bool `env:"PISTA_CHECK" help:"Exit with code 2 when the plan contains executable changes."`
 }
 
-func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {
+func (cmd *Plan) Run(ctx context.Context, w io.Writer) error {
+	client := pistachio.NewClient(&cmd.Options)
+
 	result, err := client.Plan(ctx, &cmd.PlanOptions)
 	if err != nil {
 		return err
