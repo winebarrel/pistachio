@@ -228,9 +228,10 @@ func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Options: options,
-		Files:  []string{desiredFile},
-		PreSQL: "SELECT 1;",
+	cmd := &command.Plan{
+		Options: options,
+		Files:   []string{desiredFile},
+		PreSQL:  "SELECT 1;",
 	}
 	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
@@ -478,10 +479,11 @@ func TestPlan_Run_CheckPreSQLNoChanges(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Options: options,
-		Check:  true,
-		Files:  []string{desiredFile},
-		PreSQL: "SELECT 1;",
+	cmd := &command.Plan{
+		Options: options,
+		Check:   true,
+		Files:   []string{desiredFile},
+		PreSQL:  "SELECT 1;",
 	}
 	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)

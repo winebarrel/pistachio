@@ -157,7 +157,8 @@ func TestApply_Run_WithTx_FlushesBufferOnError(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	cmd := &command.Apply{Options: options,
+	cmd := &command.Apply{
+		Options:    options,
 		Files:      []string{desiredFile},
 		PreSQLFile: preSQLFile,
 		WithTx:     true,
