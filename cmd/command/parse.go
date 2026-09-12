@@ -3,7 +3,6 @@ package command
 import (
 	"io"
 
-	"github.com/alecthomas/kong"
 	"github.com/winebarrel/pistachio"
 )
 
@@ -15,12 +14,9 @@ type Parse struct {
 	Schemas []string `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schema to qualify unqualified names with. Only the first is used."`
 }
 
-func (cmd *Parse) AfterApply(kctx *kong.Context) error {
-	bindClient(kctx, &pistachio.Options{Schemas: cmd.Schemas})
-	return nil
-}
+func (cmd *Parse) Run(w io.Writer) error {
+	client := pistachio.NewClient(&pistachio.Options{Schemas: cmd.Schemas})
 
-func (cmd *Parse) Run(client *pistachio.Client, w io.Writer) error {
 	result, err := client.ParseSchema(cmd.Files)
 	if err != nil {
 		return err

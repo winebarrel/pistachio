@@ -63,8 +63,6 @@ func run(args []string, stdout, stderr io.Writer, exit func(int)) {
 		kctx.BindTo(w, (*io.Writer)(nil))
 	}
 
-	// The client is bound by the running command's AfterApply, built from the
-	// connection flags that command carries.
 	err = kctx.Run()
 	closePager()
 	// plan --check and fmt --check report a difference as exit code 2 instead

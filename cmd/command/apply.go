@@ -7,7 +7,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/alecthomas/kong"
 	"github.com/winebarrel/pistachio"
 )
 
@@ -16,12 +15,9 @@ type Apply struct {
 	pistachio.ApplyOptions
 }
 
-func (cmd *Apply) AfterApply(kctx *kong.Context) error {
-	bindClient(kctx, &cmd.Options)
-	return nil
-}
+func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
+	client := pistachio.NewClient(&cmd.Options)
 
-func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {
 	var buf bytes.Buffer
 	result, err := client.Apply(ctx, &cmd.ApplyOptions, &buf)
 	if err != nil {

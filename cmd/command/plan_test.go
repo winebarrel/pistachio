@@ -28,14 +28,14 @@ func TestPlan_Run(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{AllowDrop: []string{"all"}, Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, AllowDrop: []string{"all"}, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
 	assertConnectedCommentFirst(t, buf.String(), conn.Config())
@@ -43,17 +43,17 @@ func TestPlan_Run(t *testing.T) {
 
 func TestPlan_Run_Error(t *testing.T) {
 	ctx := context.Background()
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: "invalid://connection",
 		Schemas:    []string{"public"},
-	})
+	}
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{AllowDrop: []string{"all"}, Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, AllowDrop: []string{"all"}, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.Error(t, err)
 }
 
@@ -71,14 +71,14 @@ func TestPlan_Run_NoChanges(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{AllowDrop: []string{"all"}, Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, AllowDrop: []string{"all"}, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- Plan for schema public (")
 	assert.Contains(t, buf.String(), "-- No changes")
@@ -113,14 +113,14 @@ CREATE TABLE public.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	got := buf.String()
 	assert.Contains(t, got, "ADD COLUMN email")
@@ -147,14 +147,14 @@ CREATE TABLE public.legacy (
     CONSTRAINT legacy_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	got := buf.String()
 	assert.Contains(t, got, "-- ignored: public.legacy")
@@ -178,14 +178,14 @@ func TestPlan_Run_DropDeniedShowsNoChanges(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(""), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	got := buf.String()
 	assert.Contains(t, got, "-- skipped: DROP TABLE public.users;")
@@ -222,17 +222,17 @@ func TestPlan_Run_PreSQLBeforeSkippedDrops(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{
+	cmd := &command.Plan{Options: options,
 		Files:  []string{desiredFile},
 		PreSQL: "SELECT 1;",
 	}
-	err := cmd.Run(ctx, client, &buf)
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	got := buf.String()
 
@@ -261,14 +261,14 @@ func TestPlan_Run_CheckWithDiff(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Check: true, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.ErrorIs(t, err, command.ErrPlanDiff)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
 }
@@ -288,14 +288,14 @@ func TestPlan_Run_CheckNoChanges(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Check: true, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- No changes")
 }
@@ -315,14 +315,14 @@ func TestPlan_Run_CheckSkippedDropOnly(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(""), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Check: true, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	got := buf.String()
 	assert.Contains(t, got, "-- skipped: DROP TABLE public.users;")
@@ -348,14 +348,14 @@ func TestPlan_Run_CheckExecuteOnly(t *testing.T) {
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Check: true, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.ErrorIs(t, err, command.ErrPlanDiff)
 }
 
@@ -378,14 +378,14 @@ func TestPlan_Run_CheckExecuteOnlyCheckFalse(t *testing.T) {
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
-	require.NoError(t, cmd.Run(ctx, client, &buf))
+	cmd := &command.Plan{Options: options, Check: true, Files: []string{desiredFile}}
+	require.NoError(t, cmd.Run(ctx, &buf))
 	assert.Contains(t, buf.String(), "-- No changes")
 }
 
@@ -409,15 +409,15 @@ CREATE TABLE public.audit_log (
 );
 `), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
+	cmd := &command.Plan{Options: options, Check: true, Files: []string{desiredFile}}
 	// Undetermined counts as a pending change, so --check still reports a diff.
-	require.ErrorIs(t, cmd.Run(ctx, client, &buf), command.ErrPlanDiff)
+	require.ErrorIs(t, cmd.Run(ctx, &buf), command.ErrPlanDiff)
 
 	got := buf.String()
 	assert.Contains(t, got, "CREATE TABLE public.audit_log", "unrelated DDL must still appear")
@@ -442,14 +442,14 @@ func TestPlan_Run_ExecuteCheckWrites_KeepsStatement(t *testing.T) {
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Files: []string{desiredFile}}
-	require.NoError(t, cmd.Run(ctx, client, &buf))
+	cmd := &command.Plan{Options: options, Files: []string{desiredFile}}
+	require.NoError(t, cmd.Run(ctx, &buf))
 
 	got := buf.String()
 	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func")
@@ -472,18 +472,18 @@ func TestPlan_Run_CheckPreSQLNoChanges(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(initSQL), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{
+	cmd := &command.Plan{Options: options,
 		Check:  true,
 		Files:  []string{desiredFile},
 		PreSQL: "SELECT 1;",
 	}
-	err := cmd.Run(ctx, client, &buf)
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	got := buf.String()
 	assert.Contains(t, got, "-- No changes")
@@ -493,17 +493,17 @@ func TestPlan_Run_CheckPreSQLNoChanges(t *testing.T) {
 func TestPlan_Run_CheckError(t *testing.T) {
 	// Connection failures must surface as ordinary errors, not ErrPlanDiff.
 	ctx := context.Background()
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: "invalid://connection",
 		Schemas:    []string{"public"},
-	})
+	}
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Check: true, Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Check: true, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.Error(t, err)
 	require.NotErrorIs(t, err, command.ErrPlanDiff)
 }
@@ -527,14 +527,14 @@ func TestPlan_Run_ExecuteOnly_NotNoChanges(t *testing.T) {
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	got := buf.String()
 	assert.Contains(t, got, "CREATE OR REPLACE FUNCTION public.test_func")
@@ -566,14 +566,14 @@ CREATE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plp
 CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
 `), 0o644))
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Plan{Files: []string{desiredFile}}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Plan{Options: options, Files: []string{desiredFile}}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	got := buf.String()
 	assert.NotContains(t, got, "CREATE OR REPLACE FUNCTION public.test_func", "plan should omit execute SQL apply would skip")

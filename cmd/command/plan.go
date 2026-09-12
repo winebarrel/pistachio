@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/alecthomas/kong"
 	"github.com/winebarrel/pistachio"
 )
 
@@ -21,12 +20,9 @@ type Plan struct {
 	Check bool `env:"PISTA_CHECK" help:"Exit with code 2 when the plan contains executable changes."`
 }
 
-func (cmd *Plan) AfterApply(kctx *kong.Context) error {
-	bindClient(kctx, &cmd.Options)
-	return nil
-}
+func (cmd *Plan) Run(ctx context.Context, w io.Writer) error {
+	client := pistachio.NewClient(&cmd.Options)
 
-func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {
 	result, err := client.Plan(ctx, &cmd.PlanOptions)
 	if err != nil {
 		return err

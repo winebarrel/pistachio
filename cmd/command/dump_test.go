@@ -27,14 +27,14 @@ func TestDump_Run(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Dump{Options: options}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- Dump of schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)")
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
@@ -56,15 +56,15 @@ CREATE TABLE public.posts (
     CONSTRAINT posts_pkey PRIMARY KEY (id)
 );`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	splitDir := filepath.Join(t.TempDir(), "split_output")
 	var buf bytes.Buffer
-	cmd := &command.Dump{Split: splitDir}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Dump{Options: options, Split: splitDir}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 
 	usersData, err := os.ReadFile(filepath.Join(splitDir, "public.users.sql"))
@@ -89,14 +89,14 @@ func TestDump_Run_Empty(t *testing.T) {
 
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Dump{Options: options}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- Dump of schema public (0 tables, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)")
 }
@@ -113,15 +113,15 @@ CREATE TABLE public.users (
 );
 CREATE VIEW public.active_users AS SELECT id FROM public.users;`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	splitDir := filepath.Join(t.TempDir(), "split_output")
 	var buf bytes.Buffer
-	cmd := &command.Dump{Split: splitDir}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Dump{Options: options, Split: splitDir}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 
 	usersData, err := os.ReadFile(filepath.Join(splitDir, "public.users.sql"))
@@ -140,15 +140,15 @@ func TestDump_Run_Split_Empty(t *testing.T) {
 
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	splitDir := filepath.Join(t.TempDir(), "split_output")
 	var buf bytes.Buffer
-	cmd := &command.Dump{Split: splitDir}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Dump{Options: options, Split: splitDir}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 
 	entries, err := os.ReadDir(splitDir)
@@ -169,15 +169,15 @@ CREATE TABLE public."My Table" (
     id integer NOT NULL
 );`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	splitDir := filepath.Join(t.TempDir(), "split_output")
 	var buf bytes.Buffer
-	cmd := &command.Dump{Split: splitDir}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Dump{Options: options, Split: splitDir}
+	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(filepath.Join(splitDir, "public.My_Table.sql"))
@@ -196,10 +196,10 @@ CREATE TABLE public.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	// Use a regular file as the parent so MkdirAll fails on every
 	// platform, unlike /dev/null which is a plain path on Windows.
@@ -207,8 +207,8 @@ CREATE TABLE public.users (
 	require.NoError(t, os.WriteFile(notADir, []byte("x"), 0o644))
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{Split: filepath.Join(notADir, "invalid")}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Dump{Options: options, Split: filepath.Join(notADir, "invalid")}
+	err := cmd.Run(ctx, &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to create directory")
 	// MkdirAll runs before the header, so nothing should land on stdout.
@@ -226,10 +226,10 @@ CREATE TABLE public.users (
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	// Force os.WriteFile to fail by pre-creating a directory where the
 	// dump file would go. Writing to a directory path fails on every
@@ -239,8 +239,8 @@ CREATE TABLE public.users (
 	require.NoError(t, os.MkdirAll(filepath.Join(splitDir, "public.users.sql"), 0o755))
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{Split: splitDir}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Dump{Options: options, Split: splitDir}
+	err := cmd.Run(ctx, &buf)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to write")
 	// On the write-failure path the header has already been emitted
@@ -253,14 +253,14 @@ CREATE TABLE public.users (
 
 func TestDump_Run_Error(t *testing.T) {
 	ctx := context.Background()
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: "invalid://connection",
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{}
-	err := cmd.Run(ctx, client, &buf)
+	cmd := &command.Dump{Options: options}
+	err := cmd.Run(ctx, &buf)
 	require.Error(t, err)
 }
 
@@ -279,15 +279,15 @@ CREATE TABLE public.users (
 CREATE INDEX idx_users_email ON public.users (email);
 CREATE VIEW public.live AS SELECT id FROM public.users;`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{}
+	cmd := &command.Dump{Options: options}
 	cmd.JSON = true
-	require.NoError(t, cmd.Run(ctx, client, &buf))
+	require.NoError(t, cmd.Run(ctx, &buf))
 
 	// No SQL comment can precede the document.
 	assert.True(t, strings.HasPrefix(buf.String(), "{\n"), "the document starts the output")
@@ -334,15 +334,15 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY p_users ON public.users AS RESTRICTIVE FOR SELECT USING (id > 0);
 CREATE MATERIALIZED VIEW public.recent AS SELECT id FROM public.users;`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{}
+	cmd := &command.Dump{Options: options}
 	cmd.JSON = true
-	require.NoError(t, cmd.Run(ctx, client, &buf))
+	require.NoError(t, cmd.Run(ctx, &buf))
 
 	assert.NoError(t, validateAgainstJSONSchema(t, buf.Bytes()))
 }
@@ -354,16 +354,16 @@ func TestDump_Run_JSON_OmitSchema(t *testing.T) {
 
 	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer);`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{}
+	cmd := &command.Dump{Options: options}
 	cmd.JSON = true
 	cmd.OmitSchema = true
-	require.NoError(t, cmd.Run(ctx, client, &buf))
+	require.NoError(t, cmd.Run(ctx, &buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
@@ -383,28 +383,28 @@ func TestDump_Run_JSON_FiltersAndRoutines(t *testing.T) {
 CREATE TABLE public.tmp_scratch (id integer);
 CREATE FUNCTION public.noop() RETURNS void LANGUAGE sql AS 'SELECT';`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	read := func(t *testing.T, cmd *command.Dump) map[string]any {
 		t.Helper()
 		var buf bytes.Buffer
-		require.NoError(t, cmd.Run(ctx, client, &buf))
+		require.NoError(t, cmd.Run(ctx, &buf))
 		var result map[string]any
 		require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
 
 		return result
 	}
 
-	plain := &command.Dump{}
+	plain := &command.Dump{Options: options}
 	plain.JSON = true
 	result := read(t, plain)
 	assert.Contains(t, result["tables"], "public.tmp_scratch")
 	assert.Empty(t, result["routines"], "routines are unmanaged without --manage-routine")
 
-	filtered := &command.Dump{}
+	filtered := &command.Dump{Options: options}
 	filtered.JSON = true
 	filtered.Exclude = []string{"tmp_*"}
 	filtered.ManageRoutine = true
@@ -423,15 +423,15 @@ func TestDump_Run_JSON_Empty(t *testing.T) {
 
 	testutil.SetupDB(t, ctx, conn, "")
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{}
+	cmd := &command.Dump{Options: options}
 	cmd.JSON = true
-	require.NoError(t, cmd.Run(ctx, client, &buf))
+	require.NoError(t, cmd.Run(ctx, &buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
@@ -457,15 +457,15 @@ func TestDump_Run_JSON_UnmanagedAreEmptyObjects(t *testing.T) {
 CREATE MATERIALIZED VIEW public.recent AS SELECT id FROM public.docs;
 CREATE FUNCTION public.noop() RETURNS void LANGUAGE sql AS 'SELECT';`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{}
+	cmd := &command.Dump{Options: options}
 	cmd.JSON = true
-	require.NoError(t, cmd.Run(ctx, client, &buf))
+	require.NoError(t, cmd.Run(ctx, &buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
@@ -481,10 +481,10 @@ CREATE FUNCTION public.noop() RETURNS void LANGUAGE sql AS 'SELECT';`)
 	// With the flag the parameters are there, so the empty object above is the
 	// unmanaged case rather than a table that carries none.
 	buf.Reset()
-	managed := &command.Dump{}
+	managed := &command.Dump{Options: options}
 	managed.JSON = true
 	managed.ManageStorageParam = true
-	require.NoError(t, managed.Run(ctx, client, &buf))
+	require.NoError(t, managed.Run(ctx, &buf))
 
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
 	table = result["tables"].(map[string]any)["public.docs"].(map[string]any)
@@ -502,15 +502,15 @@ func TestDump_Run_JSON_StorageTypeIsCatalogWide(t *testing.T) {
 	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.docs (id integer, body text, note text);
 ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;`)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
-	})
+	}
 
 	var buf bytes.Buffer
-	cmd := &command.Dump{}
+	cmd := &command.Dump{Options: options}
 	cmd.JSON = true
-	require.NoError(t, cmd.Run(ctx, client, &buf))
+	require.NoError(t, cmd.Run(ctx, &buf))
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
