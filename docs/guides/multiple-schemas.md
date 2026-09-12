@@ -4,21 +4,21 @@ By default, pistachio targets the `public` schema. Use `-n` or `$PISTA_SCHEMAS` 
 
 ```bash
 # Dump the "myschema" schema
-pista -n myschema dump
+pista dump -n myschema
 
 # Or use environment variable
 export PISTA_SCHEMAS=myschema
 pista dump
 
 # Plan/apply against "myschema"
-pista -n myschema plan schema.sql
-pista -n myschema apply schema.sql
+pista plan -n myschema schema.sql
+pista apply -n myschema schema.sql
 ```
 
 You can also manage multiple schemas at once:
 
 ```bash
-pista -n public,myschema dump
+pista dump -n public,myschema
 ```
 
 
@@ -28,11 +28,11 @@ Use `-m` / `--schema-map` when SQL files use a different schema name than the da
 
 ```bash
 # Dump "staging" schema but output as "public"
-pista -n staging -m staging=public dump
+pista dump -n staging -m staging=public
 
 # Plan/apply: SQL files use "public", but changes target "staging"
-pista -n staging -m staging=public plan schema.sql
-pista -n staging -m staging=public apply schema.sql
+pista plan -n staging -m staging=public schema.sql
+pista apply -n staging -m staging=public schema.sql
 ```
 
 ## Schema-less SQL files
@@ -41,8 +41,8 @@ If your SQL files omit schema names (e.g. `CREATE TABLE users` instead of `CREAT
 
 ```bash
 # Schema-less SQL is treated as "myschema"
-pista -n myschema plan schema.sql
-pista -n myschema apply schema.sql
+pista plan -n myschema schema.sql
+pista apply -n myschema schema.sql
 ```
 
 Use `--omit-schema` with dump to produce schema-less output:
@@ -70,7 +70,7 @@ pista dump --omit-schema --split ./schema/
 When schema is omitted in SQL files, `plan` and `apply` use the schema specified by `-n`:
 
 ```bash
-pista -n staging plan schema.sql   # schema-less SQL is treated as "staging"
-pista -n staging apply schema.sql
+pista plan -n staging schema.sql   # schema-less SQL is treated as "staging"
+pista apply -n staging schema.sql
 ```
 

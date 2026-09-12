@@ -7,11 +7,18 @@ import (
 	"io"
 	"time"
 
+	"github.com/alecthomas/kong"
 	"github.com/winebarrel/pistachio"
 )
 
 type Apply struct {
+	pistachio.Options
 	pistachio.ApplyOptions
+}
+
+func (cmd *Apply) AfterApply(kctx *kong.Context) error {
+	bindClient(kctx, &cmd.Options)
+	return nil
 }
 
 func (cmd *Apply) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {

@@ -13,8 +13,10 @@ import (
 
 var version string
 
+// cli holds only what every command shares. The connection flags sit on the
+// commands that open a connection, so kong does not offer them to fmt, which
+// reads no database, or to parse, which needs the schema name alone.
 type cli struct {
-	pistachio.Options
 	Config  kong.ConfigFlag `short:"C" name:"config" placeholder:"FILE" env:"PISTA_CONFIG" help:"Load options from a YAML file."`
 	Version kong.VersionFlag
 	Pager   *bool `name:"pager" negatable:"" help:"Force paging via $PISTA_PAGER even when stdout is not a TTY. PISTA_PAGER must be set."`
@@ -61,8 +63,9 @@ func run(args []string, stdout, stderr io.Writer, exit func(int)) {
 		kctx.BindTo(w, (*io.Writer)(nil))
 	}
 
-	client := pistachio.NewClient(&cli.Options)
-	err = kctx.Run(client)
+	// The client is bound by the running command's AfterApply, built from the
+	// connection flags that command carries.
+	err = kctx.Run()
 	closePager()
 	// plan --check and fmt --check report a difference as exit code 2 instead
 	// of a fatal error. The output has already been written.

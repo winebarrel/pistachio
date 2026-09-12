@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/alecthomas/kong"
 	"github.com/winebarrel/pistachio"
 )
 
@@ -15,8 +16,14 @@ import (
 var ErrPlanDiff = errors.New("plan contains changes")
 
 type Plan struct {
+	pistachio.Options
 	pistachio.PlanOptions
 	Check bool `env:"PISTA_CHECK" help:"Exit with code 2 when the plan contains executable changes."`
+}
+
+func (cmd *Plan) AfterApply(kctx *kong.Context) error {
+	bindClient(kctx, &cmd.Options)
+	return nil
 }
 
 func (cmd *Plan) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {

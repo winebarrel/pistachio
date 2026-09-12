@@ -16,7 +16,7 @@ pistachio connects to PostgreSQL using a connection string. The default is `post
 pista dump
 
 # Or specify a connection string
-pista -c 'postgres://user:pass@host:5432/mydb' dump
+pista dump -c 'postgres://user:pass@host:5432/mydb'
 
 # Or use an environment variable
 export PISTA_CONN_STR='postgres://user:pass@host:5432/mydb'

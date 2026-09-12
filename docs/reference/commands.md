@@ -4,26 +4,11 @@
 Usage: pista <command> [flags]
 
 Flags:
-  -h, --help                  Show context-sensitive help.
-  -c, --conn-string="postgres://postgres@localhost/postgres"
-                              PostgreSQL connection string. See
-                              https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-                              ($PISTA_CONN_STR)
-  -d, --dbname=STRING         PostgreSQL database name. Overrides the dbname in
-                              --conn-string ($PISTA_DBNAME).
-      --password=STRING       PostgreSQL password ($PISTA_PASSWORD).
-  -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
-  -m, --schema-map=KEY=VALUE;...
-                              Schema name mapping (e.g. -m old=new).
-      --search-path=public    search_path for the database connection.
-                              The catalog reports an object reachable through
-                              it without its schema, so this decides how dump
-                              writes that object. Pass an empty value to qualify
-                              everything ($PISTA_SEARCH_PATH).
-  -C, --config=FILE           Load options from a YAML file ($PISTA_CONFIG).
+  -h, --help           Show context-sensitive help.
+  -C, --config=FILE    Load options from a YAML file ($PISTA_CONFIG).
       --version
-      --[no-]pager            Force paging via $PISTA_PAGER even when stdout is
-                              not a TTY. PISTA_PAGER must be set.
+      --[no-]pager     Force paging via $PISTA_PAGER even when stdout is not a
+                       TTY. PISTA_PAGER must be set.
 
 Commands:
   apply <files> ... [flags]
@@ -62,6 +47,11 @@ Arguments:
 
 Flags:
   -h, --help                    Show context-sensitive help.
+  -C, --config=FILE             Load options from a YAML file ($PISTA_CONFIG).
+      --version
+      --[no-]pager              Force paging via $PISTA_PAGER even when stdout
+                                is not a TTY. PISTA_PAGER must be set.
+
   -c, --conn-string="postgres://postgres@localhost/postgres"
                                 PostgreSQL connection string. See
                                 https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
@@ -77,11 +67,6 @@ Flags:
                                 it without its schema, so this decides how
                                 dump writes that object. Pass an empty value to
                                 qualify everything ($PISTA_SEARCH_PATH).
-  -C, --config=FILE             Load options from a YAML file ($PISTA_CONFIG).
-      --version
-      --[no-]pager              Force paging via $PISTA_PAGER even when stdout
-                                is not a TTY. PISTA_PAGER must be set.
-
   -I, --include=INCLUDE,...     Include only
                                 tables/views/enums/domains/composite
                                 types/sequences/routines matching the pattern
@@ -166,6 +151,12 @@ Arguments:
 
 Flags:
   -h, --help                       Show context-sensitive help.
+  -C, --config=FILE                Load options from a YAML file
+                                   ($PISTA_CONFIG).
+      --version
+      --[no-]pager                 Force paging via $PISTA_PAGER even when
+                                   stdout is not a TTY. PISTA_PAGER must be set.
+
   -c, --conn-string="postgres://postgres@localhost/postgres"
                                    PostgreSQL connection string. See
                                    https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
@@ -182,12 +173,6 @@ Flags:
                                    it without its schema, so this decides how
                                    dump writes that object. Pass an empty value
                                    to qualify everything ($PISTA_SEARCH_PATH).
-  -C, --config=FILE                Load options from a YAML file
-                                   ($PISTA_CONFIG).
-      --version
-      --[no-]pager                 Force paging via $PISTA_PAGER even when
-                                   stdout is not a TTY. PISTA_PAGER must be set.
-
   -I, --include=INCLUDE,...        Include only
                                    tables/views/enums/domains/composite
                                    types/sequences/routines matching the
@@ -279,6 +264,11 @@ Dump the current database schema as SQL.
 
 Flags:
   -h, --help                    Show context-sensitive help.
+  -C, --config=FILE             Load options from a YAML file ($PISTA_CONFIG).
+      --version
+      --[no-]pager              Force paging via $PISTA_PAGER even when stdout
+                                is not a TTY. PISTA_PAGER must be set.
+
   -c, --conn-string="postgres://postgres@localhost/postgres"
                                 PostgreSQL connection string. See
                                 https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
@@ -294,11 +284,6 @@ Flags:
                                 it without its schema, so this decides how
                                 dump writes that object. Pass an empty value to
                                 qualify everything ($PISTA_SEARCH_PATH).
-  -C, --config=FILE             Load options from a YAML file ($PISTA_CONFIG).
-      --version
-      --[no-]pager              Force paging via $PISTA_PAGER even when stdout
-                                is not a TTY. PISTA_PAGER must be set.
-
   -I, --include=INCLUDE,...     Include only
                                 tables/views/enums/domains/composite
                                 types/sequences/routines matching the pattern
@@ -356,30 +341,15 @@ Arguments:
   <files> ...    Path to the schema SQL file(s).
 
 Flags:
-  -h, --help                  Show context-sensitive help.
-  -c, --conn-string="postgres://postgres@localhost/postgres"
-                              PostgreSQL connection string. See
-                              https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-                              ($PISTA_CONN_STR)
-  -d, --dbname=STRING         PostgreSQL database name. Overrides the dbname in
-                              --conn-string ($PISTA_DBNAME).
-      --password=STRING       PostgreSQL password ($PISTA_PASSWORD).
-  -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
-  -m, --schema-map=KEY=VALUE;...
-                              Schema name mapping (e.g. -m old=new).
-      --search-path=public    search_path for the database connection.
-                              The catalog reports an object reachable through
-                              it without its schema, so this decides how dump
-                              writes that object. Pass an empty value to qualify
-                              everything ($PISTA_SEARCH_PATH).
-  -C, --config=FILE           Load options from a YAML file ($PISTA_CONFIG).
+  -h, --help           Show context-sensitive help.
+  -C, --config=FILE    Load options from a YAML file ($PISTA_CONFIG).
       --version
-      --[no-]pager            Force paging via $PISTA_PAGER even when stdout is
-                              not a TTY. PISTA_PAGER must be set.
+      --[no-]pager     Force paging via $PISTA_PAGER even when stdout is not a
+                       TTY. PISTA_PAGER must be set.
 
-      --check                 Report the files that are not formatted instead of
-                              writing them. Exits with code 2 when there are any
-                              ($PISTA_FMT_CHECK).
+      --check          Report the files that are not formatted instead of
+                       writing them. Exits with code 2 when there are any
+                       ($PISTA_FMT_CHECK).
 ```
 
 </details>
@@ -397,25 +367,13 @@ Arguments:
 
 Flags:
   -h, --help                  Show context-sensitive help.
-  -c, --conn-string="postgres://postgres@localhost/postgres"
-                              PostgreSQL connection string. See
-                              https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-                              ($PISTA_CONN_STR)
-  -d, --dbname=STRING         PostgreSQL database name. Overrides the dbname in
-                              --conn-string ($PISTA_DBNAME).
-      --password=STRING       PostgreSQL password ($PISTA_PASSWORD).
-  -n, --schemas=public,...    Schemas to inspect and modify ($PISTA_SCHEMAS).
-  -m, --schema-map=KEY=VALUE;...
-                              Schema name mapping (e.g. -m old=new).
-      --search-path=public    search_path for the database connection.
-                              The catalog reports an object reachable through
-                              it without its schema, so this decides how dump
-                              writes that object. Pass an empty value to qualify
-                              everything ($PISTA_SEARCH_PATH).
   -C, --config=FILE           Load options from a YAML file ($PISTA_CONFIG).
       --version
       --[no-]pager            Force paging via $PISTA_PAGER even when stdout is
                               not a TTY. PISTA_PAGER must be set.
+
+  -n, --schemas=public,...    Schema to qualify unqualified names with. Only the
+                              first is used ($PISTA_SCHEMAS).
 ```
 
 </details>

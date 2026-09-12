@@ -8,11 +8,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/alecthomas/kong"
 	"github.com/winebarrel/pistachio"
 )
 
 type Dump struct {
+	pistachio.Options
 	pistachio.DumpOptions
+}
+
+func (cmd *Dump) AfterApply(kctx *kong.Context) error {
+	bindClient(kctx, &cmd.Options)
+	return nil
 }
 
 func (cmd *Dump) Run(ctx context.Context, client *pistachio.Client, w io.Writer) error {
