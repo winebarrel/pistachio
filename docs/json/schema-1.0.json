@@ -1112,10 +1112,10 @@
         "columns": {
           "oneOf": [
             {
-              "additionalProperties": {
+              "items": {
                 "$ref": "#/$defs/Column"
               },
-              "type": "object"
+              "type": "array"
             },
             {
               "type": "null"

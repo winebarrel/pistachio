@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
+	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
 )
 
@@ -124,6 +125,12 @@ func mapper(t reflect.Type) *jsonschema.Schema {
 			// left to the reflector, which describes it as best it can. Build
 			// catches it: the definition the $ref would have named is missing.
 			return nil
+		}
+
+		// A table's columns are written as an array, in the physical column
+		// order. model.JSONMarshalers is what writes them that way.
+		if deref(valueType) == reflect.TypeFor[model.Column]() {
+			return &jsonschema.Schema{Type: "array", Items: value}
 		}
 
 		return &jsonschema.Schema{Type: "object", AdditionalProperties: value}

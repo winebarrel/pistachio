@@ -37,11 +37,14 @@ func TestParse_Run(t *testing.T) {
 	items, ok := tables["public.items"].(map[string]any)
 	require.True(t, ok, "unqualified names are qualified with the default schema")
 
-	columns := items["columns"].(map[string]any)
-	id := columns["id"].(map[string]any)
+	// Columns are an array, in the order the file declares them.
+	columns := items["columns"].([]any)
+	id := columns[0].(map[string]any)
+	assert.Equal(t, "id", id["name"])
 	assert.Equal(t, "bigint", id["type"])
 	assert.Equal(t, "always", id["identity"])
-	name := columns["name"].(map[string]any)
+	name := columns[1].(map[string]any)
+	assert.Equal(t, "name", name["name"])
 	assert.Equal(t, true, name["not_null"])
 
 	constraints := items["constraints"].(map[string]any)
@@ -84,7 +87,7 @@ func TestParse_Run_WritesEveryField(t *testing.T) {
 		assert.Contains(t, table, key)
 	}
 
-	col := table["columns"].(map[string]any)["note"].(map[string]any)
+	col := table["columns"].([]any)[0].(map[string]any)
 	for _, key := range []string{
 		"name", "rename_from", "type", "serial_sequence", "not_null",
 		"not_null_name", "default", "identity", "identity_sequence",
