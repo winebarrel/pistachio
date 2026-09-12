@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.52.0] - 2026-09-12
 
 * **BREAKING**: The connection options (`-c` / `--conn-string`, `-d` / `--dbname`, `--password`, `-n` / `--schemas`, `-m` / `--schema-map`, `--search-path`) belong to the command that opens a connection, so they are written after it rather than before: `pista dump -n myschema`, not `pista -n myschema dump`. `fmt` reads no database and no longer takes them at all, and `parse` takes `-n` alone, which it uses to qualify unqualified names. `-C` / `--config`, `--pager` and `--version` stay where they were, and the environment variables and the config file are unchanged.
 
