@@ -33,8 +33,8 @@ create table users (
 	require.NoError(t, cmd.Run(&buf))
 
 	out := buf.String()
-	assert.Equal(t, "-- Diff for schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)", firstLine(out))
-	assert.Contains(t, out, "ALTER TABLE public.users ADD COLUMN email text;")
+	// No header comment: the output starts with the DDL itself.
+	assert.Equal(t, "ALTER TABLE public.users ADD COLUMN email text;", firstLine(out))
 }
 
 func TestDiff_Run_NoChanges(t *testing.T) {
@@ -49,7 +49,7 @@ func TestDiff_Run_NoChanges(t *testing.T) {
 		Desired: desired,
 	}
 	require.NoError(t, cmd.Run(&buf))
-	assert.Contains(t, buf.String(), "-- No changes")
+	assert.Equal(t, "-- No changes\n", buf.String())
 }
 
 // --check reports changes as ErrDiffChanges, which main maps to exit code 2.
