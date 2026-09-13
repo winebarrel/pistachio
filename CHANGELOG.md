@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.54.1] - 2026-09-13
+
+* `diff` no longer prints `-- pista:execute` statements. They are not schema state and their check SQL cannot be evaluated without a database; `apply` runs them as usual.
+
 ## [1.54.0] - 2026-09-13
 
 * Add `pista diff`. It compares two schema SQL files and prints the DDL that takes the first to the second, with the same statements and ordering `plan` produces, without reading a database. `--check` exits with code 2 when the diff contains executable changes.

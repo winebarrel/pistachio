@@ -21,7 +21,8 @@ type DiffOptions struct {
 
 // Diff diffs two schema SQL files without a database: the first file stands in
 // for the current state the catalog gives Plan, the second is the desired
-// state. The output is the DDL that takes the first schema to the second.
+// state. The output is the DDL that takes the first schema to the second,
+// and nothing else: -- pista:execute statements are left out.
 func (client *Client) Diff(options *DiffOptions) (*PlanResult, error) {
 	if err := client.validateSchemas(); err != nil {
 		return nil, err
@@ -71,34 +72,14 @@ func (client *Client) Diff(options *DiffOptions) (*PlanResult, error) {
 		return nil, err
 	}
 
-	// A -- pista:execute statement is kept the way plan keeps one whose check
-	// could not be evaluated: there is no database to ask, so the check is
-	// noted and apply decides. Order matches plan: execute-first statements
-	// before the schema changes, plain execute statements after them.
-	appendExecuteStmts := func(stmts []string, first bool) []string {
-		for _, es := range result.ExecuteStmts {
-			if es.First != first {
-				continue
-			}
-			note := ""
-			if es.CheckSQL != "" {
-				note = "check SQL is not evaluated without a database; apply will decide"
-			}
-			stmts = append(stmts, parser.FormatExecuteStmtWithNote(es, note))
-		}
-		return stmts
-	}
-
-	var stmts []string
-	stmts = appendExecuteStmts(stmts, true)
-	stmts = append(stmts, result.Stmts...)
-	stmts = appendExecuteStmts(stmts, false)
-
+	// A -- pista:execute statement is not part of the diff: it is not schema
+	// state, and its check SQL cannot be evaluated without a database. apply
+	// runs execute statements as usual.
 	return &PlanResult{
-		SQL:             strings.Join(stmts, "\n"),
+		SQL:             strings.Join(result.Stmts, "\n"),
 		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
 		Ignored:         strings.Join(result.Ignored, "\n"),
 		Count:           result.Count,
-		HasChanges:      len(stmts) > 0,
+		HasChanges:      len(result.Stmts) > 0,
 	}, nil
 }

@@ -1,3 +1,5 @@
+# An execute-first statement is left out the same way; only the schema DDL is
+# printed.
 current: ""
 desired: |
   -- pista:execute-first
@@ -7,8 +9,6 @@ desired: |
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
 diff: |
-  -- pista:execute-first
-  CREATE EXTENSION IF NOT EXISTS pg_trgm;
   CREATE TABLE public.users (
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
