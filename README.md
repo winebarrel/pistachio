@@ -6,7 +6,7 @@
 Declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL; pistachio generates the DDL diff.
 
 > [!WARNING]
-> **Changed in 1.52.0**: The connection options belong to the command that opens a connection, so they go after it, not before. `fmt` no longer takes them at all, and `parse` takes `-n` alone.
+> **Changed in 1.52.0**: The connection options belong to the command that opens a connection, so they go after it, not before.
 >
 > ```bash
 > pista -n myschema -c postgres://user@host/db dump   # before 1.52.0
