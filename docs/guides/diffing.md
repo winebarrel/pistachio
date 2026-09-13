@@ -29,7 +29,7 @@ CREATE TABLE users (
 CREATE INDEX idx_users_email ON users (email);
 ```
 
-```console
+```sql
 $ pista diff old.sql new.sql
 -- Diff for schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
 ALTER TABLE public.users ADD COLUMN email text;
