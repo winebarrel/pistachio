@@ -1,0 +1,20 @@
+# --disable-index-concurrently reaches the current side too: a
+# -- pista:concurrently in the current file would otherwise turn this pure
+# drop into DROP INDEX CONCURRENTLY.
+disable_index_concurrently: true
+current: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:concurrently
+  CREATE INDEX idx_users_name ON public.users (name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+diff: |
+  DROP INDEX public.idx_users_name;

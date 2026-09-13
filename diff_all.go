@@ -225,6 +225,11 @@ func (client *Client) diffObjects(current *currentObjects, options *diffAllOptio
 
 	switch {
 	case options.DisableIndexConcurrently:
+		// The current side is cleared too. The catalog never sets the flag,
+		// so this is a no-op for plan and apply, but Diff parses the current
+		// side from a file, where a -- pista:concurrently would otherwise
+		// reach a pure drop.
+		clearConcurrentlyDirectives(filteredTables, filteredViews)
 		clearConcurrentlyDirectives(desiredTables, desiredViews)
 	case options.ForceIndexConcurrently:
 		forceConcurrentlyDirectives(filteredTables, filteredViews, desiredTables, desiredViews)
@@ -346,7 +351,7 @@ func removeIgnored[V any](desired, current *orderedmap.Map[string, V], ignored f
 }
 
 // clearConcurrentlyDirectives wipes the per-index Concurrently flag on every
-// table and materialized view index in the desired schema, used to implement
+// table and materialized view index in the given maps, used to implement
 // --disable-index-concurrently.
 func clearConcurrentlyDirectives(
 	tables *orderedmap.Map[string, *model.Table],

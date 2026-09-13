@@ -60,6 +60,8 @@ pista diff --check /tmp/main-schema.sql schema.sql
 
 The first file plays the catalog's role. Only objects in the target schemas (`-n` / `--schemas`) are compared; an object outside them is out of scope on both sides, not a drop. Functions and procedures are read only under `--manage-routine`, and a sequence a column owns is unmanaged, as in the catalog.
 
+Directives in the first file count as its state. A `-- pista:concurrently` there makes a dropped index `DROP INDEX CONCURRENTLY`, which a plan against a database cannot know; `--disable-index-concurrently` clears it on both sides.
+
 
 ## Execute directives
 
