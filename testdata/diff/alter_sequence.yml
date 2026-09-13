@@ -1,0 +1,8 @@
+current: |
+  CREATE SEQUENCE public.order_seq MINVALUE 1 START WITH 1;
+desired: |
+  CREATE SEQUENCE public.order_seq MINVALUE 5 START WITH 10;
+diff: |
+  ALTER SEQUENCE public.order_seq MINVALUE 5 START WITH 10;
+count:
+  sequences: 1

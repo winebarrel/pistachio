@@ -1,0 +1,20 @@
+current: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_names AS SELECT name FROM users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_names AS SELECT id, name FROM users;
+diff: |
+  DROP VIEW public.user_names;
+  CREATE OR REPLACE VIEW public.user_names AS
+  SELECT id, name FROM users;
+count:
+  views: 1

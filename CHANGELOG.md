@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Add `pista diff`. It compares two schema SQL files and prints the DDL that takes the first to the second, with the same statements and ordering `plan` produces, without reading a database. `--check` exits with code 2 when the diff contains executable changes.
+
 ## [1.53.0] - 2026-09-12
 
 * **BREAKING**: `parse` and `dump --json` write a table's `columns` as an array rather than an object keyed by name. The order is the column order, which a JSON object does not promise to keep, and the name is already a field of the column. The published JSON Schema at `schema-1.0.json` is updated in place.

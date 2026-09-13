@@ -1,0 +1,13 @@
+# Storage parameters are opt-in. Without --manage-storage-param the WITH
+# clause is cleared on both sides, so it produces no SET and no RESET.
+current: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  ) WITH (fillfactor = 70);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+diff: ""

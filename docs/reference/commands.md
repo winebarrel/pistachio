@@ -17,6 +17,10 @@ Commands:
   plan <files> ... [flags]
     Print the schema diff SQL without applying it.
 
+  diff <current> <desired> [flags]
+    Print the DDL that takes one schema SQL file to another. No database is
+    read.
+
   dump [flags]
     Dump the current database schema as SQL.
 
@@ -133,6 +137,79 @@ Flags:
                                 and the table's row and byte estimate from
                                 pg_class ($PISTA_EXPLAIN).
       --check                   Exit with code 2 when the plan contains
+                                executable changes ($PISTA_CHECK).
+```
+
+</details>
+
+<details>
+<summary><code>pista diff --help</code></summary>
+
+```
+Usage: pista diff <current> <desired> [flags]
+
+Print the DDL that takes one schema SQL file to another. No database is read.
+
+Arguments:
+  <current>    Path to the current schema SQL file.
+  <desired>    Path to the desired schema SQL file.
+
+Flags:
+  -h, --help                    Show context-sensitive help.
+  -C, --config=FILE             Load options from a YAML file ($PISTA_CONFIG).
+      --version
+      --[no-]pager              Force paging via $PISTA_PAGER even when stdout
+                                is not a TTY. PISTA_PAGER must be set.
+
+  -n, --schemas=public,...      Schemas to compare. Unqualified names are
+                                qualified with the first ($PISTA_SCHEMAS).
+  -I, --include=INCLUDE,...     Include only
+                                tables/views/enums/domains/composite
+                                types/sequences/routines matching the pattern
+                                (wildcard: *, ?; /re/ for a regular expression)
+                                ($PISTA_INCLUDE).
+  -E, --exclude=EXCLUDE,...     Exclude tables/views/enums/domains/composite
+                                types/sequences/routines matching the pattern
+                                (wildcard: *, ?; /re/ for a regular expression)
+                                ($PISTA_EXCLUDE).
+      --enable=ENABLE,...       Enable only specified object types (can be
+                                repeated) ($PISTA_ENABLE).
+      --disable=DISABLE,...     Disable specified object types (can be repeated)
+                                ($PISTA_DISABLE).
+      --manage-routine          Manage functions and procedures. Off by default;
+                                --allow-drop routine still gates dropping them
+                                ($PISTA_MANAGE_ROUTINE).
+      --manage-storage-param    Manage the storage parameters of a table and
+                                a materialized view, the WITH (...) clause.
+                                Off by default; without it the clause is
+                                ignored on both sides and dump does not
+                                write it. A plain view's security_barrier
+                                and security_invoker are managed either way
+                                ($PISTA_MANAGE_STORAGE_PARAM).
+      --skip-partition-child    Manage a partitioned table without its
+                                partitions. For a schema whose partitions
+                                another tool creates. An INHERITS child is
+                                unaffected ($PISTA_SKIP_PARTITION_CHILD).
+      --allow-drop=ALLOW-DROP,...
+                                Allow dropping these object types (repeatable;
+                                'all' allows everything) ($PISTA_ALLOW_DROP).
+      --disable-index-concurrently
+                                Ignore CONCURRENTLY opt-ins (directive and
+                                inline) and emit plain CREATE/DROP INDEX
+                                ($PISTA_DISABLE_INDEX_CONCURRENTLY).
+      --force-index-concurrently
+                                Force CONCURRENTLY on every
+                                CREATE/DROP INDEX, including pure drops
+                                ($PISTA_FORCE_INDEX_CONCURRENTLY).
+      --bulk-alter              Combine consecutive ALTER TABLE actions on the
+                                same table into a single statement. FK changes,
+                                RENAME, VALIDATE CONSTRAINT, RLS toggles, and
+                                skipped DROPs stay separate ($PISTA_BULK_ALTER).
+      --assume-validated        Treat every table constraint, domain constraint,
+                                and foreign key as validated: ignore NOT
+                                VALID and never emit VALIDATE CONSTRAINT
+                                ($PISTA_ASSUME_VALIDATED).
+      --check                   Exit with code 2 when the diff contains
                                 executable changes ($PISTA_CHECK).
 ```
 
@@ -417,6 +494,28 @@ The catalog reports an object reachable through `search_path` without its schema
 
 !!! note
     `apply` sets `search_path` to the target schemas plus `public` so unqualified type and object references resolve. `plan` output does not include that `SET search_path`, so piping `pista plan -n <schema>` into `psql` for a non-public schema may fail on an unqualified reference. Qualify the reference or run `pista apply`.
+
+
+## diff
+
+Compare two schema SQL files and print the DDL that takes the first to the second. No database is read: the first file stands in for the current state `plan` reads from the catalog, the second is the desired state.
+
+```bash
+pista diff old.sql new.sql
+```
+
+The output follows the same rules as `plan`: the same statements, the same ordering, the same drop policy. Diffing a schema file against `pista dump` output previews what `plan` would print against that database, without a connection.
+
+`--check` works as it does for `plan`: exit code 2 when the diff contains executable changes, 0 when not, 1 on error.
+
+```bash
+pista diff --check old.sql new.sql
+echo $?  # 0: no changes, 2: changes, 1: error
+```
+
+A `-- pista:execute` statement in the desired file is kept in the output. Its check SQL cannot be evaluated without a database, so the statement carries a note and `apply` decides.
+
+See [Diffing schema files](../guides/diffing.md).
 
 
 ## apply

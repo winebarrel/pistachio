@@ -1,0 +1,15 @@
+current: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:renamed-from name
+      display_name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+diff: |
+  ALTER TABLE public.users RENAME COLUMN name TO display_name;

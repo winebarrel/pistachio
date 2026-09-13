@@ -86,6 +86,19 @@ type diffAllResult struct {
 	DesiredDomains *orderedmap.Map[string, *model.Domain]
 }
 
+// currentObjects holds the current side of a diff: one map per object kind.
+// diffAll reads it from the system catalogs; Diff fills it from a parsed
+// schema file.
+type currentObjects struct {
+	Tables         *orderedmap.Map[string, *model.Table]
+	Views          *orderedmap.Map[string, *model.View]
+	Enums          *orderedmap.Map[string, *model.Enum]
+	Domains        *orderedmap.Map[string, *model.Domain]
+	CompositeTypes *orderedmap.Map[string, *model.CompositeType]
+	Sequences      *orderedmap.Map[string, *model.Sequence]
+	Routines       *orderedmap.Map[string, *model.Routine]
+}
+
 // diffAll performs the common catalog fetch, parse, diff, and statement
 // ordering logic shared by Plan and Apply.
 func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diffAllOptions) (*diffAllResult, error) {
@@ -94,45 +107,62 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to create catalog: %w", err)
 	}
 
-	currentTables, err := cat.Tables(ctx)
+	current := &currentObjects{}
+
+	current.Tables, err = cat.Tables(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tables: %w", err)
 	}
 
-	currentViews, err := cat.Views(ctx)
+	current.Views, err = cat.Views(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch views: %w", err)
 	}
 
-	currentEnums, err := cat.Enums(ctx)
+	current.Enums, err = cat.Enums(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch enums: %w", err)
 	}
 
-	currentDomains, err := cat.Domains(ctx)
+	current.Domains, err = cat.Domains(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch domains: %w", err)
 	}
 
-	currentCompositeTypes, err := cat.CompositeTypes(ctx)
+	current.CompositeTypes, err = cat.CompositeTypes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch composite types: %w", err)
 	}
 
-	currentSequences, err := cat.Sequences(ctx)
+	current.Sequences, err = cat.Sequences(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch sequences: %w", err)
 	}
 
 	// pg_proc is read only when --manage-routine asked for it. Skipping the
 	// query keeps the extra round trip off every other run.
-	currentRoutines := orderedmap.New[string, *model.Routine]()
+	current.Routines = orderedmap.New[string, *model.Routine]()
 	if options.ManageRoutine {
-		currentRoutines, err = cat.Routines(ctx)
+		current.Routines, err = cat.Routines(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch routines: %w", err)
 		}
 	}
+
+	return client.diffObjects(current, options)
+}
+
+// diffObjects diffs the desired schema against an already-loaded current side
+// and orders the statements. diffAll hands it the catalog's view of the
+// database; Diff hands it a parsed schema file.
+func (client *Client) diffObjects(current *currentObjects, options *diffAllOptions) (*diffAllResult, error) {
+	currentTables := current.Tables
+	currentViews := current.Views
+	currentEnums := current.Enums
+	currentDomains := current.Domains
+	currentCompositeTypes := current.CompositeTypes
+	currentSequences := current.Sequences
+	currentRoutines := current.Routines
 
 	desired := options.Desired.schema
 

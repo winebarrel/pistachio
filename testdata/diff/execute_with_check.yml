@@ -1,0 +1,16 @@
+current: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:execute SELECT NOT EXISTS (SELECT 1 FROM users)
+  INSERT INTO users (id) VALUES (1);
+diff: |
+  -- pista:execute SELECT NOT EXISTS (SELECT 1 FROM users)
+  -- check SQL is not evaluated without a database; apply will decide
+  INSERT INTO users (id) VALUES (1);
