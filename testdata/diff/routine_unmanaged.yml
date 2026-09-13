@@ -1,0 +1,11 @@
+# Routines are opt-in. Without --manage-routine a function in the current file
+# is not dropped and one in the desired file is not created.
+current: |
+  CREATE FUNCTION public.add(a integer, b integer) RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT a + b $$;
+desired: |
+  CREATE FUNCTION public.sub(a integer, b integer) RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT a - b $$;
+diff: ""

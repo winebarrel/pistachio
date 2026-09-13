@@ -1,0 +1,17 @@
+manage_routine: true
+current: |
+  CREATE FUNCTION public.add(a integer, b integer) RETURNS integer
+      LANGUAGE sql IMMUTABLE STRICT
+      AS $$ SELECT a + b $$;
+desired: |
+  CREATE FUNCTION public.add(a integer, b integer) RETURNS integer
+      LANGUAGE sql IMMUTABLE STRICT
+      AS $$ SELECT b + a $$;
+diff: |
+  CREATE OR REPLACE FUNCTION public.add(a integer, b integer)
+      RETURNS integer
+      LANGUAGE sql
+      IMMUTABLE STRICT
+      AS $$ SELECT b + a $$;
+count:
+  routines: 1

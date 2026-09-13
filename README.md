@@ -113,6 +113,13 @@ pista fmt ./schema/*.sql           # rewrite them in place
 pista fmt --check ./schema/*.sql   # exit 2 when a file is not formatted
 ```
 
+Or diff two schema files without a database:
+
+```bash
+pista diff old.sql new.sql         # print the DDL that takes old.sql to new.sql
+pista diff --check old.sql new.sql # exit 2 when the two differ
+```
+
 Or read the schema as JSON:
 
 ```bash

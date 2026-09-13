@@ -68,6 +68,7 @@ nav:
       - guides/exclusive-apply.md
       - guides/executing-sql.md
       - guides/splitting.md
+      - guides/diffing.md
       - guides/formatting.md
       - guides/parsing.md
   - Reference:

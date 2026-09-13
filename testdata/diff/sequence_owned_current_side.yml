@@ -1,0 +1,14 @@
+# A CREATE SEQUENCE ... OWNED BY in the current file is unmanaged, the way the
+# catalog leaves out serial/identity-owned sequences, so no DROP is planned.
+current: |
+  CREATE TABLE public.t (
+      id integer NOT NULL
+  );
+  CREATE SEQUENCE public.s OWNED BY public.t.id;
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL
+  );
+diff: ""
+count:
+  sequences: 0

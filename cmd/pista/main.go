@@ -23,6 +23,7 @@ type cli struct {
 
 	Apply command.Apply `cmd:"" help:"Apply schema changes to the database."`
 	Plan  command.Plan  `cmd:"" help:"Print the schema diff SQL without applying it."`
+	Diff  command.Diff  `cmd:"" help:"Print the DDL that takes one schema SQL file to another. No database is read."`
 	Dump  command.Dump  `cmd:"" help:"Dump the current database schema as SQL."`
 	Fmt   command.Fmt   `cmd:"" help:"Format schema SQL files in place."`
 	Parse command.Parse `cmd:"" help:"Parse schema SQL files and print the result as JSON."`
@@ -65,9 +66,9 @@ func run(args []string, stdout, stderr io.Writer, exit func(int)) {
 
 	err = kctx.Run()
 	closePager()
-	// plan --check and fmt --check report a difference as exit code 2 instead
-	// of a fatal error. The output has already been written.
-	if errors.Is(err, command.ErrPlanDiff) || errors.Is(err, command.ErrFormatDiff) {
+	// plan --check, diff --check and fmt --check report a difference as exit
+	// code 2 instead of a fatal error. The output has already been written.
+	if errors.Is(err, command.ErrPlanDiff) || errors.Is(err, command.ErrDiffChanges) || errors.Is(err, command.ErrFormatDiff) {
 		kctx.Exit(2)
 		return
 	}

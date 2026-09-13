@@ -1,0 +1,17 @@
+disable_index_concurrently: true
+current: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:concurrently
+  CREATE INDEX idx_users_name ON public.users (name);
+diff: |
+  CREATE INDEX idx_users_name ON public.users USING btree (name);

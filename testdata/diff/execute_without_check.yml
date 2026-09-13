@@ -1,0 +1,15 @@
+current: ""
+desired: |
+  -- pista:execute-first
+  CREATE EXTENSION IF NOT EXISTS pg_trgm;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+diff: |
+  -- pista:execute-first
+  CREATE EXTENSION IF NOT EXISTS pg_trgm;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

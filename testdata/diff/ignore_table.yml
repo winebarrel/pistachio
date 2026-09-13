@@ -1,0 +1,20 @@
+current: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.legacy (
+      id integer NOT NULL
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:ignore
+  CREATE TABLE public.legacy (
+      id integer NOT NULL
+  );
+diff: ""
+ignored: |
+  -- ignored: public.legacy

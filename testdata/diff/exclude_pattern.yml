@@ -1,0 +1,20 @@
+exclude:
+  - legacy*
+current: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.legacy_logs (
+      id integer NOT NULL
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+diff: |
+  ALTER TABLE public.users ADD COLUMN email text;
+count:
+  tables: 1
