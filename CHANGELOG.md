@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.53.0] - 2026-09-13
 
 * Add `pista diff`. It compares two schema SQL files and prints the DDL that takes the first to the second, with the same statements and ordering `plan` produces, without reading a database. `--check` exits with code 2 when the diff contains executable changes.
 
