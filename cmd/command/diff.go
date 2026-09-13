@@ -31,8 +31,9 @@ func (cmd *Diff) Run(w io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(w, "-- Diff for %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
-
+	// No header comment: unlike plan there is no connection to name, and the
+	// object counts of a file say little, so the output is the DDL alone.
+	//
 	// Order matches plan: executable SQL first so it can be piped/copied as a
 	// runnable script; skipped DROPs follow as informational comments. In the
 	// no-SQL case, skipped DROPs come before "-- No changes" so the summary

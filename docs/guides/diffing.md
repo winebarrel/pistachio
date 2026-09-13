@@ -31,7 +31,6 @@ CREATE INDEX idx_users_email ON users (email);
 
 ```sql
 $ pista diff old.sql new.sql
--- Diff for schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
 ALTER TABLE public.users ADD COLUMN email text;
 CREATE INDEX idx_users_email ON public.users USING btree (email);
 ```
