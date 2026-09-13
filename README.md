@@ -48,6 +48,16 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 | Linux   | amd64, arm64 |
 | Windows | amd64        |
 
+## Demo
+
+A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
+
+```bash
+docker run --rm -it ghcr.io/winebarrel/pistachio-demo
+```
+
+See [Try it with Docker](https://winebarrel.github.io/pistachio/#try-it-with-docker).
+
 ## Example
 
 Create a schema file:
@@ -129,17 +139,6 @@ pista parse ./schema/*.sql         # print the objects the files declare as JSON
 ```
 
 It uses the same parser `plan` and `apply` use and reads no database, so another tool can consume the schema. `pista dump --json` writes the same shape, read from the database. See [Parsing schema files](https://winebarrel.github.io/pistachio/guides/parsing/).
-
-
-## Demo
-
-A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
-
-```bash
-docker run --rm -it ghcr.io/winebarrel/pistachio-demo
-```
-
-See [Try it with Docker](https://winebarrel.github.io/pistachio/#try-it-with-docker).
 
 ## Development
 
