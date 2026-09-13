@@ -39,7 +39,7 @@ CREATE INDEX idx_users_email ON public.users USING btree (email);
 
 ## The same rules as plan
 
-Both files go through the parser `plan` and `apply` use, and the diff is the one `plan` computes: the same statements, in the same order, under the same drop policy. Diffing a file against `pista dump` output previews a plan for that database without a connection.
+Both files go through the parser `plan` and `apply` use, and the diff is the one `plan` computes: the same schema DDL, in the same order, under the same drop policy. Diffing a file against `pista dump` output previews a plan for that database without a connection.
 
 Drops are suppressed by default and printed as comments; `--allow-drop` opts in. See [Controlling drops](drops.md).
 
@@ -65,13 +65,7 @@ Directives in the first file count as its state. A `-- pista:concurrently` there
 
 ## Execute directives
 
-A [`-- pista:execute`](executing-sql.md) statement in the desired file is kept in the output. Its check SQL cannot be evaluated without a database, so the statement carries a note and `apply` decides:
-
-```sql
--- pista:execute SELECT NOT EXISTS (SELECT 1 FROM users)
--- check SQL is not evaluated without a database; apply will decide
-INSERT INTO users (id) VALUES (1);
-```
+A [`-- pista:execute`](executing-sql.md) statement is not part of the diff. It is not schema state, and its check SQL cannot be evaluated without a database, so `diff` prints the schema DDL alone. `apply` runs execute statements as usual.
 
 
 ## What it is not

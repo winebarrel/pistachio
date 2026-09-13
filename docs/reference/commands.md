@@ -504,7 +504,7 @@ Compare two schema SQL files and print the DDL that takes the first to the secon
 pista diff old.sql new.sql
 ```
 
-The output follows the same rules as `plan`: the same statements, the same ordering, the same drop policy. Diffing a schema file against `pista dump` output previews what `plan` would print against that database, without a connection.
+The output follows the same rules as `plan`: the same schema DDL, the same ordering, the same drop policy. Diffing a schema file against `pista dump` output previews what `plan` would print against that database, without a connection.
 
 `--check` works as it does for `plan`: exit code 2 when the diff contains executable changes, 0 when not, 1 on error.
 
@@ -513,7 +513,7 @@ pista diff --check old.sql new.sql
 echo $?  # 0: no changes, 2: changes, 1: error
 ```
 
-A `-- pista:execute` statement in the desired file is kept in the output. Its check SQL cannot be evaluated without a database, so the statement carries a note and `apply` decides.
+A `-- pista:execute` statement is not part of the output: it is not schema state, and its check SQL cannot be evaluated without a database. `apply` runs execute statements as usual.
 
 See [Diffing schema files](../guides/diffing.md).
 

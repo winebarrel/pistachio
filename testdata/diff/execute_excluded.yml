@@ -1,3 +1,6 @@
+# A -- pista:execute statement is not part of the diff: it is not schema
+# state, and its check SQL cannot be evaluated without a database. apply runs
+# it as usual.
 current: |
   CREATE TABLE public.users (
       id integer NOT NULL,
@@ -10,7 +13,4 @@ desired: |
   );
   -- pista:execute SELECT NOT EXISTS (SELECT 1 FROM users)
   INSERT INTO users (id) VALUES (1);
-diff: |
-  -- pista:execute SELECT NOT EXISTS (SELECT 1 FROM users)
-  -- check SQL is not evaluated without a database; apply will decide
-  INSERT INTO users (id) VALUES (1);
+diff: ""
