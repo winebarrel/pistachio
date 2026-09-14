@@ -13,7 +13,7 @@ theme:
   # The header draws the logo at 24px next to site_name, so this is the nut
   # mark on its own. The full logo carries the wordmark, which would be
   # illegible at that size and repeat the name beside it.
-  logo: assets/logo-mark.webp
+  logo: assets/logo-mark.svg
   features:
     - navigation.sections
     - navigation.top
