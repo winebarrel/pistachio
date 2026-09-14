@@ -14,8 +14,7 @@ plan/apply workflow, built on
 schema in SQL; pistachio generates the DDL diff.
 
 !!! warning "Changed in 1.52.0"
-    The connection options belong to the command that opens a connection, so
-    they go after it, not before.
+    Options such as `-c` and `-n` now go after the subcommand, not before it.
 
     ```bash
     pista -n myschema -c postgres://user@host/db dump   # before 1.52.0
