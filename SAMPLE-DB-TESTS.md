@@ -150,27 +150,40 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 
 ## Coverage
 
-Object counts of the loaded schemas, as of 2026-08-08 on PostgreSQL 15.18 (16.13
-for icingadb, rt, znuny, gitlab, hive, ranger, ambari, ovirt, and chado, the
-last counted 2026-08-24; the Sequences column was counted on 15.18 throughout,
-Triggers, added 2026-08-24, and Routines, added 2026-08-25, on 15.18 for every
-sample; wso2is, nightingale, and danbooru were counted 2026-08-29 on 15.17;
-openolat and inaturalist 2026-08-30 on 16.13; joomla and harbor 2026-09-01 on
-16.13; bigbluebutton and listmonk 2026-09-11 on 16.13; dhis2 2026-09-15 on
-15.18). "Constraints"
-excludes foreign
-keys; "Types" counts enums and domains; "Sequences" counts standalone sequences
-only, since pistachio manages the sequence behind a serial or identity column as
-an attribute of that column rather than as an object of its own. Counting those
-too would add 2,221 more, 886 of them gitlab's and 210 chado's. "Triggers"
-excludes the internal triggers a foreign key installs and the clones PostgreSQL
-puts on each partition of a partitioned table's trigger, the same as what
-pistachio reads and dump writes. "Routines" counts what `--manage-routine`
-reads, so the aggregates, window functions, and `BEGIN ATOMIC` bodies pistachio
-leaves to `-- pista:execute` are out of it. All counts are limited to the
-schemas the sample is checked with, and exclude what an extension owns: the two
-views `pg_stat_statements` adds to sourcegraph's schema are not sourcegraph's
-schema and pistachio does not read them either.
+Object counts of the loaded schemas.
+
+### How the counts were taken
+
+Counted 2026-08-08 on PostgreSQL 15.18, except:
+
+- icingadb, rt, znuny, gitlab, hive, ranger, ambari, ovirt, and chado on 16.13,
+  chado counted 2026-08-24.
+- wso2is, nightingale, and danbooru 2026-08-29 on 15.17.
+- openolat and inaturalist 2026-08-30 on 16.13.
+- joomla and harbor 2026-09-01 on 16.13.
+- bigbluebutton and listmonk 2026-09-11 on 16.13.
+- dhis2 2026-09-15 on 15.18.
+- The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
+  Routines, added 2026-08-25, on 15.18 for every sample.
+
+What each column holds:
+
+- **Constraints** excludes foreign keys.
+- **Types** counts enums and domains.
+- **Sequences** counts standalone sequences only, since pistachio manages the
+  sequence behind a serial or identity column as an attribute of that column
+  rather than as an object of its own. Counting those too would add 2,221 more,
+  886 of them gitlab's and 210 chado's.
+- **Triggers** excludes the internal triggers a foreign key installs and the
+  clones PostgreSQL puts on each partition of a partitioned table's trigger, the
+  same as what pistachio reads and dump writes.
+- **Routines** counts what `--manage-routine` reads, so the aggregates, window
+  functions, and `BEGIN ATOMIC` bodies pistachio leaves to `-- pista:execute`
+  are out of it.
+
+All counts are limited to the schemas the sample is checked with, and exclude
+what an extension owns: the two views `pg_stat_statements` adds to sourcegraph's
+schema are not sourcegraph's schema and pistachio does not read them either.
 
 | Sample | Tables | Columns | Indexes | FKs | Constraints | Views | Types | Sequences | Triggers | Routines |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -233,93 +246,109 @@ schema and pistachio does not read them either.
 | dhis2 | 473 | 2,648 | 955 | 989 | 925 | 0 | 0 | 1 | 0 | 0 |
 | **Total** | **6,322** | **52,503** | **19,117** | **8,174** | **11,067** | **2,049** | **85** | **422** | **590** | **817** |
 
+### Size
+
 The 57 dumps come to about 173,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still more than a third
 of the constraints, a third of the indexes, over a quarter of the columns and
 foreign keys, and more than a fifth of the tables; dhis2, openolat, musicbrainz,
-and discourse are the largest of what remains, and chado is nearly all
-of the views. gitlab is also why `clean-schema` drops tables a batch at a time
-rather than cascading through `DROP SCHEMA`: a single statement takes locks on
-every object it reaches, and gitlab's 1,422 tables and their indexes run the
-server out of lock table space at the default `max_locks_per_transaction`. It is
-why `reset-db` resets only `public` between samples, too.
+and discourse are the largest of what remains, and chado is nearly all of the
+views.
+
+gitlab is also why `clean-schema` drops tables a batch at a time rather than
+cascading through `DROP SCHEMA`: a single statement takes locks on every object
+it reaches, and gitlab's 1,422 tables and their indexes run the server out of
+lock table space at the default `max_locks_per_transaction`. It is why
+`reset-db` resets only `public` between samples, too.
+
+### Shapes
 
 Beyond size, the samples bring in shapes the hand-written fixtures do not
-always reach: partial and expression indexes and gin, gist, hash, and brin
-methods (musicbrainz, plus 12 partial and 2 gin indexes in synapse), exclusion
-constraints and unlogged tables (demodb, which needs `btree_gist`, and
-bigbluebutton, where every one of the 54 tables is unlogged), stored
-generated columns (bigbluebutton's 17, three of them over a function of its
-own that calls `unaccent`), enums and
-domains (dvdrental, pagila, employees, mediawiki, and icingadb, whose 13 types
-are 6 enums and 7 domains, each domain carrying a named CHECK, plus
-icinga_director, whose 20 enums are more than any other sample and whose one
-domain carries two anonymous CHECKs, guacamole's 5 enums, and listmonk's 14
-over 16 tables), foreign keys
-that all declare their referential actions (all 171 of icinga_director's name
-both ON UPDATE and ON DELETE, in six combinations), unique indexes
-over an expression and a gin index over `to_tsvector` (rt), columns typed by a
-contrib extension (sourcegraph, with 49 `citext` columns, and six extensions
-installed at once), two gist indexes that name an `inet_ops` operator class and
-one over four columns, which needs `btree_gist` (osm), materialized
-views (adventureworks, pagila, and listmonk, whose three views are all
-materialized), tsvector
-columns (dvdrental, pagila), a non-default
-collation (musicbrainz), composite types (ovirt declares 10 of them, more than
-any other sample, and sourcegraph and chado 2 each), standalone sequences
-rather than serial columns (ranger, whose 85 tables come with 84 of them,
-wso2apim, which mixes 104 of them in with serial columns, and wso2is, which
-declares 92 for its 172 tables and wires 87 of them into a column DEFAULT), a
-schema written entirely in quoted mixed-case identifiers, so every name is
-case-sensitive (hive's 84 tables, where chinook has 11, and bigbluebutton,
-where 451 of 532 columns and half the tables and views are camelCase),
-index-heavy schemas
-(danbooru's 456 indexes over 66 tables are seven to a table, denser than any
-other sample, 55 of them gin, 29 of those over an expression and 17 naming
-`gin_trgm_ops`, and 49 partial; mediawiki's 192 over 64, only one of them
-partial and none over an expression), a schema whose size is all width and no
-variety, every one of its 1,239 indexes btree and every one of its 632 foreign
-keys left at NO ACTION (openolat, whose 382 tables are behind only gitlab and
-dhis2), a schema that is nearly all keys (dhis2, where 461 primary keys and 464
-unique constraints back all but 30 of its 955 indexes, it declares no CHECK at
-all, and its 989 foreign keys are more than any sample but gitlab),
-partitioned tables at scale (gitlab
-declares 100 of them and attaches 2,054 partitions, all of which live in
-schemas of their own), table
-inheritance (ledgersmb attaches 21 children with INHERITS, the only sample that
-does), four unique indexes declared `NULLS NOT DISTINCT` and one index with an
-`INCLUDE` column (discourse), views at scale (chado's 1,864 are nearly ten
-times every other sample put together, and 1,832 of them are the
-Sequence Ontology views in its `so` schema, each selecting from tables in
-`chado`, and bigbluebutton's 86 over 54 tables are the most of any other
-sample, five of them selecting from another view), gist
-indexes over a function the schema defines itself (chado's three
-name `boxrange`, one of them partial and declared from another schema), columns
-typed by an extension that is not contrib (discourse's three `halfvec` columns,
-which need pgvector, and the `geometry` columns that need PostGIS: osm's one
-`geometry(Polygon,4326)`, dhis2's one unmodified `geometry`, and inaturalist's
-26, 8 of them carrying a modifier of
-their own and 8 gist indexes over them, and those modifiers are the only ones
-any sample reports in mixed case), and
-foreign keys that cross a schema boundary: 20 of adventureworks' 90 span its
-five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into `mimiciv_hosp`,
-4 of chado's 472 point from `frange` into `chado`, and every one of gitlab's
-partitions is attached across one; and triggers
-(gitlab's 388, more than any other sample, one of them held in `ENABLE ALWAYS`
-state; kea's 81 outnumber its 64 tables; bigbluebutton's 25 and ledgersmb's 11
-come next).
+always reach.
+
+- **Index methods and predicates**: partial and expression indexes and gin,
+  gist, hash, and brin methods (musicbrainz, plus 12 partial and 2 gin indexes
+  in synapse).
+- **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to a
+  table, denser than any other sample, 55 of them gin, 29 of those over an
+  expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
+  64, only one of them partial and none over an expression.
+- **Unique indexes over an expression and a gin index over `to_tsvector`**: rt.
+- **gist indexes naming an operator class**: two that name `inet_ops` and one
+  over four columns, which needs `btree_gist` (osm).
+- **gist indexes over a function the schema defines itself**: chado's three name
+  `boxrange`, one of them partial and declared from another schema.
+- **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
+  `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse).
+- **Exclusion constraints and unlogged tables**: demodb, which needs
+  `btree_gist`, and bigbluebutton, where every one of the 54 tables is unlogged.
+- **Stored generated columns**: bigbluebutton's 17, three of them over a
+  function of its own that calls `unaccent`.
+- **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb,
+  whose 13 types are 6 enums and 7 domains, each domain carrying a named CHECK,
+  plus icinga_director, whose 20 enums are more than any other sample and whose
+  one domain carries two anonymous CHECKs, guacamole's 5 enums, and listmonk's
+  14 over 16 tables.
+- **Composite types**: ovirt declares 10 of them, more than any other sample,
+  and sourcegraph and chado 2 each.
+- **tsvector columns**: dvdrental, pagila.
+- **A non-default collation**: musicbrainz.
+- **Columns typed by a contrib extension**: sourcegraph, with 49 `citext`
+  columns, and six extensions installed at once.
+- **Columns typed by an extension that is not contrib**: discourse's three
+  `halfvec` columns, which need pgvector, and the `geometry` columns that need
+  PostGIS: osm's one `geometry(Polygon,4326)`, dhis2's one unmodified
+  `geometry`, and inaturalist's 26, 8 of them carrying a modifier of their own
+  and 8 gist indexes over them, and those modifiers are the only ones any sample
+  reports in mixed case.
+- **Foreign keys that all declare their referential actions**: all 171 of
+  icinga_director's name both ON UPDATE and ON DELETE, in six combinations.
+- **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
+  its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
+  `mimiciv_hosp`, 4 of chado's 472 point from `frange` into `chado`, and every
+  one of gitlab's partitions is attached across one.
+- **Standalone sequences rather than serial columns**: ranger, whose 85 tables
+  come with 84 of them, wso2apim, which mixes 104 of them in with serial
+  columns, and wso2is, which declares 92 for its 172 tables and wires 87 of them
+  into a column DEFAULT.
+- **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
+  tables, where chinook has 11, and bigbluebutton, where 451 of 532 columns and
+  half the tables and views are camelCase.
+- **Width without variety**: openolat, whose 382 tables are behind only gitlab
+  and dhis2, has every one of its 1,239 indexes btree and every one of its 632
+  foreign keys left at NO ACTION.
+- **A schema that is nearly all keys**: dhis2, where 461 primary keys and 464
+  unique constraints back all but 30 of its 955 indexes, it declares no CHECK at
+  all, and its 989 foreign keys are more than any sample but gitlab.
+- **Materialized views**: adventureworks, pagila, and listmonk, whose three
+  views are all materialized.
+- **Views at scale**: chado's 1,864 are nearly ten times every other sample put
+  together, and 1,832 of them are the Sequence Ontology views in its `so`
+  schema, each selecting from tables in `chado`; bigbluebutton's 86 over 54
+  tables are the most of any other sample, five of them selecting from another
+  view.
+- **Partitioned tables at scale**: gitlab declares 100 of them and attaches
+  2,054 partitions, all of which live in schemas of their own.
+- **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
+  sample that does.
+- **Triggers**: gitlab's 388, more than any other sample, one of them held in
+  `ENABLE ALWAYS` state; kea's 81 outnumber its 64 tables; bigbluebutton's 25
+  and ledgersmb's 11 come next.
+
+### Routines
 
 Routines are concentrated the same way. Twenty-two of the 57 samples declare
 one at all, and gitlab's 337, kea's and musicbrainz's 130 each, and chado's 94
 are 691 of the 817. Two thirds of them, 546, return `trigger`, though not
 every one of those has a trigger to call it: musicbrainz's 89 do not, since its
-loader concatenates a file list that leaves triggers out. 739 are written in
-plpgsql and 78 in sql. sourcegraph declares the only procedure any sample has,
-and inaturalist the only aggregate, which `--manage-routine` does not read and
-so is in neither count. Only chado and kea overload a name, 11 of them and 3,
-though danbooru's three, all sql, include a `lower(text[])` that shadows a
-built-in.
-Only sourcegraph, ledgersmb, and gitlab comment a routine, seven between them.
+loader concatenates a file list that leaves triggers out.
+
+739 are written in plpgsql and 78 in sql. sourcegraph declares the only
+procedure any sample has, and inaturalist the only aggregate, which
+`--manage-routine` does not read and so is in neither count. Only chado and kea
+overload a name, 11 of them and 3, though danbooru's three, all sql, include a
+`lower(text[])` that shadows a built-in. Only sourcegraph, ledgersmb, and gitlab
+comment a routine, seven between them.
 
 ## Load-time adjustments
 
