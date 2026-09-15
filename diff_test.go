@@ -66,8 +66,7 @@ func TestDiff(t *testing.T) {
 				ManageRoutine:            tc.ManageRoutine,
 				ManageStorageParam:       tc.ManageStorageParam,
 				SkipPartitionChild:       tc.SkipPartitionChild,
-				Current:                  currentFile,
-				Desired:                  desiredFile,
+				Files:                    []string{currentFile, desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 				BulkAlter:                tc.BulkAlter,
@@ -93,7 +92,7 @@ func TestDiff_MissingCurrentFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	client := NewClient(&Options{Schemas: []string{"public"}})
-	_, err := client.Diff(&DiffOptions{Current: "/nonexistent/current.sql", Desired: desiredFile})
+	_, err := client.Diff(&DiffOptions{Files: []string{"/nonexistent/current.sql", desiredFile}})
 	require.Error(t, err)
 }
 
@@ -102,13 +101,13 @@ func TestDiff_MissingDesiredFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(currentFile, []byte("CREATE TABLE t (id int);"), 0o644))
 
 	client := NewClient(&Options{Schemas: []string{"public"}})
-	_, err := client.Diff(&DiffOptions{Current: currentFile, Desired: "/nonexistent/desired.sql"})
+	_, err := client.Diff(&DiffOptions{Files: []string{currentFile, "/nonexistent/desired.sql"}})
 	require.Error(t, err)
 }
 
 func TestDiff_EmptySchemas(t *testing.T) {
 	client := NewClient(&Options{Schemas: []string{}})
-	_, err := client.Diff(&DiffOptions{Current: "current.sql", Desired: "desired.sql"})
+	_, err := client.Diff(&DiffOptions{Files: []string{"current.sql", "desired.sql"}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "at least one schema must be specified")
 }
@@ -123,7 +122,7 @@ func TestDiff_DefaultSchemaQualification(t *testing.T) {
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE public.users (id int);"), 0o644))
 
 	client := NewClient(&Options{Schemas: []string{"public"}})
-	got, err := client.Diff(&DiffOptions{Current: currentFile, Desired: desiredFile})
+	got, err := client.Diff(&DiffOptions{Files: []string{currentFile, desiredFile}})
 	require.NoError(t, err)
 	assert.False(t, got.HasChanges)
 	assert.Empty(t, got.SQL)
@@ -142,8 +141,7 @@ func TestDiff_FiltersBothSidesBySchema(t *testing.T) {
 	client := NewClient(&Options{Schemas: []string{"public"}})
 	got, err := client.Diff(&DiffOptions{
 		AllowDrop: []string{"all"},
-		Current:   currentFile,
-		Desired:   desiredFile,
+		Files:     []string{currentFile, desiredFile},
 	})
 	require.NoError(t, err)
 	assert.False(t, got.HasChanges)

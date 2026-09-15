@@ -23,7 +23,7 @@ type cli struct {
 
 	Apply command.Apply `cmd:"" help:"Apply schema changes to the database."`
 	Plan  command.Plan  `cmd:"" help:"Print the schema diff SQL without applying it."`
-	Diff  command.Diff  `cmd:"" help:"Print the DDL that takes one schema SQL file to another. No database is read."`
+	Diff  command.Diff  `cmd:"" help:"Print the DDL that takes one schema SQL file to another, or one git revision of it to another. No database is read."`
 	Dump  command.Dump  `cmd:"" help:"Dump the current database schema as SQL."`
 	Fmt   command.Fmt   `cmd:"" help:"Format schema SQL files in place."`
 	Parse command.Parse `cmd:"" help:"Parse schema SQL files and print the result as JSON."`
