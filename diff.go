@@ -161,7 +161,7 @@ func gitSources(revs *gitfile.Range, paths []string) ([]parser.Source, []parser.
 			return nil, nil, fmt.Errorf("%s is in neither %s nor %s", path, revs.Current, desiredSide(revs))
 		}
 
-		currentSources = append(currentSources, parser.Source{Name: revs.Current + ":" + path, SQL: currentSQL})
+		currentSources = append(currentSources, parser.Source{Name: sourceName(revs.Current, path), SQL: currentSQL})
 		desiredSources = append(desiredSources, parser.Source{Name: sourceName(revs.Desired, path), SQL: desiredSQL})
 	}
 

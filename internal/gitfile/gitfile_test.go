@@ -111,25 +111,23 @@ func TestParseRange_ThreeDot(t *testing.T) {
 	assert.Equal(t, "topic", got.Desired)
 }
 
+// Both endpoints are verified before the merge base is asked for, so every
+// form of the range names the revision the same way.
 func TestParseRange_UnknownRevision(t *testing.T) {
 	initRepo(t)
 	commit(t, "first", map[string]string{"schema.sql": "CREATE TABLE t (id int);"})
 
-	_, err := gitfile.ParseRange("nosuchrev..HEAD")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nosuchrev")
-
-	_, err = gitfile.ParseRange("HEAD..nosuchrev")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nosuchrev")
-
-	_, err = gitfile.ParseRange("nosuchrev")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nosuchrev")
-
-	_, err = gitfile.ParseRange("nosuchrev...HEAD")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nosuchrev")
+	for _, spec := range []string{
+		"nosuchrev",
+		"nosuchrev..HEAD",
+		"HEAD..nosuchrev",
+		"nosuchrev...HEAD",
+		"HEAD...nosuchrev",
+	} {
+		_, err := gitfile.ParseRange(spec)
+		require.Error(t, err, spec)
+		assert.Contains(t, err.Error(), "git revision nosuchrev", spec)
+	}
 }
 
 func TestParseRange_Empty(t *testing.T) {

@@ -40,25 +40,12 @@ func ParseRange(spec string) (*Range, error) {
 		return nil, errors.New("empty git range")
 	}
 
-	var r *Range
+	left, right, mergeBased := splitRange(spec)
 
-	switch {
-	case strings.Contains(spec, "..."):
-		left, right, _ := strings.Cut(spec, "...")
-		left, right = orHEAD(left), orHEAD(right)
-		base, err := mergeBase(left, right)
-		if err != nil {
-			return nil, err
-		}
-		r = &Range{Current: base, Desired: right}
-	case strings.Contains(spec, ".."):
-		left, right, _ := strings.Cut(spec, "..")
-		r = &Range{Current: orHEAD(left), Desired: orHEAD(right)}
-	default:
-		r = &Range{Current: spec}
-	}
-
-	for _, rev := range []string{r.Current, r.Desired} {
+	// Both endpoints are verified before the merge base is asked for, so a
+	// revision that does not exist is reported the same way whichever form
+	// the range was written in.
+	for _, rev := range []string{left, right} {
 		if rev == "" {
 			continue
 		}
@@ -67,7 +54,32 @@ func ParseRange(spec string) (*Range, error) {
 		}
 	}
 
-	return r, nil
+	if !mergeBased {
+		return &Range{Current: left, Desired: right}, nil
+	}
+
+	base, err := mergeBase(left, right)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Range{Current: base, Desired: right}, nil
+}
+
+// splitRange returns the two endpoints of the range and whether the current
+// side is their merge base. A bare revision has no desired revision: the
+// working tree stands in for it, which the empty string says.
+func splitRange(spec string) (left, right string, mergeBased bool) {
+	switch {
+	case strings.Contains(spec, "..."):
+		l, r, _ := strings.Cut(spec, "...")
+		return orHEAD(l), orHEAD(r), true
+	case strings.Contains(spec, ".."):
+		l, r, _ := strings.Cut(spec, "..")
+		return orHEAD(l), orHEAD(r), false
+	default:
+		return spec, "", false
+	}
 }
 
 // Read returns the contents of path at rev. ok is false when rev does not

@@ -116,6 +116,14 @@ pista diff --git main..HEAD schema/tables.sql schema/indexes.sql
 
 A file one side does not hold is empty there, so a file added between the two revisions reads as a create and one removed reads as a drop. A path neither side holds is an error; otherwise a mistyped path would read as an empty schema and plan a drop of everything.
 
+The list itself is not read from git. A shell glob expands against the working tree, so a file the branch deleted is never named and its drop goes unreported, `--check` included:
+
+```bash
+pista diff --check --git origin/main...HEAD schema/*.sql   # misses a deleted schema/b.sql
+```
+
+A file only one side holds has to be named.
+
 `git` has to be on `PATH`.
 
 

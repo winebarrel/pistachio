@@ -511,7 +511,7 @@ pista diff old.sql new.sql
 
 The output follows the same rules as `plan`: the same schema DDL, the same ordering, the same drop policy. Diffing a schema file against `pista dump` output previews what `plan` would print against that database, without a connection.
 
-Use `--git` (`-g`) to read the files out of a git repository. `A..B` compares the two revisions, `A...B` compares B against its merge base with A, and `A` alone compares A against the working tree; an omitted side is `HEAD`. Any revision spelling git accepts works. Paths resolve against the working directory, every file is read at both ends of the range, and a file one side does not hold is empty there. Also available as `$PISTA_GIT`.
+Use `--git` (`-g`) to read the files out of a git repository. `A..B` compares the two revisions, `A...B` compares B against its merge base with A, and `A` alone compares A against the working tree; an omitted side is `HEAD`. Any revision spelling git accepts works. Paths resolve against the working directory, every file is read at both ends of the range, and a file one side does not hold is empty there. The list itself is not read from git, so a shell glob misses a file the branch deleted. Also available as `$PISTA_GIT`.
 
 ```bash
 pista diff --git HEAD^..HEAD schema.sql
