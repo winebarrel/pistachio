@@ -206,21 +206,41 @@ func readSQLFile(path string) (string, error) {
 }
 
 func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult, error) {
-	var sqls []string
-	var spans []fileSpan
-	offset := 0
+	sources := make([]Source, 0, len(paths))
 	for _, path := range paths {
 		sql, err := readSQLFile(path)
 		if err != nil {
 			return nil, err
 		}
-		spanPath := path
+		name := path
 		if path == "-" {
-			spanPath = "<stdin>"
+			name = "<stdin>"
 		}
-		spans = append(spans, fileSpan{path: spanPath, start: offset})
-		sqls = append(sqls, sql)
-		offset += len(sql) + 1 // the "\n" the join puts between files
+		sources = append(sources, Source{Name: name, SQL: sql})
+	}
+
+	return ParseSQLSourcesWithSchema(sources, defaultSchema)
+}
+
+// Source is one piece of desired-schema SQL and the name a message calls it
+// by. A file's name is its path; SQL read out of a git repository carries the
+// revision as well, so an error says which version of the file it is in.
+type Source struct {
+	Name string
+	SQL  string
+}
+
+// ParseSQLSourcesWithSchema parses SQL that is already in memory, the way
+// ParseSQLFilesWithSchema parses the files it reads. A caller that did not
+// read a file uses it to keep the file name in an error and a warning.
+func ParseSQLSourcesWithSchema(sources []Source, defaultSchema string) (*ParseResult, error) {
+	sqls := make([]string, 0, len(sources))
+	spans := make([]fileSpan, 0, len(sources))
+	offset := 0
+	for _, source := range sources {
+		spans = append(spans, fileSpan{path: source.Name, start: offset})
+		sqls = append(sqls, source.SQL)
+		offset += len(source.SQL) + 1 // the "\n" the join puts between sources
 	}
 
 	joined := strings.Join(sqls, "\n")

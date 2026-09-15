@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+* Add `--git` (`-g`, `$PISTA_GIT`) to `diff`. It reads the files on the command line out of a git repository: `A..B` compares the two revisions, `A...B` compares B against its merge base with A, and `A` alone compares A against the working tree. Every file is read at both ends of the range, so a side can span more than one file.
 * `fmt` and `dump` keep an `ARRAY[...]` constructor on one line. The layout counted a parenthesis but not a square bracket, so a comma inside a constructor read as the end of a column and broke the line there.
 * The Homebrew cask writes the `postflight_steps` stanza instead of `postflight`, which Homebrew 7 deprecates.
 

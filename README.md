@@ -130,6 +130,13 @@ pista diff old.sql new.sql         # print the DDL that takes old.sql to new.sql
 pista diff --check old.sql new.sql # exit 2 when the two differ
 ```
 
+Or two revisions of one schema file, read out of git:
+
+```bash
+pista diff --git HEAD^..HEAD schema.sql          # what the last commit changed
+pista diff --git origin/main...HEAD schema.sql   # what this branch changes
+```
+
 The output carries the same schema DDL as `plan`, so diffing two revisions of a schema file previews a migration in CI. See [Diffing schema files](https://winebarrel.github.io/pistachio/guides/diffing/).
 
 Or read the schema as JSON:

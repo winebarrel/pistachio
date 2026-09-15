@@ -27,8 +27,7 @@ create table users (
 	var buf bytes.Buffer
 	cmd := &command.Diff{
 		Schemas: []string{"public"},
-		Current: current,
-		Desired: desired,
+		Files:   []string{current, desired},
 	}
 	require.NoError(t, cmd.Run(&buf))
 
@@ -45,8 +44,7 @@ func TestDiff_Run_NoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := &command.Diff{
 		Schemas: []string{"public"},
-		Current: current,
-		Desired: desired,
+		Files:   []string{current, desired},
 	}
 	require.NoError(t, cmd.Run(&buf))
 	assert.Equal(t, "-- No changes\n", buf.String())
@@ -61,8 +59,7 @@ func TestDiff_Run_Check(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := &command.Diff{
 		Schemas: []string{"public"},
-		Current: current,
-		Desired: desired,
+		Files:   []string{current, desired},
 		Check:   true,
 	}
 	err := cmd.Run(&buf)
@@ -78,8 +75,7 @@ func TestDiff_Run_CheckNoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := &command.Diff{
 		Schemas: []string{"public"},
-		Current: current,
-		Desired: desired,
+		Files:   []string{current, desired},
 		Check:   true,
 	}
 	require.NoError(t, cmd.Run(&buf))
@@ -95,8 +91,7 @@ func TestDiff_Run_DisallowedDropIsNotAChange(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := &command.Diff{
 		Schemas: []string{"public"},
-		Current: current,
-		Desired: desired,
+		Files:   []string{current, desired},
 		Check:   true,
 	}
 	require.NoError(t, cmd.Run(&buf))
@@ -121,8 +116,7 @@ create table legacy (id integer);
 	var buf bytes.Buffer
 	cmd := &command.Diff{
 		Schemas: []string{"public"},
-		Current: current,
-		Desired: desired,
+		Files:   []string{current, desired},
 	}
 	require.NoError(t, cmd.Run(&buf))
 	out := buf.String()
@@ -138,8 +132,29 @@ func TestDiff_Run_ParseError(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := &command.Diff{
 		Schemas: []string{"public"},
-		Current: current,
-		Desired: desired,
+		Files:   []string{current, desired},
 	}
 	require.Error(t, cmd.Run(&buf))
+}
+
+// An ignored object is reported in the no-SQL case too, before the summary
+// line.
+func TestDiff_Run_IgnoredWithNoChanges(t *testing.T) {
+	current := writeSQLFile(t, "current.sql", `
+create table users (id integer);
+create table legacy (id integer);
+`)
+	desired := writeSQLFile(t, "desired.sql", `
+create table users (id integer);
+-- pista:ignore
+create table legacy (id integer);
+`)
+
+	var buf bytes.Buffer
+	cmd := &command.Diff{
+		Schemas: []string{"public"},
+		Files:   []string{current, desired},
+	}
+	require.NoError(t, cmd.Run(&buf))
+	assert.Equal(t, "-- ignored: public.legacy\n-- No changes\n", buf.String())
 }

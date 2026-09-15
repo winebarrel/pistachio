@@ -17,9 +17,9 @@ Commands:
   plan <files> ... [flags]
     Print the schema diff SQL without applying it.
 
-  diff <current> <desired> [flags]
-    Print the DDL that takes one schema SQL file to another. No database is
-    read.
+  diff <files> ... [flags]
+    Print the DDL that takes one schema SQL file to another, or one git revision
+    of it to another. No database is read.
 
   dump [flags]
     Dump the current database schema as SQL.
@@ -146,13 +146,14 @@ Flags:
 <summary><code>pista diff --help</code></summary>
 
 ```
-Usage: pista diff <current> <desired> [flags]
+Usage: pista diff <files> ... [flags]
 
-Print the DDL that takes one schema SQL file to another. No database is read.
+Print the DDL that takes one schema SQL file to another, or one git revision of
+it to another. No database is read.
 
 Arguments:
-  <current>    Path to the current schema SQL file.
-  <desired>    Path to the desired schema SQL file.
+  <files> ...    Paths to the schema SQL files. Without --git, exactly two:
+                 the current schema and the desired schema.
 
 Flags:
   -h, --help                    Show context-sensitive help.
@@ -193,6 +194,10 @@ Flags:
       --allow-drop=ALLOW-DROP,...
                                 Allow dropping these object types (repeatable;
                                 'all' allows everything) ($PISTA_ALLOW_DROP).
+  -g, --git=RANGE               Read the files from git. A..B compares the two
+                                revisions, A...B compares B against its merge
+                                base with A, and A alone compares A against the
+                                working tree ($PISTA_GIT).
       --disable-index-concurrently
                                 Ignore CONCURRENTLY opt-ins (directive and
                                 inline) and emit plain CREATE/DROP INDEX
@@ -506,10 +511,17 @@ pista diff old.sql new.sql
 
 The output follows the same rules as `plan`: the same schema DDL, the same ordering, the same drop policy. Diffing a schema file against `pista dump` output previews what `plan` would print against that database, without a connection.
 
+Use `--git` (`-g`) to read the files out of a git repository. `A..B` compares the two revisions, `A...B` compares B against its merge base with A, and `A` alone compares A against the working tree; an omitted side is `HEAD`. Any revision spelling git accepts works. Paths resolve against the working directory, every file is read at both ends of the range, and a file one side does not hold is empty there. Also available as `$PISTA_GIT`.
+
+```bash
+pista diff --git HEAD^..HEAD schema.sql
+pista diff --git origin/main...HEAD schema/tables.sql schema/indexes.sql
+```
+
 `--check` works as it does for `plan`: exit code 2 when the diff contains executable changes, 0 when not, 1 on error.
 
 ```bash
-pista diff --check old.sql new.sql
+pista diff --check --git origin/main...HEAD schema.sql
 echo $?  # 0: no changes, 2: changes, 1: error
 ```
 
