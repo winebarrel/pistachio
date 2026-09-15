@@ -746,15 +746,17 @@ redefaulted on every plan, and the statement it emits is a syntax error:
 ALTER TABLE public.t ALTER COLUMN e SET DEFAULT ARRAY[1, 2, 3][1];
 ```
 
-So this one breaks a `pista dump` round trip rather than only drifting.
-The deparse is wrong for an `A_ArrayExpr` under an `A_Indirection` alone:
-`(c).x`, `(ROW(1,2)).f1`, `(f(x)).a`, `(a[1])[2]` and `(x::int[])[1]` all
-come back with their parentheses. Closing it means restoring the pair
-around a constructor the deparse subscripts, on every path that renders an
-expression: a column default, a CHECK constraint, an index expression and a
-policy qualifier each reach the deparse separately.
+A `pista dump` round trip is broken, not merely drifting, so this is not
+`Priority: low`.
+
+The deparse drops the pair for an `A_ArrayExpr` under an `A_Indirection`
+alone. `(c).x`, `(ROW(1,2)).f1`, `(f(x)).a`, `(a[1])[2]` and
+`(x::int[])[1]` all keep theirs. Closing it means putting the pair back
+around a constructor the deparse subscripts, on each path that renders an
+expression: a column default, a CHECK constraint, an index expression and
+a policy qualifier reach the deparse separately.
 
 An array constructor is a constant, so `(ARRAY[1,2,3])[1]` is a longer way
-to write `1` and no sample schema declares one.
+to write `1`, and no sample schema declares one.
 
 Origin: review of the `ARRAY[...]` layout fix, 2026-09-15.
