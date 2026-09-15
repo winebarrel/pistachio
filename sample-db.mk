@@ -42,7 +42,7 @@ sourcegraph|sample-db-url-schema|URL=https://raw.githubusercontent.com/sourcegra
 imdb|sample-db-imdb||
 adventureworks|sample-db-adventureworks||person,humanresources,production,purchasing,sales
 clubdata|sample-db-clubdata|URL=https://pgexercises.com/dbfiles/clubdata.sql|cd
-demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/bf7a1c1972d2f89dc9de21f19d7dd3aa650e8647/tables.sql|bookings
+demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/bf7a1c1972d2f89dc9de21f19d7dd3aa650e8647/tables.sql CLIENT_MIN_MESSAGES=warning|bookings
 musicbrainz|sample-db-musicbrainz||musicbrainz
 znuny|sample-db-znuny||znuny
 hive|sample-db-hive|URL=https://raw.githubusercontent.com/apache/hive/d98bfeda81c23007866bd5bf7ee970fa017689ed/standalone-metastore/metastore-server/src/main/sql/postgres/hive-schema-4.2.0.postgres.sql SCHEMA=hive|hive
@@ -138,12 +138,12 @@ sample-db-mimiciv:
 # gets its own schema instead.
 #
 # CLIENT_MIN_MESSAGES defaults to notice, the server default; a sample whose
-# dump is noisy on a fresh database can raise it from its SAMPLES record. kea,
-# dolphinscheduler, wso2apim, wso2is, and listmonk raise it to warning, since
-# each drops what it is about to create with IF EXISTS, wso2is also because
-# five of its index names are over 63 characters and the server says so as it
-# truncates them, and ranger to error, since it drops the same way and commits
-# outside a transaction, which adds a warning per statement.
+# dump is noisy on a fresh database can raise it from its SAMPLES record.
+# demodb, kea, dolphinscheduler, wso2apim, wso2is, and listmonk raise it to
+# warning, since each drops what it is about to create with IF EXISTS, wso2is
+# also because five of its index names are over 63 characters and the server
+# says so as it truncates them, and ranger to error, since it drops the same way
+# and commits outside a transaction, which adds a warning per statement.
 CLIENT_MIN_MESSAGES ?= notice
 
 .PHONY: sample-db-url-schema
@@ -235,13 +235,15 @@ sample-db-clubdata:
 # `gen` and `bookings` schemas and \copy-loads reference data from .dat files we
 # don't fetch. We only need the schema, so strip the \copy lines (their data is
 # irrelevant to a round-trip check) and enable btree_gist first, which the
-# bookings.routes exclusion constraint requires.
+# bookings.routes exclusion constraint requires. It drops both schemas with
+# IF EXISTS before creating them, which says so on a fresh database, so
+# client_min_messages is raised to warning for the load.
 .PHONY: sample-db-demodb
 sample-db-demodb:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS btree_gist'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | awk '/^[[:space:]]*\\copy/ { next } { print }' \
-	  | $(PSQL)
+	  | PGOPTIONS='-c client_min_messages=$(CLIENT_MIN_MESSAGES)' $(PSQL)
 
 # MusicBrainz (metabrainz/musicbrainz-server, GPL-2.0). The schema ships as one
 # file per object kind and none of them create the schema, so create
