@@ -362,7 +362,9 @@ strip only what is irrelevant to a schema round trip:
   cannot be done mid-pipe. Those two lines are dropped; the rest creates the
   `cd` schema itself.
 - **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
-  constraint, and the `\copy` lines are dropped.
+  constraint, and the `\copy` lines are dropped. The script drops the `gen` and
+  `bookings` schemas with `IF EXISTS` before it creates them, which says so on a
+  fresh database, so `client_min_messages` is raised to `warning` for the load.
 - **dhis2**: the dump is the base schema Flyway starts from, a `pg_dump` that
   names no schema and no owner, so it loads into a schema of its own like the
   group below. It does not install PostGIS, which the one `geometry` column in
