@@ -431,6 +431,49 @@ AS ' SELECT lower ( e ) ';
 );
 `,
 		},
+		{
+			name:  "nest an ARRAY constructor inside another",
+			input: `CREATE TABLE public.items (grid integer[][] DEFAULT ARRAY[ARRAY[1, 2], ARRAY[3, 4]], name text);`,
+			expected: `CREATE TABLE public.items (
+    grid integer[][] DEFAULT ARRAY[ARRAY[1, 2], ARRAY[3, 4]],
+    name text
+);
+`,
+		},
+		{
+			name:  "count a subscript and a dimension as nesting",
+			input: `CREATE TABLE public.items (grid integer[3][4], first integer GENERATED ALWAYS AS (grid[1] + grid[2]) STORED);`,
+			expected: `CREATE TABLE public.items (
+    grid integer[3][4],
+    first integer GENERATED ALWAYS AS (grid[1] + grid[2]) STORED
+);
+`,
+		},
+		{
+			name:  "keep an ARRAY constructor in a CHECK on one line",
+			input: `CREATE TABLE public.items (state text, CONSTRAINT state_ck CHECK (state = ANY (ARRAY['on'::text, 'off'::text])), name text);`,
+			expected: `CREATE TABLE public.items (
+    state text,
+    CONSTRAINT state_ck CHECK (state = ANY (ARRAY['on'::text, 'off'::text])),
+    name text
+);
+`,
+		},
+		{
+			name: "break an ARRAY constructor a comment ends",
+			input: `CREATE TABLE public.items (
+    tags text[] DEFAULT ARRAY['x', -- the first
+'y'],
+    name text
+);
+`,
+			expected: `CREATE TABLE public.items (
+    tags text[] DEFAULT ARRAY['x', -- the first
+    'y'],
+    name text
+);
+`,
+		},
 	}
 
 	for _, tt := range tests {
