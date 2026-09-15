@@ -231,3 +231,19 @@ func TestParseRange_NoGitOnPath(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "git")
 }
+
+// Two root commits share no history, so git has no merge base to report. It
+// says so with an exit status and nothing else, which the message stands in
+// for.
+func TestParseRange_NoMergeBase(t *testing.T) {
+	initRepo(t)
+	commit(t, "main", map[string]string{"schema.sql": "CREATE TABLE t (id int);"})
+	git(t, "checkout", "-q", "--orphan", "lonely")
+	commit(t, "lonely", map[string]string{"schema.sql": "CREATE TABLE u (id int);"})
+
+	_, err := gitfile.ParseRange("main...lonely")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "git merge-base main lonely")
+	assert.Contains(t, err.Error(), "share no history")
+	assert.NotContains(t, err.Error(), "exit status")
+}

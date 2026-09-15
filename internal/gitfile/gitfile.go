@@ -149,9 +149,17 @@ func verify(rev string) error {
 	return nil
 }
 
+// mergeBase resolves the current side of a three-dot range. git reports two
+// revisions with no merge base by exit status 1 and nothing on stderr, so
+// that case is named here rather than left as a bare "exit status 1".
 func mergeBase(left, right string) (string, error) {
 	out, err := run("merge-base", "--end-of-options", left, right)
 	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			err = errors.New("the two share no history")
+		}
+
 		return "", fmt.Errorf("git merge-base %s %s: %w", left, right, err)
 	}
 
