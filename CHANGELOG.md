@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+* `fmt` and `dump` keep an `ARRAY[...]` constructor on one line. The layout counted a parenthesis but not a square bracket, so a comma inside a constructor read as the end of a column and broke the line there.
 * The Homebrew cask writes the `postflight_steps` stanza instead of `postflight`, which Homebrew 7 deprecates.
 
 ## [1.54.2] - 2026-09-13
