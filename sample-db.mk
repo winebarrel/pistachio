@@ -73,6 +73,7 @@ joomla|sample-db-joomla||joomla
 harbor|sample-db-harbor||harbor
 bigbluebutton|sample-db-bigbluebutton|URL=https://raw.githubusercontent.com/bigbluebutton/bigbluebutton/4c3a477fe3e34a7da6854c491be2c8d02e83c083/bbb-graphql-server/bbb_schema.sql SCHEMA=bigbluebutton|bigbluebutton
 listmonk|sample-db-url-schema|URL=https://raw.githubusercontent.com/knadh/listmonk/594b74056dd8a0d3a7621a32898ee38bfbe10e96/schema.sql SCHEMA=listmonk CLIENT_MIN_MESSAGES=warning|listmonk
+dhis2|sample-db-dhis2|URL=https://raw.githubusercontent.com/dhis2/dhis2-core/5d2dbdef40e91c1c613fc50a8132158dd5683b7f/dhis-2/dhis-support/dhis-support-db-migration/src/main/resources/org/hisp/dhis/db/base/dhis2_base_schema.sql SCHEMA=dhis2|dhis2
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -409,6 +410,20 @@ sample-db-bigbluebutton:
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | sed -E 's/^(CREATE OR REPLACE VIEW )public\./\1/' \
 	  | PGOPTIONS='-c search_path=$(SCHEMA)' $(PSQL)
+
+# DHIS2 (dhis2/dhis2-core, BSD-3-Clause). A pg_dump of the base schema Flyway
+# starts from, naming no schema and no owner, so it loads like the
+# sample-db-url-schema dumps. One of its columns is a PostGIS geometry, though,
+# and the dump does not install the extension, so install it first and leave
+# `public` in the search path for the type to resolve from. PostGIS is not in
+# the official image; compose.yaml and the samples CI job install it for the
+# osm and inaturalist samples already.
+.PHONY: sample-db-dhis2
+sample-db-dhis2:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS postgis'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | PGOPTIONS='-c search_path=$(SCHEMA),public' $(PSQL)
 
 .PHONY: test-samples
 test-samples:

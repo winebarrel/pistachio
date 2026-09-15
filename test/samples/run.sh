@@ -77,8 +77,9 @@ check() {
 }
 
 # require_extension <extension> <package> <samples>
-# The discourse sample needs pgvector and the osm and inaturalist samples need
-# PostGIS, neither of which the official postgres image ships. Say so up front:
+# The discourse sample needs pgvector, and the osm and inaturalist samples and
+# the dhis2 loader need PostGIS, neither of which the official postgres image
+# ships. Say so up front:
 # without them the sample fails at load time and the reason is buried in psql's
 # output.
 require_extension() {
@@ -92,7 +93,7 @@ require_extension() {
 }
 
 require_extension vector pgvector "the discourse sample"
-require_extension postgis PostGIS "the osm and inaturalist samples"
+require_extension postgis PostGIS "the osm, inaturalist, and dhis2 samples"
 
 echo "Building pista..."
 go build -o pista ./cmd/pista
