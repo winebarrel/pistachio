@@ -25,6 +25,12 @@ checks that a `pista dump` reloaded into an empty database produces the schema
 it was taken from, comparing `pg_dump` output on both sides. The latter needs a
 `pg_dump` at least as new as the server.
 
+`make test-samples` checks pista against real-world schemas downloaded from
+their upstream sources: each is loaded into a database of its own, dumped, and
+planned back, and the plan has to come out empty. The sample list, the check
+itself, and how to add a sample live in
+[SAMPLE-DB-TESTS.md](https://github.com/winebarrel/pistachio/blob/main/SAMPLE-DB-TESTS.md).
+
 `make fuzz` runs the fuzz targets: one feeds arbitrary text to the parser and
 renders whatever comes back, the other diffs a parsed schema against itself and
 requires no DDL. Neither needs a database. `FUZZTIME` sets how long each target
