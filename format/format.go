@@ -188,9 +188,11 @@ func upper(t *token) string {
 	return strings.ToUpper(t.orig)
 }
 
-// parenDepth returns the parenthesis depth of every token. A closing
-// parenthesis carries the depth it leaves behind, so the line it opens lines
-// up with whatever opened the group.
+// parenDepth returns the bracket depth of every token. A square bracket counts
+// as well as a parenthesis: the depth decides which commas separate the
+// elements of a definition list, and the ones inside an ARRAY constructor
+// separate its elements instead. A closing bracket carries the depth it leaves
+// behind, so the line it opens lines up with whatever opened the group.
 func parenDepth(toks []*token) []int {
 	depth := make([]int, len(toks))
 	level := 0
@@ -199,10 +201,10 @@ func parenDepth(toks []*token) []int {
 		switch {
 		case t.isComment():
 			depth[i] = level
-		case t.orig == "(":
+		case t.orig == "(", t.orig == "[":
 			depth[i] = level
 			level++
-		case t.orig == ")":
+		case t.orig == ")", t.orig == "]":
 			if level > 0 {
 				level--
 			}

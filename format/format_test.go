@@ -394,6 +394,43 @@ AS ' SELECT lower ( e ) ';
 			input:    "CREATE INDEX i ON public.t (v);   \n",
 			expected: "CREATE INDEX i ON public.t (v);\n",
 		},
+		{
+			name: "keep an ARRAY constructor on one line",
+			input: `CREATE TABLE public.items (
+    id integer NOT NULL,
+    tags text[] DEFAULT ARRAY['x'::text, 'y'::text],
+    nums integer[] DEFAULT ARRAY[1, 2, 3]
+);
+`,
+			expected: `CREATE TABLE public.items (
+    id integer NOT NULL,
+    tags text[] DEFAULT ARRAY['x'::text, 'y'::text],
+    nums integer[] DEFAULT ARRAY[1, 2, 3]
+);
+`,
+		},
+		{
+			name:  "expand a definition list around an ARRAY constructor",
+			input: `CREATE TABLE public.items (id integer, tags text[] DEFAULT ARRAY['x', 'y']);`,
+			expected: `CREATE TABLE public.items (
+    id integer,
+    tags text[] DEFAULT ARRAY['x', 'y']
+);
+`,
+		},
+		{
+			name: "line up an ARRAY constructor the input broke",
+			input: `CREATE TABLE public.items (
+    tags text[] DEFAULT ARRAY['x',
+'y']
+);
+`,
+			expected: `CREATE TABLE public.items (
+    tags text[] DEFAULT ARRAY['x',
+    'y']
+);
+`,
+		},
 	}
 
 	for _, tt := range tests {

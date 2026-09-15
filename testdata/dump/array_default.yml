@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.configs (
+      id integer NOT NULL,
+      tags text[] DEFAULT ARRAY['x'::text, 'y'::text],
+      scores integer[] DEFAULT ARRAY[1, 2, 3],
+      CONSTRAINT configs_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.configs
+  CREATE TABLE public.configs (
+      id integer NOT NULL,
+      tags text[] DEFAULT ARRAY['x'::text, 'y'::text],
+      scores integer[] DEFAULT ARRAY[1, 2, 3],
+      CONSTRAINT configs_pkey PRIMARY KEY (id)
+  );

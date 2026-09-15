@@ -731,3 +731,30 @@ with no separate index, and that output plans clean. Only a file that writes
 `USING INDEX` reaches this.
 
 Origin: review of the primary key NOT NULL fix, 2026-09-09.
+
+## A subscripted ARRAY constructor loses its parentheses
+
+PostgreSQL needs a parenthesis to subscript an array constructor, and
+`pg_get_expr` writes it back that way: a column declared
+`DEFAULT (ARRAY[1,2,3])[1]` reads out of the catalog as
+`(ARRAY[1, 2, 3])[1]`. The desired side runs the expression through
+libpg_query's deparse, which drops the pair and returns
+`ARRAY[1, 2, 3][1]`. The two never compare equal, so the column is
+redefaulted on every plan, and the statement it emits is a syntax error:
+
+```
+ALTER TABLE public.t ALTER COLUMN e SET DEFAULT ARRAY[1, 2, 3][1];
+```
+
+So this one breaks a `pista dump` round trip rather than only drifting.
+The deparse is wrong for an `A_ArrayExpr` under an `A_Indirection` alone:
+`(c).x`, `(ROW(1,2)).f1`, `(f(x)).a`, `(a[1])[2]` and `(x::int[])[1]` all
+come back with their parentheses. Closing it means restoring the pair
+around a constructor the deparse subscripts, on every path that renders an
+expression: a column default, a CHECK constraint, an index expression and a
+policy qualifier each reach the deparse separately.
+
+An array constructor is a constant, so `(ARRAY[1,2,3])[1]` is a longer way
+to write `1` and no sample schema declares one.
+
+Origin: review of the `ARRAY[...]` layout fix, 2026-09-15.
