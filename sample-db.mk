@@ -1,6 +1,6 @@
 # Loading the real-world sample schemas and checking that pista round-trips
 # them. Included by the Makefile, which owns PGHOST/PGUSER/PGPORT and SHELL.
-# See docs/contributing-samples.md.
+# See SAMPLE-DB-TESTS.md.
 
 # Single source of the real-world sample schemas, consumed by both `schema`
 # (loads them all into one database) and `test-samples` (loads each into an
@@ -334,10 +334,10 @@ sample-db-camunda:
 #
 # discourse needs pgvector and osm and inaturalist need PostGIS, neither of
 # which the official postgres image ships; compose.yaml and the samples CI job
-# install both. See docs/contributing-samples.md. danbooru installs five
-# extensions of its own, btree_gin, fuzzystrmatch, pg_trgm, pgcrypto, and
-# pgstattuple, and inaturalist one, uuid-ossp, which 16 of its columns default
-# through; those are all contrib and the official image already has them.
+# install both. See SAMPLE-DB-TESTS.md. danbooru installs five extensions of
+# its own, btree_gin, fuzzystrmatch, pg_trgm, pgcrypto, and pgstattuple, and
+# inaturalist one, uuid-ossp, which 16 of its columns default through; those
+# are all contrib and the official image already has them.
 .PHONY: sample-db-pgdump-schema
 sample-db-pgdump-schema:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
