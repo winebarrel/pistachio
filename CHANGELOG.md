@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* The Homebrew cask writes the `postflight_steps` stanza instead of `postflight`, which Homebrew 7 deprecates.
+
 ## [1.54.2] - 2026-09-13
 
 * `diff` no longer prints the `-- Diff for schema ...` header. There is no connection to name and the object counts of a file say little, so the output is the DDL alone.

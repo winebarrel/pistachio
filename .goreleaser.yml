@@ -71,12 +71,17 @@ homebrew_casks:
     description: pistachio is a declarative schema management tool for PostgreSQL.
     license: MIT
     binaries: [pista]
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/pista"]
-          end
+    # Homebrew 7 deprecates the postflight block that hooks.post.install
+    # renders, so emit postflight_steps via custom_block instead. goreleaser
+    # templates the whole cask, so {{staged_path}} is written as a template
+    # producing that literal, expanded by Homebrew at install time. Move this
+    # to the dedicated goreleaser field once it ships (goreleaser#6870).
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/pista"]
+        end
+      end
 nfpms:
   - file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
     homepage: https://github.com/winebarrel/pistachio
