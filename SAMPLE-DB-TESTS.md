@@ -151,6 +151,9 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | coder | coder | [coder/coder](https://github.com/coder/coder) |
 | hatchet | hatchet | [hatchet-dev/hatchet](https://github.com/hatchet-dev/hatchet) |
 | thingsboard | thingsboard | [thingsboard/thingsboard](https://github.com/thingsboard/thingsboard) |
+| glific | glific | [glific/glific](https://github.com/glific/glific) |
+| lago | lago | [getlago/lago-api](https://github.com/getlago/lago-api) |
+| calcom | calcom | [calcom/cal.diy](https://github.com/calcom/cal.diy) |
 
 ## Coverage
 
@@ -167,7 +170,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - joomla and harbor 2026-09-01 on 16.13.
 - bigbluebutton and listmonk 2026-09-11 on 16.13.
 - dhis2 2026-09-15 on 15.18.
-- coder, boundary, hatchet, and thingsboard 2026-09-17 on 15.18.
+- coder, boundary, hatchet, thingsboard, glific, lago, and calcom 2026-09-17 on
+  15.18.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -253,16 +257,19 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | coder | 116 | 1,173 | 292 | 153 | 217 | 11 | 62 | 1 | 30 | 30 |
 | hatchet | 133 | 1,209 | 330 | 77 | 136 | 0 | 57 | 1 | 22 | 49 |
 | thingsboard | 65 | 660 | 163 | 29 | 106 | 6 | 0 | 3 | 0 | 14 |
-| **Total** | **6,929** | **57,075** | **20,464** | **8,820** | **12,211** | **2,128** | **240** | **427** | **1,383** | **1,135** |
+| glific | 57 | 590 | 199 | 142 | 57 | 0 | 19 | 0 | 14 | 14 |
+| lago | 143 | 1,738 | 801 | 363 | 177 | 34 | 45 | 0 | 2 | 2 |
+| calcom | 102 | 1,092 | 394 | 179 | 104 | 2 | 46 | 0 | 7 | 9 |
+| **Total** | **7,231** | **60,495** | **21,858** | **9,504** | **12,549** | **2,164** | **350** | **427** | **1,406** | **1,160** |
 
 ### Size
 
-The 61 dumps come to about 197,000 lines of SQL. chado is 43,700 of them, the
+The 64 dumps come to about 207,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
-of the constraints and the indexes, over a quarter of the columns and
-foreign keys, and more than a fifth of the tables; dhis2, openolat, musicbrainz,
-and discourse are the largest of what remains, and chado is nearly all of the
-views.
+of the constraints, three in ten of the indexes, nearly a quarter of the
+columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
+musicbrainz, and discourse are the largest of what remains, and chado is nearly
+all of the views.
 
 gitlab is also why `clean-schema` drops tables a batch at a time rather than
 cascading through `DROP SCHEMA`: a single statement takes locks on every object
@@ -281,26 +288,28 @@ always reach.
 - **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to a
   table, denser than any other sample, 55 of them gin, 29 of those over an
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
-  64, only one of them partial and none over an expression.
+  64, only one of them partial and none over an expression; lago's 801 over 143,
+  123 of them partial and 16 gin.
 - **Unique indexes over an expression and a gin index over `to_tsvector`**: rt.
 - **gist indexes naming an operator class**: two that name `inet_ops` and one
   over four columns, which needs `btree_gist` (osm).
 - **gist indexes over a function the schema defines itself**: chado's three name
   `boxrange`, one of them partial and declared from another schema.
 - **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
-  `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse).
+  `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse), and
+  one `NULLS NOT DISTINCT` index and eight with `INCLUDE` columns (lago).
 - **Exclusion constraints and unlogged tables**: demodb, which needs
   `btree_gist`, boundary, whose 19 exclusion constraints need it too, hatchet,
-  whose 2 compare a range column with `&&`, and
-  bigbluebutton, where every one of the 54 tables is unlogged.
+  whose 2 compare a range column with `&&`, lago, with one, and bigbluebutton,
+  where every one of the 54 tables is unlogged.
 - **Stored generated columns**: bigbluebutton's 17, three of them over a
   function of its own that calls `unaccent`.
 - **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb,
   whose 13 types are 6 enums and 7 domains, each domain carrying a named CHECK,
-  plus icinga_director, whose 20 enums are more than any other sample but coder
-  and hatchet and whose one domain carries two anonymous CHECKs, guacamole's 5
-  enums, listmonk's 14 over 16 tables, coder's 61, which 73 columns are typed
-  by, and hatchet's 57.
+  plus icinga_director, whose 20 enums come with one domain that carries two
+  anonymous CHECKs, guacamole's 5 enums, listmonk's 14 over 16 tables, coder's
+  61, which 73 columns are typed by, hatchet's 57, glific's 19, lago's 45, and
+  calcom's 46, three of whose columns are arrays of one.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -316,7 +325,10 @@ always reach.
   and 8 gist indexes over them, and those modifiers are the only ones any sample
   reports in mixed case.
 - **Foreign keys that all declare their referential actions**: all 171 of
-  icinga_director's name both ON UPDATE and ON DELETE, in six combinations.
+  icinga_director's name both ON UPDATE and ON DELETE, in six combinations,
+  and all 179 of calcom's name ON UPDATE CASCADE and an ON DELETE action, 134 of
+  them CASCADE. 137 of glific's 142 name ON DELETE, 106 of them CASCADE.
+- **Column comments**: glific comments 274 of its 590 columns.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
   its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
   `mimiciv_hosp`, 4 of chado's 472 point from `frange` into `chado`, and every
@@ -326,7 +338,8 @@ always reach.
   columns, and wso2is, which declares 92 for its 172 tables and wires 87 of them
   into a column DEFAULT.
 - **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
-  tables, where chinook has 11, hatchet's 72 of 133, and bigbluebutton, where
+  tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with
+  747 of its 1,092 columns, and bigbluebutton, where
   451 of 532 columns and half the tables and views are camelCase.
 - **Width without variety**: openolat, whose 382 tables are behind only gitlab
   and dhis2, has every one of its 1,239 indexes btree and every one of its 632
@@ -334,8 +347,8 @@ always reach.
 - **A schema that is nearly all keys**: dhis2, where 461 primary keys and 464
   unique constraints back all but 30 of its 955 indexes, it declares no CHECK at
   all, and its 989 foreign keys are more than any sample but gitlab.
-- **Materialized views**: adventureworks, pagila, and listmonk, whose three
-  views are all materialized.
+- **Materialized views**: adventureworks, pagila, listmonk, whose three views
+  are all materialized, and lago.
 - **Views at scale**: chado's 1,864 are nearly ten times every other sample put
   together, and 1,832 of them are the Sequence Ontology views in its `so`
   schema, each selecting from tables in `chado`; bigbluebutton's 86 over 54
@@ -345,7 +358,8 @@ always reach.
   2,054 partitions, all of which live in schemas of their own. hatchet declares
   22, 20 by range and 2 by hash, and attaches none, since it creates its
   partitions at run time; 13 of its tables set autovacuum storage parameters.
-  thingsboard declares 11, all by range, and attaches none for the same
+  lago declares one and attaches five in its own schema. thingsboard declares
+  11, all by range, and attaches none for the same
   reason.
 - **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
   sample that does.
@@ -358,13 +372,13 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Twenty-six of the 61 samples declare
+Routines are concentrated the same way. Twenty-nine of the 64 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,135. Seven in ten of them, 782, return
+and chado's 94 are 916 of the 1,160. Seven in ten of them, 805, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,037 are written in plpgsql and 98 in sql. sourcegraph declares one
+1,062 are written in plpgsql and 98 in sql. sourcegraph declares one
 procedure and thingsboard three, the only procedures any sample has, and
 inaturalist the only aggregate, which `--manage-routine` does not read and so is
 in neither count. Only chado, kea,
@@ -401,6 +415,13 @@ strip only what is irrelevant to a schema round trip:
   in. Either stops the load when another sample's schema is already there, so
   boundary is the first sample in `SAMPLES`, loaded right after
   `clean-schema`.
+- **calcom**: the schema ships as a Prisma migration history, 596 directories
+  each holding a `migration.sql`, replayed in name order into a schema of its
+  own. The repository tarball is fetched once and only the migrations directory
+  is extracted. A few files end without a semicolon or on a comment, so each is
+  followed by a newline and one, and the `public` qualifier Prisma writes in
+  some statements is stripped. Some migrations insert or update rows as well;
+  they run, and the rows are not part of the check.
 - **camunda**: the schema ships as one file per engine component and none of
   them create a schema, so `camunda` is created up front and the files are
   concatenated in dependency order (process engine, history, identity, then the
@@ -458,6 +479,10 @@ strip only what is irrelevant to a schema round trip:
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
+- **glific**: the schema is Ecto's `structure.sql`, the same `pg_dump` output
+  as discourse, osm, danbooru, and inaturalist, so it loads the same way. It
+  has no `SET search_path` line before its migration versions, so those rows go
+  into glific's own `schema_migrations`. They are data, not schema.
 - **harbor**: the schema ships as one file per release, each a delta meant to
   be replayed by golang-migrate, which tracks what it has applied in a
   `schema_migrations` table of its own. One delta `ALTER TABLE`s that table
@@ -488,6 +513,13 @@ strip only what is irrelevant to a schema round trip:
   `client_min_messages` is raised to `warning` for the load. wso2is is also
   where five index names run past the 63 character identifier limit, and the
   server says so as it truncates them.
+- **lago**: the schema is Rails' `db/structure.sql` like discourse's, and loads
+  the same way with two things taken out first. It was dumped with `--clean`,
+  so everything before the first `-- Name:` header, about 1,400 lines of
+  `DROP ... IF EXISTS` and placeholder views, is skipped; with `public` second
+  in `search_path` those could reach another sample's objects in `make schema`.
+  It also installs `pg_partman`, which is not contrib, into a schema of its own
+  with one template table, so every statement that names partman is dropped.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
   **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,

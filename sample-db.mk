@@ -83,6 +83,9 @@ dhis2|sample-db-dhis2|URL=https://raw.githubusercontent.com/dhis2/dhis2-core/5d2
 coder|sample-db-url-schema|URL=https://raw.githubusercontent.com/coder/coder/263f2c207eca19c2e42a71f439782c15ebeb8f07/coderd/database/dump.sql SCHEMA=coder CHECK_FUNCTION_BODIES=off|coder
 hatchet|sample-db-hatchet||hatchet
 thingsboard|sample-db-thingsboard||thingsboard
+glific|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/glific/glific/2c8141103b58aa6144240e79c253f119bfbcf98c/priv/repo/structure.sql SCHEMA=glific|glific
+lago|sample-db-lago|URL=https://raw.githubusercontent.com/getlago/lago-api/78f709bfb31c43834ab6ea18d5f771e3a94e313d/db/structure.sql|lago
+calcom|sample-db-prisma|REPO=calcom/cal.diy SHA=6bc45298226f96ff79e0c070c8b2ce39727e8477 DIR=packages/prisma/migrations SCHEMA=calcom|calcom
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -348,6 +351,10 @@ sample-db-camunda:
 # inserts into schema_migrations, which is data and would land in the wrong
 # schema anyway, so everything from that line on is dropped.
 #
+# glific's structure.sql is Ecto's rather than Rails', the same pg_dump output
+# without that SET line, so its migration versions stay and, with the qualifier
+# stripped, go into glific's own schema_migrations. They are rows, not schema.
+#
 # discourse needs pgvector and osm and inaturalist need PostGIS, neither of
 # which the official postgres image ships; compose.yaml and the samples CI job
 # install both. See SAMPLE-DB-TESTS.md. danbooru installs five extensions of
@@ -514,6 +521,44 @@ sample-db-thingsboard:
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/thingsboard/thingsboard/562b19aa90f92c97b96c255b14816c32da7f4958/dao/src/main/resources/sql/$$f || exit 1; \
 	  echo; \
 	done | PGOPTIONS='-c search_path=thingsboard -c client_min_messages=warning' $(PSQL)
+
+# Lago (getlago/lago-api, AGPL-3.0). Its db/structure.sql is Rails' pg_dump
+# output like discourse's, and loads the same way as sample-db-pgdump-schema
+# with two things taken out first. It was dumped with --clean, so it opens with
+# about 1,400 lines of DROP ... IF EXISTS and placeholder views; with public
+# second in search_path those could reach another sample's objects in `make
+# schema`, so everything before the first `-- Name:` header is skipped. And it
+# installs pg_partman, which is not contrib, into a schema of its own and keeps
+# one template table there. pg_dump separates statements with a blank line, so
+# every paragraph that names partman is dropped; the partitioned table Lago
+# creates itself stays.
+.PHONY: sample-db-lago
+sample-db-lago:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lago'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | awk '/^-- Name: /{body=1} !body && /^(DROP |ALTER TABLE IF EXISTS |CREATE OR REPLACE VIEW )/{skip=1} body{skip=0} !skip' \
+	  | awk -v RS= -v ORS='\n\n' '!/partman/' \
+	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
+	  | PGOPTIONS='-c search_path=lago,public' $(PSQL)
+
+# A Prisma migration history replayed into a schema of its own. Prisma keeps
+# one directory per migration under DIR, each holding a migration.sql, and
+# applies them in name order, which starts with a timestamp. The repository
+# tarball is fetched once and only DIR is extracted, since there are hundreds
+# of files; the archive's top directory is named after the repository, so
+# REPO is the name GitHub uses now. A few files end without a semicolon, or on
+# a comment, so every file is followed by a newline and one. Prisma qualifies
+# some statements with `public`, which is stripped so search_path places them.
+.PHONY: sample-db-prisma
+sample-db-prisma:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/$(REPO)/tar.gz/$(SHA) \
+	  | tar xz -C "$$dir" --strip-components=$$((1 + $(words $(subst /, ,$(DIR))))) $(notdir $(REPO))-$(SHA)/$(DIR) && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | PGOPTIONS='-c search_path=$(SCHEMA)' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
