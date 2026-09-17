@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Compare an index element's operator class and collation, an exclusion constraint's elements too, the way PostgreSQL writes them: a name in the search_path without its schema, an option value quoted, `siglen='32'`. A file that wrote either the other way re-created the index on every plan.
+
 ## [1.55.0] - 2026-09-16
 
 * Add `--git` (`-g`, `$PISTA_GIT`) to `diff`. It reads the files on the command line out of a git repository: `A..B` compares the two revisions, `A...B` compares B against its merge base with A, and `A` alone compares A against the working tree. Every file is read at both ends of the range, so a side can span more than one file.

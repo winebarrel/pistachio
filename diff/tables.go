@@ -730,8 +730,9 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 // three-part form when the catalog names the current database, and pg_query
 // parses it, so matching on a two-part name alone would leave it drifting.
 //
-// parseTriggerDef applies it to an EXECUTE FUNCTION name, which is not an
-// expression node and so never reaches the walk above.
+// parseTriggerDef applies it to an EXECUTE FUNCTION name, and
+// normalizeIndexElem to an operator class name; neither is an expression node,
+// so neither reaches the walk above.
 func lastNamePart(name []*pg_query.Node) []*pg_query.Node {
 	if len(name) < 2 {
 		return name
@@ -1754,6 +1755,21 @@ func normalizeIndexStmt(is *pg_query.IndexStmt) {
 // order compare equal, so does the NULLS order that is the default for the
 // chosen direction, and the expression takes the symmetric expression
 // normalizations.
+//
+// The operator class and the collation lose their schema qualifier, which
+// ruleutils (src/backend/utils/adt/ruleutils.c) writes only for a name off the
+// search_path, and the class's options take the storage-parameter fold: they
+// go through get_reloptions, the function that writes the WITH clause, so a
+// value that does not read as an identifier comes back quoted. A file that
+// qualified the class or wrote `siglen=32` for the catalog's `siglen='32'`
+// re-created the index on every plan. Dropping the qualifier carries the
+// tradeoff stripFuncSchema does.
+//
+// Which class and which collation the element names is left alone. PostgreSQL
+// omits the class when it is the default for the column's type, and the
+// collation when it is the column's own, so a file that writes either out
+// still drifts; telling that from a real change means a lookup the diff does
+// not thread. LIMITATIONS.md covers it.
 func normalizeIndexElem(ie *pg_query.IndexElem) {
 	if ie.Ordering == pg_query.SortByDir_SORTBY_ASC {
 		ie.Ordering = pg_query.SortByDir_SORTBY_DEFAULT
@@ -1768,21 +1784,25 @@ func normalizeIndexElem(ie *pg_query.IndexElem) {
 			ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
 		}
 	}
+	ie.Collation = lastNamePart(ie.Collation)
+	ie.Opclass = lastNamePart(ie.Opclass)
+	normalizeStorageParams(ie.Opclassopts)
 	if ie.Expr != nil {
 		ie.Expr = normalizeCheckExpr(ie.Expr)
 	}
 }
 
-// normalizeStorageParams canonicalises an index's WITH clause so the two
-// spellings of one parameter compare equal. pg_get_indexdef quotes a value
-// that does not read as an identifier, `fillfactor='80'`, while a file writes
-// the number bare, so the two arrive as a String and an Integer node. The
-// order is not part of the setting either, and the catalog keeps the one the
-// parameters were created in. Without this an index carrying a parameter was
-// dropped and recreated on every run.
+// normalizeStorageParams canonicalises an index's WITH clause, and an operator
+// class's option list, so the two spellings of one parameter compare equal.
+// pg_get_indexdef quotes a value that does not read as an identifier,
+// `fillfactor='80'`, while a file writes the number bare, so the two arrive as
+// a String and an Integer node. The order is not part of the setting either,
+// and the catalog keeps the one the parameters were created in. Without this
+// an index carrying a parameter was dropped and recreated on every run.
 //
-// An integer is folded to its decimal string; no index storage parameter
-// takes a fractional value. A bare word, `deduplicate_items=off`, parses as a
+// An integer is folded to its decimal string, and a fractional value to the
+// digits the file wrote: a BRIN bloom class takes `false_positive_rate=0.05`,
+// which parses as a Float. A bare word, `deduplicate_items=off`, parses as a
 // single-name TypeName while the quoted spelling parses as a String, so the
 // TypeName is folded to a String too.
 func normalizeStorageParams(options []*pg_query.Node) {
@@ -1791,6 +1811,9 @@ func normalizeStorageParams(options []*pg_query.Node) {
 		if i := de.GetArg().GetInteger(); i != nil {
 			sval := strconv.FormatInt(int64(i.Ival), 10)
 			de.Arg = &pg_query.Node{Node: &pg_query.Node_String_{String_: &pg_query.String{Sval: sval}}}
+		}
+		if f := de.GetArg().GetFloat(); f != nil {
+			de.Arg = &pg_query.Node{Node: &pg_query.Node_String_{String_: &pg_query.String{Sval: f.Fval}}}
 		}
 		if tn := de.GetArg().GetTypeName(); tn != nil && len(tn.Names) == 1 {
 			if s := tn.Names[0].GetString_(); s != nil {

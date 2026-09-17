@@ -1,0 +1,18 @@
+# An exclusion element is an index element, so its operator class takes the
+# same comparison: pg_get_constraintdef writes the class bare, the file
+# qualifies it.
+init: |
+  CREATE TABLE public.rooms (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT rooms_pkey PRIMARY KEY (id),
+      CONSTRAINT rooms_name_excl EXCLUDE USING btree (name pg_catalog.text_pattern_ops WITH =)
+  );
+desired: |
+  CREATE TABLE public.rooms (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT rooms_pkey PRIMARY KEY (id),
+      CONSTRAINT rooms_name_excl EXCLUDE USING btree (name pg_catalog.text_pattern_ops WITH =)
+  );
+plan: ""

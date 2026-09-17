@@ -760,3 +760,30 @@ An array constructor is a constant, so `(ARRAY[1,2,3])[1]` is a longer way
 to write `1`, and no sample schema declares one.
 
 Origin: review of the `ARRAY[...]` layout fix, 2026-09-15.
+
+## Perpetual drift on a default operator class or collation written out
+
+Priority: low.
+
+`pg_get_indexdef` and `pg_get_constraintdef` name an index element's operator
+class only when it is not the default for the column's type, and its collation
+only when it is not the one the column carries. The desired side keeps what
+the file wrote, so an index created as `(id int4_ops)` never compares equal to
+the bare column the catalog hands back: the index is dropped and created on
+every plan, and an exclusion constraint is dropped and added.
+
+Deciding that a written class is the default means reading
+`pg_opclass.opcdefault` for the column's type under the index's access method,
+which the diff does not thread, and an expression element has no column type
+to look it up by. Matching the name against the classes that are a default for
+some type answers a different question: `bpchar_ops` on a `text` column is
+legal and is not that column's default, and would fold away. The collation
+needs the column's own, which the diff does not carry either.
+
+An element that carries operator class options is not affected. ruleutils
+(`src/backend/utils/adt/ruleutils.c`) passes `InvalidOid` for the column type
+there, so the class is written either way and both sides name it.
+
+Workaround: leave both out, which is what `pista dump` and `pg_dump` write.
+
+Origin: review of the index element canonicalization, 2026-09-17.
