@@ -1,0 +1,18 @@
+# get_reloptions writes an operator class option whose value does not read as
+# an identifier quoted, siglen='32', the way it writes the WITH clause. The
+# file writes the number bare.
+init: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      tsv tsvector,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX docs_tsv_idx ON public.docs USING gist (tsv tsvector_ops (siglen=32));
+desired: |
+  CREATE TABLE public.docs (
+      id integer NOT NULL,
+      tsv tsvector,
+      CONSTRAINT docs_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX docs_tsv_idx ON public.docs USING gist (tsv tsvector_ops (siglen=32));
+plan: ""

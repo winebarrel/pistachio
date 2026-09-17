@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+* Compare an index column's operator class the way PostgreSQL writes it. The schema qualifier is dropped from both sides, since `pg_get_indexdef` writes a class on the search_path bare, and the class's options take the fold the `WITH` clause already takes: an option value that does not read as an identifier comes back quoted, `siglen='32'`, while a file writes `siglen=32`. Either spelling dropped and created the index on every plan. An exclusion constraint's elements take the same comparison.
+
+  A default operator class the file writes out still drifts. Deciding that it is the default takes a lookup the diff does not have; `LIMITATIONS.md` covers it.
+
 ## [1.55.0] - 2026-09-16
 
 * Add `--git` (`-g`, `$PISTA_GIT`) to `diff`. It reads the files on the command line out of a git repository: `A..B` compares the two revisions, `A...B` compares B against its merge base with A, and `A` alone compares A against the working tree. Every file is read at both ends of the range, so a side can span more than one file.

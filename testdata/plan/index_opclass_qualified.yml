@@ -1,0 +1,17 @@
+# get_opclass_name writes an operator class on the search_path without its
+# schema. The file qualifies it.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX items_name_idx ON public.items USING btree (name pg_catalog.text_pattern_ops);
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX items_name_idx ON public.items USING btree (name pg_catalog.text_pattern_ops);
+plan: ""

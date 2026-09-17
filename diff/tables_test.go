@@ -3017,6 +3017,46 @@ func TestEqualIndexDef_ascNullsFirst_notEqual(t *testing.T) {
 	))
 }
 
+func TestEqualIndexDef_opclassQualified(t *testing.T) {
+	// get_opclass_name writes an opclass on the search_path bare, while a file
+	// may qualify it.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1 text_pattern_ops)",
+		"CREATE INDEX idx ON t USING btree (col1 public.text_pattern_ops)",
+	))
+}
+
+func TestEqualIndexDef_opclassDiffers_notEqual(t *testing.T) {
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1 text_pattern_ops)",
+		"CREATE INDEX idx ON t USING btree (col1 varchar_pattern_ops)",
+	))
+}
+
+func TestEqualIndexDef_opclassOptionQuoting(t *testing.T) {
+	// get_reloptions quotes a value that does not read as an identifier, so
+	// pg_get_indexdef writes siglen='32' where a file writes siglen=32.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='32'))",
+		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen=32))",
+	))
+}
+
+func TestEqualIndexDef_opclassOptionOrder(t *testing.T) {
+	// The order of the options is not part of the setting.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING gist (col1 some_ops (numranges='4', siglen='32'))",
+		"CREATE INDEX idx ON t USING gist (col1 some_ops (siglen=32, numranges=4))",
+	))
+}
+
+func TestEqualIndexDef_opclassOptionDiffers_notEqual(t *testing.T) {
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='32'))",
+		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='64'))",
+	))
+}
+
 func TestEqualIndexDef_different(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
@@ -4052,6 +4092,15 @@ func TestEqualConstraintDef_exclusionSchemaQualifiedFunc(t *testing.T) {
 	assert.True(t, equalConstraintDef(
 		"EXCLUDE USING btree (lower(v) WITH =)",
 		"EXCLUDE USING btree (pg_catalog.lower(v) WITH =)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionOpclass(t *testing.T) {
+	// An exclusion element is an index element, so it takes the same opclass
+	// canonicalization.
+	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING gist (tsv tsvector_ops (siglen='32') WITH &&)",
+		"EXCLUDE USING gist (tsv public.tsvector_ops (siglen=32) WITH &&)",
 	))
 }
 

@@ -730,8 +730,9 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 // three-part form when the catalog names the current database, and pg_query
 // parses it, so matching on a two-part name alone would leave it drifting.
 //
-// parseTriggerDef applies it to an EXECUTE FUNCTION name, which is not an
-// expression node and so never reaches the walk above.
+// parseTriggerDef applies it to an EXECUTE FUNCTION name, and
+// normalizeIndexElem to an operator class name; neither is an expression node,
+// so neither reaches the walk above.
 func lastNamePart(name []*pg_query.Node) []*pg_query.Node {
 	if len(name) < 2 {
 		return name
@@ -1754,6 +1755,25 @@ func normalizeIndexStmt(is *pg_query.IndexStmt) {
 // order compare equal, so does the NULLS order that is the default for the
 // chosen direction, and the expression takes the symmetric expression
 // normalizations.
+//
+// The operator class loses its schema qualifier and its options take the
+// storage-parameter fold. get_opclass_name (src/backend/utils/adt/ruleutils.c)
+// writes a class on the search_path bare, and the options go through
+// get_reloptions, the function that writes the WITH clause, so an option value
+// that does not read as an identifier comes back quoted. A file that qualifies
+// the class or writes `siglen=32` for the catalog's `siglen='32'` dropped and
+// created the index on every plan.
+//
+// Dropping the qualifier carries the tradeoff stripFuncSchema does: two
+// same-named classes in different schemas compare equal, so moving the class
+// from one schema to another produces no diff.
+//
+// The class name itself is left alone otherwise. PostgreSQL omits it when it
+// is the default for the column's type, which a file is free to write out;
+// telling the two apart means reading the default class for that type, which
+// the diff does not thread. LIMITATIONS.md covers it. An element that carries
+// options is not affected: ruleutils passes InvalidOid for the column type
+// there, so the class is always written.
 func normalizeIndexElem(ie *pg_query.IndexElem) {
 	if ie.Ordering == pg_query.SortByDir_SORTBY_ASC {
 		ie.Ordering = pg_query.SortByDir_SORTBY_DEFAULT
@@ -1768,13 +1788,16 @@ func normalizeIndexElem(ie *pg_query.IndexElem) {
 			ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
 		}
 	}
+	ie.Opclass = lastNamePart(ie.Opclass)
+	normalizeStorageParams(ie.Opclassopts)
 	if ie.Expr != nil {
 		ie.Expr = normalizeCheckExpr(ie.Expr)
 	}
 }
 
-// normalizeStorageParams canonicalises an index's WITH clause so the two
-// spellings of one parameter compare equal. pg_get_indexdef quotes a value
+// normalizeStorageParams canonicalises an index's WITH clause, and an operator
+// class's option list, so the two spellings of one parameter compare equal.
+// pg_get_indexdef quotes a value
 // that does not read as an identifier, `fillfactor='80'`, while a file writes
 // the number bare, so the two arrive as a String and an Integer node. The
 // order is not part of the setting either, and the catalog keeps the one the
