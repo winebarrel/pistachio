@@ -11,7 +11,7 @@
 - Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression). An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed; a change goes out as `ALTER TABLE ... ALTER COLUMN ... SET`. No `RESTART` is planned, the same as `ALTER SEQUENCE`, so a change that puts the sequence's current value outside the new range fails at apply with the server's error.
 - Constraints (primary key, unique, check, exclusion, foreign key). See [Constraints](#constraints).
 - Indexes (unique, partial, expression, hash, multi-column)
-- Comments (on tables, columns, views, materialized views, indexes, types, domains, composite types, composite attributes, sequences, routines). See [Comments](#comments).
+- Comments (on tables, columns, views, materialized views, view and materialized view columns, indexes, types, domains, composite types, composite attributes, sequences, routines). See [Comments](#comments).
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
 - Triggers (`CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER`, `INSTEAD OF` triggers on views, and the enable state via `ALTER TABLE ... ENABLE/DISABLE TRIGGER`); see [Triggers](#triggers)
 - Routines (`CREATE FUNCTION`, `CREATE PROCEDURE`), opt-in with `--manage-routine`. An overload set is several objects, keyed by argument type. See [Routines](#routines).

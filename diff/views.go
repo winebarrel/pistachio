@@ -427,9 +427,42 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				result.CreateStmts = append(result.CreateStmts, "COMMENT ON "+objType+" "+k+" IS NULL;")
 			}
 		}
+
+		var currentColumnComments *orderedmap.Map[string, string]
+		if ok && !recreated[k] {
+			currentColumnComments = currentView.ColumnComments
+		}
+		result.CreateStmts = append(result.CreateStmts, viewColumnCommentStmts(k, currentColumnComments, desiredView.ColumnComments)...)
 	}
 
 	return result, nil
+}
+
+// viewColumnCommentStmts sets each column comment that is new or changed, then
+// clears each one desired no longer has. A nil map means no comments.
+func viewColumnCommentStmts(fqvn string, current, desired *orderedmap.Map[string, string]) []string {
+	var stmts []string
+	if desired != nil {
+		for col, comment := range desired.All() {
+			if current != nil {
+				if c, ok := current.GetOk(col); ok && c == comment {
+					continue
+				}
+			}
+			stmts = append(stmts, "COMMENT ON COLUMN "+fqvn+"."+model.Ident(col)+" IS "+model.QuoteLiteral(comment)+";")
+		}
+	}
+	if current != nil {
+		for col := range current.Keys() {
+			if desired != nil {
+				if _, ok := desired.GetOk(col); ok {
+					continue
+				}
+			}
+			stmts = append(stmts, "COMMENT ON COLUMN "+fqvn+"."+model.Ident(col)+" IS NULL;")
+		}
+	}
+	return stmts
 }
 
 // viewTriggerStmts renders the CREATE TRIGGER statements for a view that is

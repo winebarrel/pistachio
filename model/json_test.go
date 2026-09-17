@@ -316,14 +316,17 @@ func TestIndex_MarshalJSON(t *testing.T) {
 }
 
 func TestView_MarshalJSON(t *testing.T) {
+	columnComments := orderedmap.New[string, string]()
+	columnComments.Set("id", "Item ID")
 	v := &model.View{
-		Schema:        "public",
-		Name:          "recent",
-		Definition:    "SELECT * FROM items",
-		Materialized:  true,
-		StorageParams: orderedmap.New[string, string](),
-		Indexes:       orderedmap.New[string, *model.Index](),
-		Triggers:      orderedmap.New[string, *model.Trigger](),
+		Schema:         "public",
+		Name:           "recent",
+		Definition:     "SELECT * FROM items",
+		Materialized:   true,
+		StorageParams:  orderedmap.New[string, string](),
+		Indexes:        orderedmap.New[string, *model.Index](),
+		Triggers:       orderedmap.New[string, *model.Trigger](),
+		ColumnComments: columnComments,
 	}
 	assert.JSONEq(t, `{
 		"oid": 0,
@@ -337,6 +340,7 @@ func TestView_MarshalJSON(t *testing.T) {
 		"indexes": {},
 		"triggers": {},
 		"comment": null,
+		"column_comments": {"id": "Item ID"},
 		"ignore": false
 	}`, marshalJSON(t, v))
 }

@@ -26,6 +26,9 @@ type View struct {
 	Indexes       *orderedmap.Map[string, *Index]   `json:"indexes"`
 	Triggers      *orderedmap.Map[string, *Trigger] `json:"triggers"`
 	Comment       *string                           `json:"comment"`
+	// ColumnComments maps a column name to its comment. A column without a
+	// comment has no entry.
+	ColumnComments *orderedmap.Map[string, string] `json:"column_comments"`
 	// Ignore marks the view as unmanaged (set by -- pista:ignore). Ignored
 	// objects are not created, altered, or dropped; always false on the
 	// catalog side.
@@ -120,6 +123,11 @@ func (v View) CommentSQL() string {
 	var stmts []string
 	if v.Comment != nil {
 		stmts = append(stmts, "COMMENT ON "+v.ObjType()+" "+Ident(v.Schema, v.Name)+" IS "+QuoteLiteral(*v.Comment)+";")
+	}
+	if v.ColumnComments != nil {
+		for col, comment := range v.ColumnComments.All() {
+			stmts = append(stmts, "COMMENT ON COLUMN "+Ident(v.Schema, v.Name, col)+" IS "+QuoteLiteral(comment)+";")
+		}
 	}
 	if v.Indexes != nil {
 		for _, idx := range v.Indexes.CollectValues() {

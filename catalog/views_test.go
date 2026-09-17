@@ -169,4 +169,31 @@ func TestViews(t *testing.T) {
 		require.NotNil(t, v.Comment)
 		assert.Equal(t, "Active users only", *v.Comment)
 	})
+
+	t.Run("view column comment", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.users (
+				id integer NOT NULL,
+				name text NOT NULL,
+				email text
+			);
+			CREATE VIEW public.active_users AS SELECT id, name, email FROM public.users;
+			COMMENT ON COLUMN public.active_users.email IS 'Email';
+			COMMENT ON COLUMN public.active_users.id IS 'User ID';
+			CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		views, err := cat.Views(ctx)
+		require.NoError(t, err)
+
+		// Column order, not the order the comments were written in.
+		v := views.Get("public.active_users")
+		require.NotNil(t, v)
+		assert.Equal(t, []string{"id", "email"}, slices.Collect(v.ColumnComments.Keys()))
+		assert.Equal(t, "User ID", v.ColumnComments.Get("id"))
+		assert.Equal(t, "Email", v.ColumnComments.Get("email"))
+
+		assert.Equal(t, 0, views.Get("public.user_stats").ColumnComments.Len())
+	})
 }

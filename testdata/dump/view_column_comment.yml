@@ -1,0 +1,59 @@
+# A comment on a column of a view or a materialized view.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, name FROM public.users;
+  COMMENT ON VIEW public.active_users IS 'Active users only';
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
+  COMMENT ON COLUMN public.active_users.id IS 'User ID';
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'User count';
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_users
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT users.id,
+      users.name
+     FROM users;
+  COMMENT ON VIEW public.active_users IS 'Active users only';
+  COMMENT ON COLUMN public.active_users.id IS 'User ID';
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
+
+  -- public.user_stats
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt
+     FROM users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'User count';
+dump_pg16: &dump_pg16plus |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.active_users
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT id,
+      name
+     FROM users;
+  COMMENT ON VIEW public.active_users IS 'Active users only';
+  COMMENT ON COLUMN public.active_users.id IS 'User ID';
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
+
+  -- public.user_stats
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt
+     FROM users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'User count';
+dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus

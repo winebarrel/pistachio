@@ -1,0 +1,22 @@
+# The recreate is skipped, so the column comment is left as it is.
+drop_policy:
+  allow_drop: []
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'User count';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt, max(id) AS max_id FROM public.users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'Number of users';
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP MATERIALIZED VIEW public.user_stats;

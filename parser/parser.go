@@ -1361,13 +1361,14 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 	}
 
 	return &model.View{
-		Schema:        schema,
-		Name:          vs.View.Relname,
-		Definition:    def,
-		CheckOption:   viewCheckOption(vs),
-		StorageParams: parseViewStorageParams(vs.Options),
-		Indexes:       orderedmap.New[string, *model.Index](),
-		Triggers:      orderedmap.New[string, *model.Trigger](),
+		Schema:         schema,
+		Name:           vs.View.Relname,
+		Definition:     def,
+		CheckOption:    viewCheckOption(vs),
+		StorageParams:  parseViewStorageParams(vs.Options),
+		Indexes:        orderedmap.New[string, *model.Index](),
+		Triggers:       orderedmap.New[string, *model.Trigger](),
+		ColumnComments: orderedmap.New[string, string](),
 	}, nil
 }
 
@@ -1436,13 +1437,14 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 	}
 
 	return &model.View{
-		Schema:        schema,
-		Name:          into.Rel.Relname,
-		Definition:    def,
-		Materialized:  true,
-		StorageParams: parseViewStorageParams(into.Options),
-		Indexes:       orderedmap.New[string, *model.Index](),
-		Triggers:      orderedmap.New[string, *model.Trigger](),
+		Schema:         schema,
+		Name:           into.Rel.Relname,
+		Definition:     def,
+		Materialized:   true,
+		StorageParams:  parseViewStorageParams(into.Options),
+		Indexes:        orderedmap.New[string, *model.Index](),
+		Triggers:       orderedmap.New[string, *model.Trigger](),
+		ColumnComments: orderedmap.New[string, string](),
 	}, nil
 }
 
@@ -1939,6 +1941,17 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 			// entry would be mistaken for a new column.
 			if t.IsPartitionChild() {
 				t.Columns.Set(colName, &model.Column{Name: colName, Comment: comment})
+			}
+			return
+		}
+		// COMMENT ON COLUMN also targets the columns of a view or a
+		// materialized view. The column list is not checked: the view's
+		// columns come from its query, which the parser does not resolve.
+		if v, ok := views.GetOk(fqtn); ok {
+			if comment != nil {
+				v.ColumnComments.Set(colName, *comment)
+			} else {
+				v.ColumnComments.Delete(colName)
 			}
 			return
 		}

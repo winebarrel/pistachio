@@ -1,0 +1,25 @@
+# A comment on a column of a new view or materialized view is emitted after
+# the view is created.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, name FROM public.users;
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'User count';
+plan: |
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT id, name FROM public.users;
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt FROM public.users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'User count';

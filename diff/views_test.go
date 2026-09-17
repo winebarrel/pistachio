@@ -1583,3 +1583,37 @@ func TestDiffViews_columnRemovedDropDeniedFallsBackToCommented(t *testing.T) {
 	assert.Empty(t, result.CreateStmts)
 	assert.Equal(t, []string{"-- skipped: DROP VIEW public.v;"}, result.DisallowedDropStmts)
 }
+
+func TestDiffViews_columnComment(t *testing.T) {
+	commentsOf := func(kv ...string) *orderedmap.Map[string, string] {
+		m := orderedmap.New[string, string]()
+		for i := 0; i < len(kv); i += 2 {
+			m.Set(kv[i], kv[i+1])
+		}
+		return m
+	}
+
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{
+		Schema: "public", Name: "v1", Definition: "SELECT 1 AS a, 2 AS b, 3 AS c",
+		ColumnComments: commentsOf("a", "old", "b", "same", "c", "gone"),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v1", &model.View{
+		Schema: "public", Name: "v1", Definition: "SELECT 1 AS a, 2 AS b, 3 AS c",
+		ColumnComments: commentsOf("b", "same", "a", "new"),
+	})
+	desired.Set("public.v2", &model.View{
+		Schema: "public", Name: "v2", Definition: "SELECT 1 AS \"X\"",
+		ColumnComments: commentsOf("X", "x"),
+	})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"CREATE OR REPLACE VIEW public.v2 AS\nSELECT 1 AS \"X\";",
+		"COMMENT ON COLUMN public.v1.a IS 'new';",
+		"COMMENT ON COLUMN public.v1.c IS NULL;",
+		"COMMENT ON COLUMN public.v2.\"X\" IS 'x';",
+	}, result.CreateStmts)
+}
