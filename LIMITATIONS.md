@@ -346,26 +346,49 @@ parent, so the field would carry a list for the INHERITS case alone.
 
 Origin: INHERITS local column support.
 
-## A dump of a partitioned table with an index on the parent does not reload
+## An index on a partitioned table written the way `dump` writes it
 
 Priority: low.
 
-`dump` writes each table followed by its own indexes, so an index on a
-partitioned parent is created before the partitions under it. PostgreSQL then
-creates the partition's copy itself, under the name the dump goes on to
-declare, and psql stops on `relation "logs_2025_at_idx" already exists`.
-pg_dump avoids it by writing every table first and every index after, with an
-`ALTER INDEX ... ATTACH PARTITION` for each child.
+`dump` writes the parent's index with `ON ONLY` and the index on each partition
+as a `CREATE INDEX` of its own, and nothing attaches the second to the first.
+`pista plan` and `pista apply` run both statements as written. Feeding a dump
+back to the database it came from is clean, which is the contract, but creating
+the index from such a file goes wrong in two ways.
 
-Feeding the dump back to `pista plan` is clean, which is the contract, so this
-only reaches someone loading a dump with psql. `test/fidelity` is where it
-turned up, and its `partition.sql` leaves the parent index out with a note
-pointing here. Putting it back is the regression test.
+On an empty database, `dump` writes each table followed by its own indexes, so
+the parent's index is created before the partitions under it. PostgreSQL then
+creates and attaches the partition's copy itself, under the name the file goes
+on to declare, and both psql and `pista apply` stop on `relation
+"logs_2025_at_idx" already exists`. pg_dump avoids it by writing every table
+first and every index after, with an `ALTER INDEX ... ATTACH PARTITION` for
+each partition.
 
-Emitting the indexes after every table, or following pg_dump with `ON ONLY`
-plus `ATTACH`, are the two shapes. The first changes the order of every dump.
+On a database where the partition already exists, the `ON ONLY` index is
+created on the parent alone and stays invalid until every partition's index is
+attached. The partition's `CREATE INDEX` attaches nothing, so the parent's index
+stays invalid, and every later plan is clean because the catalog reads neither
+validity nor attachment. An invalid unique index does not back `ON CONFLICT` or
+a foreign key.
 
-Origin: [#459](https://github.com/winebarrel/pistachio/pull/459).
+Writing the parent's index without `ONLY` does not help alone. If the file
+still declares the partition's index, the plan creates it again: under the name
+PostgreSQL gave its copy, apply fails on `already exists`; under another name,
+the partition ends up with two identical indexes and the plan is clean.
+Workaround: write the parent's index without `ONLY` and leave the partitions'
+indexes out. PostgreSQL creates and attaches them, and the plan does not report
+them.
+
+`test/fidelity` is where the empty database case turned up, and its
+`partition.sql` leaves the parent index out with a note pointing here. Putting
+it back is the regression test.
+
+Closing it means emitting `ALTER INDEX ... ATTACH PARTITION` for a partition's
+index the parent's does not have, and ordering the indexes after every table.
+The second changes the order of every dump.
+
+Origin: [#459](https://github.com/winebarrel/pistachio/pull/459),
+[#596](https://github.com/winebarrel/pistachio/pull/596).
 
 ## Perpetual drift on a typed literal the catalog re-prints
 
