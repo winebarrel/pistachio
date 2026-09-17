@@ -83,6 +83,7 @@ dhis2|sample-db-dhis2|URL=https://raw.githubusercontent.com/dhis2/dhis2-core/5d2
 coder|sample-db-url-schema|URL=https://raw.githubusercontent.com/coder/coder/263f2c207eca19c2e42a71f439782c15ebeb8f07/coderd/database/dump.sql SCHEMA=coder CHECK_FUNCTION_BODIES=off|coder
 hatchet|sample-db-hatchet||hatchet
 thingsboard|sample-db-thingsboard||thingsboard
+glific|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/glific/glific/2c8141103b58aa6144240e79c253f119bfbcf98c/priv/repo/structure.sql SCHEMA=glific|glific
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -347,6 +348,10 @@ sample-db-camunda:
 # `SET search_path TO "$user", public` followed by the migration versions it
 # inserts into schema_migrations, which is data and would land in the wrong
 # schema anyway, so everything from that line on is dropped.
+#
+# glific's structure.sql is Ecto's rather than Rails', the same pg_dump output
+# without that SET line, so its migration versions stay and, with the qualifier
+# stripped, go into glific's own schema_migrations. They are rows, not schema.
 #
 # discourse needs pgvector and osm and inaturalist need PostGIS, neither of
 # which the official postgres image ships; compose.yaml and the samples CI job

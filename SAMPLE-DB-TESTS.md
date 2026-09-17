@@ -151,6 +151,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | coder | coder | [coder/coder](https://github.com/coder/coder) |
 | hatchet | hatchet | [hatchet-dev/hatchet](https://github.com/hatchet-dev/hatchet) |
 | thingsboard | thingsboard | [thingsboard/thingsboard](https://github.com/thingsboard/thingsboard) |
+| glific | glific | [glific/glific](https://github.com/glific/glific) |
 
 ## Coverage
 
@@ -167,7 +168,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - joomla and harbor 2026-09-01 on 16.13.
 - bigbluebutton and listmonk 2026-09-11 on 16.13.
 - dhis2 2026-09-15 on 15.18.
-- coder, boundary, hatchet, and thingsboard 2026-09-17 on 15.18.
+- coder, boundary, hatchet, thingsboard, and glific 2026-09-17 on 15.18.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -253,13 +254,14 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | coder | 116 | 1,173 | 292 | 153 | 217 | 11 | 62 | 1 | 30 | 30 |
 | hatchet | 133 | 1,209 | 330 | 77 | 136 | 0 | 57 | 1 | 22 | 49 |
 | thingsboard | 65 | 660 | 163 | 29 | 106 | 6 | 0 | 3 | 0 | 14 |
-| **Total** | **6,929** | **57,075** | **20,464** | **8,820** | **12,211** | **2,128** | **240** | **427** | **1,383** | **1,135** |
+| glific | 57 | 590 | 199 | 142 | 57 | 0 | 19 | 0 | 14 | 14 |
+| **Total** | **6,986** | **57,665** | **20,663** | **8,962** | **12,268** | **2,128** | **259** | **427** | **1,397** | **1,149** |
 
 ### Size
 
-The 61 dumps come to about 197,000 lines of SQL. chado is 43,700 of them, the
+The 62 dumps come to about 199,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
-of the constraints and the indexes, over a quarter of the columns and
+of the constraints and the indexes, a quarter of the columns and the
 foreign keys, and more than a fifth of the tables; dhis2, openolat, musicbrainz,
 and discourse are the largest of what remains, and chado is nearly all of the
 views.
@@ -300,7 +302,7 @@ always reach.
   plus icinga_director, whose 20 enums are more than any other sample but coder
   and hatchet and whose one domain carries two anonymous CHECKs, guacamole's 5
   enums, listmonk's 14 over 16 tables, coder's 61, which 73 columns are typed
-  by, and hatchet's 57.
+  by, hatchet's 57, and glific's 19.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -316,7 +318,9 @@ always reach.
   and 8 gist indexes over them, and those modifiers are the only ones any sample
   reports in mixed case.
 - **Foreign keys that all declare their referential actions**: all 171 of
-  icinga_director's name both ON UPDATE and ON DELETE, in six combinations.
+  icinga_director's name both ON UPDATE and ON DELETE, in six combinations,
+  and 137 of glific's 142 name ON DELETE, 106 of them CASCADE.
+- **Column comments**: glific comments 274 of its 590 columns.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
   its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
   `mimiciv_hosp`, 4 of chado's 472 point from `frange` into `chado`, and every
@@ -358,13 +362,13 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Twenty-six of the 61 samples declare
+Routines are concentrated the same way. Twenty-seven of the 62 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,135. Seven in ten of them, 782, return
+and chado's 94 are 916 of the 1,149. Seven in ten of them, 796, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,037 are written in plpgsql and 98 in sql. sourcegraph declares one
+1,051 are written in plpgsql and 98 in sql. sourcegraph declares one
 procedure and thingsboard three, the only procedures any sample has, and
 inaturalist the only aggregate, which `--manage-routine` does not read and so is
 in neither count. Only chado, kea,
@@ -458,6 +462,10 @@ strip only what is irrelevant to a schema round trip:
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
+- **glific**: the schema is Ecto's `structure.sql`, the same `pg_dump` output
+  as discourse, osm, danbooru, and inaturalist, so it loads the same way. It has no `SET search_path` line
+  before its migration versions, so those rows go into glific's own
+  `schema_migrations`. They are data, not schema.
 - **harbor**: the schema ships as one file per release, each a delta meant to
   be replayed by golang-migrate, which tracks what it has applied in a
   `schema_migrations` table of its own. One delta `ALTER TABLE`s that table
