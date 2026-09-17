@@ -81,6 +81,7 @@ bigbluebutton|sample-db-bigbluebutton|URL=https://raw.githubusercontent.com/bigb
 listmonk|sample-db-url-schema|URL=https://raw.githubusercontent.com/knadh/listmonk/594b74056dd8a0d3a7621a32898ee38bfbe10e96/schema.sql SCHEMA=listmonk CLIENT_MIN_MESSAGES=warning|listmonk
 dhis2|sample-db-dhis2|URL=https://raw.githubusercontent.com/dhis2/dhis2-core/5d2dbdef40e91c1c613fc50a8132158dd5683b7f/dhis-2/dhis-support/dhis-support-db-migration/src/main/resources/org/hisp/dhis/db/base/dhis2_base_schema.sql SCHEMA=dhis2|dhis2
 coder|sample-db-url-schema|URL=https://raw.githubusercontent.com/coder/coder/263f2c207eca19c2e42a71f439782c15ebeb8f07/coderd/database/dump.sql SCHEMA=coder CHECK_FUNCTION_BODIES=off|coder
+hatchet|sample-db-hatchet||hatchet
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -469,6 +470,23 @@ sample-db-boundary:
 	{ ls base/postgres/*.up.sql; ls oss/postgres/*/*.up.sql | sort -t/ -k3,3n -k4,4; } \
 	  | while read -r f; do cat "$$f"; echo; done \
 	  | PGOPTIONS='-c search_path=boundary -c client_min_messages=warning' $(PSQL)
+
+# Hatchet (hatchet-dev/hatchet, MIT). The schema ships as three files, so they
+# are concatenated in the order Hatchet's sqlc.yaml lists them: v0.sql,
+# v1-core.sql, and v1-olap.sql. The pg-stubs.sql it lists after them stands in
+# for catalog views sqlc cannot see and is not schema. None of the three names a
+# schema, so `hatchet` is created up front and search_path places everything,
+# btree_gist included, which is contrib. The partitions are created at run time
+# by functions the files define, so only the partitioned parents load.
+HATCHET_SQL_FILES = v0.sql v1-core.sql v1-olap.sql
+
+.PHONY: sample-db-hatchet
+sample-db-hatchet:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hatchet'
+	for f in $(HATCHET_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/hatchet-dev/hatchet/1b410eb672448014bb1c6a29df92c63554f46034/sql/schema/$$f || exit 1; \
+	  echo; \
+	done | PGOPTIONS='-c search_path=hatchet -c client_min_messages=warning' $(PSQL)
 
 .PHONY: test-samples
 test-samples:

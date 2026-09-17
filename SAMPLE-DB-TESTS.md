@@ -149,6 +149,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | listmonk | listmonk | [knadh/listmonk](https://github.com/knadh/listmonk) |
 | dhis2 | dhis2 | [dhis2/dhis2-core](https://github.com/dhis2/dhis2-core) |
 | coder | coder | [coder/coder](https://github.com/coder/coder) |
+| hatchet | hatchet | [hatchet-dev/hatchet](https://github.com/hatchet-dev/hatchet) |
 
 ## Coverage
 
@@ -165,7 +166,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - joomla and harbor 2026-09-01 on 16.13.
 - bigbluebutton and listmonk 2026-09-11 on 16.13.
 - dhis2 2026-09-15 on 15.18.
-- coder and boundary 2026-09-17 on 15.18.
+- coder, boundary, and hatchet 2026-09-17 on 15.18.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -249,13 +250,14 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | listmonk | 16 | 126 | 65 | 19 | 25 | 3 | 14 | 0 | 0 | 0 |
 | dhis2 | 473 | 2,648 | 955 | 989 | 925 | 0 | 0 | 1 | 0 | 0 |
 | coder | 116 | 1,173 | 292 | 153 | 217 | 11 | 62 | 1 | 30 | 30 |
-| **Total** | **6,731** | **55,206** | **19,971** | **8,714** | **11,969** | **2,122** | **183** | **423** | **1,361** | **1,072** |
+| hatchet | 133 | 1,209 | 330 | 77 | 136 | 0 | 57 | 1 | 22 | 49 |
+| **Total** | **6,864** | **56,415** | **20,301** | **8,791** | **12,105** | **2,122** | **240** | **424** | **1,383** | **1,121** |
 
 ### Size
 
-The 59 dumps come to about 190,000 lines of SQL. chado is 43,700 of them, the
-longest dump of any sample, and gitlab 34,700. gitlab is still more than a third
-of the constraints, a third of the indexes, over a quarter of the columns and
+The 60 dumps come to about 195,000 lines of SQL. chado is 43,700 of them, the
+longest dump of any sample, and gitlab 34,700. gitlab is still about a third
+of the constraints and the indexes, over a quarter of the columns and
 foreign keys, and more than a fifth of the tables; dhis2, openolat, musicbrainz,
 and discourse are the largest of what remains, and chado is nearly all of the
 views.
@@ -286,15 +288,17 @@ always reach.
 - **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
   `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse).
 - **Exclusion constraints and unlogged tables**: demodb, which needs
-  `btree_gist`, boundary, whose 19 exclusion constraints need it too, and
+  `btree_gist`, boundary, whose 19 exclusion constraints need it too, hatchet,
+  whose 2 compare a range column with `&&`, and
   bigbluebutton, where every one of the 54 tables is unlogged.
 - **Stored generated columns**: bigbluebutton's 17, three of them over a
   function of its own that calls `unaccent`.
 - **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb,
   whose 13 types are 6 enums and 7 domains, each domain carrying a named CHECK,
   plus icinga_director, whose 20 enums are more than any other sample but coder
-  and whose one domain carries two anonymous CHECKs, guacamole's 5 enums,
-  listmonk's 14 over 16 tables, and coder's 61, which 73 columns are typed by.
+  and hatchet and whose one domain carries two anonymous CHECKs, guacamole's 5
+  enums, listmonk's 14 over 16 tables, coder's 61, which 73 columns are typed
+  by, and hatchet's 57.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -320,8 +324,8 @@ always reach.
   columns, and wso2is, which declares 92 for its 172 tables and wires 87 of them
   into a column DEFAULT.
 - **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
-  tables, where chinook has 11, and bigbluebutton, where 451 of 532 columns and
-  half the tables and views are camelCase.
+  tables, where chinook has 11, hatchet's 72 of 133, and bigbluebutton, where
+  451 of 532 columns and half the tables and views are camelCase.
 - **Width without variety**: openolat, whose 382 tables are behind only gitlab
   and dhis2, has every one of its 1,239 indexes btree and every one of its 632
   foreign keys left at NO ACTION.
@@ -336,23 +340,27 @@ always reach.
   tables are the most of any other sample, five of them selecting from another
   view.
 - **Partitioned tables at scale**: gitlab declares 100 of them and attaches
-  2,054 partitions, all of which live in schemas of their own.
+  2,054 partitions, all of which live in schemas of their own. hatchet declares
+  22, 20 by range and 2 by hash, and attaches none, since it creates its
+  partitions at run time; 13 of its tables set autovacuum storage parameters.
 - **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
   sample that does.
 - **Triggers**: boundary's 741, more than any other sample, spread over 182
   of its 293 tables, 7 of them constraint triggers; gitlab's 388, one of them
   held in `ENABLE ALWAYS` state; kea's 81 outnumber its 64 tables; coder's 30,
-  bigbluebutton's 25, and ledgersmb's 11 come next.
+  bigbluebutton's 25, hatchet's 22, and ledgersmb's 11 come next. 21 of
+  hatchet's are statement-level triggers with transition tables, and 12 sit on
+  a partitioned table.
 
 ### Routines
 
-Routines are concentrated the same way. Twenty-four of the 59 samples declare
+Routines are concentrated the same way. Twenty-five of the 60 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,072. Seven in ten of them, 760, return
+and chado's 94 are 916 of the 1,121. Seven in ten of them, 782, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-976 are written in plpgsql and 96 in sql. sourcegraph declares the only
+1,023 are written in plpgsql and 98 in sql. sourcegraph declares the only
 procedure any sample has, and inaturalist the only aggregate, which
 `--manage-routine` does not read and so is in neither count. Only chado, kea,
 and boundary overload a name, 11 of them, 3, and 1, though danbooru's three, all
@@ -453,6 +461,10 @@ strip only what is irrelevant to a schema round trip:
   Harbor's schema. A few deltas also omit their file's closing `;`, which
   merges the next file's opening statement into it once concatenated, so
   every file gets one appended regardless of whether it already ends in one.
+- **hatchet**: the schema ships as three files, so `v0.sql`, `v1-core.sql`, and
+  `v1-olap.sql` are concatenated in the order Hatchet's `sqlc.yaml` lists them.
+  None of them names a schema, so `hatchet` is created up front and
+  `search_path` places everything.
 - **hive**: the dump belongs in a schema of its own like the group below, but
   it is `pg_dump` output that sets `search_path` to `public` itself, which
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
