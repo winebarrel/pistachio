@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      region text NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') PARTITION BY LIST (region);
+  CREATE TABLE public.logs_2025_jp PARTITION OF public.logs_2025 FOR VALUES IN ('jp');
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      region text NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') PARTITION BY LIST (region);
+  CREATE TABLE public.logs_2025_jp PARTITION OF public.logs_2025 FOR VALUES IN ('jp');
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+plan: ""

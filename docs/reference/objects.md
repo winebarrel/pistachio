@@ -197,6 +197,12 @@ Recreating an index drops its comment, so a definition change writes the comment
 
 A comment on a constraint, a trigger or a policy is not managed, and the index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE` constraint owns belongs to the constraint. A `COMMENT ON INDEX` naming one of those, or an index no schema file declares, is dropped without a warning. `pg_dump` writes such lines and they are lost on the way in.
 
+## Indexes on a partitioned table
+
+`pg_get_indexdef` writes `ON ONLY` for every index on a partitioned table, so `ONLY` is ignored when two definitions are compared. It matters only to `CREATE INDEX`: without it PostgreSQL also creates an index on each partition and attaches it.
+
+An index attached to the parent's is dropped with it, and PostgreSQL rejects a `DROP INDEX` on one, so pistachio never emits that statement.
+
 ## Constraint and index naming
 
 !!! info

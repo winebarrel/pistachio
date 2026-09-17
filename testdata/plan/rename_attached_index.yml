@@ -1,0 +1,19 @@
+# An attached index cannot be dropped, but it can be renamed.
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_at_idx ON ONLY public.logs USING btree (at);
+  -- pista:renamed-from public.logs_2025_at_idx
+  CREATE INDEX logs_2025_at ON public.logs_2025 USING btree (at);
+plan: |
+  ALTER INDEX public.logs_2025_at_idx RENAME TO logs_2025_at;
