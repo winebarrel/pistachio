@@ -133,6 +133,19 @@ func TestRoutines(t *testing.T) {
 		assert.Equal(t, 0, routines.Len())
 	})
 
+	// The constructors of a range type are part of the type. A function written
+	// under the same name is still read.
+	t.Run("range type constructors are left out", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TYPE public.floatrange AS RANGE (subtype = double precision);
+			CREATE FUNCTION public.floatrange(text) RETURNS public.floatrange
+			    LANGUAGE sql AS $$ SELECT public.floatrange(0, 1) $$;
+		`)
+		routines, err := newCatalog(t).Routines(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"public.floatrange(text)"}, routines.CollectKeys())
+	})
+
 	t.Run("other schemas are left out", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE SCHEMA other;

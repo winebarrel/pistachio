@@ -115,7 +115,7 @@ The following are not managed. Both sides of the diff leave them out, so `dump` 
 
 - aggregates and window functions
 - a routine whose body is written in the SQL-standard `BEGIN ATOMIC` form. Such a body records real dependencies on the tables it reads, so it cannot be created ahead of them
-- a routine an extension owns
+- a routine an extension owns, and the constructors of a range type
 - a routine carrying an option pistachio does not read, `SUPPORT` and `TRANSFORM FOR TYPE` among them
 - renaming, via `-- pista:renamed-from`
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* `--manage-routine` leaves out the constructor functions of a range type. `dump` wrote them, and `plan` proposed dropping them, which PostgreSQL refuses.
+
 ## [1.56.0] - 2026-09-17
 
 * Compare an index element's operator class and collation, an exclusion constraint's elements too, the way PostgreSQL writes them: a name in the search_path without its schema, an option value quoted, `siglen='32'`. A file that wrote either the other way re-created the index on every plan.

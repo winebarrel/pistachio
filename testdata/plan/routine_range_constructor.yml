@@ -1,0 +1,17 @@
+# The constructors of a range type cannot be dropped on their own, so a desired
+# schema that does not write them plans no DROP FUNCTION.
+manage_routine: true
+init: |
+  CREATE TYPE public.floatrange AS RANGE (subtype = double precision);
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      r public.floatrange,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      r public.floatrange,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+plan: ""
