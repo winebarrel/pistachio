@@ -148,6 +148,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | listmonk | listmonk | [knadh/listmonk](https://github.com/knadh/listmonk) |
 | dhis2 | dhis2 | [dhis2/dhis2-core](https://github.com/dhis2/dhis2-core) |
 | coder | coder | [coder/coder](https://github.com/coder/coder) |
+| boundary | boundary | [hashicorp/boundary](https://github.com/hashicorp/boundary) |
 
 ## Coverage
 
@@ -164,7 +165,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - joomla and harbor 2026-09-01 on 16.13.
 - bigbluebutton and listmonk 2026-09-11 on 16.13.
 - dhis2 2026-09-15 on 15.18.
-- coder 2026-09-17 on 15.18.
+- coder and boundary 2026-09-17 on 15.18.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -247,11 +248,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | listmonk | 16 | 126 | 65 | 19 | 25 | 3 | 14 | 0 | 0 | 0 |
 | dhis2 | 473 | 2,648 | 955 | 989 | 925 | 0 | 0 | 1 | 0 | 0 |
 | coder | 116 | 1,173 | 292 | 153 | 217 | 11 | 62 | 1 | 30 | 30 |
-| **Total** | **6,438** | **53,676** | **19,409** | **8,327** | **11,284** | **2,060** | **147** | **423** | **620** | **847** |
+| boundary | 293 | 1,530 | 562 | 387 | 685 | 62 | 36 | 0 | 741 | 225 |
+| **Total** | **6,731** | **55,206** | **19,971** | **8,714** | **11,969** | **2,122** | **183** | **423** | **1,361** | **1,072** |
 
 ### Size
 
-The 58 dumps come to about 178,000 lines of SQL. chado is 43,700 of them, the
+The 59 dumps come to about 190,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still more than a third
 of the constraints, a third of the indexes, over a quarter of the columns and
 foreign keys, and more than a fifth of the tables; dhis2, openolat, musicbrainz,
@@ -284,7 +286,8 @@ always reach.
 - **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
   `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse).
 - **Exclusion constraints and unlogged tables**: demodb, which needs
-  `btree_gist`, and bigbluebutton, where every one of the 54 tables is unlogged.
+  `btree_gist`, boundary, whose 19 exclusion constraints need it too, and
+  bigbluebutton, where every one of the 54 tables is unlogged.
 - **Stored generated columns**: bigbluebutton's 17, three of them over a
   function of its own that calls `unaccent`.
 - **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb,
@@ -292,6 +295,8 @@ always reach.
   plus icinga_director, whose 20 enums are more than any other sample but coder
   and whose one domain carries two anonymous CHECKs, guacamole's 5 enums,
   listmonk's 14 over 16 tables, and coder's 61, which 73 columns are typed by.
+  boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
+  between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
   and sourcegraph, chado, and coder 2 each.
 - **tsvector columns**: dvdrental, pagila.
@@ -334,24 +339,26 @@ always reach.
   2,054 partitions, all of which live in schemas of their own.
 - **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
   sample that does.
-- **Triggers**: gitlab's 388, more than any other sample, one of them held in
-  `ENABLE ALWAYS` state; kea's 81 outnumber its 64 tables; coder's 30,
+- **Triggers**: boundary's 741, more than any other sample, spread over 182
+  of its 293 tables, 7 of them constraint triggers; gitlab's 388, one of them
+  held in `ENABLE ALWAYS` state; kea's 81 outnumber its 64 tables; coder's 30,
   bigbluebutton's 25, and ledgersmb's 11 come next.
 
 ### Routines
 
-Routines are concentrated the same way. Twenty-three of the 58 samples declare
-one at all, and gitlab's 337, kea's and musicbrainz's 130 each, and chado's 94
-are 691 of the 847. Two thirds of them, 573, return `trigger`, though not
-every one of those has a trigger to call it: musicbrainz's 89 do not, since its
-loader concatenates a file list that leaves triggers out.
+Routines are concentrated the same way. Twenty-four of the 59 samples declare
+one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
+and chado's 94 are 916 of the 1,072. Seven in ten of them, 760, return
+`trigger`, though not every one of those has a trigger to call it: musicbrainz's
+89 do not, since its loader concatenates a file list that leaves triggers out.
 
-768 are written in plpgsql and 79 in sql. sourcegraph declares the only
+976 are written in plpgsql and 96 in sql. sourcegraph declares the only
 procedure any sample has, and inaturalist the only aggregate, which
-`--manage-routine` does not read and so is in neither count. Only chado and kea
-overload a name, 11 of them and 3, though danbooru's three, all sql, include a
-`lower(text[])` that shadows a built-in. Only sourcegraph, ledgersmb, gitlab,
-and coder comment a routine, 13 between them.
+`--manage-routine` does not read and so is in neither count. Only chado, kea,
+and boundary overload a name, 11 of them, 3, and 1, though danbooru's three, all
+sql, include a `lower(text[])` that shadows a built-in. Only sourcegraph,
+ledgersmb, gitlab, coder, and boundary comment a routine, 137 between them, 124
+of those boundary's.
 
 ## Load-time adjustments
 
@@ -368,6 +375,14 @@ strip only what is irrelevant to a schema round trip:
   stripped. The file also installs `unaccent`, which a function behind three
   of its stored generated columns calls; it is contrib, so the official image
   already has it.
+- **boundary**: the schema ships as migrations only, 290 files that Boundary
+  replays in order: the two base files, then one directory per schema version
+  in numeric order, with the files in each in name order. The repository
+  tarball is fetched once and only the migrations directory is extracted,
+  since fetching 290 files one at a time is slow. None of the files names a
+  schema, so `boundary` is created up front and `search_path` places
+  everything, the `citext`, `pgcrypto`, and `btree_gist` extensions included;
+  all three are contrib.
 - **camunda**: the schema ships as one file per engine component and none of
   them create a schema, so `camunda` is created up front and the files are
   concatenated in dependency order (process engine, history, identity, then the

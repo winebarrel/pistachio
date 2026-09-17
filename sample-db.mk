@@ -75,6 +75,7 @@ bigbluebutton|sample-db-bigbluebutton|URL=https://raw.githubusercontent.com/bigb
 listmonk|sample-db-url-schema|URL=https://raw.githubusercontent.com/knadh/listmonk/594b74056dd8a0d3a7621a32898ee38bfbe10e96/schema.sql SCHEMA=listmonk CLIENT_MIN_MESSAGES=warning|listmonk
 dhis2|sample-db-dhis2|URL=https://raw.githubusercontent.com/dhis2/dhis2-core/5d2dbdef40e91c1c613fc50a8132158dd5683b7f/dhis-2/dhis-support/dhis-support-db-migration/src/main/resources/org/hisp/dhis/db/base/dhis2_base_schema.sql SCHEMA=dhis2|dhis2
 coder|sample-db-url-schema|URL=https://raw.githubusercontent.com/coder/coder/263f2c207eca19c2e42a71f439782c15ebeb8f07/coderd/database/dump.sql SCHEMA=coder CHECK_FUNCTION_BODIES=off|coder
+boundary|sample-db-boundary||boundary
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -434,6 +435,27 @@ sample-db-dhis2:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | PGOPTIONS='-c search_path=$(SCHEMA),public' $(PSQL)
+
+# HashiCorp Boundary (hashicorp/boundary, BUSL-1.1). The schema ships as
+# migrations only, 290 files that Boundary replays in order: the two base files
+# first, then one directory per schema version, in numeric order, with the files
+# in each in name order. Fetching them one at a time is slow, so the repository
+# tarball is fetched once and only the migrations directory is extracted. None
+# of the files names a schema, so `boundary` is created up front and search_path
+# places everything, the extensions citext, pgcrypto, and btree_gist included;
+# all three are contrib.
+BOUNDARY_SHA = 01cd5c86e8602aa9babc54b07e51ef7b8445e0b6
+
+.PHONY: sample-db-boundary
+sample-db-boundary:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS boundary'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/hashicorp/boundary/tar.gz/$(BOUNDARY_SHA) \
+	  | tar xz -C "$$dir" --strip-components=5 boundary-$(BOUNDARY_SHA)/internal/db/schema/migrations && \
+	cd "$$dir" && \
+	{ ls base/postgres/*.up.sql; ls oss/postgres/*/*.up.sql | sort -t/ -k3,3n -k4,4; } \
+	  | while read -r f; do cat "$$f"; echo; done \
+	  | PGOPTIONS='-c search_path=boundary -c client_min_messages=warning' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
