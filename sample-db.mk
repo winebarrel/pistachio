@@ -617,6 +617,17 @@ sample-db-mattermost:
 # sample-db-harbor does with golang-migrate's; it is not part of Lemmy's schema.
 # The migrations drop what they are about to create with IF EXISTS throughout,
 # so client_min_messages is raised to warning.
+#
+# Twenty-two of them turn a table's indexes off around a bulk update with
+# `UPDATE pg_index ... WHERE indrelid = (SELECT oid FROM pg_class WHERE relname
+# = '<table>')`, which names no schema. Lemmy owns its database, so upstream
+# that subquery returns one row; here every other sample's schema is still
+# there, and `comment` alone matches several, which fails the load with "more
+# than one row returned by a subquery". The sed scopes those lookups to the
+# lemmy schema, which is what the migration means. It matches only the bare
+# `relname =` predicates, so the `relname LIKE '%ccnew%'` inside
+# drop_ccnew_indexes, the one that sits in a function body, is left as upstream
+# wrote it.
 LEMMY_SHA = 646f5a01558d5a38859558426ce54b06185b92e2
 LEMMY_REPLACEABLE = crates/diesel_utils/replaceable_schema
 
@@ -632,7 +643,8 @@ sample-db-lemmy:
 	{ for f in migrations/*/up.sql; do cat "$$f"; printf '\n;\n'; done; \
 	  echo 'CREATE SCHEMA r;'; \
 	  cat $(LEMMY_REPLACEABLE)/utils.sql $(LEMMY_REPLACEABLE)/triggers.sql; } \
-	  | sed -E 's/^public\.//; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | sed -E "s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g; \
+	            s/^([[:space:]]*)relname = /\1relnamespace = 'lemmy'::regnamespace AND relname = /" \
 	  | PGOPTIONS='-c search_path=lemmy -c client_min_messages=warning' $(PSQL)
 	$(PSQL) -c 'SET search_path = lemmy; DROP TABLE __diesel_schema_migrations'
 
@@ -658,6 +670,19 @@ sample-db-lemmy:
 # so check_function_bodies is turned off as it is for coder, and the migrations
 # drop what they are about to create with IF EXISTS throughout, so
 # client_min_messages is raised to warning.
+#
+# Four of the catalog lookups assume Windmill owns the database, and the sed
+# scopes all four to the schema the sample loads into. Two read
+# information_schema.columns with no schema filter, one of them to build
+# queue_view out of whichever columns it finds, which picks up another sample's
+# `queue` and fails the load; they get table_schema = current_schema(). Two more
+# name schemaname = 'public' when they look through pg_policies, which finds
+# nothing here and silently skips what they do: one creates admin_policy where
+# it is missing, the other rewrites the policies that read a session GUC. That
+# second one is why the rewrite matters rather than just being tidy -- left
+# alone, the sample would carry 366 policies with the wrong expressions in them.
+# All four sites sit in DO blocks or in a pg_temp function, so no definition the
+# round trip reads is touched.
 WINDMILL_SHA = 5371519f0f5ce7750982dcdb374dca72115902e7
 
 .PHONY: sample-db-windmill
@@ -669,7 +694,9 @@ sample-db-windmill:
 	  | tar xz -C "$$dir" --strip-components=3 windmill-$(WINDMILL_SHA)/backend/migrations && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
-	  | sed -E 's/^public\.//; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | sed -E "s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g; \
+	            s/WHERE table_name = /WHERE table_schema = current_schema() AND table_name = /; \
+	            s/schemaname = 'public'/schemaname = current_schema()/" \
 	  | PGOPTIONS='-c search_path=windmill,extensions -c client_min_messages=warning -c check_function_bodies=off' $(PSQL)
 	$(PSQL) -c 'SET search_path = windmill; DROP TABLE _sqlx_migrations'
 

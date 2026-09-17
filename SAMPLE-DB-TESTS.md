@@ -587,7 +587,12 @@ strip only what is irrelevant to a schema round trip:
   stripped. One of them puts a trigger on `__diesel_schema_migrations`, Diesel's
   bookkeeping table, which the CLI creates rather than a migration, so a
   stand-in is created before the migrations run and dropped once they have, the
-  way harbor's is.
+  way harbor's is. Twenty-two turn a table's indexes off around a bulk update
+  and find the table with `SELECT oid FROM pg_class WHERE relname = '<table>'`,
+  naming no schema: upstream Lemmy owns its database, but here the samples
+  before it are still there and `comment` alone matches several, so those
+  lookups are scoped to the `lemmy` schema. The one `relname LIKE` inside a
+  function body is left alone.
 - **mattermost**: the schema ships as golang-migrate migrations, 227 `.up.sql`
   files replayed in name order. The repository tarball is fetched once and only
   the migrations directory is extracted, since fetching 227 files one at a time
@@ -644,7 +649,14 @@ strip only what is irrelevant to a schema round trip:
   policies to load. One migration reads `_sqlx_migrations`, sqlx's own
   bookkeeping table, so a stand-in is created and dropped around the run the way
   harbor's is, and several functions are declared before the tables they read,
-  so `check_function_bodies` is turned off as it is for coder.
+  so `check_function_bodies` is turned off as it is for coder. Four catalog
+  lookups assume Windmill owns the database and are scoped to the sample's
+  schema: two read `information_schema.columns` with no schema filter, one of
+  them to build `queue_view` out of whichever columns it finds, which picks up
+  another sample's `queue`; two name `schemaname = 'public'` against
+  `pg_policies`, which finds nothing here, and one of those is the migration
+  that rewrites every policy reading a session GUC, so without the rewrite the
+  sample would carry its 366 policies with the wrong expressions in them.
 - **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.
