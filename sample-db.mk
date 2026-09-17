@@ -16,7 +16,13 @@
 # Each SHA is the tip of the upstream default branch as of the pin, except
 # synapse (develop), rt (stable), and znuny (dev), which ship their schema
 # elsewhere.
+#
+# boundary comes first because its migrations assume the database is Boundary's
+# alone; sample-db-boundary says why. Every loader runs in list order after one
+# clean-schema, in both `schema` and `test-samples`, so first is the one place
+# no other sample's schema is there yet.
 define SAMPLES
+boundary|sample-db-boundary||boundary
 chinook|sample-db|SQL_FILE=chinook.sql|
 dvdrental|sample-db|SQL_FILE=dvdrental.sql|
 happiness_index|sample-db|SQL_FILE=happiness_index.sql|
@@ -75,7 +81,6 @@ bigbluebutton|sample-db-bigbluebutton|URL=https://raw.githubusercontent.com/bigb
 listmonk|sample-db-url-schema|URL=https://raw.githubusercontent.com/knadh/listmonk/594b74056dd8a0d3a7621a32898ee38bfbe10e96/schema.sql SCHEMA=listmonk CLIENT_MIN_MESSAGES=warning|listmonk
 dhis2|sample-db-dhis2|URL=https://raw.githubusercontent.com/dhis2/dhis2-core/5d2dbdef40e91c1c613fc50a8132158dd5683b7f/dhis-2/dhis-support/dhis-support-db-migration/src/main/resources/org/hisp/dhis/db/base/dhis2_base_schema.sql SCHEMA=dhis2|dhis2
 coder|sample-db-url-schema|URL=https://raw.githubusercontent.com/coder/coder/263f2c207eca19c2e42a71f439782c15ebeb8f07/coderd/database/dump.sql SCHEMA=coder CHECK_FUNCTION_BODIES=off|coder
-boundary|sample-db-boundary||boundary
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -444,6 +449,14 @@ sample-db-dhis2:
 # of the files names a schema, so `boundary` is created up front and search_path
 # places everything, the extensions citext, pgcrypto, and btree_gist included;
 # all three are contrib.
+#
+# The migrations assume the database holds Boundary and nothing else. One runs a
+# bare `analyze;` and another renames every unique constraint and foreign key it
+# finds in pg_constraint, whichever schema the table is in. With another
+# sample's schema already loaded, both reach it and stop the load, the ANALYZE on
+# musicbrainz's expression indexes, whose unaccent dictionary reset-db has
+# dropped, and the rename on a table search_path cannot see. So boundary is the
+# first sample in SAMPLES.
 BOUNDARY_SHA = 01cd5c86e8602aa9babc54b07e51ef7b8445e0b6
 
 .PHONY: sample-db-boundary

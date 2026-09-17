@@ -90,6 +90,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 
 | Sample | Schemas | Source |
 |---|---|---|
+| boundary | boundary | [hashicorp/boundary](https://github.com/hashicorp/boundary) |
 | chinook | public | [neondatabase/postgres-sample-dbs](https://github.com/neondatabase/postgres-sample-dbs) |
 | dvdrental | public | [neondatabase/postgres-sample-dbs](https://github.com/neondatabase/postgres-sample-dbs) |
 | happiness_index | public | [neondatabase/postgres-sample-dbs](https://github.com/neondatabase/postgres-sample-dbs) |
@@ -148,7 +149,6 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | listmonk | listmonk | [knadh/listmonk](https://github.com/knadh/listmonk) |
 | dhis2 | dhis2 | [dhis2/dhis2-core](https://github.com/dhis2/dhis2-core) |
 | coder | coder | [coder/coder](https://github.com/coder/coder) |
-| boundary | boundary | [hashicorp/boundary](https://github.com/hashicorp/boundary) |
 
 ## Coverage
 
@@ -190,6 +190,7 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 
 | Sample | Tables | Columns | Indexes | FKs | Constraints | Views | Types | Sequences | Triggers | Routines |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| boundary | 293 | 1,530 | 562 | 387 | 685 | 62 | 36 | 0 | 741 | 225 |
 | chinook | 11 | 64 | 21 | 11 | 11 | 0 | 0 | 0 | 0 | 0 |
 | dvdrental | 15 | 86 | 32 | 18 | 16 | 7 | 2 | 13 | 15 | 9 |
 | happiness_index | 1 | 9 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
@@ -248,7 +249,6 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | listmonk | 16 | 126 | 65 | 19 | 25 | 3 | 14 | 0 | 0 | 0 |
 | dhis2 | 473 | 2,648 | 955 | 989 | 925 | 0 | 0 | 1 | 0 | 0 |
 | coder | 116 | 1,173 | 292 | 153 | 217 | 11 | 62 | 1 | 30 | 30 |
-| boundary | 293 | 1,530 | 562 | 387 | 685 | 62 | 36 | 0 | 741 | 225 |
 | **Total** | **6,731** | **55,206** | **19,971** | **8,714** | **11,969** | **2,122** | **183** | **423** | **1,361** | **1,072** |
 
 ### Size
@@ -382,7 +382,12 @@ strip only what is irrelevant to a schema round trip:
   since fetching 290 files one at a time is slow. None of the files names a
   schema, so `boundary` is created up front and `search_path` places
   everything, the `citext`, `pgcrypto`, and `btree_gist` extensions included;
-  all three are contrib.
+  all three are contrib. The migrations also assume the database holds
+  Boundary alone: one runs a bare `analyze;` and another renames every unique
+  constraint and foreign key in `pg_constraint`, whichever schema its table is
+  in. Either stops the load when another sample's schema is already there, so
+  boundary is the first sample in `SAMPLES`, loaded right after
+  `clean-schema`.
 - **camunda**: the schema ships as one file per engine component and none of
   them create a schema, so `camunda` is created up front and the files are
   concatenated in dependency order (process engine, history, identity, then the
