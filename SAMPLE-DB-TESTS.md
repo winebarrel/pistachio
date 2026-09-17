@@ -155,6 +155,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | lago | lago | [getlago/lago-api](https://github.com/getlago/lago-api) |
 | calcom | calcom | [calcom/cal.diy](https://github.com/calcom/cal.diy) |
 | triggerdev | triggerdev | [triggerdotdev/trigger.dev](https://github.com/triggerdotdev/trigger.dev) |
+| mattermost | mattermost | [mattermost/mattermost](https://github.com/mattermost/mattermost) |
 
 ## Coverage
 
@@ -173,6 +174,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - dhis2 2026-09-15 on 15.18.
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
+- mattermost 2026-09-17 on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -262,11 +264,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | lago | 143 | 1,738 | 801 | 363 | 177 | 34 | 45 | 0 | 2 | 2 |
 | calcom | 102 | 1,092 | 394 | 179 | 104 | 2 | 46 | 0 | 7 | 9 |
 | triggerdev | 85 | 1,123 | 289 | 135 | 81 | 0 | 48 | 0 | 0 | 0 |
-| **Total** | **7,316** | **61,618** | **22,147** | **9,639** | **12,630** | **2,164** | **398** | **427** | **1,406** | **1,160** |
+| mattermost | 86 | 740 | 279 | 3 | 104 | 6 | 7 | 0 | 0 | 0 |
+| **Total** | **7,402** | **62,358** | **22,426** | **9,642** | **12,734** | **2,170** | **405** | **427** | **1,406** | **1,160** |
 
 ### Size
 
-The 65 dumps come to about 209,000 lines of SQL. chado is 43,700 of them, the
+The 66 dumps come to about 210,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -292,9 +295,14 @@ always reach.
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
   64, only one of them partial and none over an expression; lago's 801 over 143,
   123 of them partial and 16 gin.
-- **Unique indexes over an expression and a gin index over `to_tsvector`**: rt.
+- **Unique indexes over an expression and a gin index over `to_tsvector`**: rt,
+  plus mattermost's 11, six of them over the concatenation of two to five
+  columns.
 - **gist indexes naming an operator class**: two that name `inet_ops` and one
   over four columns, which needs `btree_gist` (osm).
+- **btree and gin indexes naming an operator class**: five of mattermost's nine
+  btree indexes over `lower()` name `text_pattern_ops`, and its two gin indexes
+  over a `->` expression name `jsonb_path_ops`.
 - **gist indexes over a function the schema defines itself**: chado's three name
   `boxrange`, one of them partial and declared from another schema.
 - **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
@@ -312,7 +320,8 @@ always reach.
   anonymous CHECKs, guacamole's 5 enums, listmonk's 14 over 16 tables, coder's
   61, which 73 columns are typed by, hatchet's 57, glific's 19, lago's 45, and
   calcom's 46 and triggerdev's 48, five columns between them typed as an array
-  of one.
+  of one, and mattermost's 7, which type 9 columns and one of which a partial
+  index predicate casts to.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -352,8 +361,13 @@ always reach.
 - **A schema that is nearly all keys**: dhis2, where 461 primary keys and 464
   unique constraints back all but 30 of its 955 indexes, it declares no CHECK at
   all, and its 989 foreign keys are more than any sample but gitlab.
+- **A schema that barely keys at all**: mattermost backs its 86 tables with 85
+  primary keys and 19 unique constraints, declares no CHECK, and leaves all but
+  3 of the references between them to the application. mediawiki, temporal,
+  imdb, dolphinscheduler, nightingale, and joomla declare no foreign key at all.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
-  are all materialized, and lago.
+  are all materialized, lago, and mattermost, whose six are all materialized and
+  one of which carries an index.
 - **Views at scale**: chado's 1,864 are nearly ten times every other sample put
   together, and 1,832 of them are the Sequence Ontology views in its `so`
   schema, each selecting from tables in `chado`; bigbluebutton's 86 over 54
@@ -378,7 +392,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Twenty-nine of the 64 samples declare
+Routines are concentrated the same way. Twenty-nine of the 66 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
 and chado's 94 are 916 of the 1,160. Seven in ten of them, 805, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
@@ -526,6 +540,15 @@ strip only what is irrelevant to a schema round trip:
   in `search_path` those could reach another sample's objects in `make schema`.
   It also installs `pg_partman`, which is not contrib, into a schema of its own
   with one template table, so every statement that names partman is dropped.
+- **mattermost**: the schema ships as golang-migrate migrations, 227 `.up.sql`
+  files replayed in name order. The repository tarball is fetched once and only
+  the migrations directory is extracted, since fetching 227 files one at a time
+  is slow. None of the files names a schema, and the guards they write against
+  `information_schema` all say `current_schema()`, so `mattermost` is created up
+  front and `search_path` places everything. Eight of the files end without a
+  semicolon, so each is followed by a newline and one. Most of them also add and
+  drop with `IF NOT EXISTS` and `IF EXISTS`, so `client_min_messages` is raised
+  to `warning`.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
   **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,
