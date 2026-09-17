@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Compare an index column's operator class and collation the way PostgreSQL writes them. The catalog writes a name on the search_path without its schema, and quotes an operator class option value that does not read as an identifier, `siglen='32'`, where a file writes `siglen=32`. Either spelling re-created the index on every plan. An exclusion constraint's elements take the same comparison.
+* Compare an index element's operator class and collation, an exclusion constraint's included, the way PostgreSQL writes them: a name in the search_path without its schema, an option value quoted, `siglen='32'`. A file that wrote either the other way re-created the index on every plan.
 
 ## [1.55.0] - 2026-09-16
 
