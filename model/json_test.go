@@ -311,7 +311,8 @@ func TestIndex_MarshalJSON(t *testing.T) {
 		"definition": "CREATE INDEX idx_items_name ON public.items USING btree (name)",
 		"table_space": null,
 		"concurrently": true,
-		"comment": null
+		"comment": null,
+		"attached": false
 	}`, marshalJSON(t, idx))
 }
 

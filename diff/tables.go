@@ -1379,6 +1379,10 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consume
 			// under the ADD CONSTRAINT.
 			continue
 		}
+		if currentIdx.Attached {
+			// Dropped with the parent's index, and a DROP of its own fails.
+			continue
+		}
 		if !ok || !sameDef[name] {
 			// Use CONCURRENTLY when the desired index (when it exists and is
 			// being changed) has the per-index directive. For pure drops the
@@ -1738,6 +1742,9 @@ func normalizeIndexStmt(is *pg_query.IndexStmt) {
 	}
 	if is.Relation != nil {
 		is.Relation.Schemaname = ""
+		// pg_get_indexdef writes ONLY for every index on a partitioned table,
+		// however it was created, and never for one on another table.
+		is.Relation.Inh = true
 	}
 	for _, p := range is.IndexParams {
 		if ie := p.GetIndexElem(); ie != nil {

@@ -10,6 +10,10 @@ type Index struct {
 	TableSpace   *string `json:"table_space"`
 	Concurrently bool    `json:"concurrently"`
 	Comment      *string `json:"comment"`
+	// Attached marks an index attached to an index on the partitioned parent.
+	// PostgreSQL rejects a DROP of one and drops it with the parent's. Only the
+	// catalog sets it.
+	Attached bool `json:"attached"`
 }
 
 func (idx Index) FQTN() string {

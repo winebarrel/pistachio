@@ -1,0 +1,25 @@
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+
+  -- public.logs_2025
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+applied_sql: |
+  DROP INDEX public.logs_at_idx;

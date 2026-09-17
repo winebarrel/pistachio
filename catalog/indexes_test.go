@@ -66,6 +66,27 @@ func TestListIndexes(t *testing.T) {
 		assert.Nil(t, bare.Comment)
 	})
 
+	t.Run("attached index", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.logs (
+				id integer NOT NULL,
+				at date NOT NULL
+			) PARTITION BY RANGE (at);
+			CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+			CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+			CREATE INDEX logs_2025_id_idx ON public.logs_2025 USING btree (id);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		assert.False(t, tables.Get("public.logs").Indexes.Get("logs_at_idx").Attached)
+		child := tables.Get("public.logs_2025").Indexes
+		assert.True(t, child.Get("logs_2025_at_idx").Attached)
+		assert.False(t, child.Get("logs_2025_id_idx").Attached)
+	})
+
 	t.Run("unique index", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.users (

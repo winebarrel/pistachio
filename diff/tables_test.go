@@ -1004,6 +1004,21 @@ func TestDiffIndexes_drop(t *testing.T) {
 	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
 }
 
+func TestDiffIndexes_dropAttached(t *testing.T) {
+	// Removed from desired or changed, an attached index is left to its
+	// parent's index either way.
+	current := orderedmap.New[string, *model.Index]()
+	current.Set("logs_2025_at_idx", &model.Index{Schema: "public", Name: "logs_2025_at_idx", Definition: "CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at)", Attached: true})
+	current.Set("logs_2025_id_idx", &model.Index{Schema: "public", Name: "logs_2025_id_idx", Definition: "CREATE INDEX logs_2025_id_idx ON public.logs_2025 USING btree (id)", Attached: true})
+	desired := orderedmap.New[string, *model.Index]()
+	desired.Set("logs_2025_id_idx", &model.Index{Schema: "public", Name: "logs_2025_id_idx", Definition: "CREATE INDEX logs_2025_id_idx ON public.logs_2025 USING btree (id, at)"})
+
+	idxResult, err := diffIndexes(current, desired, nil, denyAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"CREATE INDEX logs_2025_id_idx ON public.logs_2025 USING btree (id, at);"}, idxResult.Stmts)
+	assert.Empty(t, idxResult.DisallowedDropStmts)
+}
+
 func TestDiffIndexes_drop_denied(t *testing.T) {
 	current := orderedmap.New[string, *model.Index]()
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
@@ -2806,6 +2821,13 @@ func TestEqualIndexDef_schemaVsNoSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON users USING btree (id)",
+	))
+}
+
+func TestEqualIndexDef_only(t *testing.T) {
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON ONLY public.logs USING btree (at)",
+		"CREATE INDEX idx ON logs USING btree (at)",
 	))
 }
 

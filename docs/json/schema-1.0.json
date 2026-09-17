@@ -667,6 +667,9 @@
               "type": "null"
             }
           ]
+        },
+        "attached": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -680,7 +683,8 @@
         "definition",
         "table_space",
         "concurrently",
-        "comment"
+        "comment",
+        "attached"
       ]
     },
     "Policy": {
