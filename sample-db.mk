@@ -90,6 +90,8 @@ triggerdev|sample-db-prisma|REPO=triggerdotdev/trigger.dev SHA=2d03fee2e3ff36812
 mattermost|sample-db-mattermost||mattermost
 lemmy|sample-db-lemmy||lemmy,r,utils
 windmill|sample-db-windmill||windmill
+plausible|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/plausible/analytics/30abd272b5114ba1f3c2c8bd146b86a4d2b7b984/priv/repo/structure.sql SCHEMA=plausible|plausible
+feedbin|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/feedbin/feedbin/eabfb10cc5975ebd755781ce33c0043feee6af31/db/structure.sql SCHEMA=feedbin|feedbin
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -337,7 +339,8 @@ sample-db-camunda:
 	done | PGOPTIONS='-c search_path=camunda' $(PSQL)
 
 # A pg_dump-style dump loaded into a schema of its own. discourse, osm,
-# danbooru, and inaturalist ship their schema as Rails' db/structure.sql, which
+# danbooru, inaturalist, and feedbin ship their schema as Rails'
+# db/structure.sql, which
 # belongs in a schema of its own like the sample-db-url-schema dumps but is
 # pg_dump output: it empties search_path and qualifies every object it creates
 # with `public`, so neither PGOPTIONS nor the hive-style search_path rewrite
@@ -355,16 +358,19 @@ sample-db-camunda:
 # inserts into schema_migrations, which is data and would land in the wrong
 # schema anyway, so everything from that line on is dropped.
 #
-# glific's structure.sql is Ecto's rather than Rails', the same pg_dump output
-# without that SET line, so its migration versions stay and, with the qualifier
-# stripped, go into glific's own schema_migrations. They are rows, not schema.
+# glific's and plausible's structure.sql is Ecto's rather than Rails', the same
+# pg_dump output without that SET line, so their migration versions stay and,
+# with the qualifier stripped, go into their own schema_migrations. They are
+# rows, not schema.
 #
 # discourse needs pgvector and osm and inaturalist need PostGIS, neither of
 # which the official postgres image ships; compose.yaml and the samples CI job
 # install both. See SAMPLE-DB-TESTS.md. danbooru installs five extensions of
-# its own, btree_gin, fuzzystrmatch, pg_trgm, pgcrypto, and pgstattuple, and
-# inaturalist one, uuid-ossp, which 16 of its columns default through; those
-# are all contrib and the official image already has them.
+# its own, btree_gin, fuzzystrmatch, pg_trgm, pgcrypto, and pgstattuple,
+# inaturalist one, uuid-ossp, which 16 of its columns default through, feedbin
+# three, hstore, pg_stat_statements, and uuid-ossp, and plausible one, citext,
+# which three of its columns are typed by; those are all contrib and the
+# official image already has them.
 .PHONY: sample-db-pgdump-schema
 sample-db-pgdump-schema:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'

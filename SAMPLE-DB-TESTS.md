@@ -158,6 +158,8 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | mattermost | mattermost | [mattermost/mattermost](https://github.com/mattermost/mattermost) |
 | lemmy | lemmy, r, utils | [LemmyNet/lemmy](https://github.com/LemmyNet/lemmy) |
 | windmill | windmill | [windmill-labs/windmill](https://github.com/windmill-labs/windmill) |
+| plausible | plausible | [plausible/analytics](https://github.com/plausible/analytics) |
+| feedbin | feedbin | [feedbin/feedbin](https://github.com/feedbin/feedbin) |
 
 ## Coverage
 
@@ -176,7 +178,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - dhis2 2026-09-15 on 15.18.
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
-- mattermost, lemmy, and windmill 2026-09-17 on 16.13.
+- mattermost, lemmy, windmill, plausible, and feedbin 2026-09-17 on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -272,11 +274,13 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | mattermost | 86 | 740 | 279 | 3 | 104 | 6 | 7 | 0 | 0 | 0 |
 | lemmy | 58 | 573 | 290 | 113 | 101 | 0 | 16 | 1 | 66 | 74 |
 | windmill | 173 | 1,511 | 392 | 105 | 210 | 3 | 33 | 4 | 26 | 24 |
-| **Total** | **7,633** | **64,442** | **23,108** | **9,860** | **13,045** | **2,173** | **454** | **432** | **1,498** | **1,258** |
+| plausible | 42 | 294 | 81 | 40 | 47 | 0 | 3 | 0 | 1 | 1 |
+| feedbin | 44 | 395 | 161 | 8 | 43 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **7,719** | **65,131** | **23,350** | **9,908** | **13,135** | **2,173** | **457** | **432** | **1,499** | **1,259** |
 
 ### Size
 
-The 68 dumps come to about 219,000 lines of SQL. chado is 43,700 of them, the
+The 70 dumps come to about 220,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -301,7 +305,8 @@ always reach.
   table, denser than any other sample, 55 of them gin, 29 of those over an
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
   64, only one of them partial and none over an expression; lago's 801 over 143,
-  123 of them partial and 16 gin.
+  123 of them partial and 16 gin; feedbin's 161 over 44, every one of them
+  btree, only 7 partial and 3 over an expression.
 - **Partial indexes**: 37 of lemmy's 290 and 88 of windmill's 392, which also
   has 31 gin indexes.
 - **Unique indexes over an expression and a gin index over `to_tsvector`**: rt,
@@ -330,8 +335,8 @@ always reach.
   61, which 73 columns are typed by, hatchet's 57, glific's 19, lago's 45, and
   calcom's 46 and triggerdev's 48, five columns between them typed as an array
   of one, mattermost's 7, which type 9 columns and one of which a partial
-  index predicate casts to, lemmy's 16 over 24 columns, and windmill's 33 over
-  57.
+  index predicate casts to, lemmy's 16 over 24 columns, windmill's 33 over 57,
+  and plausible's 3, one of which is Oban's job state.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -340,7 +345,9 @@ always reach.
 - **A non-default collation**: musicbrainz.
 - **Columns typed by a contrib extension**: sourcegraph, with 49 `citext`
   columns, and six extensions installed at once; lemmy, whose `comment.path` is
-  an `ltree` and which installs `pg_trgm` and `pgcrypto` beside it.
+  an `ltree` and which installs `pg_trgm` and `pgcrypto` beside it; plausible,
+  with 3 more `citext` columns; and feedbin, with 2 `hstore` columns and
+  `pg_stat_statements` installed beside them.
 - **Columns typed by an extension that is not contrib**: discourse's three
   `halfvec` columns, which need pgvector, and the `geometry` columns that need
   PostGIS: osm's one `geometry(Polygon,4326)`, dhis2's one unmodified
@@ -414,13 +421,13 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-one of the 68 samples declare
+Routines are concentrated the same way. Thirty-two of the 70 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,258. Seven in ten of them, 886, return
+and chado's 94 are 916 of the 1,259. Seven in ten of them, 887, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,157 are written in plpgsql and 101 in sql. sourcegraph declares one
+1,158 are written in plpgsql and 101 in sql. sourcegraph declares one
 procedure, thingsboard three, and lemmy two, the only procedures any sample has,
 and inaturalist the only aggregate, which `--manage-routine` does not read and
 so is in neither count. Only chado, kea,
@@ -502,29 +509,34 @@ strip only what is irrelevant to a schema round trip:
   group below. It does not install PostGIS, which the one `geometry` column in
   `programstageinstance` needs, so the loader creates the extension first and
   leaves `public` in the search path for the type to resolve from.
-- **discourse**, **osm**, **danbooru**, **inaturalist**: all four ship their
-  schema as Rails' `db/structure.sql`, which belongs in a schema of its own like
-  the group below but is `pg_dump` output that empties `search_path` and
-  qualifies every object with `public`, so neither `PGOPTIONS` nor hive's
-  one-line rewrite reaches it. The line that empties `search_path` is dropped
-  and the `public.` qualifier is stripped, which leaves every name unqualified
-  for `search_path` to place. The `CREATE EXTENSION` lines say `WITH SCHEMA
-  public` without a dot, so they are untouched and the types they own still
-  resolve from `public`, which stays second in the search path. The tail of the
-  file is Rails' own `SET search_path` followed by the migration versions it
-  inserts into `schema_migrations`, which is data, so everything from that line
-  on is dropped. danbooru installs five extensions of its own, `btree_gin`,
+- **discourse**, **osm**, **danbooru**, **inaturalist**, **feedbin**: all five
+  ship their schema as Rails' `db/structure.sql`, which belongs in a schema of
+  its own like the group below but is `pg_dump` output that empties
+  `search_path` and qualifies every object with `public`, so neither
+  `PGOPTIONS` nor hive's one-line rewrite reaches it. The line that empties
+  `search_path` is dropped and the `public.` qualifier is stripped, which
+  leaves every name unqualified for `search_path` to place. The
+  `CREATE EXTENSION` lines say `WITH SCHEMA public` without a dot, so they are
+  untouched and the types they own still resolve from `public`, which stays
+  second in the search path. The tail of the file is Rails' own
+  `SET search_path` followed by the migration versions it inserts into
+  `schema_migrations`, which is data, so everything from that line on is
+  dropped. danbooru installs five extensions of its own, `btree_gin`,
   `fuzzystrmatch`, `pg_trgm`, `pgcrypto`, and `pgstattuple`, but all five are
   contrib and the official image already has them, so it needs nothing installed
   the way discourse and osm do. inaturalist needs PostGIS, as osm does, and
   `uuid-ossp`, which is contrib and which 16 of its columns default through.
+  feedbin installs three contrib extensions of its own, `hstore`,
+  `pg_stat_statements`, and `uuid-ossp`.
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
-- **glific**: the schema is Ecto's `structure.sql`, the same `pg_dump` output
-  as discourse, osm, danbooru, and inaturalist, so it loads the same way. It
-  has no `SET search_path` line before its migration versions, so those rows go
-  into glific's own `schema_migrations`. They are data, not schema.
+- **glific**, **plausible**: the schema is Ecto's `structure.sql`, the same
+  `pg_dump` output as the group above, so it loads the same way. Neither has a
+  `SET search_path` line before its migration versions, so those rows go into
+  the sample's own `schema_migrations`. They are data, not schema. plausible
+  installs `citext`, which is contrib and which three of its columns are typed
+  by.
 - **harbor**: the schema ships as one file per release, each a delta meant to
   be replayed by golang-migrate, which tracks what it has applied in a
   `schema_migrations` table of its own. One delta `ALTER TABLE`s that table
