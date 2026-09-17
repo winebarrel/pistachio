@@ -16,7 +16,13 @@
 # Each SHA is the tip of the upstream default branch as of the pin, except
 # synapse (develop), rt (stable), and znuny (dev), which ship their schema
 # elsewhere.
+#
+# boundary comes first because its migrations assume the database is Boundary's
+# alone; sample-db-boundary says why. Every loader runs in list order after one
+# clean-schema, in both `schema` and `test-samples`, so first is the one place
+# no other sample's schema is there yet.
 define SAMPLES
+boundary|sample-db-boundary||boundary
 chinook|sample-db|SQL_FILE=chinook.sql|
 dvdrental|sample-db|SQL_FILE=dvdrental.sql|
 happiness_index|sample-db|SQL_FILE=happiness_index.sql|
@@ -434,6 +440,35 @@ sample-db-dhis2:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | PGOPTIONS='-c search_path=$(SCHEMA),public' $(PSQL)
+
+# HashiCorp Boundary (hashicorp/boundary, BUSL-1.1). The schema ships as
+# migrations only, 290 files that Boundary replays in order: the two base files
+# first, then one directory per schema version, in numeric order, with the files
+# in each in name order. Fetching them one at a time is slow, so the repository
+# tarball is fetched once and only the migrations directory is extracted. None
+# of the files names a schema, so `boundary` is created up front and search_path
+# places everything, the extensions citext, pgcrypto, and btree_gist included;
+# all three are contrib.
+#
+# The migrations assume the database holds Boundary and nothing else. One runs a
+# bare `analyze;` and another renames every unique constraint and foreign key it
+# finds in pg_constraint, whichever schema the table is in. With another
+# sample's schema already loaded, both reach it and stop the load, the ANALYZE on
+# musicbrainz's expression indexes, whose unaccent dictionary reset-db has
+# dropped, and the rename on a table search_path cannot see. So boundary is the
+# first sample in SAMPLES.
+BOUNDARY_SHA = 01cd5c86e8602aa9babc54b07e51ef7b8445e0b6
+
+.PHONY: sample-db-boundary
+sample-db-boundary:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS boundary'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/hashicorp/boundary/tar.gz/$(BOUNDARY_SHA) \
+	  | tar xz -C "$$dir" --strip-components=5 boundary-$(BOUNDARY_SHA)/internal/db/schema/migrations && \
+	cd "$$dir" && \
+	{ ls base/postgres/*.up.sql; ls oss/postgres/*/*.up.sql | sort -t/ -k3,3n -k4,4; } \
+	  | while read -r f; do cat "$$f"; echo; done \
+	  | PGOPTIONS='-c search_path=boundary -c client_min_messages=warning' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
