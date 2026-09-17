@@ -15,7 +15,7 @@ init: |
   CREATE MATERIALIZED VIEW public.user_counts AS SELECT count(*) AS cnt FROM public.users;
   CREATE UNIQUE INDEX user_counts_cnt_idx ON public.user_counts USING btree (cnt);
   ANALYZE public.user_counts;
-  CREATE VIEW public.user_names AS SELECT name FROM public.users;
+  CREATE VIEW public.user_total AS SELECT count(*) AS total FROM public.users;
 dump: |
   -- public.logs (not analyzed)
   CREATE TABLE public.logs (
@@ -39,7 +39,7 @@ dump: |
   -- 16 kB
   CREATE UNIQUE INDEX user_counts_cnt_idx ON public.user_counts USING btree (cnt);
 
-  -- public.user_names
-  CREATE OR REPLACE VIEW public.user_names AS
-  SELECT users.name
+  -- public.user_total
+  CREATE OR REPLACE VIEW public.user_total AS
+  SELECT count(*) AS total
      FROM users;
