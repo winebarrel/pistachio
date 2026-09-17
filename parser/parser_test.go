@@ -515,6 +515,30 @@ func TestParseSQL_CommentOnCompositeAttribute(t *testing.T) {
 	assert.Equal(t, "city name", *ct.Attributes[1].Comment)
 }
 
+// COMMENT ON COLUMN names a view or materialized view column too, and an
+// explicit NULL clears one the same file set earlier.
+func TestParseSQL_CommentOnViewColumn(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.users (id int, name text);
+		CREATE VIEW public.v AS SELECT id, name FROM public.users;
+		COMMENT ON COLUMN public.v.name IS 'name';
+		COMMENT ON COLUMN public.v.id IS 'id';
+		COMMENT ON COLUMN public.v.id IS NULL;
+		CREATE MATERIALIZED VIEW mv AS SELECT id FROM public.users;
+		COMMENT ON COLUMN mv.id IS 'mv id';
+	`)
+	require.NoError(t, err)
+
+	v, ok := result.Views.GetOk("public.v")
+	require.True(t, ok)
+	assert.Equal(t, []string{"name"}, slices.Collect(v.ColumnComments.Keys()))
+	assert.Equal(t, "name", v.ColumnComments.Get("name"))
+
+	mv, ok := result.Views.GetOk("public.mv")
+	require.True(t, ok)
+	assert.Equal(t, "mv id", mv.ColumnComments.Get("id"))
+}
+
 // An explicit NULL comment clears one the same file set earlier.
 func TestParseSQL_CommentIsNullClearsComment(t *testing.T) {
 	result, err := parseSQLWithPublicSchema(`

@@ -1349,6 +1349,19 @@
             }
           ]
         },
+        "column_comments": {
+          "oneOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "ignore": {
           "type": "boolean"
         }
@@ -1367,6 +1380,7 @@
         "indexes",
         "triggers",
         "comment",
+        "column_comments",
         "ignore"
       ]
     }

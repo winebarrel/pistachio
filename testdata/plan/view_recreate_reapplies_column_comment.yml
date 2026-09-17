@@ -1,0 +1,27 @@
+# Dropping the view takes its column comments with it, so they are emitted
+# again after the view is created.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      legacy text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, name, legacy FROM public.users;
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, name FROM public.users;
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
+plan: |
+  DROP VIEW public.active_users;
+  ALTER TABLE public.users DROP COLUMN legacy;
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT id, name FROM public.users;
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';

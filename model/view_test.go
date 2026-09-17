@@ -94,6 +94,17 @@ func TestView_CommentSQL_indexComment(t *testing.T) {
 	assert.Equal(t, "COMMENT ON MATERIALIZED VIEW public.mv IS 'stats';\nCOMMENT ON INDEX public.idx_mv_n IS 'Lookup by n';", v.CommentSQL())
 }
 
+func TestView_CommentSQL_columnComment(t *testing.T) {
+	columnComments := orderedmap.New[string, string]()
+	columnComments.Set("id", "User ID")
+	columnComments.Set("Full Name", "it's the name")
+	viewComment := "Active users"
+	v := model.View{Schema: "public", Name: "active_users", Comment: &viewComment, ColumnComments: columnComments}
+	assert.Equal(t, `COMMENT ON VIEW public.active_users IS 'Active users';
+COMMENT ON COLUMN public.active_users.id IS 'User ID';
+COMMENT ON COLUMN public.active_users."Full Name" IS 'it''s the name';`, v.CommentSQL())
+}
+
 func TestView_SQL_checkOption(t *testing.T) {
 	v := model.View{Schema: "public", Name: "v1", Definition: "SELECT id FROM t WHERE ok", CheckOption: "cascaded"}
 	assert.Equal(t, "CREATE OR REPLACE VIEW public.v1 AS\nSELECT id FROM t WHERE ok\n  WITH CASCADED CHECK OPTION;", v.SQL())

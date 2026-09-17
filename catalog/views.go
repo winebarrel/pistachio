@@ -77,7 +77,9 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			) AS check_option,
 			c.reloptions,
 			tc.reloptions AS toast_reloptions,
-			d.description
+			d.description,
+			cc.names AS column_comment_names,
+			cc.comments AS column_comments
 		FROM
 			pg_catalog.pg_class c
 			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -85,6 +87,20 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			LEFT JOIN dependency_extension de ON de.objid = c.oid
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = c.oid
 			AND d.objsubid = 0
+			CROSS JOIN LATERAL (
+				SELECT
+					coalesce(array_agg(a.attname ORDER BY a.attnum), '{}') AS names,
+					coalesce(array_agg(ad.description ORDER BY a.attnum), '{}') AS comments
+				FROM
+					pg_catalog.pg_attribute a
+					JOIN pg_catalog.pg_description ad ON ad.objoid = a.attrelid
+					AND ad.classoid = 'pg_catalog.pg_class'::regclass
+					AND ad.objsubid = a.attnum
+				WHERE
+					a.attrelid = c.oid
+					AND a.attnum > 0
+					AND NOT a.attisdropped
+			) cc
 		WHERE
 			c.relkind IN ('v', 'm')
 			AND n.nspname = ANY(@schemas)
@@ -109,6 +125,7 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 		var v model.View
 		var checkOption *string
 		var reloptions, toastReloptions []string
+		var columnCommentNames, columnComments []string
 		err := rows.Scan(
 			&v.OID,
 			&v.Schema,
@@ -119,6 +136,8 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			&reloptions,
 			&toastReloptions,
 			&v.Comment,
+			&columnCommentNames,
+			&columnComments,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan view info: %w", err)
@@ -129,6 +148,10 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 		v.StorageParams = viewStorageParams(reloptions, toastReloptions)
 		v.Indexes = orderedmap.New[string, *model.Index]()
 		v.Triggers = orderedmap.New[string, *model.Trigger]()
+		v.ColumnComments = orderedmap.New[string, string]()
+		for i, name := range columnCommentNames {
+			v.ColumnComments.Set(name, columnComments[i])
+		}
 		views = append(views, &v)
 	}
 

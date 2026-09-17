@@ -1,0 +1,33 @@
+# Recreating a materialized view, or turning a view into one, drops the column
+# comments, so they are emitted again.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'User count';
+  CREATE VIEW public.user_ids AS SELECT id FROM public.users;
+  COMMENT ON COLUMN public.user_ids.id IS 'User ID';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt, max(id) AS max_id FROM public.users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'User count';
+  CREATE MATERIALIZED VIEW public.user_ids AS SELECT id FROM public.users;
+  COMMENT ON COLUMN public.user_ids.id IS 'User ID';
+plan: |
+  DROP MATERIALIZED VIEW public.user_stats;
+  DROP VIEW public.user_ids;
+  CREATE MATERIALIZED VIEW public.user_ids AS
+  SELECT id FROM public.users;
+  COMMENT ON COLUMN public.user_ids.id IS 'User ID';
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt, max(id) AS max_id FROM public.users;
+  COMMENT ON COLUMN public.user_stats.cnt IS 'User count';

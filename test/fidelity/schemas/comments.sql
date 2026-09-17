@@ -9,3 +9,4 @@ COMMENT ON TABLE public.notes IS 'user notes';
 COMMENT ON COLUMN public.notes.body IS 'the text';
 COMMENT ON VIEW public.recent_notes IS 'a view';
 COMMENT ON INDEX public.notes_body_idx IS 'body lookups';
+COMMENT ON COLUMN public.recent_notes.body IS 'a view column';

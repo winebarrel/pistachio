@@ -1,0 +1,23 @@
+# CREATE OR REPLACE VIEW keeps the comments of the columns it keeps, so only
+# the appended column's comment is emitted.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id FROM public.users;
+  COMMENT ON COLUMN public.active_users.id IS 'User ID';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, name FROM public.users;
+  COMMENT ON COLUMN public.active_users.id IS 'User ID';
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
+plan: |
+  CREATE OR REPLACE VIEW public.active_users AS
+  SELECT id, name FROM public.users;
+  COMMENT ON COLUMN public.active_users.name IS 'Full name';
