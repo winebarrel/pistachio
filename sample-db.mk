@@ -86,6 +86,7 @@ thingsboard|sample-db-thingsboard||thingsboard
 glific|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/glific/glific/2c8141103b58aa6144240e79c253f119bfbcf98c/priv/repo/structure.sql SCHEMA=glific|glific
 lago|sample-db-lago|URL=https://raw.githubusercontent.com/getlago/lago-api/78f709bfb31c43834ab6ea18d5f771e3a94e313d/db/structure.sql|lago
 calcom|sample-db-prisma|REPO=calcom/cal.diy SHA=6bc45298226f96ff79e0c070c8b2ce39727e8477 DIR=packages/prisma/migrations SCHEMA=calcom|calcom
+triggerdev|sample-db-prisma|REPO=triggerdotdev/trigger.dev SHA=2d03fee2e3ff368128302ed4c783ba4e32d1cb00 DIR=internal-packages/database/prisma/migrations SCHEMA=triggerdev|triggerdev
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing

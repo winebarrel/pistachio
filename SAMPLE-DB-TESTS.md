@@ -154,6 +154,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | glific | glific | [glific/glific](https://github.com/glific/glific) |
 | lago | lago | [getlago/lago-api](https://github.com/getlago/lago-api) |
 | calcom | calcom | [calcom/cal.diy](https://github.com/calcom/cal.diy) |
+| triggerdev | triggerdev | [triggerdotdev/trigger.dev](https://github.com/triggerdotdev/trigger.dev) |
 
 ## Coverage
 
@@ -170,8 +171,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - joomla and harbor 2026-09-01 on 16.13.
 - bigbluebutton and listmonk 2026-09-11 on 16.13.
 - dhis2 2026-09-15 on 15.18.
-- coder, boundary, hatchet, thingsboard, glific, lago, and calcom 2026-09-17 on
-  15.18.
+- coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
+  2026-09-17 on 15.18.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -260,11 +261,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | glific | 57 | 590 | 199 | 142 | 57 | 0 | 19 | 0 | 14 | 14 |
 | lago | 143 | 1,738 | 801 | 363 | 177 | 34 | 45 | 0 | 2 | 2 |
 | calcom | 102 | 1,092 | 394 | 179 | 104 | 2 | 46 | 0 | 7 | 9 |
-| **Total** | **7,231** | **60,495** | **21,858** | **9,504** | **12,549** | **2,164** | **350** | **427** | **1,406** | **1,160** |
+| triggerdev | 85 | 1,123 | 289 | 135 | 81 | 0 | 48 | 0 | 0 | 0 |
+| **Total** | **7,316** | **61,618** | **22,147** | **9,639** | **12,630** | **2,164** | **398** | **427** | **1,406** | **1,160** |
 
 ### Size
 
-The 64 dumps come to about 207,000 lines of SQL. chado is 43,700 of them, the
+The 65 dumps come to about 209,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -309,7 +311,8 @@ always reach.
   plus icinga_director, whose 20 enums come with one domain that carries two
   anonymous CHECKs, guacamole's 5 enums, listmonk's 14 over 16 tables, coder's
   61, which 73 columns are typed by, hatchet's 57, glific's 19, lago's 45, and
-  calcom's 46, three of whose columns are arrays of one.
+  calcom's 46 and triggerdev's 48, five columns between them typed as an array
+  of one.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -325,9 +328,10 @@ always reach.
   and 8 gist indexes over them, and those modifiers are the only ones any sample
   reports in mixed case.
 - **Foreign keys that all declare their referential actions**: all 171 of
-  icinga_director's name both ON UPDATE and ON DELETE, in six combinations,
-  and all 179 of calcom's name ON UPDATE CASCADE and an ON DELETE action, 134 of
-  them CASCADE. 137 of glific's 142 name ON DELETE, 106 of them CASCADE.
+  icinga_director's name both ON UPDATE and ON DELETE, in six combinations, and
+  every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and an
+  ON DELETE action, CASCADE for most. 137 of glific's 142 name ON DELETE, 106 of
+  them CASCADE.
 - **Column comments**: glific comments 274 of its 590 columns.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
   its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
@@ -338,9 +342,10 @@ always reach.
   columns, and wso2is, which declares 92 for its 172 tables and wires 87 of them
   into a column DEFAULT.
 - **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
-  tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with
-  747 of its 1,092 columns, and bigbluebutton, where
-  451 of 532 columns and half the tables and views are camelCase.
+  tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with 747
+  of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, and
+  bigbluebutton, where 451 of 532 columns and half the tables and views are
+  camelCase.
 - **Width without variety**: openolat, whose 382 tables are behind only gitlab
   and dhis2, has every one of its 1,239 indexes btree and every one of its 632
   foreign keys left at NO ACTION.
@@ -358,7 +363,8 @@ always reach.
   2,054 partitions, all of which live in schemas of their own. hatchet declares
   22, 20 by range and 2 by hash, and attaches none, since it creates its
   partitions at run time; 13 of its tables set autovacuum storage parameters.
-  lago declares one and attaches five in its own schema. thingsboard declares
+  lago declares one and attaches five in its own schema, and triggerdev
+  declares two by range and attaches none. thingsboard declares
   11, all by range, and attaches none for the same
   reason.
 - **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
@@ -415,13 +421,13 @@ strip only what is irrelevant to a schema round trip:
   in. Either stops the load when another sample's schema is already there, so
   boundary is the first sample in `SAMPLES`, loaded right after
   `clean-schema`.
-- **calcom**: the schema ships as a Prisma migration history, 596 directories
-  each holding a `migration.sql`, replayed in name order into a schema of its
-  own. The repository tarball is fetched once and only the migrations directory
-  is extracted. A few files end without a semicolon or on a comment, so each is
-  followed by a newline and one, and the `public` qualifier Prisma writes in
-  some statements is stripped. Some migrations insert or update rows as well;
-  they run, and the rows are not part of the check.
+- **calcom**, **triggerdev**: each schema ships as a Prisma migration history,
+  596 and 828 directories each holding a `migration.sql`, replayed in name order
+  into a schema of its own. The repository tarball is fetched once and only the
+  migrations directory is extracted. A few files end without a semicolon or on a
+  comment, so each is followed by a newline and one, and the `public` qualifier
+  Prisma writes in some statements is stripped. Some migrations insert or update
+  rows as well; they run, and the rows are not part of the check.
 - **camunda**: the schema ships as one file per engine component and none of
   them create a schema, so `camunda` is created up front and the files are
   concatenated in dependency order (process engine, history, identity, then the
