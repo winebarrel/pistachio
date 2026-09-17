@@ -82,6 +82,7 @@ listmonk|sample-db-url-schema|URL=https://raw.githubusercontent.com/knadh/listmo
 dhis2|sample-db-dhis2|URL=https://raw.githubusercontent.com/dhis2/dhis2-core/5d2dbdef40e91c1c613fc50a8132158dd5683b7f/dhis-2/dhis-support/dhis-support-db-migration/src/main/resources/org/hisp/dhis/db/base/dhis2_base_schema.sql SCHEMA=dhis2|dhis2
 coder|sample-db-url-schema|URL=https://raw.githubusercontent.com/coder/coder/263f2c207eca19c2e42a71f439782c15ebeb8f07/coderd/database/dump.sql SCHEMA=coder CHECK_FUNCTION_BODIES=off|coder
 hatchet|sample-db-hatchet||hatchet
+thingsboard|sample-db-thingsboard||thingsboard
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -487,6 +488,32 @@ sample-db-hatchet:
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/hatchet-dev/hatchet/1b410eb672448014bb1c6a29df92c63554f46034/sql/schema/$$f || exit 1; \
 	  echo; \
 	done | PGOPTIONS='-c search_path=hatchet -c client_min_messages=warning' $(PSQL)
+
+# ThingsBoard (thingsboard/thingsboard, Apache-2.0). The schema ships as one
+# file per part, loaded in the order ThingsBoard's installer runs them: the
+# entity tables and their indexes, the PostgreSQL-only indexes, the views, and
+# then the functions, several of which declare a variable of a view's row type,
+# followed by the time series tables. schema-ts-latest-psql.sql is left out: only
+# the migration from Cassandra reads it, and schema-entities.sql already creates
+# the table it holds. None of them names a schema, so
+# `thingsboard` is created up front and search_path places everything. The
+# time series tables are partitioned, and their partitions are created at run
+# time, so only the partitioned parents load.
+THINGSBOARD_SQL_FILES = \
+	schema-entities.sql \
+	schema-entities-idx.sql \
+	schema-entities-idx-psql-addon.sql \
+	schema-views.sql \
+	schema-functions.sql \
+	schema-ts-psql.sql
+
+.PHONY: sample-db-thingsboard
+sample-db-thingsboard:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS thingsboard'
+	for f in $(THINGSBOARD_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/thingsboard/thingsboard/562b19aa90f92c97b96c255b14816c32da7f4958/dao/src/main/resources/sql/$$f || exit 1; \
+	  echo; \
+	done | PGOPTIONS='-c search_path=thingsboard -c client_min_messages=warning' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
