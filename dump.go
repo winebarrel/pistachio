@@ -24,7 +24,10 @@ type DumpOptions struct {
 	// JSON writes the dump as JSON rather than SQL, in the shape `pista parse`
 	// writes, so the same schema describes both. The flags that lay SQL out have nothing to
 	// change in it, so kong refuses them alongside it.
-	JSON bool `xor:"json-split,json-sort-by-deps,json-no-format" env:"PISTA_DUMP_JSON" help:"Write the dump as JSON instead of SQL."`
+	JSON bool `xor:"json-split,json-sort-by-deps,json-no-format,json-explain" env:"PISTA_DUMP_JSON" help:"Write the dump as JSON instead of SQL."`
+	// Explain writes the size estimate of each table, materialized view and
+	// index into the comment above it. The JSON carries no comment to hold it.
+	Explain bool `xor:"json-explain" env:"PISTA_DUMP_EXPLAIN" help:"Comment each table, materialized view and index with its size estimate from pg_class."`
 }
 
 type DumpResult struct {
@@ -572,6 +575,14 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		routines, err = catalog.Routines(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch routines: %w", err)
+		}
+	}
+
+	// The estimates are keyed by the names the catalog read, so they are
+	// attached before a --schema-map remap renames the schemas.
+	if options.Explain {
+		if err := explainDump(ctx, catalog, tables, views); err != nil {
+			return nil, fmt.Errorf("failed to explain dump: %w", err)
 		}
 	}
 

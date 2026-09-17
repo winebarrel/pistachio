@@ -17,6 +17,14 @@ func TestIndex_SQL(t *testing.T) {
 	assert.Equal(t, "CREATE INDEX idx_name ON public.users USING btree (name);", idx.SQL())
 }
 
+func TestIndex_DumpSQL(t *testing.T) {
+	idx := model.Index{Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"}
+	assert.Equal(t, "CREATE INDEX idx_name ON public.users USING btree (name);", idx.DumpSQL())
+
+	idx.Size = "16 kB"
+	assert.Equal(t, "-- 16 kB\nCREATE INDEX idx_name ON public.users USING btree (name);", idx.DumpSQL())
+}
+
 func TestIndex_CommentSQL(t *testing.T) {
 	comment := "Lookup by name"
 	idx := model.Index{Schema: "public", Name: "idx_users_name", Comment: &comment}

@@ -33,6 +33,10 @@ type dumpTestCase struct {
 	ManageRoutine      bool     `yaml:"manage_routine,omitempty"`
 	ManageStorageParam bool     `yaml:"manage_storage_param,omitempty"`
 	SkipPartitionChild bool     `yaml:"skip_partition_child,omitempty"`
+	// Explain sets --explain, so the dump carries the size of each table and
+	// index. An init that wants the estimates runs ANALYZE; write {{today}}
+	// in the expected dump for the date it prints.
+	Explain bool `yaml:"explain,omitempty"`
 }
 
 func (tc *dumpTestCase) expectedDump(major int) string {
@@ -908,9 +912,10 @@ func TestDump(t *testing.T) {
 				ManageRoutine:      tc.ManageRoutine,
 				ManageStorageParam: tc.ManageStorageParam,
 				SkipPartitionChild: tc.SkipPartitionChild,
+				Explain:            tc.Explain,
 			})
 			require.NoError(t, err)
-			expected := strings.TrimSpace(tc.expectedDump(pgMajor))
+			expected := strings.TrimSpace(expandToday(tc.expectedDump(pgMajor)))
 			assert.Equal(t, expected, strings.TrimSpace(got.String()))
 
 			// dump writes through the formatter, so its output has to be what

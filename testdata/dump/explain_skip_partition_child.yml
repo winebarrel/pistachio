@@ -1,0 +1,21 @@
+explain: true
+skip_partition_child: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  INSERT INTO public.events VALUES (1, '2024-03-01'), (2, '2024-04-01'), (3, '2025-03-01');
+  CREATE INDEX events_at_idx ON public.events USING btree (at);
+  ANALYZE public.events;
+dump: |
+  -- public.events (~3 rows, 16 kB, as of {{today}}, 2 partitions)
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  -- 32 kB
+  CREATE INDEX events_at_idx ON ONLY public.events USING btree (at);

@@ -119,6 +119,71 @@ func TestTableStats(t *testing.T) {
 		assert.Contains(t, stats, "public.users")
 		assert.NotContains(t, stats, "public.user_ids")
 	})
+
+	t.Run("materialized view", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.users (id integer NOT NULL);
+			INSERT INTO public.users SELECT g FROM generate_series(1, 3) g;
+			CREATE MATERIALIZED VIEW public.user_ids AS SELECT id FROM public.users;
+			ANALYZE public.user_ids;
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		stats, err := cat.TableStats(ctx)
+		require.NoError(t, err)
+
+		st, ok := stats["public.user_ids"]
+		require.True(t, ok)
+		assert.Equal(t, int64(3), st.Rows)
+		assert.Equal(t, int64(8192), st.Bytes)
+	})
+}
+
+func TestIndexSizes(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	t.Run("indexes of a table and a materialized view", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.users (
+				id integer NOT NULL,
+				name text,
+				CONSTRAINT users_pkey PRIMARY KEY (id)
+			);
+			CREATE INDEX users_name_idx ON public.users USING btree (name);
+			CREATE MATERIALIZED VIEW public.user_ids AS SELECT id FROM public.users;
+			CREATE INDEX user_ids_id_idx ON public.user_ids USING btree (id);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		sizes, err := cat.IndexSizes(ctx)
+		require.NoError(t, err)
+
+		// An empty btree index is its metapage alone.
+		assert.Equal(t, map[string]int64{
+			"public.users_pkey":      8192,
+			"public.users_name_idx":  8192,
+			"public.user_ids_id_idx": 8192,
+		}, sizes)
+	})
+
+	t.Run("partitioned index sums its partitions", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.events (id integer NOT NULL, at date NOT NULL) PARTITION BY RANGE (at);
+			CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+			CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+			CREATE INDEX events_at_idx ON public.events USING btree (at);
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		sizes, err := cat.IndexSizes(ctx)
+		require.NoError(t, err)
+
+		assert.Equal(t, int64(8192), sizes["public.events_2024_at_idx"])
+		assert.Equal(t, int64(8192), sizes["public.events_2025_at_idx"])
+		assert.Equal(t, int64(16384), sizes["public.events_at_idx"])
+	})
 }
 
 func TestTypeChanges(t *testing.T) {

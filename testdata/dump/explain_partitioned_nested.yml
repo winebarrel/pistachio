@@ -1,0 +1,20 @@
+explain: true
+include:
+  - events
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01') PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2024_h1 PARTITION OF public.events_2024 FOR VALUES FROM ('2024-01-01') TO ('2024-07-01');
+  CREATE TABLE public.events_2024_h2 PARTITION OF public.events_2024 FOR VALUES FROM ('2024-07-01') TO ('2025-01-01');
+  INSERT INTO public.events VALUES (1, '2024-03-01'), (2, '2024-04-01'), (3, '2024-09-01');
+  ANALYZE public.events;
+dump: |
+  -- public.events (~3 rows, 16 kB, as of {{today}}, 3 partitions)
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);

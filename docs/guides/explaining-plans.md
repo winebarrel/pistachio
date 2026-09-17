@@ -54,3 +54,23 @@ The comment is about the statement, not the data. Whether a `SET NOT NULL` finds
 It reports the lock the statement takes, not the wait to get it. An ACCESS EXCLUSIVE lock queues behind every transaction already reading the table, and everything arriving later queues behind the lock, so even a statement that changes the catalog alone can stop the table for as long as one old transaction runs. `--pre-sql "SET lock_timeout = '5s'"` bounds that wait.
 
 Two cases read coarser than PostgreSQL treats them. A binary-coercible type change that still changes an index's operator class, `integer` to `oid`, rebuilds that index and takes no comment. An `ALTER TABLE` on an `INHERITS` parent counts every child even for `ADD CONSTRAINT ... PRIMARY KEY` and `ADD CONSTRAINT ... FOREIGN KEY`, which do not recurse; pistachio writes foreign keys with `ONLY`, so nothing it emits reaches this.
+
+
+## Sizes in a dump
+
+`pista dump --explain` writes the same size after the name of each table and materialized view, and the size of each index in a comment above it.
+
+```sql
+-- public.events (~120,000,000 rows, 9629 MB, as of 2026-09-08, 24 partitions)
+CREATE TABLE public.events (
+    id bigint NOT NULL,
+    at date NOT NULL
+)
+PARTITION BY RANGE (at);
+-- 2573 MB
+CREATE INDEX events_at_idx ON ONLY public.events USING btree (at);
+```
+
+A partitioned table sums its partitions, and an index on it sums the indexes on the partitions. A partition counts even when `-I`, `-E` or `--skip-partition-child` leaves it out of the dump, but not when it sits in a schema `-n` does not name. An `INHERITS` parent counts its own rows alone, since each child has a comment of its own.
+
+An index size has no date. VACUUM and ANALYZE write it together with the table's, so the table's date applies. An index that a primary key, unique or exclusion constraint owns is written inside `CREATE TABLE` and has no comment.

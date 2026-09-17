@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Add `--explain` to `dump` (`$PISTA_DUMP_EXPLAIN`). It writes the size of each table, materialized view and index in a comment, from the same estimates `plan --explain` reads.
+
 ## [1.57.0] - 2026-09-17
 
 * **BREAKING**: `--manage-routine` leaves out the constructor functions of a range type. `dump` wrote them, and `plan` proposed dropping them, which PostgreSQL refuses. Delete them from a file an earlier `dump` wrote, or every plan creates them.

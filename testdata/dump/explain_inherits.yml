@@ -1,0 +1,18 @@
+explain: true
+init: |
+  CREATE TABLE public.logs (id integer NOT NULL);
+  CREATE TABLE public.logs_old () INHERITS (public.logs);
+  INSERT INTO public.logs SELECT g FROM generate_series(1, 3) g;
+  INSERT INTO public.logs_old SELECT g FROM generate_series(1, 2) g;
+  ANALYZE public.logs;
+  ANALYZE public.logs_old;
+dump: |
+  -- public.logs (~3 rows, 8192 bytes, as of {{today}})
+  CREATE TABLE public.logs (
+      id integer NOT NULL
+  );
+
+  -- public.logs_old (~2 rows, 8192 bytes, as of {{today}})
+  CREATE TABLE public.logs_old (
+  )
+  INHERITS (public.logs);

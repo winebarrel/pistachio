@@ -27,8 +27,9 @@ type TableStat struct {
 	StatsAt time.Time
 }
 
-// TableStats reads the size estimate of every table in the managed schemas,
-// keyed by the same schema-qualified name the Tables map uses. The TOAST
+// TableStats reads the size estimate of every table and materialized view in
+// the managed schemas, keyed by the same schema-qualified name the Tables and
+// Views maps use. The TOAST
 // relation's pages count toward the table's bytes, since a rewrite copies them
 // too. A partitioned parent holds no rows of its own; the caller sums its
 // partitions.
@@ -56,7 +57,7 @@ func (c *Catalog) TableStats(ctx context.Context) (map[string]TableStat, error) 
 			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 			LEFT JOIN pg_catalog.pg_class t ON t.oid = c.reltoastrelid
 		WHERE
-			c.relkind IN ('r', 'p')
+			c.relkind IN ('r', 'p', 'm')
 			AND n.nspname = ANY(@schemas)
 	`
 
@@ -88,6 +89,56 @@ func (c *Catalog) TableStats(ctx context.Context) (map[string]TableStat, error) 
 		return nil, fmt.Errorf("catalog: failed to scan table stats rows: %w", err)
 	}
 	return stats, nil
+}
+
+// IndexSizes reads the size estimate of every index in the managed schemas,
+// in bytes, keyed by the schema-qualified index name. Like TableStats it is
+// relpages, which VACUUM, ANALYZE and CREATE INDEX write. An index on a
+// partitioned table holds nothing itself, so it reads as the sum of the
+// indexes attached to it on the partitions.
+func (c *Catalog) IndexSizes(ctx context.Context) (map[string]int64, error) {
+	q := `
+		SELECT
+			n.nspname,
+			c.relname,
+			CASE c.relkind
+				WHEN 'I' THEN (
+					SELECT COALESCE(sum(GREATEST(l.relpages, 0)), 0)::bigint
+					FROM
+						pg_catalog.pg_partition_tree(c.oid) pt
+						JOIN pg_catalog.pg_class l ON l.oid = pt.relid
+					WHERE
+						pt.isleaf
+				)
+				ELSE GREATEST(c.relpages, 0)::bigint
+			END * pg_catalog.current_setting('block_size')::bigint
+		FROM
+			pg_catalog.pg_class c
+			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE
+			c.relkind IN ('i', 'I')
+			AND n.nspname = ANY(@schemas)
+	`
+
+	rows, err := c.conn.Query(ctx, q, pgx.NamedArgs{"schemas": c.schemas})
+	if err != nil {
+		return nil, fmt.Errorf("catalog: failed to get index sizes: %w", err)
+	}
+	defer rows.Close()
+
+	sizes := map[string]int64{}
+	for rows.Next() {
+		var schema, name string
+		var bytes int64
+		if err := rows.Scan(&schema, &name, &bytes); err != nil {
+			return nil, fmt.Errorf("catalog: failed to scan index size: %w", err)
+		}
+		sizes[model.Ident(schema, name)] = bytes
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("catalog: failed to scan index size rows: %w", err)
+	}
+	return sizes, nil
 }
 
 // TypeChange names the two sides of a column type change, each as a type name

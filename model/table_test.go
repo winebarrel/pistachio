@@ -61,6 +61,23 @@ func TestTable_RLSSQL_NilPolicies(t *testing.T) {
 	assert.Empty(t, tbl.RLSSQL())
 }
 
+func TestTableToSQL_Size(t *testing.T) {
+	tbl := newTable("public", "users")
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
+	tbl.Indexes.Set("users_id_idx", &model.Index{
+		Schema: "public", Name: "users_id_idx", Table: "users",
+		Definition: "CREATE INDEX users_id_idx ON public.users USING btree (id)",
+		Size:       "16 kB",
+	})
+	tbl.Size = "~3 rows, 8192 bytes"
+	assert.Equal(t, `-- public.users (~3 rows, 8192 bytes)
+CREATE TABLE public.users (
+    id integer NOT NULL
+);
+-- 16 kB
+CREATE INDEX users_id_idx ON public.users USING btree (id);`, model.TableToSQL(tbl))
+}
+
 func TestTableToSQL_IncludesRLS(t *testing.T) {
 	tbl := newTable("public", "users")
 	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})

@@ -1,0 +1,16 @@
+explain: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX events_at_idx ON public.events USING btree (at);
+dump: |
+  -- public.events (not analyzed, 0 partitions)
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  -- 0 bytes
+  CREATE INDEX events_at_idx ON ONLY public.events USING btree (at);

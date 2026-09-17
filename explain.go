@@ -805,11 +805,26 @@ func (ex *explainer) renderTarget(tg explainTarget) string {
 	if tg.descendants > 0 {
 		relations = append(relations, ex.descendants(t)...)
 	}
+	details := sizeDetails(ex.stats, relations)
+	if tg.rebuilt > 0 {
+		details = append(details, plural(tg.rebuilt, "index", "indexes")+" rebuilt")
+	}
+	if tg.descendants > 0 {
+		details = append(details, pluralize(tg.descendants, tg.descendantKind))
+	}
+	return tg.key + " (" + strings.Join(details, ", ") + ")"
+}
+
+// sizeDetails writes the row and byte estimate of the relations, summed, with
+// the date of the oldest estimate among them. A partitioned parent adds
+// nothing, since its partitions hold the rows. When none of them has been
+// analyzed the size reads as not analyzed.
+func sizeDetails(stats map[string]catalog.TableStat, relations []*model.Table) []string {
 	var rows, bytes int64
 	analyzed := false
 	var statsAt time.Time
 	for _, r := range relations {
-		st, ok := ex.stats[r.FQTN()]
+		st, ok := stats[r.FQTN()]
 		if !ok || r.Partitioned {
 			continue
 		}
@@ -823,26 +838,18 @@ func (ex *explainer) renderTarget(tg explainTarget) string {
 		}
 	}
 
-	var details []string
-	if analyzed {
-		noun := "rows"
-		if rows == 1 {
-			noun = "row"
-		}
-		details = append(details, "~"+groupDigits(rows)+" "+noun, sizePretty(bytes))
-		if !statsAt.IsZero() {
-			details = append(details, "as of "+statsAt.Local().Format(time.DateOnly))
-		}
-	} else {
-		details = append(details, "not analyzed")
+	if !analyzed {
+		return []string{"not analyzed"}
 	}
-	if tg.rebuilt > 0 {
-		details = append(details, plural(tg.rebuilt, "index", "indexes")+" rebuilt")
+	noun := "rows"
+	if rows == 1 {
+		noun = "row"
 	}
-	if tg.descendants > 0 {
-		details = append(details, pluralize(tg.descendants, tg.descendantKind))
+	details := []string{"~" + groupDigits(rows) + " " + noun, sizePretty(bytes)}
+	if !statsAt.IsZero() {
+		details = append(details, "as of "+statsAt.Local().Format(time.DateOnly))
 	}
-	return tg.key + " (" + strings.Join(details, ", ") + ")"
+	return details
 }
 
 // plural is pluralize for a noun whose plural is not the singular plus s.
