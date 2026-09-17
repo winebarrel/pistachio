@@ -1756,24 +1756,20 @@ func normalizeIndexStmt(is *pg_query.IndexStmt) {
 // chosen direction, and the expression takes the symmetric expression
 // normalizations.
 //
-// The operator class loses its schema qualifier and its options take the
-// storage-parameter fold. get_opclass_name (src/backend/utils/adt/ruleutils.c)
-// writes a class on the search_path bare, and the options go through
-// get_reloptions, the function that writes the WITH clause, so an option value
-// that does not read as an identifier comes back quoted. A file that qualifies
-// the class or writes `siglen=32` for the catalog's `siglen='32'` dropped and
-// created the index on every plan.
+// The operator class and the collation lose their schema qualifier, which
+// ruleutils (src/backend/utils/adt/ruleutils.c) writes only for a name off the
+// search_path, and the class's options take the storage-parameter fold: they
+// go through get_reloptions, the function that writes the WITH clause, so a
+// value that does not read as an identifier comes back quoted. A file that
+// qualified the class or wrote `siglen=32` for the catalog's `siglen='32'`
+// re-created the index on every plan. Dropping the qualifier carries the
+// tradeoff stripFuncSchema does.
 //
-// Dropping the qualifier carries the tradeoff stripFuncSchema does: two
-// same-named classes in different schemas compare equal, so moving the class
-// from one schema to another produces no diff.
-//
-// The class name itself is left alone otherwise. PostgreSQL omits it when it
-// is the default for the column's type, which a file is free to write out;
-// telling the two apart means reading the default class for that type, which
-// the diff does not thread. LIMITATIONS.md covers it. An element that carries
-// options is not affected: ruleutils passes InvalidOid for the column type
-// there, so the class is always written.
+// Which class and which collation the element names is left alone. PostgreSQL
+// omits the class when it is the default for the column's type, and the
+// collation when it is the column's own, so a file that writes either out
+// still drifts; telling that from a real change means a lookup the diff does
+// not thread. LIMITATIONS.md covers it.
 func normalizeIndexElem(ie *pg_query.IndexElem) {
 	if ie.Ordering == pg_query.SortByDir_SORTBY_ASC {
 		ie.Ordering = pg_query.SortByDir_SORTBY_DEFAULT
@@ -1788,6 +1784,7 @@ func normalizeIndexElem(ie *pg_query.IndexElem) {
 			ie.NullsOrdering = pg_query.SortByNulls_SORTBY_NULLS_DEFAULT
 		}
 	}
+	ie.Collation = lastNamePart(ie.Collation)
 	ie.Opclass = lastNamePart(ie.Opclass)
 	normalizeStorageParams(ie.Opclassopts)
 	if ie.Expr != nil {
@@ -1797,12 +1794,11 @@ func normalizeIndexElem(ie *pg_query.IndexElem) {
 
 // normalizeStorageParams canonicalises an index's WITH clause, and an operator
 // class's option list, so the two spellings of one parameter compare equal.
-// pg_get_indexdef quotes a value
-// that does not read as an identifier, `fillfactor='80'`, while a file writes
-// the number bare, so the two arrive as a String and an Integer node. The
-// order is not part of the setting either, and the catalog keeps the one the
-// parameters were created in. Without this an index carrying a parameter was
-// dropped and recreated on every run.
+// pg_get_indexdef quotes a value that does not read as an identifier,
+// `fillfactor='80'`, while a file writes the number bare, so the two arrive as
+// a String and an Integer node. The order is not part of the setting either,
+// and the catalog keeps the one the parameters were created in. Without this
+// an index carrying a parameter was dropped and recreated on every run.
 //
 // An integer is folded to its decimal string; no index storage parameter
 // takes a fractional value. A bare word, `deduplicate_items=off`, parses as a

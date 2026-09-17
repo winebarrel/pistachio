@@ -2,9 +2,9 @@
 
 ## [Unreleased]
 
-* Compare an index column's operator class the way PostgreSQL writes it. The schema qualifier is dropped from both sides, since `pg_get_indexdef` writes a class on the search_path bare, and the class's options take the fold the `WITH` clause already takes: an option value that does not read as an identifier comes back quoted, `siglen='32'`, while a file writes `siglen=32`. Either spelling dropped and created the index on every plan. An exclusion constraint's elements take the same comparison.
+* Compare an index column's operator class and collation the way PostgreSQL writes them. The schema qualifier is dropped from both sides, since the catalog writes a name on the search_path bare, and the operator class's options take the fold the `WITH` clause already takes: a value that does not read as an identifier comes back quoted, `siglen='32'`, where a file writes `siglen=32`. Either spelling re-created the index on every plan. An exclusion constraint's elements are index elements and take the same comparison.
 
-  A default operator class the file writes out still drifts. Deciding that it is the default takes a lookup the diff does not have; `LIMITATIONS.md` covers it.
+  A file that writes out the default operator class, or the collation the column already carries, still drifts. The catalog omits both, and telling that from a real change takes a lookup the diff does not have. `LIMITATIONS.md` covers it.
 
 ## [1.55.0] - 2026-09-16
 

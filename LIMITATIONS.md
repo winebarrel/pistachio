@@ -761,34 +761,29 @@ to write `1`, and no sample schema declares one.
 
 Origin: review of the `ARRAY[...]` layout fix, 2026-09-15.
 
-## Perpetual drift on a default operator class written out
+## Perpetual drift on a default operator class or collation written out
 
 Priority: low.
 
-An index column takes the default operator class of its type when nothing
-names one, and `get_opclass_name` (`src/backend/utils/adt/ruleutils.c`) writes
-the class only when it is not that default, so `pg_get_indexdef` and
-`pg_get_constraintdef` hand back a bare column for an index created as
-`(id int4_ops)`. The desired side keeps what the file wrote, so the two never
-compare equal: the index is dropped and created on every plan, and an
-exclusion constraint is dropped and added.
+`pg_get_indexdef` and `pg_get_constraintdef` name an index element's operator
+class only when it is not the default for the column's type, and its collation
+only when it is not the one the column carries. The desired side keeps what
+the file wrote, so an index created as `(id int4_ops)` never compares equal to
+the bare column the catalog hands back: the index is dropped and created on
+every plan, and an exclusion constraint is dropped and added.
 
-Deciding whether a written class is the default one means reading
+Deciding that a written class is the default means reading
 `pg_opclass.opcdefault` for the column's type under the index's access method,
 which the diff does not thread, and an expression element has no column type
-to look it up by. Matching the name alone against the classes that are a
-default for some type is not the same question: `bpchar_ops` on a `text`
-column is legal and is not that column's default, and would fold away.
+to look it up by. Matching the name against the classes that are a default for
+some type answers a different question: `bpchar_ops` on a `text` column is
+legal and is not that column's default, and would fold away. The collation
+needs the column's own, which the diff does not carry either.
 
 An element that carries operator class options is not affected. ruleutils
-passes `InvalidOid` for the column type there, so the class is written whether
-or not it is the default, and both sides name it.
+(`src/backend/utils/adt/ruleutils.c`) passes `InvalidOid` for the column type
+there, so the class is written either way and both sides name it.
 
-An element's `COLLATE` clause is omitted on the same terms, when the collation
-is the one the column already carries, and drifts the same way when a file
-writes it out.
-
-Workaround: leave the default class out, which is what `pista dump` and
-`pg_dump` write.
+Workaround: leave both out, which is what `pista dump` and `pg_dump` write.
 
 Origin: review of the index element canonicalization, 2026-09-17.

@@ -3057,6 +3057,72 @@ func TestEqualIndexDef_opclassOptionDiffers_notEqual(t *testing.T) {
 	))
 }
 
+func TestEqualIndexDef_opclassOptionBareWord(t *testing.T) {
+	// A value that reads as an identifier comes back bare, so the quoted
+	// spelling is the one a file may carry.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING gist (col1 some_ops (mode=fast))",
+		"CREATE INDEX idx ON t USING gist (col1 some_ops (mode='fast'))",
+	))
+}
+
+func TestEqualIndexDef_opclassOnlyOnOneSide_notEqual(t *testing.T) {
+	// The catalog omits a class that is the default for the column's type.
+	// Which class that is takes a lookup the diff does not have, so the two
+	// stay different. LIMITATIONS.md covers it.
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1)",
+		"CREATE INDEX idx ON t USING btree (col1 text_ops)",
+	))
+}
+
+func TestEqualIndexDef_opclassOptionOnlyOnOneSide_notEqual(t *testing.T) {
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops)",
+		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen=32))",
+	))
+}
+
+func TestEqualIndexDef_opclassOnExpression(t *testing.T) {
+	// An expression element takes both folds.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (lower(col1) text_pattern_ops)",
+		"CREATE INDEX idx ON t USING btree (pg_catalog.lower(col1) public.text_pattern_ops)",
+	))
+}
+
+func TestEqualIndexDef_opclassOnSecondColumn(t *testing.T) {
+	// Every element is canonicalised, not just the first.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1, col2 text_pattern_ops)",
+		"CREATE INDEX idx ON t USING btree (col1, col2 public.text_pattern_ops)",
+	))
+}
+
+func TestEqualIndexDef_collationQualified(t *testing.T) {
+	// generate_collation_name writes a collation on the search_path bare.
+	assert.True(t, equalIndexDef(
+		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
+		`CREATE INDEX idx ON t USING btree (col1 COLLATE pg_catalog."C")`,
+	))
+}
+
+func TestEqualIndexDef_collationDiffers_notEqual(t *testing.T) {
+	assert.False(t, equalIndexDef(
+		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
+		`CREATE INDEX idx ON t USING btree (col1 COLLATE "POSIX")`,
+	))
+}
+
+func TestEqualIndexDef_collationOnlyOnOneSide_notEqual(t *testing.T) {
+	// The catalog omits the collation the column already carries. Reading
+	// that one is the lookup the diff does not have.
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING btree (col1)",
+		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
+	))
+}
+
 func TestEqualIndexDef_different(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
@@ -4095,12 +4161,33 @@ func TestEqualConstraintDef_exclusionSchemaQualifiedFunc(t *testing.T) {
 	))
 }
 
-func TestEqualConstraintDef_exclusionOpclass(t *testing.T) {
-	// An exclusion element is an index element, so it takes the same opclass
+func TestEqualConstraintDef_exclusionOpclassQualified(t *testing.T) {
+	// An exclusion element is an index element, so it takes the same
 	// canonicalization.
 	assert.True(t, equalConstraintDef(
+		"EXCLUDE USING btree (v text_pattern_ops WITH =)",
+		"EXCLUDE USING btree (v public.text_pattern_ops WITH =)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionOpclassOption(t *testing.T) {
+	assert.True(t, equalConstraintDef(
 		"EXCLUDE USING gist (tsv tsvector_ops (siglen='32') WITH &&)",
-		"EXCLUDE USING gist (tsv public.tsvector_ops (siglen=32) WITH &&)",
+		"EXCLUDE USING gist (tsv tsvector_ops (siglen=32) WITH &&)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionOpclassDiffers_notEqual(t *testing.T) {
+	assert.False(t, equalConstraintDef(
+		"EXCLUDE USING btree (v text_pattern_ops WITH =)",
+		"EXCLUDE USING btree (v varchar_pattern_ops WITH =)",
+	))
+}
+
+func TestEqualConstraintDef_exclusionCollationQualified(t *testing.T) {
+	assert.True(t, equalConstraintDef(
+		`EXCLUDE USING btree (v COLLATE "C" WITH =)`,
+		`EXCLUDE USING btree (v COLLATE pg_catalog."C" WITH =)`,
 	))
 }
 
