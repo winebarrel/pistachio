@@ -463,9 +463,9 @@ strip only what is irrelevant to a schema round trip:
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
 - **glific**: the schema is Ecto's `structure.sql`, the same `pg_dump` output
-  as discourse, osm, danbooru, and inaturalist, so it loads the same way. It has no `SET search_path` line
-  before its migration versions, so those rows go into glific's own
-  `schema_migrations`. They are data, not schema.
+  as discourse, osm, danbooru, and inaturalist, so it loads the same way. It
+  has no `SET search_path` line before its migration versions, so those rows go
+  into glific's own `schema_migrations`. They are data, not schema.
 - **harbor**: the schema ships as one file per release, each a delta meant to
   be replayed by golang-migrate, which tracks what it has applied in a
   `schema_migrations` table of its own. One delta `ALTER TABLE`s that table
