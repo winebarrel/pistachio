@@ -152,6 +152,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | hatchet | hatchet | [hatchet-dev/hatchet](https://github.com/hatchet-dev/hatchet) |
 | thingsboard | thingsboard | [thingsboard/thingsboard](https://github.com/thingsboard/thingsboard) |
 | glific | glific | [glific/glific](https://github.com/glific/glific) |
+| lago | lago | [getlago/lago-api](https://github.com/getlago/lago-api) |
 
 ## Coverage
 
@@ -168,7 +169,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - joomla and harbor 2026-09-01 on 16.13.
 - bigbluebutton and listmonk 2026-09-11 on 16.13.
 - dhis2 2026-09-15 on 15.18.
-- coder, boundary, hatchet, thingsboard, and glific 2026-09-17 on 15.18.
+- coder, boundary, hatchet, thingsboard, glific, and lago 2026-09-17 on 15.18.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -255,14 +256,15 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | hatchet | 133 | 1,209 | 330 | 77 | 136 | 0 | 57 | 1 | 22 | 49 |
 | thingsboard | 65 | 660 | 163 | 29 | 106 | 6 | 0 | 3 | 0 | 14 |
 | glific | 57 | 590 | 199 | 142 | 57 | 0 | 19 | 0 | 14 | 14 |
-| **Total** | **6,986** | **57,665** | **20,663** | **8,962** | **12,268** | **2,128** | **259** | **427** | **1,397** | **1,149** |
+| lago | 143 | 1,738 | 801 | 363 | 177 | 34 | 45 | 0 | 2 | 2 |
+| **Total** | **7,129** | **59,403** | **21,464** | **9,325** | **12,445** | **2,162** | **304** | **427** | **1,399** | **1,151** |
 
 ### Size
 
-The 62 dumps come to about 199,000 lines of SQL. chado is 43,700 of them, the
+The 63 dumps come to about 204,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
-of the constraints and the indexes, a quarter of the columns and the
-foreign keys, and more than a fifth of the tables; dhis2, openolat, musicbrainz,
+of the constraints, three in ten of the indexes, a quarter of the columns and
+the foreign keys, and a fifth of the tables; dhis2, openolat, musicbrainz,
 and discourse are the largest of what remains, and chado is nearly all of the
 views.
 
@@ -283,26 +285,27 @@ always reach.
 - **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to a
   table, denser than any other sample, 55 of them gin, 29 of those over an
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
-  64, only one of them partial and none over an expression.
+  64, only one of them partial and none over an expression; lago's 801 over 143,
+  123 of them partial and 16 gin.
 - **Unique indexes over an expression and a gin index over `to_tsvector`**: rt.
 - **gist indexes naming an operator class**: two that name `inet_ops` and one
   over four columns, which needs `btree_gist` (osm).
 - **gist indexes over a function the schema defines itself**: chado's three name
   `boxrange`, one of them partial and declared from another schema.
 - **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
-  `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse).
+  `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse), and
+  one `NULLS NOT DISTINCT` index and eight with `INCLUDE` columns (lago).
 - **Exclusion constraints and unlogged tables**: demodb, which needs
   `btree_gist`, boundary, whose 19 exclusion constraints need it too, hatchet,
-  whose 2 compare a range column with `&&`, and
-  bigbluebutton, where every one of the 54 tables is unlogged.
+  whose 2 compare a range column with `&&`, lago, with one, and bigbluebutton,
+  where every one of the 54 tables is unlogged.
 - **Stored generated columns**: bigbluebutton's 17, three of them over a
   function of its own that calls `unaccent`.
 - **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb,
   whose 13 types are 6 enums and 7 domains, each domain carrying a named CHECK,
-  plus icinga_director, whose 20 enums are more than any other sample but coder
-  and hatchet and whose one domain carries two anonymous CHECKs, guacamole's 5
-  enums, listmonk's 14 over 16 tables, coder's 61, which 73 columns are typed
-  by, hatchet's 57, and glific's 19.
+  plus icinga_director, whose 20 enums come with one domain that carries two
+  anonymous CHECKs, guacamole's 5 enums, listmonk's 14 over 16 tables, coder's
+  61, which 73 columns are typed by, hatchet's 57, glific's 19, and lago's 45.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -338,8 +341,8 @@ always reach.
 - **A schema that is nearly all keys**: dhis2, where 461 primary keys and 464
   unique constraints back all but 30 of its 955 indexes, it declares no CHECK at
   all, and its 989 foreign keys are more than any sample but gitlab.
-- **Materialized views**: adventureworks, pagila, and listmonk, whose three
-  views are all materialized.
+- **Materialized views**: adventureworks, pagila, listmonk, whose three views
+  are all materialized, and lago.
 - **Views at scale**: chado's 1,864 are nearly ten times every other sample put
   together, and 1,832 of them are the Sequence Ontology views in its `so`
   schema, each selecting from tables in `chado`; bigbluebutton's 86 over 54
@@ -349,7 +352,8 @@ always reach.
   2,054 partitions, all of which live in schemas of their own. hatchet declares
   22, 20 by range and 2 by hash, and attaches none, since it creates its
   partitions at run time; 13 of its tables set autovacuum storage parameters.
-  thingsboard declares 11, all by range, and attaches none for the same
+  lago declares one and attaches five in its own schema. thingsboard declares
+  11, all by range, and attaches none for the same
   reason.
 - **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
   sample that does.
@@ -496,6 +500,13 @@ strip only what is irrelevant to a schema round trip:
   `client_min_messages` is raised to `warning` for the load. wso2is is also
   where five index names run past the 63 character identifier limit, and the
   server says so as it truncates them.
+- **lago**: the schema is Rails' `db/structure.sql` like discourse's, and loads
+  the same way with two things taken out first. It was dumped with `--clean`,
+  so everything before the first `-- Name:` header, about 1,400 lines of
+  `DROP ... IF EXISTS` and placeholder views, is skipped; with `public` second
+  in `search_path` those could reach another sample's objects in `make schema`.
+  It also installs `pg_partman`, which is not contrib, into a schema of its own
+  with one template table, so every statement that names partman is dropped.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
   **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,

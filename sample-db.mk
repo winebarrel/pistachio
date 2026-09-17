@@ -84,6 +84,7 @@ coder|sample-db-url-schema|URL=https://raw.githubusercontent.com/coder/coder/263
 hatchet|sample-db-hatchet||hatchet
 thingsboard|sample-db-thingsboard||thingsboard
 glific|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/glific/glific/2c8141103b58aa6144240e79c253f119bfbcf98c/priv/repo/structure.sql SCHEMA=glific|glific
+lago|sample-db-lago|URL=https://raw.githubusercontent.com/getlago/lago-api/78f709bfb31c43834ab6ea18d5f771e3a94e313d/db/structure.sql|lago
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -519,6 +520,25 @@ sample-db-thingsboard:
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/thingsboard/thingsboard/562b19aa90f92c97b96c255b14816c32da7f4958/dao/src/main/resources/sql/$$f || exit 1; \
 	  echo; \
 	done | PGOPTIONS='-c search_path=thingsboard -c client_min_messages=warning' $(PSQL)
+
+# Lago (getlago/lago-api, AGPL-3.0). Its db/structure.sql is Rails' pg_dump
+# output like discourse's, and loads the same way as sample-db-pgdump-schema
+# with two things taken out first. It was dumped with --clean, so it opens with
+# about 1,400 lines of DROP ... IF EXISTS and placeholder views; with public
+# second in search_path those could reach another sample's objects in `make
+# schema`, so everything before the first `-- Name:` header is skipped. And it
+# installs pg_partman, which is not contrib, into a schema of its own and keeps
+# one template table there. pg_dump separates statements with a blank line, so
+# every paragraph that names partman is dropped; the partitioned table Lago
+# creates itself stays.
+.PHONY: sample-db-lago
+sample-db-lago:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lago'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | awk '/^-- Name: /{body=1} !body && /^(DROP |ALTER TABLE IF EXISTS |CREATE OR REPLACE VIEW )/{skip=1} body{skip=0} !skip' \
+	  | awk -v RS= -v ORS='\n\n' '!/partman/' \
+	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
+	  | PGOPTIONS='-c search_path=lago,public' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
