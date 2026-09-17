@@ -150,6 +150,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | dhis2 | dhis2 | [dhis2/dhis2-core](https://github.com/dhis2/dhis2-core) |
 | coder | coder | [coder/coder](https://github.com/coder/coder) |
 | hatchet | hatchet | [hatchet-dev/hatchet](https://github.com/hatchet-dev/hatchet) |
+| thingsboard | thingsboard | [thingsboard/thingsboard](https://github.com/thingsboard/thingsboard) |
 
 ## Coverage
 
@@ -166,7 +167,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - joomla and harbor 2026-09-01 on 16.13.
 - bigbluebutton and listmonk 2026-09-11 on 16.13.
 - dhis2 2026-09-15 on 15.18.
-- coder, boundary, and hatchet 2026-09-17 on 15.18.
+- coder, boundary, hatchet, and thingsboard 2026-09-17 on 15.18.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -251,11 +252,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | dhis2 | 473 | 2,648 | 955 | 989 | 925 | 0 | 0 | 1 | 0 | 0 |
 | coder | 116 | 1,173 | 292 | 153 | 217 | 11 | 62 | 1 | 30 | 30 |
 | hatchet | 133 | 1,209 | 330 | 77 | 136 | 0 | 57 | 1 | 22 | 49 |
-| **Total** | **6,864** | **56,415** | **20,301** | **8,791** | **12,105** | **2,122** | **240** | **424** | **1,383** | **1,121** |
+| thingsboard | 65 | 660 | 163 | 29 | 106 | 6 | 0 | 3 | 0 | 14 |
+| **Total** | **6,929** | **57,075** | **20,464** | **8,820** | **12,211** | **2,128** | **240** | **427** | **1,383** | **1,135** |
 
 ### Size
 
-The 60 dumps come to about 195,000 lines of SQL. chado is 43,700 of them, the
+The 61 dumps come to about 197,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints and the indexes, over a quarter of the columns and
 foreign keys, and more than a fifth of the tables; dhis2, openolat, musicbrainz,
@@ -343,6 +345,8 @@ always reach.
   2,054 partitions, all of which live in schemas of their own. hatchet declares
   22, 20 by range and 2 by hash, and attaches none, since it creates its
   partitions at run time; 13 of its tables set autovacuum storage parameters.
+  thingsboard declares 11, all by range, and attaches none for the same
+  reason.
 - **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
   sample that does.
 - **Triggers**: boundary's 741, more than any other sample, spread over 182
@@ -354,15 +358,16 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Twenty-five of the 60 samples declare
+Routines are concentrated the same way. Twenty-six of the 61 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,121. Seven in ten of them, 782, return
+and chado's 94 are 916 of the 1,135. Seven in ten of them, 782, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,023 are written in plpgsql and 98 in sql. sourcegraph declares the only
-procedure any sample has, and inaturalist the only aggregate, which
-`--manage-routine` does not read and so is in neither count. Only chado, kea,
+1,037 are written in plpgsql and 98 in sql. sourcegraph declares one
+procedure and thingsboard three, the only procedures any sample has, and
+inaturalist the only aggregate, which `--manage-routine` does not read and so is
+in neither count. Only chado, kea,
 and boundary overload a name, 11 of them, 3, and 1, though danbooru's three, all
 sql, include a `lower(text[])` that shadows a built-in. Only sourcegraph,
 ledgersmb, gitlab, coder, and boundary comment a routine, 137 between them, 124
@@ -511,6 +516,11 @@ strip only what is irrelevant to a schema round trip:
   `IF EXISTS` and commits outside a transaction, which floods a fresh database
   with a few hundred NOTICEs and warnings, so `client_min_messages` is raised to
   `error` for the load.
+- **thingsboard**: the schema ships as one file per part, loaded in the order
+  ThingsBoard's installer runs them, with the views before the functions that
+  declare variables of their row types. `schema-ts-latest-psql.sql` is left
+  out, since only the migration from Cassandra reads it and
+  `schema-entities.sql` already creates its table.
 - **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.
