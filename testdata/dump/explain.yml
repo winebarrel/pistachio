@@ -1,0 +1,45 @@
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.users SELECT g, 'n' || g FROM generate_series(1, 1000) g;
+  CREATE INDEX users_name_idx ON public.users USING btree (name);
+  ANALYZE public.users;
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      body text
+  );
+  CREATE MATERIALIZED VIEW public.user_counts AS SELECT count(*) AS cnt FROM public.users;
+  CREATE UNIQUE INDEX user_counts_cnt_idx ON public.user_counts USING btree (cnt);
+  ANALYZE public.user_counts;
+  CREATE VIEW public.user_total AS SELECT count(*) AS total FROM public.users;
+dump: |
+  -- public.logs (not analyzed)
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      body text
+  );
+
+  -- public.users (~1,000 rows, 48 kB, as of {{today}})
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- 40 kB
+  CREATE INDEX users_name_idx ON public.users USING btree (name);
+
+  -- public.user_counts (~1 row, 8192 bytes, as of {{today}})
+  CREATE MATERIALIZED VIEW public.user_counts AS
+  SELECT count(*) AS cnt
+     FROM users;
+  -- 16 kB
+  CREATE UNIQUE INDEX user_counts_cnt_idx ON public.user_counts USING btree (cnt);
+
+  -- public.user_total
+  CREATE OR REPLACE VIEW public.user_total AS
+  SELECT count(*) AS total
+     FROM users;

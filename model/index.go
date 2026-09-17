@@ -14,6 +14,9 @@ type Index struct {
 	// PostgreSQL rejects a DROP of one and drops it with the parent's. Only the
 	// catalog sets it.
 	Attached bool `json:"attached"`
+	// Size is the size estimate dump --explain writes in a comment above the
+	// index. Only dump sets it.
+	Size string `json:"-"`
 }
 
 func (idx Index) FQTN() string {
@@ -22,6 +25,14 @@ func (idx Index) FQTN() string {
 
 func (idx Index) SQL() string {
 	return idx.Definition + ";"
+}
+
+// DumpSQL is SQL with the size comment dump --explain puts above it.
+func (idx Index) DumpSQL() string {
+	if idx.Size == "" {
+		return idx.SQL()
+	}
+	return "-- " + idx.Size + "\n" + idx.SQL()
 }
 
 // CommentSQL renders the index's own COMMENT ON, or an empty string when it

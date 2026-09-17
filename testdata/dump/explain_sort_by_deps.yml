@@ -1,0 +1,21 @@
+explain: true
+sort_by_deps: true
+init: |
+  CREATE TABLE public.users (id integer NOT NULL);
+  CREATE INDEX users_id_idx ON public.users USING btree (id);
+  INSERT INTO public.users SELECT g FROM generate_series(1, 3) g;
+  ANALYZE public.users;
+  CREATE MATERIALIZED VIEW public.user_ids AS SELECT count(*) AS cnt FROM public.users;
+  ANALYZE public.user_ids;
+dump: |
+  -- public.users (~3 rows, 8192 bytes, as of {{today}})
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  );
+  -- 16 kB
+  CREATE INDEX users_id_idx ON public.users USING btree (id);
+
+  -- public.user_ids (~1 row, 8192 bytes, as of {{today}})
+  CREATE MATERIALIZED VIEW public.user_ids AS
+  SELECT count(*) AS cnt
+     FROM users;

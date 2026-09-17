@@ -407,6 +407,9 @@ Flags:
                                 the layout pista fmt applies ($PISTA_NO_FORMAT).
       --json                    Write the dump as JSON instead of SQL
                                 ($PISTA_DUMP_JSON).
+      --explain                 Comment each table, materialized view and
+                                index with its size estimate from pg_class
+                                ($PISTA_DUMP_EXPLAIN).
 ```
 
 </details>
@@ -725,7 +728,20 @@ The output goes through the formatter that `pista fmt` runs, so a dump needs no 
 
 `GRANT`, `CREATE EXTENSION` and roles are out of scope and are not written. A dump loaded into an empty database therefore restores the schema, not the privileges on it.
 
-`--json` writes JSON instead of SQL, in the same shape `pista parse` writes. Also available as `$PISTA_DUMP_JSON`. `--split`, `--sort-by-deps` and `--no-format` lay SQL out and cannot be used with it. See [Parsing schema files](../guides/parsing.md) for the shape of the document.
+`--explain` writes the size of each table and materialized view after its name in the header comment, and the size of each index in a comment above it. The sizes are the `pg_class` estimates `plan --explain` prints. Also available as `$PISTA_DUMP_EXPLAIN`. See [Explaining a plan](../guides/explaining-plans.md#sizes-in-a-dump).
+
+```sql
+-- public.users (~2,000,000 rows, 210 MB, as of 2026-09-09)
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- 43 MB
+CREATE INDEX users_name_idx ON public.users USING btree (name);
+```
+
+`--json` writes JSON instead of SQL, in the same shape `pista parse` writes. Also available as `$PISTA_DUMP_JSON`. `--split`, `--sort-by-deps` and `--no-format` lay SQL out, and `--explain` writes SQL comments, so none of them can be used with it. See [Parsing schema files](../guides/parsing.md) for the shape of the document.
 
 
 ## fmt

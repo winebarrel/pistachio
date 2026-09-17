@@ -159,7 +159,7 @@ func TestRun_Pager(t *testing.T) {
 // kong refuses them alongside --json. The parser rejects them before a
 // database is reached, so no connection is needed.
 func TestRun_DumpJSONExclusiveFlags(t *testing.T) {
-	for _, flag := range []string{"--split=/tmp", "--sort-by-deps", "--no-format"} {
+	for _, flag := range []string{"--split=/tmp", "--sort-by-deps", "--no-format", "--explain"} {
 		t.Run(flag, func(t *testing.T) {
 			var stdout bytes.Buffer
 			code, stderr := runCLI(t, &stdout, "dump", "--json", flag)

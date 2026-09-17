@@ -26,6 +26,9 @@ type View struct {
 	Indexes       *orderedmap.Map[string, *Index]   `json:"indexes"`
 	Triggers      *orderedmap.Map[string, *Trigger] `json:"triggers"`
 	Comment       *string                           `json:"comment"`
+	// Size is the size estimate dump --explain writes after a materialized
+	// view's name in the comment above it. Only dump sets it.
+	Size string `json:"-"`
 	// ColumnComments maps a column name to its comment. A column without a
 	// comment has no entry.
 	ColumnComments *orderedmap.Map[string, string] `json:"column_comments"`
@@ -140,10 +143,10 @@ func (v View) CommentSQL() string {
 }
 
 func ViewToSQL(v *View) string {
-	parts := []string{"-- " + v.FQVN(), v.SQL()}
+	parts := []string{sizedHeader(v.FQVN(), v.Size), v.SQL()}
 	if v.Indexes != nil {
 		for _, idx := range v.Indexes.CollectValues() {
-			parts = append(parts, idx.SQL())
+			parts = append(parts, idx.DumpSQL())
 		}
 	}
 	if s := v.TrigSQL(); s != "" {

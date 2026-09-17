@@ -37,6 +37,9 @@ type Table struct {
 	Policies         *orderedmap.Map[string, *Policy]     `json:"policies"`
 	Triggers         *orderedmap.Map[string, *Trigger]    `json:"triggers"`
 	Comment          *string                              `json:"comment"`
+	// Size is the size estimate dump --explain writes after the table's name
+	// in the comment above its CREATE TABLE. Only dump sets it.
+	Size string `json:"-"`
 }
 
 // IsPartitionChild reports whether the table is a partition of a declarative
@@ -180,7 +183,7 @@ func (t Table) NotValidConSQL() string {
 
 func (t Table) IdxSQL() string {
 	return strings.Join(
-		t.Indexes.TransformSlice(func(_ string, idx *Index) string { return idx.SQL() }),
+		t.Indexes.TransformSlice(func(_ string, idx *Index) string { return idx.DumpSQL() }),
 		"\n",
 	)
 }
@@ -327,8 +330,17 @@ func (t Table) CommentSQL() string {
 	return strings.Join(stmts, "\n")
 }
 
+// sizedHeader writes the comment dump puts above a relation, with the size
+// estimate after the name when dump --explain read one.
+func sizedHeader(name, size string) string {
+	if size == "" {
+		return "-- " + name
+	}
+	return "-- " + name + " (" + size + ")"
+}
+
 func TableToSQL(t *Table) string {
-	parts := []string{"-- " + t.FQTN(), t.SQL()}
+	parts := []string{sizedHeader(t.FQTN(), t.Size), t.SQL()}
 	if s := t.NotValidConSQL(); s != "" {
 		parts = append(parts, s)
 	}
