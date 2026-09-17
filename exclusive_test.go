@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +37,27 @@ func holdExclusive(t *testing.T, ctx context.Context, conn *pgx.Conn) {
 func releaseExclusive(ctx context.Context, conn *pgx.Conn) error {
 	_, err := conn.Exec(ctx, "SELECT pg_advisory_unlock($1, hashtext(current_database()))", exclusiveLockClassID)
 	return err
+}
+
+// waitingWriter closes waiting when apply writes that it is waiting for the
+// exclusion. A test that releases or cancels on that signal rather than after
+// a fixed sleep cannot act before apply has made its first attempt, which a
+// slow connection otherwise allows.
+type waitingWriter struct {
+	io.Writer
+	once    sync.Once
+	waiting chan struct{}
+}
+
+func newWaitingWriter(w io.Writer) *waitingWriter {
+	return &waitingWriter{Writer: w, waiting: make(chan struct{})}
+}
+
+func (w *waitingWriter) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte("-- Waiting for another exclusive apply to finish")) {
+		w.once.Do(func() { close(w.waiting) })
+	}
+	return w.Writer.Write(p)
 }
 
 func durationPtr(d time.Duration) *UnsignedDuration {
@@ -143,9 +165,11 @@ func TestApplyExclusiveWait(t *testing.T) {
 	defer holder.Close(ctx)
 	holdExclusive(t, ctx, holder)
 
+	var buf bytes.Buffer
+	out := newWaitingWriter(&buf)
 	release := make(chan error, 1)
 	go func() {
-		time.Sleep(200 * time.Millisecond)
+		<-out.waiting
 		release <- releaseExclusive(ctx, holder)
 	}()
 
@@ -155,11 +179,10 @@ func TestApplyExclusiveWait(t *testing.T) {
 	})
 
 	// 0 waits without limit.
-	var buf bytes.Buffer
 	result, err := client.Apply(ctx, &ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
 		ExclusiveWait: durationPtr(0),
-	}, &buf)
+	}, out)
 	require.NoError(t, err)
 	require.NoError(t, <-release)
 	assert.True(t, result.Applied)
@@ -177,9 +200,11 @@ func TestApplyExclusiveWaitWithinDeadline(t *testing.T) {
 	defer holder.Close(ctx)
 	holdExclusive(t, ctx, holder)
 
+	var buf bytes.Buffer
+	out := newWaitingWriter(&buf)
 	release := make(chan error, 1)
 	go func() {
-		time.Sleep(200 * time.Millisecond)
+		<-out.waiting
 		release <- releaseExclusive(ctx, holder)
 	}()
 
@@ -188,11 +213,10 @@ func TestApplyExclusiveWaitWithinDeadline(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	var buf bytes.Buffer
 	result, err := client.Apply(ctx, &ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
 		ExclusiveWait: durationPtr(10 * time.Second),
-	}, &buf)
+	}, out)
 	require.NoError(t, err)
 	require.NoError(t, <-release)
 	assert.True(t, result.Applied)
@@ -269,15 +293,16 @@ func TestApplyExclusiveWaitCanceled(t *testing.T) {
 	// Canceling the caller's context (e.g. Ctrl-C) must stop an unlimited
 	// wait, and must not be reported as a wait timeout.
 	applyCtx, cancel := context.WithCancel(ctx)
+	out := newWaitingWriter(io.Discard)
 	go func() {
-		time.Sleep(200 * time.Millisecond)
+		<-out.waiting
 		cancel()
 	}()
 
 	_, err := client.Apply(applyCtx, &ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
 		ExclusiveWait: durationPtr(0),
-	}, io.Discard)
+	}, out)
 	require.ErrorContains(t, err, "failed to acquire the apply exclusion")
 	assert.NotContains(t, err.Error(), "did not finish within")
 }
@@ -318,9 +343,11 @@ func TestApplyExclusiveWaitDuringConcurrentIndexBuild(t *testing.T) {
 	// waits for the waiter's snapshot, and the waiter waits for the exclusion
 	// the index build's session holds. The wait must therefore hold no
 	// snapshot between attempts.
+	var buf bytes.Buffer
+	out := newWaitingWriter(&buf)
 	done := make(chan error, 1)
 	go func() {
-		time.Sleep(300 * time.Millisecond)
+		<-out.waiting
 		if _, err := holder.Exec(ctx, "CREATE INDEX CONCURRENTLY items_id_idx ON items (id)"); err != nil {
 			done <- err
 			return
@@ -333,11 +360,10 @@ func TestApplyExclusiveWaitDuringConcurrentIndexBuild(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
-	var buf bytes.Buffer
 	result, err := client.Apply(ctx, &ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveIndexDesired)},
 		ExclusiveWait: durationPtr(30 * time.Second),
-	}, &buf)
+	}, out)
 	require.NoError(t, err)
 	require.NoError(t, <-done)
 	assert.True(t, result.Applied)
