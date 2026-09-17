@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.58.0] - 2026-09-17
 
 * Add `--explain` to `dump` (`$PISTA_DUMP_EXPLAIN`). It writes the size of each table, materialized view and index in a comment, from the same estimates `plan --explain` reads.
 
