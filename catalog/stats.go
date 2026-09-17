@@ -95,7 +95,8 @@ func (c *Catalog) TableStats(ctx context.Context) (map[string]TableStat, error) 
 // in bytes, keyed by the schema-qualified index name. Like TableStats it is
 // relpages, which VACUUM, ANALYZE and CREATE INDEX write. An index on a
 // partitioned table holds nothing itself, so it reads as the sum of the
-// indexes attached to it on the partitions.
+// indexes attached to it on the partitions in the managed schemas, the same
+// partitions a table's size sums.
 func (c *Catalog) IndexSizes(ctx context.Context) (map[string]int64, error) {
 	q := `
 		SELECT
@@ -107,8 +108,10 @@ func (c *Catalog) IndexSizes(ctx context.Context) (map[string]int64, error) {
 					FROM
 						pg_catalog.pg_partition_tree(c.oid) pt
 						JOIN pg_catalog.pg_class l ON l.oid = pt.relid
+						JOIN pg_catalog.pg_namespace ln ON ln.oid = l.relnamespace
 					WHERE
 						pt.isleaf
+						AND ln.nspname = ANY(@schemas)
 				)
 				ELSE GREATEST(c.relpages, 0)::bigint
 			END * pg_catalog.current_setting('block_size')::bigint

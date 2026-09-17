@@ -184,6 +184,27 @@ func TestIndexSizes(t *testing.T) {
 		assert.Equal(t, int64(8192), sizes["public.events_2025_at_idx"])
 		assert.Equal(t, int64(16384), sizes["public.events_at_idx"])
 	})
+
+	// The sum stops at the managed schemas, the same boundary TableStats
+	// draws for the partitions of a table.
+	t.Run("partitioned index leaves out a partition in another schema", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.events (id integer NOT NULL, at date NOT NULL) PARTITION BY RANGE (at);
+			CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+			CREATE SCHEMA other_parts;
+			CREATE TABLE other_parts.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+			CREATE INDEX events_at_idx ON public.events USING btree (at);
+		`)
+		t.Cleanup(func() {
+			conn.Exec(ctx, "DROP SCHEMA IF EXISTS other_parts CASCADE")
+		})
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		sizes, err := cat.IndexSizes(ctx)
+		require.NoError(t, err)
+
+		assert.Equal(t, int64(8192), sizes["public.events_at_idx"])
+	})
 }
 
 func TestTypeChanges(t *testing.T) {
