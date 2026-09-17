@@ -23,7 +23,8 @@ variables rather than per-sample flags because they have to reach both the dump
 and the plan, and the manifest's flags column reaches only the plan.
 
 The server also needs pgvector for the discourse sample's `halfvec` columns and
-PostGIS for the osm, inaturalist, and dhis2 samples' `geometry` columns. The
+citizenlab's `vector` column, and PostGIS for the osm, inaturalist, and dhis2
+samples' `geometry` columns and citizenlab's `geography` ones. The
 official postgres image ships neither. compose.yaml installs
 `postgresql-<major>-pgvector` and `postgresql-<major>-postgis-3` from PGDG when
 a container starts, and the samples CI job installs the same packages into its
@@ -160,6 +161,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | windmill | windmill | [windmill-labs/windmill](https://github.com/windmill-labs/windmill) |
 | plausible | plausible | [plausible/analytics](https://github.com/plausible/analytics) |
 | feedbin | feedbin | [feedbin/feedbin](https://github.com/feedbin/feedbin) |
+| citizenlab | citizenlab | [CitizenLabDotCo/citizenlab](https://github.com/CitizenLabDotCo/citizenlab) |
 
 ## Coverage
 
@@ -178,7 +180,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - dhis2 2026-09-15 on 15.18.
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
-- mattermost, lemmy, windmill, plausible, and feedbin 2026-09-17 on 16.13.
+- mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
+  on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -276,11 +279,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | windmill | 173 | 1,511 | 392 | 105 | 210 | 3 | 33 | 4 | 26 | 24 |
 | plausible | 42 | 294 | 81 | 40 | 47 | 0 | 3 | 0 | 1 | 1 |
 | feedbin | 44 | 395 | 161 | 8 | 43 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **7,719** | **65,131** | **23,350** | **9,908** | **13,135** | **2,173** | **457** | **432** | **1,499** | **1,259** |
+| citizenlab | 144 | 1,304 | 498 | 169 | 155 | 26 | 0 | 0 | 2 | 4 |
+| **Total** | **7,863** | **66,435** | **23,848** | **10,077** | **13,290** | **2,199** | **457** | **432** | **1,501** | **1,263** |
 
 ### Size
 
-The 70 dumps come to about 220,000 lines of SQL. chado is 43,700 of them, the
+The 71 dumps come to about 224,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -300,7 +304,9 @@ always reach.
 
 - **Index methods and predicates**: partial and expression indexes and gin,
   gist, hash, and brin methods (musicbrainz, plus 12 partial and 2 gin indexes
-  in synapse).
+  in synapse). citizenlab adds the one hnsw index any sample has, pgvector's,
+  over its one `vector` column and naming `vector_cosine_ops` from the schema
+  the extension sits in.
 - **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to a
   table, denser than any other sample, 55 of them gin, 29 of those over an
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
@@ -353,7 +359,8 @@ always reach.
   PostGIS: osm's one `geometry(Polygon,4326)`, dhis2's one unmodified
   `geometry`, and inaturalist's 26, 8 of them carrying a modifier of their own
   and 8 gist indexes over them, and those modifiers are the only ones any sample
-  reports in mixed case.
+  reports in mixed case. citizenlab needs both, for one `vector` column and
+  three `geography` ones, the only `geography` any sample declares.
 - **Foreign keys that all declare their referential actions**: all 171 of
   icinga_director's name both ON UPDATE and ON DELETE, in six combinations, and
   every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and an
@@ -386,6 +393,12 @@ always reach.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, and mattermost, whose six are all materialized and
   one of which carries an index.
+- **Extensions in a schema of their own**: citizenlab puts all five of its in
+  `shared_extensions` and qualifies every use with it, so 135 of its column
+  defaults call `shared_extensions.gen_random_uuid()` and two of its indexes
+  name an operator class from there. windmill does the same with `uuid-ossp`
+  in an `extensions` schema, and lemmy installs its three into the schema it
+  loads into.
 - **Views at scale**: chado's 1,864 are nearly ten times every other sample put
   together, and 1,832 of them are the Sequence Ontology views in its `so`
   schema, each selecting from tables in `chado`; bigbluebutton's 86 over 54
@@ -421,13 +434,13 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-two of the 70 samples declare
+Routines are concentrated the same way. Thirty-three of the 71 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,259. Seven in ten of them, 887, return
+and chado's 94 are 916 of the 1,263. Seven in ten of them, 889, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,158 are written in plpgsql and 101 in sql. sourcegraph declares one
+1,160 are written in plpgsql and 103 in sql. sourcegraph declares one
 procedure, thingsboard three, and lemmy two, the only procedures any sample has,
 and inaturalist the only aggregate, which `--manage-routine` does not read and
 so is in neither count. Only chado, kea,
@@ -493,6 +506,18 @@ strip only what is irrelevant to a schema round trip:
   and does not find it. With the calls qualified, every table, index,
   constraint, and view loads on all four versions of the CI matrix, the three
   gist indexes among them.
+- **citizenlab**: the schema is Rails' `db/structure.sql` like discourse's, but
+  multi-tenant: its five extensions live in a `shared_extensions` schema the
+  file creates, and every use of them is qualified with it, so only the
+  `public.` qualifier is stripped and `search_path` places the rest. It was
+  dumped with `--clean`, so everything before the first `-- Name:` header is
+  skipped, as it is for lago. Here that matters for more than tidiness: the
+  preamble ends with `DROP SCHEMA IF EXISTS shared_extensions` and
+  `DROP SCHEMA IF EXISTS public`, and the second would take every public sample
+  with it in `make schema`. Skipping it also drops the `SET` lines `pg_dump`
+  writes at the top, so `check_function_bodies` and `client_min_messages` are
+  passed in instead, and the `CREATE SCHEMA public` that opens the body is
+  dropped, since `reset-db` has just created it.
 - **clubdata**: the dump creates its own database and reconnects to it, which
   cannot be done mid-pipe. Those two lines are dropped; the rest creates the
   `cd` schema itself.

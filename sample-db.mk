@@ -92,6 +92,7 @@ lemmy|sample-db-lemmy||lemmy,r,utils
 windmill|sample-db-windmill||windmill
 plausible|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/plausible/analytics/30abd272b5114ba1f3c2c8bd146b86a4d2b7b984/priv/repo/structure.sql SCHEMA=plausible|plausible
 feedbin|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/feedbin/feedbin/eabfb10cc5975ebd755781ce33c0043feee6af31/db/structure.sql SCHEMA=feedbin|feedbin
+citizenlab|sample-db-citizenlab|URL=https://raw.githubusercontent.com/CitizenLabDotCo/citizenlab/0501175990e1ecec84f4a541c1a8b7a2b4755da1/back/db/structure.sql|citizenlab
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -699,6 +700,35 @@ sample-db-windmill:
 	            s/schemaname = 'public'/schemaname = current_schema()/" \
 	  | PGOPTIONS='-c search_path=windmill,extensions -c client_min_messages=warning -c check_function_bodies=off' $(PSQL)
 	$(PSQL) -c 'SET search_path = windmill; DROP TABLE _sqlx_migrations'
+
+# CitizenLab (CitizenLabDotCo/citizenlab, AGPL-3.0). Its db/structure.sql is
+# Rails' pg_dump output like discourse's, but it is a multi-tenant schema: the
+# extensions live in a schema of its own named shared_extensions, which the file
+# creates, and every use of them is qualified with it. So only the `public.`
+# qualifier is stripped and search_path places the rest, the way
+# sample-db-pgdump-schema does it.
+#
+# It was dumped with --clean, so like lago it opens with several hundred DROP
+# statements; everything before the first `-- Name:` header is skipped. Here
+# that is not only tidiness: the last two lines of the preamble are
+# `DROP SCHEMA IF EXISTS shared_extensions` and `DROP SCHEMA IF EXISTS public`,
+# and the second would take every public sample with it in `make schema`.
+# Skipping the preamble also drops the SET lines pg_dump writes at the top, so
+# check_function_bodies and client_min_messages are passed in instead. The
+# `CREATE SCHEMA public` that opens the body is dropped as well, since reset-db
+# has just created it.
+#
+# It needs PostGIS for three geography columns and pgvector for one vector
+# column and the hnsw index over it; compose.yaml and the samples CI job install
+# both for discourse, osm, inaturalist, and dhis2 already. pgcrypto, pg_trgm,
+# and uuid-ossp are contrib.
+.PHONY: sample-db-citizenlab
+sample-db-citizenlab:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS citizenlab'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | awk '/^-- Name: /{body=1} body' \
+	  | sed -E "/^CREATE SCHEMA public;\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
+	  | PGOPTIONS='-c search_path=citizenlab -c client_min_messages=warning -c check_function_bodies=off' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
