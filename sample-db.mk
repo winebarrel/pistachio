@@ -87,6 +87,7 @@ glific|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/glific/glif
 lago|sample-db-lago|URL=https://raw.githubusercontent.com/getlago/lago-api/78f709bfb31c43834ab6ea18d5f771e3a94e313d/db/structure.sql|lago
 calcom|sample-db-prisma|REPO=calcom/cal.diy SHA=6bc45298226f96ff79e0c070c8b2ce39727e8477 DIR=packages/prisma/migrations SCHEMA=calcom|calcom
 triggerdev|sample-db-prisma|REPO=triggerdotdev/trigger.dev SHA=2d03fee2e3ff368128302ed4c783ba4e32d1cb00 DIR=internal-packages/database/prisma/migrations SCHEMA=triggerdev|triggerdev
+mattermost|sample-db-mattermost||mattermost
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -560,6 +561,29 @@ sample-db-prisma:
 	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
 	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
 	  | PGOPTIONS='-c search_path=$(SCHEMA)' $(PSQL)
+
+# Mattermost (mattermost/mattermost, AGPL-3.0 and Apache-2.0). The schema ships
+# as golang-migrate migrations, 227 .up.sql files replayed in name order, so the
+# repository tarball is fetched once and only the migrations directory is
+# extracted, as sample-db-boundary and sample-db-prisma do; fetching 227 files
+# one at a time is slow. None of the files names a schema, and the guards they
+# write against information_schema all say current_schema(), so `mattermost` is
+# created up front and search_path places everything. Eight of the files end
+# without a semicolon, which would merge the next file's opening statement into
+# the last one, so each is followed by a newline and one regardless. Most of
+# them also add and drop with IF NOT EXISTS and IF EXISTS, which floods a fresh
+# database with NOTICEs, so client_min_messages is raised to warning.
+MATTERMOST_SHA = 3db1a9adf80fd91d911de1b02632bd0bc3e9fe9d
+
+.PHONY: sample-db-mattermost
+sample-db-mattermost:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS mattermost'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/mattermost/mattermost/tar.gz/$(MATTERMOST_SHA) \
+	  | tar xz -C "$$dir" --strip-components=6 mattermost-$(MATTERMOST_SHA)/server/channels/db/migrations/postgres && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | PGOPTIONS='-c search_path=mattermost -c client_min_messages=warning' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
