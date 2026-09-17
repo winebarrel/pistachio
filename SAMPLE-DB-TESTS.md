@@ -147,6 +147,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | bigbluebutton | bigbluebutton | [bigbluebutton/bigbluebutton](https://github.com/bigbluebutton/bigbluebutton) |
 | listmonk | listmonk | [knadh/listmonk](https://github.com/knadh/listmonk) |
 | dhis2 | dhis2 | [dhis2/dhis2-core](https://github.com/dhis2/dhis2-core) |
+| coder | coder | [coder/coder](https://github.com/coder/coder) |
 
 ## Coverage
 
@@ -163,6 +164,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - joomla and harbor 2026-09-01 on 16.13.
 - bigbluebutton and listmonk 2026-09-11 on 16.13.
 - dhis2 2026-09-15 on 15.18.
+- coder 2026-09-17 on 15.18.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -244,11 +246,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | bigbluebutton | 54 | 532 | 147 | 65 | 51 | 86 | 0 | 0 | 25 | 26 |
 | listmonk | 16 | 126 | 65 | 19 | 25 | 3 | 14 | 0 | 0 | 0 |
 | dhis2 | 473 | 2,648 | 955 | 989 | 925 | 0 | 0 | 1 | 0 | 0 |
-| **Total** | **6,322** | **52,503** | **19,117** | **8,174** | **11,067** | **2,049** | **85** | **422** | **590** | **817** |
+| coder | 116 | 1,173 | 292 | 153 | 217 | 11 | 62 | 1 | 30 | 30 |
+| **Total** | **6,438** | **53,676** | **19,409** | **8,327** | **11,284** | **2,060** | **147** | **423** | **620** | **847** |
 
 ### Size
 
-The 57 dumps come to about 173,000 lines of SQL. chado is 43,700 of them, the
+The 58 dumps come to about 178,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still more than a third
 of the constraints, a third of the indexes, over a quarter of the columns and
 foreign keys, and more than a fifth of the tables; dhis2, openolat, musicbrainz,
@@ -286,11 +289,11 @@ always reach.
   function of its own that calls `unaccent`.
 - **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb,
   whose 13 types are 6 enums and 7 domains, each domain carrying a named CHECK,
-  plus icinga_director, whose 20 enums are more than any other sample and whose
-  one domain carries two anonymous CHECKs, guacamole's 5 enums, and listmonk's
-  14 over 16 tables.
+  plus icinga_director, whose 20 enums are more than any other sample but coder
+  and whose one domain carries two anonymous CHECKs, guacamole's 5 enums,
+  listmonk's 14 over 16 tables, and coder's 61, which 73 columns are typed by.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
-  and sourcegraph and chado 2 each.
+  and sourcegraph, chado, and coder 2 each.
 - **tsvector columns**: dvdrental, pagila.
 - **A non-default collation**: musicbrainz.
 - **Columns typed by a contrib extension**: sourcegraph, with 49 `citext`
@@ -332,23 +335,23 @@ always reach.
 - **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
   sample that does.
 - **Triggers**: gitlab's 388, more than any other sample, one of them held in
-  `ENABLE ALWAYS` state; kea's 81 outnumber its 64 tables; bigbluebutton's 25
-  and ledgersmb's 11 come next.
+  `ENABLE ALWAYS` state; kea's 81 outnumber its 64 tables; coder's 30,
+  bigbluebutton's 25, and ledgersmb's 11 come next.
 
 ### Routines
 
-Routines are concentrated the same way. Twenty-two of the 57 samples declare
+Routines are concentrated the same way. Twenty-three of the 58 samples declare
 one at all, and gitlab's 337, kea's and musicbrainz's 130 each, and chado's 94
-are 691 of the 817. Two thirds of them, 546, return `trigger`, though not
+are 691 of the 847. Two thirds of them, 573, return `trigger`, though not
 every one of those has a trigger to call it: musicbrainz's 89 do not, since its
 loader concatenates a file list that leaves triggers out.
 
-739 are written in plpgsql and 78 in sql. sourcegraph declares the only
+768 are written in plpgsql and 79 in sql. sourcegraph declares the only
 procedure any sample has, and inaturalist the only aggregate, which
 `--manage-routine` does not read and so is in neither count. Only chado and kea
 overload a name, 11 of them and 3, though danbooru's three, all sql, include a
-`lower(text[])` that shadows a built-in. Only sourcegraph, ledgersmb, and gitlab
-comment a routine, seven between them.
+`lower(text[])` that shadows a built-in. Only sourcegraph, ledgersmb, gitlab,
+and coder comment a routine, 13 between them.
 
 ## Load-time adjustments
 
@@ -390,6 +393,10 @@ strip only what is irrelevant to a schema round trip:
 - **clubdata**: the dump creates its own database and reconnects to it, which
   cannot be done mid-pipe. Those two lines are dropped; the rest creates the
   `cd` schema itself.
+- **coder**: the dump is `pg_dump` output with the preamble stripped, and the
+  preamble is where `pg_dump` turns `check_function_bodies` off. Left on, a
+  plpgsql function that declares a variable of a table's row type stops the
+  load, since the table comes later in the file, so the loader turns it off.
 - **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
   constraint, and the `\copy` lines are dropped. The script drops the `gen` and
   `bookings` schemas with `IF EXISTS` before it creates them, which says so on a
@@ -448,8 +455,9 @@ strip only what is irrelevant to a schema round trip:
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
   **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,
   **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
-  **nightingale**, **openolat**, **listmonk**, **dhis2**: these dumps name no
-  schema at all, so whichever schema comes first in `search_path` gets them.
+  **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**: these
+  dumps name no schema at all, so whichever schema comes first in `search_path`
+  gets them.
   Each is loaded into a schema of its own instead of `public`, so that
   `make schema`, which puts every sample in one database, does not stack them on
   top of the other public samples (mediawiki and pagila both define `actor` and

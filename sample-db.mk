@@ -74,6 +74,7 @@ harbor|sample-db-harbor||harbor
 bigbluebutton|sample-db-bigbluebutton|URL=https://raw.githubusercontent.com/bigbluebutton/bigbluebutton/4c3a477fe3e34a7da6854c491be2c8d02e83c083/bbb-graphql-server/bbb_schema.sql SCHEMA=bigbluebutton|bigbluebutton
 listmonk|sample-db-url-schema|URL=https://raw.githubusercontent.com/knadh/listmonk/594b74056dd8a0d3a7621a32898ee38bfbe10e96/schema.sql SCHEMA=listmonk CLIENT_MIN_MESSAGES=warning|listmonk
 dhis2|sample-db-dhis2|URL=https://raw.githubusercontent.com/dhis2/dhis2-core/5d2dbdef40e91c1c613fc50a8132158dd5683b7f/dhis-2/dhis-support/dhis-support-db-migration/src/main/resources/org/hisp/dhis/db/base/dhis2_base_schema.sql SCHEMA=dhis2|dhis2
+coder|sample-db-url-schema|URL=https://raw.githubusercontent.com/coder/coder/263f2c207eca19c2e42a71f439782c15ebeb8f07/coderd/database/dump.sql SCHEMA=coder CHECK_FUNCTION_BODIES=off|coder
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -146,10 +147,17 @@ sample-db-mimiciv:
 # and commits outside a transaction, which adds a warning per statement.
 CLIENT_MIN_MESSAGES ?= notice
 
+# CHECK_FUNCTION_BODIES defaults to on, the server default. coder turns it off:
+# its dump is pg_dump output with the preamble stripped, and that preamble is
+# where pg_dump turns it off itself. Without it a plpgsql function declaring a
+# variable of a table's row type stops the load, since the table comes later in
+# the file.
+CHECK_FUNCTION_BODIES ?= on
+
 .PHONY: sample-db-url-schema
 sample-db-url-schema:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) | PGOPTIONS='-c search_path=$(SCHEMA) -c client_min_messages=$(CLIENT_MIN_MESSAGES)' $(PSQL)
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) | PGOPTIONS='-c search_path=$(SCHEMA) -c client_min_messages=$(CLIENT_MIN_MESSAGES) -c check_function_bodies=$(CHECK_FUNCTION_BODIES)' $(PSQL)
 
 # Hive metastore (apache/hive, Apache-2.0). Like the sample-db-url-schema
 # dumps this one belongs in a schema of its own, but it is a pg_dump-style
