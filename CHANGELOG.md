@@ -2,7 +2,7 @@
 
 ## [1.57.0] - 2026-09-17
 
-* `--manage-routine` leaves out the constructor functions of a range type. `dump` wrote them, and `plan` proposed dropping them, which PostgreSQL refuses. Delete them from a file an earlier `dump` wrote, or every plan creates them.
+* **BREAKING**: `--manage-routine` leaves out the constructor functions of a range type. `dump` wrote them, and `plan` proposed dropping them, which PostgreSQL refuses. Delete them from a file an earlier `dump` wrote, or every plan creates them.
 
 ## [1.56.0] - 2026-09-17
 
