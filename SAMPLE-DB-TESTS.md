@@ -366,13 +366,13 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Twenty-seven of the 62 samples declare
+Routines are concentrated the same way. Twenty-eight of the 63 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,149. Seven in ten of them, 796, return
+and chado's 94 are 916 of the 1,151. Seven in ten of them, 798, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,051 are written in plpgsql and 98 in sql. sourcegraph declares one
+1,053 are written in plpgsql and 98 in sql. sourcegraph declares one
 procedure and thingsboard three, the only procedures any sample has, and
 inaturalist the only aggregate, which `--manage-routine` does not read and so is
 in neither count. Only chado, kea,
