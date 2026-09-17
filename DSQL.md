@@ -1,8 +1,9 @@
 # Amazon Aurora DSQL
 
-pistachio does not support DSQL. This file records what a live cluster
-answered, so the next attempt starts from evidence rather than from the
-PostgreSQL manual. It is not a commitment to implement it.
+pistachio does not support DSQL. Support looks feasible, but it is not
+clear that anyone needs it, so the work has not been started. This file
+records what a live cluster answered, so an attempt starts from evidence
+rather than from the PostgreSQL manual.
 
 Verified against a live DSQL cluster (PostgreSQL 16 wire protocol,
 ap-northeast-1). Adding ASYNC to CREATE INDEX is not enough. Within
