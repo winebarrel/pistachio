@@ -85,6 +85,7 @@ hatchet|sample-db-hatchet||hatchet
 thingsboard|sample-db-thingsboard||thingsboard
 glific|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/glific/glific/2c8141103b58aa6144240e79c253f119bfbcf98c/priv/repo/structure.sql SCHEMA=glific|glific
 lago|sample-db-lago|URL=https://raw.githubusercontent.com/getlago/lago-api/78f709bfb31c43834ab6ea18d5f771e3a94e313d/db/structure.sql|lago
+calcom|sample-db-prisma|REPO=calcom/cal.diy SHA=6bc45298226f96ff79e0c070c8b2ce39727e8477 DIR=packages/prisma/migrations SCHEMA=calcom|calcom
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -539,6 +540,25 @@ sample-db-lago:
 	  | awk -v RS= -v ORS='\n\n' '!/partman/' \
 	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
 	  | PGOPTIONS='-c search_path=lago,public' $(PSQL)
+
+# A Prisma migration history replayed into a schema of its own. Prisma keeps
+# one directory per migration under DIR, each holding a migration.sql, and
+# applies them in name order, which starts with a timestamp. The repository
+# tarball is fetched once and only DIR is extracted, since there are hundreds
+# of files; the archive's top directory is named after the repository, so
+# REPO is the name GitHub uses now. A few files end without a semicolon, or on
+# a comment, so every file is followed by a newline and one. Prisma qualifies
+# some statements with `public`, which is stripped so search_path places them.
+.PHONY: sample-db-prisma
+sample-db-prisma:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/$(REPO)/tar.gz/$(SHA) \
+	  | tar xz -C "$$dir" --strip-components=$$((1 + $(words $(subst /, ,$(DIR))))) $(notdir $(REPO))-$(SHA)/$(DIR) && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | PGOPTIONS='-c search_path=$(SCHEMA)' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
