@@ -1,0 +1,24 @@
+# Rebuilding an index for a new collation leaves no drift behind: the harness
+# re-plans after the apply.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE "POSIX");
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE "POSIX");

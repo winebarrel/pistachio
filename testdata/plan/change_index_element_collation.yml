@@ -1,0 +1,19 @@
+# The collation is part of what the index is, so changing it rebuilds the
+# index. PostgreSQL has no ALTER INDEX for a definition, hence DROP + CREATE.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE "POSIX");
+plan: |
+  DROP INDEX public.users_email_idx;
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE "POSIX");

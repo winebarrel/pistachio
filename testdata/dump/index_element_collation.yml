@@ -1,0 +1,22 @@
+# An index element carries its own COLLATE, on a column and on an expression
+# alike. pg_get_indexdef writes the collation unqualified when pg_catalog is
+# on the search_path, so dump leaves it that way.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+  CREATE INDEX users_name_lower_idx ON public.users USING btree (lower(name) COLLATE "POSIX" DESC);
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+  CREATE INDEX users_name_lower_idx ON public.users USING btree (lower(name) COLLATE "POSIX" DESC);
