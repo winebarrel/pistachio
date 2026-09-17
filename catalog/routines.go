@@ -40,16 +40,21 @@ func (c *Catalog) Routines(ctx context.Context) (*orderedmap.Map[string, *model.
 // pg_depend entries on whatever it reads, which contradicts the order
 // pistachio creates routines in. The parser skips the same ones, so neither
 // side of the diff sees them.
+//
+// A routine an extension owns (deptype 'e') is left out as well, and so is one
+// that is part of another object (deptype 'i'), such as the constructors of a
+// range type, which cannot be dropped on their own.
 func (c *Catalog) ListRoutines(ctx context.Context) ([]*model.Routine, error) {
 	q := `
 		WITH
-			dependency_extension AS (
+			dependency_owned AS (
 				SELECT DISTINCT
 					d.objid
 				FROM
 					pg_catalog.pg_depend d
 				WHERE
-					d.deptype = 'e'
+					d.classid = 'pg_proc'::regclass
+					AND d.deptype IN ('e', 'i')
 			)
 		SELECT
 			p.oid,
@@ -61,7 +66,7 @@ func (c *Catalog) ListRoutines(ctx context.Context) ([]*model.Routine, error) {
 			LEFT JOIN pg_catalog.pg_description descr ON descr.objoid = p.oid
 			AND descr.classoid = 'pg_proc'::regclass
 			AND descr.objsubid = 0
-			LEFT JOIN dependency_extension de ON de.objid = p.oid
+			LEFT JOIN dependency_owned de ON de.objid = p.oid
 		WHERE
 			p.prokind IN ('f', 'p')
 			AND p.prosqlbody IS NULL
