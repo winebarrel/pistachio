@@ -1,0 +1,21 @@
+# The catalog writes an index element's collation unqualified; the file may
+# qualify it. The two name the same collation, so there is no diff.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+  CREATE INDEX users_name_lower_idx ON public.users USING btree (lower(name) COLLATE "POSIX" DESC);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email COLLATE pg_catalog."C");
+  CREATE INDEX users_name_lower_idx ON public.users USING btree (lower(name) COLLATE pg_catalog."POSIX" DESC);
+plan: ""
