@@ -3057,6 +3057,22 @@ func TestEqualIndexDef_opclassOptionDiffers_notEqual(t *testing.T) {
 	))
 }
 
+func TestEqualIndexDef_opclassOptionFractional(t *testing.T) {
+	// A BRIN bloom class takes a fractional value, which arrives as a Float
+	// where the catalog's quoted spelling arrives as a String.
+	assert.True(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate='0.05'))",
+		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate=0.05))",
+	))
+}
+
+func TestEqualIndexDef_opclassOptionFractionalDiffers_notEqual(t *testing.T) {
+	assert.False(t, equalIndexDef(
+		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate='0.05'))",
+		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate=0.02))",
+	))
+}
+
 func TestEqualIndexDef_opclassOptionBareWord(t *testing.T) {
 	// A value that reads as an identifier comes back bare, so the quoted
 	// spelling is the one a file may carry.

@@ -1800,8 +1800,9 @@ func normalizeIndexElem(ie *pg_query.IndexElem) {
 // and the catalog keeps the one the parameters were created in. Without this
 // an index carrying a parameter was dropped and recreated on every run.
 //
-// An integer is folded to its decimal string; no index storage parameter
-// takes a fractional value. A bare word, `deduplicate_items=off`, parses as a
+// An integer is folded to its decimal string, and a fractional value to the
+// digits the file wrote: a BRIN bloom class takes `false_positive_rate=0.05`,
+// which parses as a Float. A bare word, `deduplicate_items=off`, parses as a
 // single-name TypeName while the quoted spelling parses as a String, so the
 // TypeName is folded to a String too.
 func normalizeStorageParams(options []*pg_query.Node) {
@@ -1810,6 +1811,9 @@ func normalizeStorageParams(options []*pg_query.Node) {
 		if i := de.GetArg().GetInteger(); i != nil {
 			sval := strconv.FormatInt(int64(i.Ival), 10)
 			de.Arg = &pg_query.Node{Node: &pg_query.Node_String_{String_: &pg_query.String{Sval: sval}}}
+		}
+		if f := de.GetArg().GetFloat(); f != nil {
+			de.Arg = &pg_query.Node{Node: &pg_query.Node_String_{String_: &pg_query.String{Sval: f.Fval}}}
 		}
 		if tn := de.GetArg().GetTypeName(); tn != nil && len(tn.Names) == 1 {
 			if s := tn.Names[0].GetString_(); s != nil {

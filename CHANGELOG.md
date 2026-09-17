@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Compare an index element's operator class and collation, an exclusion constraint's included, the way PostgreSQL writes them: a name in the search_path without its schema, an option value quoted, `siglen='32'`. A file that wrote either the other way re-created the index on every plan.
+* Compare an index element's operator class and collation, an exclusion constraint's elements too, the way PostgreSQL writes them: a name in the search_path without its schema, an option value quoted, `siglen='32'`. A file that wrote either the other way re-created the index on every plan.
 
 ## [1.55.0] - 2026-09-16
 
