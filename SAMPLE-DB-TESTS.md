@@ -156,6 +156,8 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | calcom | calcom | [calcom/cal.diy](https://github.com/calcom/cal.diy) |
 | triggerdev | triggerdev | [triggerdotdev/trigger.dev](https://github.com/triggerdotdev/trigger.dev) |
 | mattermost | mattermost | [mattermost/mattermost](https://github.com/mattermost/mattermost) |
+| lemmy | lemmy, r, utils | [LemmyNet/lemmy](https://github.com/LemmyNet/lemmy) |
+| windmill | windmill | [windmill-labs/windmill](https://github.com/windmill-labs/windmill) |
 
 ## Coverage
 
@@ -174,7 +176,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - dhis2 2026-09-15 on 15.18.
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
-- mattermost 2026-09-17 on 16.13.
+- mattermost, lemmy, and windmill 2026-09-17 on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -191,7 +193,10 @@ What each column holds:
   same as what pistachio reads and dump writes.
 - **Routines** counts what `--manage-routine` reads, so the aggregates, window
   functions, and `BEGIN ATOMIC` bodies pistachio leaves to `-- pista:execute`
-  are out of it.
+  are out of it. lemmy is the sample that brings the last of those: 6 of its 80
+  functions carry a SQL-standard body, so its column says 74.
+- **Policies** are not a column, because windmill declares all 366 of them and
+  no other sample turns row-level security on at all.
 
 All counts are limited to the schemas the sample is checked with, and exclude
 what an extension owns: the two views `pg_stat_statements` adds to sourcegraph's
@@ -265,11 +270,13 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | calcom | 102 | 1,092 | 394 | 179 | 104 | 2 | 46 | 0 | 7 | 9 |
 | triggerdev | 85 | 1,123 | 289 | 135 | 81 | 0 | 48 | 0 | 0 | 0 |
 | mattermost | 86 | 740 | 279 | 3 | 104 | 6 | 7 | 0 | 0 | 0 |
-| **Total** | **7,402** | **62,358** | **22,426** | **9,642** | **12,734** | **2,170** | **405** | **427** | **1,406** | **1,160** |
+| lemmy | 58 | 573 | 290 | 113 | 101 | 0 | 16 | 1 | 66 | 74 |
+| windmill | 173 | 1,511 | 392 | 105 | 210 | 3 | 33 | 4 | 26 | 24 |
+| **Total** | **7,633** | **64,442** | **23,108** | **9,860** | **13,045** | **2,173** | **454** | **432** | **1,498** | **1,258** |
 
 ### Size
 
-The 66 dumps come to about 210,000 lines of SQL. chado is 43,700 of them, the
+The 68 dumps come to about 219,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -295,6 +302,8 @@ always reach.
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
   64, only one of them partial and none over an expression; lago's 801 over 143,
   123 of them partial and 16 gin.
+- **Partial indexes**: 37 of lemmy's 290 and 88 of windmill's 392, which also
+  has 31 gin indexes.
 - **Unique indexes over an expression and a gin index over `to_tsvector`**: rt,
   plus mattermost's 11, six of them over the concatenation of two to five
   columns.
@@ -320,8 +329,9 @@ always reach.
   anonymous CHECKs, guacamole's 5 enums, listmonk's 14 over 16 tables, coder's
   61, which 73 columns are typed by, hatchet's 57, glific's 19, lago's 45, and
   calcom's 46 and triggerdev's 48, five columns between them typed as an array
-  of one, and mattermost's 7, which type 9 columns and one of which a partial
-  index predicate casts to.
+  of one, mattermost's 7, which type 9 columns and one of which a partial
+  index predicate casts to, lemmy's 16 over 24 columns, and windmill's 33 over
+  57.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -329,7 +339,8 @@ always reach.
 - **tsvector columns**: dvdrental, pagila.
 - **A non-default collation**: musicbrainz.
 - **Columns typed by a contrib extension**: sourcegraph, with 49 `citext`
-  columns, and six extensions installed at once.
+  columns, and six extensions installed at once; lemmy, whose `comment.path` is
+  an `ltree` and which installs `pg_trgm` and `pgcrypto` beside it.
 - **Columns typed by an extension that is not contrib**: discourse's three
   `halfvec` columns, which need pgvector, and the `geometry` columns that need
   PostGIS: osm's one `geometry(Polygon,4326)`, dhis2's one unmodified
@@ -380,28 +391,39 @@ always reach.
   lago declares one and attaches five in its own schema, and triggerdev
   declares two by range and attaches none. thingsboard declares
   11, all by range, and attaches none for the same
-  reason.
+  reason. windmill declares one by range and attaches four beside it.
+- **Row-level security**: windmill turns it on for 38 of its 173 tables and
+  backs them with 366 policies, 32 names reused across the tables. 98 are
+  declared for ALL, 73 for SELECT, 71 for INSERT, 62 each for UPDATE and
+  DELETE, and 77 carry a WITH CHECK as well as a USING. Every one of them names
+  a role, `windmill_admin` or `windmill_user`, which the migrations create
+  themselves; pistachio does not manage roles, but it has to write the names
+  back. No other sample declares a policy.
 - **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
   sample that does.
 - **Triggers**: boundary's 741, more than any other sample, spread over 182
   of its 293 tables, 7 of them constraint triggers; gitlab's 388, one of them
   held in `ENABLE ALWAYS` state; kea's 81 outnumber its 64 tables; coder's 30,
-  bigbluebutton's 25, hatchet's 22, and ledgersmb's 11 come next. 21 of
-  hatchet's are statement-level triggers with transition tables, and 12 sit on
-  a partitioned table.
+  lemmy's 66, bigbluebutton's 25, hatchet's 22, and ledgersmb's 11 come next.
+  21 of hatchet's are statement-level triggers with transition tables, and 12
+  sit on a partitioned table.
+- **Trigger functions in a schema of their own**: every one of lemmy's 66
+  triggers sits on a table in `lemmy` and calls a function in `r`, the schema
+  Lemmy's migration runner drops and rebuilds whenever those functions change,
+  so the dump has to carry the qualifier for the plan to read it back.
 
 ### Routines
 
-Routines are concentrated the same way. Twenty-nine of the 66 samples declare
+Routines are concentrated the same way. Thirty-one of the 68 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,160. Seven in ten of them, 805, return
+and chado's 94 are 916 of the 1,258. Seven in ten of them, 886, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,062 are written in plpgsql and 98 in sql. sourcegraph declares one
-procedure and thingsboard three, the only procedures any sample has, and
-inaturalist the only aggregate, which `--manage-routine` does not read and so is
-in neither count. Only chado, kea,
+1,157 are written in plpgsql and 101 in sql. sourcegraph declares one
+procedure, thingsboard three, and lemmy two, the only procedures any sample has,
+and inaturalist the only aggregate, which `--manage-routine` does not read and
+so is in neither count. Only chado, kea,
 and boundary overload a name, 11 of them, 3, and 1, though danbooru's three, all
 sql, include a `lower(text[])` that shadows a built-in. Only sourcegraph,
 ledgersmb, gitlab, coder, and boundary comment a routine, 137 between them, 124
@@ -540,6 +562,20 @@ strip only what is irrelevant to a schema round trip:
   in `search_path` those could reach another sample's objects in `make schema`.
   It also installs `pg_partman`, which is not contrib, into a schema of its own
   with one template table, so every statement that names partman is dropped.
+- **lemmy**: the schema ships as Diesel migrations, 342 directories each holding
+  an `up.sql`, and that is only half of it: every trigger function lives in a
+  schema named `r` that Lemmy's own runner builds afterwards out of two files.
+  So the migrations are followed by `CREATE SCHEMA r` and those two files, in
+  the order `schema_setup/mod.rs` lists them. The repository tarball is fetched
+  once and both paths are extracted from it. None of the files names a schema,
+  so `lemmy` is created up front and `search_path` places everything, the
+  contrib extensions `ltree`, `pg_trgm`, and `pgcrypto` included; the migrations
+  create a `utils` schema themselves, so the sample is checked with all three.
+  Some migrations qualify a table or a function with `public`, which is
+  stripped. One of them puts a trigger on `__diesel_schema_migrations`, Diesel's
+  bookkeeping table, which the CLI creates rather than a migration, so a
+  stand-in is created before the migrations run and dropped once they have, the
+  way harbor's is.
 - **mattermost**: the schema ships as golang-migrate migrations, 227 `.up.sql`
   files replayed in name order. The repository tarball is fetched once and only
   the migrations directory is extracted, since fetching 227 files one at a time
@@ -582,6 +618,21 @@ strip only what is irrelevant to a schema round trip:
   declare variables of their row types. `schema-ts-latest-psql.sql` is left
   out, since only the migration from Cassandra reads it and
   `schema-entities.sql` already creates its table.
+- **windmill**: the schema ships as sqlx migrations, 661 `.up.sql` files
+  replayed in name order. The repository tarball is fetched once and only the
+  migrations directory is extracted. It names no schema, so `windmill` is
+  created up front and `search_path` places everything; the five files that
+  qualify something with `public` have the qualifier stripped. The migrations
+  create an `extensions` schema of their own and install `uuid-ossp` there,
+  which is contrib, so `extensions` stays second in the search path for the
+  column defaults that call it and is not part of the check. They also create
+  the `windmill_user` and `windmill_admin` roles, each in a `DO` block that
+  swallows the error when the role is already there; pistachio does not manage
+  roles, but 366 of Windmill's policies name one, so they have to exist for the
+  policies to load. One migration reads `_sqlx_migrations`, sqlx's own
+  bookkeeping table, so a stand-in is created and dropped around the run the way
+  harbor's is, and several functions are declared before the tables they read,
+  so `check_function_bodies` is turned off as it is for coder.
 - **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.

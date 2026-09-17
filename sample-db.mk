@@ -88,6 +88,8 @@ lago|sample-db-lago|URL=https://raw.githubusercontent.com/getlago/lago-api/78f70
 calcom|sample-db-prisma|REPO=calcom/cal.diy SHA=6bc45298226f96ff79e0c070c8b2ce39727e8477 DIR=packages/prisma/migrations SCHEMA=calcom|calcom
 triggerdev|sample-db-prisma|REPO=triggerdotdev/trigger.dev SHA=2d03fee2e3ff368128302ed4c783ba4e32d1cb00 DIR=internal-packages/database/prisma/migrations SCHEMA=triggerdev|triggerdev
 mattermost|sample-db-mattermost||mattermost
+lemmy|sample-db-lemmy||lemmy,r,utils
+windmill|sample-db-windmill||windmill
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -584,6 +586,86 @@ sample-db-mattermost:
 	cd "$$dir" && LC_ALL=C && \
 	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
 	  | PGOPTIONS='-c search_path=mattermost -c client_min_messages=warning' $(PSQL)
+
+# Lemmy (LemmyNet/lemmy, AGPL-3.0). The schema ships as Diesel migrations, 342
+# directories each holding an up.sql and replayed in name order, and that is
+# only half of it: every trigger function lives in a schema named `r` that
+# Lemmy's own runner builds afterwards out of two files, dropping and recreating
+# the schema whenever they change. So the migrations are followed by the
+# CREATE SCHEMA r and the two files that schema_setup/mod.rs lists, which leaves
+# the 66 triggers on lemmy's tables calling functions in `r`. The repository
+# tarball is fetched once and both paths are extracted from it, since fetching
+# 342 files one at a time is slow.
+#
+# None of the files names a schema, so `lemmy` is created up front and
+# search_path places everything, the contrib extensions ltree, pg_trgm, and
+# pgcrypto included; the migrations also create a `utils` schema of their own,
+# so the sample is checked with all three. Some of them qualify a table or a
+# function with `public`, which is stripped the way sample-db-pgdump-schema
+# strips it. The `r` and `utils` files qualify nothing, so the same sed is
+# harmless there.
+#
+# One migration puts a trigger on __diesel_schema_migrations, Diesel's own
+# bookkeeping table, which the CLI creates rather than a migration. A stand-in
+# is created before the migrations run and dropped once they have, as
+# sample-db-harbor does with golang-migrate's; it is not part of Lemmy's schema.
+# The migrations drop what they are about to create with IF EXISTS throughout,
+# so client_min_messages is raised to warning.
+LEMMY_SHA = 646f5a01558d5a38859558426ce54b06185b92e2
+LEMMY_REPLACEABLE = crates/diesel_utils/replaceable_schema
+
+.PHONY: sample-db-lemmy
+sample-db-lemmy:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lemmy'
+	$(PSQL) -c 'SET search_path = lemmy; CREATE TABLE __diesel_schema_migrations (version varchar(50) NOT NULL PRIMARY KEY, run_on timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP)'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/LemmyNet/lemmy/tar.gz/$(LEMMY_SHA) \
+	  | tar xz -C "$$dir" --strip-components=1 \
+	      lemmy-$(LEMMY_SHA)/migrations lemmy-$(LEMMY_SHA)/$(LEMMY_REPLACEABLE) && \
+	cd "$$dir" && LC_ALL=C && \
+	{ for f in migrations/*/up.sql; do cat "$$f"; printf '\n;\n'; done; \
+	  echo 'CREATE SCHEMA r;'; \
+	  cat $(LEMMY_REPLACEABLE)/utils.sql $(LEMMY_REPLACEABLE)/triggers.sql; } \
+	  | sed -E 's/^public\.//; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | PGOPTIONS='-c search_path=lemmy -c client_min_messages=warning' $(PSQL)
+	$(PSQL) -c 'SET search_path = lemmy; DROP TABLE __diesel_schema_migrations'
+
+# Windmill (windmill-labs/windmill, AGPL-3.0). The schema ships as sqlx
+# migrations, 661 .up.sql files replayed in name order, so the repository
+# tarball is fetched once and only the migrations directory is extracted. It
+# names no schema, so `windmill` is created up front and search_path places
+# everything; the five files that qualify something with `public` have the
+# qualifier stripped the way sample-db-pgdump-schema strips it. The migrations
+# create an `extensions` schema of their own and install uuid-ossp there, which
+# is contrib, so `extensions` stays second in the search path for the column
+# defaults that call it and is not part of the check.
+#
+# They also create the windmill_user and windmill_admin roles, each in a DO
+# block that swallows the error when the role is already there. pistachio does
+# not manage roles, but 366 of Windmill's row-level security policies name one,
+# so they have to exist for the policies to load.
+#
+# One migration reads _sqlx_migrations, sqlx's own bookkeeping table, which the
+# migrator creates rather than a migration, so a stand-in is created before the
+# migrations run and dropped once they have, as sample-db-harbor does with
+# golang-migrate's. Several functions are declared before the tables they read,
+# so check_function_bodies is turned off as it is for coder, and the migrations
+# drop what they are about to create with IF EXISTS throughout, so
+# client_min_messages is raised to warning.
+WINDMILL_SHA = 5371519f0f5ce7750982dcdb374dca72115902e7
+
+.PHONY: sample-db-windmill
+sample-db-windmill:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS windmill'
+	$(PSQL) -c 'SET search_path = windmill; CREATE TABLE _sqlx_migrations (version bigint NOT NULL PRIMARY KEY, description text NOT NULL, installed_on timestamptz NOT NULL DEFAULT now(), success boolean NOT NULL, checksum bytea NOT NULL, execution_time bigint NOT NULL)'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/windmill-labs/windmill/tar.gz/$(WINDMILL_SHA) \
+	  | tar xz -C "$$dir" --strip-components=3 windmill-$(WINDMILL_SHA)/backend/migrations && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | sed -E 's/^public\.//; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | PGOPTIONS='-c search_path=windmill,extensions -c client_min_messages=warning -c check_function_bodies=off' $(PSQL)
+	$(PSQL) -c 'SET search_path = windmill; DROP TABLE _sqlx_migrations'
 
 .PHONY: test-samples
 test-samples:
