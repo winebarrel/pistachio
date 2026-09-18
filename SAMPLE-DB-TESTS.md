@@ -165,6 +165,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | dokploy | dokploy | [Dokploy/dokploy](https://github.com/Dokploy/dokploy) |
 | hyperswitch | hyperswitch | [juspay/hyperswitch](https://github.com/juspay/hyperswitch) |
 | documenso | documenso | [documenso/documenso](https://github.com/documenso/documenso) |
+| langfuse | langfuse | [langfuse/langfuse](https://github.com/langfuse/langfuse) |
 
 ## Coverage
 
@@ -184,7 +185,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
-  on 16.13, and dokploy, hyperswitch, and documenso 2026-09-18 on the same.
+  on 16.13, and dokploy, hyperswitch, documenso, and langfuse 2026-09-18 on
+  the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -286,11 +288,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | dokploy | 67 | 946 | 106 | 133 | 89 | 0 | 27 | 0 | 0 | 0 |
 | hyperswitch | 50 | 1,070 | 135 | 0 | 61 | 0 | 46 | 0 | 0 | 2 |
 | documenso | 51 | 490 | 138 | 63 | 51 | 0 | 30 | 0 | 0 | 4 |
-| **Total** | **8,031** | **68,941** | **24,227** | **10,273** | **13,491** | **2,199** | **560** | **432** | **1,501** | **1,269** |
+| langfuse | 74 | 757 | 222 | 113 | 72 | 0 | 35 | 0 | 0 | 0 |
+| **Total** | **8,105** | **69,698** | **24,449** | **10,386** | **13,563** | **2,199** | **595** | **432** | **1,501** | **1,269** |
 
 ### Size
 
-The 74 dumps come to about 229,000 lines of SQL. chado is 43,700 of them, the
+The 75 dumps come to about 231,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -312,7 +315,9 @@ always reach.
   gist, hash, and brin methods (musicbrainz, plus 12 partial and 2 gin indexes
   in synapse). citizenlab adds the one hnsw index any sample has, pgvector's,
   over its one `vector` column and naming `vector_cosine_ops` from the schema
-  the extension sits in.
+  the extension sits in. langfuse brings four hash indexes, all over a `text`
+  column, and two gin, one over a `text[]` column and one over
+  `to_tsvector('english', content)`, which is the only expression index it has.
 - **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to a
   table, denser than any other sample, 55 of them gin, 29 of those over an
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
@@ -354,7 +359,9 @@ always reach.
   hyperswitch is denser than any of them: 46 enums over 50 tables, typing 74
   columns and one array-of-enum column, and the 695 labels between them are
   lopsided too, since `CountryAlpha2` carries 249 of them and `Currency` 158.
-  documenso's 30 over 51 tables are close behind, typing 34 columns.
+  documenso's 30 over 51 tables are close behind, typing 34 columns, and
+  langfuse's 35 over 74 tables type 45 of its columns with 116 labels between
+  them.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -378,7 +385,9 @@ always reach.
   every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and an
   ON DELETE action, CASCADE for most. 137 of glific's 142 name ON DELETE, 106 of
   them CASCADE, and 132 of dokploy's 133 name ON DELETE, 113 of them CASCADE
-  and 19 SET NULL, while none of them names ON UPDATE at all.
+  and 19 SET NULL, while none of them names ON UPDATE at all. Every one of
+  langfuse's 113 names ON UPDATE CASCADE as well, 90 of them with ON DELETE
+  CASCADE and the other 23 with SET NULL.
 - **Column comments**: glific comments 274 of its 590 columns.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
   its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
@@ -392,7 +401,10 @@ always reach.
   tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with 747
   of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, documenso,
   where all 51 tables and 314 of the 490 columns are, and bigbluebutton, where
-  451 of 532 columns and half the tables and views are camelCase.
+  451 of 532 columns and half the tables and views are camelCase. langfuse is
+  the Prisma schema that went the other way: only 2 of its 74 tables and 3 of
+  its 757 columns are quoted and the rest are snake_case, though all 35 of its
+  enum types are PascalCase.
 - **Width without variety**: openolat, whose 382 tables are behind only gitlab
   and dhis2, has every one of its 1,239 indexes btree and every one of its 632
   foreign keys left at NO ACTION.
@@ -448,7 +460,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-five of the 74 samples declare
+Routines are concentrated the same way. Thirty-five of the 75 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
 and chado's 94 are 916 of the 1,269. Seven in ten of them, 890, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
@@ -466,8 +478,16 @@ of those boundary's.
 
 ## Load-time adjustments
 
-Some upstream dumps cannot be piped into `psql` as they are. The loader targets
-strip only what is irrelevant to a schema round trip:
+Every loader runs its `psql` with `client_min_messages` raised to `warning`,
+set once in `sample-db.mk` rather than sample by sample. Dumps drop what they
+are about to create with `IF EXISTS`, declare an identifier past 63 characters
+the server truncates, or hand an index to a constraint that renames it, and
+each says so on a fresh database; none of it is about the schema under test,
+and the runner passes a loader's stderr through. ranger raises the level
+further, to `error`, from its `SAMPLES` record.
+
+Some upstream dumps cannot be piped into `psql` as they are, either. The loader
+targets strip only what is irrelevant to a schema round trip:
 
 - **adventureworks**: `\copy` lines are dropped (the data lives in CSVs that are
   not fetched), along with the inline `Production.ProductReview` INSERT, whose
@@ -508,11 +528,10 @@ strip only what is irrelevant to a schema round trip:
   overrides anything `PGOPTIONS` passes in. The `public` in those four lines is
   rewritten to `chado`, the way hive's one line is. The lines that name
   `genetic_code`, `so`, and `frange` keep them: the file creates those three
-  schemas itself, so the sample is checked with all four. Its tables are all
-  `bigserial`, so `client_min_messages` is raised to `warning` to quiet the
-  implicit-sequence NOTICEs. Nine of its SQL functions are dropped, the six
-  written against the `@` box operator that PostgreSQL 14 removed and the three
-  that call one of those six; they error out on every version in the CI matrix.
+  schemas itself, so the sample is checked with all four. Nine of its SQL
+  functions are dropped, the six written against the `@` box operator that
+  PostgreSQL 14 removed and the three that call one of those six; they error
+  out on every version in the CI matrix.
   The 94 that load are part of the round trip like any other object. The
   `create_point` calls in the bodies of `boxrange` and `boxquery` are qualified
   with `chado.`, because PostgreSQL 17 runs `CREATE INDEX` with `search_path`
@@ -530,9 +549,9 @@ strip only what is irrelevant to a schema round trip:
   preamble ends with `DROP SCHEMA IF EXISTS shared_extensions` and
   `DROP SCHEMA IF EXISTS public`, and the second would take every public sample
   with it in `make schema`. Skipping it also drops the `SET` lines `pg_dump`
-  writes at the top, so `check_function_bodies` and `client_min_messages` are
-  passed in instead, and the `CREATE SCHEMA public` that opens the body is
-  dropped, since `reset-db` has just created it.
+  writes at the top, so `check_function_bodies` is passed in instead, and the
+  `CREATE SCHEMA public` that opens the body is dropped, since `reset-db` has
+  just created it.
 - **clubdata**: the dump creates its own database and reconnects to it, which
   cannot be done mid-pipe. Those two lines are dropped; the rest creates the
   `cd` schema itself.
@@ -541,14 +560,13 @@ strip only what is irrelevant to a schema round trip:
   plpgsql function that declares a variable of a table's row type stops the
   load, since the table comes later in the file, so the loader turns it off.
 - **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
-  constraint, and the `\copy` lines are dropped. The script drops the `gen` and
-  `bookings` schemas with `IF EXISTS` before it creates them, which says so on a
-  fresh database, so `client_min_messages` is raised to `warning` for the load.
+  constraint, and the `\copy` lines are dropped.
 - **dhis2**: the dump is the base schema Flyway starts from, a `pg_dump` that
   names no schema and no owner, so it loads into a schema of its own like the
   group below. It does not install PostGIS, which the one `geometry` column in
-  `programstageinstance` needs, so the loader creates the extension first and
-  leaves `public` in the search path for the type to resolve from.
+  `programstageinstance` needs, so the loader creates the extension first,
+  `WITH SCHEMA public` since its own `search_path` names the sample's schema
+  first, and leaves `public` in the search path for the type to resolve from.
 - **discourse**, **osm**, **danbooru**, **inaturalist**, **feedbin**: all five
   ship their schema as Rails' `db/structure.sql`, which belongs in a schema of
   its own like the group below but is `pg_dump` output that empties
@@ -585,8 +603,7 @@ strip only what is irrelevant to a schema round trip:
   created up front and `search_path` places everything, but the foreign keys
   Drizzle writes qualify their target with `"public"`, which is stripped. Two
   of those foreign key names run past the 63 character identifier limit and the
-  server says so as it truncates them, as it does for wso2is, so
-  `client_min_messages` is raised to `warning`.
+  server truncates them, as it does wso2is's.
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
@@ -629,11 +646,6 @@ strip only what is irrelevant to a schema round trip:
   themselves, and every table name carries the literal `#__` prefix Joomla
   substitutes at install time; quoted, it is just an ordinary identifier and
   needs no rewriting.
-- **kea**, **dolphinscheduler**, **wso2apim**, **wso2is**, **listmonk**: each
-  dump drops what it is about to create with `IF EXISTS`, so
-  `client_min_messages` is raised to `warning` for the load. wso2is is also
-  where five index names run past the 63 character identifier limit, and the
-  server says so as it truncates them.
 - **lago**: the schema is Rails' `db/structure.sql` like discourse's, and loads
   the same way with two things taken out first. It was dumped with `--clean`,
   so everything before the first `-- Name:` header, about 1,400 lines of
@@ -641,6 +653,15 @@ strip only what is irrelevant to a schema round trip:
   in `search_path` those could reach another sample's objects in `make schema`.
   It also installs `pg_partman`, which is not contrib, into a schema of its own
   with one template table, so every statement that names partman is dropped.
+- **langfuse**: the schema ships as a Prisma migration history like calcom's,
+  triggerdev's, and documenso's, 438 directories replayed through
+  `sample-db-prisma`, so it needs no loader of its own. It installs no
+  extension and qualifies nothing with `public`, so the sed that strips the
+  qualifier has nothing to strip. One of its index names runs past 63
+  characters, which the server truncates, and one migration turns a unique
+  index into a primary key with `ADD CONSTRAINT ... USING INDEX`, which renames
+  the index; neither object survives into the schema the check reads, since a
+  later migration drops the table behind them.
 - **lemmy**: the schema ships as Diesel migrations, 342 directories each holding
   an `up.sql`, and that is only half of it: every trigger function lives in a
   schema named `r` that Lemmy's own runner builds afterwards out of two files.
@@ -666,9 +687,7 @@ strip only what is irrelevant to a schema round trip:
   is slow. None of the files names a schema, and the guards they write against
   `information_schema` all say `current_schema()`, so `mattermost` is created up
   front and `search_path` places everything. Eight of the files end without a
-  semicolon, so each is followed by a newline and one. Most of them also add and
-  drop with `IF NOT EXISTS` and `IF EXISTS`, so `client_min_messages` is raised
-  to `warning`.
+  semicolon, so each is followed by a newline and one.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
   **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,
@@ -686,17 +705,16 @@ strip only what is irrelevant to a schema round trip:
   named.
 - **mimiciv**: the schema ships as three files, so `create.sql` (tables),
   `constraint.sql` (primary and foreign keys), and `index.sql` are concatenated
-  in that order. Both later files drop what they create with `IF EXISTS` first,
-  so NOTICEs are quieted.
+  in that order.
 - **musicbrainz**: the schema ships as one file per object kind and none of them
   create the schema, so `musicbrainz` is created up front and the files are
   concatenated in dependency order (extensions and collation, search
   configuration, types, tables, functions, then keys, indexes, constraints, and
   views).
 - **ranger**: the dump drops every object it is about to create with
-  `IF EXISTS` and commits outside a transaction, which floods a fresh database
-  with a few hundred NOTICEs and warnings, so `client_min_messages` is raised to
-  `error` for the load.
+  `IF EXISTS` and commits outside a transaction, which adds a warning per
+  statement, so `client_min_messages` is raised from `warning` to `error` for
+  the load, the one sample that moves it at all.
 - **thingsboard**: the schema ships as one file per part, loaded in the order
   ThingsBoard's installer runs them, with the views before the functions that
   declare variables of their row types. `schema-ts-latest-psql.sql` is left
@@ -724,6 +742,8 @@ strip only what is irrelevant to a schema round trip:
   `pg_policies`, which finds nothing here, and one of those is the migration
   that rewrites every policy reading a session GUC, so without the rewrite the
   sample would carry its 366 policies with the wrong expressions in them.
+- **wso2is**: five of its index names run past the 63 character identifier
+  limit, and the server truncates them.
 - **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.

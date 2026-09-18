@@ -48,7 +48,7 @@ sourcegraph|sample-db-url-schema|URL=https://raw.githubusercontent.com/sourcegra
 imdb|sample-db-imdb||
 adventureworks|sample-db-adventureworks||person,humanresources,production,purchasing,sales
 clubdata|sample-db-clubdata|URL=https://pgexercises.com/dbfiles/clubdata.sql|cd
-demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/bf7a1c1972d2f89dc9de21f19d7dd3aa650e8647/tables.sql CLIENT_MIN_MESSAGES=warning|bookings
+demodb|sample-db-demodb|URL=https://raw.githubusercontent.com/postgrespro/demodb/bf7a1c1972d2f89dc9de21f19d7dd3aa650e8647/tables.sql|bookings
 musicbrainz|sample-db-musicbrainz||musicbrainz
 znuny|sample-db-znuny||znuny
 hive|sample-db-hive|URL=https://raw.githubusercontent.com/apache/hive/d98bfeda81c23007866bd5bf7ee970fa017689ed/standalone-metastore/metastore-server/src/main/sql/postgres/hive-schema-4.2.0.postgres.sql SCHEMA=hive|hive
@@ -58,10 +58,10 @@ ovirt|sample-db-url-schema|URL=https://raw.githubusercontent.com/oVirt/ovirt-eng
 gitlab|sample-db-url-schema|URL=https://raw.githubusercontent.com/gitlabhq/gitlabhq/35e789d8f1173a11a7724ae360a80d1f19ec92dc/db/structure.sql SCHEMA=gitlab|gitlab,gitlab_partitions_static,gitlab_partitions_dynamic
 ledgersmb|sample-db-url-schema|URL=https://raw.githubusercontent.com/ledgersmb/LedgerSMB/34a05e7b58c161e008561e36a74dbede860fe4d9/sql/Pg-database.sql SCHEMA=ledgersmb|ledgersmb
 koji|sample-db-url-schema|URL=https://raw.githubusercontent.com/koji-project/koji/c3239d46c1abdcbda509739eb0182031b71d9f01/schemas/schema.sql SCHEMA=koji|koji
-kea|sample-db-url-schema|URL=https://raw.githubusercontent.com/isc-projects/kea/82440eddc70089a55892a42ca96b78a92eb3e484/src/share/database/scripts/pgsql/dhcpdb_create.pgsql SCHEMA=kea CLIENT_MIN_MESSAGES=warning|kea
-dolphinscheduler|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/dolphinscheduler/51057477b815eef59c68f1b76563567814c72a93/dolphinscheduler-dao/src/main/resources/sql/dolphinscheduler_postgresql.sql SCHEMA=dolphinscheduler CLIENT_MIN_MESSAGES=warning|dolphinscheduler
+kea|sample-db-url-schema|URL=https://raw.githubusercontent.com/isc-projects/kea/82440eddc70089a55892a42ca96b78a92eb3e484/src/share/database/scripts/pgsql/dhcpdb_create.pgsql SCHEMA=kea|kea
+dolphinscheduler|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/dolphinscheduler/51057477b815eef59c68f1b76563567814c72a93/dolphinscheduler-dao/src/main/resources/sql/dolphinscheduler_postgresql.sql SCHEMA=dolphinscheduler|dolphinscheduler
 camunda|sample-db-camunda||camunda
-wso2apim|sample-db-url-schema|URL=https://raw.githubusercontent.com/wso2/carbon-apimgt/5dd6e3084a35228b7542c4ff6a9071af1c7476fa/features/apimgt/org.wso2.carbon.apimgt.core.feature/src/main/resources/sql/postgresql.sql SCHEMA=wso2apim CLIENT_MIN_MESSAGES=warning|wso2apim
+wso2apim|sample-db-url-schema|URL=https://raw.githubusercontent.com/wso2/carbon-apimgt/5dd6e3084a35228b7542c4ff6a9071af1c7476fa/features/apimgt/org.wso2.carbon.apimgt.core.feature/src/main/resources/sql/postgresql.sql SCHEMA=wso2apim|wso2apim
 discourse|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/discourse/discourse/f3c568cfd26a427e9cae32063732a56bc7d334b9/db/structure.sql SCHEMA=discourse|discourse
 icinga_director|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icingaweb2-module-director/b2e4a4e4180b0a160461a773ca8b8b5874e0fba7/schema/pgsql.sql SCHEMA=icinga_director|icinga_director
 flowable|sample-db-url-schema|URL=https://raw.githubusercontent.com/flowable/flowable-engine/53e93b6681e86dccea720efaa3c0fc2a96f57366/distro/sql/create/all/flowable.postgres.all.create.sql SCHEMA=flowable|flowable
@@ -70,7 +70,7 @@ guacamole|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/guac
 dotcms|sample-db-url-schema|URL=https://raw.githubusercontent.com/dotCMS/core/b0095c0c3920e236efcc16ceb136cd5dd88804b7/dotCMS/src/main/resources/postgres.sql SCHEMA=dotcms|dotcms
 osm|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/openstreetmap/openstreetmap-website/9da0fa5ecbff8adc5e6e91c7cf22546755a91f77/db/structure.sql SCHEMA=osm|osm
 chado|sample-db-chado|URL=https://raw.githubusercontent.com/GMOD/Chado/31c2407716e3d0fe4e837b6effad0a510af22238/chado/schemas/1.31/default_schema.sql|chado,genetic_code,so,frange
-wso2is|sample-db-url-schema|URL=https://raw.githubusercontent.com/wso2/carbon-identity-framework/a956a69ffdd1bcf916132682b12b5f319102f69e/features/identity-core/org.wso2.carbon.identity.core.server.feature/resources/dbscripts/postgresql.sql SCHEMA=wso2is CLIENT_MIN_MESSAGES=warning|wso2is
+wso2is|sample-db-url-schema|URL=https://raw.githubusercontent.com/wso2/carbon-identity-framework/a956a69ffdd1bcf916132682b12b5f319102f69e/features/identity-core/org.wso2.carbon.identity.core.server.feature/resources/dbscripts/postgresql.sql SCHEMA=wso2is|wso2is
 nightingale|sample-db-url-schema|URL=https://raw.githubusercontent.com/ccfos/nightingale/8362cbe18f98b3c06af176d71b13994673912c46/docker/compose-postgres/initsql_for_postgres/a-n9e-for-Postgres.sql SCHEMA=nightingale|nightingale
 danbooru|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/danbooru/danbooru/f8de3ba286db1f9a1f3efbbf495bcbc1001e7b9b/db/structure.sql SCHEMA=danbooru|danbooru
 openolat|sample-db-url-schema|URL=https://raw.githubusercontent.com/OpenOLAT/OpenOLAT/8d07a02fe4dafb8c82179f3efa77e1cb985fdc7e/src/main/resources/database/postgresql/setupDatabase.sql SCHEMA=openolat|openolat
@@ -78,7 +78,7 @@ inaturalist|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/inatur
 joomla|sample-db-joomla||joomla
 harbor|sample-db-harbor||harbor
 bigbluebutton|sample-db-bigbluebutton|URL=https://raw.githubusercontent.com/bigbluebutton/bigbluebutton/4c3a477fe3e34a7da6854c491be2c8d02e83c083/bbb-graphql-server/bbb_schema.sql SCHEMA=bigbluebutton|bigbluebutton
-listmonk|sample-db-url-schema|URL=https://raw.githubusercontent.com/knadh/listmonk/594b74056dd8a0d3a7621a32898ee38bfbe10e96/schema.sql SCHEMA=listmonk CLIENT_MIN_MESSAGES=warning|listmonk
+listmonk|sample-db-url-schema|URL=https://raw.githubusercontent.com/knadh/listmonk/594b74056dd8a0d3a7621a32898ee38bfbe10e96/schema.sql SCHEMA=listmonk|listmonk
 dhis2|sample-db-dhis2|URL=https://raw.githubusercontent.com/dhis2/dhis2-core/5d2dbdef40e91c1c613fc50a8132158dd5683b7f/dhis-2/dhis-support/dhis-support-db-migration/src/main/resources/org/hisp/dhis/db/base/dhis2_base_schema.sql SCHEMA=dhis2|dhis2
 coder|sample-db-url-schema|URL=https://raw.githubusercontent.com/coder/coder/263f2c207eca19c2e42a71f439782c15ebeb8f07/coderd/database/dump.sql SCHEMA=coder CHECK_FUNCTION_BODIES=off|coder
 hatchet|sample-db-hatchet||hatchet
@@ -96,6 +96,7 @@ citizenlab|sample-db-citizenlab|URL=https://raw.githubusercontent.com/CitizenLab
 dokploy|sample-db-dokploy||dokploy
 hyperswitch|sample-db-hyperswitch||hyperswitch
 documenso|sample-db-prisma|REPO=documenso/documenso SHA=e658cc581878f52c03b3e6a8f7ffd613aead4e69 DIR=packages/prisma/migrations SCHEMA=documenso|documenso
+langfuse|sample-db-prisma|REPO=langfuse/langfuse SHA=330bb86bcc332a76d4b24569fa4e1c1086d651d1 DIR=packages/shared/prisma/migrations SCHEMA=langfuse|langfuse
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -103,7 +104,23 @@ endef
 # FAIL (load). Without it psql prints the error, carries on, and exits 0, and
 # the check runs against a schema quietly missing whatever the statement was
 # going to create -- which dump and plan then agree about, so the sample passes.
-PSQL = psql -v ON_ERROR_STOP=1
+#
+# It also raises client_min_messages for every loader at once, rather than
+# sample by sample. A dump that drops what it is about to create with IF
+# EXISTS, an identifier past 63 characters the server truncates, an index a
+# constraint takes over and renames: each says so on a fresh database, none of
+# it is about the schema under test, and the runner passes a loader's stderr
+# through. A sample noisier still can raise the level further from its SAMPLES
+# record, as ranger does to error, since it commits outside a transaction,
+# which adds a warning per statement.
+#
+# PGOPTS carries whatever else a loader needs, search_path above all. It is set
+# per target rather than inline in front of $(PSQL), because an inline
+# PGOPTIONS assignment and the one in PSQL would be two assignments to the same
+# variable and the last one, PSQL's, would win.
+CLIENT_MIN_MESSAGES ?= warning
+PGOPTS =
+PSQL = PGOPTIONS='$(strip -c client_min_messages=$(CLIENT_MIN_MESSAGES) $(PGOPTS))' psql -v ON_ERROR_STOP=1
 
 # Print the sample manifest, one record per line, for shell consumers.
 .PHONY: print-samples
@@ -140,9 +157,7 @@ sample-db-url:
 # concatenate them in dependency order: create.sql (which creates the mimiciv_*
 # schemas and the tables), then the primary and foreign keys, then the indexes.
 # constraint.sql qualifies every table it touches and index.sql sets its own
-# search_path, so no search_path is needed here. Both files drop what they are
-# about to create with IF EXISTS, which floods a fresh database with NOTICEs, so
-# quiet those.
+# search_path, so no search_path is needed here.
 MIMICIV_SQL_FILES = create.sql constraint.sql index.sql
 
 .PHONY: sample-db-mimiciv
@@ -150,7 +165,7 @@ sample-db-mimiciv:
 	for f in $(MIMICIV_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/MIT-LCP/mimic-code/3a914fce11e05888a4b659c7788e207bc34d1728/mimic-iv/buildmimic/postgres/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c client_min_messages=warning' $(PSQL)
+	done | $(PSQL)
 
 # A plain SQL URL loaded into a schema of its own. These dumps name no schema at
 # all, so search_path decides where they land, and upstream expects them in the
@@ -158,15 +173,6 @@ sample-db-mimiciv:
 # other public samples when `make schema` puts everything in one database
 # (mediawiki and pagila both define `actor` and `category`, for one), so each
 # gets its own schema instead.
-#
-# CLIENT_MIN_MESSAGES defaults to notice, the server default; a sample whose
-# dump is noisy on a fresh database can raise it from its SAMPLES record.
-# demodb, kea, dolphinscheduler, wso2apim, wso2is, and listmonk raise it to
-# warning, since each drops what it is about to create with IF EXISTS, wso2is
-# also because five of its index names are over 63 characters and the server
-# says so as it truncates them, and ranger to error, since it drops the same way
-# and commits outside a transaction, which adds a warning per statement.
-CLIENT_MIN_MESSAGES ?= notice
 
 # CHECK_FUNCTION_BODIES defaults to on, the server default. coder turns it off:
 # its dump is pg_dump output with the preamble stripped, and that preamble is
@@ -175,10 +181,11 @@ CLIENT_MIN_MESSAGES ?= notice
 # the file.
 CHECK_FUNCTION_BODIES ?= on
 
+sample-db-url-schema: PGOPTS = -c search_path=$(SCHEMA) -c check_function_bodies=$(CHECK_FUNCTION_BODIES)
 .PHONY: sample-db-url-schema
 sample-db-url-schema:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) | PGOPTIONS='-c search_path=$(SCHEMA) -c client_min_messages=$(CLIENT_MIN_MESSAGES) -c check_function_bodies=$(CHECK_FUNCTION_BODIES)' $(PSQL)
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) | $(PSQL)
 
 # Hive metastore (apache/hive, Apache-2.0). Like the sample-db-url-schema
 # dumps this one belongs in a schema of its own, but it is a pg_dump-style
@@ -217,6 +224,7 @@ sample-db-hive:
 # operator plus the three that call the three-argument groupoverlaps, which is
 # one of the six. Nothing else is dropped, so the 94 functions that do load are
 # part of the round trip like every other object.
+sample-db-chado: PGOPTS = -c search_path=chado
 .PHONY: sample-db-chado
 sample-db-chado:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS chado'
@@ -228,7 +236,7 @@ sample-db-chado:
 	                  if (buf !~ /@ boxrange|FROM groupoverlaps\(\$$1,\$$2,\$$3\)/) print buf } \
 	                next } \
 	         { print }' \
-	  | PGOPTIONS='-c search_path=chado -c client_min_messages=warning' $(PSQL)
+	  | $(PSQL)
 
 # Join Order Benchmark (gregrahn/join-order-benchmark), the IMDB schema used by
 # the JOB query set. The tables and their indexes ship as two separate files, so
@@ -265,14 +273,13 @@ sample-db-clubdata:
 # don't fetch. We only need the schema, so strip the \copy lines (their data is
 # irrelevant to a round-trip check) and enable btree_gist first, which the
 # bookings.routes exclusion constraint requires. It drops both schemas with
-# IF EXISTS before creating them, which says so on a fresh database, so
-# client_min_messages is raised to warning for the load.
+# IF EXISTS before creating them.
 .PHONY: sample-db-demodb
 sample-db-demodb:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS btree_gist'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | awk '/^[[:space:]]*\\copy/ { next } { print }' \
-	  | PGOPTIONS='-c client_min_messages=$(CLIENT_MIN_MESSAGES)' $(PSQL)
+	  | $(PSQL)
 
 # MusicBrainz (metabrainz/musicbrainz-server, GPL-2.0). The schema ships as one
 # file per object kind and none of them create the schema, so create
@@ -294,13 +301,14 @@ MUSICBRAINZ_SQL_FILES = \
 	CreateConstraints.sql \
 	CreateViews.sql
 
+sample-db-musicbrainz: PGOPTS = -c search_path=musicbrainz,public
 .PHONY: sample-db-musicbrainz
 sample-db-musicbrainz:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS musicbrainz'
 	for f in $(MUSICBRAINZ_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/metabrainz/musicbrainz-server/424c5fad44da2b3ad55d08286fe8ad07c11ec471/admin/sql/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c search_path=musicbrainz,public -c client_min_messages=warning' $(PSQL)
+	done | $(PSQL)
 
 # Znuny (znuny/Znuny, GPL-3.0). The schema ships as two files, so concatenate
 # them: schema.postgresql.sql (tables and indexes) and then
@@ -311,13 +319,14 @@ sample-db-musicbrainz:
 # dumps.
 ZNUNY_SQL_FILES = schema.postgresql.sql schema-post.postgresql.sql
 
+sample-db-znuny: PGOPTS = -c search_path=znuny
 .PHONY: sample-db-znuny
 sample-db-znuny:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS znuny'
 	for f in $(ZNUNY_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/znuny/Znuny/0b894348ebc458621545ccdab5f3d24d1b396a70/scripts/database/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c search_path=znuny' $(PSQL)
+	done | $(PSQL)
 
 # Camunda 7 (camunda/camunda-bpm-platform, Apache-2.0). The schema ships as one
 # file per engine component and none of them create a schema, so create
@@ -334,13 +343,14 @@ CAMUNDA_SQL_FILES = \
 	activiti.postgres.create.decision.engine.sql \
 	activiti.postgres.create.decision.history.sql
 
+sample-db-camunda: PGOPTS = -c search_path=camunda
 .PHONY: sample-db-camunda
 sample-db-camunda:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS camunda'
 	for f in $(CAMUNDA_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/camunda/camunda-bpm-platform/ee4826e5e76c2348a1510ef46a2f4ccd3b080e48/engine/src/main/resources/org/camunda/bpm/engine/db/create/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c search_path=camunda' $(PSQL)
+	done | $(PSQL)
 
 # A pg_dump-style dump loaded into a schema of its own. discourse, osm,
 # danbooru, inaturalist, and feedbin ship their schema as Rails'
@@ -375,12 +385,13 @@ sample-db-camunda:
 # three, hstore, pg_stat_statements, and uuid-ossp, and plausible one, citext,
 # which three of its columns are typed by; those are all contrib and the
 # official image already has them.
+sample-db-pgdump-schema: PGOPTS = -c search_path=$(SCHEMA),public
 .PHONY: sample-db-pgdump-schema
 sample-db-pgdump-schema:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
-	  | PGOPTIONS='-c search_path=$(SCHEMA),public' $(PSQL)
+	  | $(PSQL)
 
 # Joomla CMS (joomla/joomla-cms, GPL-2.0-or-later). The PostgreSQL installer
 # ships as three files that must load in that order -- base.sql (the core
@@ -392,13 +403,14 @@ sample-db-pgdump-schema:
 # identifier, so nothing needs rewriting.
 JOOMLA_SQL_FILES = base.sql extensions.sql supports.sql
 
+sample-db-joomla: PGOPTS = -c search_path=joomla
 .PHONY: sample-db-joomla
 sample-db-joomla:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS joomla'
 	for f in $(JOOMLA_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/joomla/joomla-cms/b2648c39655a1dc9ceb2791cf9131acc4f98d22e/installation/sql/postgresql/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c search_path=joomla' $(PSQL)
+	done | $(PSQL)
 
 # Harbor (goharbor/harbor, Apache-2.0), the CNCF container registry. Its
 # schema ships as one file per release, each an incremental delta meant to be
@@ -425,6 +437,7 @@ HARBOR_SQL_FILES = 0001_initial_schema.up.sql 0002_1.7.0_schema.up.sql \
 	0170_2.14.0_schema.up.sql 0171_2.14.1_schema.up.sql 0180_2.15.0_schema.up.sql \
 	0181_2.15.3_schema.up.sql 0190_2.16.0_schema.up.sql
 
+sample-db-harbor: PGOPTS = -c search_path=harbor
 .PHONY: sample-db-harbor
 sample-db-harbor:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS harbor'
@@ -432,7 +445,7 @@ sample-db-harbor:
 	for f in $(HARBOR_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/goharbor/harbor/fb4e2406747df0b01dec994bf593f49261f6a874/make/migrations/postgresql/$$f || exit 1; \
 	  echo ';'; \
-	done | PGOPTIONS='-c search_path=harbor -c client_min_messages=warning' $(PSQL)
+	done | $(PSQL)
 	$(PSQL) -c 'SET search_path = harbor; DROP TABLE schema_migrations'
 
 # BigBlueButton (bigbluebutton/bigbluebutton, LGPL-3.0). The schema belongs in
@@ -443,12 +456,13 @@ sample-db-harbor:
 # and search_path places them with the rest. The file also installs unaccent,
 # which a function behind three of its generated columns calls; it is contrib,
 # so the official image already has it.
+sample-db-bigbluebutton: PGOPTS = -c search_path=$(SCHEMA)
 .PHONY: sample-db-bigbluebutton
 sample-db-bigbluebutton:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | sed -E 's/^(CREATE OR REPLACE VIEW )public\./\1/' \
-	  | PGOPTIONS='-c search_path=$(SCHEMA)' $(PSQL)
+	  | $(PSQL)
 
 # DHIS2 (dhis2/dhis2-core, BSD-3-Clause). A pg_dump of the base schema Flyway
 # starts from, naming no schema and no owner, so it loads like the
@@ -457,12 +471,13 @@ sample-db-bigbluebutton:
 # `public` in the search path for the type to resolve from. PostGIS is not in
 # the official image; compose.yaml and the samples CI job install it for the
 # osm and inaturalist samples already.
+sample-db-dhis2: PGOPTS = -c search_path=$(SCHEMA),public
 .PHONY: sample-db-dhis2
 sample-db-dhis2:
-	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS postgis'
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
-	  | PGOPTIONS='-c search_path=$(SCHEMA),public' $(PSQL)
+	  | $(PSQL)
 
 # HashiCorp Boundary (hashicorp/boundary, BUSL-1.1). The schema ships as
 # migrations only, 290 files that Boundary replays in order: the two base files
@@ -482,6 +497,7 @@ sample-db-dhis2:
 # first sample in SAMPLES.
 BOUNDARY_SHA = 01cd5c86e8602aa9babc54b07e51ef7b8445e0b6
 
+sample-db-boundary: PGOPTS = -c search_path=boundary
 .PHONY: sample-db-boundary
 sample-db-boundary:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS boundary'
@@ -491,7 +507,7 @@ sample-db-boundary:
 	cd "$$dir" && \
 	{ ls base/postgres/*.up.sql; ls oss/postgres/*/*.up.sql | sort -t/ -k3,3n -k4,4; } \
 	  | while read -r f; do cat "$$f"; echo; done \
-	  | PGOPTIONS='-c search_path=boundary -c client_min_messages=warning' $(PSQL)
+	  | $(PSQL)
 
 # Hatchet (hatchet-dev/hatchet, MIT). The schema ships as three files, so they
 # are concatenated in the order Hatchet's sqlc.yaml lists them: v0.sql,
@@ -502,13 +518,14 @@ sample-db-boundary:
 # by functions the files define, so only the partitioned parents load.
 HATCHET_SQL_FILES = v0.sql v1-core.sql v1-olap.sql
 
+sample-db-hatchet: PGOPTS = -c search_path=hatchet
 .PHONY: sample-db-hatchet
 sample-db-hatchet:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hatchet'
 	for f in $(HATCHET_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/hatchet-dev/hatchet/1b410eb672448014bb1c6a29df92c63554f46034/sql/schema/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c search_path=hatchet -c client_min_messages=warning' $(PSQL)
+	done | $(PSQL)
 
 # ThingsBoard (thingsboard/thingsboard, Apache-2.0). The schema ships as one
 # file per part, loaded in the order ThingsBoard's installer runs them: the
@@ -528,13 +545,14 @@ THINGSBOARD_SQL_FILES = \
 	schema-functions.sql \
 	schema-ts-psql.sql
 
+sample-db-thingsboard: PGOPTS = -c search_path=thingsboard
 .PHONY: sample-db-thingsboard
 sample-db-thingsboard:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS thingsboard'
 	for f in $(THINGSBOARD_SQL_FILES); do \
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/thingsboard/thingsboard/562b19aa90f92c97b96c255b14816c32da7f4958/dao/src/main/resources/sql/$$f || exit 1; \
 	  echo; \
-	done | PGOPTIONS='-c search_path=thingsboard -c client_min_messages=warning' $(PSQL)
+	done | $(PSQL)
 
 # Lago (getlago/lago-api, AGPL-3.0). Its db/structure.sql is Rails' pg_dump
 # output like discourse's, and loads the same way as sample-db-pgdump-schema
@@ -546,6 +564,7 @@ sample-db-thingsboard:
 # one template table there. pg_dump separates statements with a blank line, so
 # every paragraph that names partman is dropped; the partitioned table Lago
 # creates itself stays.
+sample-db-lago: PGOPTS = -c search_path=lago,public
 .PHONY: sample-db-lago
 sample-db-lago:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lago'
@@ -553,7 +572,7 @@ sample-db-lago:
 	  | awk '/^-- Name: /{body=1} !body && /^(DROP |ALTER TABLE IF EXISTS |CREATE OR REPLACE VIEW )/{skip=1} body{skip=0} !skip' \
 	  | awk -v RS= -v ORS='\n\n' '!/partman/' \
 	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
-	  | PGOPTIONS='-c search_path=lago,public' $(PSQL)
+	  | $(PSQL)
 
 # A Prisma migration history replayed into a schema of its own. Prisma keeps
 # one directory per migration under DIR, each holding a migration.sql, and
@@ -563,6 +582,7 @@ sample-db-lago:
 # REPO is the name GitHub uses now. A few files end without a semicolon, or on
 # a comment, so every file is followed by a newline and one. Prisma qualifies
 # some statements with `public`, which is stripped so search_path places them.
+sample-db-prisma: PGOPTS = -c search_path=$(SCHEMA)
 .PHONY: sample-db-prisma
 sample-db-prisma:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
@@ -572,7 +592,7 @@ sample-db-prisma:
 	cd "$$dir" && LC_ALL=C && \
 	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
 	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
-	  | PGOPTIONS='-c search_path=$(SCHEMA)' $(PSQL)
+	  | $(PSQL)
 
 # Mattermost (mattermost/mattermost, AGPL-3.0 and Apache-2.0). The schema ships
 # as golang-migrate migrations, 227 .up.sql files replayed in name order, so the
@@ -583,10 +603,10 @@ sample-db-prisma:
 # created up front and search_path places everything. Eight of the files end
 # without a semicolon, which would merge the next file's opening statement into
 # the last one, so each is followed by a newline and one regardless. Most of
-# them also add and drop with IF NOT EXISTS and IF EXISTS, which floods a fresh
-# database with NOTICEs, so client_min_messages is raised to warning.
+# them also add and drop with IF NOT EXISTS and IF EXISTS.
 MATTERMOST_SHA = 3db1a9adf80fd91d911de1b02632bd0bc3e9fe9d
 
+sample-db-mattermost: PGOPTS = -c search_path=mattermost
 .PHONY: sample-db-mattermost
 sample-db-mattermost:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS mattermost'
@@ -595,7 +615,7 @@ sample-db-mattermost:
 	  | tar xz -C "$$dir" --strip-components=6 mattermost-$(MATTERMOST_SHA)/server/channels/db/migrations/postgres && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
-	  | PGOPTIONS='-c search_path=mattermost -c client_min_messages=warning' $(PSQL)
+	  | $(PSQL)
 
 # Lemmy (LemmyNet/lemmy, AGPL-3.0). The schema ships as Diesel migrations, 342
 # directories each holding an up.sql and replayed in name order, and that is
@@ -619,9 +639,6 @@ sample-db-mattermost:
 # bookkeeping table, which the CLI creates rather than a migration. A stand-in
 # is created before the migrations run and dropped once they have, as
 # sample-db-harbor does with golang-migrate's; it is not part of Lemmy's schema.
-# The migrations drop what they are about to create with IF EXISTS throughout,
-# so client_min_messages is raised to warning.
-#
 # Twenty-two of them turn a table's indexes off around a bulk update with
 # `UPDATE pg_index ... WHERE indrelid = (SELECT oid FROM pg_class WHERE relname
 # = '<table>')`, which names no schema. Lemmy owns its database, so upstream
@@ -635,6 +652,7 @@ sample-db-mattermost:
 LEMMY_SHA = 646f5a01558d5a38859558426ce54b06185b92e2
 LEMMY_REPLACEABLE = crates/diesel_utils/replaceable_schema
 
+sample-db-lemmy: PGOPTS = -c search_path=lemmy
 .PHONY: sample-db-lemmy
 sample-db-lemmy:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lemmy'
@@ -649,7 +667,7 @@ sample-db-lemmy:
 	  cat $(LEMMY_REPLACEABLE)/utils.sql $(LEMMY_REPLACEABLE)/triggers.sql; } \
 	  | sed -E "s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g; \
 	            s/^([[:space:]]*)relname = /\1relnamespace = 'lemmy'::regnamespace AND relname = /" \
-	  | PGOPTIONS='-c search_path=lemmy -c client_min_messages=warning' $(PSQL)
+	  | $(PSQL)
 	$(PSQL) -c 'SET search_path = lemmy; DROP TABLE __diesel_schema_migrations'
 
 # Windmill (windmill-labs/windmill, AGPL-3.0). The schema ships as sqlx
@@ -671,9 +689,7 @@ sample-db-lemmy:
 # migrator creates rather than a migration, so a stand-in is created before the
 # migrations run and dropped once they have, as sample-db-harbor does with
 # golang-migrate's. Several functions are declared before the tables they read,
-# so check_function_bodies is turned off as it is for coder, and the migrations
-# drop what they are about to create with IF EXISTS throughout, so
-# client_min_messages is raised to warning.
+# so check_function_bodies is turned off as it is for coder.
 #
 # Four of the catalog lookups assume Windmill owns the database, and the sed
 # scopes all four to the schema the sample loads into. Two read
@@ -689,6 +705,7 @@ sample-db-lemmy:
 # round trip reads is touched.
 WINDMILL_SHA = 5371519f0f5ce7750982dcdb374dca72115902e7
 
+sample-db-windmill: PGOPTS = -c search_path=windmill,extensions -c check_function_bodies=off
 .PHONY: sample-db-windmill
 sample-db-windmill:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS windmill'
@@ -701,7 +718,7 @@ sample-db-windmill:
 	  | sed -E "s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g; \
 	            s/WHERE table_name = /WHERE table_schema = current_schema() AND table_name = /; \
 	            s/schemaname = 'public'/schemaname = current_schema()/" \
-	  | PGOPTIONS='-c search_path=windmill,extensions -c client_min_messages=warning -c check_function_bodies=off' $(PSQL)
+	  | $(PSQL)
 	$(PSQL) -c 'SET search_path = windmill; DROP TABLE _sqlx_migrations'
 
 # CitizenLab (CitizenLabDotCo/citizenlab, AGPL-3.0). Its db/structure.sql is
@@ -717,7 +734,7 @@ sample-db-windmill:
 # `DROP SCHEMA IF EXISTS shared_extensions` and `DROP SCHEMA IF EXISTS public`,
 # and the second would take every public sample with it in `make schema`.
 # Skipping the preamble also drops the SET lines pg_dump writes at the top, so
-# check_function_bodies and client_min_messages are passed in instead. The
+# check_function_bodies is passed in instead. The
 # `CREATE SCHEMA public` that opens the body is dropped as well, since reset-db
 # has just created it.
 #
@@ -725,13 +742,14 @@ sample-db-windmill:
 # column and the hnsw index over it; compose.yaml and the samples CI job install
 # both for discourse, osm, inaturalist, and dhis2 already. pgcrypto, pg_trgm,
 # and uuid-ossp are contrib.
+sample-db-citizenlab: PGOPTS = -c search_path=citizenlab -c check_function_bodies=off
 .PHONY: sample-db-citizenlab
 sample-db-citizenlab:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS citizenlab'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | awk '/^-- Name: /{body=1} body' \
 	  | sed -E "/^CREATE SCHEMA public;\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
-	  | PGOPTIONS='-c search_path=citizenlab -c client_min_messages=warning -c check_function_bodies=off' $(PSQL)
+	  | $(PSQL)
 
 # Dokploy (Dokploy/dokploy, Apache-2.0). The schema ships as Drizzle
 # migrations, and Drizzle is the fifth migration tool in this list after
@@ -749,12 +767,11 @@ sample-db-citizenlab:
 # None of the files names a schema, so `dokploy` is created up front and
 # search_path places everything, but the foreign keys Drizzle writes qualify
 # their target with "public", which is stripped the way sample-db-prisma strips
-# it. client_min_messages is raised to warning for the two foreign key names
-# that run past the 63 character identifier limit, which the server says so
-# about as it truncates them, as it does for wso2is, and for the one DROP that
-# cascades.
+# it. Two of the foreign key names it writes run past the 63 character
+# identifier limit, which the server truncates as it does wso2is's.
 DOKPLOY_SHA = 853ca33659853093ee6a91af3719abdc4e1bae72
 
+sample-db-dokploy: PGOPTS = -c search_path=dokploy
 .PHONY: sample-db-dokploy
 sample-db-dokploy:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS dokploy'
@@ -765,7 +782,7 @@ sample-db-dokploy:
 	grep -oE '"tag": "[^"]+"' meta/_journal.json | sed 's/.*: "//; s/"$$//' \
 	  | while read -r t; do cat "$$t.sql"; printf '\n;\n'; done \
 	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
-	  | PGOPTIONS='-c search_path=dokploy -c client_min_messages=warning' $(PSQL)
+	  | $(PSQL)
 
 # Hyperswitch (juspay/hyperswitch, Apache-2.0), the payments orchestrator. The
 # schema ships as Diesel migrations, 530 directories each holding an up.sql and
@@ -778,9 +795,10 @@ sample-db-dokploy:
 # Nothing in them names a schema, qualifies anything with public, or installs an
 # extension, so `hyperswitch` is created up front and search_path places
 # everything. The migrations drop what they are about to create with IF EXISTS
-# throughout, so client_min_messages is raised to warning.
+# throughout.
 HYPERSWITCH_SHA = 80d426974242eecedefed015b617202fbdcbdac1
 
+sample-db-hyperswitch: PGOPTS = -c search_path=hyperswitch
 .PHONY: sample-db-hyperswitch
 sample-db-hyperswitch:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hyperswitch'
@@ -789,7 +807,7 @@ sample-db-hyperswitch:
 	  | tar xz -C "$$dir" --strip-components=2 hyperswitch-$(HYPERSWITCH_SHA)/migrations && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in */up.sql; do cat "$$f"; printf '\n;\n'; done \
-	  | PGOPTIONS='-c search_path=hyperswitch -c client_min_messages=warning' $(PSQL)
+	  | $(PSQL)
 
 .PHONY: test-samples
 test-samples:
