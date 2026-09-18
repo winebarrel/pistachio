@@ -97,6 +97,11 @@ dokploy|sample-db-dokploy||dokploy
 hyperswitch|sample-db-hyperswitch||hyperswitch
 documenso|sample-db-prisma|REPO=documenso/documenso SHA=e658cc581878f52c03b3e6a8f7ffd613aead4e69 DIR=packages/prisma/migrations SCHEMA=documenso|documenso
 langfuse|sample-db-prisma|REPO=langfuse/langfuse SHA=330bb86bcc332a76d4b24569fa4e1c1086d651d1 DIR=packages/shared/prisma/migrations SCHEMA=langfuse|langfuse
+icinga_ido|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icinga2/3be2e74d386eaedb105b1acab69cbd88190957c9/lib/db_ido_pgsql/schema/pgsql.sql SCHEMA=icinga_ido|icinga_ido
+openfire|sample-db-url-schema|URL=https://raw.githubusercontent.com/igniterealtime/Openfire/c1b8d31a49f17a273aea2ccd89321d34c72fad3b/distribution/src/database/openfire_postgresql.sql SCHEMA=openfire|openfire
+bareos|sample-db-url-schema|URL=https://raw.githubusercontent.com/bareos/bareos/13a52fc1da1b2b131cf794fa4adb3936d39e049d/core/src/cats/ddl/creates/postgresql.sql SCHEMA=bareos|bareos
+opencms|sample-db-url-schema|URL=https://raw.githubusercontent.com/alkacon/opencms-core/3411490f10d73474d15d3f0dd31d132793cb22cb/webapp/WEB-INF/setupdata/database/postgresql/create_tables.sql SCHEMA=opencms|opencms
+marquez|sample-db-marquez||marquez
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -592,6 +597,39 @@ sample-db-prisma:
 	cd "$$dir" && LC_ALL=C && \
 	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
 	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | $(PSQL)
+
+# Marquez (MarquezProject/marquez, Apache-2.0), the reference implementation of
+# OpenLineage. The schema ships as Flyway migrations, and Flyway is the sixth
+# migration tool in this list after Diesel, sqlx, golang-migrate, Prisma, and
+# Drizzle: 81 versioned files and 3 repeatable ones in one directory, which the
+# repository tarball is fetched once for.
+#
+# Flyway applies the versioned files in version order, which is not the name
+# order the other migration loaders here replay in, since V10 comes after V9 and
+# V17.1 between V17 and V18. So the version is cut out of each name and sorted
+# on its own, and the repeatable files, the ones named R__, follow them in name
+# order, which is where Flyway runs them. A few files end without a semicolon,
+# so each is followed by a newline and one.
+#
+# Marquez ships seven Java migrations as well, which Flyway runs in the same
+# sequence. Six of them backfill rows and the seventh creates facet views, so
+# the sample is checked without those views, the way musicbrainz is checked
+# without the triggers its file list leaves out. Nothing in the SQL files names
+# a schema or qualifies anything with public, so `marquez` is created up front
+# and search_path places everything.
+MARQUEZ_SHA = 180f37b22387146187af1ef0279e3ee1d1ccd789
+
+sample-db-marquez: PGOPTS = -c search_path=marquez
+.PHONY: sample-db-marquez
+sample-db-marquez:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS marquez'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/MarquezProject/marquez/tar.gz/$(MARQUEZ_SHA) \
+	  | tar xz -C "$$dir" --strip-components=8 marquez-$(MARQUEZ_SHA)/api/src/main/resources/marquez/db/migration && \
+	cd "$$dir" && LC_ALL=C && \
+	{ for f in V*.sql; do v=$${f#V}; printf '%s\t%s\n' "$${v%%__*}" "$$f"; done | sort -V | cut -f2; ls R__*.sql; } \
+	  | while read -r f; do cat "$$f"; printf '\n;\n'; done \
 	  | $(PSQL)
 
 # Mattermost (mattermost/mattermost, AGPL-3.0 and Apache-2.0). The schema ships
