@@ -1,0 +1,55 @@
+# bulk_alter merges the two ADD COLUMNs into one statement, while the new
+# foreign key still stays a separate statement per the bulk-alter rule. The
+# partitioned-table rule applies independently: the FK is added without ONLY.
+bulk_alter: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      total numeric,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  ) PARTITION BY RANGE (id);
+  CREATE TABLE public.orders_p1 PARTITION OF public.orders FOR VALUES FROM (1) TO (1000);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      total numeric,
+      user_id integer,
+      discount numeric,
+      CONSTRAINT orders_pkey PRIMARY KEY (id),
+      CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+  ) PARTITION BY RANGE (id);
+  CREATE TABLE public.orders_p1 PARTITION OF public.orders FOR VALUES FROM (1) TO (1000);
+applied_sql: |
+  ALTER TABLE public.orders
+    ADD COLUMN user_id integer,
+    ADD COLUMN discount numeric;
+  ALTER TABLE public.orders ADD CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id);
+applied: |
+  -- public.orders
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      total numeric,
+      user_id integer,
+      discount numeric,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  )
+  PARTITION BY RANGE (id);
+
+  ALTER TABLE public.orders ADD CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+  -- public.orders_p1
+  CREATE TABLE public.orders_p1 PARTITION OF public.orders FOR VALUES FROM (1) TO (1000);
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
