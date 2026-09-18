@@ -1,0 +1,23 @@
+# A renamed identity column and a sequence-option change on it compose
+# cleanly: the rename runs first, then the option diff resolves against the
+# new name with no accidental DROP/re-ADD of the identity itself.
+init: |
+  CREATE TABLE public.users (
+      user_id integer GENERATED ALWAYS AS IDENTITY,
+      name text
+  );
+desired: |
+  CREATE TABLE public.users (
+      -- pista:renamed-from user_id
+      id integer GENERATED ALWAYS AS IDENTITY (INCREMENT BY 2),
+      name text
+  );
+applied_sql: |
+  ALTER TABLE public.users RENAME COLUMN user_id TO id;
+  ALTER TABLE public.users ALTER COLUMN id SET INCREMENT BY 2;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer GENERATED ALWAYS AS IDENTITY (INCREMENT BY 2),
+      name text
+  );

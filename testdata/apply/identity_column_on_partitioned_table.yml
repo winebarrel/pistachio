@@ -1,0 +1,28 @@
+# An identity column is declared once on the partitioned parent; partitions
+# never declare their own columns, so a sequence-option change on the parent
+# is the only statement, with nothing spurious against the partition.
+init: |
+  CREATE TABLE public.events (
+      id bigint GENERATED ALWAYS AS IDENTITY,
+      at date NOT NULL,
+      PRIMARY KEY (id, at)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+desired: |
+  CREATE TABLE public.events (
+      id bigint GENERATED ALWAYS AS IDENTITY (INCREMENT BY 2),
+      at date NOT NULL,
+      PRIMARY KEY (id, at)
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id bigint GENERATED ALWAYS AS IDENTITY (INCREMENT BY 2),
+      at date NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id, at)
+  )
+  PARTITION BY RANGE (at);
+
+  -- public.events_2026
+  CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
