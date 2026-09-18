@@ -162,6 +162,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | plausible | plausible | [plausible/analytics](https://github.com/plausible/analytics) |
 | feedbin | feedbin | [feedbin/feedbin](https://github.com/feedbin/feedbin) |
 | citizenlab | citizenlab | [CitizenLabDotCo/citizenlab](https://github.com/CitizenLabDotCo/citizenlab) |
+| dokploy | dokploy | [Dokploy/dokploy](https://github.com/Dokploy/dokploy) |
 
 ## Coverage
 
@@ -181,7 +182,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
-  on 16.13.
+  on 16.13, and dokploy 2026-09-18 on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -280,11 +281,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | plausible | 42 | 294 | 81 | 40 | 47 | 0 | 3 | 0 | 1 | 1 |
 | feedbin | 44 | 395 | 161 | 8 | 43 | 0 | 0 | 0 | 0 | 0 |
 | citizenlab | 144 | 1,304 | 498 | 169 | 155 | 26 | 0 | 0 | 2 | 4 |
-| **Total** | **7,863** | **66,435** | **23,848** | **10,077** | **13,290** | **2,199** | **457** | **432** | **1,501** | **1,263** |
+| dokploy | 67 | 946 | 106 | 133 | 89 | 0 | 27 | 0 | 0 | 0 |
+| **Total** | **7,930** | **67,381** | **23,954** | **10,210** | **13,379** | **2,199** | **484** | **432** | **1,501** | **1,263** |
 
 ### Size
 
-The 71 dumps come to about 224,000 lines of SQL. chado is 43,700 of them, the
+The 72 dumps come to about 226,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -342,7 +344,9 @@ always reach.
   calcom's 46 and triggerdev's 48, five columns between them typed as an array
   of one, mattermost's 7, which type 9 columns and one of which a partial
   index predicate casts to, lemmy's 16 over 24 columns, windmill's 33 over 57,
-  and plausible's 3, one of which is Oban's job state.
+  plausible's 3, one of which is Oban's job state, and dokploy's 27, which 40
+  of its columns are typed by and which are all quoted mixed-case names, as
+  calcom's and triggerdev's are.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -365,7 +369,8 @@ always reach.
   icinga_director's name both ON UPDATE and ON DELETE, in six combinations, and
   every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and an
   ON DELETE action, CASCADE for most. 137 of glific's 142 name ON DELETE, 106 of
-  them CASCADE.
+  them CASCADE, and 132 of dokploy's 133 name ON DELETE, 113 of them CASCADE
+  and 19 SET NULL, while none of them names ON UPDATE at all.
 - **Column comments**: glific comments 274 of its 590 columns.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
   its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
@@ -434,7 +439,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-three of the 71 samples declare
+Routines are concentrated the same way. Thirty-three of the 72 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
 and chado's 94 are 916 of the 1,263. Seven in ten of them, 889, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
@@ -553,6 +558,21 @@ strip only what is irrelevant to a schema round trip:
   `uuid-ossp`, which is contrib and which 16 of its columns default through.
   feedbin installs three contrib extensions of its own, `hstore`,
   `pg_stat_statements`, and `uuid-ossp`.
+- **dokploy**: the schema ships as Drizzle migrations, the fifth migration tool
+  in this list after Diesel, sqlx, golang-migrate, and Prisma. The repository
+  tarball is fetched once and only the drizzle directory is extracted. Which
+  files to replay comes from `meta/_journal.json` rather than from the
+  directory listing, because the two do not agree: `0130_abandoned_dagger.sql`
+  is on disk but not in the journal, so Drizzle never applies it, and replaying
+  it adds a column that a later migration adds again, which stops the load. The
+  journal lists its tags in the order Drizzle applies them, so they are read out
+  of it and each file catted in turn, followed by a newline and a semicolon
+  since a few end without one. None of the files names a schema, so `dokploy` is
+  created up front and `search_path` places everything, but the foreign keys
+  Drizzle writes qualify their target with `"public"`, which is stripped. Two
+  of those foreign key names run past the 63 character identifier limit and the
+  server says so as it truncates them, as it does for wso2is, so
+  `client_min_messages` is raised to `warning`.
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.

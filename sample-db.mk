@@ -93,6 +93,7 @@ windmill|sample-db-windmill||windmill
 plausible|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/plausible/analytics/30abd272b5114ba1f3c2c8bd146b86a4d2b7b984/priv/repo/structure.sql SCHEMA=plausible|plausible
 feedbin|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/feedbin/feedbin/eabfb10cc5975ebd755781ce33c0043feee6af31/db/structure.sql SCHEMA=feedbin|feedbin
 citizenlab|sample-db-citizenlab|URL=https://raw.githubusercontent.com/CitizenLabDotCo/citizenlab/0501175990e1ecec84f4a541c1a8b7a2b4755da1/back/db/structure.sql|citizenlab
+dokploy|sample-db-dokploy||dokploy
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -729,6 +730,40 @@ sample-db-citizenlab:
 	  | awk '/^-- Name: /{body=1} body' \
 	  | sed -E "/^CREATE SCHEMA public;\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
 	  | PGOPTIONS='-c search_path=citizenlab -c client_min_messages=warning -c check_function_bodies=off' $(PSQL)
+
+# Dokploy (Dokploy/dokploy, Apache-2.0). The schema ships as Drizzle
+# migrations, and Drizzle is the fifth migration tool in this list after
+# Diesel, sqlx, golang-migrate, and Prisma. The repository tarball is fetched
+# once and only the drizzle directory is extracted.
+#
+# Which files to replay comes from meta/_journal.json rather than from the
+# directory listing, because those two do not agree: 0130_abandoned_dagger.sql
+# is on disk but not in the journal, so Drizzle never applies it, and replaying
+# it adds a `customEntrypoint` column that 0158 adds again, which stops the
+# load. The journal lists its tags in the order Drizzle applies them, which is
+# also name order, so the tags are read out of it and each file catted in turn.
+# A few end without a semicolon, so each is followed by a newline and one.
+#
+# None of the files names a schema, so `dokploy` is created up front and
+# search_path places everything, but the foreign keys Drizzle writes qualify
+# their target with "public", which is stripped the way sample-db-prisma strips
+# it. client_min_messages is raised to warning for the two foreign key names
+# that run past the 63 character identifier limit, which the server says so
+# about as it truncates them, as it does for wso2is, and for the one DROP that
+# cascades.
+DOKPLOY_SHA = 853ca33659853093ee6a91af3719abdc4e1bae72
+
+.PHONY: sample-db-dokploy
+sample-db-dokploy:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS dokploy'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/Dokploy/dokploy/tar.gz/$(DOKPLOY_SHA) \
+	  | tar xz -C "$$dir" --strip-components=4 dokploy-$(DOKPLOY_SHA)/apps/dokploy/drizzle && \
+	cd "$$dir" && \
+	grep -oE '"tag": "[^"]+"' meta/_journal.json | sed 's/.*: "//; s/"$$//' \
+	  | while read -r t; do cat "$$t.sql"; printf '\n;\n'; done \
+	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | PGOPTIONS='-c search_path=dokploy -c client_min_messages=warning' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
