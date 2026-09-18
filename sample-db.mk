@@ -94,6 +94,7 @@ plausible|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/plausibl
 feedbin|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/feedbin/feedbin/eabfb10cc5975ebd755781ce33c0043feee6af31/db/structure.sql SCHEMA=feedbin|feedbin
 citizenlab|sample-db-citizenlab|URL=https://raw.githubusercontent.com/CitizenLabDotCo/citizenlab/0501175990e1ecec84f4a541c1a8b7a2b4755da1/back/db/structure.sql|citizenlab
 dokploy|sample-db-dokploy||dokploy
+hyperswitch|sample-db-hyperswitch||hyperswitch
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -764,6 +765,30 @@ sample-db-dokploy:
 	  | while read -r t; do cat "$$t.sql"; printf '\n;\n'; done \
 	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
 	  | PGOPTIONS='-c search_path=dokploy -c client_min_messages=warning' $(PSQL)
+
+# Hyperswitch (juspay/hyperswitch, Apache-2.0), the payments orchestrator. The
+# schema ships as Diesel migrations, 530 directories each holding an up.sql and
+# replayed in name order, so the repository tarball is fetched once and only the
+# migrations directory is extracted, as sample-db-lemmy does. Every directory
+# but Diesel's own 00000000000000_diesel_initial_setup is named for a date, so
+# plain name order is the order Diesel applies them in. Four of the files end
+# without a semicolon, so each is followed by a newline and one.
+#
+# Nothing in them names a schema, qualifies anything with public, or installs an
+# extension, so `hyperswitch` is created up front and search_path places
+# everything. The migrations drop what they are about to create with IF EXISTS
+# throughout, so client_min_messages is raised to warning.
+HYPERSWITCH_SHA = 80d426974242eecedefed015b617202fbdcbdac1
+
+.PHONY: sample-db-hyperswitch
+sample-db-hyperswitch:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hyperswitch'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/juspay/hyperswitch/tar.gz/$(HYPERSWITCH_SHA) \
+	  | tar xz -C "$$dir" --strip-components=2 hyperswitch-$(HYPERSWITCH_SHA)/migrations && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in */up.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | PGOPTIONS='-c search_path=hyperswitch -c client_min_messages=warning' $(PSQL)
 
 .PHONY: test-samples
 test-samples:
