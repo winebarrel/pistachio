@@ -1,0 +1,22 @@
+# ADD CONSTRAINT ... USING INDEX adopts an index that is already built, so
+# explain has no scan to report and the statement is left unannotated.
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id);
+  CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email);
+  INSERT INTO public.users SELECT g, 'u' || g FROM generate_series(1, 3) g;
+  ANALYZE public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  ALTER TABLE ONLY public.users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
+  ALTER TABLE ONLY public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;
+plan: |
+  ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
+  ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;
