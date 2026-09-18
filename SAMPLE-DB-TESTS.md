@@ -657,7 +657,11 @@ strip only what is irrelevant to a schema round trip:
   triggerdev's, and documenso's, 438 directories replayed through
   `sample-db-prisma`, so it needs no loader of its own. It installs no
   extension and qualifies nothing with `public`, so the sed that strips the
-  qualifier has nothing to strip.
+  qualifier has nothing to strip. `client_min_messages` is raised to `warning`
+  for two NOTICEs the replay would otherwise print: one index name runs past
+  63 characters, which the server says so about as it truncates it, and one
+  migration turns a unique index into a primary key with
+  `ADD CONSTRAINT ... USING INDEX`, which renames the index.
 - **lemmy**: the schema ships as Diesel migrations, 342 directories each holding
   an `up.sql`, and that is only half of it: every trigger function lives in a
   schema named `r` that Lemmy's own runner builds afterwards out of two files.

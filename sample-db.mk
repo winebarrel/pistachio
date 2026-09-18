@@ -96,7 +96,7 @@ citizenlab|sample-db-citizenlab|URL=https://raw.githubusercontent.com/CitizenLab
 dokploy|sample-db-dokploy||dokploy
 hyperswitch|sample-db-hyperswitch||hyperswitch
 documenso|sample-db-prisma|REPO=documenso/documenso SHA=e658cc581878f52c03b3e6a8f7ffd613aead4e69 DIR=packages/prisma/migrations SCHEMA=documenso|documenso
-langfuse|sample-db-prisma|REPO=langfuse/langfuse SHA=330bb86bcc332a76d4b24569fa4e1c1086d651d1 DIR=packages/shared/prisma/migrations SCHEMA=langfuse|langfuse
+langfuse|sample-db-prisma|REPO=langfuse/langfuse SHA=330bb86bcc332a76d4b24569fa4e1c1086d651d1 DIR=packages/shared/prisma/migrations SCHEMA=langfuse CLIENT_MIN_MESSAGES=warning|langfuse
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -166,7 +166,11 @@ sample-db-mimiciv:
 # warning, since each drops what it is about to create with IF EXISTS, wso2is
 # also because five of its index names are over 63 characters and the server
 # says so as it truncates them, and ranger to error, since it drops the same way
-# and commits outside a transaction, which adds a warning per statement.
+# and commits outside a transaction, which adds a warning per statement. It
+# reaches sample-db-prisma as well, where langfuse raises it for the same two
+# reasons: one of its index names runs past 63 characters, and one migration
+# turns a unique index into a primary key with ADD CONSTRAINT ... USING INDEX,
+# which the server says it is renaming the index for.
 CLIENT_MIN_MESSAGES ?= notice
 
 # CHECK_FUNCTION_BODIES defaults to on, the server default. coder turns it off:
@@ -564,6 +568,8 @@ sample-db-lago:
 # REPO is the name GitHub uses now. A few files end without a semicolon, or on
 # a comment, so every file is followed by a newline and one. Prisma qualifies
 # some statements with `public`, which is stripped so search_path places them.
+# CLIENT_MIN_MESSAGES is passed in the way sample-db-url-schema passes it, for
+# a migration history whose replay is noisy on a fresh database.
 .PHONY: sample-db-prisma
 sample-db-prisma:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
@@ -573,7 +579,7 @@ sample-db-prisma:
 	cd "$$dir" && LC_ALL=C && \
 	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
 	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
-	  | PGOPTIONS='-c search_path=$(SCHEMA)' $(PSQL)
+	  | PGOPTIONS='-c search_path=$(SCHEMA) -c client_min_messages=$(CLIENT_MIN_MESSAGES)' $(PSQL)
 
 # Mattermost (mattermost/mattermost, AGPL-3.0 and Apache-2.0). The schema ships
 # as golang-migrate migrations, 227 .up.sql files replayed in name order, so the
