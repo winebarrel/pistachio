@@ -169,6 +169,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | icinga_ido | icinga_ido | [Icinga/icinga2](https://github.com/Icinga/icinga2) |
 | openfire | openfire | [igniterealtime/Openfire](https://github.com/igniterealtime/Openfire) |
 | bareos | bareos | [bareos/bareos](https://github.com/bareos/bareos) |
+| opencms | opencms | [alkacon/opencms-core](https://github.com/alkacon/opencms-core) |
 
 ## Coverage
 
@@ -189,7 +190,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
   on 16.13, and dokploy, hyperswitch, documenso, langfuse, icinga_ido,
-  openfire, and bareos 2026-09-18 on the same.
+  openfire, bareos, and opencms 2026-09-18 on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -295,11 +296,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | icinga_ido | 61 | 791 | 234 | 0 | 94 | 0 | 0 | 0 | 0 | 3 |
 | openfire | 35 | 224 | 50 | 1 | 33 | 0 | 0 | 0 | 0 | 0 |
 | bareos | 28 | 259 | 39 | 0 | 26 | 0 | 0 | 0 | 0 | 2 |
-| **Total** | **8,229** | **70,972** | **24,772** | **10,387** | **13,716** | **2,199** | **595** | **432** | **1,501** | **1,274** |
+| opencms | 41 | 246 | 164 | 0 | 44 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **8,270** | **71,218** | **24,936** | **10,387** | **13,760** | **2,199** | **595** | **432** | **1,501** | **1,274** |
 
 ### Size
 
-The 78 dumps come to about 233,000 lines of SQL. chado is 43,700 of them, the
+The 79 dumps come to about 233,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -329,7 +331,9 @@ always reach.
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
   64, only one of them partial and none over an expression; lago's 801 over 143,
   123 of them partial and 16 gin; feedbin's 161 over 44, every one of them
-  btree, only 7 partial and 3 over an expression.
+  btree, only 7 partial and 3 over an expression; opencms's 164 over 41 are
+  four to a table like danbooru's but plainer: every one of them is btree, 120
+  are non-unique, and not one is partial or over an expression.
 - **Partial indexes**: 37 of lemmy's 290 and 88 of windmill's 392, which also
   has 31 gin indexes.
 - **Unique indexes over an expression and a gin index over `to_tsvector`**: rt,
@@ -420,9 +424,9 @@ always reach.
 - **A schema that barely keys at all**: mattermost backs its 86 tables with 85
   primary keys and 19 unique constraints, declares no CHECK, and leaves all but
   3 of the references between them to the application. mediawiki, temporal,
-  imdb, dolphinscheduler, nightingale, joomla, hyperswitch, icinga_ido, and
-  bareos declare no foreign key at all, and openfire declares exactly one, over
-  35 tables. icinga_ido is the widest of them: 61 tables
+  imdb, dolphinscheduler, nightingale, joomla, hyperswitch, icinga_ido,
+  bareos, and opencms declare no foreign key at all, and openfire declares
+  exactly one, over 35 tables. icinga_ido is the widest of them: 61 tables
   and 791 columns, indexed 234 times and keyed by 61 primary keys and 33
   unique constraints, with every reference between them left to Icinga.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
@@ -469,7 +473,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-seven of the 78 samples declare
+Routines are concentrated the same way. Thirty-seven of the 79 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
 and chado's 94 are 916 of the 1,274. Seven in ten of them, 890, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
@@ -701,7 +705,7 @@ targets strip only what is irrelevant to a schema round trip:
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **icinga_ido**,
   **rt**, **znuny**, **ranger**, **ambari**, **ovirt**, **gitlab**,
   **ledgersmb**, **koji**, **kea**, **dolphinscheduler**, **wso2apim**,
-  **icinga_director**, **openfire**, **bareos**,
+  **icinga_director**, **openfire**, **bareos**, **opencms**,
   **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
   **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**: these
   dumps name no schema at all, so whichever schema comes first in `search_path`

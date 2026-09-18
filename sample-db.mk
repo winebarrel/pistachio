@@ -100,6 +100,7 @@ langfuse|sample-db-prisma|REPO=langfuse/langfuse SHA=330bb86bcc332a76d4b24569fa4
 icinga_ido|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icinga2/3be2e74d386eaedb105b1acab69cbd88190957c9/lib/db_ido_pgsql/schema/pgsql.sql SCHEMA=icinga_ido|icinga_ido
 openfire|sample-db-url-schema|URL=https://raw.githubusercontent.com/igniterealtime/Openfire/c1b8d31a49f17a273aea2ccd89321d34c72fad3b/distribution/src/database/openfire_postgresql.sql SCHEMA=openfire|openfire
 bareos|sample-db-url-schema|URL=https://raw.githubusercontent.com/bareos/bareos/13a52fc1da1b2b131cf794fa4adb3936d39e049d/core/src/cats/ddl/creates/postgresql.sql SCHEMA=bareos|bareos
+opencms|sample-db-url-schema|URL=https://raw.githubusercontent.com/alkacon/opencms-core/3411490f10d73474d15d3f0dd31d132793cb22cb/webapp/WEB-INF/setupdata/database/postgresql/create_tables.sql SCHEMA=opencms|opencms
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
