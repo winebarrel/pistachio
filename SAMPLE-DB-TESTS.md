@@ -170,6 +170,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | openfire | openfire | [igniterealtime/Openfire](https://github.com/igniterealtime/Openfire) |
 | bareos | bareos | [bareos/bareos](https://github.com/bareos/bareos) |
 | opencms | opencms | [alkacon/opencms-core](https://github.com/alkacon/opencms-core) |
+| marquez | marquez | [MarquezProject/marquez](https://github.com/MarquezProject/marquez) |
 
 ## Coverage
 
@@ -190,7 +191,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
   on 16.13, and dokploy, hyperswitch, documenso, langfuse, icinga_ido,
-  openfire, bareos, and opencms 2026-09-18 on the same.
+  openfire, bareos, opencms, and marquez 2026-09-18 on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -297,11 +298,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | openfire | 35 | 224 | 50 | 1 | 33 | 0 | 0 | 0 | 0 | 0 |
 | bareos | 28 | 259 | 39 | 0 | 26 | 0 | 0 | 0 | 0 | 2 |
 | opencms | 41 | 246 | 164 | 0 | 44 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **8,270** | **71,218** | **24,936** | **10,387** | **13,760** | **2,199** | **595** | **432** | **1,501** | **1,274** |
+| marquez | 30 | 199 | 83 | 46 | 38 | 4 | 0 | 0 | 2 | 2 |
+| **Total** | **8,300** | **71,417** | **25,019** | **10,433** | **13,798** | **2,203** | **595** | **432** | **1,503** | **1,276** |
 
 ### Size
 
-The 79 dumps come to about 233,000 lines of SQL. chado is 43,700 of them, the
+The 80 dumps come to about 234,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -375,7 +377,8 @@ always reach.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
-  and sourcegraph, chado, and coder 2 each.
+  sourcegraph, chado, and coder 2 each, and marquez 1, which one of its views
+  builds an array of with ROW().
 - **tsvector columns**: dvdrental, pagila.
 - **A non-default collation**: musicbrainz.
 - **Columns typed by a contrib extension**: sourcegraph, with 49 `citext`
@@ -430,8 +433,8 @@ always reach.
   and 791 columns, indexed 234 times and keyed by 61 primary keys and 33
   unique constraints, with every reference between them left to Icinga.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
-  are all materialized, lago, and mattermost, whose six are all materialized and
-  one of which carries an index.
+  are all materialized, lago, mattermost, whose six are all materialized and
+  one of which carries an index, and marquez, where one of the four is.
 - **Extensions in a schema of their own**: citizenlab puts all five of its in
   `shared_extensions` and qualifies every use with it, so 135 of its column
   defaults call `shared_extensions.gen_random_uuid()` and two of its indexes
@@ -465,7 +468,8 @@ always reach.
   held in `ENABLE ALWAYS` state; kea's 81 outnumber its 64 tables; coder's 30,
   lemmy's 66, bigbluebutton's 25, hatchet's 22, and ledgersmb's 11 come next.
   21 of hatchet's are statement-level triggers with transition tables, and 12
-  sit on a partitioned table.
+  sit on a partitioned table. One of marquez's 2 is an INSTEAD OF trigger on a
+  view rather than a table, so its dump has to name the view.
 - **Trigger functions in a schema of their own**: every one of lemmy's 66
   triggers sits on a table in `lemmy` and calls a function in `r`, the schema
   Lemmy's migration runner drops and rebuilds whenever those functions change,
@@ -473,13 +477,13 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-seven of the 79 samples declare
+Routines are concentrated the same way. Thirty-eight of the 80 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,274. Seven in ten of them, 890, return
+and chado's 94 are 916 of the 1,276. Seven in ten of them, 890, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,169 are written in plpgsql and 105 in sql. sourcegraph declares one
+1,171 are written in plpgsql and 105 in sql. sourcegraph declares one
 procedure, thingsboard three, and lemmy two, the only procedures any sample has,
 and inaturalist the only aggregate, which `--manage-routine` does not read and
 so is in neither count. bareos's `decode_lstat` returns a 16-column `TABLE`,
@@ -695,6 +699,17 @@ targets strip only what is irrelevant to a schema round trip:
   before it are still there and `comment` alone matches several, so those
   lookups are scoped to the `lemmy` schema. The one `relname LIKE` inside a
   function body is left alone.
+- **marquez**: the schema ships as Flyway migrations, 81 versioned files and 3
+  repeatable ones in one directory, which the repository tarball is fetched
+  once for. Flyway applies the versioned files in version order rather than
+  name order, since V10 comes after V9 and V17.1 sits between V17 and V18, so
+  the version is cut out of each name and sorted on its own; the repeatable
+  files, the ones named `R__`, follow in name order, where Flyway runs them.
+  A few end without a semicolon, so each is followed by a newline and one.
+  Marquez also ships seven Java migrations that Flyway runs in the same
+  sequence: six backfill rows and the seventh creates facet views, so the
+  sample is checked without those views, the way musicbrainz is checked without
+  the triggers its file list leaves out.
 - **mattermost**: the schema ships as golang-migrate migrations, 227 `.up.sql`
   files replayed in name order. The repository tarball is fetched once and only
   the migrations directory is extracted, since fetching 227 files one at a time
