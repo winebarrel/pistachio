@@ -166,6 +166,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | hyperswitch | hyperswitch | [juspay/hyperswitch](https://github.com/juspay/hyperswitch) |
 | documenso | documenso | [documenso/documenso](https://github.com/documenso/documenso) |
 | langfuse | langfuse | [langfuse/langfuse](https://github.com/langfuse/langfuse) |
+| icinga_ido | icinga_ido | [Icinga/icinga2](https://github.com/Icinga/icinga2) |
 
 ## Coverage
 
@@ -185,8 +186,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
-  on 16.13, and dokploy, hyperswitch, documenso, and langfuse 2026-09-18 on
-  the same.
+  on 16.13, and dokploy, hyperswitch, documenso, langfuse, and icinga_ido
+  2026-09-18 on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -289,11 +290,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | hyperswitch | 50 | 1,070 | 135 | 0 | 61 | 0 | 46 | 0 | 0 | 2 |
 | documenso | 51 | 490 | 138 | 63 | 51 | 0 | 30 | 0 | 0 | 4 |
 | langfuse | 74 | 757 | 222 | 113 | 72 | 0 | 35 | 0 | 0 | 0 |
-| **Total** | **8,105** | **69,698** | **24,449** | **10,386** | **13,563** | **2,199** | **595** | **432** | **1,501** | **1,269** |
+| icinga_ido | 61 | 791 | 234 | 0 | 94 | 0 | 0 | 0 | 0 | 3 |
+| **Total** | **8,166** | **70,489** | **24,683** | **10,386** | **13,657** | **2,199** | **595** | **432** | **1,501** | **1,272** |
 
 ### Size
 
-The 75 dumps come to about 231,000 lines of SQL. chado is 43,700 of them, the
+The 76 dumps come to about 232,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -414,8 +416,10 @@ always reach.
 - **A schema that barely keys at all**: mattermost backs its 86 tables with 85
   primary keys and 19 unique constraints, declares no CHECK, and leaves all but
   3 of the references between them to the application. mediawiki, temporal,
-  imdb, dolphinscheduler, nightingale, joomla, and hyperswitch declare no
-  foreign key at all.
+  imdb, dolphinscheduler, nightingale, joomla, hyperswitch, and icinga_ido
+  declare no foreign key at all. icinga_ido is the widest of them: 61 tables
+  and 791 columns, indexed 234 times and keyed by 61 primary keys and 33
+  unique constraints, with every reference between them left to Icinga.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, and mattermost, whose six are all materialized and
   one of which carries an index.
@@ -460,13 +464,13 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-five of the 75 samples declare
+Routines are concentrated the same way. Thirty-six of the 76 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,269. Seven in ten of them, 890, return
+and chado's 94 are 916 of the 1,272. Seven in ten of them, 890, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,166 are written in plpgsql and 103 in sql. sourcegraph declares one
+1,167 are written in plpgsql and 105 in sql. sourcegraph declares one
 procedure, thingsboard three, and lemmy two, the only procedures any sample has,
 and inaturalist the only aggregate, which `--manage-routine` does not read and
 so is in neither count. Only chado, kea,
@@ -688,9 +692,10 @@ targets strip only what is irrelevant to a schema round trip:
   `information_schema` all say `current_schema()`, so `mattermost` is created up
   front and `search_path` places everything. Eight of the files end without a
   semicolon, so each is followed by a newline and one.
-- **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
-  **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
-  **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,
+- **mediawiki**, **synapse**, **temporal**, **icingadb**, **icinga_ido**,
+  **rt**, **znuny**, **ranger**, **ambari**, **ovirt**, **gitlab**,
+  **ledgersmb**, **koji**, **kea**, **dolphinscheduler**, **wso2apim**,
+  **icinga_director**,
   **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
   **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**: these
   dumps name no schema at all, so whichever schema comes first in `search_path`
