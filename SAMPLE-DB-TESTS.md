@@ -164,6 +164,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | citizenlab | citizenlab | [CitizenLabDotCo/citizenlab](https://github.com/CitizenLabDotCo/citizenlab) |
 | dokploy | dokploy | [Dokploy/dokploy](https://github.com/Dokploy/dokploy) |
 | hyperswitch | hyperswitch | [juspay/hyperswitch](https://github.com/juspay/hyperswitch) |
+| documenso | documenso | [documenso/documenso](https://github.com/documenso/documenso) |
 
 ## Coverage
 
@@ -183,7 +184,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
-  on 16.13, and dokploy and hyperswitch 2026-09-18 on the same.
+  on 16.13, and dokploy, hyperswitch, and documenso 2026-09-18 on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -284,11 +285,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | citizenlab | 144 | 1,304 | 498 | 169 | 155 | 26 | 0 | 0 | 2 | 4 |
 | dokploy | 67 | 946 | 106 | 133 | 89 | 0 | 27 | 0 | 0 | 0 |
 | hyperswitch | 50 | 1,070 | 135 | 0 | 61 | 0 | 46 | 0 | 0 | 2 |
-| **Total** | **7,980** | **68,451** | **24,089** | **10,210** | **13,440** | **2,199** | **530** | **432** | **1,501** | **1,265** |
+| documenso | 51 | 490 | 138 | 63 | 51 | 0 | 30 | 0 | 0 | 4 |
+| **Total** | **8,031** | **68,941** | **24,227** | **10,273** | **13,491** | **2,199** | **560** | **432** | **1,501** | **1,269** |
 
 ### Size
 
-The 73 dumps come to about 228,000 lines of SQL. chado is 43,700 of them, the
+The 74 dumps come to about 229,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -352,6 +354,7 @@ always reach.
   hyperswitch is denser than any of them: 46 enums over 50 tables, typing 74
   columns and one array-of-enum column, and the 695 labels between them are
   lopsided too, since `CountryAlpha2` carries 249 of them and `Currency` 158.
+  documenso's 30 over 51 tables are close behind, typing 34 columns.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -387,9 +390,9 @@ always reach.
   into a column DEFAULT.
 - **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
   tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with 747
-  of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, and
-  bigbluebutton, where 451 of 532 columns and half the tables and views are
-  camelCase.
+  of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, documenso,
+  where all 51 tables and 314 of the 490 columns are, and bigbluebutton, where
+  451 of 532 columns and half the tables and views are camelCase.
 - **Width without variety**: openolat, whose 382 tables are behind only gitlab
   and dhis2, has every one of its 1,239 indexes btree and every one of its 632
   foreign keys left at NO ACTION.
@@ -445,18 +448,19 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-four of the 73 samples declare
+Routines are concentrated the same way. Thirty-five of the 74 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,265. Seven in ten of them, 890, return
+and chado's 94 are 916 of the 1,269. Seven in ten of them, 890, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,162 are written in plpgsql and 103 in sql. sourcegraph declares one
+1,166 are written in plpgsql and 103 in sql. sourcegraph declares one
 procedure, thingsboard three, and lemmy two, the only procedures any sample has,
 and inaturalist the only aggregate, which `--manage-routine` does not read and
 so is in neither count. Only chado, kea,
-and boundary overload a name, 11 of them, 3, and 1, though danbooru's three, all
-sql, include a `lower(text[])` that shadows a built-in. Only sourcegraph,
+and boundary overload a name, 11 of them, 3, and 1, though danbooru's three,
+all sql, include a `lower(text[])` that shadows a built-in, and documenso's
+`nanoid` gives all three of its arguments a default. Only sourcegraph,
 ledgersmb, gitlab, coder, and boundary comment a routine, 137 between them, 124
 of those boundary's.
 
@@ -564,6 +568,10 @@ strip only what is irrelevant to a schema round trip:
   `uuid-ossp`, which is contrib and which 16 of its columns default through.
   feedbin installs three contrib extensions of its own, `hstore`,
   `pg_stat_statements`, and `uuid-ossp`.
+- **documenso**: the schema ships as a Prisma migration history like calcom's
+  and triggerdev's, 164 directories replayed through `sample-db-prisma`, so it
+  needs no loader of its own. It installs `pg_trgm` and `pgcrypto`, both
+  contrib, into the schema it loads into.
 - **dokploy**: the schema ships as Drizzle migrations, the fifth migration tool
   in this list after Diesel, sqlx, golang-migrate, and Prisma. The repository
   tarball is fetched once and only the drizzle directory is extracted. Which

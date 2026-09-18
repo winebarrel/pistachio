@@ -95,6 +95,7 @@ feedbin|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/feedbin/fe
 citizenlab|sample-db-citizenlab|URL=https://raw.githubusercontent.com/CitizenLabDotCo/citizenlab/0501175990e1ecec84f4a541c1a8b7a2b4755da1/back/db/structure.sql|citizenlab
 dokploy|sample-db-dokploy||dokploy
 hyperswitch|sample-db-hyperswitch||hyperswitch
+documenso|sample-db-prisma|REPO=documenso/documenso SHA=e658cc581878f52c03b3e6a8f7ffd613aead4e69 DIR=packages/prisma/migrations SCHEMA=documenso|documenso
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
