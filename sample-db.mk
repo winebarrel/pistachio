@@ -99,6 +99,7 @@ documenso|sample-db-prisma|REPO=documenso/documenso SHA=e658cc581878f52c03b3e6a8
 langfuse|sample-db-prisma|REPO=langfuse/langfuse SHA=330bb86bcc332a76d4b24569fa4e1c1086d651d1 DIR=packages/shared/prisma/migrations SCHEMA=langfuse|langfuse
 icinga_ido|sample-db-url-schema|URL=https://raw.githubusercontent.com/Icinga/icinga2/3be2e74d386eaedb105b1acab69cbd88190957c9/lib/db_ido_pgsql/schema/pgsql.sql SCHEMA=icinga_ido|icinga_ido
 openfire|sample-db-url-schema|URL=https://raw.githubusercontent.com/igniterealtime/Openfire/c1b8d31a49f17a273aea2ccd89321d34c72fad3b/distribution/src/database/openfire_postgresql.sql SCHEMA=openfire|openfire
+bareos|sample-db-url-schema|URL=https://raw.githubusercontent.com/bareos/bareos/13a52fc1da1b2b131cf794fa4adb3936d39e049d/core/src/cats/ddl/creates/postgresql.sql SCHEMA=bareos|bareos
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
