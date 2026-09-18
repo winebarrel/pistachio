@@ -15,6 +15,8 @@ desired: |
       PRIMARY KEY (id, at)
   ) PARTITION BY RANGE (at);
   CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+applied_sql: |
+  ALTER TABLE public.events ALTER COLUMN id SET INCREMENT BY 2;
 applied: |
   -- public.events
   CREATE TABLE public.events (
