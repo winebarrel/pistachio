@@ -729,6 +729,8 @@ gitlab's 68 `NOT VALID` constraints round-trip without the flag.
    plain pipe does not work.
 3. If the source is on GitHub, put a commit SHA in the URL, not a branch name.
 4. Run `make test-samples` and confirm the new sample reports `PASS`.
+5. Leave `CHANGELOG.md` alone. A sample is test-only, and nothing about it
+   reaches someone using pista.
 
 A `DRIFT` result is the interesting outcome: it means pistachio reads or writes
 that schema incorrectly. Fix the catalog reader, the parser, or the diff before
