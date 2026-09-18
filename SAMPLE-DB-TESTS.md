@@ -478,8 +478,16 @@ of those boundary's.
 
 ## Load-time adjustments
 
-Some upstream dumps cannot be piped into `psql` as they are. The loader targets
-strip only what is irrelevant to a schema round trip:
+Every loader runs its `psql` with `client_min_messages` raised to `warning`,
+set once in `sample-db.mk` rather than sample by sample. Dumps drop what they
+are about to create with `IF EXISTS`, declare an identifier past 63 characters
+the server truncates, or hand an index to a constraint that renames it, and
+each says so on a fresh database; none of it is about the schema under test,
+and the runner passes a loader's stderr through. ranger raises the level
+further, to `error`, from its `SAMPLES` record.
+
+Some upstream dumps cannot be piped into `psql` as they are, either. The loader
+targets strip only what is irrelevant to a schema round trip:
 
 - **adventureworks**: `\copy` lines are dropped (the data lives in CSVs that are
   not fetched), along with the inline `Production.ProductReview` INSERT, whose
@@ -520,11 +528,10 @@ strip only what is irrelevant to a schema round trip:
   overrides anything `PGOPTIONS` passes in. The `public` in those four lines is
   rewritten to `chado`, the way hive's one line is. The lines that name
   `genetic_code`, `so`, and `frange` keep them: the file creates those three
-  schemas itself, so the sample is checked with all four. Its tables are all
-  `bigserial`, so `client_min_messages` is raised to `warning` to quiet the
-  implicit-sequence NOTICEs. Nine of its SQL functions are dropped, the six
-  written against the `@` box operator that PostgreSQL 14 removed and the three
-  that call one of those six; they error out on every version in the CI matrix.
+  schemas itself, so the sample is checked with all four. Nine of its SQL
+  functions are dropped, the six written against the `@` box operator that
+  PostgreSQL 14 removed and the three that call one of those six; they error
+  out on every version in the CI matrix.
   The 94 that load are part of the round trip like any other object. The
   `create_point` calls in the bodies of `boxrange` and `boxquery` are qualified
   with `chado.`, because PostgreSQL 17 runs `CREATE INDEX` with `search_path`
@@ -542,9 +549,9 @@ strip only what is irrelevant to a schema round trip:
   preamble ends with `DROP SCHEMA IF EXISTS shared_extensions` and
   `DROP SCHEMA IF EXISTS public`, and the second would take every public sample
   with it in `make schema`. Skipping it also drops the `SET` lines `pg_dump`
-  writes at the top, so `check_function_bodies` and `client_min_messages` are
-  passed in instead, and the `CREATE SCHEMA public` that opens the body is
-  dropped, since `reset-db` has just created it.
+  writes at the top, so `check_function_bodies` is passed in instead, and the
+  `CREATE SCHEMA public` that opens the body is dropped, since `reset-db` has
+  just created it.
 - **clubdata**: the dump creates its own database and reconnects to it, which
   cannot be done mid-pipe. Those two lines are dropped; the rest creates the
   `cd` schema itself.
@@ -553,14 +560,13 @@ strip only what is irrelevant to a schema round trip:
   plpgsql function that declares a variable of a table's row type stops the
   load, since the table comes later in the file, so the loader turns it off.
 - **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
-  constraint, and the `\copy` lines are dropped. The script drops the `gen` and
-  `bookings` schemas with `IF EXISTS` before it creates them, which says so on a
-  fresh database, so `client_min_messages` is raised to `warning` for the load.
+  constraint, and the `\copy` lines are dropped.
 - **dhis2**: the dump is the base schema Flyway starts from, a `pg_dump` that
   names no schema and no owner, so it loads into a schema of its own like the
   group below. It does not install PostGIS, which the one `geometry` column in
-  `programstageinstance` needs, so the loader creates the extension first and
-  leaves `public` in the search path for the type to resolve from.
+  `programstageinstance` needs, so the loader creates the extension first,
+  `WITH SCHEMA public` since its own `search_path` names the sample's schema
+  first, and leaves `public` in the search path for the type to resolve from.
 - **discourse**, **osm**, **danbooru**, **inaturalist**, **feedbin**: all five
   ship their schema as Rails' `db/structure.sql`, which belongs in a schema of
   its own like the group below but is `pg_dump` output that empties
@@ -597,8 +603,7 @@ strip only what is irrelevant to a schema round trip:
   created up front and `search_path` places everything, but the foreign keys
   Drizzle writes qualify their target with `"public"`, which is stripped. Two
   of those foreign key names run past the 63 character identifier limit and the
-  server says so as it truncates them, as it does for wso2is, so
-  `client_min_messages` is raised to `warning`.
+  server truncates them, as it does wso2is's.
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
@@ -641,11 +646,6 @@ strip only what is irrelevant to a schema round trip:
   themselves, and every table name carries the literal `#__` prefix Joomla
   substitutes at install time; quoted, it is just an ordinary identifier and
   needs no rewriting.
-- **kea**, **dolphinscheduler**, **wso2apim**, **wso2is**, **listmonk**: each
-  dump drops what it is about to create with `IF EXISTS`, so
-  `client_min_messages` is raised to `warning` for the load. wso2is is also
-  where five index names run past the 63 character identifier limit, and the
-  server says so as it truncates them.
 - **lago**: the schema is Rails' `db/structure.sql` like discourse's, and loads
   the same way with two things taken out first. It was dumped with `--clean`,
   so everything before the first `-- Name:` header, about 1,400 lines of
@@ -657,11 +657,11 @@ strip only what is irrelevant to a schema round trip:
   triggerdev's, and documenso's, 438 directories replayed through
   `sample-db-prisma`, so it needs no loader of its own. It installs no
   extension and qualifies nothing with `public`, so the sed that strips the
-  qualifier has nothing to strip. `client_min_messages` is raised to `warning`
-  for two NOTICEs the replay would otherwise print: one index name runs past
-  63 characters, which the server says so about as it truncates it, and one
-  migration turns a unique index into a primary key with
-  `ADD CONSTRAINT ... USING INDEX`, which renames the index.
+  qualifier has nothing to strip. One of its index names runs past 63
+  characters, which the server truncates, and one migration turns a unique
+  index into a primary key with `ADD CONSTRAINT ... USING INDEX`, which renames
+  the index; neither object survives into the schema the check reads, since a
+  later migration drops the table behind them.
 - **lemmy**: the schema ships as Diesel migrations, 342 directories each holding
   an `up.sql`, and that is only half of it: every trigger function lives in a
   schema named `r` that Lemmy's own runner builds afterwards out of two files.
@@ -687,9 +687,7 @@ strip only what is irrelevant to a schema round trip:
   is slow. None of the files names a schema, and the guards they write against
   `information_schema` all say `current_schema()`, so `mattermost` is created up
   front and `search_path` places everything. Eight of the files end without a
-  semicolon, so each is followed by a newline and one. Most of them also add and
-  drop with `IF NOT EXISTS` and `IF EXISTS`, so `client_min_messages` is raised
-  to `warning`.
+  semicolon, so each is followed by a newline and one.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **rt**, **znuny**,
   **ranger**, **ambari**, **ovirt**, **gitlab**, **ledgersmb**, **koji**,
   **kea**, **dolphinscheduler**, **wso2apim**, **icinga_director**,
@@ -707,17 +705,16 @@ strip only what is irrelevant to a schema round trip:
   named.
 - **mimiciv**: the schema ships as three files, so `create.sql` (tables),
   `constraint.sql` (primary and foreign keys), and `index.sql` are concatenated
-  in that order. Both later files drop what they create with `IF EXISTS` first,
-  so NOTICEs are quieted.
+  in that order.
 - **musicbrainz**: the schema ships as one file per object kind and none of them
   create the schema, so `musicbrainz` is created up front and the files are
   concatenated in dependency order (extensions and collation, search
   configuration, types, tables, functions, then keys, indexes, constraints, and
   views).
 - **ranger**: the dump drops every object it is about to create with
-  `IF EXISTS` and commits outside a transaction, which floods a fresh database
-  with a few hundred NOTICEs and warnings, so `client_min_messages` is raised to
-  `error` for the load.
+  `IF EXISTS` and commits outside a transaction, which adds a warning per
+  statement, so `client_min_messages` is raised from `warning` to `error` for
+  the load, the one sample that moves it at all.
 - **thingsboard**: the schema ships as one file per part, loaded in the order
   ThingsBoard's installer runs them, with the views before the functions that
   declare variables of their row types. `schema-ts-latest-psql.sql` is left
@@ -745,6 +742,8 @@ strip only what is irrelevant to a schema round trip:
   `pg_policies`, which finds nothing here, and one of those is the migration
   that rewrites every policy reading a session GUC, so without the rewrite the
   sample would carry its 366 policies with the wrong expressions in them.
+- **wso2is**: five of its index names run past the 63 character identifier
+  limit, and the server truncates them.
 - **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.
