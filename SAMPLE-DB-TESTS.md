@@ -165,6 +165,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | dokploy | dokploy | [Dokploy/dokploy](https://github.com/Dokploy/dokploy) |
 | hyperswitch | hyperswitch | [juspay/hyperswitch](https://github.com/juspay/hyperswitch) |
 | documenso | documenso | [documenso/documenso](https://github.com/documenso/documenso) |
+| langfuse | langfuse | [langfuse/langfuse](https://github.com/langfuse/langfuse) |
 
 ## Coverage
 
@@ -184,7 +185,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
-  on 16.13, and dokploy, hyperswitch, and documenso 2026-09-18 on the same.
+  on 16.13, and dokploy, hyperswitch, documenso, and langfuse 2026-09-18 on
+  the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -286,11 +288,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | dokploy | 67 | 946 | 106 | 133 | 89 | 0 | 27 | 0 | 0 | 0 |
 | hyperswitch | 50 | 1,070 | 135 | 0 | 61 | 0 | 46 | 0 | 0 | 2 |
 | documenso | 51 | 490 | 138 | 63 | 51 | 0 | 30 | 0 | 0 | 4 |
-| **Total** | **8,031** | **68,941** | **24,227** | **10,273** | **13,491** | **2,199** | **560** | **432** | **1,501** | **1,269** |
+| langfuse | 74 | 757 | 222 | 113 | 72 | 0 | 35 | 0 | 0 | 0 |
+| **Total** | **8,105** | **69,698** | **24,449** | **10,386** | **13,563** | **2,199** | **595** | **432** | **1,501** | **1,269** |
 
 ### Size
 
-The 74 dumps come to about 229,000 lines of SQL. chado is 43,700 of them, the
+The 75 dumps come to about 231,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -312,7 +315,9 @@ always reach.
   gist, hash, and brin methods (musicbrainz, plus 12 partial and 2 gin indexes
   in synapse). citizenlab adds the one hnsw index any sample has, pgvector's,
   over its one `vector` column and naming `vector_cosine_ops` from the schema
-  the extension sits in.
+  the extension sits in. langfuse brings four hash indexes, all over a `text`
+  column, and two gin, one over a `text[]` column and one over
+  `to_tsvector('english', content)`, which is the only expression index it has.
 - **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to a
   table, denser than any other sample, 55 of them gin, 29 of those over an
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
@@ -354,7 +359,9 @@ always reach.
   hyperswitch is denser than any of them: 46 enums over 50 tables, typing 74
   columns and one array-of-enum column, and the 695 labels between them are
   lopsided too, since `CountryAlpha2` carries 249 of them and `Currency` 158.
-  documenso's 30 over 51 tables are close behind, typing 34 columns.
+  documenso's 30 over 51 tables are close behind, typing 34 columns, and
+  langfuse's 35 over 74 tables type 45 of its columns with 116 labels between
+  them.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -378,7 +385,9 @@ always reach.
   every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and an
   ON DELETE action, CASCADE for most. 137 of glific's 142 name ON DELETE, 106 of
   them CASCADE, and 132 of dokploy's 133 name ON DELETE, 113 of them CASCADE
-  and 19 SET NULL, while none of them names ON UPDATE at all.
+  and 19 SET NULL, while none of them names ON UPDATE at all. Every one of
+  langfuse's 113 names ON UPDATE CASCADE as well, 90 of them with ON DELETE
+  CASCADE and the other 23 with SET NULL.
 - **Column comments**: glific comments 274 of its 590 columns.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
   its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
@@ -392,7 +401,10 @@ always reach.
   tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with 747
   of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, documenso,
   where all 51 tables and 314 of the 490 columns are, and bigbluebutton, where
-  451 of 532 columns and half the tables and views are camelCase.
+  451 of 532 columns and half the tables and views are camelCase. langfuse is
+  the Prisma schema that went the other way: only 2 of its 74 tables and 3 of
+  its 757 columns are quoted and the rest are snake_case, though all 35 of its
+  enum types are PascalCase.
 - **Width without variety**: openolat, whose 382 tables are behind only gitlab
   and dhis2, has every one of its 1,239 indexes btree and every one of its 632
   foreign keys left at NO ACTION.
@@ -448,7 +460,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-five of the 74 samples declare
+Routines are concentrated the same way. Thirty-five of the 75 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
 and chado's 94 are 916 of the 1,269. Seven in ten of them, 890, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
@@ -641,6 +653,11 @@ strip only what is irrelevant to a schema round trip:
   in `search_path` those could reach another sample's objects in `make schema`.
   It also installs `pg_partman`, which is not contrib, into a schema of its own
   with one template table, so every statement that names partman is dropped.
+- **langfuse**: the schema ships as a Prisma migration history like calcom's,
+  triggerdev's, and documenso's, 438 directories replayed through
+  `sample-db-prisma`, so it needs no loader of its own. It installs no
+  extension and qualifies nothing with `public`, so the sed that strips the
+  qualifier has nothing to strip.
 - **lemmy**: the schema ships as Diesel migrations, 342 directories each holding
   an `up.sql`, and that is only half of it: every trigger function lives in a
   schema named `r` that Lemmy's own runner builds afterwards out of two files.
