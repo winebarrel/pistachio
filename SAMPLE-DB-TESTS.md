@@ -167,6 +167,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | documenso | documenso | [documenso/documenso](https://github.com/documenso/documenso) |
 | langfuse | langfuse | [langfuse/langfuse](https://github.com/langfuse/langfuse) |
 | icinga_ido | icinga_ido | [Icinga/icinga2](https://github.com/Icinga/icinga2) |
+| openfire | openfire | [igniterealtime/Openfire](https://github.com/igniterealtime/Openfire) |
 
 ## Coverage
 
@@ -186,8 +187,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
-  on 16.13, and dokploy, hyperswitch, documenso, langfuse, and icinga_ido
-  2026-09-18 on the same.
+  on 16.13, and dokploy, hyperswitch, documenso, langfuse, icinga_ido, and
+  openfire 2026-09-18 on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -291,11 +292,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | documenso | 51 | 490 | 138 | 63 | 51 | 0 | 30 | 0 | 0 | 4 |
 | langfuse | 74 | 757 | 222 | 113 | 72 | 0 | 35 | 0 | 0 | 0 |
 | icinga_ido | 61 | 791 | 234 | 0 | 94 | 0 | 0 | 0 | 0 | 3 |
-| **Total** | **8,166** | **70,489** | **24,683** | **10,386** | **13,657** | **2,199** | **595** | **432** | **1,501** | **1,272** |
+| openfire | 35 | 224 | 50 | 1 | 33 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **8,201** | **70,713** | **24,733** | **10,387** | **13,690** | **2,199** | **595** | **432** | **1,501** | **1,272** |
 
 ### Size
 
-The 76 dumps come to about 232,000 lines of SQL. chado is 43,700 of them, the
+The 77 dumps come to about 232,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -417,7 +419,8 @@ always reach.
   primary keys and 19 unique constraints, declares no CHECK, and leaves all but
   3 of the references between them to the application. mediawiki, temporal,
   imdb, dolphinscheduler, nightingale, joomla, hyperswitch, and icinga_ido
-  declare no foreign key at all. icinga_ido is the widest of them: 61 tables
+  declare no foreign key at all, and openfire declares exactly one, over 35
+  tables. icinga_ido is the widest of them: 61 tables
   and 791 columns, indexed 234 times and keyed by 61 primary keys and 33
   unique constraints, with every reference between them left to Icinga.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
@@ -464,7 +467,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-six of the 76 samples declare
+Routines are concentrated the same way. Thirty-six of the 77 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
 and chado's 94 are 916 of the 1,272. Seven in ten of them, 890, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
@@ -695,7 +698,7 @@ targets strip only what is irrelevant to a schema round trip:
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **icinga_ido**,
   **rt**, **znuny**, **ranger**, **ambari**, **ovirt**, **gitlab**,
   **ledgersmb**, **koji**, **kea**, **dolphinscheduler**, **wso2apim**,
-  **icinga_director**,
+  **icinga_director**, **openfire**,
   **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
   **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**: these
   dumps name no schema at all, so whichever schema comes first in `search_path`
