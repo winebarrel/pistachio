@@ -163,6 +163,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | feedbin | feedbin | [feedbin/feedbin](https://github.com/feedbin/feedbin) |
 | citizenlab | citizenlab | [CitizenLabDotCo/citizenlab](https://github.com/CitizenLabDotCo/citizenlab) |
 | dokploy | dokploy | [Dokploy/dokploy](https://github.com/Dokploy/dokploy) |
+| hyperswitch | hyperswitch | [juspay/hyperswitch](https://github.com/juspay/hyperswitch) |
 
 ## Coverage
 
@@ -182,7 +183,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
-  on 16.13, and dokploy 2026-09-18 on the same.
+  on 16.13, and dokploy and hyperswitch 2026-09-18 on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -282,11 +283,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | feedbin | 44 | 395 | 161 | 8 | 43 | 0 | 0 | 0 | 0 | 0 |
 | citizenlab | 144 | 1,304 | 498 | 169 | 155 | 26 | 0 | 0 | 2 | 4 |
 | dokploy | 67 | 946 | 106 | 133 | 89 | 0 | 27 | 0 | 0 | 0 |
-| **Total** | **7,930** | **67,381** | **23,954** | **10,210** | **13,379** | **2,199** | **484** | **432** | **1,501** | **1,263** |
+| hyperswitch | 50 | 1,070 | 135 | 0 | 61 | 0 | 46 | 0 | 0 | 2 |
+| **Total** | **7,980** | **68,451** | **24,089** | **10,210** | **13,440** | **2,199** | **530** | **432** | **1,501** | **1,265** |
 
 ### Size
 
-The 72 dumps come to about 226,000 lines of SQL. chado is 43,700 of them, the
+The 73 dumps come to about 228,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -347,6 +349,9 @@ always reach.
   plausible's 3, one of which is Oban's job state, and dokploy's 27, which 40
   of its columns are typed by and which are all quoted mixed-case names, as
   calcom's and triggerdev's are.
+  hyperswitch is denser than any of them: 46 enums over 50 tables, typing 74
+  columns and one array-of-enum column, and the 695 labels between them are
+  lopsided too, since `CountryAlpha2` carries 249 of them and `Currency` 158.
   boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
   between them, and 1,039 of its 1,530 columns are typed by one.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
@@ -394,7 +399,8 @@ always reach.
 - **A schema that barely keys at all**: mattermost backs its 86 tables with 85
   primary keys and 19 unique constraints, declares no CHECK, and leaves all but
   3 of the references between them to the application. mediawiki, temporal,
-  imdb, dolphinscheduler, nightingale, and joomla declare no foreign key at all.
+  imdb, dolphinscheduler, nightingale, joomla, and hyperswitch declare no
+  foreign key at all.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, and mattermost, whose six are all materialized and
   one of which carries an index.
@@ -439,13 +445,13 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-three of the 72 samples declare
+Routines are concentrated the same way. Thirty-four of the 73 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,263. Seven in ten of them, 889, return
+and chado's 94 are 916 of the 1,265. Seven in ten of them, 890, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,160 are written in plpgsql and 103 in sql. sourcegraph declares one
+1,162 are written in plpgsql and 103 in sql. sourcegraph declares one
 procedure, thingsboard three, and lemmy two, the only procedures any sample has,
 and inaturalist the only aggregate, which `--manage-routine` does not read and
 so is in neither count. Only chado, kea,
@@ -598,6 +604,14 @@ strip only what is irrelevant to a schema round trip:
   it is `pg_dump` output that sets `search_path` to `public` itself, which
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
   the `hive` schema.
+- **hyperswitch**: the schema ships as Diesel migrations, 530 directories each
+  holding an `up.sql`, replayed in name order. The repository tarball is fetched
+  once and only the migrations directory is extracted, the way lemmy's is. Every
+  directory but Diesel's own `00000000000000_diesel_initial_setup` is named for
+  a date, so plain name order is the order Diesel applies them in. Four of the
+  files end without a semicolon, so each is followed by a newline and one.
+  Nothing in them names a schema, qualifies anything with `public`, or installs
+  an extension, so `search_path` places the lot.
 - **imdb**: the schema and its foreign key indexes ship as two files, so
   `schema.sql` and `fkindexes.sql` are concatenated.
 - **joomla**: the schema ships as three files that must load in order --
