@@ -336,16 +336,15 @@ func (client *Client) diffObjects(current *currentObjects, options *diffAllOptio
 	}, nil
 }
 
-// checkViewDependents fails the plan when a view or materialized view it
-// drops is read by an object the plan keeps. PostgreSQL refuses such a DROP
-// rather than cascading, so without this the statement reads as fine and
-// apply fails on it.
+// checkViewDependents fails the plan when it would drop a view or
+// materialized view that another object still reads. PostgreSQL refuses that
+// DROP instead of cascading, so without this the plan reads as fine and apply
+// fails on it.
 //
-// The dependents come from the catalog rather than from the desired schema,
-// which misses one a filter or an unmanaged schema hides.
+// Dependents come from the catalog, not from the desired schema, which cannot
+// see a view a filter or an unmanaged schema hides.
 //
-// A dependent the same plan drops is not a blocker, since the drops run
-// deepest first.
+// A dependent the same plan drops is no obstacle: drops run deepest first.
 func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []string) error {
 	dependents, err := cat.ViewDependents(ctx)
 	if err != nil {

@@ -34,9 +34,9 @@ func (d Dependent) String() string {
 // A relation nothing reads is absent rather than present and empty.
 //
 // Only the direct dependents are read. A view two steps away depends on the
-// view between them, which has to be dropped for the chain to come apart, so
-// the caller meets it at that drop. A dependent outside the managed schemas is
-// included, since it blocks the drop just the same.
+// view between them, and that one has to be dropped for the chain to come
+// apart, so the caller meets it there. A dependent outside the managed schemas
+// is included, since it blocks the drop just the same.
 //
 // The rewrite rule a view holds over itself is left out. Every view depends on
 // its own columns that way, and the rule goes with the view.

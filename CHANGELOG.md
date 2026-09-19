@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Fail the plan when a view or materialized view it drops is read by an object the plan keeps, naming what blocks it. PostgreSQL refuses such a `DROP` rather than cascading, so the statement read as fine and `apply` failed on it. A definition change `CREATE OR REPLACE VIEW` cannot carry is a drop and a create, as is every definition change of a materialized view, so a chain of views hit this with nothing dropped on purpose. The dependents are read from the catalog, so one hidden by `--include` / `--exclude` or by a schema outside `--schemas` counts, and so does a routine with a SQL body. A dependent the same plan drops does not block it, since the drops run deepest first. Only a plan that drops a view makes the query.
+* `plan` now fails when it would drop a view or materialized view that another object still reads, and names what reads it. PostgreSQL refuses that `DROP` instead of cascading, so the plan read as fine and `apply` failed on it. Views hit this without being dropped on purpose: a definition change becomes a drop and a create whenever `CREATE OR REPLACE VIEW` cannot express it, and always for a materialized view. Dependents come from the catalog, so a view that `--include` / `--exclude` hides, or one outside `--schemas`, blocks the drop too. So does a routine with a SQL body. A dependent the same plan drops does not block it, because drops run deepest first. The query runs only when the plan drops a view.
 
 ## [1.58.0] - 2026-09-17
 
