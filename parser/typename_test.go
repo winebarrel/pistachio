@@ -19,6 +19,7 @@ func TestNormalizeTypeName(t *testing.T) {
 		{"alias", "varchar(255)", "character varying(255)"},
 		{"alias without modifier", "float", "double precision"},
 		{"alias with time zone", "timestamptz", "timestamp with time zone"},
+		{"serial alias", "serial8", "bigserial"},
 		{"modifier spacing", "numeric(10, 2)", "numeric(10,2)"},
 
 		// PostgreSQL takes a numeric with only a precision as a scale of zero

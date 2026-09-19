@@ -1,0 +1,15 @@
+# The aliases take the same path as serial to bigserial: the widening names
+# the base type and the owned sequence follows.
+init: |
+  CREATE TABLE public.users (
+      id serial4,
+      name text NOT NULL
+  );
+desired: |
+  CREATE TABLE public.users (
+      id serial8,
+      name text NOT NULL
+  );
+plan: |
+  ALTER SEQUENCE public.users_id_seq AS bigint;
+  ALTER TABLE public.users ALTER COLUMN id SET DATA TYPE bigint;

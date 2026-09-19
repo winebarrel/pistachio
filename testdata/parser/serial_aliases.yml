@@ -1,0 +1,15 @@
+input: |
+  CREATE TABLE public.items (
+      id serial8,
+      qty serial4,
+      code serial2,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+expected: |
+  -- public.items
+  CREATE TABLE public.items (
+      id bigserial NOT NULL,
+      qty serial NOT NULL,
+      code smallserial NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );

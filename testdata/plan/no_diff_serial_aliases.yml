@@ -1,0 +1,15 @@
+init: |
+  CREATE TABLE public.items (
+      id serial8,
+      qty serial4,
+      code serial2,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id serial8,
+      qty serial4,
+      code serial2,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+plan: ""
