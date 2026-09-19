@@ -72,29 +72,39 @@ func TestFmt_Run_KeepsFileMode(t *testing.T) {
 }
 
 // A symlink is formatted through to the file it points at, and stays a
-// symlink. The link and the file sit in different directories, so the
-// temporary file has to go next to the file, not the link.
+// symlink, as does a link to that link. The links and the file sit in
+// different directories, so the temporary file has to go next to the file,
+// and the file keeps its own mode rather than taking the link's.
 func TestFmt_Run_Symlink(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating a symlink needs a privilege on Windows")
 	}
 
 	target := writeSQLFile(t, "schema.sql", unformattedSQL)
+	require.NoError(t, os.Chmod(target, 0o600))
 	link := filepath.Join(t.TempDir(), "link.sql")
 	require.NoError(t, os.Symlink(target, link))
+	chain := filepath.Join(t.TempDir(), "chain.sql")
+	require.NoError(t, os.Symlink(link, chain))
 
 	var buf bytes.Buffer
-	cmd := &command.Fmt{Files: []string{link}}
+	cmd := &command.Fmt{Files: []string{chain}}
 	require.NoError(t, cmd.Run(&buf))
 
-	info, err := os.Lstat(link)
-	require.NoError(t, err)
-	assert.NotZero(t, info.Mode()&os.ModeSymlink, "the link must stay a link")
+	for _, l := range []string{chain, link} {
+		info, err := os.Lstat(l)
+		require.NoError(t, err)
+		assert.NotZero(t, info.Mode()&os.ModeSymlink, "%s must stay a link", l)
+	}
 
 	got, err := os.ReadFile(target)
 	require.NoError(t, err)
 	assert.Equal(t, formattedSQL, string(got))
-	assert.Equal(t, link+"\n", buf.String())
+	assert.Equal(t, chain+"\n", buf.String())
+
+	info, err := os.Stat(target)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
 func TestFmt_Run_Check(t *testing.T) {
