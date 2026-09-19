@@ -386,6 +386,35 @@ CREATE TABLE public.t (
 	assert.Empty(t, strings.TrimSpace(got.SQL))
 }
 
+func TestRemapQualifiedName(t *testing.T) {
+	mapSchema := func(s string) string {
+		if s == "myschema" || s == "My Schema" {
+			return "public"
+		}
+		return s
+	}
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"qualified type", "myschema.status", "public.status"},
+		{"array type", "myschema.status[]", "public.status[]"},
+		{"quoted schema", `"My Schema".status`, "public.status"},
+		{"other schema", "other.status", "other.status"},
+		{"schema ending in the mapped name", "mymyschema.status", "mymyschema.status"},
+		{"unqualified type", "integer", "integer"},
+		{"type modifier", "numeric(10,2)", "numeric(10,2)"},
+		{"three-part name", "myschema.t.col", "myschema.t.col"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, remapQualifiedName(tt.in, mapSchema))
+		})
+	}
+}
+
 func TestRemapDefaultExpr(t *testing.T) {
 	mapSchema := func(s string) string {
 		if s == "myschema" {
@@ -406,6 +435,8 @@ func TestRemapDefaultExpr(t *testing.T) {
 		{"cast type", "'a'::myschema.status", "'a'::public.status"},
 		{"regtype literal", "'myschema.status'::regtype", "'public.status'::regtype"},
 		{"string literal is left alone", "'myschema.example.com'::text", "'myschema.example.com'::text"},
+		{"literal in another function is left alone", "upper('myschema.x')", "upper('myschema.x')"},
+		{"regclass over a call is left alone", "nextval(pg_get_serial_sequence('myschema.t', 'id')::regclass)", "nextval(pg_get_serial_sequence('myschema.t', 'id')::regclass)"},
 		{"other schema is left alone", "other.gen()", "other.gen()"},
 		{"schema ending in the mapped name is left alone", "mymyschema.gen()", "mymyschema.gen()"},
 		{"unqualified call is left alone", "now()", "now()"},
@@ -1408,7 +1439,7 @@ func TestDump_WithSchemaMap_Routine(t *testing.T) {
 
 	connString := setupSchemaDB(t, ctx, "myschema", `
 CREATE TYPE myschema.status AS ENUM ('active');
-CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
+CREATE FUNCTION myschema.label(s myschema.status DEFAULT 'active'::myschema.status, host text DEFAULT 'myschema.example.com') RETURNS text
     LANGUAGE sql AS $$ SELECT s::text $$;
 `)
 
@@ -1428,7 +1459,7 @@ CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
 	require.NoError(t, err)
 
 	out := got.String()
-	assert.Contains(t, out, "CREATE OR REPLACE FUNCTION public.label(s public.status)")
+	assert.Contains(t, out, "CREATE OR REPLACE FUNCTION public.label(s public.status DEFAULT 'active'::public.status, host text DEFAULT 'myschema.example.com'::text)")
 	assert.NotContains(t, out, "myschema.label")
 	assert.NotContains(t, out, "s myschema.status")
 }

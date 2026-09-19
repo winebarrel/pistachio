@@ -53,9 +53,6 @@ func buildDefReplacer(schemaMap map[string]string) *defReplacer {
 
 // Replace returns s with every mapped schema prefix rewritten.
 func (r *defReplacer) Replace(s string) string {
-	if len(r.to) == 0 {
-		return s
-	}
 	return r.re.ReplaceAllStringFunc(s, func(m string) string {
 		sub := r.re.FindStringSubmatch(m)
 		return sub[1] + r.to[sub[2]] + "."
@@ -88,13 +85,13 @@ func remapQualifiedName(name string, mapSchema func(string) string) string {
 	return model.Ident(mapped) + "." + parts[1]
 }
 
-// remapDefaultExpr rewrites the schema in a column default: the name of a
-// function it calls, the type of a cast, and the relation a reg* literal
-// names, which is how nextval('myschema.seq'::regclass) carries one. The
-// expression is parsed for it, since a prefix substitution over the text
-// would also rewrite a string literal that happens to start the same way. An
-// expression that names no mapped schema, or does not parse, is returned as
-// it was.
+// remapDefaultExpr rewrites the schema in a default expression, a column's or
+// a parameter's: the name of a function it calls, the type of a cast, and the
+// relation a reg* literal names, which is how nextval('myschema.seq'::regclass)
+// carries one. The expression is parsed for it, since a prefix substitution
+// over the text would also rewrite a string literal that happens to start the
+// same way. An expression that names no mapped schema, or does not parse, is
+// returned as it was.
 func remapDefaultExpr(expr string, mapSchema func(string) string) string {
 	result, target, err := pgast.ParseExpr(expr)
 	if err != nil {
@@ -106,14 +103,10 @@ func remapDefaultExpr(expr string, mapSchema func(string) string) string {
 			return false
 		}
 		s := names[0].GetString_()
-		if s == nil {
+		if s == nil || mapSchema(s.Sval) == s.Sval {
 			return false
 		}
-		mapped := mapSchema(s.Sval)
-		if mapped == s.Sval {
-			return false
-		}
-		s.Sval = mapped
+		s.Sval = mapSchema(s.Sval)
 		return true
 	}
 
@@ -131,11 +124,7 @@ func remapDefaultExpr(expr string, mapSchema func(string) string) string {
 				}
 			}
 		case *pg_query.Node_TypeCast:
-			tn := n.TypeCast.TypeName
-			if tn == nil {
-				break
-			}
-			if remapName(tn.Names) {
+			if remapName(n.TypeCast.GetTypeName().GetNames()) {
 				changed = true
 			}
 			if lit := regLiteral(n.TypeCast); lit != nil {
@@ -182,7 +171,7 @@ func sequenceLiteral(fc *pg_query.FuncCall) *pg_query.String {
 // regtype, regproc and the rest) is applied to, or nil for any other cast.
 // Such a literal names a catalog object, schema-qualified or not.
 func regLiteral(tc *pg_query.TypeCast) *pg_query.String {
-	names := tc.TypeName.Names
+	names := tc.GetTypeName().GetNames()
 	if len(names) == 0 || !strings.HasPrefix(names[len(names)-1].GetString_().GetSval(), "reg") {
 		return nil
 	}
@@ -417,12 +406,11 @@ func (client *Client) remapDomainSchemas(domains *orderedmap.Map[string, *model.
 		return domains
 	}
 
-	replacer := buildDefReplacer(client.SchemaMap)
 	remapped := orderedmap.New[string, *model.Domain]()
 
 	for _, d := range domains.CollectValues() {
 		d.Schema = client.RemapSchema(d.Schema)
-		d.BaseType = replacer.Replace(d.BaseType)
+		d.BaseType = remapQualifiedName(d.BaseType, client.RemapSchema)
 		remapped.Set(d.FQDN(), d)
 	}
 
@@ -434,12 +422,11 @@ func (client *Client) reverseRemapDomainSchemas(domains *orderedmap.Map[string, 
 		return domains
 	}
 
-	replacer := buildReverseDefReplacer(client.SchemaMap)
 	remapped := orderedmap.New[string, *model.Domain]()
 
 	for _, d := range domains.CollectValues() {
 		d.Schema = client.ReverseRemapSchema(d.Schema)
-		d.BaseType = replacer.Replace(d.BaseType)
+		d.BaseType = remapQualifiedName(d.BaseType, client.ReverseRemapSchema)
 		remapped.Set(d.FQDN(), d)
 	}
 
@@ -451,13 +438,12 @@ func (client *Client) remapCompositeTypeSchemas(compositeTypes *orderedmap.Map[s
 		return compositeTypes
 	}
 
-	replacer := buildDefReplacer(client.SchemaMap)
 	remapped := orderedmap.New[string, *model.CompositeType]()
 
 	for _, ct := range compositeTypes.CollectValues() {
 		ct.Schema = client.RemapSchema(ct.Schema)
 		for _, a := range ct.Attributes {
-			a.TypeName = replacer.Replace(a.TypeName)
+			a.TypeName = remapQualifiedName(a.TypeName, client.RemapSchema)
 		}
 		remapped.Set(ct.FQCN(), ct)
 	}
@@ -470,13 +456,12 @@ func (client *Client) reverseRemapCompositeTypeSchemas(compositeTypes *orderedma
 		return compositeTypes
 	}
 
-	replacer := buildReverseDefReplacer(client.SchemaMap)
 	remapped := orderedmap.New[string, *model.CompositeType]()
 
 	for _, ct := range compositeTypes.CollectValues() {
 		ct.Schema = client.ReverseRemapSchema(ct.Schema)
 		for _, a := range ct.Attributes {
-			a.TypeName = replacer.Replace(a.TypeName)
+			a.TypeName = remapQualifiedName(a.TypeName, client.ReverseRemapSchema)
 		}
 		remapped.Set(ct.FQCN(), ct)
 	}
@@ -484,37 +469,38 @@ func (client *Client) reverseRemapCompositeTypeSchemas(compositeTypes *orderedma
 	return remapped
 }
 
-// remapRoutineSchemas rewrites the schema of each routine and of the type
-// names in its signature. The body is left untouched: it is opaque text in
-// whatever language the routine is written in, and a blind prefix substitution
-// over it would be a guess.
+// remapRoutineSchemas rewrites the schema of each routine, of the type names
+// in its signature and of a parameter default. The body is left untouched: it
+// is opaque text in whatever language the routine is written in, and a blind
+// prefix substitution over it would be a guess.
 func (client *Client) remapRoutineSchemas(routines *orderedmap.Map[string, *model.Routine]) *orderedmap.Map[string, *model.Routine] {
 	if len(client.SchemaMap) == 0 {
 		return routines
 	}
-	return remapRoutines(routines, client.RemapSchema, buildDefReplacer(client.SchemaMap))
+	return remapRoutines(routines, client.RemapSchema)
 }
 
 func (client *Client) reverseRemapRoutineSchemas(routines *orderedmap.Map[string, *model.Routine]) *orderedmap.Map[string, *model.Routine] {
 	if len(client.SchemaMap) == 0 {
 		return routines
 	}
-	return remapRoutines(routines, client.ReverseRemapSchema, buildReverseDefReplacer(client.SchemaMap))
+	return remapRoutines(routines, client.ReverseRemapSchema)
 }
 
 func remapRoutines(
 	routines *orderedmap.Map[string, *model.Routine],
 	remapSchema func(string) string,
-	replacer *defReplacer,
 ) *orderedmap.Map[string, *model.Routine] {
 	remapped := orderedmap.New[string, *model.Routine]()
 
 	for _, r := range routines.CollectValues() {
 		r.Schema = remapSchema(r.Schema)
-		r.ReturnType = replacer.Replace(r.ReturnType)
+		r.ReturnType = remapQualifiedName(r.ReturnType, remapSchema)
 		for _, a := range r.Args {
-			a.Type = replacer.Replace(a.Type)
-			a.Default = replacer.Replace(a.Default)
+			a.Type = remapQualifiedName(a.Type, remapSchema)
+			if a.Default != "" {
+				a.Default = remapDefaultExpr(a.Default, remapSchema)
+			}
 		}
 		remapped.Set(r.FQRN(), r)
 	}
