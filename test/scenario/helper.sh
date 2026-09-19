@@ -90,6 +90,40 @@ assert_no_drop() {
   pass
 }
 
+# _drop_pattern prints the grep -E pattern that matches a drop of the given
+# kind. The kind may carry the object's name, "foreign_key:orders_parent_fk",
+# so the pattern matches that object rather than any drop of the kind: every
+# constraint drop is one ALTER TABLE ... DROP CONSTRAINT, and a plan that drops
+# a primary key would otherwise pass a check written for a foreign key. prefix
+# is what the statement starts with, the skipped-drop comment or leading space.
+_drop_pattern() {
+  local spec="$1"
+  local prefix="$2"
+
+  local kind="${spec%%:*}"
+  local name=""
+  if [ "$spec" != "$kind" ]; then
+    name="${spec#*:}"
+  fi
+
+  case "$kind" in
+    table)       printf '%sDROP TABLE %s' "$prefix" "$name" ;;
+    view)        printf '%sDROP (MATERIALIZED )?VIEW %s' "$prefix" "$name" ;;
+    column)      printf '%sALTER TABLE .* DROP COLUMN %s' "$prefix" "$name" ;;
+    enum)        printf '%sDROP TYPE %s' "$prefix" "$name" ;;
+    domain)      printf '%sDROP DOMAIN %s' "$prefix" "$name" ;;
+    routine)     printf '%sDROP (FUNCTION|PROCEDURE) %s' "$prefix" "$name" ;;
+    foreign_key) printf '%sALTER TABLE .* DROP CONSTRAINT %s' "$prefix" "$name" ;;
+    trigger)     printf '%sDROP TRIGGER %s' "$prefix" "$name" ;;
+    *) return 1 ;;
+  esac
+}
+
+# The two prefixes a drop is looked for under: the comment a suppressed drop
+# leaves, and the start of a statement that runs.
+_SKIPPED_PREFIX='^-- skipped: '
+_RUNS_PREFIX='^[[:space:]]*'
+
 # Assert that plan output contains a commented DROP for a specific type.
 # Used to verify that suppressed drops are still surfaced as comments.
 # Usage: assert_commented_drop "step name" "expected_type" files...
@@ -105,17 +139,10 @@ assert_commented_drop() {
   plan_output=$(pista_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
-  case "$expected_type" in
-    table)  drop_pattern='^-- skipped: DROP TABLE' ;;
-    view)   drop_pattern='^-- skipped: DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='^-- skipped: ALTER TABLE .* DROP COLUMN' ;;
-    enum)   drop_pattern='^-- skipped: DROP TYPE' ;;
-    domain) drop_pattern='^-- skipped: DROP DOMAIN' ;;
-    routine) drop_pattern='^-- skipped: DROP (FUNCTION|PROCEDURE)' ;;
-    foreign_key) drop_pattern='^-- skipped: ALTER TABLE .* DROP CONSTRAINT' ;;
-    trigger) drop_pattern='^-- skipped: DROP TRIGGER' ;;
-    *) fail "unknown expected_type: $expected_type"; return 1 ;;
-  esac
+  drop_pattern=$(_drop_pattern "$expected_type" "$_SKIPPED_PREFIX") || {
+    fail "unknown expected_type: $expected_type"
+    return 1
+  }
 
   if ! echo "$plan_output" | grep -qE "$drop_pattern"; then
     fail "expected skipped $expected_type drop in plan"
@@ -148,17 +175,10 @@ assert_commented_drop_with_allowed() {
   plan_output=$(pista_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
-  case "$expected_type" in
-    table)  drop_pattern='^-- skipped: DROP TABLE' ;;
-    view)   drop_pattern='^-- skipped: DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='^-- skipped: ALTER TABLE .* DROP COLUMN' ;;
-    enum)   drop_pattern='^-- skipped: DROP TYPE' ;;
-    domain) drop_pattern='^-- skipped: DROP DOMAIN' ;;
-    routine) drop_pattern='^-- skipped: DROP (FUNCTION|PROCEDURE)' ;;
-    foreign_key) drop_pattern='^-- skipped: ALTER TABLE .* DROP CONSTRAINT' ;;
-    trigger) drop_pattern='^-- skipped: DROP TRIGGER' ;;
-    *) fail "unknown expected_type: $expected_type"; return 1 ;;
-  esac
+  drop_pattern=$(_drop_pattern "$expected_type" "$_SKIPPED_PREFIX") || {
+    fail "unknown expected_type: $expected_type"
+    return 1
+  }
 
   if ! echo "$plan_output" | grep -qE "$drop_pattern"; then
     fail "expected skipped $expected_type drop in plan with --allow-drop $allowed_types"
@@ -186,17 +206,10 @@ assert_no_drop_type() {
   plan_output=$(pista_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
-  case "$protected_type" in
-    table)  drop_pattern='^[[:space:]]*DROP TABLE' ;;
-    view)   drop_pattern='^[[:space:]]*DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP COLUMN' ;;
-    enum)   drop_pattern='^[[:space:]]*DROP TYPE' ;;
-    domain) drop_pattern='^[[:space:]]*DROP DOMAIN' ;;
-    routine) drop_pattern='^[[:space:]]*DROP (FUNCTION|PROCEDURE)' ;;
-    foreign_key) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP CONSTRAINT' ;;
-    trigger) drop_pattern='^[[:space:]]*DROP TRIGGER' ;;
-    *) fail "unknown protected_type: $protected_type"; return 1 ;;
-  esac
+  drop_pattern=$(_drop_pattern "$protected_type" "$_RUNS_PREFIX") || {
+    fail "unknown protected_type: $protected_type"
+    return 1
+  }
 
   if echo "$plan_output" | grep -qiE "$drop_pattern"; then
     fail "unexpected $protected_type drop in plan with --allow-drop $allowed_types"
@@ -223,17 +236,10 @@ assert_drop_type_present() {
   plan_output=$(pista_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
-  case "$expected_type" in
-    table)  drop_pattern='^[[:space:]]*DROP TABLE' ;;
-    view)   drop_pattern='^[[:space:]]*DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP COLUMN' ;;
-    enum)   drop_pattern='^[[:space:]]*DROP TYPE' ;;
-    domain) drop_pattern='^[[:space:]]*DROP DOMAIN' ;;
-    routine) drop_pattern='^[[:space:]]*DROP (FUNCTION|PROCEDURE)' ;;
-    foreign_key) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP CONSTRAINT' ;;
-    trigger) drop_pattern='^[[:space:]]*DROP TRIGGER' ;;
-    *) fail "unknown expected_type: $expected_type"; return 1 ;;
-  esac
+  drop_pattern=$(_drop_pattern "$expected_type" "$_RUNS_PREFIX") || {
+    fail "unknown expected_type: $expected_type"
+    return 1
+  }
 
   if echo "$plan_output" | grep -qiE "$drop_pattern"; then
     pass

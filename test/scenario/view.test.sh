@@ -22,10 +22,17 @@ run_step "01 add a view column" \
   "CREATE OR REPLACE VIEW public.staff AS" \
   "$DATA/steps/01_add_view_column.sql" || true
 
-# --- Step 2: a changed expression under the same name replaces in place ---
-run_step "02 change a column expression" \
-  "SELECT employees.id, upper(employees.name) AS name, employees.dept, employees.salary FROM public.employees;" \
-  "$DATA/steps/02_change_view_column.sql" || true
+# --- Step 2: a changed expression under the same name replaces in place.
+#     The drop check is what says so: the SELECT body alone would also appear
+#     in a plan that dropped the view and created it again. ---
+assert_no_drop_type "02 change a column expression without a drop" \
+  view all "$DATA/steps/02_change_view_column.sql" || true
+
+run_step "02b the change is a replace" "$(cat <<'EOS'
+CREATE OR REPLACE VIEW public.staff AS
+SELECT employees.id, upper(employees.name) AS name, employees.dept, employees.salary FROM public.employees;
+EOS
+)" "$DATA/steps/02_change_view_column.sql" || true
 
 # --- Step 3: comments on the view and on one of its columns ---
 run_step "03 comment on view and view column" "$(cat <<'EOS'

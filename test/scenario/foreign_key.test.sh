@@ -81,10 +81,10 @@ EOS
 )" "$DATA/steps/08_drop_referenced_table.sql" || true
 
 # --- Step 10: a key drop of its own needs --allow-drop foreign_key ---
-assert_commented_drop "10 fk drop is suppressed by default" foreign_key \
+assert_commented_drop "10 fk drop is suppressed by default" foreign_key:orders_parent_fk \
   "$DATA/steps/09_drop_fk.sql" || true
 assert_drop_type_present "11 fk drop runs with --allow-drop foreign_key" \
-  foreign_key foreign_key "$DATA/steps/09_drop_fk.sql" || true
+  foreign_key:orders_parent_fk foreign_key "$DATA/steps/09_drop_fk.sql" || true
 
 # --- Step 12: with the drop allowed, the key goes ---
 run_step "12 drop the self-referencing key" \

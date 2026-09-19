@@ -65,9 +65,9 @@ EOS
 
 # --- Step 9: a trigger drop needs --allow-drop trigger ---
 assert_commented_drop_with_allowed "09 trigger drop is suppressed by default" \
-  trigger view "$DATA/steps/09_drop_triggers.sql" || true
+  trigger:accounts_audit_stmt view "$DATA/steps/09_drop_triggers.sql" || true
 assert_no_drop_type "10 no trigger drop without the type" \
-  trigger view "$DATA/steps/09_drop_triggers.sql" || true
+  trigger:accounts_audit_stmt view "$DATA/steps/09_drop_triggers.sql" || true
 
 # --- Step 11: with the drop allowed, the view and its triggers go ---
 run_step "11 drop the triggers" "$(cat <<'EOS'

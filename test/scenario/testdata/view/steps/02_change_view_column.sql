@@ -1,5 +1,6 @@
--- staff.name changes shape, which CREATE OR REPLACE cannot do, so both views
--- are dropped and re-created, the dependent one first.
+-- staff.name gains an expression. The output column keeps its name, its
+-- position and its type, so CREATE OR REPLACE carries the change and neither
+-- view is dropped.
 CREATE TABLE public.employees (
     id integer NOT NULL,
     name text NOT NULL,
