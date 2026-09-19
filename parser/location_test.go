@@ -397,6 +397,21 @@ func TestParseSQLFiles_IgnoredAlterTableActionWarningLocation(t *testing.T) {
 	assert.Contains(t, buf.String(), "pistachio: "+paths[0]+":2:1: ignored unsupported statement: ALTER TABLE public.items ALTER COLUMN id SET STATISTICS 100")
 }
 
+// The LIKE warning is built from a rebuilt statement, and carries the position
+// of the CREATE TABLE it came from.
+func TestParseSQLFiles_IgnoredLikeClauseWarningLocation(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	paths := writeSQLFiles(t, map[string]string{
+		"items.sql": "CREATE TABLE public.items (id integer);\n\nCREATE TABLE public.copies (\n    LIKE public.items\n);\n",
+	})
+
+	_, err := ParseSQLFilesWithSchema(paths, "public")
+	require.NoError(t, err)
+	assert.Equal(t, "pistachio: "+paths[0]+":3:1: ignored unsupported statement: CREATE TABLE public.copies (LIKE public.items)\n", buf.String())
+}
+
 // Parsing a string names no file, so the warning reads as it did before
 // positions were added.
 func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {

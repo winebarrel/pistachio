@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Warn about `CREATE TABLE ... AS`, a `LIKE` clause in `CREATE TABLE`, and `ALTER INDEX` / `ALTER VIEW` / `ALTER MATERIALIZED VIEW`. Each shares a statement type with one the parser reads, so none reached the `ignored unsupported statement` warning and was dropped in silence: a table created with `AS` was absent from the desired schema, and the columns a `LIKE` clause copies planned as `DROP COLUMN`.
+
 * `-- pista:renamed-from` written without a name is an error. It matched nothing and raised nothing, so the object was dropped and created instead of renamed.
 
 * Trim the whitespace around each schema name in `-n`, `$PISTA_SCHEMAS` and `schemas` in the config file, and around each side of a `-m` mapping. `-n 'public, billing'` read the second entry as ` billing`, a schema of its own, so the real one was neither read nor written, and `-m 'old=new; other=third'` mapped ` other`, which matched nothing. `-m` now also refuses an empty side, `-m 'x='`, which left the mapped objects unqualified, and two sources that differ only in whitespace.

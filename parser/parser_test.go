@@ -147,6 +147,87 @@ func TestParseSQL_WarnsUnsupportedStmt_LastNoSemicolon(t *testing.T) {
 	assert.NotContains(t, out, "trailing comment")
 }
 
+// CREATE TABLE AS is not read, unlike CREATE MATERIALIZED VIEW AS, which
+// shares its statement type.
+func TestParseSQL_WarnsCreateTableAs(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	result, err := parseSQLNoFile("CREATE TABLE public.t AS SELECT 1 AS a;", "public")
+	require.NoError(t, err)
+
+	_, ok := result.Tables.GetOk("public.t")
+	assert.False(t, ok)
+	assert.Contains(t, buf.String(), "ignored unsupported statement: CREATE TABLE public.t AS SELECT 1 AS a")
+}
+
+// A LIKE clause is not expanded. The table is still read with the columns it
+// declares itself, and the warning carries the LIKE clause alone.
+func TestParseSQL_WarnsCreateTableLike(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	sql := "CREATE TABLE public.t (id integer);\nCREATE TABLE public.t2 (LIKE public.t INCLUDING ALL, x integer);"
+	result, err := parseSQLNoFile(sql, "public")
+	require.NoError(t, err)
+
+	t2, ok := result.Tables.GetOk("public.t2")
+	require.True(t, ok)
+	assert.Equal(t, []string{"x"}, slices.Collect(t2.Columns.Keys()))
+	assert.Contains(t, buf.String(), "ignored unsupported statement: CREATE TABLE public.t2 (LIKE public.t INCLUDING ALL)")
+	assert.NotContains(t, buf.String(), "x integer")
+}
+
+// Two LIKE clauses in one table warn once, together.
+func TestParseSQL_WarnsCreateTableLike_TwoClauses(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	sql := "CREATE TABLE public.a (x integer);\nCREATE TABLE public.b (y integer);\nCREATE TABLE public.c (LIKE public.a, id integer, LIKE public.b);"
+	_, err := parseSQLNoFile(sql, "public")
+	require.NoError(t, err)
+	assert.Equal(t, "pistachio: ignored unsupported statement: CREATE TABLE public.c (LIKE public.a, LIKE public.b)\n", buf.String())
+}
+
+// A table marked -- pista:ignore is out of the diff, so its LIKE clause does
+// not warn.
+func TestParseSQL_CreateTableLike_IgnoredTableDoesNotWarn(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	sql := "CREATE TABLE public.t (id integer);\n-- pista:ignore\nCREATE TABLE public.t2 (LIKE public.t);"
+	_, err := parseSQLNoFile(sql, "public")
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// ALTER INDEX, ALTER VIEW and ALTER MATERIALIZED VIEW share ALTER TABLE's
+// statement type and name no table, so they reached its case and were dropped
+// there without the warning.
+func TestParseSQL_WarnsAlterOnNonTable(t *testing.T) {
+	for _, tc := range []struct{ sql, warn string }{
+		{
+			"CREATE TABLE public.t (id integer);\nCREATE INDEX i ON public.t (id);\nALTER INDEX public.i SET (fillfactor = 70);",
+			"ignored unsupported statement: ALTER INDEX public.i SET (fillfactor=70)",
+		},
+		{
+			"CREATE VIEW public.v AS SELECT 1 AS a;\nALTER VIEW public.v ALTER COLUMN a SET DEFAULT 2;",
+			"ignored unsupported statement: ALTER VIEW public.v ALTER COLUMN a SET DEFAULT 2",
+		},
+		{
+			"CREATE MATERIALIZED VIEW public.mv AS SELECT 1 AS a;\nALTER MATERIALIZED VIEW public.mv SET (autovacuum_enabled = false);",
+			"ignored unsupported statement: ALTER MATERIALIZED VIEW public.mv SET (autovacuum_enabled=false)",
+		},
+	} {
+		var buf bytes.Buffer
+		restore := setWarnWriter(&buf)
+		_, err := parseSQLNoFile(tc.sql, "public")
+		restore()
+		require.NoError(t, err, tc.sql)
+		assert.Contains(t, buf.String(), tc.warn, tc.sql)
+	}
+}
+
 // A statement longer than the limit is truncated on a rune boundary, so the
 // warning stays short and valid UTF-8 even for multibyte input.
 func TestParseSQL_WarnsUnsupportedStmt_Truncated(t *testing.T) {

@@ -89,6 +89,37 @@ func warnIgnoredStmt(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt) {
 	fmt.Fprintf(warnWriter, "pistachio: %signored unsupported statement: %s%s\n", at, snippet, txHint(rawStmt)) //nolint:errcheck
 }
 
+// warnIgnoredCreateTableLike warns about a LIKE clause, which the parser does
+// not expand. The columns it would copy read as absent from the desired
+// schema, so a table created this way would plan as a DROP COLUMN for each of
+// them. The warning carries a statement rebuilt from the LIKE clauses alone.
+func warnIgnoredCreateTableLike(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt, cs *pg_query.CreateStmt) {
+	var likes []*pg_query.Node
+
+	for _, elt := range cs.TableElts {
+		if elt.GetTableLikeClause() != nil {
+			likes = append(likes, elt)
+		}
+	}
+
+	if len(likes) == 0 {
+		return
+	}
+
+	warnIgnoredStmt(sql, spans, &pg_query.RawStmt{
+		Stmt: &pg_query.Node{
+			Node: &pg_query.Node_CreateStmt{
+				CreateStmt: &pg_query.CreateStmt{
+					Relation:  cs.Relation,
+					TableElts: likes,
+				},
+			},
+		},
+		StmtLocation: rawStmt.StmtLocation,
+		StmtLen:      rawStmt.StmtLen,
+	})
+}
+
 // alterTableSupportedCmds lists the ALTER TABLE actions the parser reads into
 // the model: constraints (parseAlterTableConstraints), the row-level security
 // toggles (applyAlterTableRLS), the trigger states
@@ -400,6 +431,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 
 			table.Ignore = ignore
+			if !table.Ignore {
+				warnIgnoredCreateTableLike(sql, spans, rawStmt, node.GetCreateStmt())
+			}
 			if err := setUnique(tables, table.FQTN(), "table", table, "", stmtOffset); err != nil {
 				return nil, err
 			}
@@ -420,19 +454,22 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 
 		case node.GetCreateTableAsStmt() != nil:
 			as := node.GetCreateTableAsStmt()
-			if as.Objtype == pg_query.ObjectType_OBJECT_MATVIEW {
-				view, err := parseCreateMatViewStmt(as, defaultSchema)
-				if err != nil {
-					return nil, err
-				}
-				if renameFrom != "" {
-					qualified := qualifyRenameFrom(renameFrom, defaultSchema)
-					view.RenameFrom = &qualified
-				}
-				view.Ignore = ignore
-				if err := setUnique(views, view.FQVN(), "materialized view", view, "", stmtOffset); err != nil {
-					return nil, err
-				}
+			// CREATE TABLE AS shares this statement type and is not read.
+			if as.Objtype != pg_query.ObjectType_OBJECT_MATVIEW {
+				warnIgnoredStmt(sql, spans, rawStmt)
+				break
+			}
+			view, err := parseCreateMatViewStmt(as, defaultSchema)
+			if err != nil {
+				return nil, err
+			}
+			if renameFrom != "" {
+				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
+				view.RenameFrom = &qualified
+			}
+			view.Ignore = ignore
+			if err := setUnique(views, view.FQVN(), "materialized view", view, "", stmtOffset); err != nil {
+				return nil, err
 			}
 
 		case node.GetIndexStmt() != nil:
@@ -467,6 +504,13 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			fqtn := model.Ident(schema, as.Relation.Relname)
 			t, ok := tables.GetOk(fqtn)
 			if !ok {
+				// ALTER INDEX, ALTER VIEW and ALTER MATERIALIZED VIEW share
+				// this statement type, name no table, and are not read. An
+				// ALTER TABLE on a table the file does not declare is
+				// skipped without a warning, on purpose.
+				if as.Objtype != pg_query.ObjectType_OBJECT_TABLE {
+					warnIgnoredStmt(sql, spans, rawStmt)
+				}
 				continue
 			}
 
