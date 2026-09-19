@@ -292,6 +292,21 @@ func TestYAMLConfig_ExclusiveWait(t *testing.T) {
 		assert.Equal(t, UnsignedDuration(5*time.Minute), *cli.Apply.ExclusiveWait)
 	})
 
+	t.Run("environment variable", func(t *testing.T) {
+		t.Setenv("PISTA_EXCLUSIVE_WAIT", "0")
+		cli, err := parseCommandCLI(t, "apply", "schema.sql")
+		require.NoError(t, err)
+		require.NotNil(t, cli.Apply.ExclusiveWait)
+		assert.Equal(t, UnsignedDuration(0), *cli.Apply.ExclusiveWait)
+	})
+
+	t.Run("number without a unit", func(t *testing.T) {
+		path := writeConfig(t, "exclusive-wait: 30\n")
+		_, err := parseCommandCLI(t, "--config", path, "apply", "schema.sql")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing unit")
+	})
+
 	t.Run("negative", func(t *testing.T) {
 		_, err := parseCommandCLI(t, "apply", "--exclusive-wait=-1s", "schema.sql")
 		require.Error(t, err)

@@ -29,9 +29,9 @@ const exclusivePollInterval = time.Second
 type UnsignedDuration time.Duration
 
 // Decode reads the value kong hands over. The command line and an environment
-// variable hand over text. The config file hands over what YAML read, and a
-// bare 0, the value that waits without limit, is a number there; it is read as
-// its text, the way the command line would hand it over.
+// variable hand over text. The config file hands over what YAML read, so a
+// bare 0, the value that waits without limit, arrives as a number and is read
+// as its text.
 func (d *UnsignedDuration) Decode(ctx *kong.DecodeContext) error {
 	token, err := ctx.Scan.PopValue("duration")
 	if err != nil {
