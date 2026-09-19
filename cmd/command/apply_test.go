@@ -468,20 +468,20 @@ func TestApply_Run_ExclusiveWaitMessageIsNotHeldBack(t *testing.T) {
 	// The same two-key advisory lock apply takes: "Pist" and the database.
 	holder := testutil.ConnectDB(t)
 	defer holder.Close(ctx)
-	_, err := holder.Exec(ctx, "SELECT pg_advisory_lock(1349478772, hashtext(current_database()))")
+	_, err := holder.Exec(ctx, "SELECT pg_advisory_lock(x'50697374'::int, hashtext(current_database()))")
 	require.NoError(t, err)
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE public.users (id integer NOT NULL);"), 0o644))
 
 	w := &releasingWriter{release: func() {
-		_, err := holder.Exec(ctx, "SELECT pg_advisory_unlock(1349478772, hashtext(current_database()))")
+		_, err := holder.Exec(ctx, "SELECT pg_advisory_unlock(x'50697374'::int, hashtext(current_database()))")
 		assert.NoError(t, err)
 	}}
 	wait := pistachio.UnsignedDuration(5 * time.Second)
 	cmd := &command.Apply{
-		Options:      pistachio.Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}},
-		ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}, ExclusiveWait: &wait},
+		ConnString: conn.Config().ConnString(), Schemas: []string{"public"},
+		Files: []string{desiredFile}, ExclusiveWait: &wait,
 	}
 	require.NoError(t, cmd.Run(ctx, w))
 
