@@ -68,6 +68,47 @@ func TestBuildDefReplacer_PreservesThreePartReference(t *testing.T) {
 	assert.Equal(t, "x.col", replacer.Replace(`"a.b".col`))
 }
 
+// The replacer matches a schema name as a whole word: a schema whose name
+// ends in the mapped one, and a table named like the schema in a three-part
+// reference, are not rewritten.
+func TestBuildDefReplacer_SchemaBoundary(t *testing.T) {
+	replacer := buildDefReplacer(map[string]string{"staging": "public"})
+
+	assert.Equal(t, "public.t", replacer.Replace("staging.t"))
+	assert.Equal(t, "REFERENCES mystaging.ref(id)", replacer.Replace("REFERENCES mystaging.ref(id)"))
+	assert.Equal(t, "f(public.a, public.b)", replacer.Replace("f(staging.a, staging.b)"))
+	assert.Equal(t, "public.staging.col", replacer.Replace("staging.staging.col"))
+	assert.Equal(t, `"mystaging".t`, replacer.Replace(`"mystaging".t`))
+}
+
+// A foreign key to a schema whose name ends in the mapped one kept the wrong
+// schema: the prefix substitution turned mystaging.ref into mypublic.ref.
+func TestDump_WithSchemaMap_LongerSchemaName(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "mystaging", `
+CREATE TABLE mystaging.ref (id integer NOT NULL, CONSTRAINT ref_pkey PRIMARY KEY (id));
+`)
+	setupSchemaDB(t, ctx, "staging", `
+CREATE TABLE staging.t (id integer NOT NULL, ref_id integer REFERENCES mystaging.ref (id));
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"staging"},
+		SchemaMap:  map[string]string{"staging": "public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "REFERENCES mystaging.ref(id)")
+	assert.NotContains(t, output, "mypublic")
+}
+
 func TestAfterApply(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		o := &Options{SchemaMap: map[string]string{"staging": "public"}}
@@ -208,6 +249,287 @@ CREATE VIEW myschema.active_users AS SELECT id, name FROM myschema.users;
 	assert.Contains(t, output, "CREATE TABLE public.users")
 	assert.Contains(t, output, "CREATE OR REPLACE VIEW public.active_users")
 	assert.Contains(t, output, "FROM public.users")
+}
+
+// A column's type and a partition's parent name the schema too, so the map has
+// to reach them: a dump that writes public.child PARTITION OF myschema.parent
+// does not load.
+func TestDump_WithSchemaMap_ColumnTypeAndPartition(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('a', 'b');
+CREATE TABLE myschema.parent (r integer, s myschema.status, tags myschema.status[]) PARTITION BY RANGE (r);
+CREATE TABLE myschema.child PARTITION OF myschema.parent FOR VALUES FROM (0) TO (10);
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "s public.status,")
+	assert.Contains(t, output, "tags public.status[]")
+	assert.Contains(t, output, "CREATE TABLE public.child PARTITION OF public.parent")
+	assert.NotContains(t, output, "myschema.")
+}
+
+// The desired side written against public has to come back as myschema in a
+// column type and a partition parent, or the plan retypes every column of a
+// mapped type on every run.
+func TestPlan_WithSchemaMap_ColumnTypeAndPartition(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('a', 'b');
+CREATE TABLE myschema.parent (r integer, s myschema.status, tags myschema.status[]) PARTITION BY RANGE (r);
+CREATE TABLE myschema.child PARTITION OF myschema.parent FOR VALUES FROM (0) TO (10);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TYPE public.status AS ENUM ('a', 'b');
+CREATE TABLE public.parent (r integer, s public.status, tags public.status[]) PARTITION BY RANGE (r);
+CREATE TABLE public.child PARTITION OF public.parent FOR VALUES FROM (0) TO (10);
+`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Empty(t, strings.TrimSpace(got.SQL))
+}
+
+// A column default names the schema in a sequence, a function or a cast, and
+// the map reaches those, but not a string literal that merely looks like one.
+func TestDump_WithSchemaMap_ColumnDefault(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('a', 'b');
+CREATE SEQUENCE myschema.seq1;
+CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
+CREATE TABLE myschema.t (
+    n integer DEFAULT nextval('myschema.seq1'),
+    s myschema.status DEFAULT 'a'::myschema.status,
+    g text DEFAULT myschema.gen(),
+    host text DEFAULT 'myschema.example.com'
+);
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "DEFAULT nextval('public.seq1'::regclass)")
+	assert.Contains(t, output, "DEFAULT 'a'::public.status")
+	assert.Contains(t, output, "DEFAULT public.gen()")
+	assert.Contains(t, output, "DEFAULT 'myschema.example.com'::text")
+}
+
+func TestPlan_WithSchemaMap_ColumnDefault(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('a', 'b');
+CREATE SEQUENCE myschema.seq1;
+CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
+CREATE TABLE myschema.t (
+    n integer DEFAULT nextval('myschema.seq1'),
+    s myschema.status DEFAULT 'a'::myschema.status,
+    g text DEFAULT myschema.gen(),
+    host text DEFAULT 'myschema.example.com'
+);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TYPE public.status AS ENUM ('a', 'b');
+CREATE SEQUENCE public.seq1;
+CREATE TABLE public.t (
+    n integer DEFAULT nextval('public.seq1'),
+    s public.status DEFAULT 'a'::public.status,
+    g text DEFAULT public.gen(),
+    host text DEFAULT 'myschema.example.com'
+);
+`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Empty(t, strings.TrimSpace(got.SQL))
+}
+
+// A collation, a domain's default and collation, and a constraint definition
+// name the schema too.
+func TestDump_WithSchemaMap_CollationAndDomain(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE COLLATION myschema.mycoll (locale = 'C');
+CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
+CREATE FUNCTION myschema.ok(text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$ SELECT true $$;
+CREATE DOMAIN myschema.d AS text COLLATE myschema.mycoll DEFAULT myschema.gen() CONSTRAINT d_ok CHECK (myschema.ok(VALUE));
+CREATE TYPE myschema.ct AS (x text COLLATE myschema.mycoll);
+CREATE TABLE myschema.t (
+    a text COLLATE myschema.mycoll,
+    b myschema.d,
+    CONSTRAINT t_ok CHECK (myschema.ok(a))
+);
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "a text COLLATE public.mycoll")
+	assert.Contains(t, output, "x text COLLATE public.mycoll")
+	assert.Contains(t, output, "CREATE DOMAIN public.d AS text")
+	assert.Contains(t, output, "COLLATE public.mycoll")
+	assert.Contains(t, output, "DEFAULT public.gen()")
+	assert.Contains(t, output, "CONSTRAINT d_ok CHECK (public.ok(VALUE))")
+	assert.Contains(t, output, "CONSTRAINT t_ok CHECK (public.ok(a))")
+	assert.NotContains(t, output, "myschema.")
+}
+
+func TestPlan_WithSchemaMap_CollationAndDomain(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE COLLATION myschema.mycoll (locale = 'C');
+CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
+CREATE FUNCTION myschema.ok(text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$ SELECT true $$;
+CREATE DOMAIN myschema.d AS text COLLATE myschema.mycoll DEFAULT myschema.gen() CONSTRAINT d_ok CHECK (myschema.ok(VALUE));
+CREATE TYPE myschema.ct AS (x text COLLATE myschema.mycoll);
+CREATE TABLE myschema.t (
+    a text COLLATE myschema.mycoll,
+    b myschema.d,
+    CONSTRAINT t_ok CHECK (myschema.ok(a))
+);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE DOMAIN public.d AS text COLLATE public.mycoll DEFAULT public.gen() CONSTRAINT d_ok CHECK (public.ok(VALUE));
+CREATE TYPE public.ct AS (x text COLLATE public.mycoll);
+CREATE TABLE public.t (
+    a text COLLATE public.mycoll,
+    b public.d,
+    CONSTRAINT t_ok CHECK (public.ok(a))
+);
+`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Empty(t, strings.TrimSpace(got.SQL))
+}
+
+func TestRemapQualifiedName(t *testing.T) {
+	mapSchema := func(s string) string {
+		if s == "myschema" || s == "My Schema" {
+			return "public"
+		}
+		return s
+	}
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"qualified type", "myschema.status", "public.status"},
+		{"array type", "myschema.status[]", "public.status[]"},
+		{"quoted schema", `"My Schema".status`, "public.status"},
+		{"other schema", "other.status", "other.status"},
+		{"schema ending in the mapped name", "mymyschema.status", "mymyschema.status"},
+		{"unqualified type", "integer", "integer"},
+		{"type modifier", "numeric(10,2)", "numeric(10,2)"},
+		{"three-part name", "myschema.t.col", "myschema.t.col"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, remapQualifiedName(tt.in, mapSchema))
+		})
+	}
+}
+
+func TestRemapDefaultExpr(t *testing.T) {
+	mapSchema := func(s string) string {
+		if s == "myschema" {
+			return "public"
+		}
+		return s
+	}
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"sequence literal cast to regclass", "nextval('myschema.seq'::regclass)", "nextval('public.seq'::regclass)"},
+		{"bare sequence literal", "nextval('myschema.seq')", "nextval('public.seq')"},
+		{"quoted schema in a sequence literal", `nextval('"My Schema".seq'::regclass)`, `nextval('"My Schema".seq'::regclass)`},
+		{"function name", "myschema.gen()", "public.gen()"},
+		{"cast type", "'a'::myschema.status", "'a'::public.status"},
+		{"regtype literal", "'myschema.status'::regtype", "'public.status'::regtype"},
+		{"regclass qualified with pg_catalog", "'myschema.seq'::pg_catalog.regclass", "'public.seq'::pg_catalog.regclass"},
+		{"sequence function qualified with pg_catalog", "pg_catalog.nextval('myschema.seq')", "pg_catalog.nextval('public.seq')"},
+		{"user function named nextval keeps its argument", "myschema.nextval('myschema.label')", "public.nextval('myschema.label')"},
+		{"user type starting with reg keeps its literal", "'myschema.x'::myschema.registry_code", "'myschema.x'::public.registry_code"},
+		{"string literal is left alone", "'myschema.example.com'::text", "'myschema.example.com'::text"},
+		{"literal in another function is left alone", "upper('myschema.x')", "upper('myschema.x')"},
+		{"regclass over a call is left alone", "nextval(pg_get_serial_sequence('myschema.t', 'id')::regclass)", "nextval(pg_get_serial_sequence('myschema.t', 'id')::regclass)"},
+		{"other schema is left alone", "other.gen()", "other.gen()"},
+		{"schema ending in the mapped name is left alone", "mymyschema.gen()", "mymyschema.gen()"},
+		{"unqualified call is left alone", "now()", "now()"},
+		{"unparseable expression is left alone", "not an expression (", "not an expression ("},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, remapDefaultExpr(tt.in, mapSchema))
+		})
+	}
 }
 
 func TestDump_WithSchemaMap_Sequence(t *testing.T) {
@@ -1200,7 +1522,7 @@ func TestDump_WithSchemaMap_Routine(t *testing.T) {
 
 	connString := setupSchemaDB(t, ctx, "myschema", `
 CREATE TYPE myschema.status AS ENUM ('active');
-CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
+CREATE FUNCTION myschema.label(s myschema.status DEFAULT 'active'::myschema.status, host text DEFAULT 'myschema.example.com') RETURNS text
     LANGUAGE sql AS $$ SELECT s::text $$;
 `)
 
@@ -1220,7 +1542,7 @@ CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
 	require.NoError(t, err)
 
 	out := got.String()
-	assert.Contains(t, out, "CREATE OR REPLACE FUNCTION public.label(s public.status)")
+	assert.Contains(t, out, "CREATE OR REPLACE FUNCTION public.label(s public.status DEFAULT 'active'::public.status, host text DEFAULT 'myschema.example.com'::text)")
 	assert.NotContains(t, out, "myschema.label")
 	assert.NotContains(t, out, "s myschema.status")
 }
