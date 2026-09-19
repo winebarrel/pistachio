@@ -1,0 +1,15 @@
+# staff loses a column, which CREATE OR REPLACE cannot do, so the plan drops
+# and re-creates it. eng_staff reads staff and nothing in this plan touches
+# it, so PostgreSQL refuses the DROP. The plan says so rather than letting
+# apply fail on a statement that looked fine.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept, salary FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+desired: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+error: "cannot drop public.staff: view public.eng_staff depends on it"

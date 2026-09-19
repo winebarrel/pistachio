@@ -1,0 +1,14 @@
+# A routine with a SQL body records the same dependency a view does, so it
+# blocks the DROP too. Routines are not managed here, so nothing in the plan
+# takes it out of the way.
+min_pg: 14
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, n text);
+  CREATE VIEW public.v AS SELECT id, n FROM public.t;
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM public.v; END;
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, n text);
+  CREATE VIEW public.v AS SELECT id FROM public.t;
+error: "cannot drop public.v: function public.total() depends on it"

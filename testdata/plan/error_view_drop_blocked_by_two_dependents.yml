@@ -1,0 +1,15 @@
+# Every object that blocks the drop is named, not just the first one, so one
+# run says everything that has to move.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept, salary FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+  CREATE MATERIALIZED VIEW public.staff_count AS SELECT dept, count(*) AS total FROM public.staff GROUP BY dept;
+desired: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+  CREATE MATERIALIZED VIEW public.staff_count AS SELECT dept, count(*) AS total FROM public.staff GROUP BY dept;
+error: "cannot drop public.staff: materialized view public.staff_count, view public.eng_staff depend on it"

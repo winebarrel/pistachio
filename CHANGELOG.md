@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* Fail the plan when a view or materialized view it drops is read by an object the same plan leaves in place, naming what is in the way. PostgreSQL refuses such a `DROP` rather than cascading, so the statement read as fine and `apply` failed on it. A definition change a view cannot take through `CREATE OR REPLACE` arrives as a drop and a create, and a materialized view takes that route on every definition change, so a chain of views hit this without anything being dropped on purpose. The dependents are read from the catalog, which sees one a filter or an unmanaged schema hides, and only a plan that drops a view makes the query. A dependent the same plan drops is not in the way, since the drops run deepest first.
+
 ## [1.58.0] - 2026-09-17
 
 * Add `--explain` to `dump` (`$PISTA_DUMP_EXPLAIN`). It writes the size of each table, materialized view and index in a comment, from the same estimates `plan --explain` reads.

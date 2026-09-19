@@ -84,6 +84,10 @@ type diffAllResult struct {
 	CurrentTables  *orderedmap.Map[string, *model.Table]
 	DesiredTables  *orderedmap.Map[string, *model.Table]
 	DesiredDomains *orderedmap.Map[string, *model.Domain]
+	// DroppedViews names the views and materialized views the statements
+	// drop, for the dependent check diffAll makes against the catalog. Diff
+	// reads no catalog and leaves it alone.
+	DroppedViews []string
 }
 
 // currentObjects holds the current side of a diff: one map per object kind.
@@ -149,7 +153,20 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		}
 	}
 
-	return client.diffObjects(current, options)
+	result, err := client.diffObjects(current, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only a plan that drops a view pays for the dependent read, so the
+	// common run makes no extra query.
+	if len(result.DroppedViews) > 0 {
+		if err := checkViewDependents(ctx, cat, result.DroppedViews); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
 }
 
 // diffObjects diffs the desired schema against an already-loaded current side
@@ -315,7 +332,55 @@ func (client *Client) diffObjects(current *currentObjects, options *diffAllOptio
 		CurrentTables:        currentTables,
 		DesiredTables:        desiredTables,
 		DesiredDomains:       desiredDomains,
+		DroppedViews:         viewDiff.DroppedViews,
 	}, nil
+}
+
+// checkViewDependents fails the plan when a view or materialized view it
+// drops is read by an object the same plan leaves in place. PostgreSQL
+// refuses such a DROP rather than cascading, so without this the statement
+// reads as fine and apply fails on it. A definition change a view cannot take
+// through CREATE OR REPLACE arrives here as a drop and a create, and a
+// materialized view takes that route on every definition change, so a chain of
+// views hits this without anything being dropped on purpose.
+//
+// The dependents come from the catalog rather than from the desired schema
+// because a filter, or a schema this run does not manage, hides an object
+// that still blocks the drop.
+//
+// A dependent the same plan drops is not a blocker: the drops run deepest
+// first, so a chain re-created together comes apart in an order PostgreSQL
+// accepts.
+func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []string) error {
+	dependents, err := cat.ViewDependents(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch view dependents: %w", err)
+	}
+
+	alsoDropped := make(map[string]bool, len(dropped))
+	for _, k := range dropped {
+		alsoDropped[k] = true
+	}
+
+	for _, k := range dropped {
+		var blockers []string
+		for _, dep := range dependents[k] {
+			if dep.Relation != "" && alsoDropped[dep.Relation] {
+				continue
+			}
+			blockers = append(blockers, dep.String())
+		}
+		if len(blockers) == 0 {
+			continue
+		}
+		verb := "depends"
+		if len(blockers) > 1 {
+			verb = "depend"
+		}
+		return fmt.Errorf("cannot drop %s: %s %s on it", k, strings.Join(blockers, ", "), verb)
+	}
+
+	return nil
 }
 
 // standaloneSequences returns only the sequences not owned by a table column.
