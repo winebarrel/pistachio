@@ -71,6 +71,32 @@ func TestFmt_Run_KeepsFileMode(t *testing.T) {
 	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
+// A symlink is formatted through to the file it points at, and stays a
+// symlink. The link and the file sit in different directories, so the
+// temporary file has to go next to the file, not the link.
+func TestFmt_Run_Symlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating a symlink needs a privilege on Windows")
+	}
+
+	target := writeSQLFile(t, "schema.sql", unformattedSQL)
+	link := filepath.Join(t.TempDir(), "link.sql")
+	require.NoError(t, os.Symlink(target, link))
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{link}}
+	require.NoError(t, cmd.Run(&buf))
+
+	info, err := os.Lstat(link)
+	require.NoError(t, err)
+	assert.NotZero(t, info.Mode()&os.ModeSymlink, "the link must stay a link")
+
+	got, err := os.ReadFile(target)
+	require.NoError(t, err)
+	assert.Equal(t, formattedSQL, string(got))
+	assert.Equal(t, link+"\n", buf.String())
+}
+
 func TestFmt_Run_Check(t *testing.T) {
 	path := writeSQLFile(t, "schema.sql", unformattedSQL)
 

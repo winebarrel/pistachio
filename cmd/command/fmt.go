@@ -64,11 +64,18 @@ func (cmd *Fmt) formatFile(path string, w io.Writer) (bool, error) {
 	}
 
 	if !cmd.Check {
-		info, err := os.Stat(path)
+		// A symlink is written through to the file it points at. Renaming
+		// over the link itself would replace it with a plain file and leave
+		// the file it pointed at as it was.
+		target, err := filepath.EvalSymlinks(path)
 		if err != nil {
 			return false, err
 		}
-		if err := writeFileAtomic(path, out, info.Mode().Perm()); err != nil {
+		info, err := os.Stat(target)
+		if err != nil {
+			return false, err
+		}
+		if err := writeFileAtomic(target, out, info.Mode().Perm()); err != nil {
 			return false, err
 		}
 	}
