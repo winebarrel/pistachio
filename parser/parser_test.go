@@ -407,19 +407,6 @@ func TestParseSQL_ExecuteDirectiveSilencesAlterTableWarning(t *testing.T) {
 	assert.Empty(t, buf.String())
 }
 
-// An ALTER TABLE naming a relation the file does not declare is skipped whole,
-// the same as a CREATE INDEX on such a relation. That is deliberate, so it
-// stays silent.
-func TestParseSQL_NoWarnForAlterTableOnUndeclaredRelation(t *testing.T) {
-	var buf bytes.Buffer
-	restore := setWarnWriter(&buf)
-	defer restore()
-
-	_, err := parseSQLWithPublicSchema(`ALTER TABLE public.nosuch ADD COLUMN x text;`)
-	require.NoError(t, err)
-	assert.Empty(t, buf.String())
-}
-
 // A table marked -- pista:ignore is out of the diff, so an action dropped
 // from it cannot mislead the plan and the warning would be noise.
 func TestParseSQL_NoWarnForAlterTableOnIgnoredTable(t *testing.T) {
@@ -1544,14 +1531,6 @@ ALTER TABLE ONLY public.items ADD PRIMARY KEY USING INDEX items_pkey;`
 	require.True(t, ok)
 	assert.True(t, pk.Type.IsPrimaryKeyConstraint())
 	assert.Equal(t, "items_pkey", pk.IndexName)
-}
-
-func TestParseSQL_AlterTableUnknownTable(t *testing.T) {
-	// ALTER TABLE referencing a table not in parsed result is silently skipped
-	sql := `ALTER TABLE public.nonexistent ADD CONSTRAINT fk FOREIGN KEY (id) REFERENCES public.other(id);`
-	result, err := parseSQLWithPublicSchema(sql)
-	require.NoError(t, err)
-	assert.Equal(t, 0, result.Tables.Len())
 }
 
 func TestParseSQL_CommentOnUnknownTable(t *testing.T) {

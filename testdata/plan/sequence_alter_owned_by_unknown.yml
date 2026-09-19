@@ -1,5 +1,5 @@
-# ALTER SEQUENCE against a sequence the desired schema never declares is
-# ignored rather than treated as a declaration.
+# ALTER SEQUENCE against a sequence the desired schema does not declare
+# before it is an error, not a declaration and not a statement to drop.
 init: |
   CREATE TABLE public.t (
       id integer,
@@ -11,4 +11,4 @@ desired: |
       val integer DEFAULT 42
   );
   ALTER SEQUENCE public.absent_seq OWNED BY public.t.val;
-plan: ""
+error: "ALTER SEQUENCE public.absent_seq: sequence public.absent_seq is not declared before it"
