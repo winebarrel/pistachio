@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* A constraint trigger whose definition changes is dropped and created again, under `--allow-drop trigger`. `plan` wrote `CREATE OR REPLACE CONSTRAINT TRIGGER`, which PostgreSQL does not have, so `apply` failed.
+
 * `serial2`, `serial4` and `serial8` are read as `smallserial`, `serial` and `bigserial`, like `int2`, `int4` and `int8`. A column written with one of them planned `SET DATA TYPE serial8`, which PostgreSQL refuses, and `DROP NOT NULL` on every run.
 
 * `plan` now fails when it would drop a view or materialized view that another object still reads, and names what reads it. PostgreSQL refuses that `DROP` instead of cascading, so the plan read as fine and `apply` failed on it. Views hit this without being dropped on purpose: a definition change becomes a drop and a create whenever `CREATE OR REPLACE VIEW` cannot express it, and always for a materialized view.

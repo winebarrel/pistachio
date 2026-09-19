@@ -12,13 +12,13 @@ import (
 // desired state.
 //
 // A definition change goes through CREATE OR REPLACE TRIGGER, which PostgreSQL
-// has carried since 14 and which takes a lighter lock than DROP TRIGGER. It
-// refuses to turn a constraint trigger into a plain one or back, so that pair
-// falls back to DROP and CREATE, honoring the trigger-drop policy via dc the
-// same as a removal: with the drop denied, the trigger keeps its current
-// definition rather than running the CREATE half alone. Either way PostgreSQL
-// leaves the new trigger enabled, so a desired state other than the default is
-// re-applied after the statement that reset it.
+// has carried since 14 and which takes a lighter lock than DROP TRIGGER. There
+// is no CREATE OR REPLACE CONSTRAINT TRIGGER, so a change to or from a
+// constraint trigger falls back to DROP and CREATE, honoring the trigger-drop
+// policy via dc the same as a removal: with the drop denied, the trigger keeps
+// its current definition rather than running the CREATE half alone. Either
+// way PostgreSQL leaves the new trigger enabled, so a desired state other than
+// the default is re-applied after the statement that reset it.
 func diffTriggers(
 	fqtn string,
 	current, desired *orderedmap.Map[string, *model.Trigger],
@@ -36,8 +36,8 @@ func diffTriggers(
 	}
 
 	// Compare once. The loops below need both whether the definition changed
-	// and whether the change crosses the constraint-trigger line, which is the
-	// one PostgreSQL will not replace in place.
+	// and whether a constraint trigger is involved, which PostgreSQL will not
+	// replace in place.
 	changed := map[string]bool{}
 	recreated := map[string]bool{}
 	for name, des := range desired.All() {
@@ -53,14 +53,14 @@ func diffTriggers(
 			continue
 		}
 		changed[name] = true
-		if isConstraintTrigger(cur.Definition) != isConstraintTrigger(des.Definition) {
+		if isConstraintTrigger(cur.Definition) || isConstraintTrigger(des.Definition) {
 			recreated[name] = true
 		}
 	}
 
 	triggerAllowed := dc.IsDropAllowed("trigger")
 
-	// A recreate crossing the constraint-trigger line needs the same drop the
+	// A recreate involving a constraint trigger needs the same drop the
 	// removal branch below honors: nothing else about the trigger can change
 	// while the drop that clears the way for it is denied, so it stays
 	// exactly as it is, the way DiffViews leaves a view alone when its own
@@ -281,8 +281,8 @@ func equalTriggerDef(current, desired, schema string) (bool, error) {
 }
 
 // isConstraintTrigger reports whether a definition is a CREATE CONSTRAINT
-// TRIGGER. PostgreSQL will not replace one with a plain trigger or the other
-// way round, so the two need a DROP in between.
+// TRIGGER. PostgreSQL has no OR REPLACE for one, so a change to or from one
+// needs a DROP in between.
 func isConstraintTrigger(def string) bool {
 	_, ct, err := parseTriggerDef(def, "")
 	if err != nil {
