@@ -215,10 +215,12 @@ func TestApplyExclusiveWaitWriter(t *testing.T) {
 		Schemas:    []string{"public"},
 	})
 
+	// Bounded, so a line that never reaches WaitWriter fails here rather
+	// than at the suite's timeout.
 	var buf bytes.Buffer
 	result, err := client.Apply(ctx, &ApplyOptions{
 		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
-		ExclusiveWait: durationPtr(0),
+		ExclusiveWait: durationPtr(10 * time.Second),
 		WaitWriter:    waitOut,
 	}, &buf)
 	require.NoError(t, err)
