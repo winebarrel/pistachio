@@ -1,0 +1,16 @@
+# CREATE INDEX on a table the desired schema does not declare before it is an
+# error. Dropped in silence, the index would be missing from the desired side
+# and the plan would offer to drop it.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text
+  );
+  CREATE INDEX users_name_idx ON public.users (name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text
+  );
+  CREATE INDEX users_name_idx ON public.usres (name);
+error: "CREATE INDEX users_name_idx: table or materialized view public.usres is not declared before it"
