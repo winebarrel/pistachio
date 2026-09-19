@@ -558,6 +558,7 @@ func TestValidateDirectives_RenamedFromWithoutArg(t *testing.T) {
 		"-- pista:renamed-from\nCREATE TABLE t (id int);",
 		"-- pista:renamed-from   \nCREATE TABLE t (id int);",
 		"-- pista:renamed-from\r\nCREATE TABLE t (id int);",
+		"CREATE TABLE t (\n  -- pista:renamed-from\n  id int\n);",
 	} {
 		err := validateDirectives(sql)
 		require.Error(t, err, sql)
