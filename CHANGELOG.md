@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* `fmt` writes through a symlink to the file it points at. It replaced the link with a plain file and left that file unformatted.
+
 * A trigger state naming a trigger, and a storage setting naming a column, that the table does not declare before it are errors, as is `CREATE INDEX` on a table or materialized view not declared before it. Each was dropped in silence, so the index or the setting was missing from the desired schema. An `ALTER SEQUENCE` option other than `OWNED BY` warns as an unread `ALTER TABLE` action does; it was dropped in silence too.
 
 * `ALTER TABLE` on a table, and `ALTER SEQUENCE` on a sequence, that no statement before it declares is an error. Both were dropped in silence, so a typo in the table name, or a file that sorts before the one declaring the table, left the constraint out of the desired schema and the plan offered to drop it from the database. `ALTER TABLE` on a view, a materialized view or a sequence warns as `ALTER VIEW` does.

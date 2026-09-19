@@ -71,6 +71,42 @@ func TestFmt_Run_KeepsFileMode(t *testing.T) {
 	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
+// A symlink is formatted through to the file it points at, and stays a
+// symlink, as does a link to that link. The links and the file sit in
+// different directories, so the temporary file has to go next to the file.
+// The file keeps its mode.
+func TestFmt_Run_Symlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating a symlink needs a privilege on Windows")
+	}
+
+	target := writeSQLFile(t, "schema.sql", unformattedSQL)
+	require.NoError(t, os.Chmod(target, 0o600))
+	link := filepath.Join(t.TempDir(), "link.sql")
+	require.NoError(t, os.Symlink(target, link))
+	chain := filepath.Join(t.TempDir(), "chain.sql")
+	require.NoError(t, os.Symlink(link, chain))
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{chain}}
+	require.NoError(t, cmd.Run(&buf))
+
+	for _, l := range []string{chain, link} {
+		info, err := os.Lstat(l)
+		require.NoError(t, err)
+		assert.NotZero(t, info.Mode()&os.ModeSymlink, "%s must stay a link", l)
+	}
+
+	got, err := os.ReadFile(target)
+	require.NoError(t, err)
+	assert.Equal(t, formattedSQL, string(got))
+	assert.Equal(t, chain+"\n", buf.String())
+
+	info, err := os.Stat(target)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+}
+
 func TestFmt_Run_Check(t *testing.T) {
 	path := writeSQLFile(t, "schema.sql", unformattedSQL)
 
@@ -159,6 +195,24 @@ func TestFmt_Run_UnwritableDir(t *testing.T) {
 	got, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, unformattedSQL, string(got), "the file is left as it was")
+}
+
+func TestFmt_Run_UnreadableFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not carry the Unix permission bits")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a file with no permission bits")
+	}
+
+	path := writeSQLFile(t, "schema.sql", unformattedSQL)
+	require.NoError(t, os.Chmod(path, 0o000))
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{path}}
+	err := cmd.Run(&buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to format 1 file(s)")
 }
 
 func TestFmt_Run_MissingFile(t *testing.T) {

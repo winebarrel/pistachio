@@ -48,8 +48,19 @@ func (cmd *Fmt) Run(w io.Writer) error {
 // formatFile reports whether path was not formatted already. The file is
 // rewritten unless --check is set, and its name is printed either way; a file
 // that is already formatted is left alone and says nothing.
+//
+// A symlink is resolved once, up front, and the file it points at is what is
+// read and written. Renaming over the link itself would replace it with a
+// plain file and leave the file it pointed at as it was, and resolving after
+// the read would let a link retargeted in between carry one file's text onto
+// another.
 func (cmd *Fmt) formatFile(path string, w io.Writer) (bool, error) {
-	src, err := os.ReadFile(path)
+	target, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false, err
+	}
+
+	src, err := os.ReadFile(target)
 	if err != nil {
 		return false, err
 	}
@@ -64,11 +75,11 @@ func (cmd *Fmt) formatFile(path string, w io.Writer) (bool, error) {
 	}
 
 	if !cmd.Check {
-		info, err := os.Stat(path)
+		info, err := os.Stat(target)
 		if err != nil {
 			return false, err
 		}
-		if err := writeFileAtomic(path, out, info.Mode().Perm()); err != nil {
+		if err := writeFileAtomic(target, out, info.Mode().Perm()); err != nil {
 			return false, err
 		}
 	}
@@ -81,7 +92,9 @@ func (cmd *Fmt) formatFile(path string, w io.Writer) (bool, error) {
 // writeFileAtomic writes content next to path and renames it over path, so a
 // failure partway through leaves the original file as it was. The checks run
 // in order: a rename that follows a failed write would put a half-written file
-// where the original was.
+// where the original was. The rename replaces the name, not the inode, so a
+// hard link to the file keeps the old content; the atomicity and the other
+// names cannot both be kept.
 func writeFileAtomic(path, content string, perm os.FileMode) error {
 	dir, base := filepath.Dir(path), filepath.Base(path)
 
