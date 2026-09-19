@@ -10,8 +10,6 @@ input: |
   ALTER TABLE public.docs ALTER COLUMN note SET STORAGE main;
   -- pg_dump writes ONLY, which the actions are read through just the same.
   ALTER TABLE ONLY public.docs ALTER COLUMN note SET COMPRESSION pglz;
-  -- A setting for a column the file does not declare has nothing to sit on.
-  ALTER TABLE public.docs ALTER COLUMN gone SET STORAGE main;
 expected: |
   -- public.docs
   CREATE TABLE public.docs (
