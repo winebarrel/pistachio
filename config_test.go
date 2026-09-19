@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/stretchr/testify/assert"
@@ -222,6 +223,9 @@ type commandCLI struct {
 	Dump struct {
 		DumpOptions
 	} `cmd:""`
+	Apply struct {
+		ApplyOptions
+	} `cmd:""`
 }
 
 func parseCommandCLI(t *testing.T, args ...string) (*commandCLI, error) {
@@ -258,6 +262,45 @@ bulk-alter: true
 		cli, err := parseCommandCLI(t, "--config", path, "plan", "schema.sql")
 		require.NoError(t, err)
 		assert.True(t, cli.Plan.BulkAlter)
+	})
+}
+
+// YAML reads a bare 0 as a number, and exclusive-wait: 0 is the 0 that waits
+// without limit, not a type error. The text forms keep working from the file
+// and from the command line.
+func TestYAMLConfig_ExclusiveWait(t *testing.T) {
+	t.Run("zero", func(t *testing.T) {
+		path := writeConfig(t, "exclusive-wait: 0\n")
+		cli, err := parseCommandCLI(t, "--config", path, "apply", "schema.sql")
+		require.NoError(t, err)
+		require.NotNil(t, cli.Apply.ExclusiveWait)
+		assert.Equal(t, UnsignedDuration(0), *cli.Apply.ExclusiveWait)
+	})
+
+	t.Run("duration", func(t *testing.T) {
+		path := writeConfig(t, "exclusive-wait: 5m\n")
+		cli, err := parseCommandCLI(t, "--config", path, "apply", "schema.sql")
+		require.NoError(t, err)
+		require.NotNil(t, cli.Apply.ExclusiveWait)
+		assert.Equal(t, UnsignedDuration(5*time.Minute), *cli.Apply.ExclusiveWait)
+	})
+
+	t.Run("flag", func(t *testing.T) {
+		cli, err := parseCommandCLI(t, "apply", "--exclusive-wait", "5m", "schema.sql")
+		require.NoError(t, err)
+		require.NotNil(t, cli.Apply.ExclusiveWait)
+		assert.Equal(t, UnsignedDuration(5*time.Minute), *cli.Apply.ExclusiveWait)
+	})
+
+	t.Run("negative", func(t *testing.T) {
+		_, err := parseCommandCLI(t, "apply", "--exclusive-wait=-1s", "schema.sql")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must not be negative")
+	})
+
+	t.Run("missing value", func(t *testing.T) {
+		_, err := parseCommandCLI(t, "apply", "schema.sql", "--exclusive-wait")
+		require.Error(t, err)
 	})
 }
 

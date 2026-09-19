@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* `exclusive-wait: 0` in the config file is read as `--exclusive-wait 0` is. It failed with `cannot unmarshal number into Go value of type string`, since YAML reads a bare `0` as a number and the flag took only text.
+
 * `--schema-map` now reaches a column's type, collation and default, a partition's parent, a constraint definition, a composite attribute's collation, and a domain's base type, collation, default and constraints. `dump -m myschema=public` wrote `s myschema.status`, `DEFAULT nextval('myschema.seq1'::regclass)` and `PARTITION OF myschema.parent` under a `public` table, which does not load, and `plan` retyped such a column and re-set such a default on every run. The map also no longer rewrites a schema whose name ends in the mapped one: a foreign key to `mystaging.ref` came out as `mypublic.ref` under `-m staging=public`.
 
 * Name an unnamed `UNIQUE` or `EXCLUDE` constraint the way PostgreSQL does when it holds an expression or an `INCLUDE` list: `EXCLUDE (lower(a) WITH =)` is `t_lower_excl`, not `t_expr_excl`, and `UNIQUE (a) INCLUDE (b)` is `t_a_b_key`, not `t_a_key`. Every plan added the constraint under the old name and offered to drop the server's.
