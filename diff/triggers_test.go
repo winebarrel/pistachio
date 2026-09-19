@@ -224,6 +224,20 @@ func TestDiffTriggers_ConstraintSwitch(t *testing.T) {
 	}, stmts)
 }
 
+// PostgreSQL has no CREATE OR REPLACE CONSTRAINT TRIGGER, so a constraint
+// trigger that stays one runs as DROP and CREATE too.
+func TestDiffTriggers_ConstraintChange(t *testing.T) {
+	changed := "CREATE CONSTRAINT TRIGGER events_stamp AFTER INSERT ON public.events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp2()"
+	cur := triggers(newTrigger("events_stamp", conDef))
+	des := triggers(newTrigger("events_stamp", changed))
+	stmts, _, err := diffTriggers("public.events", cur, des, allowTriggerDrops())
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"DROP TRIGGER events_stamp ON public.events;",
+		changed + ";",
+	}, stmts)
+}
+
 // A denied recreate leaves the trigger exactly as it was: no DROP, no
 // CREATE, nothing else touches it either.
 func TestDiffTriggers_ConstraintSwitchDenied(t *testing.T) {
