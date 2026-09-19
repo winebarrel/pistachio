@@ -957,7 +957,7 @@ func applyAlterTableColumnStorage(as *pg_query.AlterTableStmt, t *model.Table) {
 		}
 		// checkAlterTableTargets has refused a column the table does not
 		// declare, so the lookup fails only on a partition child, which
-		// declares none.
+		// declares none, or on an ignored table, which is not checked.
 		col, ok := t.Columns.GetOk(cmd.Name)
 		if !ok {
 			continue

@@ -91,7 +91,7 @@ func applyAlterTableTriggerState(as *pg_query.AlterTableStmt, t *model.Table) {
 			continue
 		}
 		// checkAlterTableTargets has refused a trigger the table does not
-		// declare.
+		// declare, unless the table is ignored and so not checked.
 		if trg, ok := t.Triggers.GetOk(cmd.Name); ok {
 			trg.State = state
 		}
