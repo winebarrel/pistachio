@@ -3,7 +3,9 @@ package pistachio
 import (
 	"strings"
 
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -51,10 +53,119 @@ func remapQualifiedName(name string, mapSchema func(string) string) string {
 	return model.Ident(mapped) + "." + parts[1]
 }
 
-// remapColumns rewrites the schema in each column's type.
+// remapDefaultExpr rewrites the schema in a column default: the name of a
+// function it calls, the type of a cast, and the relation a reg* literal
+// names, which is how nextval('myschema.seq'::regclass) carries one. The
+// expression is parsed for it, since a prefix substitution over the text
+// would also rewrite a string literal that happens to start the same way. An
+// expression that names no mapped schema, or does not parse, is returned as
+// it was.
+func remapDefaultExpr(expr string, mapSchema func(string) string) string {
+	result, target, err := pgast.ParseExpr(expr)
+	if err != nil {
+		return expr
+	}
+
+	remapName := func(names []*pg_query.Node) bool {
+		if len(names) != 2 {
+			return false
+		}
+		s := names[0].GetString_()
+		if s == nil {
+			return false
+		}
+		mapped := mapSchema(s.Sval)
+		if mapped == s.Sval {
+			return false
+		}
+		s.Sval = mapped
+		return true
+	}
+
+	changed := false
+	pgast.Walk(target.Val, pgast.WalkOptions{}, func(_ pgast.Ctx, node *pg_query.Node) *pg_query.Node {
+		switch n := node.Node.(type) {
+		case *pg_query.Node_FuncCall:
+			if remapName(n.FuncCall.Funcname) {
+				changed = true
+			}
+			if lit := sequenceLiteral(n.FuncCall); lit != nil {
+				if mapped := remapQualifiedName(lit.Sval, mapSchema); mapped != lit.Sval {
+					lit.Sval = mapped
+					changed = true
+				}
+			}
+		case *pg_query.Node_TypeCast:
+			tn := n.TypeCast.TypeName
+			if tn == nil {
+				break
+			}
+			if remapName(tn.Names) {
+				changed = true
+			}
+			if lit := regLiteral(n.TypeCast); lit != nil {
+				if mapped := remapQualifiedName(lit.Sval, mapSchema); mapped != lit.Sval {
+					lit.Sval = mapped
+					changed = true
+				}
+			}
+		}
+		return node
+	})
+	if !changed {
+		return expr
+	}
+
+	sql, err := pg_query.Deparse(result)
+	if err != nil {
+		return expr
+	}
+	return strings.TrimPrefix(sql, "SELECT ")
+}
+
+// sequenceLiteral returns the bare string literal a sequence function is
+// called with, as in nextval('myschema.seq'), or nil. A schema file writes the
+// call that way; the catalog writes the literal cast to regclass, which
+// regLiteral reads.
+func sequenceLiteral(fc *pg_query.FuncCall) *pg_query.String {
+	if len(fc.Funcname) == 0 || len(fc.Args) == 0 {
+		return nil
+	}
+	switch fc.Funcname[len(fc.Funcname)-1].GetString_().GetSval() {
+	case "nextval", "currval", "setval":
+	default:
+		return nil
+	}
+	c := fc.Args[0].GetAConst()
+	if c == nil {
+		return nil
+	}
+	return c.GetSval()
+}
+
+// regLiteral returns the string literal a cast to a reg* type (regclass,
+// regtype, regproc and the rest) is applied to, or nil for any other cast.
+// Such a literal names a catalog object, schema-qualified or not.
+func regLiteral(tc *pg_query.TypeCast) *pg_query.String {
+	names := tc.TypeName.Names
+	if len(names) == 0 || !strings.HasPrefix(names[len(names)-1].GetString_().GetSval(), "reg") {
+		return nil
+	}
+	c := tc.Arg.GetAConst()
+	if c == nil {
+		return nil
+	}
+	return c.GetSval()
+}
+
+// remapColumns rewrites the schema in each column's type and default.
 func remapColumns(t *model.Table, mapSchema func(string) string) {
 	for _, col := range t.Columns.CollectValues() {
 		col.TypeName = remapQualifiedName(col.TypeName, mapSchema)
+		if col.Default != nil {
+			def := remapDefaultExpr(*col.Default, mapSchema)
+			col.Default = &def
+		}
 	}
 	if t.PartitionOf != nil {
 		parent := remapQualifiedName(*t.PartitionOf, mapSchema)

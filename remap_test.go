@@ -271,6 +271,112 @@ CREATE TABLE public.child PARTITION OF public.parent FOR VALUES FROM (0) TO (10)
 	assert.Empty(t, strings.TrimSpace(got.SQL))
 }
 
+// A column default names the schema in a sequence, a function or a cast, and
+// the map reaches those, but not a string literal that merely looks like one.
+func TestDump_WithSchemaMap_ColumnDefault(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('a', 'b');
+CREATE SEQUENCE myschema.seq1;
+CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
+CREATE TABLE myschema.t (
+    n integer DEFAULT nextval('myschema.seq1'),
+    s myschema.status DEFAULT 'a'::myschema.status,
+    g text DEFAULT myschema.gen(),
+    host text DEFAULT 'myschema.example.com'
+);
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "DEFAULT nextval('public.seq1'::regclass)")
+	assert.Contains(t, output, "DEFAULT 'a'::public.status")
+	assert.Contains(t, output, "DEFAULT public.gen()")
+	assert.Contains(t, output, "DEFAULT 'myschema.example.com'::text")
+}
+
+func TestPlan_WithSchemaMap_ColumnDefault(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('a', 'b');
+CREATE SEQUENCE myschema.seq1;
+CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
+CREATE TABLE myschema.t (
+    n integer DEFAULT nextval('myschema.seq1'),
+    s myschema.status DEFAULT 'a'::myschema.status,
+    g text DEFAULT myschema.gen(),
+    host text DEFAULT 'myschema.example.com'
+);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TYPE public.status AS ENUM ('a', 'b');
+CREATE SEQUENCE public.seq1;
+CREATE TABLE public.t (
+    n integer DEFAULT nextval('public.seq1'),
+    s public.status DEFAULT 'a'::public.status,
+    g text DEFAULT public.gen(),
+    host text DEFAULT 'myschema.example.com'
+);
+`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Empty(t, strings.TrimSpace(got.SQL))
+}
+
+func TestRemapDefaultExpr(t *testing.T) {
+	mapSchema := func(s string) string {
+		if s == "myschema" {
+			return "public"
+		}
+		return s
+	}
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"sequence literal cast to regclass", "nextval('myschema.seq'::regclass)", "nextval('public.seq'::regclass)"},
+		{"bare sequence literal", "nextval('myschema.seq')", "nextval('public.seq')"},
+		{"quoted schema in a sequence literal", `nextval('"My Schema".seq'::regclass)`, `nextval('"My Schema".seq'::regclass)`},
+		{"function name", "myschema.gen()", "public.gen()"},
+		{"cast type", "'a'::myschema.status", "'a'::public.status"},
+		{"regtype literal", "'myschema.status'::regtype", "'public.status'::regtype"},
+		{"string literal is left alone", "'myschema.example.com'::text", "'myschema.example.com'::text"},
+		{"other schema is left alone", "other.gen()", "other.gen()"},
+		{"schema ending in the mapped name is left alone", "mymyschema.gen()", "mymyschema.gen()"},
+		{"unqualified call is left alone", "now()", "now()"},
+		{"unparseable expression is left alone", "not an expression (", "not an expression ("},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, remapDefaultExpr(tt.in, mapSchema))
+		})
+	}
+}
+
 func TestDump_WithSchemaMap_Sequence(t *testing.T) {
 	ctx := context.Background()
 
