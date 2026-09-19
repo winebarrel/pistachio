@@ -33,6 +33,35 @@ func buildReverseDefReplacer(schemaMap map[string]string) *strings.Replacer {
 	return buildDefReplacer(reversed)
 }
 
+// remapQualifiedName rewrites the schema of a schema-qualified name, a column
+// type or a partition parent, and leaves an unqualified one alone. The name is
+// split the way an identifier is read, so a type modifier or an array suffix
+// stays with the type, and a schema whose name ends in the mapped one is not
+// touched the way a prefix substitution would touch it.
+func remapQualifiedName(name string, mapSchema func(string) string) string {
+	parts := model.SplitQualifiedName(name)
+	if len(parts) != 2 {
+		return name
+	}
+	schema := model.UnquoteIdent(parts[0])
+	mapped := mapSchema(schema)
+	if mapped == schema {
+		return name
+	}
+	return model.Ident(mapped) + "." + parts[1]
+}
+
+// remapColumns rewrites the schema in each column's type.
+func remapColumns(t *model.Table, mapSchema func(string) string) {
+	for _, col := range t.Columns.CollectValues() {
+		col.TypeName = remapQualifiedName(col.TypeName, mapSchema)
+	}
+	if t.PartitionOf != nil {
+		parent := remapQualifiedName(*t.PartitionOf, mapSchema)
+		t.PartitionOf = &parent
+	}
+}
+
 func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Table]) *orderedmap.Map[string, *model.Table] {
 	if len(client.SchemaMap) == 0 {
 		return tables
@@ -43,6 +72,7 @@ func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Ta
 
 	for _, t := range tables.CollectValues() {
 		t.Schema = client.RemapSchema(t.Schema)
+		remapColumns(t, client.RemapSchema)
 
 		for _, idx := range t.Indexes.CollectValues() {
 			idx.Schema = client.RemapSchema(idx.Schema)
@@ -133,6 +163,7 @@ func (client *Client) reverseRemapTableSchemas(tables *orderedmap.Map[string, *m
 
 	for _, t := range tables.CollectValues() {
 		t.Schema = client.ReverseRemapSchema(t.Schema)
+		remapColumns(t, client.ReverseRemapSchema)
 
 		for _, idx := range t.Indexes.CollectValues() {
 			idx.Schema = client.ReverseRemapSchema(idx.Schema)

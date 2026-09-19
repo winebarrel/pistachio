@@ -210,6 +210,67 @@ CREATE VIEW myschema.active_users AS SELECT id, name FROM myschema.users;
 	assert.Contains(t, output, "FROM public.users")
 }
 
+// A column's type and a partition's parent name the schema too, so the map has
+// to reach them: a dump that writes public.child PARTITION OF myschema.parent
+// does not load.
+func TestDump_WithSchemaMap_ColumnTypeAndPartition(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('a', 'b');
+CREATE TABLE myschema.parent (r integer, s myschema.status, tags myschema.status[]) PARTITION BY RANGE (r);
+CREATE TABLE myschema.child PARTITION OF myschema.parent FOR VALUES FROM (0) TO (10);
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "s public.status,")
+	assert.Contains(t, output, "tags public.status[]")
+	assert.Contains(t, output, "CREATE TABLE public.child PARTITION OF public.parent")
+	assert.NotContains(t, output, "myschema.")
+}
+
+// The desired side written against public has to come back as myschema in a
+// column type and a partition parent, or the plan retypes every column of a
+// mapped type on every run.
+func TestPlan_WithSchemaMap_ColumnTypeAndPartition(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TYPE myschema.status AS ENUM ('a', 'b');
+CREATE TABLE myschema.parent (r integer, s myschema.status, tags myschema.status[]) PARTITION BY RANGE (r);
+CREATE TABLE myschema.child PARTITION OF myschema.parent FOR VALUES FROM (0) TO (10);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TYPE public.status AS ENUM ('a', 'b');
+CREATE TABLE public.parent (r integer, s public.status, tags public.status[]) PARTITION BY RANGE (r);
+CREATE TABLE public.child PARTITION OF public.parent FOR VALUES FROM (0) TO (10);
+`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Empty(t, strings.TrimSpace(got.SQL))
+}
+
 func TestDump_WithSchemaMap_Sequence(t *testing.T) {
 	ctx := context.Background()
 
