@@ -619,15 +619,17 @@ Origin: routine support.
 
 ## Schema mapping rewrites a string literal that starts with the schema name
 
-`-m old=new` rewrites the definitions of indexes, keys, policies, triggers and
-views as text, replacing `old.` where a name can start. A string literal that
-begins the same way is rewritten too: `WHERE host = 'old.example.com'` in a
-view comes out as `'new.example.com'`. A column default is parsed instead, so
-its literals are left alone.
+`-m old=new` rewrites the definitions of indexes, constraints, keys, policies,
+triggers and views as text, replacing `old.` where a name can start. A string
+literal that begins the same way is rewritten too: `WHERE host =
+'old.example.com'` in a view comes out as `'new.example.com'`. A column or
+domain default and a routine parameter default are parsed instead: a literal
+that names a relation or a type, `nextval('old.seq')` or `'old.t'::regclass`,
+is rewritten, and any other literal is left alone.
 
-Telling the literal apart needs the definition parsed, which the column
-default already is. Doing the same for the other definitions means rewriting
-the relation, function and type names in five statement kinds.
+Telling the literal apart needs the definition parsed, which a default already
+is. Doing the same for the other definitions means rewriting the relation,
+function and type names in six statement kinds.
 
 Priority: low.
 

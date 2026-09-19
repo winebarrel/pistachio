@@ -386,6 +386,81 @@ CREATE TABLE public.t (
 	assert.Empty(t, strings.TrimSpace(got.SQL))
 }
 
+// A collation, a domain's default and collation, and a constraint definition
+// name the schema too.
+func TestDump_WithSchemaMap_CollationAndDomain(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE COLLATION myschema.mycoll (locale = 'C');
+CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
+CREATE FUNCTION myschema.ok(text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$ SELECT true $$;
+CREATE DOMAIN myschema.d AS text COLLATE myschema.mycoll DEFAULT myschema.gen() CONSTRAINT d_ok CHECK (myschema.ok(VALUE));
+CREATE TABLE myschema.t (
+    a text COLLATE myschema.mycoll,
+    b myschema.d,
+    CONSTRAINT t_ok CHECK (myschema.ok(a))
+);
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "a text COLLATE public.mycoll")
+	assert.Contains(t, output, "CREATE DOMAIN public.d AS text")
+	assert.Contains(t, output, "COLLATE public.mycoll")
+	assert.Contains(t, output, "DEFAULT public.gen()")
+	assert.Contains(t, output, "CONSTRAINT d_ok CHECK (public.ok(VALUE))")
+	assert.Contains(t, output, "CONSTRAINT t_ok CHECK (public.ok(a))")
+	assert.NotContains(t, output, "myschema.")
+}
+
+func TestPlan_WithSchemaMap_CollationAndDomain(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE COLLATION myschema.mycoll (locale = 'C');
+CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
+CREATE FUNCTION myschema.ok(text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$ SELECT true $$;
+CREATE DOMAIN myschema.d AS text COLLATE myschema.mycoll DEFAULT myschema.gen() CONSTRAINT d_ok CHECK (myschema.ok(VALUE));
+CREATE TABLE myschema.t (
+    a text COLLATE myschema.mycoll,
+    b myschema.d,
+    CONSTRAINT t_ok CHECK (myschema.ok(a))
+);
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE DOMAIN public.d AS text COLLATE public.mycoll DEFAULT public.gen() CONSTRAINT d_ok CHECK (public.ok(VALUE));
+CREATE TABLE public.t (
+    a text COLLATE public.mycoll,
+    b public.d,
+    CONSTRAINT t_ok CHECK (public.ok(a))
+);
+`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Empty(t, strings.TrimSpace(got.SQL))
+}
+
 func TestRemapQualifiedName(t *testing.T) {
 	mapSchema := func(s string) string {
 		if s == "myschema" || s == "My Schema" {
@@ -434,6 +509,10 @@ func TestRemapDefaultExpr(t *testing.T) {
 		{"function name", "myschema.gen()", "public.gen()"},
 		{"cast type", "'a'::myschema.status", "'a'::public.status"},
 		{"regtype literal", "'myschema.status'::regtype", "'public.status'::regtype"},
+		{"regclass qualified with pg_catalog", "'myschema.seq'::pg_catalog.regclass", "'public.seq'::pg_catalog.regclass"},
+		{"sequence function qualified with pg_catalog", "pg_catalog.nextval('myschema.seq')", "pg_catalog.nextval('public.seq')"},
+		{"user function named nextval keeps its argument", "myschema.nextval('myschema.label')", "public.nextval('myschema.label')"},
+		{"user type starting with reg keeps its literal", "'myschema.x'::myschema.registry_code", "'myschema.x'::public.registry_code"},
 		{"string literal is left alone", "'myschema.example.com'::text", "'myschema.example.com'::text"},
 		{"literal in another function is left alone", "upper('myschema.x')", "upper('myschema.x')"},
 		{"regclass over a call is left alone", "nextval(pg_get_serial_sequence('myschema.t', 'id')::regclass)", "nextval(pg_get_serial_sequence('myschema.t', 'id')::regclass)"},

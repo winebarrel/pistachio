@@ -47,6 +47,9 @@ func buildDefReplacer(schemaMap map[string]string) *defReplacer {
 		froms[i] = regexp.QuoteMeta(from)
 	}
 
+	// A double quote is not a boundary either: a schema literally named
+	// staging.x is written "staging.x".t, and the unquoted branch must not
+	// find staging. inside it.
 	r.re = regexp.MustCompile(`(^|[^A-Za-z0-9_"])(` + strings.Join(froms, "|") + `)\.`)
 	return r
 }
@@ -152,12 +155,7 @@ func remapDefaultExpr(expr string, mapSchema func(string) string) string {
 // call that way; the catalog writes the literal cast to regclass, which
 // regLiteral reads.
 func sequenceLiteral(fc *pg_query.FuncCall) *pg_query.String {
-	if len(fc.Funcname) == 0 || len(fc.Args) == 0 {
-		return nil
-	}
-	switch fc.Funcname[len(fc.Funcname)-1].GetString_().GetSval() {
-	case "nextval", "currval", "setval":
-	default:
+	if !builtinName(fc.Funcname, "nextval", "currval", "setval") || len(fc.Args) == 0 {
 		return nil
 	}
 	c := fc.Args[0].GetAConst()
@@ -167,12 +165,17 @@ func sequenceLiteral(fc *pg_query.FuncCall) *pg_query.String {
 	return c.GetSval()
 }
 
-// regLiteral returns the string literal a cast to a reg* type (regclass,
-// regtype, regproc and the rest) is applied to, or nil for any other cast.
-// Such a literal names a catalog object, schema-qualified or not.
+// regTypes are the object identifier types. A literal cast to one names a
+// catalog object, schema-qualified or not.
+var regTypes = []string{
+	"regclass", "regcollation", "regconfig", "regdictionary", "regnamespace",
+	"regoper", "regoperator", "regproc", "regprocedure", "regrole", "regtype",
+}
+
+// regLiteral returns the string literal a cast to an object identifier type
+// is applied to, or nil for any other cast.
 func regLiteral(tc *pg_query.TypeCast) *pg_query.String {
-	names := tc.GetTypeName().GetNames()
-	if len(names) == 0 || !strings.HasPrefix(names[len(names)-1].GetString_().GetSval(), "reg") {
+	if !builtinName(tc.GetTypeName().GetNames(), regTypes...) {
 		return nil
 	}
 	c := tc.Arg.GetAConst()
@@ -182,19 +185,62 @@ func regLiteral(tc *pg_query.TypeCast) *pg_query.String {
 	return c.GetSval()
 }
 
-// remapColumns rewrites the schema in each column's type and default.
-func remapColumns(t *model.Table, mapSchema func(string) string) {
+// builtinName reports whether a function or type name is one of the given
+// pg_catalog names, written bare or qualified with pg_catalog. A user-defined
+// object of the same name in another schema is not one, so its argument is
+// left alone.
+func builtinName(names []*pg_query.Node, candidates ...string) bool {
+	switch len(names) {
+	case 1:
+	case 2:
+		if names[0].GetString_().GetSval() != "pg_catalog" {
+			return false
+		}
+	default:
+		return false
+	}
+	return slices.Contains(candidates, names[len(names)-1].GetString_().GetSval())
+}
+
+// remapColumns rewrites the schema in each column's type, collation and
+// default, in the partition parent, and in the constraint definitions.
+func remapColumns(t *model.Table, mapSchema func(string) string, replacer *defReplacer) {
 	for _, col := range t.Columns.CollectValues() {
 		col.TypeName = remapQualifiedName(col.TypeName, mapSchema)
-		if col.Default != nil {
-			def := remapDefaultExpr(*col.Default, mapSchema)
-			col.Default = &def
-		}
+		col.Collation = remapQualifiedNamePtr(col.Collation, mapSchema)
+		col.Default = remapDefaultExprPtr(col.Default, mapSchema)
 	}
-	if t.PartitionOf != nil {
-		parent := remapQualifiedName(*t.PartitionOf, mapSchema)
-		t.PartitionOf = &parent
+	t.PartitionOf = remapQualifiedNamePtr(t.PartitionOf, mapSchema)
+	for _, con := range t.Constraints.CollectValues() {
+		con.Definition = replacer.Replace(con.Definition)
 	}
+}
+
+// remapDomain rewrites the schema in a domain's base type, collation and
+// default, and in its constraint definitions.
+func remapDomain(d *model.Domain, mapSchema func(string) string, replacer *defReplacer) {
+	d.BaseType = remapQualifiedName(d.BaseType, mapSchema)
+	d.Collation = remapQualifiedNamePtr(d.Collation, mapSchema)
+	d.Default = remapDefaultExprPtr(d.Default, mapSchema)
+	for _, con := range d.Constraints {
+		con.Definition = replacer.Replace(con.Definition)
+	}
+}
+
+func remapQualifiedNamePtr(name *string, mapSchema func(string) string) *string {
+	if name == nil {
+		return nil
+	}
+	mapped := remapQualifiedName(*name, mapSchema)
+	return &mapped
+}
+
+func remapDefaultExprPtr(expr *string, mapSchema func(string) string) *string {
+	if expr == nil {
+		return nil
+	}
+	mapped := remapDefaultExpr(*expr, mapSchema)
+	return &mapped
 }
 
 func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Table]) *orderedmap.Map[string, *model.Table] {
@@ -207,7 +253,7 @@ func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Ta
 
 	for _, t := range tables.CollectValues() {
 		t.Schema = client.RemapSchema(t.Schema)
-		remapColumns(t, client.RemapSchema)
+		remapColumns(t, client.RemapSchema, replacer)
 
 		for _, idx := range t.Indexes.CollectValues() {
 			idx.Schema = client.RemapSchema(idx.Schema)
@@ -298,7 +344,7 @@ func (client *Client) reverseRemapTableSchemas(tables *orderedmap.Map[string, *m
 
 	for _, t := range tables.CollectValues() {
 		t.Schema = client.ReverseRemapSchema(t.Schema)
-		remapColumns(t, client.ReverseRemapSchema)
+		remapColumns(t, client.ReverseRemapSchema, replacer)
 
 		for _, idx := range t.Indexes.CollectValues() {
 			idx.Schema = client.ReverseRemapSchema(idx.Schema)
@@ -406,11 +452,12 @@ func (client *Client) remapDomainSchemas(domains *orderedmap.Map[string, *model.
 		return domains
 	}
 
+	replacer := buildDefReplacer(client.SchemaMap)
 	remapped := orderedmap.New[string, *model.Domain]()
 
 	for _, d := range domains.CollectValues() {
 		d.Schema = client.RemapSchema(d.Schema)
-		d.BaseType = remapQualifiedName(d.BaseType, client.RemapSchema)
+		remapDomain(d, client.RemapSchema, replacer)
 		remapped.Set(d.FQDN(), d)
 	}
 
@@ -422,11 +469,12 @@ func (client *Client) reverseRemapDomainSchemas(domains *orderedmap.Map[string, 
 		return domains
 	}
 
+	replacer := buildReverseDefReplacer(client.SchemaMap)
 	remapped := orderedmap.New[string, *model.Domain]()
 
 	for _, d := range domains.CollectValues() {
 		d.Schema = client.ReverseRemapSchema(d.Schema)
-		d.BaseType = remapQualifiedName(d.BaseType, client.ReverseRemapSchema)
+		remapDomain(d, client.ReverseRemapSchema, replacer)
 		remapped.Set(d.FQDN(), d)
 	}
 
