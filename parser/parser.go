@@ -1102,13 +1102,13 @@ func autoNameIndex(is *pg_query.IndexStmt) string {
 	return makeObjectName(is.Relation.Relname, strings.Join(chooseIndexColumnNames(is), "_"), "idx")
 }
 
-// constraintKeyCols returns the names PostgreSQL builds an unnamed constraint's
+// constraintNameParts returns the names PostgreSQL builds an unnamed constraint's
 // name from, in order. The constraint is backed by an index, and the name comes
 // from that index's elements: the key columns, which Keys holds for PRIMARY
 // KEY and UNIQUE and Exclusions for EXCLUDE, followed by the INCLUDE columns.
 // An element that is an expression is named the way an index element is, so
 // lower(a) reads lower and a repeated name takes a number.
-func constraintKeyCols(con *pg_query.Constraint) []string {
+func constraintNameParts(con *pg_query.Constraint) []string {
 	var elems []*pg_query.Node
 	for _, k := range con.Keys {
 		if s := k.GetString_(); s != nil {
@@ -1258,7 +1258,7 @@ func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Co
 			// the constraint after the index.
 			con.Conname = con.Indexname
 		} else {
-			cols := constraintKeyCols(con)
+			cols := constraintNameParts(con)
 			if con.Contype == pg_query.ConstrType_CONSTR_CHECK {
 				cols = checkExprCols(con.RawExpr)
 			}
