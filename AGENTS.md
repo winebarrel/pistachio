@@ -12,6 +12,8 @@ Drift that appears only with a desired schema written some other way is low prio
 
 `CREATE EXTENSION`, `CREATE ROLE` and `GRANT` are out of scope. They sit at a different privilege layer, so manage them where the rest of the infrastructure is managed, Terraform for example.
 
+`--pre-sql` running DDL that changes what the plan sees is not a case to design for. The plan is computed against the schema as it is.
+
 Avoid normalization that makes the diff complex.
 
 Do not emit DDL a change does not need, and never emit it implicitly. Low load on the database comes before a simple interface: a directive the user writes beats an inference.

@@ -60,7 +60,7 @@ pista: error: cannot drop public.staff: materialized view public.staff_count, vi
 
 Drops run deepest first, so a dependent the same plan drops is no obstacle. A chain of views that all change shape goes through as it is, and so does a view whose dependent the desired schema no longer holds. Anything else has to be moved in a run of its own.
 
-Dependents come from the catalog rather than the schema file. A view that `--include` / `--exclude` hides, or one outside `-n`, blocks the drop just the same, and so does a routine with a SQL body.
+Dependents come from the catalog rather than the schema file. A view that `--include` / `--exclude` hides, or one outside `-n`, blocks the drop just the same. So do a routine with a SQL body, a rule and a policy, each named the way PostgreSQL names it.
 
 ## Table inheritance
 

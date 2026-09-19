@@ -2,6 +2,7 @@ package pistachio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -356,6 +357,9 @@ func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []st
 		alsoDropped[k] = true
 	}
 
+	// Every blocked view is reported, not the first one, so one run says
+	// everything that has to move rather than one view per run.
+	var msgs []string
 	for _, k := range dropped {
 		var blockers []string
 		for _, dep := range dependents[k] {
@@ -371,7 +375,11 @@ func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []st
 		if len(blockers) > 1 {
 			verb = "depend"
 		}
-		return fmt.Errorf("cannot drop %s: %s %s on it", k, strings.Join(blockers, ", "), verb)
+		msgs = append(msgs, fmt.Sprintf("cannot drop %s: %s %s on it", k, strings.Join(blockers, ", "), verb))
+	}
+
+	if len(msgs) > 0 {
+		return errors.New(strings.Join(msgs, "; "))
 	}
 
 	return nil

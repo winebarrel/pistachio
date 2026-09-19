@@ -15,13 +15,16 @@ type Dependent struct {
 	// Kind is what PostgreSQL calls the object: "view", "materialized view",
 	// "function", and so on.
 	Kind string
-	// Name is the object's identity, schema-qualified. A relation is written
-	// the way the rest of the model writes one; anything else is written the
-	// way PostgreSQL identifies it, so a function carries its argument types.
+	// Name is the object's identity, schema-qualified. A view or materialized
+	// view is written the way the rest of the model writes a name; anything
+	// else the way PostgreSQL identifies it, so a function carries its
+	// argument types and a rule the relation it sits on.
 	Name string
 	// Relation is Name when the dependent is a view or a materialized view,
 	// and "" otherwise. A plan that drops that relation too is not blocked by
-	// it, since the drops run deepest first.
+	// it, since the drops run deepest first. A rule on a table records the
+	// dependency a view does, so this stays empty for one: the field is what
+	// the caller matches against the views it drops.
 	Relation string
 }
 
@@ -41,44 +44,35 @@ func (d Dependent) String() string {
 // The rewrite rule a view holds over itself is left out. Every view depends on
 // its own columns that way, and the rule goes with the view.
 func (c *Catalog) ViewDependents(ctx context.Context) (map[string][]Dependent, error) {
+	// A view records its dependency through the rewrite rule it holds, so the
+	// rule is resolved back to the relation it sits on and the dependent is
+	// named as that relation. A rule on a plain table records the same kind of
+	// row, and falls through to pg_identify_object with the rest, which names
+	// it the way PostgreSQL's own error does.
+	//
+	// DISTINCT because a dependent reading several columns of the target has a
+	// pg_depend row per column.
 	q := `
-		SELECT
+		SELECT DISTINCT
 			tn.nspname,
 			t.relname,
-			CASE dc.relkind WHEN 'm' THEN 'materialized view' ELSE 'view' END,
-			dn.nspname,
-			dc.relname
-		FROM
-			pg_catalog.pg_depend d
-			JOIN pg_catalog.pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_catalog.pg_rewrite'::regclass
-			JOIN pg_catalog.pg_class dc ON dc.oid = r.ev_class
-			JOIN pg_catalog.pg_namespace dn ON dn.oid = dc.relnamespace
-			JOIN pg_catalog.pg_class t ON t.oid = d.refobjid
-			JOIN pg_catalog.pg_namespace tn ON tn.oid = t.relnamespace
-		WHERE
-			d.refclassid = 'pg_catalog.pg_class'::regclass
-			AND d.deptype = 'n'
-			AND t.relkind IN ('v', 'm')
-			AND tn.nspname = ANY(@schemas)
-			AND r.ev_class <> d.refobjid
-		UNION
-		SELECT
-			tn.nspname,
-			t.relname,
-			(oi).type,
-			NULL,
-			(oi).identity
+			CASE dc.relkind WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view' ELSE (oi).type END,
+			CASE WHEN dc.relkind IN ('v', 'm') THEN dn.nspname END,
+			CASE WHEN dc.relkind IN ('v', 'm') THEN dc.relname ELSE (oi).identity END
 		FROM
 			pg_catalog.pg_depend d
 			JOIN pg_catalog.pg_class t ON t.oid = d.refobjid
 			JOIN pg_catalog.pg_namespace tn ON tn.oid = t.relnamespace
 			CROSS JOIN LATERAL pg_catalog.pg_identify_object(d.classid, d.objid, 0) oi
+			LEFT JOIN pg_catalog.pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_catalog.pg_rewrite'::regclass
+			LEFT JOIN pg_catalog.pg_class dc ON dc.oid = r.ev_class
+			LEFT JOIN pg_catalog.pg_namespace dn ON dn.oid = dc.relnamespace
 		WHERE
 			d.refclassid = 'pg_catalog.pg_class'::regclass
 			AND d.deptype = 'n'
 			AND t.relkind IN ('v', 'm')
 			AND tn.nspname = ANY(@schemas)
-			AND d.classid <> 'pg_catalog.pg_rewrite'::regclass
+			AND (r.oid IS NULL OR r.ev_class <> d.refobjid)
 		ORDER BY
 			1, 2, 3, 4, 5
 	`

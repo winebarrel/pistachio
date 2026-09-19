@@ -1,0 +1,17 @@
+# A rule on a plain table and a policy on another record the same dependency a
+# view does. Neither is a relation the plan can drop, so both are named the way
+# PostgreSQL names them rather than as the view they are not.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (id integer, n text);
+  CREATE VIEW public.v AS SELECT id, n FROM public.t;
+  CREATE TABLE public.log (id integer);
+  CREATE RULE r AS ON INSERT TO public.log DO INSTEAD SELECT id FROM public.v;
+  CREATE TABLE public.secured (id integer);
+  CREATE POLICY p ON public.secured USING (id IN (SELECT id FROM public.v));
+desired: |
+  CREATE TABLE public.t (id integer, n text);
+  CREATE TABLE public.log (id integer);
+  CREATE TABLE public.secured (id integer);
+error: "cannot drop public.v: policy p on public.secured, rule r on public.log depend on it"

@@ -81,6 +81,32 @@ func TestViewDependents(t *testing.T) {
 		}, dependents["public.v"])
 	})
 
+	// A rule on a plain table records the dependency a view does, through the
+	// same rewrite rule, so it is named as a rule rather than as the table it
+	// sits on. A policy comes through the generic branch.
+	t.Run("rule and policy", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.t (id integer, n text);
+			CREATE VIEW public.v AS SELECT id, n FROM public.t;
+			CREATE TABLE public.log (id integer);
+			CREATE RULE r AS ON INSERT TO public.log DO INSTEAD SELECT id FROM public.v;
+			CREATE TABLE public.secured (id integer);
+			CREATE POLICY p ON public.secured USING (id IN (SELECT id FROM public.v));
+		`)
+
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		dependents, err := cat.ViewDependents(ctx)
+		require.NoError(t, err)
+
+		// Relation stays empty for both: neither is a view the plan can drop
+		// to get the target out from under them.
+		assert.Equal(t, []catalog.Dependent{
+			{Kind: "policy", Name: "p on public.secured"},
+			{Kind: "rule", Name: "r on public.log"},
+		}, dependents["public.v"])
+	})
+
 	// A table is not read here: the check is about the relations the view
 	// diff drops.
 	t.Run("a table is not a target", func(t *testing.T) {
