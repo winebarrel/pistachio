@@ -1552,8 +1552,8 @@ CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = '
 
 	var out bytes.Buffer
 	_, err := client.Apply(ctx, &ApplyOptions{
-		DropPolicy: DropPolicy{AllowDrop: []string{"all"}},
-		Files:      []string{desiredFile},
+		AllowDrop: []string{"all"},
+		Files:     []string{desiredFile},
 	}, &out)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot drop public.staff: view public.eng_staff depends on it")
