@@ -489,10 +489,16 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				if err := setUnique(t.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
-			} else if v, ok := views.GetOk(fqtn); ok && v.Materialized {
+			} else if v, ok := views.GetOk(fqtn); ok {
+				// PostgreSQL refuses an index on a plain view.
+				if !v.Materialized {
+					return nil, &locatedError{msg: "CREATE INDEX " + idx.Name + ": " + fqtn + " is a view, which cannot hold an index", offset: int(stmtOffset)}
+				}
 				if err := setUnique(v.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
+			} else {
+				return nil, undeclared("CREATE INDEX "+idx.Name, "table or materialized view", fqtn, stmtOffset)
 			}
 
 		case node.GetAlterTableStmt() != nil:
@@ -520,8 +526,12 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 
 			// A table marked -- pista:ignore is out of the diff, so an
-			// action dropped from it cannot mislead the plan.
+			// action dropped from it, or a trigger or column it does not
+			// declare, cannot mislead the plan.
 			if !t.Ignore {
+				if err := checkAlterTableTargets(as, t, fqtn, stmtOffset); err != nil {
+					return nil, err
+				}
 				warnIgnoredAlterTableCmds(sql, spans, rawStmt, as)
 			}
 
@@ -600,8 +610,14 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 
 		case node.GetAlterSeqStmt() != nil:
-			if err := applyAlterSeqOwnedBy(node.GetAlterSeqStmt(), defaultSchema, sequences, stmtOffset); err != nil {
+			seq, err := applyAlterSeqOwnedBy(node.GetAlterSeqStmt(), defaultSchema, sequences, stmtOffset)
+			if err != nil {
 				return nil, err
+			}
+			// A sequence marked -- pista:ignore is out of the diff, so an
+			// option dropped from it cannot mislead the plan.
+			if seq != nil && !seq.Ignore {
+				warnIgnoredAlterSeqOptions(sql, spans, rawStmt, node.GetAlterSeqStmt())
 			}
 
 		case node.GetCreateFunctionStmt() != nil:
@@ -902,6 +918,33 @@ func normalizeStorageKeyword(name string) string {
 // applyAlterTableColumnStorage reads the storage and compression actions onto
 // the columns they name. pg_dump writes both as separate statements, so a file
 // adopted from one carries them here rather than in the column definition.
+// checkAlterTableTargets refuses a trigger state naming a trigger, or a
+// storage setting naming a column, that the table does not declare before
+// the statement. It runs before anything in the statement is applied or
+// warned about. The ALL and USER trigger forms are subtypes of their own and
+// name no trigger. A partition child declares no columns of its own, so its
+// storage settings are not checked; dump writes none, pg_dump may.
+func checkAlterTableTargets(as *pg_query.AlterTableStmt, t *model.Table, fqtn string, offset int32) error {
+	for _, cmdNode := range as.Cmds {
+		cmd := cmdNode.GetAlterTableCmd()
+		if cmd == nil {
+			continue
+		}
+		switch cmd.Subtype {
+		case pg_query.AlterTableType_AT_EnableTrig, pg_query.AlterTableType_AT_DisableTrig,
+			pg_query.AlterTableType_AT_EnableAlwaysTrig, pg_query.AlterTableType_AT_EnableReplicaTrig:
+			if _, ok := t.Triggers.GetOk(cmd.Name); !ok {
+				return undeclared("ALTER TABLE "+fqtn, "trigger", cmd.Name, offset)
+			}
+		case pg_query.AlterTableType_AT_SetStorage, pg_query.AlterTableType_AT_SetCompression:
+			if _, ok := t.Columns.GetOk(cmd.Name); !ok && !t.IsPartitionChild() {
+				return undeclared("ALTER TABLE "+fqtn, "column", cmd.Name, offset)
+			}
+		}
+	}
+	return nil
+}
+
 func applyAlterTableColumnStorage(as *pg_query.AlterTableStmt, t *model.Table) {
 	for _, cmdNode := range as.Cmds {
 		cmd := cmdNode.GetAlterTableCmd()
@@ -912,8 +955,9 @@ func applyAlterTableColumnStorage(as *pg_query.AlterTableStmt, t *model.Table) {
 			cmd.Subtype != pg_query.AlterTableType_AT_SetCompression {
 			continue
 		}
-		// A setting for a column the file does not declare has nothing to sit
-		// on, the same as a trigger state on a table declared elsewhere.
+		// checkAlterTableTargets has refused a column the table does not
+		// declare, so the lookup fails only on a partition child, which
+		// declares none, or on an ignored table, which is not checked.
 		col, ok := t.Columns.GetOk(cmd.Name)
 		if !ok {
 			continue
@@ -1866,9 +1910,9 @@ func defElemInt64(de *pg_query.DefElem) (int64, bool, error) {
 // already-parsed sequence, marking it unmanaged. The catalog excludes owned
 // sequences, so without this every plan proposes creating a sequence that
 // already exists. Other ALTER SEQUENCE options are not tracked.
-func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, sequences *orderedmap.Map[string, *model.Sequence], offset int32) error {
+func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, sequences *orderedmap.Map[string, *model.Sequence], offset int32) (*model.Sequence, error) {
 	if as.Sequence == nil {
-		return nil
+		return nil, nil
 	}
 	schema := as.Sequence.Schemaname
 	if schema == "" {
@@ -1877,7 +1921,7 @@ func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, seque
 	fqn := model.Ident(schema, as.Sequence.Relname)
 	seq, ok := sequences.GetOk(fqn)
 	if !ok {
-		return undeclared("ALTER SEQUENCE "+fqn, "sequence", fqn, offset)
+		return nil, undeclared("ALTER SEQUENCE "+fqn, "sequence", fqn, offset)
 	}
 	for _, opt := range as.Options {
 		de := opt.GetDefElem()
@@ -1886,7 +1930,40 @@ func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, seque
 		}
 		seq.OwnerTable, seq.OwnerColumn = parseSeqOwnedBy(de.Arg)
 	}
-	return nil
+	return seq, nil
+}
+
+// warnIgnoredAlterSeqOptions warns about the ALTER SEQUENCE options other
+// than OWNED BY, which the parser does not read, the way
+// warnIgnoredAlterTableCmds does for an ALTER TABLE action: the warning
+// carries a statement rebuilt from the dropped options alone.
+func warnIgnoredAlterSeqOptions(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt, as *pg_query.AlterSeqStmt) {
+	var ignored []*pg_query.Node
+
+	for _, opt := range as.Options {
+		if de := opt.GetDefElem(); de != nil && de.Defname == "owned_by" {
+			continue
+		}
+		ignored = append(ignored, opt)
+	}
+
+	if len(ignored) == 0 {
+		return
+	}
+
+	warnIgnoredStmt(sql, spans, &pg_query.RawStmt{
+		Stmt: &pg_query.Node{
+			Node: &pg_query.Node_AlterSeqStmt{
+				AlterSeqStmt: &pg_query.AlterSeqStmt{
+					Sequence:  as.Sequence,
+					Options:   ignored,
+					MissingOk: as.MissingOk,
+				},
+			},
+		},
+		StmtLocation: rawStmt.StmtLocation,
+		StmtLen:      rawStmt.StmtLen,
+	})
 }
 
 // parseSeqOwnedBy extracts the owner table and column from an OWNED BY clause.

@@ -142,12 +142,18 @@ ALTER TABLE public.t ENABLE TRIGGER t_on;`
 	assert.Equal(t, model.TriggerStateDefault, triggers.Get("t_on").State)
 }
 
-// An enable state named for a trigger the file does not declare is ignored,
-// the way an index on an undeclared table is.
+// An enable state for a trigger the file does not declare before it is an
+// error. The ALL and USER forms name no trigger and are left alone.
 func TestParseSQL_Trigger_EnableStateUnknownTrigger(t *testing.T) {
 	sql := `CREATE TABLE public.t (id int);
 ALTER TABLE public.t DISABLE TRIGGER nowhere;`
-	result, err := parseSQLWithPublicSchema(sql)
+	_, err := parseSQLWithPublicSchema(sql)
+	require.Error(t, err)
+	assert.Equal(t, "ALTER TABLE public.t: trigger nowhere is not declared before it", err.Error())
+
+	result, err := parseSQLWithPublicSchema(`CREATE TABLE public.t (id int);
+ALTER TABLE public.t DISABLE TRIGGER ALL;
+ALTER TABLE public.t ENABLE TRIGGER USER;`)
 	require.NoError(t, err)
 	assert.Zero(t, result.Tables.Get("public.t").Triggers.Len())
 }

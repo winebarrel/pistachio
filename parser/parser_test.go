@@ -2087,13 +2087,6 @@ GRANT SELECT ON public.users TO readonly_role;`
 	assert.Empty(t, result.ExecuteStmts[0].CheckSQL)
 }
 
-func TestParseSQL_IndexOnUnknownTableSkipped(t *testing.T) {
-	sql := `CREATE INDEX idx_name ON public.nonexistent USING btree (name);`
-	result, err := parseSQLWithPublicSchema(sql)
-	require.NoError(t, err)
-	assert.Equal(t, 0, result.Tables.Len())
-}
-
 func TestParseSQL_ForeignKeyWithSchema(t *testing.T) {
 	sql := `CREATE TABLE myschema.users (
     id integer NOT NULL,

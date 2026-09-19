@@ -90,8 +90,8 @@ func applyAlterTableTriggerState(as *pg_query.AlterTableStmt, t *model.Table) {
 		default:
 			continue
 		}
-		// A state for a trigger the file does not declare has nothing to sit
-		// on, the same as an index on a table declared elsewhere.
+		// checkAlterTableTargets has refused a trigger the table does not
+		// declare, unless the table is ignored and so not checked.
 		if trg, ok := t.Triggers.GetOk(cmd.Name); ok {
 			trg.State = state
 		}

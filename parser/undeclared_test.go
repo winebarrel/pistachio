@@ -27,6 +27,16 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 		{"alter sequence declared later", "ALTER SEQUENCE public.s OWNED BY public.t.id;\nCREATE SEQUENCE public.s;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence if exists", "ALTER SEQUENCE IF EXISTS public.s OWNED BY public.t.id;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence other option", "ALTER SEQUENCE public.s RESTART WITH 10;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
+		{"trigger state", "CREATE TABLE public.t (id integer);\nALTER TABLE public.t DISABLE TRIGGER trg;", "ALTER TABLE public.t: trigger trg is not declared before it"},
+		{"trigger state enable", "CREATE TABLE public.t (id integer);\nALTER TABLE public.t ENABLE TRIGGER trg;", "ALTER TABLE public.t: trigger trg is not declared before it"},
+		{"trigger state enable always", "CREATE TABLE public.t (id integer);\nALTER TABLE public.t ENABLE ALWAYS TRIGGER trg;", "ALTER TABLE public.t: trigger trg is not declared before it"},
+		{"trigger state enable replica", "CREATE TABLE public.t (id integer);\nALTER TABLE public.t ENABLE REPLICA TRIGGER trg;", "ALTER TABLE public.t: trigger trg is not declared before it"},
+		{"trigger declared later", "CREATE TABLE public.t (id integer);\nALTER TABLE public.t DISABLE TRIGGER trg;\nCREATE TRIGGER trg BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION f();", "ALTER TABLE public.t: trigger trg is not declared before it"},
+		{"column storage", "CREATE TABLE public.t (id integer);\nALTER TABLE public.t ALTER COLUMN body SET STORAGE EXTERNAL;", "ALTER TABLE public.t: column body is not declared before it"},
+		{"column compression", "CREATE TABLE public.t (id integer);\nALTER TABLE public.t ALTER COLUMN body SET COMPRESSION lz4;", "ALTER TABLE public.t: column body is not declared before it"},
+		{"index", "CREATE INDEX i ON public.t (id);", "CREATE INDEX i: table or materialized view public.t is not declared before it"},
+		{"index declared later", "CREATE INDEX i ON public.t (id);\nCREATE TABLE public.t (id integer);", "CREATE INDEX i: table or materialized view public.t is not declared before it"},
+		{"index on a plain view", "CREATE VIEW public.v AS SELECT 1 AS x;\nCREATE INDEX i ON public.v (x);", "CREATE INDEX i: public.v is a view, which cannot hold an index"},
 	} {
 		_, err := parseSQLWithPublicSchema(tc.sql)
 		require.Error(t, err, tc.name)
@@ -99,6 +109,72 @@ ALTER SEQUENCE IF EXISTS public.s OWNED BY public.t.id;
 	assert.Empty(t, buf.String())
 	assert.NotNil(t, result.Tables.Get("public.t").Constraints.Get("t_chk"))
 	assert.True(t, result.Sequences.Get("public.s").Owned())
+}
+
+// The trigger and column checks run before anything in the statement is
+// applied or warned about, so a statement mixing a supported action with an
+// undeclared name fails whole.
+func TestParseSQL_AlterTableUndeclaredPartFailsWhole(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	_, err := parseSQLWithPublicSchema(`
+CREATE TABLE public.t (id integer);
+ALTER TABLE public.t ADD CONSTRAINT t_chk CHECK (id > 0), ADD COLUMN x text, DISABLE TRIGGER trg;
+`)
+	require.Error(t, err)
+	assert.Equal(t, "ALTER TABLE public.t: trigger trg is not declared before it", err.Error())
+	assert.Empty(t, buf.String())
+}
+
+// A table marked -- pista:ignore is out of the diff, so a trigger or column
+// it does not declare cannot mislead the plan and is not checked, the same
+// as an action dropped from it is not warned about.
+func TestParseSQL_AlterTableUndeclaredPartOnIgnoredTable(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	_, err := parseSQLWithPublicSchema(`
+-- pista:ignore
+CREATE TABLE public.t (id integer);
+ALTER TABLE public.t DISABLE TRIGGER trg, ALTER COLUMN body SET STORAGE MAIN, ADD COLUMN x text;
+`)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+}
+
+// A partition child declares no columns of its own, so a storage setting on
+// one is not checked against them. dump does not write it; pg_dump may.
+func TestParseSQL_AlterTableStorageOnPartitionChild(t *testing.T) {
+	_, err := parseSQLWithPublicSchema(`
+CREATE TABLE public.p (id integer, body text) PARTITION BY RANGE (id);
+CREATE TABLE public.c PARTITION OF public.p FOR VALUES FROM (0) TO (10);
+ALTER TABLE public.c ALTER COLUMN body SET STORAGE MAIN;
+`)
+	require.NoError(t, err)
+}
+
+// An ALTER SEQUENCE option other than OWNED BY is not read and warns, the way
+// an ALTER TABLE action does, with the statement rebuilt from the options
+// that were dropped. A sequence marked -- pista:ignore is out of the diff,
+// so it does not warn.
+func TestParseSQL_AlterSequenceIgnoredOptionsWarn(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	result, err := parseSQLWithPublicSchema(`
+CREATE TABLE public.t (id integer);
+CREATE SEQUENCE public.s;
+ALTER SEQUENCE public.s INCREMENT BY 2 OWNED BY public.t.id;
+ALTER SEQUENCE public.s RESTART WITH 10;
+-- pista:ignore
+CREATE SEQUENCE public.quiet;
+ALTER SEQUENCE public.quiet MINVALUE 5;
+`)
+	require.NoError(t, err)
+	assert.True(t, result.Sequences.Get("public.s").Owned())
+	assert.Equal(t, "pistachio: ignored unsupported statement: ALTER SEQUENCE public.s INCREMENT 2\n"+
+		"pistachio: ignored unsupported statement: ALTER SEQUENCE public.s RESTART 10\n", buf.String())
 }
 
 // ALTER TABLE on a declared view, materialized view or sequence is SQL
