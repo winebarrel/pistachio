@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -438,4 +440,52 @@ func TestApply_Run_ExecutedWithSkippedDrops(t *testing.T) {
 	// Apply mirrors Plan: executed SQL first, then "-- skipped:" comments.
 	assert.Less(t, addColPos, skippedPos, "executed DDL must precede skipped drop comment")
 	assert.NotContains(t, got, "-- No changes")
+}
+
+// releasingWriter frees the exclusion the moment apply writes that it is
+// waiting for it. The line has to reach the writer while apply is waiting,
+// not after: held back until the wait ends, it would never be seen and the
+// wait would run out.
+type releasingWriter struct {
+	bytes.Buffer
+	once    sync.Once
+	release func()
+}
+
+func (w *releasingWriter) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte("-- Waiting for another exclusive apply to finish")) {
+		w.once.Do(w.release)
+	}
+	return w.Buffer.Write(p)
+}
+
+func TestApply_Run_ExclusiveWaitMessageIsNotHeldBack(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	testutil.SetupDB(t, ctx, conn, "")
+
+	// The same two-key advisory lock apply takes: "Pist" and the database.
+	holder := testutil.ConnectDB(t)
+	defer holder.Close(ctx)
+	_, err := holder.Exec(ctx, "SELECT pg_advisory_lock(1349478772, hashtext(current_database()))")
+	require.NoError(t, err)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("CREATE TABLE public.users (id integer NOT NULL);"), 0o644))
+
+	w := &releasingWriter{release: func() {
+		_, err := holder.Exec(ctx, "SELECT pg_advisory_unlock(1349478772, hashtext(current_database()))")
+		assert.NoError(t, err)
+	}}
+	wait := pistachio.UnsignedDuration(5 * time.Second)
+	cmd := &command.Apply{
+		Options:      pistachio.Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}},
+		ApplyOptions: pistachio.ApplyOptions{Files: []string{desiredFile}, ExclusiveWait: &wait},
+	}
+	require.NoError(t, cmd.Run(ctx, w))
+
+	lines := strings.SplitN(w.String(), "\n", 2)
+	assert.Equal(t, "-- Waiting for another exclusive apply to finish", lines[0])
+	assert.Contains(t, w.String(), "CREATE TABLE public.users")
 }
