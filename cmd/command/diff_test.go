@@ -9,6 +9,14 @@ import (
 	"github.com/winebarrel/pistachio/cmd/command"
 )
 
+// diff carries its own -n, so it trims the names the way the global option
+// does.
+func TestDiff_AfterApply_TrimsSchemas(t *testing.T) {
+	cmd := &command.Diff{Schemas: []string{" public", "billing "}}
+	require.NoError(t, cmd.AfterApply())
+	assert.Equal(t, []string{"public", "billing"}, cmd.Schemas)
+}
+
 func TestDiff_Run(t *testing.T) {
 	current := writeSQLFile(t, "current.sql", `
 create table users (

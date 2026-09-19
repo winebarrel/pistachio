@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/winebarrel/pistachio"
 )
@@ -21,6 +22,14 @@ type Diff struct {
 	Schemas []string `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schemas to compare. Unqualified names are qualified with the first."`
 	pistachio.DiffOptions
 	Check bool `env:"PISTA_CHECK" help:"Exit with code 2 when the diff contains executable changes."`
+}
+
+// AfterApply trims each schema name the way the global option does.
+func (cmd *Diff) AfterApply() error {
+	for i, s := range cmd.Schemas {
+		cmd.Schemas[i] = strings.TrimSpace(s)
+	}
+	return nil
 }
 
 func (cmd *Diff) Run(w io.Writer) error {

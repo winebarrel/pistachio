@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Trim the whitespace around each schema name in `-n`, `$PISTA_SCHEMAS` and `schemas` in the config file, and around each side of a `-m` mapping. `-n 'public, billing'` read the second entry as ` billing`, a schema of its own, so the real one was neither read nor written, and `-m 'old=new; other=third'` mapped ` other`, which matched nothing. `-m` now also refuses an empty side, `-m 'x='`, which left the mapped objects unqualified, and two sources that differ only in whitespace.
+
 * `exclusive-wait: 0` in the config file is read as `--exclusive-wait 0` is. It failed with `cannot unmarshal number into Go value of type string`, since YAML reads a bare `0` as a number and the flag took only text.
 
 * `--schema-map` now reaches a column's type, collation and default, a partition's parent, a constraint definition, a composite attribute's collation, and a domain's base type, collation, default and constraints. `dump -m myschema=public` wrote `s myschema.status`, `DEFAULT nextval('myschema.seq1'::regclass)` and `PARTITION OF myschema.parent` under a `public` table, which does not load, and `plan` retyped such a column and re-set such a default on every run. The map also no longer rewrites a schema whose name ends in the mapped one: a foreign key to `mystaging.ref` came out as `mypublic.ref` under `-m staging=public`.

@@ -2,6 +2,7 @@ package pistachio
 
 import (
 	"fmt"
+	"maps"
 	"path"
 	"regexp"
 	"slices"
@@ -146,28 +147,48 @@ func (f *FilterOptions) ValidatePatterns() error {
 	return nil
 }
 
+// AfterApply trims each schema name, since -n 'public, billing' reaches kong
+// as ["public", " billing"] and -m 'old=new; other=third' with " other" as
+// the second source, then validates the schema map. Two sources that differ
+// only in whitespace are an error rather than one entry with either
+// destination.
 func (o *Options) AfterApply() error {
+	for i, s := range o.Schemas {
+		o.Schemas[i] = strings.TrimSpace(s)
+	}
+	if len(o.SchemaMap) > 0 {
+		trimmed := make(map[string]string, len(o.SchemaMap))
+		raw := make(map[string]string, len(o.SchemaMap))
+		for _, from := range slices.Sorted(maps.Keys(o.SchemaMap)) {
+			key := strings.TrimSpace(from)
+			if prev, ok := raw[key]; ok {
+				return fmt.Errorf("duplicate schema-map source %q: both %q and %q name it", key, prev, from)
+			}
+			raw[key] = from
+			trimmed[key] = strings.TrimSpace(o.SchemaMap[from])
+		}
+		o.SchemaMap = trimmed
+	}
 	return o.ValidateSchemaMap()
 }
 
-// ValidateSchemaMap rejects two sources mapping to one destination, which
-// would leave ReverseRemapSchema no way to pick between them. The sources are
-// walked in name order so the pair the message names is the same on every run;
-// a Go map iterates in a random one, and three sources on one destination then
-// produced a different message each time the same command was run.
+// ValidateSchemaMap rejects an empty source or destination, which model.Ident
+// would drop and leave the object unqualified, and two sources mapping to one
+// destination, which would leave ReverseRemapSchema no way to pick between
+// them. The sources are walked in name order so the pair the message names is
+// the same on every run; a Go map iterates in a random one, and three sources
+// on one destination then produced a different message each time the same
+// command was run.
 func (o *Options) ValidateSchemaMap() error {
-	if len(o.SchemaMap) <= 1 {
-		return nil
-	}
-	froms := make([]string, 0, len(o.SchemaMap))
-	for from := range o.SchemaMap {
-		froms = append(froms, from)
-	}
-	slices.Sort(froms)
-
 	seen := make(map[string]string, len(o.SchemaMap))
-	for _, from := range froms {
+	for _, from := range slices.Sorted(maps.Keys(o.SchemaMap)) {
 		to := o.SchemaMap[from]
+		if from == "" {
+			return fmt.Errorf("schema-map source for %q is empty", to)
+		}
+		if to == "" {
+			return fmt.Errorf("schema-map destination for %q is empty", from)
+		}
 		if prev, ok := seen[to]; ok {
 			return fmt.Errorf("duplicate schema-map destination %q: both %q and %q map to it", to, prev, from)
 		}

@@ -2,6 +2,7 @@ package command
 
 import (
 	"io"
+	"strings"
 
 	"github.com/winebarrel/pistachio"
 )
@@ -12,6 +13,14 @@ type Parse struct {
 	// but the parser qualifies an unqualified name with the first entry, the
 	// same way plan and apply read their input.
 	Schemas []string `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schema to qualify unqualified names with. Only the first is used."`
+}
+
+// AfterApply trims each schema name the way the global option does.
+func (cmd *Parse) AfterApply() error {
+	for i, s := range cmd.Schemas {
+		cmd.Schemas[i] = strings.TrimSpace(s)
+	}
+	return nil
 }
 
 func (cmd *Parse) Run(w io.Writer) error {

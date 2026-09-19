@@ -121,6 +121,47 @@ func TestAfterApply(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate schema-map destination")
 	})
+
+	// -n 'public, billing' reaches kong as ["public", " billing"], and the
+	// space made a schema of its own.
+	t.Run("trims schemas", func(t *testing.T) {
+		o := &Options{Schemas: []string{" public", "billing "}}
+		require.NoError(t, o.AfterApply())
+		assert.Equal(t, []string{"public", "billing"}, o.Schemas)
+	})
+
+	// -m 'old=new; other=third' reaches kong with " other" as the second
+	// source, a mapping that matches nothing.
+	t.Run("trims schema map", func(t *testing.T) {
+		o := &Options{SchemaMap: map[string]string{"old": "new ", " other": " third"}}
+		require.NoError(t, o.AfterApply())
+		assert.Equal(t, map[string]string{"old": "new", "other": "third"}, o.SchemaMap)
+	})
+
+	// The trim runs before the duplicate check, so "p" and " p" are one
+	// destination.
+	t.Run("trims schema map before validating", func(t *testing.T) {
+		o := &Options{SchemaMap: map[string]string{"x": "p", " y": " p"}}
+		err := o.AfterApply()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `both "x" and "y" map to it`)
+	})
+
+	// Two sources that differ only in whitespace would otherwise collapse
+	// into one, keeping whichever destination the map happened to yield.
+	t.Run("sources that collide after trimming", func(t *testing.T) {
+		o := &Options{SchemaMap: map[string]string{"x": "a", "x ": "b"}}
+		err := o.AfterApply()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `duplicate schema-map source "x": both "x" and "x " name it`)
+	})
+
+	t.Run("empty destination after trimming", func(t *testing.T) {
+		o := &Options{SchemaMap: map[string]string{"x": " "}}
+		err := o.AfterApply()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `schema-map destination for "x" is empty`)
+	})
 }
 
 func TestRemapSchema(t *testing.T) {
@@ -173,6 +214,22 @@ func TestValidateSchemaMap(t *testing.T) {
 			require.Error(t, err)
 			assert.Equal(t, `duplicate schema-map destination "public": both "a" and "b" map to it`, err.Error())
 		}
+	})
+
+	// model.Ident drops an empty component, so an empty side would leave an
+	// object unqualified rather than fail.
+	t.Run("empty source", func(t *testing.T) {
+		o := &Options{SchemaMap: map[string]string{"": "public"}}
+		err := o.ValidateSchemaMap()
+		require.Error(t, err)
+		assert.Equal(t, `schema-map source for "public" is empty`, err.Error())
+	})
+
+	t.Run("empty destination", func(t *testing.T) {
+		o := &Options{SchemaMap: map[string]string{"staging": ""}}
+		err := o.ValidateSchemaMap()
+		require.Error(t, err)
+		assert.Equal(t, `schema-map destination for "staging" is empty`, err.Error())
 	})
 }
 
