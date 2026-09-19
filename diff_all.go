@@ -702,29 +702,17 @@ func fallbackOrder(
 
 // sortViewStmts orders statements by the dependency order of the views alone,
 // reversed for drops. It is the fallback's stand-in for the whole-schema sort,
-// which fails on a cycle the views cannot be part of: PostgreSQL rejects a
-// view that reads a view reading it back, while two tables with foreign keys
-// to each other are a cycle and a schema people write.
+// which fails on a cycle the views cannot be part of: two tables with foreign
+// keys to each other are one, and a schema people write.
 //
-// The views are sorted against themselves, so a reference to a table resolves
-// to nothing and drops out, which is what leaves the view-to-view edges. A
-// sort that fails even so leaves the statements as they were, the way the
+// A sort that fails even so leaves the statements as they were, the way the
 // fallback left every statement before.
 func sortViewStmts(stmts []string, views *orderedmap.Map[string, *model.View], reverse bool) []string {
 	if len(stmts) == 0 || views == nil {
 		return stmts
 	}
 
-	noEnums := orderedmap.New[string, *model.Enum]()
-	noDomains := orderedmap.New[string, *model.Domain]()
-	noCompositeTypes := orderedmap.New[string, *model.CompositeType]()
-	noTables := orderedmap.New[string, *model.Table]()
-	noSequences := orderedmap.New[string, *model.Sequence]()
-	noRoutines := orderedmap.New[string, *model.Routine]()
-
-	order, err := toposort.OrderFromSchema(
-		noEnums, noDomains, noCompositeTypes, noTables, views, noSequences, noRoutines,
-	)
+	order, err := toposort.OrderViews(views)
 	if err != nil {
 		return stmts
 	}
@@ -733,7 +721,7 @@ func sortViewStmts(stmts []string, views *orderedmap.Map[string, *model.View], r
 	for i, name := range order {
 		posMap[name] = i
 	}
-	addIndexPositions(posMap, noTables, views)
+	addIndexPositions(posMap, orderedmap.New[string, *model.Table](), views)
 
 	tagged := tagStatements(stmts, posMap)
 	sort.SliceStable(tagged, func(i, j int) bool {

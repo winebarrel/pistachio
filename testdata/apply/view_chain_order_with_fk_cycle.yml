@@ -4,7 +4,8 @@
 #
 # PostgreSQL 15 qualifies a view's column references with the relation, 16 and
 # later do not, so the dump is written per version.
-allow_drop: [all]
+drop_policy:
+  allow_drop: [all]
 init: |
   CREATE TABLE public.invoices (id integer NOT NULL, shipment_id integer, CONSTRAINT invoices_pkey PRIMARY KEY (id));
   CREATE TABLE public.shipments (id integer NOT NULL, invoice_id integer, CONSTRAINT shipments_pkey PRIMARY KEY (id));
