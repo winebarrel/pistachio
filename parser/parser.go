@@ -489,7 +489,11 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				if err := setUnique(t.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
-			} else if v, ok := views.GetOk(fqtn); ok && v.Materialized {
+			} else if v, ok := views.GetOk(fqtn); ok {
+				// PostgreSQL refuses an index on a plain view.
+				if !v.Materialized {
+					return nil, &locatedError{msg: "CREATE INDEX " + idx.Name + ": " + fqtn + " is a view, which cannot hold an index", offset: int(stmtOffset)}
+				}
 				if err := setUnique(v.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
@@ -521,13 +525,13 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				return nil, undeclared("ALTER TABLE "+fqtn, "table", fqtn, stmtOffset)
 			}
 
-			if err := checkAlterTableTargets(as, t, fqtn, stmtOffset); err != nil {
-				return nil, err
-			}
-
 			// A table marked -- pista:ignore is out of the diff, so an
-			// action dropped from it cannot mislead the plan.
+			// action dropped from it, or a trigger or column it does not
+			// declare, cannot mislead the plan.
 			if !t.Ignore {
+				if err := checkAlterTableTargets(as, t, fqtn, stmtOffset); err != nil {
+					return nil, err
+				}
 				warnIgnoredAlterTableCmds(sql, spans, rawStmt, as)
 			}
 

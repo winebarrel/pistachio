@@ -36,7 +36,7 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 		{"column compression", "CREATE TABLE public.t (id integer);\nALTER TABLE public.t ALTER COLUMN body SET COMPRESSION lz4;", "ALTER TABLE public.t: column body is not declared before it"},
 		{"index", "CREATE INDEX i ON public.t (id);", "CREATE INDEX i: table or materialized view public.t is not declared before it"},
 		{"index declared later", "CREATE INDEX i ON public.t (id);\nCREATE TABLE public.t (id integer);", "CREATE INDEX i: table or materialized view public.t is not declared before it"},
-		{"index on a plain view", "CREATE VIEW public.v AS SELECT 1 AS x;\nCREATE INDEX i ON public.v (x);", "CREATE INDEX i: table or materialized view public.v is not declared before it"},
+		{"index on a plain view", "CREATE VIEW public.v AS SELECT 1 AS x;\nCREATE INDEX i ON public.v (x);", "CREATE INDEX i: public.v is a view, which cannot hold an index"},
 	} {
 		_, err := parseSQLWithPublicSchema(tc.sql)
 		require.Error(t, err, tc.name)
@@ -124,6 +124,22 @@ ALTER TABLE public.t ADD CONSTRAINT t_chk CHECK (id > 0), ADD COLUMN x text, DIS
 `)
 	require.Error(t, err)
 	assert.Equal(t, "ALTER TABLE public.t: trigger trg is not declared before it", err.Error())
+	assert.Empty(t, buf.String())
+}
+
+// A table marked -- pista:ignore is out of the diff, so a trigger or column
+// it does not declare cannot mislead the plan and is not checked, the same
+// as an action dropped from it is not warned about.
+func TestParseSQL_AlterTableUndeclaredPartOnIgnoredTable(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	_, err := parseSQLWithPublicSchema(`
+-- pista:ignore
+CREATE TABLE public.t (id integer);
+ALTER TABLE public.t DISABLE TRIGGER trg, ALTER COLUMN body SET STORAGE MAIN, ADD COLUMN x text;
+`)
+	require.NoError(t, err)
 	assert.Empty(t, buf.String())
 }
 
