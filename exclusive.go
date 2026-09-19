@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/alecthomas/kong"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -24,8 +25,20 @@ const exclusivePollInterval = time.Second
 
 // UnsignedDuration is a time.Duration that rejects a negative value at
 // parse time, so a flag, env var or config key using it cannot be set below
-// zero. kong decodes it through UnmarshalText like any other duration.
+// zero.
 type UnsignedDuration time.Duration
+
+// Decode reads the value kong hands over. The command line and an environment
+// variable hand over text. The config file hands over what YAML read, so a
+// bare 0, the value that waits without limit, arrives as a number and is read
+// as its text.
+func (d *UnsignedDuration) Decode(ctx *kong.DecodeContext) error {
+	token, err := ctx.Scan.PopValue("duration")
+	if err != nil {
+		return err
+	}
+	return d.UnmarshalText([]byte(fmt.Sprint(token.Value)))
+}
 
 func (d *UnsignedDuration) UnmarshalText(text []byte) error {
 	v, err := time.ParseDuration(string(text))
