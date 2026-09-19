@@ -16,6 +16,10 @@ import (
 // validateDirectives raised nothing either.
 var (
 	renameDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]+(.+?)[ \t]*\r?$`)
+	// Matches -- pista:renamed-from with no name (invalid usage). The pattern
+	// above needs a name, so without this a bare directive matched nothing
+	// and the object was dropped and created instead of renamed.
+	renameWithoutArgPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]*\r?$`)
 	// execute-first shares a prefix with execute. The execute pattern accepts
 	// only whitespace or end-of-line after the name, so an execute-first
 	// comment never matches it.
@@ -57,6 +61,10 @@ func validateDirectives(rawSQL string) error {
 		if !knownDirectives[name] {
 			return &locatedError{msg: fmt.Sprintf("unknown directive: -- pista:%s", name), offset: m[2]}
 		}
+	}
+
+	if m := renameWithoutArgPattern.FindStringIndex(rawSQL); m != nil {
+		return &locatedError{msg: "-- pista:renamed-from requires an argument", offset: m[0]}
 	}
 
 	if m := concurrentlyWithArgsPattern.FindStringIndex(rawSQL); m != nil {
