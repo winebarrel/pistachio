@@ -33,13 +33,13 @@ func (d Dependent) String() string {
 // managed schemas, keyed by the same schema-qualified name the Views map uses.
 // A relation nothing reads is absent rather than present and empty.
 //
-// Only the direct dependents are read. A view two steps away is a dependent of
-// the view between them, and that one has to be dropped for the chain to come
-// apart, so the caller sees it when it looks at that drop. A dependent outside
-// the managed schemas is included, because it blocks the drop just the same.
+// Only the direct dependents are read. A view two steps away depends on the
+// view between them, which has to be dropped for the chain to come apart, so
+// the caller meets it at that drop. A dependent outside the managed schemas is
+// included, since it blocks the drop just the same.
 //
-// The rewrite rule a view holds over itself is left out: every view depends on
-// its own columns that way, and it goes with the view.
+// The rewrite rule a view holds over itself is left out. Every view depends on
+// its own columns that way, and the rule goes with the view.
 func (c *Catalog) ViewDependents(ctx context.Context) (map[string][]Dependent, error) {
 	q := `
 		SELECT

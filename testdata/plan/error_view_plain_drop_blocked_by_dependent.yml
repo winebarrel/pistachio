@@ -1,0 +1,12 @@
+# The view is gone from the desired schema, so this is a plain drop rather
+# than a drop to create it again. It is checked the same way.
+drop_policy:
+  allow_drop: [all]
+exclude: [eng_staff]
+init: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text);
+  CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+desired: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text);
+error: "cannot drop public.staff: view public.eng_staff depends on it"

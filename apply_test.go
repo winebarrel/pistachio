@@ -1524,3 +1524,42 @@ func TestPlanOptions_ForceIndexConcurrently_XorEnforcement(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--force-index-concurrently")
 }
+
+// The dependent check runs in diffAll, which apply shares with plan, so apply
+// stops before it runs any DDL rather than failing partway through.
+func TestApply_ViewDropBlockedByDependent(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+CREATE VIEW public.staff AS SELECT id, name, dept, salary FROM public.employees;
+CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
+CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var out bytes.Buffer
+	_, err := client.Apply(ctx, &ApplyOptions{
+		DropPolicy: DropPolicy{AllowDrop: []string{"all"}},
+		Files:      []string{desiredFile},
+	}, &out)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot drop public.staff: view public.eng_staff depends on it")
+
+	// Nothing ran: the view still has the column the desired schema drops.
+	var def string
+	require.NoError(t, conn.QueryRow(ctx, "SELECT pg_get_viewdef('public.staff'::regclass)").Scan(&def))
+	assert.Contains(t, def, "salary")
+}

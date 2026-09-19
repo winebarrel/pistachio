@@ -203,10 +203,10 @@ type ViewDiffResult struct {
 	DisallowedDropStmts []string // DROP VIEW / DROP MATERIALIZED VIEW / DROP INDEX (on matview) suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
 	// DroppedViews names every view and materialized view DropStmts drops,
-	// the ones dropped to be created again included. A suppressed drop is not
-	// in it, since nothing runs. PostgreSQL refuses to drop a relation another
-	// object reads, so the caller checks these against the catalog before the
-	// plan is handed over; see checkViewDependents.
+	// including the ones dropped to be created again. A suppressed drop is
+	// left out, since nothing runs. PostgreSQL refuses to drop a relation
+	// another object reads, so the caller checks these against the catalog;
+	// see checkViewDependents.
 	DroppedViews []string
 }
 

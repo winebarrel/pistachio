@@ -1,0 +1,15 @@
+# A renamed view that also changes shape is dropped under its old name,
+# because the rename never runs. The error names that old name, which is what
+# the database still holds and what the dependent reads.
+drop_policy:
+  allow_drop: [all]
+exclude: [eng_staff]
+init: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text);
+  CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+desired: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text);
+  -- pista:renamed-from public.staff
+  CREATE VIEW public.crew AS SELECT id, name FROM public.employees;
+error: "cannot drop public.staff: view public.eng_staff depends on it"

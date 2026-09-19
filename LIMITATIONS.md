@@ -197,19 +197,18 @@ Origin: known limitation documented inline at `diff/views.go`
 PostgreSQL refuses to drop a relation another object reads rather than
 cascading, so a plan holding such a drop fails at apply time. `diffAll` checks
 the views and materialized views it drops against `pg_depend` and fails the
-plan instead, naming what is in the way. Two statements in the same family are
-not checked:
+plan instead. Two statements in the same family are not checked:
 
 - `DROP TABLE`, where a view reads the table.
 - `ALTER TABLE ... DROP COLUMN`, where a view reads the column.
 
-Both need a dependent pistachio cannot see, since a view it manages is dropped
-in the same plan and so never blocks anything. That means `--include` /
-`--exclude` hiding the view, or the view living in a schema outside `-n`. The
-view case is checked because it bites a schema with no filters at all: a
-definition change a view cannot take through `CREATE OR REPLACE`, and every
-definition change of a materialized view, is a drop and a create that the plan
-does not otherwise announce.
+Neither fails unless the view is one pistachio cannot see, because a view it
+manages is dropped in the same plan and so blocks nothing. That means
+`--include` / `--exclude` hiding the view, or the view living in a schema
+outside `-n`. The view case is checked because it fails with no filters at
+all: a definition change `CREATE OR REPLACE VIEW` cannot carry, and every
+definition change of a materialized view, is a drop and a create the plan does
+not otherwise announce.
 
 Closing the table half means reporting the tables a diff drops the way
 `ViewDiffResult.DroppedViews` reports the views. The column half also needs

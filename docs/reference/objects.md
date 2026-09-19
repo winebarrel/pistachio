@@ -50,15 +50,17 @@ A change to a view whose definition stays goes out as `ALTER VIEW ... SET (...)`
 
 ## Views
 
-A definition change goes out as `CREATE OR REPLACE VIEW` where PostgreSQL accepts one: the new query has to produce the same output columns in the same order, with new ones only at the end. A change that removes, renames or reorders a column goes out as a `DROP` and a `CREATE` instead, and a materialized view takes that route on every definition change.
+A definition change goes out as `CREATE OR REPLACE VIEW` where PostgreSQL accepts one: the new query has to produce the same output columns in the same order, with new ones only at the end. A change that removes, renames or reorders a column is a `DROP` and a `CREATE` instead, as is every definition change of a materialized view.
 
-PostgreSQL refuses to drop a relation another object reads rather than cascading it, so such a plan would fail partway through `apply`. `plan` fails first and names what is in the way:
+PostgreSQL refuses to drop a relation another object reads rather than cascading it, so such a plan would fail partway through `apply`. `plan` fails first and names what blocks the drop:
 
 ```
 pista: error: cannot drop public.staff: materialized view public.staff_count, view public.eng_staff depend on it
 ```
 
-A dependent the same plan drops is not in the way, because the drops run deepest first: a chain of views that all change shape, or a dependent the desired schema no longer holds, plans and applies as it is. Anything else has to move first, in a run of its own. The dependents are read from the catalog, so one hidden by `--include` / `--exclude` or living outside `-n` counts as well, and a routine with a SQL body counts the way a view does.
+A dependent the same plan drops is not a blocker, because the drops run deepest first. A chain of views that all change shape, and a dependent the desired schema no longer holds, both apply as they are. Anything else has to be moved in a run of its own.
+
+The dependents come from the catalog, not from the schema file, so one hidden by `--include` / `--exclude` or living outside `-n` counts too. So does a routine with a SQL body, which records the same dependency a view does.
 
 ## Table inheritance
 
