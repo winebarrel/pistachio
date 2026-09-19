@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* `apply --exclusive-wait` prints `-- Waiting for another exclusive apply to finish` while it waits. The line was buffered with the rest of the output and came out after the wait it announced.
+
 * `fmt` writes through a symlink to the file it points at. It replaced the link with a plain file and left that file unformatted.
 
 * A trigger state naming a trigger, and a storage setting naming a column, that the table does not declare before it are errors, as is `CREATE INDEX` on a table or materialized view not declared before it. Each was dropped in silence, so the index or the setting was missing from the desired schema. An `ALTER SEQUENCE` option other than `OWNED BY` warns as an unread `ALTER TABLE` action does; it was dropped in silence too.

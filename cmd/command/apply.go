@@ -18,6 +18,11 @@ type Apply struct {
 func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
 	client := pistachio.NewClient(&cmd.Options)
 
+	// The output is buffered until the apply is done, so the header can
+	// carry the count. The line that says apply is waiting for another
+	// exclusive apply has to reach the terminal while it waits.
+	cmd.WaitWriter = w
+
 	var buf bytes.Buffer
 	result, err := client.Apply(ctx, &cmd.ApplyOptions, &buf)
 	if err != nil {

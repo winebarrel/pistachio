@@ -30,6 +30,12 @@ type ApplyOptions struct {
 	// value (wait without limit) and must be distinguishable from "not set".
 	// The type rejects a negative value at parse time.
 	ExclusiveWait *UnsignedDuration `xor:"exclusive" env:"PISTA_EXCLUSIVE_WAIT" placeholder:"DURATION" help:"Like --exclusive, but wait up to the given duration (0 waits without limit) for the other apply to finish."`
+	// WaitWriter receives the line that says apply is waiting for another
+	// exclusive apply. The CLI buffers the output writer until the apply is
+	// done, which would hold that line back until the wait it announces is
+	// over, so it passes the terminal here. nil writes the line to the
+	// output writer.
+	WaitWriter io.Writer `kong:"-"`
 }
 
 // ApplyResult holds the result of an Apply operation.
@@ -74,7 +80,11 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// cannot be computed against a state another exclusive apply is still
 	// changing. Released when the connection closes.
 	if options.Exclusive || options.ExclusiveWait != nil {
-		if err := acquireExclusive(ctx, conn, options.ExclusiveWait, w); err != nil {
+		waitWriter := options.WaitWriter
+		if waitWriter == nil {
+			waitWriter = w
+		}
+		if err := acquireExclusive(ctx, conn, options.ExclusiveWait, waitWriter); err != nil {
 			return nil, err
 		}
 	}
