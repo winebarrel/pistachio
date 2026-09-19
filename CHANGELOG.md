@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Read `serial2`, `serial4` and `serial8` as `smallserial`, `serial` and `bigserial`, the way `int2`, `int4` and `int8` are read. A column written with one of them planned `SET DATA TYPE serial8`, which PostgreSQL refuses, and a `DROP NOT NULL` on every run.
+
 * `plan` now fails when it would drop a view or materialized view that another object still reads, and names what reads it. PostgreSQL refuses that `DROP` instead of cascading, so the plan read as fine and `apply` failed on it. Views hit this without being dropped on purpose: a definition change becomes a drop and a create whenever `CREATE OR REPLACE VIEW` cannot express it, and always for a materialized view.
 
 * Order view drops and creates even when the whole-schema sort fails. Two tables with foreign keys to each other are a cycle that sort cannot resolve, and the fallback emitted view statements in map order, so a chain of views changing shape dropped the base before the view reading it and `apply` failed. Views are now sorted among themselves there, which they always can be: PostgreSQL rejects a view that reads a view reading it back.
