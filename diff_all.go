@@ -554,7 +554,7 @@ func orderStatements(
 		desiredEnums, desiredDomains, desiredCompositeTypes, desiredTables, desiredViews, desiredSequences, desiredRoutines,
 	)
 	if err != nil {
-		return fallbackOrder(enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff)
+		return fallbackOrder(currentViews, desiredViews, enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff)
 	}
 
 	createPosMap := make(map[string]int, len(createOrder))
@@ -570,7 +570,7 @@ func orderStatements(
 		currentEnums, currentDomains, currentCompositeTypes, currentTables, currentViews, currentSequences, currentRoutines,
 	)
 	if err != nil {
-		return fallbackOrder(enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff)
+		return fallbackOrder(currentViews, desiredViews, enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff)
 	}
 
 	dropPosMap := make(map[string]int, len(dropOrder))
@@ -655,7 +655,14 @@ func orderStatements(
 }
 
 // fallbackOrder is the original hardcoded ordering logic used as fallback.
+//
+// The view statements are still sorted among themselves. A view chain has to
+// come apart deepest first and go back together base first, whatever made the
+// whole-schema sort fail, and checkViewDependents counts on that when it lets
+// a dependent the same plan drops through.
 func fallbackOrder(
+	currentViews *orderedmap.Map[string, *model.View],
+	desiredViews *orderedmap.Map[string, *model.View],
 	enumDiff *diff.EnumDiffResult,
 	domainDiff *diff.DomainDiffResult,
 	compositeTypeDiff *diff.CompositeTypeDiffResult,
@@ -670,7 +677,7 @@ func fallbackOrder(
 	stmts = append(stmts, compositeTypeDiff.Stmts...)
 	stmts = append(stmts, sequenceDiff.Stmts...)
 	stmts = append(stmts, routineDiff.Stmts...)
-	stmts = append(stmts, viewDiff.DropStmts...)
+	stmts = append(stmts, sortViewStmts(viewDiff.DropStmts, currentViews, true)...)
 	stmts = append(stmts, tableDiff.FKDropStmts...)
 	stmts = append(stmts, tableDiff.Stmts...)
 	stmts = append(stmts, tableDiff.PersistenceStmts...)
@@ -681,8 +688,55 @@ func fallbackOrder(
 	stmts = append(stmts, domainDiff.DropStmts...)
 	stmts = append(stmts, enumDiff.DropStmts...)
 	stmts = append(stmts, tableDiff.FKAddStmts...)
-	stmts = append(stmts, viewDiff.CreateStmts...)
+	stmts = append(stmts, sortViewStmts(viewDiff.CreateStmts, desiredViews, false)...)
 	return stmts
+}
+
+// sortViewStmts orders statements by the dependency order of the views alone,
+// reversed for drops. It is the fallback's stand-in for the whole-schema sort,
+// which fails on a cycle the views cannot be part of: PostgreSQL rejects a
+// view that reads a view reading it back, while two tables with foreign keys
+// to each other are a cycle and a schema people write.
+//
+// The views are sorted against themselves, so a reference to a table resolves
+// to nothing and drops out, which is what leaves the view-to-view edges. A
+// sort that fails even so leaves the statements as they were, the way the
+// fallback left every statement before.
+func sortViewStmts(stmts []string, views *orderedmap.Map[string, *model.View], reverse bool) []string {
+	if len(stmts) == 0 || views == nil {
+		return stmts
+	}
+
+	noEnums := orderedmap.New[string, *model.Enum]()
+	noDomains := orderedmap.New[string, *model.Domain]()
+	noCompositeTypes := orderedmap.New[string, *model.CompositeType]()
+	noTables := orderedmap.New[string, *model.Table]()
+	noSequences := orderedmap.New[string, *model.Sequence]()
+	noRoutines := orderedmap.New[string, *model.Routine]()
+
+	order, err := toposort.OrderFromSchema(
+		noEnums, noDomains, noCompositeTypes, noTables, views, noSequences, noRoutines,
+	)
+	if err != nil {
+		return stmts
+	}
+
+	posMap := make(map[string]int, len(order))
+	for i, name := range order {
+		posMap[name] = i
+	}
+	addIndexPositions(posMap, noTables, views)
+
+	tagged := tagStatements(stmts, posMap)
+	sort.SliceStable(tagged, func(i, j int) bool {
+		return compareTaggedPos(tagged[i].pos, tagged[j].pos, reverse)
+	})
+
+	sorted := make([]string, len(tagged))
+	for i, ts := range tagged {
+		sorted[i] = ts.sql
+	}
+	return sorted
 }
 
 // addIndexPositions gives every index the position of the relation it sits on.
