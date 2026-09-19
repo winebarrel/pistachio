@@ -147,10 +147,18 @@ func (f *FilterOptions) ValidatePatterns() error {
 }
 
 // AfterApply trims each schema name, since -n 'public, billing' reaches kong
-// as ["public", " billing"], then validates the schema map.
+// as ["public", " billing"] and -m 'old=new; other=third' with " other" as
+// the second source, then validates the schema map.
 func (o *Options) AfterApply() error {
 	for i, s := range o.Schemas {
 		o.Schemas[i] = strings.TrimSpace(s)
+	}
+	if len(o.SchemaMap) > 0 {
+		trimmed := make(map[string]string, len(o.SchemaMap))
+		for from, to := range o.SchemaMap {
+			trimmed[strings.TrimSpace(from)] = strings.TrimSpace(to)
+		}
+		o.SchemaMap = trimmed
 	}
 	return o.ValidateSchemaMap()
 }

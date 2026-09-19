@@ -85,6 +85,12 @@ func TestOptions_SchemasTrimmed(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []string{"public", "billing"}, cli.Schemas)
 	})
+
+	t.Run("schema map", func(t *testing.T) {
+		cli, err := parseWithConfig(t, "-m", "old=new; other= third")
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{"old": "new", "other": "third"}, cli.SchemaMap)
+	})
 }
 
 // The --search-path default lives in a struct tag, while connect falls back to

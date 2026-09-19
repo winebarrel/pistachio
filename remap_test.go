@@ -129,6 +129,23 @@ func TestAfterApply(t *testing.T) {
 		require.NoError(t, o.AfterApply())
 		assert.Equal(t, []string{"public", "billing"}, o.Schemas)
 	})
+
+	// -m 'old=new; other=third' reaches kong with " other" as the second
+	// source, a mapping that matches nothing.
+	t.Run("trims schema map", func(t *testing.T) {
+		o := &Options{SchemaMap: map[string]string{"old": "new ", " other": " third"}}
+		require.NoError(t, o.AfterApply())
+		assert.Equal(t, map[string]string{"old": "new", "other": "third"}, o.SchemaMap)
+	})
+
+	// The trim runs before the duplicate check, so "p" and " p" are one
+	// destination.
+	t.Run("trims schema map before validating", func(t *testing.T) {
+		o := &Options{SchemaMap: map[string]string{"x": "p", " y": " p"}}
+		err := o.AfterApply()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `both "x" and "y" map to it`)
+	})
 }
 
 func TestRemapSchema(t *testing.T) {
