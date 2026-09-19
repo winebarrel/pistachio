@@ -551,6 +551,26 @@ func TestValidateDirectives_Valid(t *testing.T) {
 	assert.NoError(t, validateDirectives("SELECT 1; -- no directives"))
 }
 
+// A renamed-from with no name matched nothing and raised nothing, so the
+// object was dropped and created instead of renamed.
+func TestValidateDirectives_RenamedFromWithoutArg(t *testing.T) {
+	for _, sql := range []string{
+		"-- pista:renamed-from\nCREATE TABLE t (id int);",
+		"-- pista:renamed-from   \nCREATE TABLE t (id int);",
+		"-- pista:renamed-from\r\nCREATE TABLE t (id int);",
+	} {
+		err := validateDirectives(sql)
+		require.Error(t, err, sql)
+		assert.Contains(t, err.Error(), "-- pista:renamed-from requires an argument")
+	}
+}
+
+func TestParseSQL_RenamedFromWithoutArg(t *testing.T) {
+	_, err := parseSQLWithPublicSchema("-- pista:renamed-from\nCREATE TABLE public.t (id int);")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "-- pista:renamed-from requires an argument")
+}
+
 func TestValidateDirectives_IgnoreWithArgs(t *testing.T) {
 	err := validateDirectives("-- pista:ignore extra")
 	require.Error(t, err)
