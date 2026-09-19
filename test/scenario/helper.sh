@@ -42,6 +42,11 @@ setup_db() {
   fi
 }
 
+# Run SQL against the test database, for a change pista is not making.
+run_sql() {
+  psql -X "$PISTA_CONN_STR" -q -v ON_ERROR_STOP=1 -c "$1"
+}
+
 # Run pista plan and capture output.
 pista_plan() {
   "$PISTA" plan --allow-drop all "$@" 2>&1
@@ -85,6 +90,40 @@ assert_no_drop() {
   pass
 }
 
+# _drop_pattern prints the grep -E pattern that matches a drop of the given
+# kind. The kind may carry the object's name, "foreign_key:orders_parent_fk",
+# so the pattern matches that object rather than any drop of the kind: every
+# constraint drop is one ALTER TABLE ... DROP CONSTRAINT, and a plan that drops
+# a primary key would otherwise pass a check written for a foreign key. prefix
+# is what the statement starts with, the skipped-drop comment or leading space.
+_drop_pattern() {
+  local spec="$1"
+  local prefix="$2"
+
+  local kind="${spec%%:*}"
+  local name=""
+  if [ "$spec" != "$kind" ]; then
+    name="${spec#*:}"
+  fi
+
+  case "$kind" in
+    table)       printf '%sDROP TABLE %s' "$prefix" "$name" ;;
+    view)        printf '%sDROP (MATERIALIZED )?VIEW %s' "$prefix" "$name" ;;
+    column)      printf '%sALTER TABLE .* DROP COLUMN %s' "$prefix" "$name" ;;
+    enum)        printf '%sDROP TYPE %s' "$prefix" "$name" ;;
+    domain)      printf '%sDROP DOMAIN %s' "$prefix" "$name" ;;
+    routine)     printf '%sDROP (FUNCTION|PROCEDURE) %s' "$prefix" "$name" ;;
+    foreign_key) printf '%sALTER TABLE .* DROP CONSTRAINT %s' "$prefix" "$name" ;;
+    trigger)     printf '%sDROP TRIGGER %s' "$prefix" "$name" ;;
+    *) return 1 ;;
+  esac
+}
+
+# The two prefixes a drop is looked for under: the comment a suppressed drop
+# leaves, and the start of a statement that runs.
+_SKIPPED_PREFIX='^-- skipped: '
+_RUNS_PREFIX='^[[:space:]]*'
+
 # Assert that plan output contains a commented DROP for a specific type.
 # Used to verify that suppressed drops are still surfaced as comments.
 # Usage: assert_commented_drop "step name" "expected_type" files...
@@ -100,15 +139,10 @@ assert_commented_drop() {
   plan_output=$(pista_plan_no_drop "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
-  case "$expected_type" in
-    table)  drop_pattern='^-- skipped: DROP TABLE' ;;
-    view)   drop_pattern='^-- skipped: DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='^-- skipped: ALTER TABLE .* DROP COLUMN' ;;
-    enum)   drop_pattern='^-- skipped: DROP TYPE' ;;
-    domain) drop_pattern='^-- skipped: DROP DOMAIN' ;;
-    routine) drop_pattern='^-- skipped: DROP (FUNCTION|PROCEDURE)' ;;
-    *) fail "unknown expected_type: $expected_type"; return 1 ;;
-  esac
+  drop_pattern=$(_drop_pattern "$expected_type" "$_SKIPPED_PREFIX") || {
+    fail "unknown expected_type: $expected_type"
+    return 1
+  }
 
   if ! echo "$plan_output" | grep -qE "$drop_pattern"; then
     fail "expected skipped $expected_type drop in plan"
@@ -141,15 +175,10 @@ assert_commented_drop_with_allowed() {
   plan_output=$(pista_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
-  case "$expected_type" in
-    table)  drop_pattern='^-- skipped: DROP TABLE' ;;
-    view)   drop_pattern='^-- skipped: DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='^-- skipped: ALTER TABLE .* DROP COLUMN' ;;
-    enum)   drop_pattern='^-- skipped: DROP TYPE' ;;
-    domain) drop_pattern='^-- skipped: DROP DOMAIN' ;;
-    routine) drop_pattern='^-- skipped: DROP (FUNCTION|PROCEDURE)' ;;
-    *) fail "unknown expected_type: $expected_type"; return 1 ;;
-  esac
+  drop_pattern=$(_drop_pattern "$expected_type" "$_SKIPPED_PREFIX") || {
+    fail "unknown expected_type: $expected_type"
+    return 1
+  }
 
   if ! echo "$plan_output" | grep -qE "$drop_pattern"; then
     fail "expected skipped $expected_type drop in plan with --allow-drop $allowed_types"
@@ -177,15 +206,10 @@ assert_no_drop_type() {
   plan_output=$(pista_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
-  case "$protected_type" in
-    table)  drop_pattern='^[[:space:]]*DROP TABLE' ;;
-    view)   drop_pattern='^[[:space:]]*DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP COLUMN' ;;
-    enum)   drop_pattern='^[[:space:]]*DROP TYPE' ;;
-    domain) drop_pattern='^[[:space:]]*DROP DOMAIN' ;;
-    routine) drop_pattern='^[[:space:]]*DROP (FUNCTION|PROCEDURE)' ;;
-    *) fail "unknown protected_type: $protected_type"; return 1 ;;
-  esac
+  drop_pattern=$(_drop_pattern "$protected_type" "$_RUNS_PREFIX") || {
+    fail "unknown protected_type: $protected_type"
+    return 1
+  }
 
   if echo "$plan_output" | grep -qiE "$drop_pattern"; then
     fail "unexpected $protected_type drop in plan with --allow-drop $allowed_types"
@@ -212,15 +236,10 @@ assert_drop_type_present() {
   plan_output=$(pista_plan_allow_drop "$allowed_types" "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
   local drop_pattern
-  case "$expected_type" in
-    table)  drop_pattern='^[[:space:]]*DROP TABLE' ;;
-    view)   drop_pattern='^[[:space:]]*DROP (MATERIALIZED )?VIEW' ;;
-    column) drop_pattern='^[[:space:]]*ALTER TABLE .* DROP COLUMN' ;;
-    enum)   drop_pattern='^[[:space:]]*DROP TYPE' ;;
-    domain) drop_pattern='^[[:space:]]*DROP DOMAIN' ;;
-    routine) drop_pattern='^[[:space:]]*DROP (FUNCTION|PROCEDURE)' ;;
-    *) fail "unknown expected_type: $expected_type"; return 1 ;;
-  esac
+  drop_pattern=$(_drop_pattern "$expected_type" "$_RUNS_PREFIX") || {
+    fail "unknown expected_type: $expected_type"
+    return 1
+  }
 
   if echo "$plan_output" | grep -qiE "$drop_pattern"; then
     pass
@@ -231,7 +250,28 @@ assert_drop_type_present() {
   fi
 }
 
-# Run a step: plan, check expected output, apply, verify no drift.
+# Print the first expectation missing from the given output, if any. The
+# expectations are one per line; blank lines are skipped.
+# Usage: _missing_expectation "$expected" "$actual"
+_missing_expectation() {
+  local expected="$1"
+  local actual="$2"
+  local line
+
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    if ! printf '%s\n' "$actual" | grep -qF -- "$line"; then
+      printf '%s' "$line"
+      return 0
+    fi
+  done <<< "$expected"
+
+  return 1
+}
+
+# Run a step: plan, check expected output, apply, verify no drift. The
+# expected output is one string per line, so a step that produces several
+# statements can name each of them.
 run_step() {
   local step_name="$1"
   local expected="$2"
@@ -243,9 +283,10 @@ run_step() {
   local plan_output
   plan_output=$(pista_plan "${files[@]}") || { fail "plan failed: $plan_output"; return 1; }
 
-  if ! echo "$plan_output" | grep -qF "$expected"; then
+  local missing
+  if missing=$(_missing_expectation "$expected" "$plan_output"); then
     fail "unexpected plan output"
-    echo "    expected to contain: $expected" >&2
+    echo "    expected to contain: $missing" >&2
     echo "    actual: $plan_output" >&2
     return 1
   fi
@@ -258,6 +299,72 @@ run_step() {
   if ! echo "$drift" | grep -q 'No changes'; then
     fail "drift after apply"
     echo "    $drift" >&2
+    return 1
+  fi
+
+  pass
+}
+
+# Assert that the dump output plans clean when it is fed back as the desired
+# schema. Any flags are passed to both dump and plan.
+# Usage: assert_dump_round_trip "step name" [flags...]
+assert_dump_round_trip() {
+  local step_name="$1"
+  shift
+  local flags=("$@")
+
+  step "$step_name"
+
+  local tmp_sql
+  tmp_sql=$(mktemp)
+
+  if ! "$PISTA" dump "${flags[@]}" > "$tmp_sql" 2>/dev/null; then
+    rm -f "$tmp_sql"
+    fail "dump failed"
+    return 1
+  fi
+
+  local plan_output
+  plan_output=$(pista_plan "${flags[@]}" "$tmp_sql") || {
+    rm -f "$tmp_sql"
+    fail "plan failed: $plan_output"
+    return 1
+  }
+  rm -f "$tmp_sql"
+
+  if ! echo "$plan_output" | grep -qF -e '-- No changes'; then
+    fail "expected no changes when the dump is fed back"
+    echo "    $plan_output" >&2
+    return 1
+  fi
+
+  pass
+}
+
+# Assert that plan fails and that its message contains the given text.
+# Usage: assert_plan_error "step name" "expected message" files...
+assert_plan_error() {
+  local step_name="$1"
+  local expected="$2"
+  shift 2
+  local files=("$@")
+
+  step "$step_name"
+
+  local plan_output
+  local rc=0
+  plan_output=$(pista_plan "${files[@]}") || rc=$?
+
+  if [ "$rc" -eq 0 ]; then
+    fail "expected plan to fail"
+    echo "    $plan_output" >&2
+    return 1
+  fi
+
+  if ! echo "$plan_output" | grep -qF "$expected"; then
+    fail "unexpected error message"
+    echo "    expected to contain: $expected" >&2
+    echo "    actual: $plan_output" >&2
     return 1
   fi
 
