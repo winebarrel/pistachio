@@ -492,6 +492,7 @@ func (client *Client) remapCompositeTypeSchemas(compositeTypes *orderedmap.Map[s
 		ct.Schema = client.RemapSchema(ct.Schema)
 		for _, a := range ct.Attributes {
 			a.TypeName = remapQualifiedName(a.TypeName, client.RemapSchema)
+			a.Collation = remapQualifiedNamePtr(a.Collation, client.RemapSchema)
 		}
 		remapped.Set(ct.FQCN(), ct)
 	}
@@ -510,6 +511,7 @@ func (client *Client) reverseRemapCompositeTypeSchemas(compositeTypes *orderedma
 		ct.Schema = client.ReverseRemapSchema(ct.Schema)
 		for _, a := range ct.Attributes {
 			a.TypeName = remapQualifiedName(a.TypeName, client.ReverseRemapSchema)
+			a.Collation = remapQualifiedNamePtr(a.Collation, client.ReverseRemapSchema)
 		}
 		remapped.Set(ct.FQCN(), ct)
 	}

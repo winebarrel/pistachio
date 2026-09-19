@@ -396,6 +396,7 @@ CREATE COLLATION myschema.mycoll (locale = 'C');
 CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
 CREATE FUNCTION myschema.ok(text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$ SELECT true $$;
 CREATE DOMAIN myschema.d AS text COLLATE myschema.mycoll DEFAULT myschema.gen() CONSTRAINT d_ok CHECK (myschema.ok(VALUE));
+CREATE TYPE myschema.ct AS (x text COLLATE myschema.mycoll);
 CREATE TABLE myschema.t (
     a text COLLATE myschema.mycoll,
     b myschema.d,
@@ -416,6 +417,7 @@ CREATE TABLE myschema.t (
 	t.Log(output)
 
 	assert.Contains(t, output, "a text COLLATE public.mycoll")
+	assert.Contains(t, output, "x text COLLATE public.mycoll")
 	assert.Contains(t, output, "CREATE DOMAIN public.d AS text")
 	assert.Contains(t, output, "COLLATE public.mycoll")
 	assert.Contains(t, output, "DEFAULT public.gen()")
@@ -432,6 +434,7 @@ CREATE COLLATION myschema.mycoll (locale = 'C');
 CREATE FUNCTION myschema.gen() RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT 'x' $$;
 CREATE FUNCTION myschema.ok(text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$ SELECT true $$;
 CREATE DOMAIN myschema.d AS text COLLATE myschema.mycoll DEFAULT myschema.gen() CONSTRAINT d_ok CHECK (myschema.ok(VALUE));
+CREATE TYPE myschema.ct AS (x text COLLATE myschema.mycoll);
 CREATE TABLE myschema.t (
     a text COLLATE myschema.mycoll,
     b myschema.d,
@@ -442,6 +445,7 @@ CREATE TABLE myschema.t (
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(`
 CREATE DOMAIN public.d AS text COLLATE public.mycoll DEFAULT public.gen() CONSTRAINT d_ok CHECK (public.ok(VALUE));
+CREATE TYPE public.ct AS (x text COLLATE public.mycoll);
 CREATE TABLE public.t (
     a text COLLATE public.mycoll,
     b public.d,
