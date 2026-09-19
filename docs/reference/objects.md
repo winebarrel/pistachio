@@ -6,7 +6,7 @@
 - Sequences (`CREATE SEQUENCE`, `ALTER SEQUENCE`, `DROP SEQUENCE`, including unlogged sequences). Only standalone sequences are managed; sequences owned by a serial or identity column are handled as part of that column, not as separate objects.
 - Tables (including unlogged and partitioned tables, and `INHERITS` children). See [Table inheritance](#table-inheritance).
 - Storage parameters, the `WITH (...)` clause. An index's parameters and a plain view's are always managed; a table's and a materialized view's are opt-in with `--manage-storage-param`. See [Storage parameters](#storage-parameters).
-- Views, including `WITH [LOCAL | CASCADED] CHECK OPTION`, `security_barrier` and `security_invoker`.
+- Views, including `WITH [LOCAL | CASCADED] CHECK OPTION`, `security_barrier` and `security_invoker`. See [Views](#views).
 - Materialized views
 - Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression). An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed; a change goes out as `ALTER TABLE ... ALTER COLUMN ... SET`. No `RESTART` is planned, the same as `ALTER SEQUENCE`, so a change that puts the sequence's current value outside the new range fails at apply with the server's error.
 - Constraints (primary key, unique, check, exclusion, foreign key). See [Constraints](#constraints).
@@ -47,6 +47,20 @@ CREATE VIEW public.my_accounts WITH (security_barrier = true, security_invoker =
 
 A change to a view whose definition stays goes out as `ALTER VIEW ... SET (...)` / `RESET (...)`. A definition change carries the clause on its `CREATE OR REPLACE VIEW`, which replaces the view's options as a whole.
 
+
+## Views
+
+A definition change goes out as `CREATE OR REPLACE VIEW` where PostgreSQL accepts one. It accepts one when the new query produces the same output columns in the same order, with new ones only at the end. A change that removes, renames or reorders a column is a `DROP` and a `CREATE` instead. So is every definition change of a materialized view.
+
+PostgreSQL refuses to drop a relation another object reads, instead of cascading, so that plan would fail partway through `apply`. `plan` fails first and names what reads it:
+
+```
+pista: error: cannot drop public.staff: materialized view public.staff_count, view public.eng_staff depend on it
+```
+
+Drops run deepest first, so a dependent the same plan drops is no obstacle. A chain of views that all change shape goes through as it is, and so does a view whose dependent the desired schema no longer holds. Anything else has to be moved in a run of its own.
+
+Dependents come from the catalog rather than the schema file. A view that `--include` / `--exclude` hides, or one outside `-n`, blocks the drop just the same. So do a rule, a policy and a routine, each named the way PostgreSQL names it. A routine counts when it reads the view in a `BEGIN ATOMIC` body or returns the view's row type; one whose body is a string literal records no dependency and does not block anything.
 
 ## Table inheritance
 

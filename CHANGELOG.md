@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+* `plan` now fails when it would drop a view or materialized view that another object still reads, and names what reads it. PostgreSQL refuses that `DROP` instead of cascading, so the plan read as fine and `apply` failed on it. Views hit this without being dropped on purpose: a definition change becomes a drop and a create whenever `CREATE OR REPLACE VIEW` cannot express it, and always for a materialized view.
+
+* Order view drops and creates even when the whole-schema sort fails. Two tables with foreign keys to each other are a cycle that sort cannot resolve, and the fallback emitted view statements in map order, so a chain of views changing shape dropped the base before the view reading it and `apply` failed. Views are now sorted among themselves there, which they always can be: PostgreSQL rejects a view that reads a view reading it back.
+
 ## [1.58.0] - 2026-09-17
 
 * Add `--explain` to `dump` (`$PISTA_DUMP_EXPLAIN`). It writes the size of each table, materialized view and index in a comment, from the same estimates `plan --explain` reads.

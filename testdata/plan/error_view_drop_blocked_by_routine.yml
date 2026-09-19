@@ -1,0 +1,16 @@
+# A BEGIN ATOMIC body is parsed at creation, so the routine records the same
+# dependency a view does and blocks the DROP. A body written as a string
+# literal records none; view_drop_not_blocked_by_string_body_routine.yml holds
+# that side. Routines are not managed here, so nothing takes this one out of
+# the way.
+min_pg: 14
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, n text);
+  CREATE VIEW public.v AS SELECT id, n FROM public.t;
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM public.v; END;
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, n text);
+  CREATE VIEW public.v AS SELECT id FROM public.t;
+error: "cannot drop public.v: function public.total() depends on it"

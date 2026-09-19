@@ -192,6 +192,31 @@ pre-step.
 Origin: known limitation documented inline at `diff/views.go`
 (`canCreateOrReplaceView`).
 
+## A blocked drop is caught for a view, not for a table or a column
+
+PostgreSQL refuses to drop a relation another object reads rather than
+cascading, so a plan holding such a drop fails at apply time. `diffAll` checks
+the views and materialized views it drops against `pg_depend` and fails the
+plan instead. Two statements in the same family are not checked:
+
+- `DROP TABLE`, where a view reads the table.
+- `ALTER TABLE ... DROP COLUMN`, where a view reads the column.
+
+Neither fails unless pistachio cannot see the view. A view it manages is
+dropped in the same plan, so it never blocks anything. Hiding one takes
+`--include` / `--exclude`, or a schema outside `-n`.
+
+The view case is checked because it fails with no filters at all. A definition
+change becomes a drop and a create whenever `CREATE OR REPLACE VIEW` cannot
+express it, and always for a materialized view. Nothing in the plan says so.
+
+Closing the table half means reporting the tables a diff drops the way
+`ViewDiffResult.DroppedViews` reports the views. The column half also needs
+the dependents read per column (`pg_depend.refobjsubid`) and the dropped
+columns reported alongside the tables.
+
+Origin: review of the view dependent check, 2026-09-19.
+
 ## Amazon Aurora DSQL is not supported
 
 A DSQL-targeted schema never holds what DSQL cannot create, so what stands in

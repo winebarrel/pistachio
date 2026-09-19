@@ -1,0 +1,20 @@
+# Both views change shape, so both are dropped and created again. The
+# dependent is dropped before the view it reads and created after it, so
+# nothing blocks the DROP and the plan is not an error.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept, salary FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name, salary FROM public.staff WHERE dept = 'eng';
+desired: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+plan: |
+  DROP VIEW public.eng_staff;
+  DROP VIEW public.staff;
+  CREATE OR REPLACE VIEW public.staff AS
+  SELECT id, name, dept FROM public.employees;
+  CREATE OR REPLACE VIEW public.eng_staff AS
+  SELECT id, name FROM public.staff WHERE dept = 'eng';

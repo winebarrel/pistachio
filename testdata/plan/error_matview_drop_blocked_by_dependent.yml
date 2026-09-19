@@ -1,0 +1,14 @@
+# A materialized view always takes DROP + CREATE on a definition change, so
+# anything reading one blocks every such change, not only the column-shape
+# changes that block a plain view.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, n text, extra text);
+  CREATE MATERIALIZED VIEW public.mv AS SELECT id, n FROM public.t;
+  CREATE VIEW public.v_on_mv AS SELECT id FROM public.mv;
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, n text, extra text);
+  CREATE MATERIALIZED VIEW public.mv AS SELECT id, n, extra FROM public.t;
+  CREATE VIEW public.v_on_mv AS SELECT id FROM public.mv;
+error: "cannot drop public.mv: view public.v_on_mv depends on it"

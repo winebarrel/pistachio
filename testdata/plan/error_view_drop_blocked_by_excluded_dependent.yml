@@ -1,0 +1,15 @@
+# --exclude keeps eng_staff out of the diff entirely, but it still reads
+# staff and still blocks the DROP. The dependents come from the catalog for
+# this reason: a dependent the filters hid is invisible to the model and
+# would be missed by reading the desired schema.
+drop_policy:
+  allow_drop: [all]
+exclude: [eng_staff]
+init: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept, salary FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+desired: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
+error: "cannot drop public.staff: view public.eng_staff depends on it"

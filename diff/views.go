@@ -202,6 +202,12 @@ type ViewDiffResult struct {
 	CreateStmts         []string // ALTER VIEW RENAME, CREATE OR REPLACE VIEW, CREATE MATERIALIZED VIEW, indexes, comments (should run after table changes)
 	DisallowedDropStmts []string // DROP VIEW / DROP MATERIALIZED VIEW / DROP INDEX (on matview) suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
+	// DroppedViews names every view and materialized view DropStmts drops,
+	// including the ones dropped to be created again. A suppressed drop is
+	// left out, since nothing runs. PostgreSQL refuses to drop a relation
+	// another object reads, so the caller checks these against the catalog;
+	// see checkViewDependents.
+	DroppedViews []string
 }
 
 func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChecker) (*ViewDiffResult, error) {
@@ -314,6 +320,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					} else {
 						result.DropStmts = append(result.DropStmts, "DROP VIEW "+dropName+";")
 					}
+					result.DroppedViews = append(result.DroppedViews, dropName)
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 					// DROP VIEW takes the view's triggers with it, so the
 					// recreate has to put them back.
@@ -391,6 +398,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			}
 			if viewAllowed {
 				result.DropStmts = append(result.DropStmts, drop)
+				result.DroppedViews = append(result.DroppedViews, k)
 			} else {
 				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: "+drop)
 			}

@@ -1439,3 +1439,38 @@ func TestOrderFromSchema_CompositeTypeAttributeTypes(t *testing.T) {
 	assert.Less(t, idx["public.z_status"], idx["public.a_row"], "enum before composite type")
 	assert.Less(t, idx["public.z_positive"], idx["public.a_row"], "domain before composite type")
 }
+
+func TestOrderViews(t *testing.T) {
+	views := orderedmap.New[string, *model.View]()
+	// Declared with the reader first, so the order below is the sort's doing
+	// rather than the map's.
+	views.Set("public.b_top", &model.View{
+		Schema:     "public",
+		Name:       "b_top",
+		Definition: "SELECT id, name FROM public.a_base",
+	})
+	views.Set("public.a_base", &model.View{
+		Schema:     "public",
+		Name:       "a_base",
+		Definition: "SELECT id, name FROM public.employees",
+	})
+	views.Set("public.lonely", &model.View{
+		Schema:     "public",
+		Name:       "lonely",
+		Definition: "SELECT 1 AS one",
+	})
+
+	order, err := toposort.OrderViews(views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int, len(order))
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	// employees is a table, not one of the views, so it resolves to nothing
+	// and leaves no node behind.
+	assert.Len(t, order, 3)
+	assert.NotContains(t, idx, "public.employees")
+	assert.Less(t, idx["public.a_base"], idx["public.b_top"])
+}

@@ -1,0 +1,16 @@
+# The dependent is gone from the desired schema, so the same plan drops it
+# before it drops the view it reads. That is not a blocked DROP either.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name, dept FROM public.employees;
+  CREATE VIEW public.eng_staff AS SELECT id, name FROM public.staff WHERE dept = 'eng';
+desired: |
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.staff AS SELECT id, name FROM public.employees;
+plan: |
+  DROP VIEW public.eng_staff;
+  DROP VIEW public.staff;
+  CREATE OR REPLACE VIEW public.staff AS
+  SELECT id, name FROM public.employees;
