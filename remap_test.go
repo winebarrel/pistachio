@@ -68,6 +68,47 @@ func TestBuildDefReplacer_PreservesThreePartReference(t *testing.T) {
 	assert.Equal(t, "x.col", replacer.Replace(`"a.b".col`))
 }
 
+// The replacer matches a schema name as a whole word: a schema whose name
+// ends in the mapped one, and a table named like the schema in a three-part
+// reference, are not rewritten.
+func TestBuildDefReplacer_SchemaBoundary(t *testing.T) {
+	replacer := buildDefReplacer(map[string]string{"staging": "public"})
+
+	assert.Equal(t, "public.t", replacer.Replace("staging.t"))
+	assert.Equal(t, "REFERENCES mystaging.ref(id)", replacer.Replace("REFERENCES mystaging.ref(id)"))
+	assert.Equal(t, "f(public.a, public.b)", replacer.Replace("f(staging.a, staging.b)"))
+	assert.Equal(t, "public.staging.col", replacer.Replace("staging.staging.col"))
+	assert.Equal(t, `"mystaging".t`, replacer.Replace(`"mystaging".t`))
+}
+
+// A foreign key to a schema whose name ends in the mapped one kept the wrong
+// schema: the prefix substitution turned mystaging.ref into mypublic.ref.
+func TestDump_WithSchemaMap_LongerSchemaName(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "mystaging", `
+CREATE TABLE mystaging.ref (id integer NOT NULL, CONSTRAINT ref_pkey PRIMARY KEY (id));
+`)
+	setupSchemaDB(t, ctx, "staging", `
+CREATE TABLE staging.t (id integer NOT NULL, ref_id integer REFERENCES mystaging.ref (id));
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"staging"},
+		SchemaMap:  map[string]string{"staging": "public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	assert.Contains(t, output, "REFERENCES mystaging.ref(id)")
+	assert.NotContains(t, output, "mypublic")
+}
+
 func TestAfterApply(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		o := &Options{SchemaMap: map[string]string{"staging": "public"}}

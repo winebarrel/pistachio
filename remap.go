@@ -1,6 +1,8 @@
 package pistachio
 
 import (
+	"regexp"
+	"slices"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -9,25 +11,58 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// buildDefReplacer builds a strings.Replacer that replaces schema-qualified
-// prefixes in raw SQL definitions (e.g. "staging." -> "public.").
+// defReplacer rewrites schema-qualified prefixes in raw SQL definitions,
+// "staging." to "public.". A prefix counts only where a name can start: at the
+// beginning of the text or after a character that cannot continue an
+// identifier, so a schema whose name ends in the mapped one, mystaging., and a
+// table named like the schema in a three-part reference, staging.staging.col,
+// keep their second part. A string literal that starts the same way is still
+// rewritten, since the text is not parsed here.
 //
-// All inputs to this replacer come from canonical SQL; pg_get_*def output
-// from the catalog or pg_query deparse output from the parser; so any
-// identifier that requires quoting is already wrapped in double quotes.
-// Only the model.Ident form is added to the pair list. Adding an unquoted
-// fallback (e.g. raw `a.b.` for a schema literally named `a.b`) would
-// dangerously collide with three-part references like `a.b.col` (schema
-// `a`, table `b`, column `col`).
-func buildDefReplacer(schemaMap map[string]string) *strings.Replacer {
-	var pairs []string
-	for from, to := range schemaMap {
-		pairs = append(pairs, model.Ident(from)+".", model.Ident(to)+".")
-	}
-	return strings.NewReplacer(pairs...)
+// All inputs come from canonical SQL, pg_get_*def output from the catalog or
+// pg_query deparse output from the parser, so an identifier that requires
+// quoting is already wrapped in double quotes and only the model.Ident form is
+// matched. An unquoted fallback, the raw `a.b.` for a schema literally named
+// `a.b`, would collide with a three-part reference `a.b.col`.
+type defReplacer struct {
+	re *regexp.Regexp
+	to map[string]string
 }
 
-func buildReverseDefReplacer(schemaMap map[string]string) *strings.Replacer {
+func buildDefReplacer(schemaMap map[string]string) *defReplacer {
+	r := &defReplacer{to: make(map[string]string, len(schemaMap))}
+
+	// Longest first, so a name that starts another whole name is not matched
+	// short: the alternation takes the first branch that matches.
+	froms := make([]string, 0, len(schemaMap))
+	for from, to := range schemaMap {
+		ident := model.Ident(from)
+		froms = append(froms, ident)
+		r.to[ident] = model.Ident(to)
+	}
+	slices.SortFunc(froms, func(a, b string) int {
+		return len(b) - len(a)
+	})
+	for i, from := range froms {
+		froms[i] = regexp.QuoteMeta(from)
+	}
+
+	r.re = regexp.MustCompile(`(^|[^A-Za-z0-9_"])(` + strings.Join(froms, "|") + `)\.`)
+	return r
+}
+
+// Replace returns s with every mapped schema prefix rewritten.
+func (r *defReplacer) Replace(s string) string {
+	if len(r.to) == 0 {
+		return s
+	}
+	return r.re.ReplaceAllStringFunc(s, func(m string) string {
+		sub := r.re.FindStringSubmatch(m)
+		return sub[1] + r.to[sub[2]] + "."
+	})
+}
+
+func buildReverseDefReplacer(schemaMap map[string]string) *defReplacer {
 	reversed := make(map[string]string, len(schemaMap))
 	for k, v := range schemaMap {
 		reversed[v] = k
@@ -216,7 +251,7 @@ func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Ta
 func remapPolicies(
 	policies *orderedmap.Map[string, *model.Policy],
 	mapSchema func(string) string,
-	replacer *strings.Replacer,
+	replacer *defReplacer,
 ) {
 	for _, p := range policies.CollectValues() {
 		p.Schema = mapSchema(p.Schema)
@@ -238,7 +273,7 @@ func remapPolicies(
 func remapTriggers(
 	triggers *orderedmap.Map[string, *model.Trigger],
 	mapSchema func(string) string,
-	replacer *strings.Replacer,
+	replacer *defReplacer,
 ) {
 	for _, trg := range triggers.CollectValues() {
 		trg.Schema = mapSchema(trg.Schema)
@@ -470,7 +505,7 @@ func (client *Client) reverseRemapRoutineSchemas(routines *orderedmap.Map[string
 func remapRoutines(
 	routines *orderedmap.Map[string, *model.Routine],
 	remapSchema func(string) string,
-	replacer *strings.Replacer,
+	replacer *defReplacer,
 ) *orderedmap.Map[string, *model.Routine] {
 	remapped := orderedmap.New[string, *model.Routine]()
 
