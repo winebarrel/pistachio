@@ -1,0 +1,19 @@
+# PostgreSQL joins the INCLUDE columns into the name of an unnamed UNIQUE or
+# EXCLUDE, so t_a_b_key rather than t_a_key.
+init: |
+  CREATE TABLE public.t (
+      a integer,
+      b integer,
+      c integer,
+      UNIQUE (a) INCLUDE (b),
+      EXCLUDE (c WITH =) INCLUDE (b)
+  );
+desired: |
+  CREATE TABLE public.t (
+      a integer,
+      b integer,
+      c integer,
+      UNIQUE (a) INCLUDE (b),
+      EXCLUDE (c WITH =) INCLUDE (b)
+  );
+plan: ""

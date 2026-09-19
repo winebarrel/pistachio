@@ -220,7 +220,7 @@ An index attached to the parent's is dropped with it, and PostgreSQL rejects a `
 ## Constraint and index naming
 
 !!! info
-    Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are auto-named by pistachio following PostgreSQL's convention: `{table}_pkey`, and `{table}_{col}..._key`, `{table}_{col}..._fkey`, `{table}_{col}..._excl` joining every key column. A `CHECK` becomes `{table}_{col}_check` when its expression references one column and `{table}_check` when it references none or several, which is what PostgreSQL does even for a constraint written on a column.
+    Unnamed constraints (e.g. `id integer PRIMARY KEY`, `name text UNIQUE`, `col integer REFERENCES other(id)`) are auto-named by pistachio following PostgreSQL's convention: `{table}_pkey`, and `{table}_{col}..._key`, `{table}_{col}..._fkey`, `{table}_{col}..._excl` joining every key column. A `UNIQUE` or `EXCLUDE` joins its `INCLUDE` columns as well, and an `EXCLUDE` element written as an expression is named the way an index element is, below. A `CHECK` becomes `{table}_{col}_check` when its expression references one column and `{table}_check` when it references none or several, which is what PostgreSQL does even for a constraint written on a column.
 
     An index written without a name (e.g. `CREATE INDEX ON users (name)`) is named `{table}_{col}..._idx`, joining every index element including the `INCLUDE` list. An element written as an expression takes the name PostgreSQL gives it: the function it calls (`(lower(name))` gives `users_lower_idx`), the field of a field selection, the column under a subscript, the type of a cast that has nothing under it, or `expr` when it has none of its own.
 

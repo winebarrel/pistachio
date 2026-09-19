@@ -1050,13 +1050,19 @@ func lastNodeName(nodes []*pg_query.Node) string {
 // (src/backend/commands/indexcmds.c). A name repeated within one index takes a
 // number, so (lower(a), lower(b)) reads lower_lower1.
 func chooseIndexColumnNames(is *pg_query.IndexStmt) []string {
+	return chooseIndexElemNames(is.IndexParams, is.IndexIncludingParams)
+}
+
+// chooseIndexElemNames is chooseIndexColumnNames over the element lists
+// themselves, so a constraint's elements can be named the same way.
+func chooseIndexElemNames(lists ...[]*pg_query.Node) []string {
 	var names []string
 
 	taken := func(name string) bool {
 		return slices.Contains(names, name)
 	}
 
-	for _, params := range [][]*pg_query.Node{is.IndexParams, is.IndexIncludingParams} {
+	for _, params := range lists {
 		for _, node := range params {
 			ie := node.GetIndexElem()
 
@@ -1096,15 +1102,17 @@ func autoNameIndex(is *pg_query.IndexStmt) string {
 	return makeObjectName(is.Relation.Relname, strings.Join(chooseIndexColumnNames(is), "_"), "idx")
 }
 
-// constraintKeyCols returns the columns a constraint keys on, in order. Keys
-// holds them for PRIMARY KEY and UNIQUE; EXCLUDE keeps its elements in
-// Exclusions instead, where PostgreSQL stands "expr" in for an element that is
-// an expression rather than a column.
+// constraintKeyCols returns the names PostgreSQL builds an unnamed constraint's
+// name from, in order. The constraint is backed by an index, and the name comes
+// from that index's elements: the key columns, which Keys holds for PRIMARY
+// KEY and UNIQUE and Exclusions for EXCLUDE, followed by the INCLUDE columns.
+// An element that is an expression is named the way an index element is, so
+// lower(a) reads lower and a repeated name takes a number.
 func constraintKeyCols(con *pg_query.Constraint) []string {
-	var cols []string
+	var elems []*pg_query.Node
 	for _, k := range con.Keys {
 		if s := k.GetString_(); s != nil {
-			cols = append(cols, s.Sval)
+			elems = append(elems, indexElemNode(s.Sval))
 		}
 	}
 	for _, ex := range con.Exclusions {
@@ -1113,18 +1121,23 @@ func constraintKeyCols(con *pg_query.Constraint) []string {
 			continue
 		}
 		for _, item := range list.Items {
-			ie := item.GetIndexElem()
-			if ie == nil {
-				continue
-			}
-			if ie.Name != "" {
-				cols = append(cols, ie.Name)
-			} else {
-				cols = append(cols, "expr")
+			if item.GetIndexElem() != nil {
+				elems = append(elems, item)
 			}
 		}
 	}
-	return cols
+	for _, inc := range con.Including {
+		if s := inc.GetString_(); s != nil {
+			elems = append(elems, indexElemNode(s.Sval))
+		}
+	}
+	return chooseIndexElemNames(elems)
+}
+
+// indexElemNode wraps a column name as the index element a constraint's key
+// list implies, so the naming can read keys and exclusions alike.
+func indexElemNode(name string) *pg_query.Node {
+	return &pg_query.Node{Node: &pg_query.Node_IndexElem{IndexElem: &pg_query.IndexElem{Name: name}}}
 }
 
 // fkAttrCols returns the local-side columns of a foreign key, in order.

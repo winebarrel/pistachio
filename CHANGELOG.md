@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Name an unnamed `UNIQUE` or `EXCLUDE` constraint the way PostgreSQL does when it holds an expression or an `INCLUDE` list: `EXCLUDE (lower(a) WITH =)` is `t_lower_excl`, not `t_expr_excl`, and `UNIQUE (a) INCLUDE (b)` is `t_a_b_key`, not `t_a_key`. Under the old name every plan added the constraint again and offered to drop the server's.
+
 * `DROP NOT NULL` now runs after the table's constraint statements. Dropping a primary key and the `NOT NULL` on its column in one plan put the `DROP NOT NULL` first, which PostgreSQL refuses with `column is in a primary key`.
 
 * A constraint trigger whose definition changes is dropped and created again, under `--allow-drop trigger`. `plan` wrote `CREATE OR REPLACE CONSTRAINT TRIGGER`, which PostgreSQL does not have, so `apply` failed.

@@ -1,0 +1,15 @@
+# An unnamed EXCLUDE on a function call takes the function's name, the way
+# PostgreSQL names it, so the plan finds the server's constraint.
+init: |
+  CREATE TABLE public.t (
+      a text,
+      b text,
+      EXCLUDE (lower(a) WITH =, lower(b) WITH =)
+  );
+desired: |
+  CREATE TABLE public.t (
+      a text,
+      b text,
+      EXCLUDE (lower(a) WITH =, lower(b) WITH =)
+  );
+plan: ""
