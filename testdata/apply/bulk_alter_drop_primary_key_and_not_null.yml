@@ -1,0 +1,23 @@
+# One ALTER TABLE dropping the primary key and then the NOT NULL on its
+# column. PostgreSQL accepts the two in that order.
+bulk_alter: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer,
+      name text
+  );
+drop_policy:
+  allow_drop:
+    - constraint
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer,
+      name text
+  );

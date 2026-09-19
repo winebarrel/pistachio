@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* `DROP NOT NULL` now runs after the table's constraint statements. Dropping a primary key and the `NOT NULL` on its column in one plan put the `DROP NOT NULL` first, which PostgreSQL refuses with `column is in a primary key`.
+
 * A constraint trigger whose definition changes is dropped and created again, under `--allow-drop trigger`. `plan` wrote `CREATE OR REPLACE CONSTRAINT TRIGGER`, which PostgreSQL does not have, so `apply` failed.
 
 * `serial2`, `serial4` and `serial8` are read as `smallserial`, `serial` and `bigserial`, like `int2`, `int4` and `int8`. A column written with one of them planned `SET DATA TYPE serial8`, which PostgreSQL refuses, and `DROP NOT NULL` on every run.

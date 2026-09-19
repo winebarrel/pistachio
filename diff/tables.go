@@ -204,7 +204,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		return result, nil
 	}
 
-	colStmts, colDropStmts, colDisallowed, err := diffColumns(fqtn, current.Columns, desired.Columns, dc)
+	colStmts, notNullDrops, colDropStmts, colDisallowed, err := diffColumns(fqtn, current.Columns, desired.Columns, dc)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +233,12 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	}
 	result.Stmts = append(result.Stmts, conStmts...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, conDisallowed...)
+
+	// DROP NOT NULL follows the constraint statements: PostgreSQL refuses it
+	// while a primary key holds the column, so the key's DROP CONSTRAINT has to
+	// run first. It stays ahead of the index statements, which keeps the ALTER
+	// TABLE run that --bulk-alter merges in one piece.
+	result.Stmts = append(result.Stmts, notNullDrops...)
 
 	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, usingIndexNames(desired.Constraints), dc)
 	if err != nil {
@@ -291,22 +297,25 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	return result, nil
 }
 
-// diffColumns returns (stmts, dropStmts, disallowed, err). Adds, alters, and
-// renames go into stmts; pure drops (columns absent from desired) go into
-// dropStmts so the caller can sequence them after constraint/index/policy
-// drops on the same table; PostgreSQL auto-cascades single-column
-// UNIQUE/CHECK constraints and dependent indexes during DROP COLUMN, which
-// makes a later explicit DROP CONSTRAINT/INDEX fail with "does not exist".
+// diffColumns returns (stmts, notNullDrops, dropStmts, disallowed, err). Adds,
+// alters, and renames go into stmts. A DROP NOT NULL goes into notNullDrops so
+// the caller can run it after the constraint statements, since PostgreSQL
+// refuses it while a primary key holds the column. Pure drops (columns absent
+// from desired) go into dropStmts so the caller can sequence them after
+// constraint/index/policy drops on the same table; PostgreSQL auto-cascades
+// single-column UNIQUE/CHECK constraints and dependent indexes during DROP
+// COLUMN, which makes a later explicit DROP CONSTRAINT/INDEX fail with "does
+// not exist".
 // Within dropStmts, generated columns are emitted before their potential
 // source columns so a paired drop (e.g. dropping both `body` and a stored
 // `word_count GENERATED ALWAYS AS (length(body))`) succeeds without CASCADE.
-func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) (stmts []string, dropStmts []string, disallowed []string, err error) {
+func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Column], dc DropChecker) (stmts []string, notNullDrops []string, dropStmts []string, disallowed []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames
 	renameStmts, current, err := detectColumnRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	stmts = append(stmts, renameStmts...)
 
@@ -333,7 +342,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 			cur := currentCol.Generated.IsStoredGeneratedColumn()
 			des := desiredCol.Generated.IsStoredGeneratedColumn()
 			if cur != des {
-				return nil, nil, nil, fmt.Errorf("column %s.%s: cannot toggle GENERATED; DROP COLUMN + ADD COLUMN is required",
+				return nil, nil, nil, nil, fmt.Errorf("column %s.%s: cannot toggle GENERATED; DROP COLUMN + ADD COLUMN is required",
 					fqtn, model.Ident(name))
 			}
 			if cur && des && exprChanged(currentCol.Default, desiredCol.Default) {
@@ -349,10 +358,13 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 				// cast change or a cast-target-type change on a GENERATED
 				// expression. equalSelectExpr keeps the asymmetric strip
 				// from #201 / #203 but no DEFAULT-style softening.
-				return nil, nil, nil, fmt.Errorf("column %s.%s: cannot change GENERATED expression; DROP COLUMN + ADD COLUMN is required",
+				return nil, nil, nil, nil, fmt.Errorf("column %s.%s: cannot change GENERATED expression; DROP COLUMN + ADD COLUMN is required",
 					fqtn, model.Ident(name))
 			}
 			stmts = append(stmts, alterColumnSQL(fqtn, currentCol, desiredCol)...)
+			if s := dropNotNullSQL(fqtn, currentCol, desiredCol); s != "" {
+				notNullDrops = append(notNullDrops, s)
+			}
 			if seqSQL := alterSerialSequenceSQL(fqtn, currentCol, desiredCol); seqSQL != "" {
 				seqStmts = append(seqStmts, seqSQL)
 			}
@@ -387,7 +399,7 @@ func diffColumns(fqtn string, current, desired *orderedmap.Map[string, *model.Co
 		}
 	}
 
-	return stmts, dropStmts, disallowed, nil
+	return stmts, notNullDrops, dropStmts, disallowed, nil
 }
 
 func addColumnSQL(fqtn string, col *model.Column) string {
@@ -455,7 +467,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" ADD GENERATED "+identityKind(desired.Identity)+" AS IDENTITY"+desired.IdentitySeq.OptionsSQL(desired.TypeName)+";")
 	case curIsIdent && !desIsIdent:
 		// identity -> none: DROP IDENTITY. The column stays NOT NULL afterwards;
-		// the NOT NULL diff below will emit DROP NOT NULL if desired is nullable.
+		// dropNotNullSQL emits DROP NOT NULL if desired is nullable.
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP IDENTITY IF EXISTS;")
 	case curIsIdent && desIsIdent:
 		// always <-> by default, and the sequence options behind the column.
@@ -497,12 +509,10 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 
 	// NOT NULL change. Identity columns are implicitly NOT NULL, so skip when
 	// the desired side is identity (the ADD IDENTITY path sets NOT NULL above).
-	if current.NotNull != desired.NotNull && !desIsIdent {
-		if desired.NotNull {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
-		} else {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP NOT NULL;")
-		}
+	// A DROP NOT NULL is not here: dropNotNullSQL renders it, and the caller
+	// runs it after the constraint statements.
+	if !current.NotNull && desired.NotNull && !desIsIdent {
+		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
 	} else if current.NotNull && desired.NotNull && !desIsIdent &&
 		current.NotNullName != nil && desired.NotNullName != nil &&
 		*current.NotNullName != *desired.NotNullName {
@@ -520,6 +530,18 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	stmts = append(stmts, columnStorageSQL(fqtn, current, desired, retyped)...)
 
 	return stmts
+}
+
+// dropNotNullSQL returns the DROP NOT NULL a column change needs, or "" when
+// it needs none. It is separate from alterColumnSQL because PostgreSQL refuses
+// the statement while a primary key holds the column, so the caller runs it
+// after the DROP CONSTRAINT that frees it. A column becoming an identity stays
+// NOT NULL, so it is skipped like the SET NOT NULL side.
+func dropNotNullSQL(fqtn string, current, desired *model.Column) string {
+	if !current.NotNull || desired.NotNull || desired.Identity.IsIdentityColumn() {
+		return ""
+	}
+	return "ALTER TABLE " + fqtn + " ALTER COLUMN " + model.Ident(desired.Name) + " DROP NOT NULL;"
 }
 
 // columnStorageSQL returns the statements that put a column's TOAST storage

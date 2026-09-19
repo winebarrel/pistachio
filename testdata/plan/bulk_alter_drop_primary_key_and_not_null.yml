@@ -1,0 +1,22 @@
+# The DROP NOT NULL sits after the constraint statements, so the merged
+# statement lists the DROP CONSTRAINT first. PostgreSQL runs the subcommands
+# in order and would refuse them the other way round.
+bulk_alter: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer,
+      name text
+  );
+drop_policy:
+  allow_drop:
+    - constraint
+plan: |
+  ALTER TABLE public.users
+    DROP CONSTRAINT users_pkey,
+    ALTER COLUMN id DROP NOT NULL;
