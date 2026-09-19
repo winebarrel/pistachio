@@ -505,13 +505,12 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			t, ok := tables.GetOk(fqtn)
 			if !ok {
 				// ALTER INDEX, ALTER VIEW and ALTER MATERIALIZED VIEW share
-				// this statement type, name no table, and are not read. An
-				// ALTER TABLE on a table the file does not declare is
-				// skipped without a warning, on purpose.
+				// this statement type, name no table, and are not read.
 				if as.Objtype != pg_query.ObjectType_OBJECT_TABLE {
 					warnIgnoredStmt(sql, spans, rawStmt)
+					continue
 				}
-				continue
+				return nil, undeclared("ALTER TABLE "+fqtn, "table", fqtn, stmtOffset)
 			}
 
 			// A table marked -- pista:ignore is out of the diff, so an
@@ -595,7 +594,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 
 		case node.GetAlterSeqStmt() != nil:
-			applyAlterSeqOwnedBy(node.GetAlterSeqStmt(), defaultSchema, sequences)
+			if err := applyAlterSeqOwnedBy(node.GetAlterSeqStmt(), defaultSchema, sequences, stmtOffset); err != nil {
+				return nil, err
+			}
 
 		case node.GetCreateFunctionStmt() != nil:
 			routine, err := parseCreateFunctionStmt(node.GetCreateFunctionStmt(), defaultSchema)
@@ -1859,17 +1860,18 @@ func defElemInt64(de *pg_query.DefElem) (int64, bool, error) {
 // already-parsed sequence, marking it unmanaged. The catalog excludes owned
 // sequences, so without this every plan proposes creating a sequence that
 // already exists. Other ALTER SEQUENCE options are not tracked.
-func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, sequences *orderedmap.Map[string, *model.Sequence]) {
+func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, sequences *orderedmap.Map[string, *model.Sequence], offset int32) error {
 	if as.Sequence == nil {
-		return
+		return nil
 	}
 	schema := as.Sequence.Schemaname
 	if schema == "" {
 		schema = defaultSchema
 	}
-	seq, ok := sequences.GetOk(model.Ident(schema, as.Sequence.Relname))
+	fqn := model.Ident(schema, as.Sequence.Relname)
+	seq, ok := sequences.GetOk(fqn)
 	if !ok {
-		return
+		return undeclared("ALTER SEQUENCE "+fqn, "sequence", fqn, offset)
 	}
 	for _, opt := range as.Options {
 		de := opt.GetDefElem()
@@ -1878,6 +1880,7 @@ func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, seque
 		}
 		seq.OwnerTable, seq.OwnerColumn = parseSeqOwnedBy(de.Arg)
 	}
+	return nil
 }
 
 // parseSeqOwnedBy extracts the owner table and column from an OWNED BY clause.

@@ -136,10 +136,11 @@ func TestApplyAlterSeqOwnedBy_OtherOptionIgnored(t *testing.T) {
 }
 
 func TestApplyAlterSeqOwnedBy_UnknownSequence(t *testing.T) {
-	seq := parseOneSequence(t, `
+	_, err := parseSQLWithPublicSchema(`
 		CREATE SEQUENCE public.s;
 		CREATE TABLE public.t (id integer, val integer DEFAULT 42);
 		ALTER SEQUENCE public.absent OWNED BY public.t.val;
 	`)
-	assert.False(t, seq.Owned())
+	require.Error(t, err)
+	assert.Equal(t, "ALTER SEQUENCE public.absent: sequence public.absent is not declared before it", err.Error())
 }
