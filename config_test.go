@@ -72,6 +72,13 @@ func TestOptions_SchemasTrimmed(t *testing.T) {
 		assert.Equal(t, []string{"public", "billing"}, cli.Schemas)
 	})
 
+	t.Run("environment variable", func(t *testing.T) {
+		t.Setenv("PISTA_SCHEMAS", "public, billing")
+		cli, err := parseWithConfig(t)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"public", "billing"}, cli.Schemas)
+	})
+
 	t.Run("config", func(t *testing.T) {
 		path := writeConfig(t, "schemas:\n  - ' public'\n  - 'billing '\n")
 		cli, err := parseWithConfig(t, "--config", path)
