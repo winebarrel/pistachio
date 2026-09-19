@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Trim the whitespace around each schema name in `-n`, `$PISTA_SCHEMAS` and `schemas` in the config file, and around each side of a `-m` mapping. `-n 'public, billing'` read the second entry as ` billing`, a schema of its own, so the real one was neither read nor written, and `-m 'old=new; other=third'` mapped ` other`, which matched nothing.
+* Trim the whitespace around each schema name in `-n`, `$PISTA_SCHEMAS` and `schemas` in the config file, and around each side of a `-m` mapping. `-n 'public, billing'` read the second entry as ` billing`, a schema of its own, so the real one was neither read nor written, and `-m 'old=new; other=third'` mapped ` other`, which matched nothing. `-m` now also refuses an empty side, `-m 'x='`, which left the mapped objects unqualified, and two sources that differ only in whitespace.
 
 * `exclusive-wait: 0` in the config file is read as `--exclusive-wait 0` is. It failed with `cannot unmarshal number into Go value of type string`, since YAML reads a bare `0` as a number and the flag took only text.
 

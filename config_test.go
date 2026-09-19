@@ -91,6 +91,18 @@ func TestOptions_SchemasTrimmed(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, map[string]string{"old": "new", "other": "third"}, cli.SchemaMap)
 	})
+
+	t.Run("schema map sources that collide after trimming", func(t *testing.T) {
+		_, err := parseWithConfig(t, "-m", "x=a; x =b")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `duplicate schema-map source "x"`)
+	})
+
+	t.Run("schema map with an empty destination", func(t *testing.T) {
+		_, err := parseWithConfig(t, "-m", "x= ")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `schema-map destination for "x" is empty`)
+	})
 }
 
 // The --search-path default lives in a struct tag, while connect falls back to
