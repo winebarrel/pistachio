@@ -13,13 +13,12 @@ import (
 //
 // A definition change goes through CREATE OR REPLACE TRIGGER, which PostgreSQL
 // has carried since 14 and which takes a lighter lock than DROP TRIGGER. There
-// is no CREATE OR REPLACE CONSTRAINT TRIGGER, so a change on either side of
-// the constraint-trigger line falls back to DROP and CREATE, honoring the
-// trigger-drop policy via dc the same as a removal: with the drop denied, the
-// trigger keeps its current definition rather than running the CREATE half
-// alone. Either way PostgreSQL leaves the new trigger enabled, so a desired
-// state other than the default is re-applied after the statement that reset
-// it.
+// is no CREATE OR REPLACE CONSTRAINT TRIGGER, so a change to or from a
+// constraint trigger falls back to DROP and CREATE, honoring the trigger-drop
+// policy via dc the same as a removal: with the drop denied, the trigger keeps
+// its current definition rather than running the CREATE half alone. Either
+// way PostgreSQL leaves the new trigger enabled, so a desired state other than
+// the default is re-applied after the statement that reset it.
 func diffTriggers(
 	fqtn string,
 	current, desired *orderedmap.Map[string, *model.Trigger],
@@ -37,8 +36,8 @@ func diffTriggers(
 	}
 
 	// Compare once. The loops below need both whether the definition changed
-	// and whether a constraint trigger is on either side of the change, which
-	// PostgreSQL will not replace in place.
+	// and whether a constraint trigger is involved, which PostgreSQL will not
+	// replace in place.
 	changed := map[string]bool{}
 	recreated := map[string]bool{}
 	for name, des := range desired.All() {

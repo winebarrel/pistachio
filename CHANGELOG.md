@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* A constraint trigger whose definition changes is dropped and created again, under `--allow-drop trigger`. PostgreSQL has no `CREATE OR REPLACE CONSTRAINT TRIGGER`, and `apply` failed on the one `plan` wrote.
+* A constraint trigger whose definition changes is dropped and created again, under `--allow-drop trigger`. `plan` wrote `CREATE OR REPLACE CONSTRAINT TRIGGER`, which PostgreSQL does not have, so `apply` failed.
 
 * `serial2`, `serial4` and `serial8` are read as `smallserial`, `serial` and `bigserial`, like `int2`, `int4` and `int8`. A column written with one of them planned `SET DATA TYPE serial8`, which PostgreSQL refuses, and `DROP NOT NULL` on every run.
 
