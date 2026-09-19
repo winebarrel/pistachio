@@ -121,6 +121,14 @@ func TestAfterApply(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate schema-map destination")
 	})
+
+	// -n 'public, billing' reaches kong as ["public", " billing"], and the
+	// space made a schema of its own.
+	t.Run("trims schemas", func(t *testing.T) {
+		o := &Options{Schemas: []string{" public", "billing "}}
+		require.NoError(t, o.AfterApply())
+		assert.Equal(t, []string{"public", "billing"}, o.Schemas)
+	})
 }
 
 func TestRemapSchema(t *testing.T) {

@@ -22,6 +22,14 @@ create index idx_items_name on items (name);
 create type status as enum ('active', 'archived');
 `
 
+// parse carries its own -n, so it trims the names the way the global option
+// does.
+func TestParse_AfterApply_TrimsSchemas(t *testing.T) {
+	cmd := &command.Parse{Schemas: []string{" public", "billing "}}
+	require.NoError(t, cmd.AfterApply())
+	assert.Equal(t, []string{"public", "billing"}, cmd.Schemas)
+}
+
 func TestParse_Run(t *testing.T) {
 	path := writeSQLFile(t, "schema.sql", parseSchemaSQL)
 

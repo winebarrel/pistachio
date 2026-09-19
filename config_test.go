@@ -63,6 +63,23 @@ schema-map:
 	assert.Equal(t, map[string]string{"old": "new"}, cli.SchemaMap)
 }
 
+// A schema name is trimmed whichever way it arrives: a comma list with spaces
+// on the command line, or a config file entry with spaces around it.
+func TestOptions_SchemasTrimmed(t *testing.T) {
+	t.Run("flag", func(t *testing.T) {
+		cli, err := parseWithConfig(t, "-n", "public, billing")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"public", "billing"}, cli.Schemas)
+	})
+
+	t.Run("config", func(t *testing.T) {
+		path := writeConfig(t, "schemas:\n  - ' public'\n  - 'billing '\n")
+		cli, err := parseWithConfig(t, "--config", path)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"public", "billing"}, cli.Schemas)
+	})
+}
+
 // The --search-path default lives in a struct tag, while connect falls back to
 // DefaultSearchPath for a library caller that builds Options directly. The two
 // have to name the same path, or the CLI and the library would open different
