@@ -511,10 +511,8 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// the desired side is identity (the ADD IDENTITY path sets NOT NULL above).
 	// A DROP NOT NULL is not here: dropNotNullSQL renders it, and the caller
 	// runs it after the constraint statements.
-	if current.NotNull != desired.NotNull && !desIsIdent {
-		if desired.NotNull {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
-		}
+	if !current.NotNull && desired.NotNull && !desIsIdent {
+		stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET NOT NULL;")
 	} else if current.NotNull && desired.NotNull && !desIsIdent &&
 		current.NotNullName != nil && desired.NotNullName != nil &&
 		*current.NotNullName != *desired.NotNullName {
