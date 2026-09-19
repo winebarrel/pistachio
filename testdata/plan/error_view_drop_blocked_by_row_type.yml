@@ -1,0 +1,12 @@
+# A routine that returns the view's row type depends on the type the view
+# owns rather than on the view, and PostgreSQL blocks the DROP for it all the
+# same. Both ways of recording it resolve to the same view here.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (id integer, n text);
+  CREATE VIEW public.v AS SELECT id, n FROM public.t;
+  CREATE FUNCTION public.row_of_v() RETURNS public.v LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+desired: |
+  CREATE TABLE public.t (id integer, n text);
+error: "cannot drop public.v: function public.row_of_v() depends on it"

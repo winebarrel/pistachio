@@ -1,6 +1,8 @@
-# A routine with a SQL body records the same dependency a view does, so it
-# blocks the DROP too. Routines are not managed here, so nothing in the plan
-# takes it out of the way.
+# A BEGIN ATOMIC body is parsed at creation, so the routine records the same
+# dependency a view does and blocks the DROP. A body written as a string
+# literal records none; view_drop_not_blocked_by_string_body_routine.yml holds
+# that side. Routines are not managed here, so nothing takes this one out of
+# the way.
 min_pg: 14
 drop_policy:
   allow_drop: [all]

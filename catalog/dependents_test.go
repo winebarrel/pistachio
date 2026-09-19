@@ -59,9 +59,11 @@ func TestViewDependents(t *testing.T) {
 		assert.NotContains(t, dependents, "public.eng_names")
 	})
 
-	// A routine with a SQL body records the dependency a view does, and it is
-	// not a relation, so a plan cannot drop it out of the way.
-	t.Run("routine with a SQL body", func(t *testing.T) {
+	// A BEGIN ATOMIC body is parsed at creation, so the routine records the
+	// dependency a view does. A routine that returns the view's row type
+	// records it on the type the view owns, which blocks the drop the same
+	// way. A body written as a string literal records neither.
+	t.Run("routine bodies and the row type", func(t *testing.T) {
 		if testutil.ServerMajorVersion(t, ctx, conn) < 14 {
 			t.Skip("requires PostgreSQL 14 or later")
 		}
@@ -69,6 +71,8 @@ func TestViewDependents(t *testing.T) {
 			CREATE TABLE public.t (id integer NOT NULL, n text);
 			CREATE VIEW public.v AS SELECT id, n FROM public.t;
 			CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM public.v; END;
+			CREATE FUNCTION public.row_of_v() RETURNS public.v LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+			CREATE FUNCTION public.plain() RETURNS bigint LANGUAGE sql AS $$ SELECT count(*) FROM public.v $$;
 		`)
 
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
@@ -77,6 +81,7 @@ func TestViewDependents(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, []catalog.Dependent{
+			{Kind: "function", Name: "public.row_of_v()"},
 			{Kind: "function", Name: "public.total()"},
 		}, dependents["public.v"])
 	})

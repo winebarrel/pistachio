@@ -1,0 +1,13 @@
+# A routine whose body is a string literal is not parsed at creation, so
+# PostgreSQL records no dependency on what it reads and the DROP goes through.
+# The check must not invent a blocker for it.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (id integer, n text);
+  CREATE VIEW public.v AS SELECT id, n FROM public.t;
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql AS $$ SELECT count(*) FROM public.v $$;
+desired: |
+  CREATE TABLE public.t (id integer, n text);
+plan: |
+  DROP VIEW public.v;

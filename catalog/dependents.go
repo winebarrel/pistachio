@@ -50,8 +50,14 @@ func (c *Catalog) ViewDependents(ctx context.Context) (map[string][]Dependent, e
 	// row, and falls through to pg_identify_object with the rest, which names
 	// it the way PostgreSQL's own error does.
 	//
+	// A relation is reached two ways. Most dependents record the relation
+	// itself, and a routine that returns the view's row type records the type
+	// that relation owns, which blocks the drop the same way. Both resolve to
+	// the same target here.
+	//
 	// DISTINCT because a dependent reading several columns of the target has a
-	// pg_depend row per column.
+	// pg_depend row per column, and one that reads the relation and returns
+	// its row type has a row for each.
 	q := `
 		SELECT DISTINCT
 			tn.nspname,
@@ -61,18 +67,22 @@ func (c *Catalog) ViewDependents(ctx context.Context) (map[string][]Dependent, e
 			CASE WHEN dc.relkind IN ('v', 'm') THEN dc.relname ELSE (oi).identity END
 		FROM
 			pg_catalog.pg_depend d
-			JOIN pg_catalog.pg_class t ON t.oid = d.refobjid
+			LEFT JOIN pg_catalog.pg_type rt ON rt.oid = d.refobjid AND d.refclassid = 'pg_catalog.pg_type'::regclass
+			JOIN pg_catalog.pg_class t ON t.oid = CASE
+				WHEN d.refclassid = 'pg_catalog.pg_class'::regclass THEN d.refobjid
+				ELSE rt.typrelid
+			END
 			JOIN pg_catalog.pg_namespace tn ON tn.oid = t.relnamespace
 			CROSS JOIN LATERAL pg_catalog.pg_identify_object(d.classid, d.objid, 0) oi
 			LEFT JOIN pg_catalog.pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_catalog.pg_rewrite'::regclass
 			LEFT JOIN pg_catalog.pg_class dc ON dc.oid = r.ev_class
 			LEFT JOIN pg_catalog.pg_namespace dn ON dn.oid = dc.relnamespace
 		WHERE
-			d.refclassid = 'pg_catalog.pg_class'::regclass
+			d.refclassid IN ('pg_catalog.pg_class'::regclass, 'pg_catalog.pg_type'::regclass)
 			AND d.deptype = 'n'
 			AND t.relkind IN ('v', 'm')
 			AND tn.nspname = ANY(@schemas)
-			AND (r.oid IS NULL OR r.ev_class <> d.refobjid)
+			AND (r.oid IS NULL OR r.ev_class <> t.oid)
 		ORDER BY
 			1, 2, 3, 4, 5
 	`
