@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,10 +17,8 @@ import (
 func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 	for _, tc := range []struct{ name, sql, want string }{
 		{"alter table", "ALTER TABLE public.t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
-		{"alter table if exists", "ALTER TABLE IF EXISTS public.t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"alter table only", "ALTER TABLE ONLY public.t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"alter table declared later", "ALTER TABLE public.t ADD CONSTRAINT c CHECK (true);\nCREATE TABLE public.t (id integer);", "ALTER TABLE public.t: table public.t is not declared before it"},
-		{"alter table on a view", "CREATE VIEW public.v AS SELECT 1 AS x;\nALTER TABLE public.v ALTER COLUMN x SET DEFAULT 2;", "ALTER TABLE public.v: table public.v is not declared before it"},
 		{"alter table with an unsupported action", "ALTER TABLE public.t ADD COLUMN x text;", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"quoted name", `ALTER TABLE "My Schema"."My Table" ADD CONSTRAINT c CHECK (true);`, `ALTER TABLE "My Schema"."My Table": table "My Schema"."My Table" is not declared before it`},
 		{"unqualified name", "CREATE TABLE other.t (id integer);\nALTER TABLE t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
@@ -79,4 +78,42 @@ func TestParseSQLFiles_AlterUndeclaredTargetLocation(t *testing.T) {
 func TestParseSQL_AlterUndeclaredTargetUnderExecute(t *testing.T) {
 	_, err := parseSQLWithPublicSchema("-- pista:execute\nALTER TABLE public.t ADD CONSTRAINT c CHECK (true);")
 	require.NoError(t, err)
+}
+
+// IF EXISTS on a missing table or sequence is a no-op, as it is for
+// PostgreSQL. On a declared one the statement is read as usual.
+func TestParseSQL_AlterIfExists(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	result, err := parseSQLWithPublicSchema(`
+ALTER TABLE IF EXISTS public.nosuch ADD CONSTRAINT c CHECK (true);
+ALTER SEQUENCE IF EXISTS public.nosuch OWNED BY public.t.id;
+CREATE TABLE public.t (id integer);
+CREATE SEQUENCE public.s;
+ALTER TABLE IF EXISTS public.t ADD CONSTRAINT t_chk CHECK (id > 0);
+ALTER SEQUENCE IF EXISTS public.s OWNED BY public.t.id;
+`)
+	require.NoError(t, err)
+	assert.Empty(t, buf.String())
+	assert.NotNil(t, result.Tables.Get("public.t").Constraints.Get("t_chk"))
+	assert.True(t, result.Sequences.Get("public.s").Owned())
+}
+
+// ALTER TABLE on a declared view or materialized view is SQL PostgreSQL
+// accepts, and pg_dump writes a view column's default that way. It is not
+// read, and warns as ALTER VIEW does rather than fail as undeclared.
+func TestParseSQL_AlterTableOnViewWarns(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	_, err := parseSQLWithPublicSchema(`
+CREATE VIEW public.v AS SELECT 1 AS x;
+ALTER TABLE ONLY public.v ALTER COLUMN x SET DEFAULT 2;
+CREATE MATERIALIZED VIEW public.mv AS SELECT 1 AS x;
+ALTER TABLE public.mv SET (autovacuum_enabled = false);
+`)
+	require.NoError(t, err)
+	assert.Equal(t, "pistachio: ignored unsupported statement: ALTER TABLE ONLY public.v ALTER COLUMN x SET DEFAULT 2\n"+
+		"pistachio: ignored unsupported statement: ALTER TABLE public.mv SET (autovacuum_enabled=false)\n", buf.String())
 }
