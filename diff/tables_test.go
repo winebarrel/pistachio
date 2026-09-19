@@ -647,9 +647,10 @@ func TestDiffColumns_identitySkipsNotNull(t *testing.T) {
 	desired := orderedmap.New[string, *model.Column]()
 	desired.Set("id", &model.Column{Name: "id", TypeName: "integer", Identity: model.ColumnIdentity('a')})
 
-	stmts, _, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
+	stmts, notNullDrops, _, _, err := diffColumns("public.users", current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, stmts)
+	assert.Empty(t, notNullDrops)
 }
 
 func TestAddColumnSQL_basic(t *testing.T) {
