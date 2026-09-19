@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* `ALTER TABLE` on a table, and `ALTER SEQUENCE` on a sequence, that no statement before it declares is an error. Both were dropped in silence, so a typo in the table name, or a file that sorts before the one declaring the table, left the constraint out of the desired schema and the plan offered to drop it from the database. `IF EXISTS` keeps the statement a no-op, and `ALTER TABLE` on a view or a materialized view warns as `ALTER VIEW` does.
+* `ALTER TABLE` on a table, and `ALTER SEQUENCE` on a sequence, that no statement before it declares is an error. Both were dropped in silence, so a typo in the table name, or a file that sorts before the one declaring the table, left the constraint out of the desired schema and the plan offered to drop it from the database. `ALTER TABLE` on a view, a materialized view or a sequence warns as `ALTER VIEW` does.
 
 * Warn about `CREATE TABLE ... AS`, a `LIKE` clause in `CREATE TABLE`, and `ALTER INDEX` / `ALTER VIEW` / `ALTER MATERIALIZED VIEW`. Each shares a statement type with one the parser reads, so none reached the `ignored unsupported statement` warning and was dropped in silence: a table created with `AS` was absent from the desired schema, and the columns a `LIKE` clause copies planned as `DROP COLUMN`.
 

@@ -506,17 +506,14 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			if !ok {
 				// ALTER INDEX, ALTER VIEW and ALTER MATERIALIZED VIEW share
 				// this statement type, name no table, and are not read. Nor
-				// is ALTER TABLE on a view or a materialized view, which
-				// PostgreSQL accepts and pg_dump writes for a view column's
-				// default.
+				// is ALTER TABLE on a view, a materialized view or a
+				// sequence, which PostgreSQL accepts and pg_dump writes for
+				// a view column's default. IF EXISTS is about the database,
+				// not the file, so it does not excuse a missing declaration.
 				_, isView := views.GetOk(fqtn)
-				if as.Objtype != pg_query.ObjectType_OBJECT_TABLE || isView {
+				_, isSeq := sequences.GetOk(fqtn)
+				if as.Objtype != pg_query.ObjectType_OBJECT_TABLE || isView || isSeq {
 					warnIgnoredStmt(sql, spans, rawStmt)
-					continue
-				}
-				// IF EXISTS asks for a no-op on a missing table, which is
-				// what PostgreSQL does.
-				if as.MissingOk {
 					continue
 				}
 				return nil, undeclared("ALTER TABLE "+fqtn, "table", fqtn, stmtOffset)
@@ -1880,11 +1877,6 @@ func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, seque
 	fqn := model.Ident(schema, as.Sequence.Relname)
 	seq, ok := sequences.GetOk(fqn)
 	if !ok {
-		// IF EXISTS asks for a no-op on a missing sequence, which is what
-		// PostgreSQL does.
-		if as.MissingOk {
-			return nil
-		}
 		return undeclared("ALTER SEQUENCE "+fqn, "sequence", fqn, offset)
 	}
 	for _, opt := range as.Options {

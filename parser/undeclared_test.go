@@ -18,12 +18,14 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 	for _, tc := range []struct{ name, sql, want string }{
 		{"alter table", "ALTER TABLE public.t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"alter table only", "ALTER TABLE ONLY public.t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
+		{"alter table if exists", "ALTER TABLE IF EXISTS public.t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"alter table declared later", "ALTER TABLE public.t ADD CONSTRAINT c CHECK (true);\nCREATE TABLE public.t (id integer);", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"alter table with an unsupported action", "ALTER TABLE public.t ADD COLUMN x text;", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"quoted name", `ALTER TABLE "My Schema"."My Table" ADD CONSTRAINT c CHECK (true);`, `ALTER TABLE "My Schema"."My Table": table "My Schema"."My Table" is not declared before it`},
 		{"unqualified name", "CREATE TABLE other.t (id integer);\nALTER TABLE t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"alter sequence", "ALTER SEQUENCE public.s OWNED BY public.t.id;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence declared later", "ALTER SEQUENCE public.s OWNED BY public.t.id;\nCREATE SEQUENCE public.s;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
+		{"alter sequence if exists", "ALTER SEQUENCE IF EXISTS public.s OWNED BY public.t.id;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence other option", "ALTER SEQUENCE public.s RESTART WITH 10;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 	} {
 		_, err := parseSQLWithPublicSchema(tc.sql)
@@ -80,15 +82,14 @@ func TestParseSQL_AlterUndeclaredTargetUnderExecute(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// IF EXISTS on a missing table or sequence is a no-op, as it is for
-// PostgreSQL. On a declared one the statement is read as usual.
-func TestParseSQL_AlterIfExists(t *testing.T) {
+// IF EXISTS is about the database, not the file, so it does not excuse a
+// missing declaration; that case is in TestParseSQL_AlterUndeclaredTargetErrors.
+// On a declared table or sequence the statement is read as usual.
+func TestParseSQL_AlterIfExistsOnDeclared(t *testing.T) {
 	var buf bytes.Buffer
 	defer setWarnWriter(&buf)()
 
 	result, err := parseSQLWithPublicSchema(`
-ALTER TABLE IF EXISTS public.nosuch ADD CONSTRAINT c CHECK (true);
-ALTER SEQUENCE IF EXISTS public.nosuch OWNED BY public.t.id;
 CREATE TABLE public.t (id integer);
 CREATE SEQUENCE public.s;
 ALTER TABLE IF EXISTS public.t ADD CONSTRAINT t_chk CHECK (id > 0);
@@ -100,10 +101,11 @@ ALTER SEQUENCE IF EXISTS public.s OWNED BY public.t.id;
 	assert.True(t, result.Sequences.Get("public.s").Owned())
 }
 
-// ALTER TABLE on a declared view or materialized view is SQL PostgreSQL
-// accepts, and pg_dump writes a view column's default that way. It is not
-// read, and warns as ALTER VIEW does rather than fail as undeclared.
-func TestParseSQL_AlterTableOnViewWarns(t *testing.T) {
+// ALTER TABLE on a declared view, materialized view or sequence is SQL
+// PostgreSQL accepts, and pg_dump writes a view column's default that way.
+// It is not read, and warns as ALTER VIEW does rather than fail as
+// undeclared.
+func TestParseSQL_AlterTableOnViewOrSequenceWarns(t *testing.T) {
 	var buf bytes.Buffer
 	defer setWarnWriter(&buf)()
 
@@ -112,8 +114,11 @@ CREATE VIEW public.v AS SELECT 1 AS x;
 ALTER TABLE ONLY public.v ALTER COLUMN x SET DEFAULT 2;
 CREATE MATERIALIZED VIEW public.mv AS SELECT 1 AS x;
 ALTER TABLE public.mv SET (autovacuum_enabled = false);
+CREATE SEQUENCE public.s;
+ALTER TABLE public.s OWNER TO app;
 `)
 	require.NoError(t, err)
 	assert.Equal(t, "pistachio: ignored unsupported statement: ALTER TABLE ONLY public.v ALTER COLUMN x SET DEFAULT 2\n"+
-		"pistachio: ignored unsupported statement: ALTER TABLE public.mv SET (autovacuum_enabled=false)\n", buf.String())
+		"pistachio: ignored unsupported statement: ALTER TABLE public.mv SET (autovacuum_enabled=false)\n"+
+		"pistachio: ignored unsupported statement: ALTER TABLE public.s OWNER TO app\n", buf.String())
 }
