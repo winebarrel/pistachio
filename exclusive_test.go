@@ -190,6 +190,45 @@ func TestApplyExclusiveWait(t *testing.T) {
 	assert.Contains(t, buf.String(), "CREATE TABLE")
 }
 
+// With WaitWriter set, the waiting line goes there and not to the output
+// writer, so a caller that buffers the output still sees it in time.
+func TestApplyExclusiveWaitWriter(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	testutil.SetupDB(t, ctx, conn, "")
+
+	holder := testutil.ConnectDB(t)
+	defer holder.Close(ctx)
+	holdExclusive(t, ctx, holder)
+
+	var waitBuf bytes.Buffer
+	waitOut := newWaitingWriter(&waitBuf)
+	release := make(chan error, 1)
+	go func() {
+		<-waitOut.waiting
+		release <- releaseExclusive(ctx, holder)
+	}()
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	result, err := client.Apply(ctx, &ApplyOptions{
+		Files:         []string{writeDesiredFile(t, exclusiveDesired)},
+		ExclusiveWait: durationPtr(0),
+		WaitWriter:    waitOut,
+	}, &buf)
+	require.NoError(t, err)
+	require.NoError(t, <-release)
+	assert.True(t, result.Applied)
+	assert.Equal(t, "-- Waiting for another exclusive apply to finish\n", waitBuf.String())
+	assert.NotContains(t, buf.String(), "-- Waiting")
+	assert.Contains(t, buf.String(), "CREATE TABLE")
+}
+
 func TestApplyExclusiveWaitWithinDeadline(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
