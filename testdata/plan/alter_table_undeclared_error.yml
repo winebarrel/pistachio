@@ -1,0 +1,14 @@
+# ALTER TABLE on a table the desired schema does not declare before it is an
+# error. Dropped in silence, the constraint would be missing from the desired
+# side and the plan would offer to drop it.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_id_check CHECK (id > 0)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  );
+  ALTER TABLE public.usres ADD CONSTRAINT users_id_check CHECK (id > 0);
+error: "ALTER TABLE public.usres: table public.usres is not declared before it"

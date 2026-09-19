@@ -22,6 +22,7 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 		{"alter table on a view", "CREATE VIEW public.v AS SELECT 1 AS x;\nALTER TABLE public.v ALTER COLUMN x SET DEFAULT 2;", "ALTER TABLE public.v: table public.v is not declared before it"},
 		{"alter table with an unsupported action", "ALTER TABLE public.t ADD COLUMN x text;", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"quoted name", `ALTER TABLE "My Schema"."My Table" ADD CONSTRAINT c CHECK (true);`, `ALTER TABLE "My Schema"."My Table": table "My Schema"."My Table" is not declared before it`},
+		{"unqualified name", "CREATE TABLE other.t (id integer);\nALTER TABLE t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"alter sequence", "ALTER SEQUENCE public.s OWNED BY public.t.id;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence declared later", "ALTER SEQUENCE public.s OWNED BY public.t.id;\nCREATE SEQUENCE public.s;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence other option", "ALTER SEQUENCE public.s RESTART WITH 10;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
