@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.59.0] - 2026-09-19
 
 * `apply --exclusive-wait` prints `-- Waiting for another exclusive apply to finish` while it waits. The line was buffered with the rest of the output and came out after the wait it announced.
 
