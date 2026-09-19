@@ -178,6 +178,17 @@ func TestParseSQL_WarnsCreateTableLike(t *testing.T) {
 	assert.NotContains(t, buf.String(), "x integer")
 }
 
+// Two LIKE clauses in one table warn once, together.
+func TestParseSQL_WarnsCreateTableLike_TwoClauses(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	sql := "CREATE TABLE public.a (x integer);\nCREATE TABLE public.b (y integer);\nCREATE TABLE public.c (LIKE public.a, id integer, LIKE public.b);"
+	_, err := parseSQLNoFile(sql, "public")
+	require.NoError(t, err)
+	assert.Equal(t, "pistachio: ignored unsupported statement: CREATE TABLE public.c (LIKE public.a, LIKE public.b)\n", buf.String())
+}
+
 // A table marked -- pista:ignore is out of the diff, so its LIKE clause does
 // not warn.
 func TestParseSQL_CreateTableLike_IgnoredTableDoesNotWarn(t *testing.T) {

@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* Warn about `CREATE TABLE ... AS`, a `LIKE` clause in `CREATE TABLE`, and `ALTER INDEX` / `ALTER VIEW` / `ALTER MATERIALIZED VIEW`. Each shares a statement type with one the parser reads, so none reached the `ignored unsupported statement` warning and the file dropped it in silence: a table created with `AS` was absent from the desired schema, and the columns a `LIKE` clause copies planned as `DROP COLUMN`.
+* Warn about `CREATE TABLE ... AS`, a `LIKE` clause in `CREATE TABLE`, and `ALTER INDEX` / `ALTER VIEW` / `ALTER MATERIALIZED VIEW`. Each shares a statement type with one the parser reads, so none reached the `ignored unsupported statement` warning and was dropped in silence: a table created with `AS` was absent from the desired schema, and the columns a `LIKE` clause copies planned as `DROP COLUMN`.
 
 * `-- pista:renamed-from` written without a name is an error. It matched nothing and raised nothing, so the object was dropped and created instead of renamed.
 
