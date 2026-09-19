@@ -1,0 +1,19 @@
+# PostgreSQL refuses DROP NOT NULL on a column while a primary key holds it,
+# so the constraint has to go first.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer,
+      name text
+  );
+drop_policy:
+  allow_drop:
+    - constraint
+plan: |
+  ALTER TABLE public.users DROP CONSTRAINT users_pkey;
+  ALTER TABLE public.users ALTER COLUMN id DROP NOT NULL;

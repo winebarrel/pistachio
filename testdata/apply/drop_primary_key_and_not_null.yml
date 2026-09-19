@@ -1,0 +1,22 @@
+# Dropping a primary key together with the NOT NULL it implied. The DROP NOT
+# NULL runs after the DROP CONSTRAINT, which PostgreSQL requires.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer,
+      name text
+  );
+drop_policy:
+  allow_drop:
+    - constraint
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer,
+      name text
+  );
