@@ -1292,6 +1292,38 @@ CREATE TABLE public.t (a integer, b integer, FOREIGN KEY (a, b) REFERENCES publi
 			conName: "t_expr_excl",
 		},
 		{
+			// An exclusion element is named the way an index element is: a
+			// function call by its function, a cast by what it casts.
+			name:    "EXCLUDE on a function call",
+			sql:     `CREATE TABLE public.t (a text, EXCLUDE (lower(a) WITH =));`,
+			conName: "t_lower_excl",
+		},
+		{
+			name:    "EXCLUDE on two calls of one function",
+			sql:     `CREATE TABLE public.t (a text, b text, EXCLUDE (lower(a) WITH =, lower(b) WITH =));`,
+			conName: "t_lower_lower1_excl",
+		},
+		{
+			name:    "EXCLUDE on a cast",
+			sql:     `CREATE TABLE public.t (a integer, EXCLUDE ((a::text) WITH =));`,
+			conName: "t_a_excl",
+		},
+		{
+			name:    "UNIQUE with INCLUDE",
+			sql:     `CREATE TABLE public.t (a integer, b integer, UNIQUE (a) INCLUDE (b));`,
+			conName: "t_a_b_key",
+		},
+		{
+			name:    "EXCLUDE with INCLUDE",
+			sql:     `CREATE TABLE public.t (a integer, b integer, EXCLUDE (a WITH =) INCLUDE (b));`,
+			conName: "t_a_b_excl",
+		},
+		{
+			name:    "PRIMARY KEY with INCLUDE carries no column",
+			sql:     `CREATE TABLE public.t (a integer, b integer, PRIMARY KEY (a) INCLUDE (b));`,
+			conName: "t_pkey",
+		},
+		{
 			name:    "CHECK reaching its column through a subscript",
 			sql:     `CREATE TABLE public.t (a integer[], CHECK (a[1] > 0));`,
 			conName: "t_a_check",
