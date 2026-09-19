@@ -73,8 +73,8 @@ func TestFmt_Run_KeepsFileMode(t *testing.T) {
 
 // A symlink is formatted through to the file it points at, and stays a
 // symlink, as does a link to that link. The links and the file sit in
-// different directories, so the temporary file has to go next to the file,
-// and the file keeps its own mode rather than taking the link's.
+// different directories, so the temporary file has to go next to the file.
+// The file keeps its mode.
 func TestFmt_Run_Symlink(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating a symlink needs a privilege on Windows")
@@ -195,6 +195,24 @@ func TestFmt_Run_UnwritableDir(t *testing.T) {
 	got, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, unformattedSQL, string(got), "the file is left as it was")
+}
+
+func TestFmt_Run_UnreadableFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not carry the Unix permission bits")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a file with no permission bits")
+	}
+
+	path := writeSQLFile(t, "schema.sql", unformattedSQL)
+	require.NoError(t, os.Chmod(path, 0o000))
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{path}}
+	err := cmd.Run(&buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to format 1 file(s)")
 }
 
 func TestFmt_Run_MissingFile(t *testing.T) {
