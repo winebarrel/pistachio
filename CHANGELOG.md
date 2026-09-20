@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* `CREATE UNLOGGED SEQUENCE` is ordered by its dependencies, as `CREATE SEQUENCE` already was. The plan placed a statement by its prefix and had no prefix for the unlogged spelling, so the statement ran before every other create. The plan now reads the parse tree, and the spelling no longer decides where a statement runs.
+
 ## [1.59.1] - 2026-09-20
 
 * A one-element `IN` list compares equal to the comparison PostgreSQL stores it as. `CHECK (carrier IN ('own_a'))` is stored as `CHECK ((carrier = 'own_a'::text))`, so the constraint was dropped and added again on every plan, revalidating the whole table. A domain constraint, an index predicate, a policy, a view body and a trigger `WHEN` drifted the same way, and a generated column failed the run with `cannot change GENERATED expression`. `NOT IN (a)` is stored as `<> a` and folds too.

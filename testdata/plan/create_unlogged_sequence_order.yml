@@ -1,0 +1,24 @@
+# An unlogged sequence takes the place in the order its dependencies give
+# it, the same place the logged spelling takes. The word UNLOGGED used to
+# leave the statement unplaced, which put it before every other create.
+init: ""
+desired: |
+  CREATE TYPE public.aaa_status AS ENUM ('a');
+  CREATE UNLOGGED SEQUENCE public.zzz_seq;
+  CREATE TABLE public.aaa_t (
+      id integer
+  );
+plan: |
+  CREATE TYPE public.aaa_status AS ENUM (
+      'a'
+  );
+  CREATE TABLE public.aaa_t (
+      id integer
+  );
+  CREATE UNLOGGED SEQUENCE public.zzz_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;

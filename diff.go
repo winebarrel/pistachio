@@ -53,7 +53,7 @@ func (client *Client) Diff(options *DiffOptions) (*PlanResult, error) {
 		currentRoutines = current.Routines
 	}
 
-	result, err := client.diffObjects(&currentObjects{
+	result, err := client.diffObjects(&schemaObjects{
 		Tables:         current.Tables,
 		Views:          current.Views,
 		Enums:          current.Enums,

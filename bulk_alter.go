@@ -105,6 +105,42 @@ func parseMergeableAlterTable(stmt string) (fqtn, action string, ok bool) {
 	return fqtn, action, true
 }
 
+// extractFirstIdentifier extracts a possibly schema-qualified identifier from
+// the beginning of a string, preserving quoting. parseMergeableAlterTable
+// needs the identifier as the statement spells it, since it goes on to slice
+// the action off after it.
+func extractFirstIdentifier(s string) string {
+	s = strings.TrimSpace(s)
+	var result strings.Builder
+	inQuote := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == '"' {
+			result.WriteByte(ch)
+			if inQuote && i+1 < len(s) && s[i+1] == '"' {
+				// Escaped quote inside a quoted identifier
+				result.WriteByte(s[i+1])
+				i++
+				continue
+			}
+			inQuote = !inQuote
+			continue
+		}
+		if inQuote {
+			result.WriteByte(ch)
+			continue
+		}
+		if ch == '.' || ch == '_' || ch == '$' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
+			result.WriteByte(ch)
+			continue
+		}
+		break
+	}
+
+	return result.String()
+}
+
 // isMergeableAction returns true for ALTER TABLE actions that are safe to
 // combine with peers under the same target table:
 //   - ADD COLUMN / DROP COLUMN
