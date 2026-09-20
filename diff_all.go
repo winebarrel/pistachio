@@ -821,15 +821,12 @@ func tagStatements(stmts []string, posMap map[string]int) []taggedStmt {
 // string means no object the order knows about, and tagStatements leaves such
 // a statement at position -1.
 //
-// The name comes from the parse tree rather than from a list of statement
-// prefixes. A list has to carry every form a statement can be written in, and
-// the form it does not carry sorts as unknown without saying so: CREATE
-// UNIQUE INDEX did once, and CREATE UNLOGGED SEQUENCE did until this.
+// The name comes from the parse tree, not from a list of statement prefixes.
+// A prefix the list leaves out sorts the statement as unknown in silence:
+// CREATE UNIQUE INDEX did once, CREATE UNLOGGED SEQUENCE until this.
 func extractObjectName(sql string) string {
-	// A statement PostgreSQL cannot read is one no order can place. It is
-	// pistachio's own output, so a parse error here is a bug rather than
-	// something the caller can act on, and the run fails on the statement
-	// itself soon enough.
+	// A statement PostgreSQL cannot read has no place in the order. These
+	// are pistachio's own statements, so the run fails on it anyway.
 	result, err := pg_query.Parse(sql)
 	if err != nil || len(result.GetStmts()) == 0 {
 		return ""
@@ -842,11 +839,10 @@ func extractObjectName(sql string) string {
 // a trigger and a policy belong to the relation they sit on, and a routine to
 // its name without the argument list, which is the key the graph gives it.
 //
-// A rename and a drop that name an index alone are left unplaced, as they
-// were before: the maps do carry an index, under the position of the relation
-// it sits on, which addIndexPositions adds for COMMENT ON INDEX, but both
-// have to run before the statements that follow them, which is what position
-// -1 does.
+// A rename or a drop that names an index alone stays unplaced, as before:
+// both run before the statements that follow them, which is what position -1
+// gives them. COMMENT ON INDEX does take the position of the relation the
+// index sits on, which addIndexPositions adds.
 func stmtObjectName(node *pg_query.Node) string {
 	switch {
 	case node.GetCreateStmt() != nil:

@@ -34,6 +34,10 @@ func TestExtractObjectName(t *testing.T) {
 		{`CREATE TABLE "MySchema"."MyTable" (id integer);`, `"MySchema"."MyTable"`},
 		// Edge cases
 		{"SELECT 1;", ""},
+		// An object kind the order has no key for, and a name too short to
+		// hold the object it is on, are unplaced rather than an error.
+		{"DROP SCHEMA public;", ""},
+		{"COMMENT ON COLUMN col IS 'x';", ""},
 		{"CREATE INDEX idx ON ONLY public.t (x);", "public.t"},
 		{"CREATE INDEX bad_no_on;", ""},
 		// DROP INDEX / ALTER INDEX
@@ -63,12 +67,20 @@ func TestExtractObjectName(t *testing.T) {
 		{"COMMENT ON SEQUENCE public.jobs_seq IS 'x';", "public.jobs_seq"},
 		{"CREATE MATERIALIZED VIEW public.mv AS SELECT 1;", "public.mv"},
 		{"DROP MATERIALIZED VIEW public.mv;", "public.mv"},
+		{"ALTER VIEW public.v SET (check_option='local');", "public.v"},
+		{"ALTER VIEW public.v RENAME TO v2;", "public.v"},
+		{"ALTER MATERIALIZED VIEW public.mv SET (fillfactor=90);", "public.mv"},
+		{"COMMENT ON VIEW public.v IS 'x';", "public.v"},
+		{"COMMENT ON MATERIALIZED VIEW public.mv IS 'x';", "public.mv"},
+		{"COMMENT ON TYPE public.status IS 'x';", "public.status"},
+		{"COMMENT ON DOMAIN public.pos_int IS 'x';", "public.pos_int"},
 		{"CREATE TYPE public.addr AS (city text);", "public.addr"},
 		{"ALTER TYPE public.addr ADD ATTRIBUTE zip text;", "public.addr"},
 		{"COMMENT ON INDEX public.idx_users_name IS 'x';", "public.idx_users_name"},
 		// A trigger and a policy belong to the relation they are on.
 		{"CREATE TRIGGER trg BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION public.f();", "public.users"},
 		{"CREATE CONSTRAINT TRIGGER trg AFTER INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION public.f();", "public.users"},
+		{"CREATE OR REPLACE TRIGGER trg BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION public.f();", "public.users"},
 		{"DROP TRIGGER trg ON public.users;", "public.users"},
 		{"ALTER TRIGGER trg ON public.users RENAME TO trg2;", "public.users"},
 		{"CREATE POLICY p ON public.users FOR SELECT USING (true);", "public.users"},
@@ -78,7 +90,9 @@ func TestExtractObjectName(t *testing.T) {
 		{"CREATE OR REPLACE FUNCTION public.f(a integer) RETURNS integer AS $$ SELECT 1 $$ LANGUAGE sql;", "routine:public.f"},
 		{"DROP FUNCTION public.f(integer);", "routine:public.f"},
 		{"COMMENT ON FUNCTION public.f(integer) IS 'x';", "routine:public.f"},
+		{"CREATE OR REPLACE PROCEDURE public.p(a integer) AS $$ BEGIN END $$ LANGUAGE plpgsql;", "routine:public.p"},
 		{"DROP PROCEDURE public.p(integer);", "routine:public.p"},
+		{"COMMENT ON PROCEDURE public.p(integer) IS 'x';", "routine:public.p"},
 		// CREATE UNIQUE INDEX should be recognized like CREATE INDEX
 		{"CREATE UNIQUE INDEX idx_users_email ON public.users USING btree (email);", "public.users"},
 		// CONCURRENTLY variants

@@ -203,6 +203,18 @@ func TestMergeAlterTable(t *testing.T) {
 			},
 		},
 		{
+			// The quote inside the name is doubled, so the scan for the end
+			// of the identifier has to read the pair as one character.
+			name: "quoted identifier holding an escaped quote",
+			in: []string{
+				`ALTER TABLE public."My""Table" ADD COLUMN x int;`,
+				`ALTER TABLE public."My""Table" ADD COLUMN y int;`,
+			},
+			want: []string{
+				"ALTER TABLE public.\"My\"\"Table\"\n  ADD COLUMN x int,\n  ADD COLUMN y int;",
+			},
+		},
+		{
 			name: "two non-consecutive groups across same table with break in between",
 			in: []string{
 				"ALTER TABLE public.users ADD COLUMN x int;",

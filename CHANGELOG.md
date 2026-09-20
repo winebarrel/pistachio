@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* `CREATE UNLOGGED SEQUENCE` takes the place in the plan its dependencies give it, the place the logged spelling already took. The order recognized a statement by its prefix, and no prefix spelled the unlogged one, so the statement was left unplaced and ran before every other create. The order now reads the parse tree, so the spelling a statement is written in no longer decides where it runs.
+* `CREATE UNLOGGED SEQUENCE` is ordered by its dependencies, as `CREATE SEQUENCE` already was. The plan placed a statement by its prefix and had no prefix for the unlogged spelling, so the statement ran before every other create. The plan now reads the parse tree, and the spelling no longer decides where a statement runs.
 
 ## [1.59.1] - 2026-09-20
 
