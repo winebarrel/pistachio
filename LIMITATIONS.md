@@ -57,10 +57,10 @@ Workaround: write the reference unqualified, which is what `pista dump` emits.
 ## Silent drift on the partition shape
 
 `Table.PartitionOf`, `Table.PartitionBound` and `Table.PartitionDef` are read
-from the catalog and parsed from the desired schema, but the diff only tests
-`PartitionOf` and `PartitionBound` against nil to pick a branch and never
-compares a value. Each of these plans `-- No changes` on a table that already
-exists, verified on 15:
+from the catalog and parsed from the desired schema, but the diff reads none of
+them: `Table.IsPartitionChild` tests the first two against nil to pick a
+branch, and no value is ever compared. Each of these plans `-- No changes` on a
+table that already exists, verified on 15 and 16:
 
 - Turning `PARTITION BY RANGE (r)` into `PARTITION BY LIST (r)`.
 - Moving a partition's `FOR VALUES` bound.
@@ -76,15 +76,43 @@ fit better than emitting any of it.
 
 Origin: review of [#383](https://github.com/winebarrel/pistachio/pull/383).
 
-## Silent drift on `Table.TableSpace` / `Index.TableSpace` changes
+## A tablespace changes nothing on a table and re-creates an index
 
-The catalog and parser populate `Table.TableSpace` and `Index.TableSpace`,
-but the diff layer never compares them. Changing a tablespace in desired
-SQL after the object exists has no effect on the generated plan. Should
-emit `ALTER TABLE ... SET TABLESPACE <new>` and
-`ALTER INDEX ... SET TABLESPACE <new>`.
+Priority: low. `dump` writes no tablespace on an index, so its output does not
+hit the drift below. What it leaves out is the heavier half: an index loaded
+from that output lands in the default tablespace.
+
+The catalog and the parser populate `Table.TableSpace` and `Index.TableSpace`,
+and the diff compares neither. The two sides go wrong differently.
+
+A table's tablespace is silent drift. Changing it in the desired SQL after the
+table exists produces no statement at all, where
+`ALTER TABLE ... SET TABLESPACE <new>` is what it takes.
+
+An index's is not silent. `pg_get_indexdef` never writes the clause, while the
+parser leaves it in the definition it deparses, so
+`CREATE INDEX ... TABLESPACE ts1` never compares equal to what the catalog
+hands back, even when the index already sits in `ts1`. Every plan drops the
+index and creates it again, verified on 16:
+
+```
+DROP INDEX public.t_id_idx;
+CREATE INDEX t_id_idx ON public.t USING btree (id) TABLESPACE ts1;
+```
+
+`dump` writes a table's `TABLESPACE` and not an index's, so a dump fed back
+plans clean and only a file that writes the clause on an index drifts.
+
+Closing it means comparing both fields and emitting
+`ALTER TABLE ... SET TABLESPACE` and `ALTER INDEX ... SET TABLESPACE`, keeping
+the clause out of the definition an index is compared by, and writing it from
+`dump`.
+
+Workaround: leave the clause off an index and move it with
+`ALTER INDEX ... SET TABLESPACE` by hand.
 
 Origin: post-[#125](https://github.com/winebarrel/pistachio/pull/125) audit.
+The index half was found re-checking the entry, 2026-09-20.
 
 ## `SET COMPRESSION` does not reach the partitions that already exist
 
@@ -241,7 +269,7 @@ but apply rolls back, so nothing is destroyed. Domain base-type changes
 already error at plan time; composite attribute type changes could do the
 same, but that needs the diff to know which composite types are referenced by
 a table column (cross-object awareness the composite diff does not have
-today). For now the limitation is documented in the README.
+today). The supported objects page (`docs/reference/objects.md`) records it.
 
 Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
 
@@ -580,6 +608,8 @@ schema at all.
 Workaround: write the column list explicitly. `pista dump` emits the
 expanded form.
 
+Origin: view definition comparison review, 2026-08-06.
+
 ## SQL/JSON forms that still drift
 
 Priority: low. A dump feeds back clean, so writing the file the way `pista
@@ -823,7 +853,7 @@ Workaround: write `integer[]`, which is what `pista dump` emits.
 
 Origin: review of the column type canonicalization, 2026-09-08.
 
-## `PRIMARY KEY USING INDEX` in a schema file does not converge
+## `PRIMARY KEY USING INDEX` does not mark its columns NOT NULL
 
 Priority: low.
 
@@ -831,36 +861,37 @@ A primary key can take its columns from an existing unique index rather than
 from a column list:
 
 ```sql
+CREATE TABLE public.t (id integer);
 CREATE UNIQUE INDEX t_idx ON public.t (id);
 ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
 ```
 
-PostgreSQL takes the index over as the constraint's index and renames it to the
-constraint's name, so afterwards there is one object where the file wrote two.
-The desired side keeps both, so every plan drops the constraint, adds it again
-and creates the index, and the run does not converge:
+The constraint and the index converge as of 1.50.0: the index the constraint
+takes over is left where it is rather than planned as a drop, and a desired
+constraint naming an index compares equal to the one PostgreSQL created from
+it. What the form still does not carry is the NOT NULL a primary key marks its
+columns with. There is no column list to read it off, so the desired side has
+the column nullable where the database has it not null, and every plan emits
 
 ```
 ALTER TABLE public.t ALTER COLUMN id DROP NOT NULL;
-ALTER TABLE public.t DROP CONSTRAINT t_pkey;
-ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
-CREATE UNIQUE INDEX t_idx ON public.t USING btree (id);
 ```
 
-The `DROP NOT NULL` is part of the same gap. A primary key marks its columns
-NOT NULL whichever way it arrives, but this form carries no column list, so the
-key columns are not reached and the statement goes out. Applying it fails with
-`column "id" is in a primary key`.
+which fails with `column "id" is in a primary key`, so the run does not
+converge, verified on 16.
 
-Closing it means resolving the constraint's columns through the index it names,
-and reading the index the constraint took over as the constraint rather than as
-an index of its own.
+Closing it means resolving the constraint's columns through the index the
+desired schema declares next to it, which is where the column list lives.
 
 `pista dump` writes the key inline, as `CONSTRAINT t_pkey PRIMARY KEY (id)`
-with no separate index, and that output plans clean. Only a file that writes
-`USING INDEX` reaches this.
+with the column declared `NOT NULL` and no separate index, and that output
+plans clean. Only a file that writes `USING INDEX` reaches this.
 
-Origin: review of the primary key NOT NULL fix, 2026-09-09.
+Workaround: declare the key's columns `NOT NULL` in the file, which leaves
+nothing for the plan to emit.
+
+Origin: review of the primary key NOT NULL fix, 2026-09-09. Narrowed once
+`USING INDEX` constraints were read in 1.50.0.
 
 ## A subscripted ARRAY constructor loses its parentheses
 
