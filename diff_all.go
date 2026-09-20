@@ -925,7 +925,10 @@ func dropObjectName(ds *pg_query.DropStmt) string {
 	}
 }
 
-// commentObjectName names the object a COMMENT belongs to.
+// commentObjectName names the object a COMMENT belongs to. A comment on a
+// constraint is not one of them, and nothing emits one: the form on a table
+// would want ownerIdent, and the form on a domain carries the domain as a
+// type name rather than as name parts.
 func commentObjectName(cs *pg_query.CommentStmt) string {
 	switch cs.GetObjtype() {
 	case pg_query.ObjectType_OBJECT_COLUMN:
