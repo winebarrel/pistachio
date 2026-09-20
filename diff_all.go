@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/diff"
@@ -91,10 +92,15 @@ type diffAllResult struct {
 	DroppedViews []string
 }
 
-// currentObjects holds the current side of a diff: one map per object kind.
-// diffAll reads it from the system catalogs; Diff fills it from a parsed
-// schema file.
-type currentObjects struct {
+// schemaObjects holds one side of a diff: one map per object kind. On the
+// current side diffAll reads it from the system catalogs and Diff fills it
+// from a parsed schema file; the desired side comes from the desired schema,
+// filtered.
+//
+// The two sides have the same shape, so a call that takes them as maps takes
+// fourteen of them, seven pairs a reader counts out by position. The struct
+// names each side instead.
+type schemaObjects struct {
 	Tables         *orderedmap.Map[string, *model.Table]
 	Views          *orderedmap.Map[string, *model.View]
 	Enums          *orderedmap.Map[string, *model.Enum]
@@ -102,6 +108,17 @@ type currentObjects struct {
 	CompositeTypes *orderedmap.Map[string, *model.CompositeType]
 	Sequences      *orderedmap.Map[string, *model.Sequence]
 	Routines       *orderedmap.Map[string, *model.Routine]
+}
+
+// objectDiffs holds what one diff produced, one result per object kind.
+type objectDiffs struct {
+	Tables         *diff.TableDiffResult
+	Views          *diff.ViewDiffResult
+	Enums          *diff.EnumDiffResult
+	Domains        *diff.DomainDiffResult
+	CompositeTypes *diff.CompositeTypeDiffResult
+	Sequences      *diff.SequenceDiffResult
+	Routines       *diff.RoutineDiffResult
 }
 
 // diffAll performs the common catalog fetch, parse, diff, and statement
@@ -112,7 +129,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to create catalog: %w", err)
 	}
 
-	current := &currentObjects{}
+	current := &schemaObjects{}
 
 	current.Tables, err = cat.Tables(ctx)
 	if err != nil {
@@ -173,7 +190,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 // diffObjects diffs the desired schema against an already-loaded current side
 // and orders the statements. diffAll hands it the catalog's view of the
 // database; Diff hands it a parsed schema file.
-func (client *Client) diffObjects(current *currentObjects, options *diffAllOptions) (*diffAllResult, error) {
+func (client *Client) diffObjects(current *schemaObjects, options *diffAllOptions) (*diffAllResult, error) {
 	currentTables := current.Tables
 	currentViews := current.Views
 	currentEnums := current.Enums
@@ -307,9 +324,33 @@ func (client *Client) diffObjects(current *currentObjects, options *diffAllOptio
 	}
 
 	stmts := orderStatements(
-		filteredEnums, filteredDomains, filteredCompositeTypes, filteredTables, filteredViews, filteredSequences, filteredRoutines,
-		desiredEnums, desiredDomains, desiredCompositeTypes, desiredTables, desiredViews, desiredSequences, desiredRoutines,
-		enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff,
+		&schemaObjects{
+			Tables:         filteredTables,
+			Views:          filteredViews,
+			Enums:          filteredEnums,
+			Domains:        filteredDomains,
+			CompositeTypes: filteredCompositeTypes,
+			Sequences:      filteredSequences,
+			Routines:       filteredRoutines,
+		},
+		&schemaObjects{
+			Tables:         desiredTables,
+			Views:          desiredViews,
+			Enums:          desiredEnums,
+			Domains:        desiredDomains,
+			CompositeTypes: desiredCompositeTypes,
+			Sequences:      desiredSequences,
+			Routines:       desiredRoutines,
+		},
+		&objectDiffs{
+			Tables:         tableDiff,
+			Views:          viewDiff,
+			Enums:          enumDiff,
+			Domains:        domainDiff,
+			CompositeTypes: compositeTypeDiff,
+			Sequences:      sequenceDiff,
+			Routines:       routineDiff,
+		},
 	)
 
 	var disallowed []string
@@ -534,69 +575,47 @@ func forceConcurrentlyDirectives(
 // orderStatements uses topological sort to determine the correct execution
 // order for diff statements based on object dependencies.
 // Falls back to the default category-based ordering if topological sort fails.
-func orderStatements(
-	currentEnums *orderedmap.Map[string, *model.Enum],
-	currentDomains *orderedmap.Map[string, *model.Domain],
-	currentCompositeTypes *orderedmap.Map[string, *model.CompositeType],
-	currentTables *orderedmap.Map[string, *model.Table],
-	currentViews *orderedmap.Map[string, *model.View],
-	currentSequences *orderedmap.Map[string, *model.Sequence],
-	currentRoutines *orderedmap.Map[string, *model.Routine],
-	desiredEnums *orderedmap.Map[string, *model.Enum],
-	desiredDomains *orderedmap.Map[string, *model.Domain],
-	desiredCompositeTypes *orderedmap.Map[string, *model.CompositeType],
-	desiredTables *orderedmap.Map[string, *model.Table],
-	desiredViews *orderedmap.Map[string, *model.View],
-	desiredSequences *orderedmap.Map[string, *model.Sequence],
-	desiredRoutines *orderedmap.Map[string, *model.Routine],
-	enumDiff *diff.EnumDiffResult,
-	domainDiff *diff.DomainDiffResult,
-	compositeTypeDiff *diff.CompositeTypeDiffResult,
-	tableDiff *diff.TableDiffResult,
-	viewDiff *diff.ViewDiffResult,
-	sequenceDiff *diff.SequenceDiffResult,
-	routineDiff *diff.RoutineDiffResult,
-) []string {
+func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []string {
 	// Build topological order from desired schema for creates
 	createOrder, err := toposort.OrderFromSchema(
-		desiredEnums, desiredDomains, desiredCompositeTypes, desiredTables, desiredViews, desiredSequences, desiredRoutines,
+		desired.Enums, desired.Domains, desired.CompositeTypes, desired.Tables, desired.Views, desired.Sequences, desired.Routines,
 	)
 	if err != nil {
-		return fallbackOrder(currentViews, desiredViews, enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff)
+		return fallbackOrder(current, desired, diffs)
 	}
 
 	createPosMap := make(map[string]int, len(createOrder))
 	for i, name := range createOrder {
 		createPosMap[name] = i
 	}
-	addIndexPositions(createPosMap, desiredTables, desiredViews)
+	addIndexPositions(createPosMap, desired.Tables, desired.Views)
 
 	// Build topological order from current schema for drops.
 	// Dropped objects are not in the desired schema, so we need the current
 	// schema's dependency graph to determine correct drop order.
 	dropOrder, err := toposort.OrderFromSchema(
-		currentEnums, currentDomains, currentCompositeTypes, currentTables, currentViews, currentSequences, currentRoutines,
+		current.Enums, current.Domains, current.CompositeTypes, current.Tables, current.Views, current.Sequences, current.Routines,
 	)
 	if err != nil {
-		return fallbackOrder(currentViews, desiredViews, enumDiff, domainDiff, compositeTypeDiff, tableDiff, viewDiff, sequenceDiff, routineDiff)
+		return fallbackOrder(current, desired, diffs)
 	}
 
 	dropPosMap := make(map[string]int, len(dropOrder))
 	for i, name := range dropOrder {
 		dropPosMap[name] = i
 	}
-	addIndexPositions(dropPosMap, currentTables, currentViews)
+	addIndexPositions(dropPosMap, current.Tables, current.Views)
 
 	// Phase 1: Creates/modifications in topological order.
 	// Statements whose owning object cannot be identified (pos < 0) are placed
 	// before all topo-ordered statements, preserving their original relative order.
 	var createStmts []taggedStmt
-	createStmts = append(createStmts, tagStatements(enumDiff.Stmts, createPosMap)...)
-	createStmts = append(createStmts, tagStatements(domainDiff.Stmts, createPosMap)...)
-	createStmts = append(createStmts, tagStatements(compositeTypeDiff.Stmts, createPosMap)...)
-	createStmts = append(createStmts, tagStatements(sequenceDiff.Stmts, createPosMap)...)
-	createStmts = append(createStmts, tagStatements(routineDiff.Stmts, createPosMap)...)
-	createStmts = append(createStmts, tagStatements(tableDiff.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(diffs.Enums.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(diffs.Domains.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(diffs.CompositeTypes.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(diffs.Sequences.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(diffs.Routines.Stmts, createPosMap)...)
+	createStmts = append(createStmts, tagStatements(diffs.Tables.Stmts, createPosMap)...)
 	sort.SliceStable(createStmts, func(i, j int) bool {
 		return compareTaggedPos(createStmts[i].pos, createStmts[j].pos, false)
 	})
@@ -605,7 +624,7 @@ func orderStatements(
 	// View drops must happen before table/column changes (views may depend on
 	// columns being dropped).
 	var preDropStmts []taggedStmt
-	preDropStmts = append(preDropStmts, tagStatements(viewDiff.DropStmts, dropPosMap)...)
+	preDropStmts = append(preDropStmts, tagStatements(diffs.Views.DropStmts, dropPosMap)...)
 	sort.SliceStable(preDropStmts, func(i, j int) bool {
 		return compareTaggedPos(preDropStmts[i].pos, preDropStmts[j].pos, true)
 	})
@@ -615,19 +634,19 @@ func orderStatements(
 	// remove references to domains/enums). Domain/enum drops come after table
 	// drops (tables must stop referencing them first).
 	var postDropStmts []taggedStmt
-	postDropStmts = append(postDropStmts, tagStatements(tableDiff.DropStmts, dropPosMap)...)
-	postDropStmts = append(postDropStmts, tagStatements(sequenceDiff.DropStmts, dropPosMap)...)
-	postDropStmts = append(postDropStmts, tagStatements(routineDiff.DropStmts, dropPosMap)...)
-	postDropStmts = append(postDropStmts, tagStatements(compositeTypeDiff.DropStmts, dropPosMap)...)
-	postDropStmts = append(postDropStmts, tagStatements(domainDiff.DropStmts, dropPosMap)...)
-	postDropStmts = append(postDropStmts, tagStatements(enumDiff.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(diffs.Tables.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(diffs.Sequences.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(diffs.Routines.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(diffs.CompositeTypes.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(diffs.Domains.DropStmts, dropPosMap)...)
+	postDropStmts = append(postDropStmts, tagStatements(diffs.Enums.DropStmts, dropPosMap)...)
 	sort.SliceStable(postDropStmts, func(i, j int) bool {
 		return compareTaggedPos(postDropStmts[i].pos, postDropStmts[j].pos, true)
 	})
 
 	// Phase 4: View creates in topological order
 	var viewCreateStmts []taggedStmt
-	viewCreateStmts = append(viewCreateStmts, tagStatements(viewDiff.CreateStmts, createPosMap)...)
+	viewCreateStmts = append(viewCreateStmts, tagStatements(diffs.Views.CreateStmts, createPosMap)...)
 	sort.SliceStable(viewCreateStmts, func(i, j int) bool {
 		return compareTaggedPos(viewCreateStmts[i].pos, viewCreateStmts[j].pos, false)
 	})
@@ -635,7 +654,7 @@ func orderStatements(
 	// Assemble:
 	// FK drops -> view drops -> creates/alters -> table/domain/enum drops -> FK adds -> view creates
 	var stmts []string
-	for _, ts := range tagStatements(tableDiff.FKDropStmts, dropPosMap) {
+	for _, ts := range tagStatements(diffs.Tables.FKDropStmts, dropPosMap) {
 		stmts = append(stmts, ts.sql)
 	}
 	for _, ts := range preDropStmts {
@@ -648,11 +667,11 @@ func orderStatements(
 	// appended rather than tagged and sorted. They sit after the creates, which
 	// puts them after any rename, and before the FK adds, which together with
 	// the FK drops above leaves exactly the keys that stay in place.
-	stmts = append(stmts, tableDiff.PersistenceStmts...)
+	stmts = append(stmts, diffs.Tables.PersistenceStmts...)
 	for _, ts := range postDropStmts {
 		stmts = append(stmts, ts.sql)
 	}
-	for _, ts := range tagStatements(tableDiff.FKAddStmts, createPosMap) {
+	for _, ts := range tagStatements(diffs.Tables.FKAddStmts, createPosMap) {
 		stmts = append(stmts, ts.sql)
 	}
 	for _, ts := range viewCreateStmts {
@@ -668,35 +687,25 @@ func orderStatements(
 // come apart deepest first and go back together base first, whatever made the
 // whole-schema sort fail, and checkViewDependents counts on that when it lets
 // a dependent the same plan drops through.
-func fallbackOrder(
-	currentViews *orderedmap.Map[string, *model.View],
-	desiredViews *orderedmap.Map[string, *model.View],
-	enumDiff *diff.EnumDiffResult,
-	domainDiff *diff.DomainDiffResult,
-	compositeTypeDiff *diff.CompositeTypeDiffResult,
-	tableDiff *diff.TableDiffResult,
-	viewDiff *diff.ViewDiffResult,
-	sequenceDiff *diff.SequenceDiffResult,
-	routineDiff *diff.RoutineDiffResult,
-) []string {
+func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string {
 	var stmts []string
-	stmts = append(stmts, enumDiff.Stmts...)
-	stmts = append(stmts, domainDiff.Stmts...)
-	stmts = append(stmts, compositeTypeDiff.Stmts...)
-	stmts = append(stmts, sequenceDiff.Stmts...)
-	stmts = append(stmts, routineDiff.Stmts...)
-	stmts = append(stmts, sortViewStmts(viewDiff.DropStmts, currentViews, true)...)
-	stmts = append(stmts, tableDiff.FKDropStmts...)
-	stmts = append(stmts, tableDiff.Stmts...)
-	stmts = append(stmts, tableDiff.PersistenceStmts...)
-	stmts = append(stmts, tableDiff.DropStmts...)
-	stmts = append(stmts, sequenceDiff.DropStmts...)
-	stmts = append(stmts, routineDiff.DropStmts...)
-	stmts = append(stmts, compositeTypeDiff.DropStmts...)
-	stmts = append(stmts, domainDiff.DropStmts...)
-	stmts = append(stmts, enumDiff.DropStmts...)
-	stmts = append(stmts, tableDiff.FKAddStmts...)
-	stmts = append(stmts, sortViewStmts(viewDiff.CreateStmts, desiredViews, false)...)
+	stmts = append(stmts, diffs.Enums.Stmts...)
+	stmts = append(stmts, diffs.Domains.Stmts...)
+	stmts = append(stmts, diffs.CompositeTypes.Stmts...)
+	stmts = append(stmts, diffs.Sequences.Stmts...)
+	stmts = append(stmts, diffs.Routines.Stmts...)
+	stmts = append(stmts, sortViewStmts(diffs.Views.DropStmts, current.Views, true)...)
+	stmts = append(stmts, diffs.Tables.FKDropStmts...)
+	stmts = append(stmts, diffs.Tables.Stmts...)
+	stmts = append(stmts, diffs.Tables.PersistenceStmts...)
+	stmts = append(stmts, diffs.Tables.DropStmts...)
+	stmts = append(stmts, diffs.Sequences.DropStmts...)
+	stmts = append(stmts, diffs.Routines.DropStmts...)
+	stmts = append(stmts, diffs.CompositeTypes.DropStmts...)
+	stmts = append(stmts, diffs.Domains.DropStmts...)
+	stmts = append(stmts, diffs.Enums.DropStmts...)
+	stmts = append(stmts, diffs.Tables.FKAddStmts...)
+	stmts = append(stmts, sortViewStmts(diffs.Views.CreateStmts, desired.Views, false)...)
 	return stmts
 }
 
@@ -807,219 +816,173 @@ func tagStatements(stmts []string, posMap map[string]int) []taggedStmt {
 	return tagged
 }
 
-// extractObjectName extracts the primary schema-qualified object name from a DDL statement.
-// The returned name preserves quoting to match the canonical format used by model.Ident.
+// extractObjectName names the object a DDL statement belongs to, the way
+// model.Ident names it, which is how the position maps are keyed. An empty
+// string means no object the order knows about, and tagStatements leaves such
+// a statement at position -1.
+//
+// The name comes from the parse tree rather than from a list of statement
+// prefixes. A list has to carry every form a statement can be written in, and
+// the form it does not carry sorts as unknown without saying so: CREATE
+// UNIQUE INDEX did once, and CREATE UNLOGGED SEQUENCE did until this.
 func extractObjectName(sql string) string {
-	sql = strings.TrimSpace(sql)
-
-	// Try common DDL patterns
-	patterns := []struct {
-		prefix string
-	}{
-		{"CREATE TABLE "},
-		{"CREATE UNLOGGED TABLE "},
-		{"CREATE TYPE "},
-		{"CREATE DOMAIN "},
-		{"CREATE MATERIALIZED VIEW "},
-		{"CREATE OR REPLACE VIEW "},
-		{"CREATE VIEW "},
-		{"CREATE UNIQUE INDEX CONCURRENTLY "},
-		{"CREATE UNIQUE INDEX "},
-		{"CREATE INDEX CONCURRENTLY "},
-		{"CREATE INDEX "},
-		{"ALTER INDEX "},
-		{"DROP INDEX CONCURRENTLY "},
-		{"DROP INDEX "},
-		{"CREATE POLICY "},
-		{"ALTER POLICY "},
-		{"DROP POLICY "},
-		{"CREATE OR REPLACE FUNCTION "},
-		{"CREATE OR REPLACE PROCEDURE "},
-		{"DROP FUNCTION "},
-		{"DROP PROCEDURE "},
-		{"COMMENT ON FUNCTION "},
-		{"COMMENT ON PROCEDURE "},
-		{"CREATE OR REPLACE TRIGGER "},
-		{"CREATE CONSTRAINT TRIGGER "},
-		{"CREATE TRIGGER "},
-		{"DROP TRIGGER "},
-		{"ALTER TRIGGER "},
-		{"ALTER TABLE ONLY "},
-		{"ALTER TABLE "},
-		{"ALTER TYPE "},
-		{"ALTER DOMAIN "},
-		{"ALTER SEQUENCE "},
-		{"CREATE SEQUENCE "},
-		{"DROP SEQUENCE "},
-		{"COMMENT ON SEQUENCE "},
-		{"ALTER MATERIALIZED VIEW "},
-		{"ALTER VIEW "},
-		{"DROP TABLE "},
-		{"DROP MATERIALIZED VIEW "},
-		{"DROP VIEW "},
-		{"DROP TYPE "},
-		{"DROP DOMAIN "},
-		{"COMMENT ON TABLE "},
-		{"COMMENT ON MATERIALIZED VIEW "},
-		{"COMMENT ON VIEW "},
-		{"COMMENT ON TYPE "},
-		{"COMMENT ON DOMAIN "},
-		{"COMMENT ON COLUMN "}, // schema.table.column -> take schema.table
-		{"COMMENT ON INDEX "},  // schema.index, positioned by addIndexPositions
+	// A statement PostgreSQL cannot read is one no order can place. It is
+	// pistachio's own output, so a parse error here is a bug rather than
+	// something the caller can act on, and the run fails on the statement
+	// itself soon enough.
+	result, err := pg_query.Parse(sql)
+	if err != nil || len(result.GetStmts()) == 0 {
+		return ""
 	}
 
-	upper := strings.ToUpper(sql)
-	for _, p := range patterns {
-		if !strings.HasPrefix(upper, strings.ToUpper(p.prefix)) {
-			continue
-		}
+	return stmtObjectName(result.GetStmts()[0].GetStmt())
+}
 
-		if strings.HasPrefix(upper, "CREATE UNIQUE INDEX CONCURRENTLY ") ||
-			strings.HasPrefix(upper, "CREATE UNIQUE INDEX ") ||
-			strings.HasPrefix(upper, "CREATE INDEX CONCURRENTLY ") ||
-			strings.HasPrefix(upper, "CREATE INDEX ") ||
-			strings.HasPrefix(upper, "DROP INDEX CONCURRENTLY ") ||
-			strings.HasPrefix(upper, "DROP INDEX ") {
-			// CREATE INDEX ... ON [ONLY] schema.table ...
-			// DROP INDEX returns "" (no ON clause) -> pos=-1
-			return extractIndexTable(sql)
-		}
-
-		if strings.HasPrefix(upper, "ALTER INDEX ") {
-			// ALTER INDEX schema.idx RENAME TO ... -> extract table from idx name context
-			// Index statements belong to the table they're on, but ALTER INDEX
-			// doesn't contain the table name directly. Return "" to use pos=-1.
-			return ""
-		}
-
-		if strings.HasPrefix(upper, "CREATE POLICY ") ||
-			strings.HasPrefix(upper, "ALTER POLICY ") ||
-			strings.HasPrefix(upper, "DROP POLICY ") {
-			// {CREATE,ALTER,DROP} POLICY name ON schema.table ...
-			return extractIndexTable(sql)
-		}
-
-		if strings.HasSuffix(strings.TrimSpace(p.prefix), "FUNCTION") ||
-			strings.HasSuffix(strings.TrimSpace(p.prefix), "PROCEDURE") {
-			// The graph keys a routine by name alone, without the argument
-			// list: extractFirstIdentifier stops at the opening paren, and a
-			// CREATE statement spells its parameters with names and defaults
-			// rather than the identity types an FQRN carries.
-			return toposort.RoutineNode(extractFirstIdentifier(sql[len(p.prefix):]))
-		}
-
-		if strings.HasSuffix(strings.TrimSpace(p.prefix), "TRIGGER") {
-			// CREATE [OR REPLACE|CONSTRAINT] TRIGGER name <events> ON
-			// schema.table ..., and {DROP,ALTER} TRIGGER name ON schema.table.
-			return extractIndexTable(sql)
-		}
-
-		rest := sql[len(p.prefix):]
-		name := extractFirstIdentifier(rest)
-
-		if strings.HasPrefix(upper, "COMMENT ON COLUMN ") {
-			// schema.table.column -> schema.table
-			parts := splitIdentifier(name, 3)
-			if len(parts) >= 2 {
-				return joinIdentifierParts(parts[:2])
-			}
-		}
-
-		return name
+// stmtObjectName names the object one parsed statement belongs to. An index,
+// a trigger and a policy belong to the relation they sit on, and a routine to
+// its name without the argument list, which is the key the graph gives it.
+//
+// A rename and a drop that name an index alone are left unplaced, as they
+// were before: the maps do carry an index, under the position of the relation
+// it sits on, which addIndexPositions adds for COMMENT ON INDEX, but both
+// have to run before the statements that follow them, which is what position
+// -1 does.
+func stmtObjectName(node *pg_query.Node) string {
+	switch {
+	case node.GetCreateStmt() != nil:
+		return rangeVarIdent(node.GetCreateStmt().GetRelation())
+	case node.GetCreateSeqStmt() != nil:
+		return rangeVarIdent(node.GetCreateSeqStmt().GetSequence())
+	case node.GetAlterSeqStmt() != nil:
+		return rangeVarIdent(node.GetAlterSeqStmt().GetSequence())
+	case node.GetViewStmt() != nil:
+		return rangeVarIdent(node.GetViewStmt().GetView())
+	case node.GetCreateTableAsStmt() != nil:
+		return rangeVarIdent(node.GetCreateTableAsStmt().GetInto().GetRel())
+	case node.GetIndexStmt() != nil:
+		return rangeVarIdent(node.GetIndexStmt().GetRelation())
+	case node.GetCreateTrigStmt() != nil:
+		return rangeVarIdent(node.GetCreateTrigStmt().GetRelation())
+	case node.GetCreatePolicyStmt() != nil:
+		return rangeVarIdent(node.GetCreatePolicyStmt().GetTable())
+	case node.GetAlterPolicyStmt() != nil:
+		return rangeVarIdent(node.GetAlterPolicyStmt().GetTable())
+	case node.GetCompositeTypeStmt() != nil:
+		return rangeVarIdent(node.GetCompositeTypeStmt().GetTypevar())
+	case node.GetCreateEnumStmt() != nil:
+		return nameIdent(node.GetCreateEnumStmt().GetTypeName())
+	case node.GetAlterEnumStmt() != nil:
+		return nameIdent(node.GetAlterEnumStmt().GetTypeName())
+	case node.GetCreateDomainStmt() != nil:
+		return nameIdent(node.GetCreateDomainStmt().GetDomainname())
+	case node.GetAlterDomainStmt() != nil:
+		return nameIdent(node.GetAlterDomainStmt().GetTypeName())
+	case node.GetCreateFunctionStmt() != nil:
+		return toposort.RoutineNode(nameIdent(node.GetCreateFunctionStmt().GetFuncname()))
+	case node.GetAlterTableStmt() != nil:
+		// ALTER TABLE, and the ALTER on a view, a materialized view, a
+		// sequence or a composite type, all arrive here.
+		return rangeVarIdent(node.GetAlterTableStmt().GetRelation())
+	case node.GetRenameStmt() != nil:
+		return renameObjectName(node.GetRenameStmt())
+	case node.GetDropStmt() != nil:
+		return dropObjectName(node.GetDropStmt())
+	case node.GetCommentStmt() != nil:
+		return commentObjectName(node.GetCommentStmt())
 	}
 
 	return ""
 }
 
-// extractFirstIdentifier extracts a possibly schema-qualified identifier
-// from the beginning of a string, preserving quoting to match the canonical
-// format used by model.Ident.
-func extractFirstIdentifier(s string) string {
-	s = strings.TrimSpace(s)
-	var result strings.Builder
-	inQuote := false
-
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if ch == '"' {
-			result.WriteByte(ch)
-			if inQuote && i+1 < len(s) && s[i+1] == '"' {
-				// Escaped quote inside a quoted identifier
-				result.WriteByte(s[i+1])
-				i++
-				continue
-			}
-			inQuote = !inQuote
-			continue
-		}
-		if inQuote {
-			result.WriteByte(ch)
-			continue
-		}
-		if ch == '.' || ch == '_' || ch == '$' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
-			result.WriteByte(ch)
-			continue
-		}
-		break
-	}
-
-	return result.String()
-}
-
-// splitIdentifier splits a possibly-quoted schema-qualified identifier into parts.
-// e.g., `"MySchema"."MyTable".col` -> ["\"MySchema\"", "\"MyTable\"", "col"]
-func splitIdentifier(ident string, maxParts int) []string {
-	var parts []string
-	var part strings.Builder
-	inQuote := false
-
-	for i := 0; i < len(ident); i++ {
-		ch := ident[i]
-		if ch == '"' {
-			part.WriteByte(ch)
-			if inQuote && i+1 < len(ident) && ident[i+1] == '"' {
-				part.WriteByte(ident[i+1])
-				i++
-				continue
-			}
-			inQuote = !inQuote
-			continue
-		}
-		if ch == '.' && !inQuote {
-			parts = append(parts, part.String())
-			part.Reset()
-			if len(parts) >= maxParts-1 {
-				// Put the rest into the last part
-				parts = append(parts, ident[i+1:])
-				return parts
-			}
-			continue
-		}
-		part.WriteByte(ch)
-	}
-	parts = append(parts, part.String())
-	return parts
-}
-
-// joinIdentifierParts joins identifier parts back with dots.
-func joinIdentifierParts(parts []string) string {
-	return strings.Join(parts, ".")
-}
-
-// extractIndexTable extracts the table name from a CREATE/DROP INDEX statement.
-func extractIndexTable(sql string) string {
-	upper := strings.ToUpper(sql)
-	idx := strings.Index(upper, " ON ")
-	if idx < 0 {
+// renameObjectName names the object a RENAME belongs to. A rename on a
+// relation, and one on a trigger, a policy, a column or a constraint, carries
+// the relation; a rename on a type or a domain carries the name alone.
+func renameObjectName(rs *pg_query.RenameStmt) string {
+	if rs.GetRenameType() == pg_query.ObjectType_OBJECT_INDEX {
 		return ""
 	}
-	rest := sql[idx+4:]
-	rest = strings.TrimSpace(rest)
 
-	// Skip optional ONLY keyword
-	if strings.HasPrefix(strings.ToUpper(rest), "ONLY ") {
-		rest = rest[5:]
+	if rs.GetRelation() != nil {
+		return rangeVarIdent(rs.GetRelation())
 	}
 
-	return extractFirstIdentifier(rest)
+	return objectIdent(rs.GetObject())
+}
+
+// dropObjectName names the object a DROP belongs to.
+func dropObjectName(ds *pg_query.DropStmt) string {
+	objects := ds.GetObjects()
+	if len(objects) == 0 {
+		return ""
+	}
+
+	switch ds.GetRemoveType() {
+	case pg_query.ObjectType_OBJECT_INDEX:
+		return ""
+	case pg_query.ObjectType_OBJECT_FUNCTION, pg_query.ObjectType_OBJECT_PROCEDURE:
+		return toposort.RoutineNode(objectIdent(objects[0]))
+	case pg_query.ObjectType_OBJECT_POLICY, pg_query.ObjectType_OBJECT_TRIGGER:
+		// DROP POLICY p ON t names the policy after the relation.
+		return ownerIdent(objects[0])
+	default:
+		return objectIdent(objects[0])
+	}
+}
+
+// commentObjectName names the object a COMMENT belongs to.
+func commentObjectName(cs *pg_query.CommentStmt) string {
+	switch cs.GetObjtype() {
+	case pg_query.ObjectType_OBJECT_COLUMN:
+		// COMMENT ON COLUMN names the column after the table or the
+		// composite type that holds it.
+		return ownerIdent(cs.GetObject())
+	case pg_query.ObjectType_OBJECT_FUNCTION, pg_query.ObjectType_OBJECT_PROCEDURE:
+		return toposort.RoutineNode(objectIdent(cs.GetObject()))
+	default:
+		return objectIdent(cs.GetObject())
+	}
+}
+
+// objectIdent names the object a DROP, a COMMENT or a RENAME carries. A type
+// arrives as a type name, a routine as a name with an argument list, and
+// everything else as a list of name parts.
+func objectIdent(node *pg_query.Node) string {
+	switch {
+	case node.GetTypeName() != nil:
+		return nameIdent(node.GetTypeName().GetNames())
+	case node.GetObjectWithArgs() != nil:
+		return nameIdent(node.GetObjectWithArgs().GetObjname())
+	case node.GetList() != nil:
+		return nameIdent(node.GetList().GetItems())
+	}
+
+	return ""
+}
+
+// ownerIdent names what holds the object, by dropping the last part of a name
+// that ends in the held object's own: a column after its table, a policy
+// after the relation it is on.
+func ownerIdent(node *pg_query.Node) string {
+	items := node.GetList().GetItems()
+	if len(items) < 2 {
+		return ""
+	}
+
+	return nameIdent(items[:len(items)-1])
+}
+
+// rangeVarIdent names a relation the way model.Ident names it.
+func rangeVarIdent(rv *pg_query.RangeVar) string {
+	return model.Ident(rv.GetSchemaname(), rv.GetRelname())
+}
+
+// nameIdent joins the parts a qualified name arrives in, each a string node,
+// into one model.Ident name.
+func nameIdent(names []*pg_query.Node) string {
+	parts := make([]string, 0, len(names))
+	for _, n := range names {
+		parts = append(parts, n.GetString_().GetSval())
+	}
+
+	return model.Ident(parts...)
 }
