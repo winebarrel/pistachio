@@ -22,9 +22,9 @@ concurrency:
 jobs:
   fuzz:
     runs-on: ubuntu-latest
-    # The fuzz targets parse SQL and diff the result against itself, so no
-    # database is involved. `make test` already replays the seed corpus; this
-    # job is the part that goes looking for new inputs.
+    # The fuzz targets parse SQL, diff the result against itself and format
+    # it, so no database is involved. `make test` already replays the seed
+    # corpus; this job is the part that goes looking for new inputs.
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +33,8 @@ jobs:
             target: FuzzParseSQLWithSchema
           - package: ./diff/
             target: FuzzDiffSelf
+          - package: ./format/
+            target: FuzzFormat
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

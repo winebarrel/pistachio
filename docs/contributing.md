@@ -32,8 +32,9 @@ itself, and how to add a sample live in
 [SAMPLE-DB-TESTS.md](https://github.com/winebarrel/pistachio/blob/main/SAMPLE-DB-TESTS.md).
 
 `make fuzz` runs the fuzz targets: one feeds arbitrary text to the parser and
-renders whatever comes back, the other diffs a parsed schema against itself and
-requires no DDL. Neither needs a database. `FUZZTIME` sets how long each target
+renders whatever comes back, one diffs a parsed schema against itself and
+requires no DDL, and one formats a file and requires formatting the result to
+change nothing. None needs a database. `FUZZTIME` sets how long each target
 runs and defaults to one minute:
 
 ```bash
