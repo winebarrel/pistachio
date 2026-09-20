@@ -1,4 +1,4 @@
-# The same fold on an enum column, where the catalog casts each element to the
+# The same fold on an enum column, where the catalog casts the value to the
 # enum type rather than to text.
 init: |
   CREATE TYPE public.parcel_state AS ENUM ('paid', 'shipped', 'canceled');
@@ -6,7 +6,8 @@ init: |
       id integer NOT NULL,
       state public.parcel_state,
       CONSTRAINT parcels_pkey PRIMARY KEY (id),
-      CONSTRAINT parcels_state_check CHECK (state IN ('paid'))
+      CONSTRAINT parcels_state_check CHECK (state IN ('paid')),
+      CONSTRAINT parcels_state_open CHECK (state NOT IN ('canceled'))
   );
 desired: |
   CREATE TYPE public.parcel_state AS ENUM ('paid', 'shipped', 'canceled');
@@ -14,6 +15,7 @@ desired: |
       id integer NOT NULL,
       state public.parcel_state,
       CONSTRAINT parcels_pkey PRIMARY KEY (id),
-      CONSTRAINT parcels_state_check CHECK (state IN ('paid'))
+      CONSTRAINT parcels_state_check CHECK (state IN ('paid')),
+      CONSTRAINT parcels_state_open CHECK (state NOT IN ('canceled'))
   );
 plan: ""

@@ -449,22 +449,20 @@ Origin: expression normalization review, 2026-08-30.
 
 Priority: low.
 
-A row on the left takes a different rewrite than a plain operand does. Parse
-analysis expands the list into one comparison per column, and joins the rows
-with OR: `(a, b) IN ((1, 2))` is stored as `(a = 1) AND (b = 2)`, and
+Parse analysis expands an `IN` list over a row into one comparison per column,
+joined with OR: `(a, b) IN ((1, 2))` is stored as `(a = 1) AND (b = 2)`, and
 `(a, b) IN ((1, 2), (3, 4))` as
 `((a = 1) AND (b = 2)) OR ((a = 3) AND (b = 4))` (`transformAExprIn`,
-`src/backend/parser/parse_expr.c`). `foldArrayComparison` and
-`foldSingleElementIn` in `diff/desugar.go` fold the plain operand alone, so
-the row spelling never matches what comes back and its `CHECK` is dropped and
-added again on every plan, revalidating the whole table. An index predicate, a
-view body, a policy and a trigger `WHEN` drift the same way, and a generated
-column fails the run, since it cannot be altered in place.
+`src/backend/parser/parse_expr.c`). The folds in `diff/desugar.go` rewrite an
+operator and leave the row alone, so the row spelling never matches what comes
+back and its `CHECK` is dropped and added again on every plan, revalidating the
+whole table. An index predicate, a view body, a policy and a trigger `WHEN`
+drift the same way, and a generated column fails the run, since it cannot be
+altered in place.
 
-Closing it means writing that expansion out, a comparison per column and an
-OR per row, rather than rewriting an operator. `desugarBetween` does that kind
-of expansion already, so the shape is there; what it buys is an input hardly
-anyone writes.
+Closing it means writing that expansion out, a comparison per column and an OR
+per row. `desugarBetween` expands its bounds the same way, so the shape is
+there; what it buys is an input hardly anyone writes.
 
 `dump` writes the expanded form, so a dump fed back plans clean and only a
 hand-written row list reaches this.

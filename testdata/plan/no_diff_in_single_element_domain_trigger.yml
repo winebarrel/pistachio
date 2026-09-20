@@ -1,0 +1,23 @@
+# A domain constraint, a trigger WHEN clause and a materialized view body
+# reach the fold through their own comparisons rather than through the one a
+# table constraint uses.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE DOMAIN public.carrier AS text CONSTRAINT carrier_check CHECK (VALUE IN ('own_a'));
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier public.carrier,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER parcels_stamp BEFORE UPDATE ON public.parcels FOR EACH ROW WHEN (new.carrier IN ('own_a')) EXECUTE FUNCTION public.stamp();
+  CREATE MATERIALIZED VIEW public.own_parcels AS SELECT id FROM public.parcels WHERE carrier IN ('own_a');
+desired: |
+  CREATE DOMAIN public.carrier AS text CONSTRAINT carrier_check CHECK (VALUE IN ('own_a'));
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier public.carrier,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id)
+  );
+  CREATE TRIGGER parcels_stamp BEFORE UPDATE ON public.parcels FOR EACH ROW WHEN (new.carrier IN ('own_a')) EXECUTE FUNCTION public.stamp();
+  CREATE MATERIALIZED VIEW public.own_parcels AS SELECT id FROM public.parcels WHERE carrier IN ('own_a');
+plan: ""

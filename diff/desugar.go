@@ -145,18 +145,18 @@ func foldArrayComparison(node *pg_query.Node) {
 	}
 }
 
-// foldSingleElementIn collapses a one-element IN list into the plain
-// comparison parse analysis stores it as: `x IN (a)` becomes `x = a` and
-// `x NOT IN (a)` becomes `x <> a` (transformAExprIn,
-// src/backend/parser/parse_expr.c). The node already carries that operator in
-// its name, so only the kind and the right operand change.
+// foldSingleElementIn collapses a one-element IN list into the comparison
+// parse analysis stores it as: `x IN (a)` becomes `x = a` and `x NOT IN (a)`
+// becomes `x <> a` (transformAExprIn, src/backend/parser/parse_expr.c). The
+// operator is already in the node's name, so only the kind and the right
+// operand change.
 //
-// foldArrayComparison runs first, so an `= ANY (ARRAY[a])` written by hand
-// reaches this through the IN form and collapses the same way.
+// foldArrayComparison runs first, so a hand-written `= ANY (ARRAY[a])` reaches
+// this through the IN form.
 //
-// A row on the left is a different rewrite: `(a, b) IN ((1, 2))` is stored as
-// `(a = 1) AND (b = 2)`, which the operator alone does not produce, so it is
-// left as written.
+// A row on the left expands into one comparison per column instead, which an
+// operator does not produce, so it is left as written. LIMITATIONS.md covers
+// it.
 func foldSingleElementIn(node *pg_query.Node) {
 	ae := node.GetAExpr()
 	if ae == nil || ae.Kind != pg_query.A_Expr_Kind_AEXPR_IN {

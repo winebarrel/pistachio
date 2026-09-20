@@ -2,7 +2,7 @@
 
 ## [1.59.1] - 2026-09-20
 
-* A one-element `IN` list now compares equal to the plain comparison PostgreSQL stores it as. `CHECK (carrier IN ('own_a'))` is stored as `CHECK ((carrier = 'own_a'::text))`, so the constraint was dropped and added again on every plan, revalidating the whole table. An index predicate, a policy, a view body and a trigger `WHEN` drifted the same way, and a generated column failed the run with `cannot change GENERATED expression`. `NOT IN (a)`, stored as `<> a`, folds too.
+* A one-element `IN` list compares equal to the comparison PostgreSQL stores it as. `CHECK (carrier IN ('own_a'))` is stored as `CHECK ((carrier = 'own_a'::text))`, so the constraint was dropped and added again on every plan, revalidating the whole table. A domain constraint, an index predicate, a policy, a view body and a trigger `WHEN` drifted the same way, and a generated column failed the run with `cannot change GENERATED expression`. `NOT IN (a)` is stored as `<> a` and folds too.
 
 ## [1.59.0] - 2026-09-19
 
