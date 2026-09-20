@@ -102,6 +102,7 @@ openfire|sample-db-url-schema|URL=https://raw.githubusercontent.com/igniterealti
 bareos|sample-db-url-schema|URL=https://raw.githubusercontent.com/bareos/bareos/13a52fc1da1b2b131cf794fa4adb3936d39e049d/core/src/cats/ddl/creates/postgresql.sql SCHEMA=bareos|bareos
 opencms|sample-db-url-schema|URL=https://raw.githubusercontent.com/alkacon/opencms-core/3411490f10d73474d15d3f0dd31d132793cb22cb/webapp/WEB-INF/setupdata/database/postgresql/create_tables.sql SCHEMA=opencms|opencms
 marquez|sample-db-marquez||marquez
+penpot|sample-db-penpot||penpot
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -845,6 +846,60 @@ sample-db-hyperswitch:
 	  | tar xz -C "$$dir" --strip-components=2 hyperswitch-$(HYPERSWITCH_SHA)/migrations && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in */up.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | $(PSQL)
+
+# Penpot (penpot/penpot, MPL-2.0), the design and prototyping platform. Its
+# schema ships as 165 SQL migration files in one directory, so the repository
+# tarball is fetched once and that directory is extracted along with the
+# migrations.clj beside it.
+#
+# Which files to replay, and in which order, comes from migrations.clj rather
+# than from the directory listing, because the two do not agree. Three files on
+# disk are not in the list, so Penpot never applies them, and replaying
+# XXXX-drop-obsolete-tables.sql alone would drop a table and three columns the
+# sample is meant to carry. Nor is the list in name order: six files share their
+# number with another and are listed the other way round, among them
+# 0122-mod-file-table, which comes before the 0122-mod-file-data-fragment-table
+# that sorts ahead of it. Two files end without a trailing newline, which would
+# run the next file's first line into their last, so each is followed by a
+# newline and a semicolon. The cat is guarded for the same reason the list is
+# read at all: a name the list holds and the tarball does not would otherwise
+# be skipped with nothing but a line on stderr, and the check would then run
+# against a schema quietly missing that migration, which is what ON_ERROR_STOP
+# keeps a failing statement from doing.
+#
+# The list also holds two migrations written in Clojure, which Penpot runs in
+# the same sequence. Both rewrite rows rather than schema, so the sample is
+# checked without them, the way marquez is checked without Flyway's Java
+# migrations.
+#
+# The list names each file as a resource path under `app/`, which the extracted
+# directory is the tail of, so that prefix is cut and the rest is the path on
+# disk. Nothing in the files names a schema or qualifies anything with public,
+# so `penpot` is created up front and search_path places everything.
+#
+# The first migration installs uuid-ossp, which the migrations call 36 times as
+# they replay and one column still defaults through at the end. It is contrib,
+# so the official image already has it, but the migration says IF NOT EXISTS
+# and names no schema: in `make schema`, where an earlier sample has already
+# installed it into `public`, that is a no-op and uuid_generate_v4 would then
+# not resolve from `penpot` alone. So it is installed into `public` up front,
+# as dhis2 installs PostGIS, and `public` stays second in the search path for
+# it to resolve from.
+PENPOT_SHA = d642fcbf5c87c54c103f2561a545d7a85748c6de
+
+sample-db-penpot: PGOPTS = -c search_path=penpot,public
+.PHONY: sample-db-penpot
+sample-db-penpot:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS penpot'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/penpot/penpot/tar.gz/$(PENPOT_SHA) \
+	  | tar xz -C "$$dir" --strip-components=4 \
+	      penpot-$(PENPOT_SHA)/backend/src/app/migrations penpot-$(PENPOT_SHA)/backend/src/app/migrations.clj && \
+	cd "$$dir" && \
+	grep -oE 'app/migrations/sql/[^"]+\.sql' migrations.clj | sed 's#^app/##' \
+	  | while read -r f; do cat "$$f" || exit 1; printf '\n;\n'; done \
 	  | $(PSQL)
 
 .PHONY: test-samples

@@ -171,6 +171,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | bareos | bareos | [bareos/bareos](https://github.com/bareos/bareos) |
 | opencms | opencms | [alkacon/opencms-core](https://github.com/alkacon/opencms-core) |
 | marquez | marquez | [MarquezProject/marquez](https://github.com/MarquezProject/marquez) |
+| penpot | penpot | [penpot/penpot](https://github.com/penpot/penpot) |
 
 ## Coverage
 
@@ -191,7 +192,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   2026-09-17 on 15.18.
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
   on 16.13, and dokploy, hyperswitch, documenso, langfuse, icinga_ido,
-  openfire, bareos, opencms, and marquez 2026-09-18 on the same.
+  openfire, bareos, opencms, and marquez 2026-09-18 on the same, and penpot
+  2026-09-20 on 16.13 as well.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -299,11 +301,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | bareos | 28 | 259 | 39 | 0 | 26 | 0 | 0 | 0 | 0 | 2 |
 | opencms | 41 | 246 | 164 | 0 | 44 | 0 | 0 | 0 | 0 | 0 |
 | marquez | 30 | 199 | 83 | 46 | 38 | 4 | 0 | 0 | 2 | 2 |
-| **Total** | **8,300** | **71,417** | **25,019** | **10,433** | **13,798** | **2,203** | **595** | **432** | **1,503** | **1,276** |
+| penpot | 61 | 511 | 169 | 85 | 71 | 0 | 0 | 0 | 8 | 3 |
+| **Total** | **8,361** | **71,928** | **25,188** | **10,518** | **13,869** | **2,203** | **595** | **432** | **1,511** | **1,279** |
 
 ### Size
 
-The 80 dumps come to about 234,000 lines of SQL. chado is 43,700 of them, the
+The 81 dumps come to about 235,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -337,7 +340,10 @@ always reach.
   four to a table like danbooru's but plainer: every one of them is btree, 120
   are non-unique, and not one is partial or over an expression.
 - **Partial indexes**: 37 of lemmy's 290 and 88 of windmill's 392, which also
-  has 31 gin indexes.
+  has 31 gin indexes, and 50 of penpot's 169, where 35 of the predicates test a
+  `deleted_at` or `archived_at` timestamp for NULL and two read a key out of a
+  `jsonb` column. Every one of penpot's indexes is btree, and its 5 expression
+  indexes are all over `jsonb` too, one of them over a `COALESCE` of two keys.
 - **Unique indexes over an expression and a gin index over `to_tsvector`**: rt,
   plus mattermost's 11, six of them over the concatenation of two to five
   columns.
@@ -453,7 +459,10 @@ always reach.
   lago declares one and attaches five in its own schema, and triggerdev
   declares two by range and attaches none. thingsboard declares
   11, all by range, and attaches none for the same
-  reason. windmill declares one by range and attaches four beside it.
+  reason. windmill declares one by range and attaches four beside it. penpot
+  declares one by hash and attaches all 16 of its partitions beside it, which
+  is a quarter of the sample's 61 tables, and both of the parent's indexes are
+  partitioned along with it.
 - **Row-level security**: windmill turns it on for 38 of its 173 tables and
   backs them with 366 policies, 32 names reused across the tables. 98 are
   declared for ALL, 73 for SELECT, 71 for INSERT, 62 each for UPDATE and
@@ -477,13 +486,13 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-eight of the 80 samples declare
+Routines are concentrated the same way. Thirty-nine of the 81 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,276. Seven in ten of them, 890, return
+and chado's 94 are 916 of the 1,279. Seven in ten of them, 893, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
 89 do not, since its loader concatenates a file list that leaves triggers out.
 
-1,171 are written in plpgsql and 105 in sql. sourcegraph declares one
+1,174 are written in plpgsql and 105 in sql. sourcegraph declares one
 procedure, thingsboard three, and lemmy two, the only procedures any sample has,
 and inaturalist the only aggregate, which `--manage-routine` does not read and
 so is in neither count. bareos's `decode_lstat` returns a 16-column `TABLE`,
@@ -741,6 +750,23 @@ targets strip only what is irrelevant to a schema round trip:
   concatenated in dependency order (extensions and collation, search
   configuration, types, tables, functions, then keys, indexes, constraints, and
   views).
+- **penpot**: the schema ships as 165 SQL migration files in one directory,
+  which the repository tarball is fetched once for, along with the
+  `migrations.clj` beside it. That file, not the directory listing, says which
+  files to replay and in which order, and the two do not agree: three files on
+  disk are not in the list, and replaying `XXXX-drop-obsolete-tables.sql`
+  alone would drop a table and three columns the sample is meant to carry.
+  Nor is the list in name order, since six files share their number with
+  another and are listed the other way round. It names each file as a resource
+  path under `app/`, which the extracted directory is the tail of, so that
+  prefix is cut. Two files end without a trailing newline, so each is followed
+  by a newline and a semicolon. Penpot's two Clojure migrations run in the same
+  sequence and both rewrite rows rather than schema, so the sample is checked
+  without them, the way marquez is checked without Flyway's Java migrations.
+  The first migration installs `uuid-ossp`, which is contrib, but it says
+  `IF NOT EXISTS` and names no schema, so it is installed into `public` up
+  front and `public` stays second in the search path for the one column default
+  that still calls `uuid_generate_v4` to resolve from.
 - **ranger**: the dump drops every object it is about to create with
   `IF EXISTS` and commits outside a transaction, which adds a warning per
   statement, so `client_min_messages` is raised from `warning` to `error` for
