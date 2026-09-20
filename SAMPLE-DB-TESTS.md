@@ -172,6 +172,8 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | opencms | opencms | [alkacon/opencms-core](https://github.com/alkacon/opencms-core) |
 | marquez | marquez | [MarquezProject/marquez](https://github.com/MarquezProject/marquez) |
 | penpot | penpot | [penpot/penpot](https://github.com/penpot/penpot) |
+| dcm4chee | dcm4chee | [dcm4che/dcm4chee-arc-light](https://github.com/dcm4che/dcm4chee-arc-light) |
+| kamailio | kamailio | [kamailio/kamailio](https://github.com/kamailio/kamailio) |
 
 ## Coverage
 
@@ -193,7 +195,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
   on 16.13, and dokploy, hyperswitch, documenso, langfuse, icinga_ido,
   openfire, bareos, opencms, and marquez 2026-09-18 on the same, and penpot
-  2026-09-20 on 16.13 as well.
+  2026-09-20 on 16.13 as well, and dcm4chee and kamailio the same day on the
+  same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -302,11 +305,13 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | opencms | 41 | 246 | 164 | 0 | 44 | 0 | 0 | 0 | 0 | 0 |
 | marquez | 30 | 199 | 83 | 46 | 38 | 4 | 0 | 0 | 2 | 2 |
 | penpot | 61 | 511 | 169 | 85 | 71 | 0 | 0 | 0 | 8 | 3 |
-| **Total** | **8,361** | **71,928** | **25,188** | **10,518** | **13,869** | **2,203** | **595** | **432** | **1,511** | **1,279** |
+| dcm4chee | 41 | 425 | 290 | 65 | 96 | 0 | 0 | 30 | 0 | 0 |
+| kamailio | 73 | 614 | 182 | 0 | 109 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **8,475** | **72,967** | **25,660** | **10,583** | **14,074** | **2,203** | **595** | **462** | **1,511** | **1,279** |
 
 ### Size
 
-The 81 dumps come to about 235,000 lines of SQL. chado is 43,700 of them, the
+The 83 dumps come to about 237,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -338,7 +343,10 @@ always reach.
   123 of them partial and 16 gin; feedbin's 161 over 44, every one of them
   btree, only 7 partial and 3 over an expression; opencms's 164 over 41 are
   four to a table like danbooru's but plainer: every one of them is btree, 120
-  are non-unique, and not one is partial or over an expression.
+  are non-unique, and not one is partial or over an expression. dcm4chee's 290
+  over 41 are seven to a table, as dense as danbooru's and plainer still: all
+  btree, none partial, and the only three over an expression are `upper()` of
+  a name or a description, which is how it searches case-insensitively.
 - **Partial indexes**: 37 of lemmy's 290 and 88 of windmill's 392, which also
   has 31 gin indexes, and 50 of penpot's 169, where 35 of the predicates test a
   `deleted_at` or `archived_at` timestamp for NULL and two read a key out of a
@@ -415,7 +423,9 @@ always reach.
 - **Standalone sequences rather than serial columns**: ranger, whose 85 tables
   come with 84 of them, wso2apim, which mixes 104 of them in with serial
   columns, and wso2is, which declares 92 for its 172 tables and wires 87 of them
-  into a column DEFAULT.
+  into a column DEFAULT. dcm4chee declares 30 for its 41 tables and wires none
+  of them into a DEFAULT at all: the application asks for the next value
+  itself, so the sequence and the column it feeds are related only by name.
 - **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
   tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with 747
   of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, documenso,
@@ -434,10 +444,15 @@ always reach.
   primary keys and 19 unique constraints, declares no CHECK, and leaves all but
   3 of the references between them to the application. mediawiki, temporal,
   imdb, dolphinscheduler, nightingale, joomla, hyperswitch, icinga_ido,
-  bareos, and opencms declare no foreign key at all, and openfire declares
-  exactly one, over 35 tables. icinga_ido is the widest of them: 61 tables
-  and 791 columns, indexed 234 times and keyed by 61 primary keys and 33
+  bareos, opencms, and kamailio declare no foreign key at all, and openfire
+  declares exactly one, over 35 tables. icinga_ido is the widest of them: 61
+  tables and 791 columns, indexed 234 times and keyed by 61 primary keys and 33
   unique constraints, with every reference between them left to Icinga.
+  kamailio has the most tables of any of them, 73, keyed by one primary key
+  each and 36 unique constraints with no CHECK anywhere, though it does default
+  380 of its 614 columns. Its schema is assembled one module at a time, so what
+  ties the tables together lives in Kamailio's configuration rather than in the
+  database.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, mattermost, whose six are all materialized and
   one of which carries an index, and marquez, where one of the four is.
@@ -486,7 +501,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-nine of the 81 samples declare
+Routines are concentrated the same way. Thirty-nine of the 83 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
 and chado's 94 are 916 of the 1,279. Seven in ten of them, 893, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
@@ -586,6 +601,10 @@ targets strip only what is irrelevant to a schema round trip:
   preamble is where `pg_dump` turns `check_function_bodies` off. Left on, a
   plpgsql function that declares a variable of a table's row type stops the
   load, since the table comes later in the file, so the loader turns it off.
+- **dcm4chee**: the schema ships as plain DDL rather than migrations, in three
+  files concatenated in dependency order: the tables and their 30 sequences,
+  then the indexes over the foreign key columns, then the three
+  case-insensitive ones, both of which need the tables.
 - **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
   constraint, and the `\copy` lines are dropped.
 - **dhis2**: the dump is the base schema Flyway starts from, a `pg_dump` that
@@ -673,6 +692,15 @@ targets strip only what is irrelevant to a schema round trip:
   themselves, and every table name carries the literal `#__` prefix Joomla
   substitutes at install time; quoted, it is just an ordinary identifier and
   needs no rewriting.
+- **kamailio**: the schema is one file per module rather than one per release,
+  and which modules a database gets is the installer's choice: `kamdbctl`
+  creates the standard set always and asks about the presence, extra, and uid
+  sets. The loader concatenates all four, in the order `kamdbctl.base` lists
+  them, which puts `standard` first because every file writes a row into the
+  `version` table it creates. The five files left over are four IMS ones and
+  `matrix`, which `kamdbctl` does not offer. A schema of its own matters more
+  here than usual: this is where the generic names live, `domain`, `group`,
+  `location`, `subscriber`, `uri`, `address`, `version`.
 - **lago**: the schema is Rails' `db/structure.sql` like discourse's, and loads
   the same way with two things taken out first. It was dumped with `--clean`,
   so everything before the first `-- Name:` header, about 1,400 lines of
