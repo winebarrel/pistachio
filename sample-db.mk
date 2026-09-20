@@ -103,6 +103,8 @@ bareos|sample-db-url-schema|URL=https://raw.githubusercontent.com/bareos/bareos/
 opencms|sample-db-url-schema|URL=https://raw.githubusercontent.com/alkacon/opencms-core/3411490f10d73474d15d3f0dd31d132793cb22cb/webapp/WEB-INF/setupdata/database/postgresql/create_tables.sql SCHEMA=opencms|opencms
 marquez|sample-db-marquez||marquez
 penpot|sample-db-penpot||penpot
+dcm4chee|sample-db-dcm4chee||dcm4chee
+kamailio|sample-db-kamailio||kamailio
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -901,6 +903,64 @@ sample-db-penpot:
 	grep -oE 'app/migrations/sql/[^"]+\.sql' migrations.clj | sed 's#^app/##' \
 	  | while read -r f; do cat "$$f" || exit 1; printf '\n;\n'; done \
 	  | $(PSQL)
+
+# dcm4chee-arc-light (dcm4che/dcm4chee-arc-light, MPL-2.0), the DICOM archive.
+# Unlike most of the Java projects here it ships plain DDL rather than
+# migrations, in three files that are concatenated in dependency order: the
+# tables and their sequences, then the indexes over the foreign key columns,
+# then the three case-insensitive ones, both of which need the tables. None of
+# them names a schema, qualifies anything with public, or installs an
+# extension, so `dcm4chee` is created up front and search_path places
+# everything.
+#
+# The sequences are why it is here: 30 standalone ones, one per table that
+# needs a surrogate key, declared apart from the columns that draw from them
+# rather than through serial or identity. Only ranger, wso2apim, and wso2is
+# bring more.
+DCM4CHEE_SQL_FILES = create-psql.sql create-fk-index.sql create-case-insensitive-index.sql
+
+sample-db-dcm4chee: PGOPTS = -c search_path=dcm4chee
+.PHONY: sample-db-dcm4chee
+sample-db-dcm4chee:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS dcm4chee'
+	for f in $(DCM4CHEE_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/dcm4che/dcm4chee-arc-light/09a7bb64080d6b76294cfda3e6807fc6faedc7a0/dcm4chee-arc-entity/src/main/resources/sql/psql/$$f || exit 1; \
+	  echo; \
+	done | $(PSQL)
+
+# Kamailio (kamailio/kamailio, GPL-2.0), the SIP server. Its schema is one file
+# per module rather than one file per release, and which modules a database
+# gets is a choice the installer makes: kamdbctl creates the standard set
+# always and asks about the presence, extra, and uid sets. The list below is
+# all four, in the order kamdbctl.base lists them, which puts `standard` first
+# because every file, itself included, writes a row into the `version` table it
+# creates. The five left over are four IMS ones and matrix, which kamdbctl
+# does not offer at all.
+#
+# None of them names a schema, qualifies anything with public, or installs an
+# extension, so `kamailio` is created up front and search_path places
+# everything. That matters more here than usual: this schema is where the
+# generic names live, `domain`, `group`, `location`, `subscriber`, `uri`,
+# `address`, `version`, and loading it into `public` would put them on top of
+# half the other public samples in `make schema`.
+KAMAILIO_MODULES = \
+	standard acc lcr domain group \
+	permissions registrar usrloc msilo alias_db uri_db speeddial \
+	avpops auth_db pdt dialog dispatcher dialplan topos \
+	presence rls \
+	imc cpl siptrace domainpolicy carrierroute \
+	drouting userblocklist htable purple uac pipelimit mtree sca mohqueue \
+	rtpproxy rtpengine secfilter ims_icscf \
+	uid_auth_db uid_avp_db uid_domain uid_gflags uid_uri_db
+
+sample-db-kamailio: PGOPTS = -c search_path=kamailio
+.PHONY: sample-db-kamailio
+sample-db-kamailio:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS kamailio'
+	for m in $(KAMAILIO_MODULES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/kamailio/kamailio/72acbabee92122e24fc13a5c2f09228450da7263/utils/kamctl/postgres/$$m-create.sql || exit 1; \
+	  echo; \
+	done | $(PSQL)
 
 .PHONY: test-samples
 test-samples:
