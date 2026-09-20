@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.59.2] - 2026-09-20
 
 * `CREATE UNLOGGED SEQUENCE` is ordered by its dependencies, as `CREATE SEQUENCE` already was. The plan placed a statement by its prefix and had no prefix for the unlogged spelling, so the statement ran before every other create. The plan now reads the parse tree, and the spelling no longer decides where a statement runs.
 
