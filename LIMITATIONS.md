@@ -471,6 +471,30 @@ Workaround: write the comparisons out, `a = 1 AND b = 2`.
 
 Origin: expression normalization review, 2026-09-20.
 
+## Perpetual drift on an array literal written with a cast
+
+Priority: low.
+
+Parse analysis moves a cast on an array constructor onto the elements, and
+drops one the elements already satisfy: `ARRAY[1]::integer[]` is stored as
+`ARRAY[1]`, `ARRAY[1]::bigint[]` as `ARRAY[(1)::bigint]`, and
+`ARRAY['2020-01-01']::date[]` as `ARRAY['2020-01-01'::date]`. The written cast
+sits on the array, so it never matches what comes back, and the `CHECK`
+holding it is dropped and added again on every plan. A text-like cast is the
+exception, since `normalizeCheckExpr` strips `::text[]` and `::varchar[]` from
+both sides; that is the form `pg_dump` writes for a `varchar` column.
+
+Matching the rest means knowing what each element's type already is, which is
+what decides whether the cast moves or goes. The tree alone does not say.
+
+`dump` writes the stored form, so a dump fed back plans clean and only a
+hand-written cast reaches this.
+
+Workaround: write the cast on the elements, `ARRAY[1::bigint]`, or leave it
+off where the elements already have the type.
+
+Origin: expression normalization review, 2026-09-20.
+
 ## Perpetual drift on a schema-qualified sequence in a column DEFAULT
 
 Priority: low.
