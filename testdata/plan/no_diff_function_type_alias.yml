@@ -1,0 +1,21 @@
+# The same routines as the catalog reports them, written with type aliases in
+# the desired schema. Nothing is due for any of them: the argument types, the
+# return type, the one behind SETOF, and the one a routine with no RETURNS
+# clause derives from its OUT parameter all resolve to the canonical name
+# before the diff compares them.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer, b timestamp with time zone) RETURNS bigint
+      LANGUAGE sql AS $$ SELECT 1::bigint $$;
+  CREATE FUNCTION public.g(a integer) RETURNS SETOF character varying
+      LANGUAGE sql AS $$ SELECT 'x'::varchar $$;
+  CREATE FUNCTION public.h(a integer, OUT b timestamp with time zone)
+      LANGUAGE sql AS $$ SELECT now() $$;
+desired: |
+  CREATE FUNCTION public.f(a int, b timestamptz) RETURNS int8
+      LANGUAGE sql AS $$ SELECT 1::bigint $$;
+  CREATE FUNCTION public.g(a int) RETURNS SETOF varchar
+      LANGUAGE sql AS $$ SELECT 'x'::varchar $$;
+  CREATE FUNCTION public.h(a int, OUT b timestamptz)
+      LANGUAGE sql AS $$ SELECT now() $$;
+plan: ""
