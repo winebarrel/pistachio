@@ -198,3 +198,34 @@ func TestEqualConstraintDef_anyOverArrayColumn(t *testing.T) {
 		"CHECK (level = ANY(others))",
 	))
 }
+
+func TestEqualConstraintDef_singleElementIn(t *testing.T) {
+	// A one-element list is stored as the plain comparison, not as the
+	// scalar-array form a longer list takes.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((carrier = 'a'::text))",
+		"CHECK (carrier IN ('a'))",
+	))
+	assert.True(t, equalConstraintDef(
+		"CHECK ((weight <> 0))",
+		"CHECK (weight NOT IN (0))",
+	))
+	// The two are each other's negation.
+	assert.False(t, equalConstraintDef(
+		"CHECK ((carrier = 'a'::text))",
+		"CHECK (carrier NOT IN ('a'))",
+	))
+	// A hand-written `= ANY (ARRAY[a])` is stored as it was written, so the
+	// catalog holds a form the fold above does not produce. It reaches the
+	// same comparison through the IN list, the way a longer one does.
+	assert.True(t, equalConstraintDef(
+		"CHECK ((carrier = ANY (ARRAY['a'::text])))",
+		"CHECK (carrier IN ('a'))",
+	))
+	// A row on the left is expanded into one comparison per column instead,
+	// which the fold does not produce. LIMITATIONS.md covers it.
+	assert.False(t, equalConstraintDef(
+		"CHECK (((a = 1) AND (b = 2)))",
+		"CHECK ((a, b) IN ((1, 2)))",
+	))
+}

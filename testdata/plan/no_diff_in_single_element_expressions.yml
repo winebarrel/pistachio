@@ -1,0 +1,27 @@
+# The fold reaches every site the expression walk covers: an index predicate,
+# a policy, a view body and a generated column. The generated column is the
+# one that fails the run rather than drifting, since it cannot be altered in
+# place.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      is_own boolean GENERATED ALWAYS AS (carrier IN ('own_a')) STORED,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.parcels ENABLE ROW LEVEL SECURITY;
+  CREATE INDEX parcels_own_idx ON public.parcels (id) WHERE carrier IN ('own_a');
+  CREATE POLICY parcels_own ON public.parcels USING (carrier IN ('own_a'));
+  CREATE VIEW public.own_parcels AS SELECT id FROM public.parcels WHERE carrier IN ('own_a');
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      is_own boolean GENERATED ALWAYS AS (carrier IN ('own_a')) STORED,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.parcels ENABLE ROW LEVEL SECURITY;
+  CREATE INDEX parcels_own_idx ON public.parcels (id) WHERE carrier IN ('own_a');
+  CREATE POLICY parcels_own ON public.parcels USING (carrier IN ('own_a'));
+  CREATE VIEW public.own_parcels AS SELECT id FROM public.parcels WHERE carrier IN ('own_a');
+plan: ""

@@ -1,0 +1,22 @@
+# A one-element `IN` list is stored as the plain comparison, `IN (a)` as
+# `= a` and `NOT IN (a)` as `<> a`, so the written list has to fold the same
+# way or the constraint is re-created on every plan.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      weight integer,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier IN ('own_a')),
+      CONSTRAINT parcels_weight_check CHECK (weight NOT IN (0))
+  );
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      weight integer,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier IN ('own_a')),
+      CONSTRAINT parcels_weight_check CHECK (weight NOT IN (0))
+  );
+plan: ""

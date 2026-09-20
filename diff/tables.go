@@ -696,7 +696,8 @@ var sequenceTypes = map[string]bool{
 //     adds to anything string-typed and a written definition practically never
 //     carries.
 //   - Converts = ANY(ARRAY[...]) to IN (...) and <> ALL(ARRAY[...]) to
-//     NOT IN (...) (PostgreSQL internal representation).
+//     NOT IN (...) (PostgreSQL internal representation), and collapses a
+//     one-element IN list into the = or <> parse analysis stores it as.
 //   - Folds NOT (a IS DISTINCT FROM b) into a IS NOT DISTINCT FROM b, the shape
 //     PostgreSQL rewrites the written operator into when it stores an
 //     expression.
@@ -728,6 +729,7 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 		}
 	}
 	foldArrayComparison(node)
+	foldSingleElementIn(node)
 	if expanded := desugarBetween(node); expanded != nil {
 		return expanded
 	}

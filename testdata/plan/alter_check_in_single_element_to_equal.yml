@@ -1,0 +1,19 @@
+# `IN (a)` and `= a` are the same stored expression, so moving between the two
+# spellings is not a change. A different value still is.
+init: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier IN ('own_a'))
+  );
+desired: |
+  CREATE TABLE public.parcels (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT parcels_pkey PRIMARY KEY (id),
+      CONSTRAINT parcels_carrier_check CHECK (carrier = 'own_b')
+  );
+plan: |
+  ALTER TABLE public.parcels DROP CONSTRAINT parcels_carrier_check;
+  ALTER TABLE public.parcels ADD CONSTRAINT parcels_carrier_check CHECK (carrier = 'own_b');
