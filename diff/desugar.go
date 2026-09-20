@@ -145,6 +145,34 @@ func foldArrayComparison(node *pg_query.Node) {
 	}
 }
 
+// foldSingleElementIn collapses a one-element IN list into the comparison
+// parse analysis stores it as: `x IN (a)` becomes `x = a` and `x NOT IN (a)`
+// becomes `x <> a` (transformAExprIn, src/backend/parser/parse_expr.c). The
+// operator is already in the node's name, so only the kind and the right
+// operand change.
+//
+// foldArrayComparison runs first, so a hand-written `= ANY (ARRAY[a])` reaches
+// this through the IN form.
+//
+// A row on the left expands into one comparison per column instead, which an
+// operator does not produce, so it is left as written. LIMITATIONS.md covers
+// it.
+func foldSingleElementIn(node *pg_query.Node) {
+	ae := node.GetAExpr()
+	if ae == nil || ae.Kind != pg_query.A_Expr_Kind_AEXPR_IN {
+		return
+	}
+	if ae.Lexpr.GetRowExpr() != nil {
+		return
+	}
+	list := ae.Rexpr.GetList()
+	if list == nil || len(list.Items) != 1 {
+		return
+	}
+	ae.Kind = pg_query.A_Expr_Kind_AEXPR_OP
+	ae.Rexpr = list.Items[0]
+}
+
 // flattenBoolExpr merges an AND argument of an AND, and an OR argument of an
 // OR, into the argument list holding it.
 //

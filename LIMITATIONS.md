@@ -445,6 +445,70 @@ leave the type off.
 
 Origin: expression normalization review, 2026-08-30.
 
+## Perpetual drift on an `IN` list PostgreSQL expands
+
+Priority: low.
+
+A list reaches the catalog as the `= ANY (ARRAY[...])` that `diff/desugar.go`
+folds back only when no item names a column and the left operand is not a row.
+Two shapes are expanded into comparisons instead (`transformAExprIn`,
+`src/backend/parser/parse_expr.c`):
+
+- A row on the left. `(a, b) IN ((1, 2))` is stored as `(a = 1) AND (b = 2)`,
+  one comparison per column joined with AND, and more than one row ORs those
+  groups together: `(a, b) IN ((1, 2), (3, 4))` becomes
+  `((a = 1) AND (b = 2)) OR ((a = 3) AND (b = 4))`.
+- An item naming a column. `a IN (b, c)` is stored as `(a = b) OR (a = c)` and
+  `a NOT IN (b, c)` as `(a <> b) AND (a <> c)`. A mixed list splits, the items
+  naming none keeping the array form: `a IN (b, 1, 2)` becomes
+  `(a = ANY (ARRAY[1, 2])) OR (a = b)`. The test is the column, not the
+  constant, so a call over literals stays whole: `a IN (length('xx'),
+  length('yyy'))` keeps the array form.
+
+Either way the written list never matches what comes back, so its `CHECK` is
+dropped and added again on every plan, revalidating the whole table. An index
+predicate, a view body, a policy and a trigger `WHEN` drift the same way, and a
+generated column fails the run, since it cannot be altered in place. A
+one-element list is the exception both ways: `a IN (b)` is stored as `a = b`,
+which `foldSingleElementIn` produces.
+
+Closing it means writing those expansions out, which is more than rewriting an
+operator. The row form needs a comparison per column and an OR per row, and the
+other needs to tell an item naming a column from one that does not, and to
+print the two halves in the order PostgreSQL does.
+
+`dump` writes the expanded form, so a dump fed back plans clean and only a
+hand-written list reaches this.
+
+Workaround: write the comparisons out, `a = 1 AND b = 2` for the row and
+`a = b OR a = c` for the other.
+
+Origin: expression normalization review, 2026-09-20.
+
+## Perpetual drift on an array literal written with a cast
+
+Priority: low.
+
+Parse analysis moves a cast on an array constructor onto the elements, and
+drops a cast the elements already carry: `ARRAY[1]::integer[]` is stored as
+`ARRAY[1]`, `ARRAY[1]::bigint[]` as `ARRAY[(1)::bigint]`, and
+`ARRAY['2020-01-01']::date[]` as `ARRAY['2020-01-01'::date]`. The written cast
+sits on the array, so it never matches what comes back, and the `CHECK`
+holding it is dropped and added again on every plan. A text-like cast is the
+exception, since `normalizeCheckExpr` strips `::text[]` and `::varchar[]` from
+both sides; that is the form `pg_dump` writes for a `varchar` column.
+
+Matching the rest means knowing what each element's type already is, which is
+what decides whether the cast moves or goes. The tree alone does not say.
+
+`dump` writes the stored form, so a dump fed back plans clean and only a
+hand-written cast reaches this.
+
+Workaround: write the cast on the elements, `ARRAY[1::bigint]`, or leave it
+off where the elements already have the type.
+
+Origin: expression normalization review, 2026-09-20.
+
 ## Perpetual drift on a schema-qualified sequence in a column DEFAULT
 
 Priority: low.
