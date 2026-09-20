@@ -445,27 +445,38 @@ leave the type off.
 
 Origin: expression normalization review, 2026-08-30.
 
-## Perpetual drift on an `IN` list over a row
+## Perpetual drift on an `IN` list PostgreSQL expands
 
 Priority: low.
 
-Parse analysis expands an `IN` list over a row into one comparison per column,
-joined with OR: `(a, b) IN ((1, 2))` is stored as `(a = 1) AND (b = 2)`, and
-`(a, b) IN ((1, 2), (3, 4))` as
-`((a = 1) AND (b = 2)) OR ((a = 3) AND (b = 4))` (`transformAExprIn`,
-`src/backend/parser/parse_expr.c`). The folds in `diff/desugar.go` rewrite an
-operator and leave the row alone, so the row spelling never matches what comes
-back and its `CHECK` is dropped and added again on every plan, revalidating the
-whole table. An index predicate, a view body, a policy and a trigger `WHEN`
-drift the same way, and a generated column fails the run, since it cannot be
-altered in place.
+A list reaches the catalog as the `= ANY (ARRAY[...])` that `diff/desugar.go`
+folds back only when it holds constants alone and the left operand is not a
+row. Two shapes are expanded into comparisons instead (`transformAExprIn`,
+`src/backend/parser/parse_expr.c`):
 
-Closing it means writing that expansion out, a comparison per column and an OR
-per row. `desugarBetween` expands its bounds the same way, so the shape is
-there; what it buys is an input hardly anyone writes.
+- A row on the left. `(a, b) IN ((1, 2))` is stored as `(a = 1) AND (b = 2)`,
+  one comparison per column joined with AND, and more than one row ORs those
+  groups together: `(a, b) IN ((1, 2), (3, 4))` becomes
+  `((a = 1) AND (b = 2)) OR ((a = 3) AND (b = 4))`.
+- An item that is not a constant. `a IN (b, c)` is stored as
+  `(a = b) OR (a = c)` and `a NOT IN (b, c)` as `(a <> b) AND (a <> c)`. A
+  mixed list splits, the constants keeping the array form: `a IN (b, 1, 2)`
+  becomes `(a = ANY (ARRAY[1, 2])) OR (a = b)`.
+
+Either way the written list never matches what comes back, so its `CHECK` is
+dropped and added again on every plan, revalidating the whole table. An index
+predicate, a view body, a policy and a trigger `WHEN` drift the same way, and a
+generated column fails the run, since it cannot be altered in place. A
+one-element list is the exception both ways: `a IN (b)` is stored as `a = b`,
+which `foldSingleElementIn` produces.
+
+Closing it means writing those expansions out, which is more than rewriting an
+operator. The row form needs a comparison per column and an OR per row, and the
+other needs to tell a constant from a reference and to print the two halves in
+the order PostgreSQL does.
 
 `dump` writes the expanded form, so a dump fed back plans clean and only a
-hand-written row list reaches this.
+hand-written list reaches this.
 
 Workaround: write the comparisons out, `a = 1 AND b = 2`.
 

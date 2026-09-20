@@ -1,22 +1,28 @@
 # A one-element `IN` list is stored as the plain comparison, `IN (a)` as
 # `= a` and `NOT IN (a)` as `<> a`, so the written list has to fold the same
-# way or the constraint is re-created on every plan.
+# way or the constraint is re-created on every plan. A list of one holding a
+# column reference takes the same rewrite, where a longer one is expanded into
+# comparisons LIMITATIONS.md covers.
 init: |
   CREATE TABLE public.parcels (
       id integer NOT NULL,
       carrier text,
       weight integer,
+      min_weight integer,
       CONSTRAINT parcels_pkey PRIMARY KEY (id),
       CONSTRAINT parcels_carrier_check CHECK (carrier IN ('own_a')),
-      CONSTRAINT parcels_weight_check CHECK (weight NOT IN (0))
+      CONSTRAINT parcels_weight_check CHECK (weight NOT IN (0)),
+      CONSTRAINT parcels_min_weight_check CHECK (weight IN (min_weight))
   );
 desired: |
   CREATE TABLE public.parcels (
       id integer NOT NULL,
       carrier text,
       weight integer,
+      min_weight integer,
       CONSTRAINT parcels_pkey PRIMARY KEY (id),
       CONSTRAINT parcels_carrier_check CHECK (carrier IN ('own_a')),
-      CONSTRAINT parcels_weight_check CHECK (weight NOT IN (0))
+      CONSTRAINT parcels_weight_check CHECK (weight NOT IN (0)),
+      CONSTRAINT parcels_min_weight_check CHECK (weight IN (min_weight))
   );
 plan: ""
