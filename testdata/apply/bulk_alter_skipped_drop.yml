@@ -1,0 +1,32 @@
+bulk_alter: true
+drop_policy:
+  allow_drop: []
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      legacy text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER TABLE public.users
+    ADD COLUMN email text,
+    ALTER COLUMN name SET NOT NULL;
+disallowed_drops: |
+  -- skipped: ALTER TABLE public.users DROP COLUMN legacy;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      legacy text,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
