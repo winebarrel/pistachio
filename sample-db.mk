@@ -862,7 +862,11 @@ sample-db-hyperswitch:
 # 0122-mod-file-table, which comes before the 0122-mod-file-data-fragment-table
 # that sorts ahead of it. Two files end without a trailing newline, which would
 # run the next file's first line into their last, so each is followed by a
-# newline and a semicolon.
+# newline and a semicolon. The cat is guarded for the same reason the list is
+# read at all: a name the list holds and the tarball does not would otherwise
+# be skipped with nothing but a line on stderr, and the check would then run
+# against a schema quietly missing that migration, which is what ON_ERROR_STOP
+# keeps a failing statement from doing.
 #
 # The list also holds two migrations written in Clojure, which Penpot runs in
 # the same sequence. Both rewrite rows rather than schema, so the sample is
@@ -895,7 +899,7 @@ sample-db-penpot:
 	      penpot-$(PENPOT_SHA)/backend/src/app/migrations penpot-$(PENPOT_SHA)/backend/src/app/migrations.clj && \
 	cd "$$dir" && \
 	grep -oE 'app/migrations/sql/[^"]+\.sql' migrations.clj | sed 's#^app/##' \
-	  | while read -r f; do cat "$$f"; printf '\n;\n'; done \
+	  | while read -r f; do cat "$$f" || exit 1; printf '\n;\n'; done \
 	  | $(PSQL)
 
 .PHONY: test-samples
