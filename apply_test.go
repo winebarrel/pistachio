@@ -815,7 +815,8 @@ func TestApply_ExecError(t *testing.T) {
 	})
 
 	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "failed to execute SQL")
+	assert.ErrorContains(t, err, `type "nonexistent_type" does not exist`)
 }
 
 func TestApply_EmptySchemas(t *testing.T) {

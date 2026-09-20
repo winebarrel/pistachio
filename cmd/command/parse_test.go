@@ -196,7 +196,7 @@ func TestParse_Run_WriteError(t *testing.T) {
 
 	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
 	err := cmd.Run(errWriter{})
-	require.Error(t, err)
+	require.ErrorContains(t, err, "broken pipe")
 }
 
 func TestParse_Run_ParseError(t *testing.T) {

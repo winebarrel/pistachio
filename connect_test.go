@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,9 +41,12 @@ func TestConnect_ReadOnly(t *testing.T) {
 	require.NoError(t, conn.QueryRow(ctx, "SHOW default_transaction_read_only").Scan(&ro))
 	assert.Equal(t, "on", ro)
 
-	// A write must be rejected by the read-only transaction.
+	// A write must be rejected by the read-only transaction, not for any
+	// other reason such as the table already being there.
 	_, err = conn.Exec(ctx, "CREATE TABLE pista_ro_probe (id integer)")
-	require.Error(t, err)
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, err, &pgErr)
+	assert.Equal(t, "25006", pgErr.Code, "read_only_sql_transaction")
 }
 
 func TestConnect_Writable(t *testing.T) {

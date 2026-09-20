@@ -146,7 +146,8 @@ func TestParseRange_OutsideRepository(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	_, err := gitfile.ParseRange("HEAD")
-	require.Error(t, err)
+	require.ErrorContains(t, err, "git revision HEAD: ")
+	assert.ErrorContains(t, err, "not a git repository")
 }
 
 func TestRead(t *testing.T) {

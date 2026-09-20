@@ -93,7 +93,7 @@ func TestDiff_MissingCurrentFile(t *testing.T) {
 
 	client := NewClient(&Options{Schemas: []string{"public"}})
 	_, err := client.Diff(&DiffOptions{Files: []string{"/nonexistent/current.sql", desiredFile}})
-	require.Error(t, err)
+	require.ErrorContains(t, err, "/nonexistent/current.sql")
 }
 
 func TestDiff_MissingDesiredFile(t *testing.T) {
@@ -102,7 +102,7 @@ func TestDiff_MissingDesiredFile(t *testing.T) {
 
 	client := NewClient(&Options{Schemas: []string{"public"}})
 	_, err := client.Diff(&DiffOptions{Files: []string{currentFile, "/nonexistent/desired.sql"}})
-	require.Error(t, err)
+	require.ErrorContains(t, err, "/nonexistent/desired.sql")
 }
 
 func TestDiff_EmptySchemas(t *testing.T) {
