@@ -143,6 +143,8 @@ func TestParseRange_OutsideRepository(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
 	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(t.TempDir()))
+	// git translates its messages, so pin the locale to read the original.
+	t.Setenv("LC_ALL", "C")
 	t.Chdir(t.TempDir())
 
 	_, err := gitfile.ParseRange("HEAD")

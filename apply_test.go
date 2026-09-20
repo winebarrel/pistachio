@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/kong"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pistachio/internal/testutil"
@@ -816,7 +817,11 @@ func TestApply_ExecError(t *testing.T) {
 
 	_, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, io.Discard)
 	require.ErrorContains(t, err, "failed to execute SQL")
-	assert.ErrorContains(t, err, `type "nonexistent_type" does not exist`)
+	// The server's error is read by SQLSTATE rather than by message, which
+	// lc_messages translates.
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, err, &pgErr)
+	assert.Equal(t, "42704", pgErr.Code, "undefined_object")
 }
 
 func TestApply_EmptySchemas(t *testing.T) {
