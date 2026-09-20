@@ -107,6 +107,8 @@ dcm4chee|sample-db-dcm4chee||dcm4chee
 kamailio|sample-db-kamailio||kamailio
 alfresco|sample-db-alfresco||alfresco
 roundcube|sample-db-url-schema|URL=https://raw.githubusercontent.com/roundcube/roundcubemail/4b54c2acfb54d5ee3d1c281ca7f143bed0dea804/SQL/postgres.initial.sql SCHEMA=roundcube|roundcube
+shenyu|sample-db-shenyu||shenyu
+nacos|sample-db-url-schema|URL=https://raw.githubusercontent.com/alibaba/nacos/d74b69fa71de104c3ed15310ef8e32d1cded8a95/plugin-default-impl/nacos-default-datasource-plugin/nacos-datasource-plugin-postgresql/src/main/resources/META-INF/pg-schema.sql SCHEMA=nacos|nacos
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1000,6 +1002,28 @@ sample-db-alfresco:
 	  echo; \
 	done \
 	  | sed -E 's/\$$\{TRUE\}/TRUE/g; /--\(optional\)[[:space:]]*$$/d' \
+	  | $(PSQL)
+
+# Apache ShenYu (apache/shenyu, Apache-2.0), the API gateway. Its schema ships
+# as one file, which loads like the sample-db-url-schema dumps but qualifies
+# every name in it with "public", sequences and the DEFAULT nextval that reads
+# them included. So the qualifier is stripped the way sample-db-prisma strips
+# it and search_path places everything. That is not only about where the
+# objects land: the file opens each table with DROP TABLE IF EXISTS
+# "public"."<name>", and in `make schema`, where every sample shares one
+# database, several of those names belong to another sample.
+#
+# What comes with it is comments. ShenYu comments 360 of its 391 columns and 6
+# of its 45 tables, a denser share than any other sample, and leaves 22 of
+# those tables without a primary key and all 45 without a foreign key.
+SHENYU_SHA = cd514ff292d6e85f299ae3a549544f6fa2d04936
+
+sample-db-shenyu: PGOPTS = -c search_path=shenyu
+.PHONY: sample-db-shenyu
+sample-db-shenyu:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS shenyu'
+	curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/apache/shenyu/$(SHENYU_SHA)/db/init/pg/create-table.sql \
+	  | sed 's/"public"\.//g' \
 	  | $(PSQL)
 
 .PHONY: test-samples

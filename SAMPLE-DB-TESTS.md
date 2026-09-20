@@ -176,6 +176,8 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | kamailio | kamailio | [kamailio/kamailio](https://github.com/kamailio/kamailio) |
 | alfresco | alfresco | [Alfresco/alfresco-community-repo](https://github.com/Alfresco/alfresco-community-repo) |
 | roundcube | roundcube | [roundcube/roundcubemail](https://github.com/roundcube/roundcubemail) |
+| shenyu | shenyu | [apache/shenyu](https://github.com/apache/shenyu) |
+| nacos | nacos | [alibaba/nacos](https://github.com/alibaba/nacos) |
 
 ## Coverage
 
@@ -197,8 +199,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
   on 16.13, and dokploy, hyperswitch, documenso, langfuse, icinga_ido,
   openfire, bareos, opencms, and marquez 2026-09-18 on the same, and penpot
-  2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, and roundcube
-  the same day on the same.
+  2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, roundcube,
+  shenyu, and nacos the same day on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -311,11 +313,13 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | kamailio | 73 | 614 | 182 | 0 | 109 | 0 | 0 | 0 | 0 | 0 |
 | alfresco | 45 | 250 | 156 | 53 | 48 | 0 | 0 | 38 | 0 | 0 |
 | roundcube | 18 | 99 | 35 | 14 | 21 | 0 | 0 | 8 | 0 | 0 |
-| **Total** | **8,538** | **73,316** | **25,851** | **10,650** | **14,143** | **2,203** | **595** | **508** | **1,511** | **1,279** |
+| shenyu | 45 | 391 | 28 | 0 | 24 | 0 | 0 | 1 | 0 | 0 |
+| nacos | 16 | 175 | 42 | 0 | 12 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **8,599** | **73,882** | **25,921** | **10,650** | **14,179** | **2,203** | **595** | **509** | **1,511** | **1,279** |
 
 ### Size
 
-The 85 dumps come to about 238,000 lines of SQL. chado is 43,700 of them, the
+The 87 dumps come to about 239,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -419,7 +423,9 @@ always reach.
   and 19 SET NULL, while none of them names ON UPDATE at all. Every one of
   langfuse's 113 names ON UPDATE CASCADE as well, 90 of them with ON DELETE
   CASCADE and the other 23 with SET NULL.
-- **Column comments**: glific comments 274 of its 590 columns.
+- **Column comments**: shenyu comments 360 of its 391 columns and 6 of its 45
+  tables, the densest share of any sample; nacos 102 of 175 and 10 of 16; glific
+  274 of its 590 columns.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
   its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
   `mimiciv_hosp`, 4 of chado's 472 point from `frange` into `chado`, and every
@@ -451,8 +457,11 @@ always reach.
   primary keys and 19 unique constraints, declares no CHECK, and leaves all but
   3 of the references between them to the application. mediawiki, temporal,
   imdb, dolphinscheduler, nightingale, joomla, hyperswitch, icinga_ido,
-  bareos, opencms, and kamailio declare no foreign key at all, and openfire
-  declares exactly one, over 35 tables. icinga_ido is the widest of them: 61
+  bareos, opencms, kamailio, shenyu, and nacos declare no foreign key at all,
+  and openfire declares exactly one, over 35 tables. shenyu goes furthest:
+  half its tables are unkeyed either way, 22 of 45 without a primary key, and
+  its 45 tables carry 24 constraints between them, 23 primary keys and one
+  CHECK. icinga_ido is the widest of them: 61
   tables and 791 columns, indexed 234 times and keyed by 61 primary keys and 33
   unique constraints, with every reference between them left to Icinga.
   kamailio has the most tables of any of them, 73, keyed by one primary key
@@ -508,7 +517,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-nine of the 85 samples declare
+Routines are concentrated the same way. Thirty-nine of the 87 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
 and chado's 94 are 916 of the 1,279. Seven in ten of them, 893, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
@@ -780,7 +789,8 @@ targets strip only what is irrelevant to a schema round trip:
   **ledgersmb**, **koji**, **kea**, **dolphinscheduler**, **wso2apim**,
   **icinga_director**, **openfire**, **bareos**, **opencms**, **roundcube**,
   **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
-  **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**: these
+  **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**, **nacos**:
+  these
   dumps name no schema at all, so whichever schema comes first in `search_path`
   gets them.
   Each is loaded into a schema of its own instead of `public`, so that
@@ -820,6 +830,13 @@ targets strip only what is irrelevant to a schema round trip:
   `IF EXISTS` and commits outside a transaction, which adds a warning per
   statement, so `client_min_messages` is raised from `warning` to `error` for
   the load, the one sample that moves it at all.
+- **shenyu**: the schema ships as one file that loads like the group above but
+  qualifies every name in it with `public`, the sequences and the `DEFAULT
+  nextval` that reads them included, so the qualifier is stripped the way
+  sample-db-prisma strips it. That is not only about where the objects land:
+  the file opens each table with `DROP TABLE IF EXISTS "public"."<name>"`, and
+  in `make schema`, where every sample shares one database, several of those
+  names belong to another sample.
 - **thingsboard**: the schema ships as one file per part, loaded in the order
   ThingsBoard's installer runs them, with the views before the functions that
   declare variables of their row types. `schema-ts-latest-psql.sql` is left
