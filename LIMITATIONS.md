@@ -476,7 +476,7 @@ Origin: expression normalization review, 2026-09-20.
 Priority: low.
 
 Parse analysis moves a cast on an array constructor onto the elements, and
-drops one the elements already satisfy: `ARRAY[1]::integer[]` is stored as
+drops a cast the elements already carry: `ARRAY[1]::integer[]` is stored as
 `ARRAY[1]`, `ARRAY[1]::bigint[]` as `ARRAY[(1)::bigint]`, and
 `ARRAY['2020-01-01']::date[]` as `ARRAY['2020-01-01'::date]`. The written cast
 sits on the array, so it never matches what comes back, and the `CHECK`
