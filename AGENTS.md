@@ -54,7 +54,7 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - `model/` - Data model structs (Table, Column, Constraint, ForeignKey, Index, Policy, View, Enum, Domain)
 - `diff/` - Generates DDL diff between current and desired schemas
 - `internal/testutil/` - Test helpers (DB connection, setup)
-- `internal/testutil/fuzzseed/` - the SQL seed corpus the fuzz targets start from. The targets themselves are `parser/fuzz_test.go` (parse arbitrary text, then render the result) and `diff/fuzz_test.go` (a schema diffed against itself must need no DDL). Neither needs a database, and `make test` replays their seed corpus.
+- `internal/testutil/fuzzseed/` - the SQL seed corpus the fuzz targets start from. The targets themselves are `parser/fuzz_test.go` (parse arbitrary text, then render the result), `diff/fuzz_test.go` (a schema diffed against itself must need no DDL) and `format/fuzz_test.go` (formatting a formatted file changes nothing). None needs a database, and `make test` replays their seed corpus.
 - `testdata/` - YAML-based test fixtures for multiple test suites, including integration and unit tests
 - `test/scenario/` - CLI-level scenario tests (shell scripts that run `pista` CLI against sample schemas)
 - `test/fidelity/` - restore fidelity check: loads `pista dump` output into an empty database and diffs `pg_dump` against the original

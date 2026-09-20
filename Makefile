@@ -93,6 +93,7 @@ FUZZTIME ?= 1m
 fuzz:
 	go test ./parser/ -run='^$$' -fuzz=FuzzParseSQLWithSchema -fuzztime=$(FUZZTIME)
 	go test ./diff/ -run='^$$' -fuzz=FuzzDiffSelf -fuzztime=$(FUZZTIME)
+	go test ./format/ -run='^$$' -fuzz=FuzzFormat -fuzztime=$(FUZZTIME)
 
 .PHONY: keywords
 keywords:
