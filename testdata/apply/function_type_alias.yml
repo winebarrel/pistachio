@@ -1,0 +1,16 @@
+# PostgreSQL resolves a type alias to the canonical name and
+# pg_get_functiondef writes that one back: int reads as integer, varchar as
+# character varying, timestamptz as timestamp with time zone. Both sides of
+# the diff deparse through the same code, so a file written with the aliases
+# renders and matches as the canonical names.
+manage_routine: true
+init: ""
+desired: |
+  CREATE FUNCTION public.f(a int, b varchar, c timestamptz, d decimal)
+      RETURNS int8 LANGUAGE sql AS $$ SELECT 1::int8 $$;
+applied: |
+  -- public.f(integer, character varying, timestamp with time zone, numeric)
+  CREATE OR REPLACE FUNCTION public.f(a integer, b character varying, c timestamp with time zone, d numeric)
+      RETURNS bigint
+      LANGUAGE sql
+      AS $$ SELECT 1::int8 $$;
