@@ -174,6 +174,8 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | penpot | penpot | [penpot/penpot](https://github.com/penpot/penpot) |
 | dcm4chee | dcm4chee | [dcm4che/dcm4chee-arc-light](https://github.com/dcm4che/dcm4chee-arc-light) |
 | kamailio | kamailio | [kamailio/kamailio](https://github.com/kamailio/kamailio) |
+| alfresco | alfresco | [Alfresco/alfresco-community-repo](https://github.com/Alfresco/alfresco-community-repo) |
+| roundcube | roundcube | [roundcube/roundcubemail](https://github.com/roundcube/roundcubemail) |
 
 ## Coverage
 
@@ -195,8 +197,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
   on 16.13, and dokploy, hyperswitch, documenso, langfuse, icinga_ido,
   openfire, bareos, opencms, and marquez 2026-09-18 on the same, and penpot
-  2026-09-20 on 16.13 as well, and dcm4chee and kamailio the same day on the
-  same.
+  2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, and roundcube
+  the same day on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -307,11 +309,13 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | penpot | 61 | 511 | 169 | 85 | 71 | 0 | 0 | 0 | 8 | 3 |
 | dcm4chee | 41 | 425 | 290 | 65 | 96 | 0 | 0 | 30 | 0 | 0 |
 | kamailio | 73 | 614 | 182 | 0 | 109 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **8,475** | **72,967** | **25,660** | **10,583** | **14,074** | **2,203** | **595** | **462** | **1,511** | **1,279** |
+| alfresco | 45 | 250 | 156 | 53 | 48 | 0 | 0 | 38 | 0 | 0 |
+| roundcube | 18 | 99 | 35 | 14 | 21 | 0 | 0 | 8 | 0 | 0 |
+| **Total** | **8,538** | **73,316** | **25,851** | **10,650** | **14,143** | **2,203** | **595** | **508** | **1,511** | **1,279** |
 
 ### Size
 
-The 83 dumps come to about 237,000 lines of SQL. chado is 43,700 of them, the
+The 85 dumps come to about 238,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, and gitlab 34,700. gitlab is still about a third
 of the constraints, three in ten of the indexes, nearly a quarter of the
 columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
@@ -423,9 +427,12 @@ always reach.
 - **Standalone sequences rather than serial columns**: ranger, whose 85 tables
   come with 84 of them, wso2apim, which mixes 104 of them in with serial
   columns, and wso2is, which declares 92 for its 172 tables and wires 87 of them
-  into a column DEFAULT. dcm4chee declares 30 for its 41 tables and wires none
-  of them into a DEFAULT at all: the application asks for the next value
-  itself, so the sequence and the column it feeds are related only by name.
+  into a column DEFAULT. dcm4chee declares 30 for its 41 tables and alfresco 38
+  for its 45, and neither wires one into a DEFAULT at all: both are Java
+  applications that ask for the next value themselves, so the sequence and the
+  column it feeds are related only by name. roundcube goes the other way with
+  the same syntax, declaring 8 and naming each one in the `nextval` DEFAULT of
+  the column it belongs to, which is what `serial` would have written for it.
 - **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
   tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with 747
   of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, documenso,
@@ -501,7 +508,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Thirty-nine of the 83 samples declare
+Routines are concentrated the same way. Thirty-nine of the 85 samples declare
 one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
 and chado's 94 are 916 of the 1,279. Seven in ten of them, 893, return
 `trigger`, though not every one of those has a trigger to call it: musicbrainz's
@@ -561,6 +568,20 @@ targets strip only what is irrelevant to a schema round trip:
   comment, so each is followed by a newline and one, and the `public` qualifier
   Prisma writes in some statements is stripped. Some migrations insert or update
   rows as well; they run, and the rows are not part of the check.
+- **alfresco**: the schema ships as 11 create scripts, one per subsystem, and
+  the order they run in is not their name order but the list in
+  `db-schema-context.xml`, which the loader repeats: the repository tables
+  first, since the rest key back into them, and the authorization tables last.
+  Alfresco's runner rewrites each script before running it and the loader does
+  the same two things. `${TRUE}` becomes `TRUE`, which is what `SchemaBootstrap`
+  substitutes on a dialect with a boolean type and what 8 rows of bootstrap
+  data here need. And a statement marked `--(optional)` is one its runner
+  carries on past: there is exactly one, a `DROP TABLE` that means something
+  only when an upgrade left the table behind, so on an empty database it can
+  only fail and is dropped. The three marked `-- (optional)`, with a space,
+  create a sequence, an index, and a table, and they stay. The scripts are
+  CRLF, which psql reads as whitespace, so only the annotation match allows for
+  the carriage return.
 - **camunda**: the schema ships as one file per engine component and none of
   them create a schema, so `camunda` is created up front and the files are
   concatenated in dependency order (process engine, history, identity, then the
@@ -757,7 +778,7 @@ targets strip only what is irrelevant to a schema round trip:
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **icinga_ido**,
   **rt**, **znuny**, **ranger**, **ambari**, **ovirt**, **gitlab**,
   **ledgersmb**, **koji**, **kea**, **dolphinscheduler**, **wso2apim**,
-  **icinga_director**, **openfire**, **bareos**, **opencms**,
+  **icinga_director**, **openfire**, **bareos**, **opencms**, **roundcube**,
   **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
   **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**: these
   dumps name no schema at all, so whichever schema comes first in `search_path`

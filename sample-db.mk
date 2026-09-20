@@ -105,6 +105,8 @@ marquez|sample-db-marquez||marquez
 penpot|sample-db-penpot||penpot
 dcm4chee|sample-db-dcm4chee||dcm4chee
 kamailio|sample-db-kamailio||kamailio
+alfresco|sample-db-alfresco||alfresco
+roundcube|sample-db-url-schema|URL=https://raw.githubusercontent.com/roundcube/roundcubemail/4b54c2acfb54d5ee3d1c281ca7f143bed0dea804/SQL/postgres.initial.sql SCHEMA=roundcube|roundcube
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -961,6 +963,44 @@ sample-db-kamailio:
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/kamailio/kamailio/72acbabee92122e24fc13a5c2f09228450da7263/utils/kamctl/postgres/$$m-create.sql || exit 1; \
 	  echo; \
 	done | $(PSQL)
+
+# Alfresco Content Services (Alfresco/alfresco-community-repo, LGPL-3.0), the
+# ECM. Its schema ships as 11 create scripts, one per subsystem, and the order
+# they run in is not their name order but the list in db-schema-context.xml,
+# which is repeated below: the repository tables first, since the rest key back
+# into them, and the authorization tables last.
+#
+# Alfresco's own runner rewrites each script twice before running it, and the
+# sed does the same two things. It replaces $${TRUE} with TRUE on a dialect that
+# has a boolean type, which SchemaBootstrap does for PostgreSQL and which 8
+# rows of bootstrap data here need. And it carries on past a statement marked
+# --(optional): there is exactly one, a DROP TABLE that only means anything
+# when an upgrade left the table behind, so on an empty database it can only
+# fail and is dropped. The three statements marked -- (optional), with a space,
+# create a sequence, an index, and a table, and they stay.
+#
+# The scripts are CRLF, which psql reads as whitespace, so only the annotation
+# match has to allow for the carriage return before end of line.
+#
+# None of them names a schema, qualifies anything with public, or installs an
+# extension, so `alfresco` is created up front and search_path places
+# everything. Like dcm4chee it keeps its sequences apart from the columns that
+# draw from them: 38 of them, and not one column default calls nextval.
+ALFRESCO_SHA = b03db39742d872ee7e58951b7c7f7d98bb7cd643
+ALFRESCO_SCRIPTS = RepoTables LockTables ContentTables PropertyValueTables \
+	ContentUrlEncryptionTables AuditTables ActivityTables UsageTables \
+	SubscriptionTables TenantTables AuthorizationTables
+
+sample-db-alfresco: PGOPTS = -c search_path=alfresco
+.PHONY: sample-db-alfresco
+sample-db-alfresco:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS alfresco'
+	for s in $(ALFRESCO_SCRIPTS); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/Alfresco/alfresco-community-repo/$(ALFRESCO_SHA)/repository/src/main/resources/alfresco/dbscripts/create/org.alfresco.repo.domain.dialect.PostgreSQLDialect/AlfrescoCreate-$$s.sql || exit 1; \
+	  echo; \
+	done \
+	  | sed -E 's/\$$\{TRUE\}/TRUE/g; /--\(optional\)[[:space:]]*$$/d' \
+	  | $(PSQL)
 
 .PHONY: test-samples
 test-samples:
