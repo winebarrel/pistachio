@@ -188,7 +188,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | affine | affine | [toeverything/AFFiNE](https://github.com/toeverything/AFFiNE) |
 | teable | teable | [teableio/teable](https://github.com/teableio/teable) |
 | uyuni | uyuni, access, rpm, deb, rhn_cache, rhn_channel, rhn_config, rhn_config_channel, rhn_entitlements, rhn_exception, rhn_org, rhn_server, rhn_user | [uyuni-project/uyuni](https://github.com/uyuni-project/uyuni) |
-| lobechat | lobechat | [lobehub/lobe-chat](https://github.com/lobehub/lobe-chat) |
+| lobehub | lobehub | [lobehub/lobehub](https://github.com/lobehub/lobehub) |
 
 ## Coverage
 
@@ -213,7 +213,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, roundcube,
   shenyu, and nacos the same day on the same.
 - openreplay and logto 2026-09-20 on 16.13, and omero, concourse, affine, and
-  teable 2026-09-21 on 15.18, and uyuni and lobechat the same day on 16.13.
+  teable 2026-09-21 on 15.18, and uyuni and lobehub the same day on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -335,7 +335,7 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | affine | 72 | 764 | 246 | 69 | 124 | 0 | 11 | 0 | 16 | 7 |
 | teable | 62 | 703 | 197 | 23 | 62 | 0 | 8 | 0 | 0 | 2 |
 | uyuni | 433 | 2,614 | 935 | 692 | 1,102 | 55 | 4 | 207 | 224 | 412 |
-| lobechat | 182 | 2,474 | 972 | 550 | 237 | 0 | 0 | 1 | 0 | 0 |
+| lobehub | 182 | 2,474 | 972 | 550 | 237 | 0 | 0 | 1 | 0 | 0 |
 | **Total** | **9,695** | **83,260** | **29,685** | **12,996** | **16,339** | **2,308** | **662** | **849** | **1,976** | **1,779** |
 
 ### Size
@@ -364,7 +364,7 @@ always reach.
   samples have between them, pgvector's, over its one `vector` column and
   naming `vector_cosine_ops` from the schema the extension sits in; affine
   brings two, one over each of its `vector(1024)` embedding columns, naming
-  the same operator class unqualified; and lobechat brings the other ten, one
+  the same operator class unqualified; and lobehub brings the other ten, one
   over each of the `vector(1024)` columns it remembers a user in, naming it
   unqualified as well and leaving its eleventh such column, a document
   chunk's embedding, unindexed. langfuse brings four hash indexes, all over
@@ -389,7 +389,7 @@ always reach.
   over 41 are seven to a table, as dense as danbooru's and plainer still: all
   btree, none partial, and the only three over an expression are `upper()` of
   a name or a description, which is how it searches case-insensitively.
-  lobechat's 972 over 182 are five to a table, 958 of them btree with 72
+  lobehub's 972 over 182 are five to a table, 958 of them btree with 72
   partial, 10 hnsw, and 4 gin, one of those over a key read out of a `jsonb`
   column with `jsonb_path_ops`. Two of its four other expression indexes cast
   a `jsonb` key to `numeric` and two wrap a nullable column in `COALESCE` to
@@ -478,7 +478,7 @@ always reach.
   `geometry`, and inaturalist's 26, 8 of them carrying a modifier of their own
   and 8 gist indexes over them, and those modifiers are the only ones any sample
   reports in mixed case. citizenlab needs both, for one `vector` column and
-  three `geography` ones, the only `geography` any sample declares. lobechat
+  three `geography` ones, the only `geography` any sample declares. lobehub
   declares 11 `vector(1024)` columns, more than every other sample together,
   ten of them the embeddings of what it remembers about a user and one the
   embedding of a document chunk.
@@ -491,7 +491,7 @@ always reach.
   langfuse's 113 names ON UPDATE CASCADE as well, 90 of them with ON DELETE
   CASCADE and the other 23 with SET NULL. So does every one of logto's 152,
   149 of them with ON DELETE CASCADE, while all 84 of openreplay's name
-  ON DELETE alone, 72 CASCADE and 12 SET NULL. lobechat is the largest of that
+  ON DELETE alone, 72 CASCADE and 12 SET NULL. lobehub is the largest of that
   shape: 541 of its 550 name ON DELETE, 417 CASCADE, 117 SET NULL and 7
   RESTRICT, and not one names ON UPDATE. uyuni mixes the two: 432 of its
   692 name ON DELETE, 371 CASCADE, 59 SET NULL and 2 RESTRICT, the other 260
@@ -569,7 +569,7 @@ always reach.
   keyed by 60 primary keys and no unique constraint at all, 2 CHECKs, and only
   23 foreign keys, with the rest of what ties its rows together left to the
   application. concourse leaves 15 of its 45 tables without a primary key.
-- **Unique indexes standing in for unique constraints**: lobechat backs its 182
+- **Unique indexes standing in for unique constraints**: lobehub backs its 182
   tables with 182 primary keys and only 20 unique constraints, and writes the
   other 138 of its 340 unique indexes as a bare `CREATE UNIQUE INDEX`, which
   is what Drizzle emits. 54 of those carry a predicate and 2 are over an
@@ -934,7 +934,7 @@ targets strip only what is irrelevant to a schema round trip:
   before it are still there and `comment` alone matches several, so those
   lookups are scoped to the `lemmy` schema. The one `relname LIKE` inside a
   function body is left alone.
-- **lobechat**: the schema ships as Drizzle migrations like dokploy's and is
+- **lobehub**: the schema ships as Drizzle migrations like dokploy's and is
   read the same way, from `meta/_journal.json` rather than from the directory,
   because the two do not agree here either:
   `0065_add_document_fields.sql` is on disk but not in the journal, left
@@ -944,7 +944,17 @@ targets strip only what is irrelevant to a schema round trip:
   and a semicolon since a few end without one, and the `public` qualifier
   Drizzle writes into a foreign key's target is stripped, along with the one
   the `to_regclass` and `::regclass` guards in a handful of hand-written
-  migrations carry. It has a loader of its own rather than sharing dokploy's
+  migrations carry, which leaves those guards reading through `search_path`.
+  Twelve other guards look a constraint up by name alone,
+  `SELECT 1 FROM pg_constraint WHERE conname = '<name>'`, and skip the
+  `ALTER TABLE` after them when they find one: upstream LobeHub owns its
+  database, but here the samples before it are still there, and a name one of
+  them already uses -- `users_email_unique` is one -- would cost this sample
+  a constraint without saying so, the way lemmy's unscoped `pg_class` lookups
+  would, so they are scoped to the sample's schema. The project was LobeChat
+  before it was renamed, and codeload names the archive's top directory after
+  the repository as it is now, so the URL and the prefix both say `lobehub`.
+  It has a loader of its own rather than sharing dokploy's
   for two reasons. pgvector types its 11 `vector(1024)` columns and the 10
   hnsw indexes over them, so it is installed into `public` up front the way
   affine's is, with `public` second in the search path, since the
@@ -1152,7 +1162,7 @@ targets strip only what is irrelevant to a schema round trip:
 
 None of these touch table, column, index, constraint, view, type, or routine
 definitions, chado's nine unloadable functions, the `search_path` two of
-logto's functions are declared with, and lobechat's 14 bm25 indexes aside, so
+logto's functions are declared with, and lobehub's 14 bm25 indexes aside, so
 the round trip still covers the full schema. The bm25 indexes are the one case
 where a sample is checked against less than its upstream schema, and the
 reason is the server rather than pistachio: the extension that defines the
