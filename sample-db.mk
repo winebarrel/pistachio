@@ -118,6 +118,7 @@ teable|sample-db-prisma|REPO=teableio/teable SHA=5ef2238883cad7c3980084de9a90311
 uyuni|sample-db-uyuni|CLIENT_MIN_MESSAGES=error|uyuni,access,rpm,deb,rhn_cache,rhn_channel,rhn_config,rhn_config_channel,rhn_entitlements,rhn_exception,rhn_org,rhn_server,rhn_user
 lobehub|sample-db-lobehub||lobehub
 hexpm|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/hexpm/hexpm/c3cc7446747226c74164683a02614d260f2e3bf6/priv/repo/structure.sql SCHEMA=hexpm|hexpm
+omop|sample-db-omop||omop
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1396,6 +1397,50 @@ sample-db-lobehub:
 	    done \
 	  | sed -E "s/\"public\"\.//g; s/([^A-Za-z0-9_])public\./\1/g; \
 	            s/WHERE conname = /WHERE connamespace = 'lobehub'::regnamespace AND conname = /g" \
+	  | $(PSQL)
+
+# The OMOP Common Data Model (OHDSI/CommonDataModel, Apache-2.0), the schema
+# observational health data is mapped into before an OHDSI analysis runs over
+# it. Version 5.4's PostgreSQL DDL ships as four files under one directory and
+# loads in the order the CDM's own installer runs them: the tables, then the
+# primary keys, then the foreign keys, then the indexes. Each is fetched by
+# name rather than the directory being listed, the way mimiciv's three are.
+#
+# Every table name in all four carries an `@cdmDatabaseSchema` placeholder
+# that OHDSI's R package fills in at install time, 529 of them, so the loader
+# substitutes the sample's schema for it. That is the whole rewrite: nothing
+# else in the files is a template, and with the schema named outright,
+# search_path decides nothing.
+#
+# The pin is the v5.4.2 tag rather than the tip of the default branch, the one
+# sample where those differ for a reason other than where the schema lives. At
+# the tip the four files do not agree: the primary key file leaves out
+# `vocabulary`'s, which two of the foreign keys need, so the load stops on the
+# first of them. 5.5's files have the same gap. v5.4.2 is the last release
+# whose four agree.
+#
+# Its foreign keys are why it is here. 39 tables carry 176 of them, 4.5 to a
+# table, ahead of omero's 4.3 over 161, and they nearly all point one way:
+# every clinical event names the vocabulary entry that says what it was, so
+# `concept` alone is referenced by 118 of the 176, and 3 are self-references.
+# What it leaves out is as lopsided. 28 primary keys over those 39 tables
+# leave 11 unkeyed, there is no unique constraint and no CHECK anywhere, and
+# no view, sequence, routine, trigger, or type either, so 28 of its 98 btree
+# indexes are there for a key and the other 70 are not. The ids are integers
+# an ETL supplies rather than serial columns, which is why nothing counts.
+OMOP_SHA = aa047a3c620b5c842b4370a0c965e2aa72203b1d
+OMOP_DIR = inst/ddl/5.4/postgresql
+OMOP_SQL_FILES = ddl primary_keys constraints indices
+
+sample-db-omop: PGOPTS = -c search_path=omop
+.PHONY: sample-db-omop
+sample-db-omop:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS omop'
+	for f in $(OMOP_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/OHDSI/CommonDataModel/$(OMOP_SHA)/$(OMOP_DIR)/OMOPCDM_postgresql_5.4_$$f.sql || exit 1; \
+	  echo; \
+	done \
+	  | sed 's/@cdmDatabaseSchema/omop/g' \
 	  | $(PSQL)
 
 .PHONY: test-samples
