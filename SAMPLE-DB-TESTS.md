@@ -225,8 +225,9 @@ What each column holds:
 - **Types** counts enums and domains.
 - **Sequences** counts standalone sequences only, since pistachio manages the
   sequence behind a serial or identity column as an attribute of that column
-  rather than as an object of its own. Counting those too would add 2,243 more,
-  886 of them gitlab's and 210 chado's.
+  rather than as an object of its own. Counting those too would add 2,274 more,
+  886 of them gitlab's, 210 chado's, and 31 hexpm's, which declares no
+  standalone sequence at all.
 - **Triggers** excludes the internal triggers a foreign key installs and the
   clones PostgreSQL puts on each partition of a partitioned table's trigger, the
   same as what pistachio reads and dump writes.
@@ -671,7 +672,7 @@ always reach.
 
 Routines are concentrated the same way. Forty-seven of the 96 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
-musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,779. Two in three of
+musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,781. Two in three of
 them, 1,190, return `trigger`, though not every one of those has a trigger to
 call it: musicbrainz's 89 do not, since its loader concatenates a file list
 that leaves triggers out.
