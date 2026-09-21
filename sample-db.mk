@@ -117,6 +117,7 @@ affine|sample-db-affine||affine
 teable|sample-db-prisma|REPO=teableio/teable SHA=5ef2238883cad7c3980084de9a9031135fb9734f DIR=packages/db-main-prisma/prisma/postgres/migrations SCHEMA=teable|teable
 uyuni|sample-db-uyuni|CLIENT_MIN_MESSAGES=error|uyuni,access,rpm,deb,rhn_cache,rhn_channel,rhn_config,rhn_config_channel,rhn_entitlements,rhn_exception,rhn_org,rhn_server,rhn_user
 lobehub|sample-db-lobehub||lobehub
+hexpm|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/hexpm/hexpm/c3cc7446747226c74164683a02614d260f2e3bf6/priv/repo/structure.sql SCHEMA=hexpm|hexpm
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -392,19 +393,21 @@ sample-db-camunda:
 # inserts into schema_migrations, which is data and would land in the wrong
 # schema anyway, so everything from that line on is dropped.
 #
-# glific's and plausible's structure.sql is Ecto's rather than Rails', the same
-# pg_dump output without that SET line, so their migration versions stay and,
-# with the qualifier stripped, go into their own schema_migrations. They are
-# rows, not schema.
+# glific's, plausible's, and hexpm's structure.sql is Ecto's rather than
+# Rails', the same pg_dump output without that SET line, so their migration
+# versions stay and, with the qualifier stripped, go into their own
+# schema_migrations. They are rows, not schema.
 #
 # discourse needs pgvector and osm and inaturalist need PostGIS, neither of
 # which the official postgres image ships; compose.yaml and the samples CI job
 # install both. See SAMPLE-DB-TESTS.md. danbooru installs five extensions of
 # its own, btree_gin, fuzzystrmatch, pg_trgm, pgcrypto, and pgstattuple,
 # inaturalist one, uuid-ossp, which 16 of its columns default through, feedbin
-# three, hstore, pg_stat_statements, and uuid-ossp, and plausible one, citext,
-# which three of its columns are typed by; those are all contrib and the
-# official image already has them.
+# three, hstore, pg_stat_statements, and uuid-ossp, plausible one, citext,
+# which three of its columns are typed by, and hexpm five, citext,
+# fuzzystrmatch, pg_trgm, pgcrypto, and uuid-ossp, one column typed by the
+# first and one gin index naming the trgm operator class; those are all
+# contrib and the official image already has them.
 sample-db-pgdump-schema: PGOPTS = -c search_path=$(SCHEMA),public
 .PHONY: sample-db-pgdump-schema
 sample-db-pgdump-schema:
