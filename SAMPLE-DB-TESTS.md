@@ -620,9 +620,10 @@ always reach.
   embeddings. zed is the same shape one size down and stricter: 29 primary
   keys over 29 tables, no unique constraint and no CHECK at all, so all 29 of
   its constraints are primary keys, and 14 of its 43 unique indexes stand on
-  their own. Its other two indexes are gin over a name with `gin_trgm_ops`,
-  the operator class resolving from the `public` the extension sits in, as
-  citizenlab's hnsw one does.
+  their own. Of the 35 indexes that are not unique, 2 are gin over a name
+  with `gin_trgm_ops`, the operator class resolving from the `public` the
+  extension sits in as citizenlab's hnsw one does, and the other 33 are
+  btree.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, mattermost, whose six are all materialized and
   one of which carries an index, and marquez, where one of the four is. hexpm
