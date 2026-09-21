@@ -193,6 +193,8 @@ its loader says why.
 | lobehub | lobehub | [lobehub/lobehub](https://github.com/lobehub/lobehub) |
 | hexpm | hexpm | [hexpm/hexpm](https://github.com/hexpm/hexpm) |
 | omop | omop | [OHDSI/CommonDataModel](https://github.com/OHDSI/CommonDataModel) |
+| zed | zed | [zed-industries/zed](https://github.com/zed-industries/zed) |
+| gravitino | gravitino | [apache/gravitino](https://github.com/apache/gravitino) |
 
 ## Coverage
 
@@ -217,8 +219,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, roundcube,
   shenyu, and nacos the same day on the same.
 - openreplay and logto 2026-09-20 on 16.13, and omero, concourse, affine, and
-  teable 2026-09-21 on 15.18, and uyuni, lobehub, hexpm, and omop the same
-  day on 16.13.
+  teable 2026-09-21 on 15.18, and uyuni, lobehub, hexpm, omop, zed, and
+  gravitino the same day on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -228,9 +230,9 @@ What each column holds:
 - **Types** counts enums and domains.
 - **Sequences** counts standalone sequences only, since pistachio manages the
   sequence behind a serial or identity column as an attribute of that column
-  rather than as an object of its own. Counting those too would add 2,274 more,
+  rather than as an object of its own. Counting those too would add 2,292 more,
   886 of them gitlab's, 210 chado's, and 31 hexpm's, which declares no
-  standalone sequence at all.
+  standalone sequence at all, as zed's 17 and gravitino's 1 do not either.
 - **Triggers** excludes the internal triggers a foreign key installs and the
   clones PostgreSQL puts on each partition of a partitioned table's trigger, the
   same as what pistachio reads and dump writes.
@@ -344,11 +346,13 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | lobehub | 182 | 2,474 | 972 | 550 | 237 | 0 | 0 | 1 | 0 | 0 |
 | hexpm | 36 | 253 | 118 | 51 | 41 | 2 | 2 | 0 | 0 | 2 |
 | omop | 39 | 432 | 98 | 176 | 28 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **9,770** | **83,945** | **29,901** | **13,223** | **16,408** | **2,310** | **664** | **849** | **1,976** | **1,781** |
+| zed | 29 | 221 | 76 | 42 | 29 | 0 | 0 | 0 | 0 | 0 |
+| gravitino | 20 | 186 | 52 | 0 | 39 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **9,819** | **84,352** | **30,029** | **13,265** | **16,476** | **2,310** | **664** | **849** | **1,976** | **1,781** |
 
 ### Size
 
-The 97 dumps come to about 281,000 lines of SQL. chado is 43,700 of them, the
+The 99 dumps come to about 282,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
 about a quarter of the constraints, a fifth of the indexes and the foreign
 keys, a sixth of the columns, and a seventh of the tables; dhis2, uyuni,
@@ -512,9 +516,14 @@ always reach.
   RESTRICT, and not one names ON UPDATE. uyuni mixes the two: 432 of its
   692 name ON DELETE, 371 CASCADE, 59 SET NULL and 2 RESTRICT, the other 260
   name nothing, and not one names ON UPDATE.
-- **Column comments**: shenyu comments 360 of its 391 columns and 6 of its 45
-  tables, the densest share of any sample; nacos 102 of 175 and 10 of 16; glific
-  274 of its 590 columns.
+- **Foreign keys over more than one column**: 3 of zed's 42, each naming two
+  columns on both sides, so the dump has to write a pair of column lists back;
+  one points a worktree's settings files at `worktrees(project_id, id)`, that
+  table's composite primary key.
+- **Column comments**: gravitino comments 183 of its 186 columns and every one
+  of its 20 tables, the densest share of any sample; shenyu 360 of its 391
+  columns and 6 of its 45 tables; nacos 102 of 175 and 10 of 16; glific 274 of
+  its 590 columns.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
   its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
   `mimiciv_hosp`, 4 of chado's 472 point from `frange` into `chado`, and every
@@ -580,8 +589,11 @@ always reach.
   primary keys and 19 unique constraints, declares no CHECK, and leaves all but
   3 of the references between them to the application. mediawiki, temporal,
   imdb, dolphinscheduler, nightingale, joomla, hyperswitch, icinga_ido,
-  bareos, opencms, kamailio, shenyu, and nacos declare no foreign key at all,
-  and openfire declares exactly one, over 35 tables. shenyu goes furthest:
+  bareos, opencms, kamailio, shenyu, nacos, and gravitino declare no foreign
+  key at all, and openfire declares exactly one, over 35 tables. gravitino is
+  the one of them that keys everything else: a primary key on each of its 20
+  tables and 19 unique constraints beside them back 39 of its 52 indexes, so
+  the references alone are what it leaves to the application. shenyu goes furthest:
   half its tables are unkeyed either way, 22 of 45 without a primary key, and
   its 45 tables carry 24 constraints between them, 23 primary keys and one
   CHECK. icinga_ido is the widest of them: 61
@@ -605,7 +617,10 @@ always reach.
   type, no trigger, and no routine, one standalone sequence named in the
   DEFAULT of the one column it feeds, 35 CHECKs its migrations wrote by hand,
   and autovacuum storage parameters on the two tables that hold its
-  embeddings.
+  embeddings. zed is the same shape one size down and stricter: 29 primary
+  keys over 29 tables, no unique constraint and no CHECK at all, so all 29 of
+  its constraints are primary keys, and 14 of its 43 unique indexes stand on
+  their own.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, mattermost, whose six are all materialized and
   one of which carries an index, and marquez, where one of the four is. hexpm
@@ -684,7 +699,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Forty-seven of the 97 samples declare
+Routines are concentrated the same way. Forty-seven of the 99 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
 musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,781. Two in three of
 them, 1,190, return `trigger`, though not every one of those has a trigger to
@@ -1058,8 +1073,8 @@ targets strip only what is irrelevant to a schema round trip:
   **ledgersmb**, **koji**, **kea**, **dolphinscheduler**, **wso2apim**,
   **icinga_director**, **openfire**, **bareos**, **opencms**, **roundcube**,
   **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
-  **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**, **nacos**:
-  these
+  **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**, **nacos**,
+  **gravitino**: these
   dumps name no schema at all, so whichever schema comes first in `search_path`
   gets them.
   Each is loaded into a schema of its own instead of `public`, so that
@@ -1204,6 +1219,13 @@ targets strip only what is irrelevant to a schema round trip:
   sample would carry its 366 policies with the wrong expressions in them.
 - **wso2is**: five of its index names run past the 63 character identifier
   limit, and the server truncates them.
+- **zed**: the schema is a dump of Zed's collaboration server, which its own
+  `cargo xtask db dump-schema` writes, so it is `pg_dump` output qualified
+  with `public` and loads the way the Rails group above does, minus the two
+  things they need: it has no line emptying `search_path` and no migration
+  versions at the tail, so only the qualifier is stripped. It installs
+  `pg_trgm`, which is contrib and which nothing in the schema then uses -- all
+  76 of its indexes are btree and no column is typed by it.
 - **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.
