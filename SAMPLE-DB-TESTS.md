@@ -90,7 +90,9 @@ Every GitHub source is fetched at a pinned commit rather than a branch, so an
 upstream schema change cannot turn CI red on its own and the object counts
 below stay accurate. To move a sample to a newer upstream schema, resolve the
 branch with `git ls-remote https://github.com/<owner>/<repo> <branch>`, replace
-the SHA in `sample-db.mk`, and re-run `make test-samples`.
+the SHA in `sample-db.mk`, and re-run `make test-samples`. omop is pinned to a
+release tag rather than a branch tip, since the files at the tip do not load;
+its loader says why.
 
 | Sample | Schemas | Source |
 |---|---|---|
@@ -190,6 +192,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | uyuni | uyuni, access, rpm, deb, rhn_cache, rhn_channel, rhn_config, rhn_config_channel, rhn_entitlements, rhn_exception, rhn_org, rhn_server, rhn_user | [uyuni-project/uyuni](https://github.com/uyuni-project/uyuni) |
 | lobehub | lobehub | [lobehub/lobehub](https://github.com/lobehub/lobehub) |
 | hexpm | hexpm | [hexpm/hexpm](https://github.com/hexpm/hexpm) |
+| omop | omop | [OHDSI/CommonDataModel](https://github.com/OHDSI/CommonDataModel) |
 
 ## Coverage
 
@@ -214,8 +217,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, roundcube,
   shenyu, and nacos the same day on the same.
 - openreplay and logto 2026-09-20 on 16.13, and omero, concourse, affine, and
-  teable 2026-09-21 on 15.18, and uyuni, lobehub, and hexpm the same day on
-  16.13.
+  teable 2026-09-21 on 15.18, and uyuni, lobehub, hexpm, and omop the same
+  day on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -340,11 +343,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | uyuni | 433 | 2,614 | 935 | 692 | 1,102 | 55 | 4 | 207 | 224 | 412 |
 | lobehub | 182 | 2,474 | 972 | 550 | 237 | 0 | 0 | 1 | 0 | 0 |
 | hexpm | 36 | 253 | 118 | 51 | 41 | 2 | 2 | 0 | 0 | 2 |
-| **Total** | **9,731** | **83,513** | **29,803** | **13,047** | **16,380** | **2,310** | **664** | **849** | **1,976** | **1,781** |
+| omop | 39 | 432 | 98 | 176 | 28 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **9,770** | **83,945** | **29,901** | **13,223** | **16,408** | **2,310** | **664** | **849** | **1,976** | **1,781** |
 
 ### Size
 
-The 96 dumps come to about 280,000 lines of SQL. chado is 43,700 of them, the
+The 97 dumps come to about 281,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
 about a quarter of the constraints, a fifth of the indexes and the foreign
 keys, a sixth of the columns, and a seventh of the tables; dhis2, uyuni,
@@ -548,6 +552,16 @@ always reach.
 - **A schema that is nearly all keys**: dhis2, where 461 primary keys and 464
   unique constraints back all but 30 of its 955 indexes, it declares no CHECK at
   all, and its 989 foreign keys are more than any sample but gitlab.
+- **Foreign keys at the highest density**: omop's 39 tables carry 176 of them,
+  4.5 to a table, ahead of omero's 4.3 over 161, and they nearly all point one
+  way: every clinical event names the vocabulary entry that says what it was,
+  so `concept` alone is referenced by 118 of the 176 and 3 are
+  self-references. The rest of the schema is as lopsided. 28 primary keys over
+  those 39 tables leave 11 unkeyed, and it declares no unique constraint and no
+  CHECK at all, so its 28 constraints are 28 primary keys and nothing else. All
+  98 of its indexes are btree, 28 backing a key and 70 not, and it has no view,
+  sequence, routine, trigger, or type: its ids are integers an ETL supplies
+  rather than serial columns, so nothing is counted behind them.
 - **CHECK constraints written by hand**: affine declares 54 over its 72 tables,
   none of which Prisma wrote, since its schema language declares no CHECK at
   all and every one of them was added by a migration: most hold a text column
@@ -670,7 +684,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Forty-seven of the 96 samples declare
+Routines are concentrated the same way. Forty-seven of the 97 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
 musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,781. Two in three of
 them, 1,190, return `trigger`, though not every one of those has a trigger to
@@ -870,6 +884,16 @@ targets strip only what is irrelevant to a schema round trip:
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
+- **omop**: the CDM's PostgreSQL DDL ships as four files under one directory,
+  so `ddl`, `primary_keys`, `constraints`, and `indices` are fetched by name
+  and concatenated in that order, the way mimiciv's three are. Every table
+  name in all four carries an `@cdmDatabaseSchema` placeholder that OHDSI's R
+  package fills in at install time, 529 of them, and the loader substitutes
+  the sample's schema for it; nothing else in the files is a template. The pin
+  is the v5.4.2 tag rather than the branch tip, the one sample where those
+  differ for a reason other than where the schema lives: at the tip the
+  primary key file leaves out `vocabulary`'s, which two foreign keys need, so
+  the load stops on the first of them, and 5.5's files have the same gap.
 - **glific**, **plausible**, **hexpm**: the schema is Ecto's `structure.sql`,
   the same `pg_dump` output as the group above, so it loads the same way. None
   has a `SET search_path` line before its migration versions, so those rows go
