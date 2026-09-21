@@ -346,9 +346,9 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | lobehub | 182 | 2,474 | 972 | 550 | 237 | 0 | 0 | 1 | 0 | 0 |
 | hexpm | 36 | 253 | 118 | 51 | 41 | 2 | 2 | 0 | 0 | 2 |
 | omop | 39 | 432 | 98 | 176 | 28 | 0 | 0 | 0 | 0 | 0 |
-| zed | 29 | 221 | 76 | 42 | 29 | 0 | 0 | 0 | 0 | 0 |
+| zed | 29 | 221 | 78 | 42 | 29 | 0 | 0 | 0 | 0 | 0 |
 | gravitino | 20 | 186 | 52 | 0 | 39 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **9,819** | **84,352** | **30,029** | **13,265** | **16,476** | **2,310** | **664** | **849** | **1,976** | **1,781** |
+| **Total** | **9,819** | **84,352** | **30,031** | **13,265** | **16,476** | **2,310** | **664** | **849** | **1,976** | **1,781** |
 
 ### Size
 
@@ -620,7 +620,9 @@ always reach.
   embeddings. zed is the same shape one size down and stricter: 29 primary
   keys over 29 tables, no unique constraint and no CHECK at all, so all 29 of
   its constraints are primary keys, and 14 of its 43 unique indexes stand on
-  their own.
+  their own. Its other two indexes are gin over a name with `gin_trgm_ops`,
+  the operator class resolving from the `public` the extension sits in, as
+  citizenlab's hnsw one does.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, mattermost, whose six are all materialized and
   one of which carries an index, and marquez, where one of the four is. hexpm
@@ -1224,8 +1226,10 @@ targets strip only what is irrelevant to a schema round trip:
   with `public` and loads the way the Rails group above does, minus the two
   things they need: it has no line emptying `search_path` and no migration
   versions at the tail, so only the qualifier is stripped. It installs
-  `pg_trgm`, which is contrib and which nothing in the schema then uses -- all
-  76 of its indexes are btree and no column is typed by it.
+  `pg_trgm`, which is contrib, for the two gin indexes it declares over a name
+  with `public.gin_trgm_ops`; the qualifier comes off that too and the
+  operator class resolves from `public`, which stays second in the search
+  path. Its other 76 indexes are btree.
 - **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.

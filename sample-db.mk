@@ -399,8 +399,10 @@ sample-db-camunda:
 #
 # zed's dump has neither the line that empties search_path nor the migration
 # versions at the tail, so the qualifier is the only thing stripped from it.
-# It installs pg_trgm, which is contrib, and then uses it for nothing: all 76
-# of its indexes are btree and no column is typed by it.
+# It installs pg_trgm, which is contrib, for the two gin indexes it declares
+# over a name with `public.gin_trgm_ops`; the qualifier is stripped off that
+# too, and the operator class resolves from `public`, which stays second in
+# the search path. Its other 76 indexes are btree.
 #
 # glific's, plausible's, and hexpm's structure.sql is Ecto's rather than
 # Rails', the same pg_dump output without that SET line, so their migration
