@@ -189,6 +189,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | teable | teable | [teableio/teable](https://github.com/teableio/teable) |
 | uyuni | uyuni, access, rpm, deb, rhn_cache, rhn_channel, rhn_config, rhn_config_channel, rhn_entitlements, rhn_exception, rhn_org, rhn_server, rhn_user | [uyuni-project/uyuni](https://github.com/uyuni-project/uyuni) |
 | lobehub | lobehub | [lobehub/lobehub](https://github.com/lobehub/lobehub) |
+| hexpm | hexpm | [hexpm/hexpm](https://github.com/hexpm/hexpm) |
 
 ## Coverage
 
@@ -213,7 +214,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, roundcube,
   shenyu, and nacos the same day on the same.
 - openreplay and logto 2026-09-20 on 16.13, and omero, concourse, affine, and
-  teable 2026-09-21 on 15.18, and uyuni and lobehub the same day on 16.13.
+  teable 2026-09-21 on 15.18, and uyuni, lobehub, and hexpm the same day on
+  16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -336,11 +338,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | teable | 62 | 703 | 197 | 23 | 62 | 0 | 8 | 0 | 0 | 2 |
 | uyuni | 433 | 2,614 | 935 | 692 | 1,102 | 55 | 4 | 207 | 224 | 412 |
 | lobehub | 182 | 2,474 | 972 | 550 | 237 | 0 | 0 | 1 | 0 | 0 |
-| **Total** | **9,695** | **83,260** | **29,685** | **12,996** | **16,339** | **2,308** | **662** | **849** | **1,976** | **1,779** |
+| hexpm | 36 | 253 | 118 | 51 | 41 | 2 | 2 | 0 | 0 | 2 |
+| **Total** | **9,731** | **83,513** | **29,803** | **13,047** | **16,380** | **2,310** | **664** | **849** | **1,976** | **1,781** |
 
 ### Size
 
-The 95 dumps come to about 279,000 lines of SQL. chado is 43,700 of them, the
+The 96 dumps come to about 280,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
 about a quarter of the constraints, a fifth of the indexes and the foreign
 keys, a sixth of the columns, and a seventh of the tables; dhis2, uyuni,
@@ -401,7 +404,11 @@ always reach.
   indexes are all over `jsonb` too, one of them over a `COALESCE` of two keys.
 - **Unique indexes over an expression and a gin index over `to_tsvector`**: rt,
   plus mattermost's 11, six of them over the concatenation of two to five
-  columns.
+  columns. hexpm's four gin indexes are three shapes at once: one names
+  `gin_trgm_ops` over a plain column, two are over a `->` key of a `jsonb`
+  column and one of those names `jsonb_path_ops`, and the fourth is over
+  `to_tsvector('english', regexp_replace(...))` of such a key cast to text, a
+  `to_tsvector` index with another function inside it.
 - **gist indexes naming an operator class**: two that name `inet_ops` and one
   over four columns, which needs `btree_gist` (osm).
 - **btree and gin indexes naming an operator class**: five of mattermost's nine
@@ -411,7 +418,8 @@ always reach.
   `boxrange`, one of them partial and declared from another schema.
 - **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
   `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse), and
-  one `NULLS NOT DISTINCT` index and eight with `INCLUDE` columns (lago).
+  one `NULLS NOT DISTINCT` index and eight with `INCLUDE` columns (lago), plus
+  one more `INCLUDE` index in hexpm, over two columns and covering a third.
 - **Storage parameters on an index**: concourse's two gin indexes, both over a
   `jsonb` column with `jsonb_path_ops` and both declared
   `WITH (FASTUPDATE = false)`, so its dump is where an index's storage
@@ -470,7 +478,10 @@ always reach.
 - **Columns typed by a contrib extension**: sourcegraph, with 49 `citext`
   columns, and six extensions installed at once; lemmy, whose `comment.path` is
   an `ltree` and which installs `pg_trgm` and `pgcrypto` beside it; plausible,
-  with 3 more `citext` columns; and feedbin, with 2 `hstore` columns and
+  with 3 more `citext` columns; hexpm, with 1 more and five extensions
+  installed for 36 tables, `citext`, `fuzzystrmatch`, `pg_trgm`, `pgcrypto`,
+  and `uuid-ossp`, the last of which one column defaults through; and feedbin,
+  with 2 `hstore` columns and
   `pg_stat_statements` installed beside them.
 - **Columns typed by an extension that is not contrib**: discourse's three
   `halfvec` columns, which need pgvector, and the `geometry` columns that need
@@ -582,7 +593,11 @@ always reach.
   embeddings.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, mattermost, whose six are all materialized and
-  one of which carries an index, and marquez, where one of the four is.
+  one of which carries an index, and marquez, where one of the four is. hexpm
+  has only two views and both are materialized, and both carry indexes, four
+  between them: two are unique, which is what a concurrent refresh needs, and
+  two order a column `DESC NULLS LAST`, one of those the second column of
+  three.
 - **Extensions in a schema of their own**: citizenlab puts all five of its in
   `shared_extensions` and qualifies every use with it, so 135 of its column
   defaults call `shared_extensions.gen_random_uuid()` and two of its indexes
@@ -654,14 +669,14 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Forty-six of the 95 samples declare
+Routines are concentrated the same way. Forty-seven of the 96 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
 musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,779. Two in three of
 them, 1,190, return `trigger`, though not every one of those has a trigger to
 call it: musicbrainz's 89 do not, since its loader concatenates a file list
 that leaves triggers out.
 
-1,666 are written in plpgsql and 113 in sql. omero's 57, the next largest after
+1,666 are written in plpgsql and 115 in sql. omero's 57, the next largest after
 lemmy's 74, are 56 of the plpgsql and one of the sql, and 49 of them return
 `trigger`; concourse and affine declare 7 each, 6 of concourse's and all of
 affine's returning `trigger`, and teable 2. uyuni's 412 are 407 plpgsql and 5
@@ -673,7 +688,10 @@ its loader creates, and it is out of the count for the same reason. bareos's
 `decode_lstat` returns a 16-column `TABLE`, so the dump has to write the whole
 column list back. Two of logto's ten are
 declared `SET search_path`, so the dump has to carry the configuration along
-with the body, and one of those two takes a VARIADIC argument. Only chado, kea,
+with the body, and one of those two takes a VARIADIC argument. hexpm's two are
+sql as well and both return `json`: one takes a VARIADIC `text[]` like logto's,
+the other a polymorphic `anyelement`, so the dump has to write both argument
+forms back. Only chado, kea,
 boundary, and uyuni overload a name, 11 of them, 3, 1, and 1, though danbooru's
 three, all sql, include a `lower(text[])` that shadows a built-in, and
 documenso's `nanoid` gives all three of its arguments a default. Only sourcegraph,
@@ -851,12 +869,17 @@ targets strip only what is irrelevant to a schema round trip:
 - **dvdrental**: the dump was taken by a `pg_dump` new enough to set
   `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
   one line is dropped. It sets nothing the schema depends on.
-- **glific**, **plausible**: the schema is Ecto's `structure.sql`, the same
-  `pg_dump` output as the group above, so it loads the same way. Neither has a
-  `SET search_path` line before its migration versions, so those rows go into
-  the sample's own `schema_migrations`. They are data, not schema. plausible
-  installs `citext`, which is contrib and which three of its columns are typed
-  by.
+- **glific**, **plausible**, **hexpm**: the schema is Ecto's `structure.sql`,
+  the same `pg_dump` output as the group above, so it loads the same way. None
+  has a `SET search_path` line before its migration versions, so those rows go
+  into the sample's own `schema_migrations`. They are data, not schema.
+  plausible installs `citext`, which is contrib and which three of its columns
+  are typed by, and hexpm five, `citext`, `fuzzystrmatch`, `pg_trgm`,
+  `pgcrypto`, and `uuid-ossp`, all contrib as well: one column is a `citext`,
+  one gin index names the trgm operator class, and one column defaults through
+  `uuid_generate_v4()` the way inaturalist's sixteen do, though hexpm's is
+  nested inside a `json_build_object` cast to `jsonb`. `fuzzystrmatch` and
+  `pgcrypto` the schema itself never names.
 - **harbor**: the schema ships as one file per release, each a delta meant to
   be replayed by golang-migrate, which tracks what it has applied in a
   `schema_migrations` table of its own. One delta `ALTER TABLE`s that table
