@@ -1062,8 +1062,8 @@ targets strip only what is irrelevant to a schema round trip:
   created up front and `search_path` places everything; it creates twelve more
   itself, so the sample is checked with all thirteen. Two REFERENCES qualify
   `public`, which is where upstream installs, so the qualifier is stripped.
-  `pg_trgm`, which the two of its indexes that name `gin_trgm_ops` need -- the
-  third gin index is over `to_tsvector` and takes the built-in `tsvector_ops` --
+  `pg_trgm`, which the two indexes that name `gin_trgm_ops` need -- the third
+  gin index is over `to_tsvector` and takes the built-in `tsvector_ops` --
   is installed into `public` up front the way concourse's `pgcrypto` is, and the
   tree's own `CREATE EXTENSION pg_trgm` is dropped, since it names no schema and
   no IF NOT EXISTS and would stop the load in `make schema` once another sample
