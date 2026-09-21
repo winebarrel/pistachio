@@ -628,9 +628,9 @@ has the syntax:
   `pg_get_viewdef` prints the one the server picked. 16 and later.
 - The query functions resolve a `RETURNING` type too, text for `JSON_VALUE`
   and `JSON_SERIALIZE` and jsonb for `JSON_QUERY`, and `JSON_QUERY` prints
-  its wrapper and quote behavior whether or not they hold the default, so a
-  file leaving them off differs from `WITHOUT WRAPPER KEEP QUOTES`. 17 and
-  later.
+  its wrapper and quote options explicitly, even when they use their
+  defaults, so a file leaving them off differs from
+  `WITHOUT WRAPPER KEEP QUOTES`. 17 and later.
 - `JSON_TABLE` is a FROM item rather than an expression, and the server adds
   a `LATERAL` and names the row pattern: `JSON_TABLE(t.a, '$.x' COLUMNS (k
   text PATH '$.k'))` is stored as `LATERAL JSON_TABLE(t.a, '$."x"' AS
