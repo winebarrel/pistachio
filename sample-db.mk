@@ -111,6 +111,7 @@ shenyu|sample-db-shenyu||shenyu
 nacos|sample-db-url-schema|URL=https://raw.githubusercontent.com/alibaba/nacos/d74b69fa71de104c3ed15310ef8e32d1cded8a95/plugin-default-impl/nacos-default-datasource-plugin/nacos-datasource-plugin-postgresql/src/main/resources/META-INF/pg-schema.sql SCHEMA=nacos|nacos
 openreplay|sample-db-openreplay|URL=https://raw.githubusercontent.com/openreplay/openreplay/3fce37d89113ca7a06c9d9d767ba8d274df94d26/scripts/schema/db/init_dbs/postgresql/init_schema.sql SCHEMA=openreplay|openreplay,events,events_common,events_ios,spots
 logto|sample-db-logto||logto
+omero|sample-db-omero||omero
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1128,6 +1129,40 @@ sample-db-logto:
 	  awk '/^(grant|revoke)/ { skip = 1 } skip { if (/;[[:space:]]*$$/) skip = 0; next } { print }' _after_all.sql; } \
 	  | sed -E "s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g; s/set search_path = public/set search_path = logto/" \
 	  | $(PSQL)
+
+# OMERO (ome/openmicroscopy, GPL-2.0), the OME platform for microscopy image
+# data. A fresh database is the four files `omero db script` concatenates, in
+# that order: psql-header.sql, which opens the transaction and declares the
+# domains and the unit enums, schema.sql, the tables Hibernate generates,
+# views.sql, and psql-footer.sql, which adds the indexes, the functions, and
+# the triggers and commits. The loader repeats that.
+#
+# The sequences are why it is here. OMERO gives 129 of its 161 tables a
+# sequence named after it and asks for the next value in the application, so
+# its 130 standalone sequences are more than any other sample declares and
+# only 2 of them are named in a column DEFAULT. It brings 130 triggers as
+# well, 4 of them deferrable constraint triggers, and 7 enums whose 157 labels
+# are unit symbols, so past ASCII.
+#
+# `omero db script` renders the header and the footer through Python's %
+# formatting, which is why every literal percent sign in them is written twice;
+# undoubling them is the whole substitution, since the header's %(TIME)s and
+# the rest of its placeholders sit in comments. The footer's one @ROOTPASS@
+# goes into a row of the password table rather than into the schema, so it
+# loads as the literal string. Nothing in the files names a schema or an
+# extension, so `omero` is created up front and search_path places everything.
+OMERO_SHA = be0fd3d0efd5f419c2c373779e50107b5f1b6b8f
+OMERO_DIR = sql/psql/OMERO5.4__0
+OMERO_SQL_FILES = psql-header.sql schema.sql views.sql psql-footer.sql
+
+sample-db-omero: PGOPTS = -c search_path=omero
+.PHONY: sample-db-omero
+sample-db-omero:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS omero'
+	for f in $(OMERO_SQL_FILES); do \
+	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/ome/openmicroscopy/$(OMERO_SHA)/$(OMERO_DIR)/$$f || exit 1; \
+	  echo; \
+	done | sed 's/%%/%/g' | $(PSQL)
 
 .PHONY: test-samples
 test-samples:
