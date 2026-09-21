@@ -5,7 +5,7 @@ This guide covers setup and basic schema management with pistachio.
 ## Prerequisites
 
 - PostgreSQL database (local or remote)
-- pistachio installed (see [Installation](index.md#installation) for installation options)
+- pistachio installed (see [Installation](index.md#installation) for the options)
 
 ## Step 1: Connect to your database
 

@@ -506,7 +506,7 @@ The catalog reports an object reachable through `search_path` without its schema
 
 ## diff
 
-Compare two schema SQL files and print the DDL that takes the first to the second. No database is read: the first file stands in for the current state `plan` reads from the catalog, the second is the desired state.
+Compare two schema SQL files and print the DDL that takes the first to the second. No database is read: the first file stands in for the current state `plan` reads from the catalog, and the second is the desired state.
 
 ```bash
 pista diff old.sql new.sql
