@@ -112,6 +112,9 @@ nacos|sample-db-url-schema|URL=https://raw.githubusercontent.com/alibaba/nacos/d
 openreplay|sample-db-openreplay|URL=https://raw.githubusercontent.com/openreplay/openreplay/3fce37d89113ca7a06c9d9d767ba8d274df94d26/scripts/schema/db/init_dbs/postgresql/init_schema.sql SCHEMA=openreplay|openreplay,events,events_common,events_ios,spots
 logto|sample-db-logto||logto
 omero|sample-db-omero||omero
+concourse|sample-db-concourse||concourse
+affine|sample-db-affine||affine
+teable|sample-db-prisma|REPO=teableio/teable SHA=5ef2238883cad7c3980084de9a9031135fb9734f DIR=packages/db-main-prisma/prisma/postgres/migrations SCHEMA=teable|teable
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1163,6 +1166,79 @@ sample-db-omero:
 	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/ome/openmicroscopy/$(OMERO_SHA)/$(OMERO_DIR)/$$f || exit 1; \
 	  echo; \
 	done | sed 's/%%/%/g' | $(PSQL)
+
+# Concourse (concourse/concourse, Apache-2.0), the CI server. The schema ships
+# as golang-migrate migrations, 151 `.up.sql` files replayed in name order like
+# mattermost's, so the repository tarball is fetched once and only the
+# migrations directory is extracted. Seven migrations beside them are Go rather
+# than SQL, replayed in the same sequence. Three of those only rewrite rows and
+# four change a table: they drop `teams.basic_auth`, rename `teams.auth` to
+# `legacy_auth` and add a new `auth`, and add `resources.type` and
+# `resource_pins.config`. Nothing in the SQL files depends on any of that, so
+# the sample is checked without them, the way marquez is checked without its
+# Java migrations' views, and its `teams` keeps the `basic_auth` column
+# upstream drops.
+#
+# The index storage parameters are why it is here: its two gin indexes are
+# declared `WITH (FASTUPDATE = false)` and name `jsonb_path_ops`, so its dump
+# is where a storage parameter on an index has to survive the round trip. A few
+# files end without a semicolon, so each is followed by a newline and one.
+#
+# None of the files names a schema, so `concourse` is created up front and
+# search_path places everything. One migration installs pgcrypto and hashes
+# rows with `digest()` in the same file, so the extension has to be resolvable
+# from the search path when that statement runs: it is contrib, so it is
+# installed into `public` up front the way openreplay's is, and `public` stays
+# second in the search path.
+CONCOURSE_SHA = a3484bc8cc3655a59583527667708d6b8fdd8e50
+
+sample-db-concourse: PGOPTS = -c search_path=concourse,public
+.PHONY: sample-db-concourse
+sample-db-concourse:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS concourse'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/concourse/concourse/tar.gz/$(CONCOURSE_SHA) \
+	  | tar xz -C "$$dir" --strip-components=5 concourse-$(CONCOURSE_SHA)/atc/db/migration/migrations && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | $(PSQL)
+
+# AFFiNE (toeverything/AFFiNE, MIT), the workspace editor. The schema ships as
+# a Prisma migration history, 123 directories each holding a migration.sql,
+# replayed in name order into a schema of its own; sample-db-prisma does that
+# for four other samples, but this one needs two extensions in the search path
+# as well, so it has a target of its own.
+#
+# What it writes by hand is why it is here. Prisma declares no CHECK constraint
+# and no trigger of its own, and AFFiNE's migrations add 54 CHECKs over its 72
+# tables and 16 triggers over 11 of them, 4 of those firing `BEFORE UPDATE OF`
+# a column list, one of them four columns long. It carries 11 enums, 2 hnsw
+# indexes, and no sequence at all beside them.
+#
+# The extensions are pgvector, for the two `vector(1024)` columns those hnsw
+# indexes cover, and pgcrypto, which a migration hashes existing rows with in
+# the same file that installs it, so it has to be resolvable from the search
+# path when that statement runs. Both are installed into `public` up front the
+# way openreplay's are, with `public` second in the search path, since the
+# `CREATE EXTENSION IF NOT EXISTS` the migrations write names no schema and
+# gets nothing when another sample already installed it somewhere else.
+AFFINE_SHA = d897bb3d84099e54a6b3c0bd5f4265f8aa87d190
+AFFINE_DIR = packages/backend/server/migrations
+
+sample-db-affine: PGOPTS = -c search_path=affine,public
+.PHONY: sample-db-affine
+sample-db-affine:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public'
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS affine'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/toeverything/AFFiNE/tar.gz/$(AFFINE_SHA) \
+	  | tar xz -C "$$dir" --strip-components=5 AFFiNE-$(AFFINE_SHA)/$(AFFINE_DIR) && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | $(PSQL)
 
 .PHONY: test-samples
 test-samples:
