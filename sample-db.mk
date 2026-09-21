@@ -116,6 +116,7 @@ concourse|sample-db-concourse||concourse
 affine|sample-db-affine||affine
 teable|sample-db-prisma|REPO=teableio/teable SHA=5ef2238883cad7c3980084de9a9031135fb9734f DIR=packages/db-main-prisma/prisma/postgres/migrations SCHEMA=teable|teable
 uyuni|sample-db-uyuni|CLIENT_MIN_MESSAGES=error|uyuni,access,rpm,deb,rhn_cache,rhn_channel,rhn_config,rhn_config_channel,rhn_entitlements,rhn_exception,rhn_org,rhn_server,rhn_user
+lobehub|sample-db-lobehub||lobehub
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1322,6 +1323,69 @@ sample-db-uyuni:
 	sed -E "/^CREATE EXTENSION pg_trgm;\$$/d; s/([^A-Za-z0-9_])public\./\1/g; \
 	        s/pg_catalog\.pg_table_is_visible\(c\.oid\)/c.relnamespace = 'uyuni'::regnamespace/" \
 	  schema/spacewalk/postgres/main.sql \
+	  | $(PSQL)
+
+# LobeHub (lobehub/lobehub, Apache-2.0), the agent workspace built on the LLM
+# providers, which was LobeChat before it was renamed; codeload names the
+# archive's top directory after the repository as it is now, so both the URL
+# and the prefix say lobehub. The schema ships as Drizzle migrations like
+# dokploy's and loads the same way: the repository tarball is fetched once,
+# only the migrations directory is extracted, and the tags are read out of
+# meta/_journal.json rather than off the directory, since here too the two do
+# not agree. 0065_add_document_fields.sql is on disk but not in the journal,
+# left behind by the rename that made it 0066_add_document_fields.sql, and
+# the two differ in the ON DELETE action of the foreign key they add, so
+# replaying the directory would take the older one. A few files end without a
+# semicolon, so each is followed by a newline and one, and the `public`
+# qualifier Drizzle writes into a foreign key's target is stripped the way
+# sample-db-prisma strips it, along with the one the `to_regclass` and
+# `::regclass` guards in a handful of hand-written migrations carry, which
+# leaves those guards reading through search_path.
+#
+# Twelve guards look a constraint up by name alone, `SELECT 1 FROM
+# pg_constraint WHERE conname = '<name>'`, and skip the ALTER TABLE that
+# follows when they find one. Upstream LobeHub owns its database, but here
+# the samples before it are still there, so a name another schema already
+# uses -- `users_email_unique` is one -- would silently cost this sample a
+# constraint. Those lookups are scoped to the sample's schema, the way
+# lemmy's are.
+#
+# The vectors are why it is here, and the first of the two reasons it does not
+# share dokploy's loader. LobeHub keeps what it remembers about a user as
+# embeddings, so 11 of its columns are `vector(1024)` and 10 hnsw indexes sit
+# over them, naming `vector_cosine_ops` unqualified the way affine's two do;
+# citizenlab and affine bring 3 hnsw indexes between them and one `vector`
+# column each. pgvector is installed into `public` up front the way affine's
+# is, with `public` second in the search path, since the `CREATE EXTENSION IF
+# NOT EXISTS vector` a migration writes names no schema and gets nothing when
+# another sample already installed it somewhere else.
+#
+# pg_search is the second. It is ParadeDB's, not contrib, and the official
+# image does not ship it, so the two migrations that need it are skipped: one
+# installs it, the other writes 14 bm25 indexes with it. Nothing else in the
+# history reads them.
+#
+# What it leaves out is the other half of why it is here: 182 tables and 972
+# indexes with no view, no enum, no domain, no trigger, and no routine at all,
+# and only 20 unique constraints, since Drizzle writes a bare CREATE UNIQUE
+# INDEX instead and 138 of its 340 unique indexes stand on their own that way.
+LOBEHUB_SHA = 14dfc07b14eee1984e52c195df9319636d6b167b
+
+sample-db-lobehub: PGOPTS = -c search_path=lobehub,public
+.PHONY: sample-db-lobehub
+sample-db-lobehub:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lobehub'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/lobehub/lobehub/tar.gz/$(LOBEHUB_SHA) \
+	  | tar xz -C "$$dir" --strip-components=4 lobehub-$(LOBEHUB_SHA)/packages/database/migrations && \
+	cd "$$dir" && \
+	grep -oE '"tag": "[^"]+"' meta/_journal.json | sed 's/.*: "//; s/"$$//' \
+	  | while read -r t; do \
+	      grep -qE 'pg_search|USING bm25' "$$t.sql" || { cat "$$t.sql"; printf '\n;\n'; }; \
+	    done \
+	  | sed -E "s/\"public\"\.//g; s/([^A-Za-z0-9_])public\./\1/g; \
+	            s/WHERE conname = /WHERE connamespace = 'lobehub'::regnamespace AND conname = /g" \
 	  | $(PSQL)
 
 .PHONY: test-samples
