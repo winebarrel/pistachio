@@ -1062,20 +1062,21 @@ targets strip only what is irrelevant to a schema round trip:
   created up front and `search_path` places everything; it creates twelve more
   itself, so the sample is checked with all thirteen. Two REFERENCES qualify
   `public`, which is where upstream installs, so the qualifier is stripped.
-  `pg_trgm`, which three of its indexes need, is installed into `public` up
-  front the way concourse's `pgcrypto` is, and the tree's own
-  `CREATE EXTENSION pg_trgm` is dropped, since it names no schema and no
-  IF NOT EXISTS and would stop the load in `make schema` once another sample has
-  installed it. The last thing the build appends walks the catalog and puts a
-  CHECK constraint on every `varchar` column, rejecting the empty string Oracle
-  would have read as NULL; it takes the tables `current_user` owns that
+  `pg_trgm`, which the two of its indexes that name `gin_trgm_ops` need -- the
+  third gin index is over `to_tsvector` and takes the built-in `tsvector_ops` --
+  is installed into `public` up front the way concourse's `pgcrypto` is, and the
+  tree's own `CREATE EXTENSION pg_trgm` is dropped, since it names no schema and
+  no IF NOT EXISTS and would stop the load in `make schema` once another sample
+  has installed it. The last thing the build appends walks the catalog and puts
+  a CHECK constraint on every `varchar` column, rejecting the empty string
+  Oracle would have read as NULL; it takes the tables `current_user` owns that
   `search_path` can see, which upstream is Uyuni's alone and here would reach
   every sample in `public`, so that lookup is scoped to the sample's schema, the
   way lemmy's are. The 635 constraints it writes are the same either way, since
   the only other schema in the search path is the empty `public` the runner has
-  just recreated. Every `commit` in the reference data loads warns that there
-  is no transaction in progress, so `client_min_messages` is raised to `error`
-  as it is for ranger.
+  just recreated. Every `commit` in the reference data loads warns that there is
+  no transaction in progress, so `client_min_messages` is raised to `error` as
+  it is for ranger.
 - **windmill**: the schema ships as sqlx migrations, 661 `.up.sql` files
   replayed in name order. The repository tarball is fetched once and only the
   migrations directory is extracted. It names no schema, so `windmill` is

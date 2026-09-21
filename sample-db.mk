@@ -1281,12 +1281,14 @@ sample-db-affine:
 # places everything. It creates twelve more itself, `access` for the RBAC tables
 # and one per package it ported, so the sample is checked with all thirteen. Two
 # REFERENCES qualify `public`, which is where upstream installs, so the
-# qualifier is stripped as sample-db-pgdump-schema strips it. pg_trgm, which
-# three of the indexes need, is installed into `public` up front the way
-# concourse's pgcrypto is, and the tree's own `CREATE EXTENSION pg_trgm` is
-# dropped: it names no schema and no IF NOT EXISTS, so it stops the load in
-# `make schema` once another sample has installed it. `public` stays second in
-# the search path for the operator class to resolve from.
+# qualifier is stripped as sample-db-pgdump-schema strips it. pg_trgm, which the
+# two indexes that name gin_trgm_ops need -- the third gin index is over
+# to_tsvector and takes the built-in tsvector_ops -- is installed into `public`
+# up front the way concourse's pgcrypto is, and the tree's own
+# `CREATE EXTENSION pg_trgm` is dropped: it names no schema and no
+# IF NOT EXISTS, so it stops the load in `make schema` once another sample has
+# installed it. `public` stays second in the search path for the operator class
+# to resolve from.
 #
 # The last thing the build appends is end.sql, which walks the catalog and puts
 # a CHECK constraint on every varchar column, 635 of them here, rejecting the
