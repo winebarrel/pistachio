@@ -1254,9 +1254,15 @@ sample-db-affine:
 # reimplementing the order, so it is the one sample that needs GNU make and
 # python3 as well as curl and psql. That inner make runs with MAKEFLAGS cleared
 # and is not written as $(MAKE), so the flags this make was given, -n among
-# them, reach neither it nor the recipe around it. The repository tarball is
-# fetched once and only the schema tree and one file from the container image
-# come out of it.
+# them, reach neither it nor the recipe around it. It runs with PYTHONWARNINGS
+# set as well: two of blend's string literals are not raw ones, `"[,\s]+"` and
+# `"\i"`, and neither escape is a Python escape, which 3.12 turned from a
+# deprecation into a SyntaxWarning it prints by default. Upstream silences the
+# pylint check over each of them rather than the warning, so the build says it
+# twice on a current python3 and the runner passes it through. Only
+# SyntaxWarning is filtered; anything else the build says still comes through.
+# The repository tarball is fetched once and only the schema tree and one file
+# from the container image come out of it.
 #
 # Its size is why it is here: 433 tables, 2,614 columns, 935 indexes, and 692
 # foreign keys put it among the five largest samples by each of them, and its
@@ -1319,7 +1325,8 @@ sample-db-uyuni:
 	  | $(PSQL) && \
 	sed -e "s!SCHEMA_NAME!'uyuni'!g" -e "s!SCHEMA_VERSION!'0'!g" -e "s!SCHEMA_RELEASE!'0'!" \
 	  schema/spacewalk/common/data/rhnVersionInfo.pre > schema/spacewalk/common/data/rhnVersionInfo.sql && \
-	MAKEFLAGS= make -C schema/spacewalk/postgres main >/dev/null && \
+	MAKEFLAGS= PYTHONWARNINGS=ignore::SyntaxWarning \
+	  make -C schema/spacewalk/postgres main >/dev/null && \
 	sed -E "/^CREATE EXTENSION pg_trgm;\$$/d; s/([^A-Za-z0-9_])public\./\1/g; \
 	        s/pg_catalog\.pg_table_is_visible\(c\.oid\)/c.relnamespace = 'uyuni'::regnamespace/" \
 	  schema/spacewalk/postgres/main.sql \
