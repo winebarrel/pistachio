@@ -119,6 +119,8 @@ uyuni|sample-db-uyuni|CLIENT_MIN_MESSAGES=error|uyuni,access,rpm,deb,rhn_cache,r
 lobehub|sample-db-lobehub||lobehub
 hexpm|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/hexpm/hexpm/c3cc7446747226c74164683a02614d260f2e3bf6/priv/repo/structure.sql SCHEMA=hexpm|hexpm
 omop|sample-db-omop||omop
+zed|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/zed-industries/zed/418f89714891f9d8105a3e92e60b9a7a5084d232/crates/collab/migrations/20251208000000_test_schema.sql SCHEMA=zed|zed
+gravitino|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/gravitino/7f303cadad7623dfe8438ae8c2b9269f8e21e919/scripts/postgresql/schema-0.9.0-postgresql.sql SCHEMA=gravitino|gravitino
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -376,7 +378,8 @@ sample-db-camunda:
 
 # A pg_dump-style dump loaded into a schema of its own. discourse, osm,
 # danbooru, inaturalist, and feedbin ship their schema as Rails'
-# db/structure.sql, which
+# db/structure.sql, and zed a dump its own `cargo xtask db dump-schema`
+# writes, which
 # belongs in a schema of its own like the sample-db-url-schema dumps but is
 # pg_dump output: it empties search_path and qualifies every object it creates
 # with `public`, so neither PGOPTIONS nor the hive-style search_path rewrite
@@ -393,6 +396,13 @@ sample-db-camunda:
 # `SET search_path TO "$user", public` followed by the migration versions it
 # inserts into schema_migrations, which is data and would land in the wrong
 # schema anyway, so everything from that line on is dropped.
+#
+# zed's dump has neither the line that empties search_path nor the migration
+# versions at the tail, so the qualifier is the only thing stripped from it.
+# It installs pg_trgm, which is contrib, for the two gin indexes it declares
+# over a name with `public.gin_trgm_ops`; the qualifier is stripped off that
+# too, and the operator class resolves from `public`, which stays second in
+# the search path. Its other 76 indexes are btree.
 #
 # glific's, plausible's, and hexpm's structure.sql is Ecto's rather than
 # Rails', the same pg_dump output without that SET line, so their migration
