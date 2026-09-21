@@ -14,7 +14,10 @@ make test-samples
 The target runs `test/samples/run.sh`, which builds `pista` and drives the
 check. It needs a running PostgreSQL instance (`PGHOST=localhost`,
 `PGUSER=postgres`, exported by the Makefile), plus `psql`, `curl`, and network
-access to the upstream hosts. The same target runs in CI as the `samples` job.
+access to the upstream hosts. The uyuni sample needs GNU `make` and `python3`
+as well: its schema is a source tree rather than a file, and the loader runs
+the build that turns it into one. The same target runs in CI as the `samples`
+job.
 
 The runner exports `PISTA_MANAGE_ROUTINE=1` and `PISTA_MANAGE_STORAGE_PARAM=1`,
 so functions, procedures and a table's storage parameters are part of the round
@@ -184,6 +187,7 @@ the SHA in `sample-db.mk`, and re-run `make test-samples`.
 | concourse | concourse | [concourse/concourse](https://github.com/concourse/concourse) |
 | affine | affine | [toeverything/AFFiNE](https://github.com/toeverything/AFFiNE) |
 | teable | teable | [teableio/teable](https://github.com/teableio/teable) |
+| uyuni | uyuni, access, rpm, deb, rhn_cache, rhn_channel, rhn_config, rhn_config_channel, rhn_entitlements, rhn_exception, rhn_org, rhn_server, rhn_user | [uyuni-project/uyuni](https://github.com/uyuni-project/uyuni) |
 
 ## Coverage
 
@@ -208,7 +212,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, roundcube,
   shenyu, and nacos the same day on the same.
 - openreplay and logto 2026-09-20 on 16.13, and omero, concourse, affine, and
-  teable 2026-09-21 on 15.18.
+  teable 2026-09-21 on 15.18, and uyuni the same day on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -218,7 +222,7 @@ What each column holds:
 - **Types** counts enums and domains.
 - **Sequences** counts standalone sequences only, since pistachio manages the
   sequence behind a serial or identity column as an attribute of that column
-  rather than as an object of its own. Counting those too would add 2,221 more,
+  rather than as an object of its own. Counting those too would add 2,243 more,
   886 of them gitlab's and 210 chado's.
 - **Triggers** excludes the internal triggers a foreign key installs and the
   clones PostgreSQL puts on each partition of a partitioned table's trigger, the
@@ -329,16 +333,17 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | concourse | 45 | 320 | 154 | 80 | 46 | 0 | 5 | 2 | 7 | 7 |
 | affine | 72 | 764 | 246 | 69 | 124 | 0 | 11 | 0 | 16 | 7 |
 | teable | 62 | 703 | 197 | 23 | 62 | 0 | 8 | 0 | 0 | 2 |
-| **Total** | **9,080** | **78,172** | **27,778** | **11,754** | **15,000** | **2,253** | **658** | **641** | **1,752** | **1,367** |
+| uyuni | 433 | 2,614 | 935 | 692 | 1,102 | 55 | 4 | 207 | 224 | 412 |
+| **Total** | **9,513** | **80,786** | **28,713** | **12,446** | **16,102** | **2,308** | **662** | **848** | **1,976** | **1,779** |
 
 ### Size
 
-The 93 dumps come to about 254,000 lines of SQL. chado is 43,700 of them, the
-longest dump of any sample, and gitlab 34,700. gitlab is still about a third
-of the constraints, three in ten of the indexes, nearly a quarter of the
-columns and the foreign keys, and a fifth of the tables; dhis2, openolat,
-musicbrainz, and discourse are the largest of what remains, and chado is nearly
-all of the views.
+The 94 dumps come to about 274,000 lines of SQL. chado is 43,700 of them, the
+longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
+about a quarter of the constraints, a fifth of the indexes and the foreign
+keys, a sixth of the columns, and a seventh of the tables; dhis2, uyuni,
+openolat, musicbrainz, and discourse are the largest of what remains, and chado
+is nearly all of the views.
 
 gitlab is also why `clean-schema` drops tables a batch at a time rather than
 cascading through `DROP SCHEMA`: a single statement takes locks on every object
@@ -361,7 +366,10 @@ always reach.
   a `text` column, and two gin, one over a `text[]` column and one over
   `to_tsvector('english', content)`, which is the only expression index it has.
   logto brings one brin index over a timestamp, beside 179 btree, 11 of them
-  partial and 13 over an expression, and a single gin.
+  partial and 13 over an expression, and a single gin. uyuni has one hash
+  index, over the column holding a package capability's name, beside 931 btree,
+  34 of them partial, and 3 gin, two naming `gin_trgm_ops` and the third over
+  `to_tsvector`.
 - **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to a
   table, denser than any other sample, 55 of them gin, 29 of those over an
   expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
@@ -405,7 +413,8 @@ always reach.
   constraint and leaves one table of its 161 unlogged, the one its triggers
   write the current administrative privileges into.
 - **Stored generated columns**: bigbluebutton's 17, three of them over a
-  function of its own that calls `unaccent`.
+  function of its own that calls `unaccent`, and uyuni's one, which is over a
+  field of the composite-typed column beside it.
 - **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb,
   whose 13 types are 6 enums and 7 domains, each domain carrying a named CHECK,
   plus icinga_director, whose 20 enums come with one domain that carries two
@@ -430,14 +439,22 @@ always reach.
   them, the SI-prefixed symbols of the units a measurement can carry, so many
   of the labels reach past ASCII, and each domain carries one anonymous CHECK
   bounding a number. concourse declares 5 enums, affine 11 with 40 labels, and
-  teable 8.
+  teable 8. uyuni goes the other way for its size: 4 enums with 10 labels
+  between them over 433 tables, since what it constrains it constrains with a
+  CHECK instead.
 - **Identity columns**: openreplay. Nineteen of its 62 tables draw their
   surrogate key from an `integer GENERATED BY DEFAULT AS IDENTITY` column
   rather than from a serial or a standalone sequence, so its dump is where the
   identity clause and the sequence behind it have to survive the round trip.
+  uyuni has 21 of them, one per table, 18 on tables SUSE added and 3 on the
+  RBAC tables in its `access` schema, while the tables around them take their
+  key from one of its 207 standalone sequences instead.
 - **Composite types**: ovirt declares 10 of them, more than any other sample,
   sourcegraph, chado, and coder 2 each, and marquez 1, which one of its views
-  builds an array of with ROW().
+  builds an array of with ROW(). uyuni has 1 as well, the four-field type its
+  package versions are stored in: two columns are typed by it, two indexes read
+  one of its fields, a generated column stores another, and 12 of its routines
+  take or return it.
 - **tsvector columns**: dvdrental, pagila.
 - **A non-default collation**: musicbrainz.
 - **Columns typed by a contrib extension**: sourcegraph, with 49 `citext`
@@ -461,7 +478,9 @@ always reach.
   langfuse's 113 names ON UPDATE CASCADE as well, 90 of them with ON DELETE
   CASCADE and the other 23 with SET NULL. So does every one of logto's 152,
   149 of them with ON DELETE CASCADE, while all 84 of openreplay's name
-  ON DELETE alone, 72 CASCADE and 12 SET NULL.
+  ON DELETE alone, 72 CASCADE and 12 SET NULL. uyuni mixes the two: 432 of its
+  692 name ON DELETE, 371 CASCADE, 59 SET NULL and 2 RESTRICT, the other 260
+  name nothing, and not one names ON UPDATE.
 - **Column comments**: shenyu comments 360 of its 391 columns and 6 of its 45
   tables, the densest share of any sample; nacos 102 of 175 and 10 of 16; glific
   274 of its 590 columns.
@@ -478,9 +497,12 @@ always reach.
   column it feeds are related only by name. roundcube goes the other way with
   the same syntax, declaring 8 and naming each one in the `nextval` DEFAULT of
   the column it belongs to, which is what `serial` would have written for it.
-  omero declares 130 for its 161 tables, more than any other sample, and is
-  Java again: 129 are named `seq_` and the table they feed, only 2 are named in
-  a DEFAULT, and the rest are read by the application alone.
+  omero declares 130 for its 161 tables, and is Java again: 129 are named
+  `seq_` and the table they feed, only 2 are named in a DEFAULT, and the rest
+  are read by the application alone. uyuni declares more than any other sample,
+  207 for its 433 tables, and names exactly one of them in a DEFAULT: they are
+  the Oracle schema's sequences, and Java asks each for the next value before
+  it inserts.
 - **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
   tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with 747
   of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, documenso,
@@ -505,6 +527,14 @@ always reach.
   to a fixed list of roles or states, and the rest pair two nullable columns so
   that either both are set or neither is. Its 16 triggers are hand-written for
   the same reason.
+- **CHECK constraints written by the installer**: uyuni declares 109 by hand,
+  nearly all of them holding a one-character column to `Y`/`N` or to a short
+  list of codes, the way the Oracle schema it was ported from did. The other
+  635 nobody wrote: the last statement of the install walks the catalog and
+  adds a CHECK to every `varchar` column rejecting the empty string, which
+  Oracle would have read as NULL. So 744 of the sample's 1,102 constraints are
+  CHECKs, and the dump has to write back a schema whose constraint names were
+  computed at install time.
 - **A schema that barely keys at all**: mattermost backs its 86 tables with 85
   primary keys and 19 unique constraints, declares no CHECK, and leaves all but
   3 of the references between them to the application. mediawiki, temporal,
@@ -565,7 +595,11 @@ always reach.
   the only ones any sample has. No other sample declares a policy.
 - **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
   sample that does.
-- **Triggers**: boundary's 741, more than any other sample, spread over 182
+- **Triggers**: uyuni's 224 sit on 201 of its 433 tables, and 174 of them are
+  the same trigger written 174 times: a row-level `BEFORE INSERT OR UPDATE`
+  that stamps the row's `modified` column, each calling a function of its own
+  rather than one shared between them, so 174 of its 412 routines exist to do
+  nothing else. boundary's 741, more than any other sample, spread over 182
   of its 293 tables, 7 of them constraint triggers; gitlab's 388, one of them
   held in `ENABLE ALWAYS` state; logto's 85, 76 of which are the one its seeder
   puts on every table it creates; kea's 81 outnumber its 64 tables; coder's 30,
@@ -580,6 +614,13 @@ always reach.
   tables: 2 call `pg_notify`, 4 create or drop a child table with INHERITS as a
   pipeline or a team comes and goes, so none of those children is in the dump,
   and 1 stands in for a foreign key.
+- **Routines spread over a dozen schemas**: uyuni is checked with 13 schemas,
+  more than any other sample. Its tables are in two of them, 426 in the one it
+  loads into and 7 in `access`, and the other eleven hold routines alone: one
+  per Oracle package it was ported from, `rhn_channel` down to `rhn_org`, plus
+  `rpm` and `deb` for comparing a package version. 94 of its 412 routines sit
+  in those eleven, so the dump has to carry the qualifier for the 318 in the
+  main schema to call them.
 - **Trigger functions in a schema of their own**: every one of lemmy's 66
   triggers sits on a table in `lemmy` and calls a function in `r`, the schema
   Lemmy's migration runner drops and rebuilds whenever those functions change,
@@ -587,25 +628,29 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Forty-five of the 93 samples declare
-one at all, and gitlab's 337, boundary's 225, kea's and musicbrainz's 130 each,
-and chado's 94 are 916 of the 1,367. Seven in ten of them, 966, return
-`trigger`, though not every one of those has a trigger to call it: musicbrainz's
-89 do not, since its loader concatenates a file list that leaves triggers out.
+Routines are concentrated the same way. Forty-six of the 94 samples declare
+one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
+musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,779. Two in three of
+them, 1,190, return `trigger`, though not every one of those has a trigger to
+call it: musicbrainz's 89 do not, since its loader concatenates a file list
+that leaves triggers out.
 
-1,259 are written in plpgsql and 108 in sql. omero's 57, the next largest after
+1,666 are written in plpgsql and 113 in sql. omero's 57, the next largest after
 lemmy's 74, are 56 of the plpgsql and one of the sql, and 49 of them return
 `trigger`; concourse and affine declare 7 each, 6 of concourse's and all of
-affine's returning `trigger`, and teable 2. sourcegraph declares one
-procedure, thingsboard three, and lemmy two, the only procedures any sample has,
-and inaturalist the only aggregate, which `--manage-routine` does not read and
-so is in neither count. bareos's `decode_lstat` returns a 16-column `TABLE`,
-so the dump has to write the whole column list back. Two of logto's ten are
+affine's returning `trigger`, and teable 2. uyuni's 412 are 407 plpgsql and 5
+sql, and 224 of them return `trigger`. sourcegraph declares one procedure,
+thingsboard three, and lemmy and uyuni two each, the only procedures any sample
+has, and inaturalist the only aggregate, which `--manage-routine` does not read
+and so is in neither count; uyuni declares one as well, for the composite type
+its loader creates, and it is out of the count for the same reason. bareos's
+`decode_lstat` returns a 16-column `TABLE`, so the dump has to write the whole
+column list back. Two of logto's ten are
 declared `SET search_path`, so the dump has to carry the configuration along
 with the body, and one of those two takes a VARIADIC argument. Only chado, kea,
-and boundary overload a name, 11 of them, 3, and 1, though danbooru's three,
-all sql, include a `lower(text[])` that shadows a built-in, and documenso's
-`nanoid` gives all three of its arguments a default. Only sourcegraph,
+boundary, and uyuni overload a name, 11 of them, 3, 1, and 1, though danbooru's
+three, all sql, include a `lower(text[])` that shadows a built-in, and
+documenso's `nanoid` gives all three of its arguments a default. Only sourcegraph,
 ledgersmb, gitlab, coder, and boundary comment a routine, 137 between them, 124
 of those boundary's.
 
@@ -993,6 +1038,44 @@ targets strip only what is irrelevant to a schema round trip:
   declare variables of their row types. `schema-ts-latest-psql.sql` is left
   out, since only the migration from Cassandra reads it and
   `schema-entities.sql` already creates its table.
+- **uyuni**: the schema is not a file but a source tree.
+  `schema/spacewalk/common` holds a file per table, view, and reference data
+  load shared with the Oracle port it came from, `schema/spacewalk/postgres` the
+  PostgreSQL side -- the enums, the functions, the triggers, and one schema per
+  Oracle package it rewrote -- and beside them a `.deps` file per directory
+  saying what has to come first. `blend`, the Python tool in the tree, reads
+  those and writes one `main.sql`. The loader runs that build rather than
+  reimplementing the order, so this is the sample that needs GNU `make` and
+  `python3`; the repository tarball is fetched once and only the schema tree and
+  one file from the container image come out of it. One file in the tree is a
+  template rather than SQL, `rhnVersionInfo.pre`, which `Makefile.schema` fills
+  in with the schema name, version, and release before the build runs and which
+  blend stops without, so the loader substitutes it the same way; the values
+  only reach a row. `evr_t`, the composite type `rhnPackageEVR.evr` is declared
+  with, is not in the tree at all -- the server container's entrypoint creates
+  it, with the functions, operators, and operator class that compare two of them
+  -- so the SQL in that script runs first, taken out of the heredoc it is
+  wrapped in with the shell's escaping undone. Two of those functions call
+  `rpm.vercmp` and `deb.debvercmp`, which SUSE ships as C extensions; both
+  bodies are plpgsql, so nothing resolves them when the function is created and
+  nothing the check runs calls them. The tree names no schema, so `uyuni` is
+  created up front and `search_path` places everything; it creates twelve more
+  itself, so the sample is checked with all thirteen. Two REFERENCES qualify
+  `public`, which is where upstream installs, so the qualifier is stripped.
+  `pg_trgm`, which three of its indexes need, is installed into `public` up
+  front the way concourse's `pgcrypto` is, and the tree's own
+  `CREATE EXTENSION pg_trgm` is dropped, since it names no schema and no
+  IF NOT EXISTS and would stop the load in `make schema` once another sample has
+  installed it. The last thing the build appends walks the catalog and puts a
+  CHECK constraint on every `varchar` column, rejecting the empty string Oracle
+  would have read as NULL; it takes the tables `current_user` owns that
+  `search_path` can see, which upstream is Uyuni's alone and here would reach
+  every sample in `public`, so that lookup is scoped to the sample's schema, the
+  way lemmy's are. The 635 constraints it writes are the same either way, since
+  the only other schema in the search path is the empty `public` the runner has
+  just recreated. Every `commit` in the reference data loads warns that there
+  is no transaction in progress, so `client_min_messages` is raised to `error`
+  as it is for ranger.
 - **windmill**: the schema ships as sqlx migrations, 661 `.up.sql` files
   replayed in name order. The repository tarball is fetched once and only the
   migrations directory is extracted. It names no schema, so `windmill` is

@@ -115,6 +115,7 @@ omero|sample-db-omero||omero
 concourse|sample-db-concourse||concourse
 affine|sample-db-affine||affine
 teable|sample-db-prisma|REPO=teableio/teable SHA=5ef2238883cad7c3980084de9a9031135fb9734f DIR=packages/db-main-prisma/prisma/postgres/migrations SCHEMA=teable|teable
+uyuni|sample-db-uyuni|CLIENT_MIN_MESSAGES=error|uyuni,access,rpm,deb,rhn_cache,rhn_channel,rhn_config,rhn_config_channel,rhn_entitlements,rhn_exception,rhn_org,rhn_server,rhn_user
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1238,6 +1239,87 @@ sample-db-affine:
 	cd "$$dir" && LC_ALL=C && \
 	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
 	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | $(PSQL)
+
+# Uyuni (uyuni-project/uyuni, GPL-2.0), the systems management server SUSE
+# Manager is built from and the project Red Hat's Spacewalk became. Its schema
+# is not a file but a source tree that a build step turns into one:
+# `schema/spacewalk/common` holds a file per table, view, and reference data
+# load shared with the Oracle port it came from, `schema/spacewalk/postgres` the
+# PostgreSQL side -- the enums, the functions, the triggers, and one schema per
+# Oracle package it rewrote -- and beside them a `.deps` file per directory
+# saying what has to come first. `blend`, the Python tool in the tree, reads
+# those and writes `main.sql`. The loader runs that build rather than
+# reimplementing the order, so it is the one sample that needs GNU make and
+# python3 as well as curl and psql. That inner make runs with MAKEFLAGS cleared
+# and is not written as $(MAKE), so the flags this make was given, -n among
+# them, reach neither it nor the recipe around it. The repository tarball is
+# fetched once and only the schema tree and one file from the container image
+# come out of it.
+#
+# Its size is why it is here: 433 tables, 2,614 columns, 935 indexes, and 692
+# foreign keys put it among the five largest samples by each of them, and its
+# 412 routines and 207 standalone sequences are more than any other sample
+# declares, 224 of the routines sitting behind a trigger. It brings 21 identity
+# columns beside openreplay's and 13 schemas, more than any other sample is
+# checked with.
+#
+# One file in the tree is a template rather than SQL, common/data's
+# rhnVersionInfo.pre, which Makefile.schema fills in with the schema name,
+# version, and release before the build runs. blend stops when it is missing, so
+# the loader substitutes it the same way; the values only reach a row.
+#
+# evr_t, the composite type rhnPackageEVR.evr is declared with, is not in the
+# tree at all: the server container's entrypoint creates it, along with the
+# functions, operators, and operator class that compare two of them. So the SQL
+# in that script runs first, taken out of the heredoc around it with the shell's
+# escaping undone. Two of its functions call rpm.vercmp and deb.debvercmp, which
+# SUSE ships as C extensions; both bodies are plpgsql, so nothing resolves them
+# when the function is created and nothing the check runs calls them.
+#
+# The tree names no schema, so `uyuni` is created up front and search_path
+# places everything. It creates twelve more itself, `access` for the RBAC tables
+# and one per package it ported, so the sample is checked with all thirteen. Two
+# REFERENCES qualify `public`, which is where upstream installs, so the
+# qualifier is stripped as sample-db-pgdump-schema strips it. pg_trgm, which
+# three of the indexes need, is installed into `public` up front the way
+# concourse's pgcrypto is, and the tree's own `CREATE EXTENSION pg_trgm` is
+# dropped: it names no schema and no IF NOT EXISTS, so it stops the load in
+# `make schema` once another sample has installed it. `public` stays second in
+# the search path for the operator class to resolve from.
+#
+# The last thing the build appends is end.sql, which walks the catalog and puts
+# a CHECK constraint on every varchar column, 635 of them here, rejecting the
+# empty string Oracle would have read as NULL. It takes the tables current_user
+# owns that search_path can see, which upstream is Uyuni's alone; here `public`
+# is in the search path too, so in `make schema` it would reach every sample
+# loaded into it. The lookup is scoped to the sample's schema instead, as
+# sample-db-lemmy scopes its own catalog lookups. Every `commit` in the
+# reference data loads warns that there is no transaction in progress, so the
+# sample raises client_min_messages to error from its SAMPLES record, as ranger
+# does.
+UYUNI_SHA = fbd7328c459b607a47054793dd9b9a898399fad0
+UYUNI_EVR_T = containers/server-postgresql-image/root/docker-entrypoint-upgdb.d/zz-evr_t.sh
+
+sample-db-uyuni: PGOPTS = -c search_path=uyuni,public
+.PHONY: sample-db-uyuni
+sample-db-uyuni:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS uyuni'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/uyuni-project/uyuni/tar.gz/$(UYUNI_SHA) \
+	  | tar xz -C "$$dir" --strip-components=1 \
+	      uyuni-$(UYUNI_SHA)/schema/spacewalk uyuni-$(UYUNI_SHA)/$(UYUNI_EVR_T) && \
+	cd "$$dir" && \
+	sed -n '/^cat << EOF | run_sql$$/,/^EOF$$/p' $(UYUNI_EVR_T) \
+	  | sed '1d; $$d; s/\\\$$/$$/g' \
+	  | $(PSQL) && \
+	sed -e "s!SCHEMA_NAME!'uyuni'!g" -e "s!SCHEMA_VERSION!'0'!g" -e "s!SCHEMA_RELEASE!'0'!" \
+	  schema/spacewalk/common/data/rhnVersionInfo.pre > schema/spacewalk/common/data/rhnVersionInfo.sql && \
+	MAKEFLAGS= make -C schema/spacewalk/postgres main >/dev/null && \
+	sed -E "/^CREATE EXTENSION pg_trgm;\$$/d; s/([^A-Za-z0-9_])public\./\1/g; \
+	        s/pg_catalog\.pg_table_is_visible\(c\.oid\)/c.relnamespace = 'uyuni'::regnamespace/" \
+	  schema/spacewalk/postgres/main.sql \
 	  | $(PSQL)
 
 .PHONY: test-samples
