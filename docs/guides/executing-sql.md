@@ -12,7 +12,7 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-Add a check SQL after `-- pista:execute` to conditionally execute. The SQL runs only when the check returns `true`:
+Add a check SQL expression after `-- pista:execute` to execute conditionally. The SQL runs only when the check returns `true`:
 
 ```sql
 -- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_timestamp')
@@ -48,7 +48,7 @@ DO $do$ BEGIN
 END $do$;
 ```
 
-When the body changes, update the tag in both places (e.g. `'v1'` -> `'v2'`); the next `apply` will re-run.
+When the body changes, update the tag in both places (e.g. `'v1'` -> `'v2'`); the next `apply` runs it again.
 
 `-- pista:execute` runs after the managed DDL. Use `-- pista:execute-first` when the managed DDL calls the function, as a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy can:
 

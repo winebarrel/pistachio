@@ -145,7 +145,7 @@ are involved.
 
 `equalSelectExpr` (formerly `equalPolicyExpr`, renamed in #207 for shared
 use across policy / generated-column expressions) reuses `normalizeCheckExpr`
-from constraint diffs, which strips text-like casts and canonicalises
+from constraint diffs, which strips text-like casts and canonicalizes
 `= ANY(ARRAY[...])` -> `IN (...)`, but does not walk into subqueries and
 rewrite ColumnRef qualifications.
 
@@ -339,7 +339,7 @@ and nothing drifts. The comment is unmanaged rather than lost to a diff:
 `dump` writes none. `pg_dump` does, and that line is dropped on the way in.
 `test/fidelity/schemas/inherits.sql` notes what it leaves out.
 
-Closing this needs the inherited column set materialised on the child, kept
+Closing this needs the inherited column set materialized on the child, kept
 apart from the local one so the column diff still sees only what the child
 declares.
 
@@ -371,7 +371,7 @@ parent-side `ADD COLUMN` do.
 
 A dump writes a redeclared column as declared, so a dump fed back plans clean
 and only a hand-written schema reaches this. Closing it needs the inherited
-column set materialised on the child, kept apart from the local one, which is
+column set materialized on the child, kept apart from the local one, which is
 the same prerequisite as the entry above. Erroring at plan time may fit better
 than emitting DDL that cannot work.
 
@@ -612,8 +612,8 @@ Origin: view definition comparison review, 2026-08-06.
 
 ## SQL/JSON forms that still drift
 
-Priority: low. A dump feeds back clean, so writing the file the way `pista
-dump` emits it avoids all of this.
+Priority: low. A dump feeds back clean, so writing the file the way
+`pista dump` emits it avoids all of this.
 
 A SQL/JSON expression is compared as written, and the server rewrites most of
 what it is handed, so a file written any other way re-emits its view or
@@ -628,7 +628,7 @@ has the syntax:
   `pg_get_viewdef` prints the one the server picked. 16 and later.
 - The query functions resolve a `RETURNING` type too, text for `JSON_VALUE`
   and `JSON_SERIALIZE` and jsonb for `JSON_QUERY`, and `JSON_QUERY` prints
-  its wrapper and quote behaviour whether or not they hold the default, so a
+  its wrapper and quote behavior whether or not they hold the default, so a
   file leaving them off differs from `WITHOUT WRAPPER KEEP QUOTES`. 17 and
   later.
 - `JSON_TABLE` is a FROM item rather than an expression, and the server adds
@@ -684,7 +684,7 @@ expression, a policy or a trigger can call one. The edge from a table to a
 routine is drawn wholesale in `addRoutineDeps` rather than by reading the
 expressions, since the answer is the same "routine first" either way.
 
-The reverse direction is not modelled at all. A `LANGUAGE sql` routine whose
+The reverse direction is not modeled at all. A `LANGUAGE sql` routine whose
 body reads a table created in the same run fails to apply, because PostgreSQL
 parses a SQL body at creation time; so does one that calls another routine
 defined later in the file. `plpgsql` is unaffected. The workaround is
@@ -771,10 +771,10 @@ those lines are lost.
 The work is the same shape the index comment took: a `Comment` field on the
 model, a `pg_description` join in the catalog read, a case in the parser, and
 emission from the diff and the create path, since an object that is dropped
-and recreated loses its comment. Each of the three names its relation, so the parser finds the
-owner without scanning. The index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE`
-constraint owns carries its comment as the constraint's, which is why a
-`COMMENT ON INDEX` naming one is dropped today.
+and recreated loses its comment. Each of the three names its relation, so the
+parser finds the owner without scanning. The index a `PRIMARY KEY`, `UNIQUE` or
+`EXCLUDE` constraint owns carries its comment as the constraint's, which is why
+a `COMMENT ON INDEX` naming one is dropped today.
 
 Origin: discussion, 2026-08-25. Narrowed once index comments shipped.
 
@@ -895,7 +895,7 @@ Origin: review of the primary key NOT NULL fix, 2026-09-09. Narrowed once
 
 ## A subscripted ARRAY constructor loses its parentheses
 
-PostgreSQL needs a parenthesis to subscript an array constructor, and
+PostgreSQL needs parentheses to subscript an array constructor, and
 `pg_get_expr` writes it back that way: a column declared
 `DEFAULT (ARRAY[1,2,3])[1]` reads out of the catalog as
 `(ARRAY[1, 2, 3])[1]`. The desired side runs the expression through

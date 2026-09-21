@@ -1,6 +1,6 @@
 # Diffing schema files
 
-`pista diff` compares two schema SQL files and prints the DDL that takes the first to the second. No database is read: the first file stands in for the current state `plan` reads from the catalog, the second is the desired state.
+`pista diff` compares two schema SQL files and prints the DDL that takes the first to the second. No database is read: the first file stands in for the current state `plan` reads from the catalog, and the second is the desired state.
 
 ```bash
 pista diff old.sql new.sql

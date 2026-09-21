@@ -1,6 +1,6 @@
 # Formatting schema files
 
-`pista fmt` lays out schema SQL files. It rewrites each file in place and prints the name of the ones it changed.
+`pista fmt` lays out schema SQL files. It rewrites each file in place and prints the names of the ones it changed.
 
 ```bash
 pista fmt schema/*.sql

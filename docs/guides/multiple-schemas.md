@@ -67,7 +67,7 @@ pista dump --omit-schema --split ./schema/
 # (writes ./schema/users.sql, ./schema/orders.sql, ...)
 ```
 
-When schema is omitted in SQL files, `plan` and `apply` use the schema specified by `-n`:
+When the schema is omitted in SQL files, `plan` and `apply` use the schema specified by `-n`:
 
 ```bash
 pista plan -n staging schema.sql   # schema-less SQL is treated as "staging"
