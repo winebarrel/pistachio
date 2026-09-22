@@ -713,14 +713,23 @@ CREATE TABLE public.text (v public.d1);
 
 The domain takes an edge to the table, the table takes one to the domain, and
 the pair closes a cycle. `dump --sort-by-deps` fails with `cycle detected`, and
-`plan` falls back to ordering by category. A schema with only one of the two
-references, a table named `text` and nothing built on `text`, takes a spurious
-edge that orders the table first and changes nothing else.
+`plan` falls back to ordering by category. It takes both references. The table
+alone is nothing: its own `text` column resolves to itself and is skipped. One
+other object written `text`, another table's column or a domain's base type,
+takes the spurious edge and orders the table first, which changes nothing else.
 
 Closing it takes the set of builtin type names in the resolver, so that a bare
 name in the set resolves to nothing. That is about a hundred names, one per
-`pg_catalog` type, and a new PostgreSQL release adds to it. An object named
-after a builtin is rare enough that the list has not been worth carrying.
+`pg_catalog` type, and a new PostgreSQL release adds to it. pg_query cannot
+stand in for the set: it qualifies the spellings its grammar maps, `json`
+parses to `pg_catalog.json`, and leaves `text` bare, and `dump` has no parse
+tree to read at all. An object named after a builtin is rare enough that the
+list has not been worth carrying.
+
+Resolving a type position among enums, domains and composite types alone
+closes the cycle with no list to keep. What it costs is the edge a column
+typed with another table's row type takes today, which is rarer still than the
+collision, so the two are worth weighing together whenever this is taken up.
 
 Workaround: do not name a relation after a builtin type. Qualifying the type
 in the schema file does not help, since the catalog reports it bare and the

@@ -224,6 +224,9 @@ CREATE TABLE app.orders (
 	output := got.String()
 	t.Log(output)
 
+	// Both statements have to be there for the positions below to compare
+	// anything: a missing one indexes to -1, which is less than any position.
+	assert.Contains(t, output, "CREATE DOMAIN public.rating AS integer;")
 	assert.Contains(t, output, "CREATE DOMAIN app.rating AS rating;")
 	assert.Less(t,
 		strings.Index(output, "CREATE DOMAIN public.rating"),
