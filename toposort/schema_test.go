@@ -338,6 +338,67 @@ func TestOrderFromSchema_DomainNamingOwnBaseType(t *testing.T) {
 	assert.Less(t, idx["public.text"], idx["public.label"], "base domain before the domain built on it")
 }
 
+// A domain named after a type in another schema takes that type, not itself:
+// its own name shadows the base type only after it exists, so the search path
+// carries on to the schema the base type is in.
+func TestOrderFromSchema_DomainShadowingItsBaseType(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	views := orderedmap.New[string, *model.View]()
+
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set("app.rating", &model.Domain{Schema: "app", Name: "rating", BaseType: "rating"})
+	domains.Set("public.rating", &model.Domain{Schema: "public", Name: "rating", BaseType: "integer"})
+
+	tables := orderedmap.New[string, *model.Table]()
+	orders := &model.Table{Schema: "app", Name: "orders"}
+	orders.Columns = orderedmap.New[string, *model.Column]()
+	orders.Columns.Set("score", &model.Column{Name: "score", TypeName: "rating"})
+	orders.Indexes = orderedmap.New[string, *model.Index]()
+	orders.Constraints = orderedmap.New[string, *model.Constraint]()
+	orders.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("app.orders", orders)
+
+	order, err := orderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int, len(order))
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.rating"], idx["app.rating"], "base domain before the domain named after it")
+	// The table is in app, so its column type reaches app.rating first.
+	assert.Less(t, idx["app.rating"], idx["app.orders"], "domain before the table using it")
+}
+
+// A table named after a type in another schema takes that type the same way.
+func TestOrderFromSchema_TableShadowingItsColumnType(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	views := orderedmap.New[string, *model.View]()
+
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set("public.rating", &model.Domain{Schema: "public", Name: "rating", BaseType: "integer"})
+
+	tables := orderedmap.New[string, *model.Table]()
+	rating := &model.Table{Schema: "app", Name: "rating"}
+	rating.Columns = orderedmap.New[string, *model.Column]()
+	rating.Columns.Set("score", &model.Column{Name: "score", TypeName: "rating"})
+	rating.Indexes = orderedmap.New[string, *model.Index]()
+	rating.Constraints = orderedmap.New[string, *model.Constraint]()
+	rating.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("app.rating", rating)
+
+	order, err := orderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int, len(order))
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Less(t, idx["public.rating"], idx["app.rating"], "domain before the table named after it")
+}
+
 // A composite type named after the type one of its attributes is written with
 // resolves to itself too.
 func TestOrderFromSchema_CompositeAttributeNamingOwnType(t *testing.T) {

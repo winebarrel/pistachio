@@ -10,10 +10,10 @@ desired: |
       CONSTRAINT text_pkey PRIMARY KEY (id)
   );
   CREATE DOMAIN public.d2 AS public.d1;
-  CREATE DOMAIN public.d1 AS text;
+  CREATE DOMAIN public.d1 AS integer;
 applied: |
   -- public.d1
-  CREATE DOMAIN public.d1 AS text;
+  CREATE DOMAIN public.d1 AS integer;
 
   -- public.d2
   CREATE DOMAIN public.d2 AS d1;

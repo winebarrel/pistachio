@@ -9,12 +9,12 @@ desired: |
       CONSTRAINT text_pkey PRIMARY KEY (id)
   );
   CREATE DOMAIN public.d2 AS public.d1;
-  CREATE DOMAIN public.d1 AS text;
+  CREATE DOMAIN public.d1 AS integer;
 plan: |
+  CREATE DOMAIN public.d1 AS integer;
+  CREATE DOMAIN public.d2 AS public.d1;
   CREATE TABLE public.text (
       id integer NOT NULL,
       body text,
       CONSTRAINT text_pkey PRIMARY KEY (id)
   );
-  CREATE DOMAIN public.d1 AS text;
-  CREATE DOMAIN public.d2 AS public.d1;

@@ -37,12 +37,10 @@ func OrderFromSchema(
 		g.AddNode(k)
 	}
 
-	// Domains: may depend on enums or other domains via base type. A domain
-	// named after its own base type, text among them, resolves to itself, and
-	// that self-edge would be read as a cycle.
+	// Domains: may depend on enums or other domains via base type
 	for k, d := range domains.All() {
 		g.AddNode(k)
-		if dep := resolveTypeDep(d.BaseType, d.Schema, defined); dep != "" && dep != k {
+		if dep := resolveTypeDep(d.BaseType, d.Schema, k, defined); dep != "" {
 			g.AddEdge(k, dep)
 		}
 	}
@@ -52,7 +50,7 @@ func OrderFromSchema(
 	for k, ct := range compositeTypes.All() {
 		g.AddNode(k)
 		for _, a := range ct.Attributes {
-			if dep := resolveTypeDep(a.TypeName, ct.Schema, defined); dep != "" && dep != k {
+			if dep := resolveTypeDep(a.TypeName, ct.Schema, k, defined); dep != "" {
 				g.AddEdge(k, dep)
 			}
 		}
@@ -63,14 +61,10 @@ func OrderFromSchema(
 	for k, t := range tables.All() {
 		g.AddNode(k)
 
-		// Column type dependencies.
-		//
-		// A table named after the type one of its columns is written with,
-		// text among them, resolves to itself. Nothing has to be created
-		// before the table, so a self-edge here would be read as a cycle.
+		// Column type dependencies
 		if t.Columns != nil {
 			for _, col := range t.Columns.CollectValues() {
-				if dep := resolveTypeDep(col.TypeName, t.Schema, defined); dep != "" && dep != k {
+				if dep := resolveTypeDep(col.TypeName, t.Schema, k, defined); dep != "" {
 					g.AddEdge(k, dep)
 				}
 				if col.Default != nil {
@@ -88,6 +82,10 @@ func OrderFromSchema(
 		// A key pointing at the table's own primary key, the parent_id of a
 		// tree, is skipped: the table is created in one statement and the key
 		// resolves within it, so a self-edge here would be read as a cycle.
+		//
+		// The name is not carried further along the path the way a type name
+		// is: a key is added to a table that already exists, so an unqualified
+		// name reaching the table itself means the table itself.
 		if t.ForeignKeys != nil {
 			for _, fk := range t.ForeignKeys.CollectValues() {
 				if fk.RefTable == nil {
@@ -98,7 +96,7 @@ func OrderFromSchema(
 					if defined[ref] && ref != k {
 						g.AddEdge(k, ref)
 					}
-				} else if ref := resolveUnqualified(model.Ident(*fk.RefTable), t.Schema, defined); ref != "" && ref != k {
+				} else if ref := resolveUnqualified(model.Ident(*fk.RefTable), t.Schema, "", defined); ref != "" && ref != k {
 					g.AddEdge(k, ref)
 				}
 			}
@@ -226,7 +224,8 @@ func extractSeqDeps(defaultExpr, defaultSchema string, defined map[string]bool) 
 		if defined[lit] {
 			deps = append(deps, lit)
 		} else if !strings.Contains(lit, ".") {
-			if q := resolveUnqualified(lit, defaultSchema, defined); q != "" {
+			// No self to skip: a table and a sequence cannot share a name.
+			if q := resolveUnqualified(lit, defaultSchema, "", defined); q != "" {
 				deps = append(deps, q)
 			}
 		}
@@ -237,19 +236,24 @@ func extractSeqDeps(defaultExpr, defaultSchema string, defined map[string]bool) 
 // resolveTypeDep checks if a type name refers to a defined object.
 // Handles schema-qualified ("public.status"), unqualified ("status"),
 // and array types ("status[]"). Uses defaultSchema to qualify unqualified names.
-func resolveTypeDep(typeName, defaultSchema string, defined map[string]bool) string {
+//
+// self is the key of the object the type is written on, or "" for a caller
+// that cannot collide with one. An object named after the type it is built on
+// resolves to itself, which is no dependency at all: the type it means is the
+// one further along the search path, as it was when the object was created.
+func resolveTypeDep(typeName, defaultSchema, self string, defined map[string]bool) string {
 	if typeName == "" {
 		return ""
 	}
 
 	// Try as-is (already schema-qualified)
-	if defined[typeName] {
+	if defined[typeName] && typeName != self {
 		return typeName
 	}
 
 	// Unqualified names: try default schema, then public (search_path fallback).
 	if !strings.Contains(typeName, ".") {
-		if q := resolveUnqualified(typeName, defaultSchema, defined); q != "" {
+		if q := resolveUnqualified(typeName, defaultSchema, self, defined); q != "" {
 			return q
 		}
 	}
@@ -257,7 +261,7 @@ func resolveTypeDep(typeName, defaultSchema string, defined map[string]bool) str
 	// Array types: strip trailing []
 	base := strings.TrimSuffix(typeName, "[]")
 	if base != typeName {
-		return resolveTypeDep(base, defaultSchema, defined)
+		return resolveTypeDep(base, defaultSchema, self, defined)
 	}
 
 	return ""
@@ -272,12 +276,14 @@ func resolveTypeDep(typeName, defaultSchema string, defined map[string]bool) str
 // miss schemas like "MySchema". `name` is taken as-is because callers already
 // normalize it to the form that appears in `defined` (typically the deparsed
 // identifier for type names, or model.Ident-quoted for raw RangeVar names).
-func resolveUnqualified(name, defaultSchema string, defined map[string]bool) string {
-	if q := model.Ident(defaultSchema) + "." + name; defined[q] {
+// self is skipped the way resolveTypeDep describes, so a name that matches the
+// object it is written on falls through to the next schema on the path.
+func resolveUnqualified(name, defaultSchema, self string, defined map[string]bool) string {
+	if q := model.Ident(defaultSchema) + "." + name; defined[q] && q != self {
 		return q
 	}
 	if defaultSchema != "public" {
-		if q := "public." + name; defined[q] {
+		if q := "public." + name; defined[q] && q != self {
 			return q
 		}
 	}
@@ -342,7 +348,8 @@ func qualifyRangeVar(rv *pg_query.RangeVar, defaultSchema string, defined map[st
 		}
 		return ""
 	}
-	return resolveUnqualified(model.Ident(rv.Relname), defaultSchema, defined)
+	// No self to skip: a view cannot name itself in its own definition.
+	return resolveUnqualified(model.Ident(rv.Relname), defaultSchema, "", defined)
 }
 
 // extractViewDepsFallback uses substring matching as a fallback when
@@ -437,12 +444,12 @@ func addRoutineDeps(
 		// No self-edge is possible: resolveTypeDep returns a key from defined,
 		// and nothing there carries the routine: prefix.
 		for _, a := range r.Args {
-			if dep := resolveTypeDep(a.Type, r.Schema, defined); dep != "" {
+			if dep := resolveTypeDep(a.Type, r.Schema, "", defined); dep != "" {
 				g.AddEdge(node, dep)
 				named[node][dep] = true
 			}
 		}
-		if dep := resolveTypeDep(r.ReturnType, r.Schema, defined); dep != "" {
+		if dep := resolveTypeDep(r.ReturnType, r.Schema, "", defined); dep != "" {
 			g.AddEdge(node, dep)
 			named[node][dep] = true
 		}
