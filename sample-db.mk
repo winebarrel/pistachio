@@ -127,6 +127,9 @@ streampark|sample-db-streampark|URL=https://raw.githubusercontent.com/apache/str
 vaultwarden|sample-db-vaultwarden||vaultwarden
 authelia|sample-db-authelia||authelia
 hydra|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/ory/hydra/4174065ffb052799890f7480f5360a877a67ffc1/internal/testhelpers/sql_schemas/postgres_dump.sql SCHEMA=hydra|hydra
+bonita|sample-db-bonita||bonita
+ghostfolio|sample-db-prisma|REPO=ghostfolio/ghostfolio SHA=bbe6af82299ab9882164f495b6124cda2e300d3c DIR=prisma/migrations SCHEMA=ghostfolio|ghostfolio
+typebot|sample-db-prisma|REPO=baptisteArno/typebot.io SHA=61056ff9a98082485add8111e901d3148ca358ef DIR=packages/prisma/postgresql/migrations SCHEMA=typebot|typebot
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1590,6 +1593,27 @@ sample-db-authelia:
 	  | tar xz -C "$$dir" --strip-components=5 authelia-$(AUTHELIA_SHA)/$(AUTHELIA_DIR) && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | $(PSQL)
+
+# Bonita (bonitasoft/bonita-engine, LGPL-2.1/GPL-2.0), the BPM engine. Its
+# schema is not a migration history but the two create scripts its installer
+# runs, one per dialect directory: `createTables.sql` for the engine and
+# `createQuartzTables.sql` for the Quartz scheduler it embeds, in that order.
+# `initTables.sql` beside them is reference data rather than schema, and the
+# drop and clean scripts are for tearing an install down, so neither is run.
+BONITA_SHA = f75ac938682122cfd789df0642b4fe17c1af9008
+BONITA_DIR = platform/platform-resources/src/main/resources/sql/postgres
+BONITA_SQL_FILES = createTables createQuartzTables
+
+sample-db-bonita: PGOPTS = -c search_path=bonita
+.PHONY: sample-db-bonita
+sample-db-bonita:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS bonita'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/bonitasoft/bonita-engine/tar.gz/$(BONITA_SHA) \
+	  | tar xz -C "$$dir" --strip-components=8 bonita-engine-$(BONITA_SHA)/$(BONITA_DIR) && \
+	cd "$$dir" && \
+	for f in $(BONITA_SQL_FILES); do cat "$$f.sql"; printf '\n;\n'; done \
 	  | $(PSQL)
 
 .PHONY: test-samples

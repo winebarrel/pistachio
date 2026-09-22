@@ -201,6 +201,9 @@ its loader says why.
 | vaultwarden | vaultwarden | [dani-garcia/vaultwarden](https://github.com/dani-garcia/vaultwarden) |
 | authelia | authelia | [authelia/authelia](https://github.com/authelia/authelia) |
 | hydra | hydra | [ory/hydra](https://github.com/ory/hydra) |
+| bonita | bonita | [bonitasoft/bonita-engine](https://github.com/bonitasoft/bonita-engine) |
+| ghostfolio | ghostfolio | [ghostfolio/ghostfolio](https://github.com/ghostfolio/ghostfolio) |
+| typebot | typebot | [baptisteArno/typebot.io](https://github.com/baptisteArno/typebot.io) |
 
 ## Coverage
 
@@ -227,7 +230,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
 - openreplay and logto 2026-09-20 on 16.13, and omero, concourse, affine, and
   teable 2026-09-21 on 15.18, and uyuni, lobehub, hexpm, omop, zed,
   gravitino, formbricks, hoppscotch, and streampark the same day on 16.13,
-  and vaultwarden, authelia, and hydra 2026-09-22 on the same.
+  and vaultwarden, authelia, hydra, bonita, ghostfolio, and typebot
+  2026-09-22 on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -363,11 +367,14 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | vaultwarden | 28 | 215 | 33 | 34 | 33 | 0 | 0 | 0 | 0 | 0 |
 | authelia | 25 | 267 | 66 | 15 | 24 | 0 | 0 | 0 | 0 | 0 |
 | hydra | 16 | 249 | 58 | 31 | 16 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **9,996** | **86,103** | **30,465** | **13,458** | **16,659** | **2,310** | **700** | **873** | **1,997** | **1,785** |
+| bonita | 81 | 707 | 191 | 32 | 115 | 0 | 0 | 0 | 1 | 1 |
+| ghostfolio | 21 | 150 | 74 | 23 | 21 | 0 | 10 | 0 | 0 | 0 |
+| typebot | 31 | 245 | 53 | 31 | 23 | 0 | 5 | 0 | 0 | 0 |
+| **Total** | **10,129** | **87,205** | **30,783** | **13,544** | **16,818** | **2,310** | **715** | **873** | **1,998** | **1,786** |
 
 ### Size
 
-The 105 dumps come to about 286,000 lines of SQL. chado is 43,700 of them, the
+The 108 dumps come to about 288,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
 about a quarter of the constraints, a fifth of the indexes, a sixth of the
 foreign keys and of the columns, and a seventh of the tables; dhis2, uyuni,
@@ -490,6 +497,8 @@ always reach.
   bounding a number. concourse declares 5 enums, affine 11 with 40 labels, and
   teable 8. formbricks's 32 over 59 tables type 32 of its columns, one apiece,
   with 109 labels between them, and hoppscotch's 4 type 8 columns with 11.
+  ghostfolio is dense for its size, 10 over 21 tables typing 14 columns with
+  49 labels, and typebot's 5 over 31 tables type 7 with 18.
   uyuni goes the other way for its size: 4 enums with 10 labels
   between them over 433 tables, since what it constrains it constrains with a
   CHECK instead.
@@ -611,7 +620,10 @@ always reach.
   constraints over 28 tables back every one of its 33 indexes, so it declares
   no index that is not a key and no CHECK either, and 10 of those primary
   keys are composite, the link tables between a user, an organization, a
-  collection, and a cipher.
+  collection, and a cipher. bonita keys as hard over three times the tables:
+  80 primary keys, 15 of them composite, and 35 unique constraints behind
+  115 of its 191 indexes, no CHECK, and only 4 of its 707 columns carry a
+  DEFAULT at all.
 - **Foreign keys at the highest density**: omop's 39 tables carry 176 of them,
   4.5 to a table, ahead of omero's 4.3 over 161, and they nearly all point one
   way: every clinical event names the vocabulary entry that says what it was,
@@ -684,7 +696,15 @@ always reach.
   23 tables leave 15 of its 40 unique indexes bare. authelia is the shape
   from a hand-written migration history rather than an ORM: 24 primary keys
   over 25 tables, no unique constraint at all, and 16 of its 40 unique
-  indexes standing on their own.
+  indexes standing on their own. typebot leans on it hardest of the Prisma
+  schemas: 23 primary keys over 31 tables, so 8 of its tables are keyed by
+  a bare unique index alone, and 22 of its 45 unique indexes are bare.
+  ghostfolio has 9 of 30 over 21 tables, every table keyed.
+- **A large object and the trigger that frees it**: bonita, the only sample
+  with a column of type `oid`. `temporary_content.content` holds the
+  identifier of a large object rather than the bytes, and the sample's one
+  trigger, an `AFTER DELETE` calling its one routine, runs `lo_unlink` on
+  the row's old value so the object goes with it.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, mattermost, whose six are all materialized and
   one of which carries an index, and marquez, where one of the four is. hexpm
@@ -776,14 +796,14 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Fifty of the 105 samples declare
+Routines are concentrated the same way. Fifty-one of the 108 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
-musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,785. Two in three of
-them, 1,193, return `trigger`, though not every one of those has a trigger to
+musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,786. Two in three of
+them, 1,194, return `trigger`, though not every one of those has a trigger to
 call it: musicbrainz's 89 do not, since its loader concatenates a file list
 that leaves triggers out.
 
-1,669 are written in plpgsql and 116 in sql. omero's 57, the next largest after
+1,670 are written in plpgsql and 116 in sql. omero's 57, the next largest after
 lemmy's 74, are 56 of the plpgsql and one of the sql, and 49 of them return
 `trigger`; concourse and affine declare 7 each, 6 of concourse's and all of
 affine's returning `trigger`, and teable 2. formbricks declares 2, a plpgsql
@@ -821,7 +841,7 @@ further, to `error`, from its `SAMPLES` record.
 Every loader that installs a contrib extension into `public` follows the
 install with `ALTER EXTENSION ... SET SCHEMA public`. The install alone is
 enough in `make test-samples`, where `reset-db` drops every extension before
-each sample, and not enough in `make schema`, where all 105 load after one
+each sample, and not enough in `make schema`, where all 108 load after one
 `clean-schema`: `CREATE EXTENSION IF NOT EXISTS ... WITH SCHEMA public`
 places a new extension but does not move one, so once boundary has put
 `pgcrypto` in its own schema, lemmy `pg_trgm` in its, windmill `uuid-ossp` in
@@ -864,6 +884,14 @@ targets strip only what is irrelevant to a schema round trip:
   stripped. The file also installs `unaccent`, which a function behind three
   of its stored generated columns calls; it is contrib, so the official image
   already has it.
+- **bonita**: the schema is not a migration history but the two create
+  scripts Bonita's installer runs, one dialect directory per backend:
+  `createTables.sql` for the engine and `createQuartzTables.sql` for the
+  Quartz scheduler it embeds, concatenated in that order. `initTables.sql`
+  beside them is reference data rather than schema and the drop and clean
+  scripts tear an install down, so none of the three is run. Nothing in the
+  two files needs rewriting: they name no schema and qualify nothing with
+  `public`.
 - **boundary**: the schema ships as migrations only, 290 files that Boundary
   replays in order: the two base files, then one directory per schema version
   in numeric order, with the files in each in name order. The repository
@@ -1031,6 +1059,10 @@ targets strip only what is irrelevant to a schema round trip:
   columns the migration declares then resolve. Nothing the check reads is
   typed by it: the three tables that carried those `vector(512)` columns
   were dropped by a later migration and the extension was left behind.
+- **ghostfolio**: the schema ships as a Prisma migration history like
+  calcom's, 126 directories replayed through `sample-db-prisma`, so it needs
+  no loader of its own. It installs no extension and qualifies nothing with
+  `public`.
 - **glific**, **plausible**, **hexpm**: the schema is Ecto's `structure.sql`,
   the same `pg_dump` output as the group above, so it loads the same way. None
   has a `SET search_path` line before its migration versions, so those rows go
@@ -1305,6 +1337,11 @@ targets strip only what is irrelevant to a schema round trip:
   declare variables of their row types. `schema-ts-latest-psql.sql` is left
   out, since only the migration from Cassandra reads it and
   `schema-entities.sql` already creates its table.
+- **typebot**: the schema ships as a Prisma migration history like calcom's,
+  84 directories replayed through `sample-db-prisma`, so it needs no loader
+  of its own. It qualifies nothing with `public`; the only `public` in the
+  files is the `"publicId"` column three of them declare, which the sed
+  leaves alone since it strips `public.` and nothing else.
 - **uyuni**: the schema is not a file but a source tree.
   `schema/spacewalk/common` holds a file per table, view, and reference data
   load shared with the Oracle port it came from, `schema/spacewalk/postgres` the
