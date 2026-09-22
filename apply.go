@@ -24,6 +24,7 @@ type ApplyOptions struct {
 	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
+	Timing                   bool     `env:"PISTA_TIMING" help:"Write each statement's elapsed time after it as a comment. Measured on the client, so it covers the round trip and any lock wait."`
 	Exclusive                bool     `xor:"exclusive" env:"PISTA_EXCLUSIVE" help:"Make apply runs on the same database mutually exclusive: fail immediately when another exclusive apply is running."`
 	// ExclusiveWait enables the same mutual exclusion as Exclusive and waits
 	// for the other apply instead of failing. A pointer because 0 is a valid
@@ -55,6 +56,13 @@ type ApplyResult struct {
 	// computation, and is zero unless Applied is true. With a fast writer it is
 	// dominated by database execution time.
 	Duration time.Duration
+}
+
+// timingComment renders an elapsed time as psql's \timing does, in
+// milliseconds with three decimals. A Go duration rounded to milliseconds
+// reports the sub-millisecond time of most DDL as "0s".
+func timingComment(elapsed time.Duration) string {
+	return fmt.Sprintf("-- Time: %.3f ms", float64(elapsed.Nanoseconds())/float64(time.Millisecond))
 }
 
 func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Writer) (*ApplyResult, error) {
@@ -128,12 +136,34 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	queryRow := conn.QueryRow
 	commit := func(context.Context) error { return nil }
 
+	// writeTiming reports how long the statement just written to w took. It is
+	// a no-op without --timing.
+	writeTiming := func(elapsed time.Duration) {
+		if options.Timing {
+			fmt.Fprintln(w, timingComment(elapsed)) //nolint:errcheck
+		}
+	}
+
+	// execTimed runs a statement already written to w and writes its elapsed
+	// time after it. A statement that fails is left without a time, so the
+	// output names where the apply stopped.
+	execTimed := func(ctx context.Context, stmt string) error {
+		stmtStart := time.Now()
+		if _, err := exec(ctx, stmt); err != nil {
+			return err
+		}
+		writeTiming(time.Since(stmtStart))
+		return nil
+	}
+
 	if withTx {
+		txStart := time.Now()
 		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to begin transaction: %w", err)
 		}
 		fmt.Fprintln(w, "-- Transaction started") //nolint:errcheck
+		writeTiming(time.Since(txStart))
 		committed := false
 		defer func() {
 			tx.Rollback(ctx) //nolint:errcheck
@@ -144,11 +174,13 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		exec = tx.Exec
 		queryRow = tx.QueryRow
 		commit = func(ctx context.Context) error {
+			commitStart := time.Now()
 			if err := tx.Commit(ctx); err != nil {
 				return err
 			}
 			committed = true
 			fmt.Fprintln(w, "-- Transaction committed") //nolint:errcheck
+			writeTiming(time.Since(commitStart))
 			return nil
 		}
 	} else if options.TryTx {
@@ -163,7 +195,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// executed -- pista:execute statements.
 	if result.PreSQL != "" {
 		fmt.Fprintln(w, result.PreSQL) //nolint:errcheck
-		if _, err := exec(ctx, result.PreSQL); err != nil {
+		if err := execTimed(ctx, result.PreSQL); err != nil {
 			return nil, fmt.Errorf("failed to execute pre-SQL: %w", err)
 		}
 	}
@@ -174,7 +206,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// always runs outside a transaction.
 	if result.ConcurrentlyPreSQL != "" && result.HasConcurrentlyIndex {
 		fmt.Fprintln(w, result.ConcurrentlyPreSQL) //nolint:errcheck
-		if _, err := exec(ctx, result.ConcurrentlyPreSQL); err != nil {
+		if err := execTimed(ctx, result.ConcurrentlyPreSQL); err != nil {
 			return nil, fmt.Errorf("failed to execute concurrently-pre-SQL: %w", err)
 		}
 	}
@@ -207,7 +239,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 			if shouldExecute {
 				fmt.Fprintln(w, parser.FormatExecuteStmt(es)) //nolint:errcheck
-				if _, err := exec(ctx, es.SQL); err != nil {
+				if err := execTimed(ctx, es.SQL); err != nil {
 					return fmt.Errorf("failed to execute SQL: %s: %w", es.SQL, err)
 				}
 				applied = true
@@ -223,7 +255,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 	for _, stmt := range result.Stmts {
 		fmt.Fprintln(w, stmt) //nolint:errcheck
-		if _, err := exec(ctx, stmt); err != nil {
+		if err := execTimed(ctx, stmt); err != nil {
 			return nil, fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
 		}
 		applied = true

@@ -1,0 +1,39 @@
+# --timing writes the elapsed time of every statement apply executes, after
+# the statement itself: pre-SQL, the -- pista:execute statements on both sides
+# of the schema DDL, and the DDL. The times vary from run to run, so the runner
+# rewrites them to <elapsed> before comparing.
+timing: true
+pre_sql: "SET statement_timeout = '30s';"
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
+  CREATE OR REPLACE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:execute SELECT NOT EXISTS (SELECT 1 FROM public.users)
+  INSERT INTO public.users (id) VALUES (1);
+applied_sql: |
+  SET statement_timeout = '30s';
+  -- Time: <elapsed>
+  -- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
+  CREATE OR REPLACE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  -- Time: <elapsed>
+  ALTER TABLE public.users ADD COLUMN email text;
+  -- Time: <elapsed>
+  -- pista:execute SELECT NOT EXISTS (SELECT 1 FROM public.users)
+  INSERT INTO public.users (id) VALUES (1);
+  -- Time: <elapsed>
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

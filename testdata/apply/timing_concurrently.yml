@@ -1,0 +1,31 @@
+# CONCURRENTLY index DDL runs outside a transaction, and its
+# concurrently-pre-SQL is timed like any other statement.
+timing: true
+concurrently_pre_sql: "SET lock_timeout = '5s';"
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:concurrently
+  CREATE INDEX idx_users_name ON public.users USING btree (name);
+applied_sql: |
+  SET lock_timeout = '5s';
+  -- Time: <elapsed>
+  CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);
+  -- Time: <elapsed>
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_name ON public.users USING btree (name);

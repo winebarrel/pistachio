@@ -324,6 +324,10 @@ Flags:
                                    constraint, and foreign key as validated:
                                    ignore NOT VALID and never emit VALIDATE
                                    CONSTRAINT ($PISTA_ASSUME_VALIDATED).
+      --timing                     Write each statement's elapsed time after
+                                   it as a comment. Measured on the client,
+                                   so it covers the round trip and any lock wait
+                                   ($PISTA_TIMING).
       --exclusive                  Make apply runs on the same database
                                    mutually exclusive: fail immediately
                                    when another exclusive apply is running
@@ -636,6 +640,29 @@ Use `--assume-validated` to treat every table constraint, domain constraint, and
 pista plan --assume-validated schema.sql
 pista apply --assume-validated schema.sql
 ```
+
+Use `--timing` to write each statement's elapsed time as a comment after it. Also available as `$PISTA_TIMING`.
+
+```bash
+pista apply --timing --with-tx schema.sql
+```
+
+```sql
+-- Transaction started
+-- Time: 0.264 ms
+ALTER TABLE public.users ADD COLUMN email text;
+-- Time: 0.326 ms
+CREATE INDEX idx_users_email ON public.users USING btree (email);
+-- Time: 4213.882 ms
+-- Transaction committed
+-- Time: 0.921 ms
+```
+
+Every statement apply writes out is timed: pre-SQL, concurrently-pre-SQL, the schema DDL, the `-- pista:execute` statements, and `BEGIN` and `COMMIT`. The `search_path` setup and a directive's check SQL are not written out, so they are not timed.
+
+The time is measured on the client, so it covers the round trip and any wait for a lock rather than server execution alone. With `--with-tx`, work PostgreSQL defers to commit time lands on `COMMIT` instead of the statement that caused it.
+
+A statement that fails is left without a time, so the output names where the apply stopped.
 
 Use `--exclusive` to make apply runs on the same database mutually exclusive: while another exclusive apply is running, the command fails at once. `--exclusive-wait` waits for the other apply instead, up to the given duration (`0` waits without limit). The two flags conflict. Also available as `$PISTA_EXCLUSIVE` / `$PISTA_EXCLUSIVE_WAIT`. See [Preventing concurrent applies](../guides/exclusive-apply.md).
 
