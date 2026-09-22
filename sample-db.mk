@@ -124,6 +124,9 @@ gravitino|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/grav
 formbricks|sample-db-formbricks||formbricks
 hoppscotch|sample-db-hoppscotch||hoppscotch
 streampark|sample-db-streampark|URL=https://raw.githubusercontent.com/apache/streampark/829466b5470d749773793193f1fc1d46e8613d61/streampark-console/streampark-console-service/src/main/assembly/script/schema/pgsql-schema.sql SCHEMA=streampark|streampark
+vaultwarden|sample-db-vaultwarden||vaultwarden
+authelia|sample-db-authelia||authelia
+hydra|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/ory/hydra/4174065ffb052799890f7480f5360a877a67ffc1/internal/testhelpers/sql_schemas/postgres_dump.sql SCHEMA=hydra|hydra
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1549,6 +1552,44 @@ sample-db-streampark:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | sed -E 's/"public"\.//g' \
+	  | $(PSQL)
+
+# Vaultwarden (dani-garcia/vaultwarden, AGPL-3.0), the Rust server that speaks
+# the Bitwarden API. Its schema ships as Diesel migrations, one directory per
+# migration holding an up.sql, replayed in name order the way hyperswitch's
+# are; the repository carries a set per backend and only `postgresql` is
+# extracted. Every directory is named for a date, so name order is the order
+# Diesel applies them in.
+VAULTWARDEN_SHA = cc67d644f62605cb46f4d16c4a2eed1a861cc8bb
+
+sample-db-vaultwarden: PGOPTS = -c search_path=vaultwarden
+.PHONY: sample-db-vaultwarden
+sample-db-vaultwarden:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS vaultwarden'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/dani-garcia/vaultwarden/tar.gz/$(VAULTWARDEN_SHA) \
+	  | tar xz -C "$$dir" --strip-components=3 vaultwarden-$(VAULTWARDEN_SHA)/migrations/postgresql && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in */up.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | $(PSQL)
+
+# Authelia (authelia/authelia, Apache-2.0), the authentication and
+# authorization server. Its schema ships as one flat directory per backend,
+# a file per migration named `V0001.<what>.up.sql`, so the version is zero
+# padded and name order is the order Authelia applies them in. Only the
+# `postgres` directory is extracted, and only the `up` side of each pair.
+AUTHELIA_SHA = 6753df338fb029ef9cebd0f19e01703780a8363d
+AUTHELIA_DIR = internal/storage/migrations/postgres
+
+sample-db-authelia: PGOPTS = -c search_path=authelia
+.PHONY: sample-db-authelia
+sample-db-authelia:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS authelia'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/authelia/authelia/tar.gz/$(AUTHELIA_SHA) \
+	  | tar xz -C "$$dir" --strip-components=5 authelia-$(AUTHELIA_SHA)/$(AUTHELIA_DIR) && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
 	  | $(PSQL)
 
 .PHONY: test-samples

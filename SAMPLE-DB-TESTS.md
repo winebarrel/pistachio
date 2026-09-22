@@ -198,6 +198,9 @@ its loader says why.
 | formbricks | formbricks | [formbricks/formbricks](https://github.com/formbricks/formbricks) |
 | hoppscotch | hoppscotch | [hoppscotch/hoppscotch](https://github.com/hoppscotch/hoppscotch) |
 | streampark | streampark | [apache/streampark](https://github.com/apache/streampark) |
+| vaultwarden | vaultwarden | [dani-garcia/vaultwarden](https://github.com/dani-garcia/vaultwarden) |
+| authelia | authelia | [authelia/authelia](https://github.com/authelia/authelia) |
+| hydra | hydra | [ory/hydra](https://github.com/ory/hydra) |
 
 ## Coverage
 
@@ -223,7 +226,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   shenyu, and nacos the same day on the same.
 - openreplay and logto 2026-09-20 on 16.13, and omero, concourse, affine, and
   teable 2026-09-21 on 15.18, and uyuni, lobehub, hexpm, omop, zed,
-  gravitino, formbricks, hoppscotch, and streampark the same day on 16.13.
+  gravitino, formbricks, hoppscotch, and streampark the same day on 16.13,
+  and vaultwarden, authelia, and hydra 2026-09-22 on the same.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -233,9 +237,11 @@ What each column holds:
 - **Types** counts enums and domains.
 - **Sequences** counts standalone sequences only, since pistachio manages the
   sequence behind a serial or identity column as an attribute of that column
-  rather than as an object of its own. Counting those too would add 2,292 more,
+  rather than as an object of its own. Counting those too would add 2,319 more,
   886 of them gitlab's, 210 chado's, and 31 hexpm's, which declares no
   standalone sequence at all, as zed's 17 and gravitino's 1 do not either.
+  authelia's 25, one per table but for its unkeyed one, and hydra's 2 are the
+  same shape.
 - **Triggers** excludes the internal triggers a foreign key installs and the
   clones PostgreSQL puts on each partition of a partitioned table's trigger, the
   same as what pistachio reads and dump writes.
@@ -354,14 +360,17 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | formbricks | 59 | 559 | 186 | 91 | 58 | 0 | 32 | 0 | 11 | 2 |
 | hoppscotch | 23 | 171 | 49 | 22 | 25 | 0 | 4 | 0 | 2 | 1 |
 | streampark | 26 | 290 | 42 | 0 | 27 | 0 | 0 | 24 | 8 | 1 |
-| **Total** | **9,927** | **85,372** | **30,308** | **13,378** | **16,586** | **2,310** | **700** | **873** | **1,997** | **1,785** |
+| vaultwarden | 28 | 215 | 33 | 34 | 33 | 0 | 0 | 0 | 0 | 0 |
+| authelia | 25 | 267 | 66 | 15 | 24 | 0 | 0 | 0 | 0 | 0 |
+| hydra | 16 | 249 | 58 | 31 | 16 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **9,996** | **86,103** | **30,465** | **13,458** | **16,659** | **2,310** | **700** | **873** | **1,997** | **1,785** |
 
 ### Size
 
-The 102 dumps come to about 285,000 lines of SQL. chado is 43,700 of them, the
+The 105 dumps come to about 286,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
-about a quarter of the constraints, a fifth of the indexes and the foreign
-keys, a sixth of the columns, and a seventh of the tables; dhis2, uyuni,
+about a quarter of the constraints, a fifth of the indexes, a sixth of the
+foreign keys and of the columns, and a seventh of the tables; dhis2, uyuni,
 openolat, musicbrainz, and discourse are the largest of what remains, and chado
 is nearly all of the views.
 
@@ -439,6 +448,9 @@ always reach.
   `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse), and
   one `NULLS NOT DISTINCT` index and eight with `INCLUDE` columns (lago), plus
   one more `INCLUDE` index in hexpm, over two columns and covering a third.
+  hydra's one is both at once, the only index any sample declares that is
+  partial and covering together: three columns, `INCLUDE (client_id)`, and
+  `WHERE login_session_id IS NOT NULL`.
 - **Storage parameters on an index**: concourse's two gin indexes, both over a
   `jsonb` column with `jsonb_path_ops` and both declared
   `WITH (FASTUPDATE = false)`, so its dump is where an index's storage
@@ -530,7 +542,12 @@ always reach.
   name nothing, and not one names ON UPDATE. formbricks names ON UPDATE
   CASCADE on all 91 of its and ON DELETE on 90, 77 CASCADE, 11 SET NULL and 2
   RESTRICT, and hoppscotch names ON UPDATE CASCADE on all 22 of its and
-  ON DELETE CASCADE on 20.
+  ON DELETE CASCADE on 20. hydra is the sample that reaches for RESTRICT on
+  the update side: 14 of its 31 name ON UPDATE RESTRICT with ON DELETE
+  CASCADE, which is how every reference to the tenant row is written, and
+  16 more name ON DELETE alone. authelia splits its 15 down the middle, 7
+  ON DELETE CASCADE and 8 ON DELETE RESTRICT, all but one of them naming
+  ON UPDATE CASCADE as well.
 - **Foreign keys over more than one column**: 3 of zed's 42, each naming two
   columns on both sides, so the dump has to write a pair of column lists back;
   one points a worktree's settings files at `worktrees(project_id, id)`, that
@@ -538,7 +555,11 @@ always reach.
   sample, and every one of them pairs the id it references with the
   `"workspaceId"` beside it, so a row can only ever point at a row of its own
   tenant. One of the nine names the referencing columns in two spellings at
-  once, `feedback_source_id` and `"workspaceId"`.
+  once, `feedback_source_id` and `"workspaceId"`. hydra has 10 of 31, and one
+  of them is the only three-column foreign key any sample declares: a trusted
+  JWT bearer issuer points at `hydra_jwk(sid, kid, nid)`. The other nine name
+  two columns, and every one of the ten carries the tenant's `nid` as its
+  last, the way formbricks's carry `"workspaceId"`.
 - **Column comments**: gravitino comments 183 of its 186 columns and every one
   of its 20 tables, the densest share of any sample; shenyu 360 of its 391
   columns and 6 of its 45 tables; nacos 102 of 175 and 10 of 16; glific 274 of
@@ -586,6 +607,11 @@ always reach.
 - **A schema that is nearly all keys**: dhis2, where 461 primary keys and 464
   unique constraints back all but 30 of its 955 indexes, it declares no CHECK at
   all, and its 989 foreign keys are more than any sample but gitlab.
+  vaultwarden goes all the way at its own size: 28 primary keys and 5 unique
+  constraints over 28 tables back every one of its 33 indexes, so it declares
+  no index that is not a key and no CHECK either, and 10 of those primary
+  keys are composite, the link tables between a user, an organization, a
+  collection, and a cipher.
 - **Foreign keys at the highest density**: omop's 39 tables carry 176 of them,
   4.5 to a table, ahead of omero's 4.3 over 161, and they nearly all point one
   way: every clinical event names the vocabulary entry that says what it was,
@@ -655,7 +681,10 @@ always reach.
   its 58 constraints are primary keys and nothing else, and 51 of its 109
   unique indexes stand on their own. hoppscotch, Prisma as well, goes the
   other way for four of them: 21 primary keys and 4 unique constraints over
-  23 tables leave 15 of its 40 unique indexes bare.
+  23 tables leave 15 of its 40 unique indexes bare. authelia is the shape
+  from a hand-written migration history rather than an ORM: 24 primary keys
+  over 25 tables, no unique constraint at all, and 16 of its 40 unique
+  indexes standing on their own.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, mattermost, whose six are all materialized and
   one of which carries an index, and marquez, where one of the four is. hexpm
@@ -747,7 +776,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Fifty of the 102 samples declare
+Routines are concentrated the same way. Fifty of the 105 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
 musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,785. Two in three of
 them, 1,193, return `trigger`, though not every one of those has a trigger to
@@ -792,7 +821,7 @@ further, to `error`, from its `SAMPLES` record.
 Every loader that installs a contrib extension into `public` follows the
 install with `ALTER EXTENSION ... SET SCHEMA public`. The install alone is
 enough in `make test-samples`, where `reset-db` drops every extension before
-each sample, and not enough in `make schema`, where all 102 load after one
+each sample, and not enough in `make schema`, where all 105 load after one
 `clean-schema`: `CREATE EXTENSION IF NOT EXISTS ... WITH SCHEMA public`
 places a new extension but does not move one, so once boundary has put
 `pgcrypto` in its own schema, lemmy `pg_trgm` in its, windmill `uuid-ossp` in
@@ -822,6 +851,12 @@ targets strip only what is irrelevant to a schema round trip:
   openreplay's are, with `public` second in the search path, since the
   `CREATE EXTENSION IF NOT EXISTS` the migrations write names no schema and
   gets nothing when another sample installed it somewhere else first.
+- **authelia**: the schema ships as one flat directory per backend, a file
+  per migration named `V0001.<what>.up.sql` beside its `down` half. Only the
+  `postgres` directory is extracted and only the `up` files are replayed, and
+  since the version is zero padded, name order is the order Authelia applies
+  them in. Nothing else is touched: the migrations name no schema and qualify
+  nothing with `public`.
 - **bigbluebutton**: the file names no schema for almost everything it
   creates, so `search_path` places it, but three of its views are qualified
   with `public`. Those three would land outside the sample's schema and the
@@ -1034,6 +1069,14 @@ targets strip only what is irrelevant to a schema round trip:
   way affine's is, relocated there when an earlier sample has installed it
   somewhere else, and `public` second in the search path, which is where the
   two gin indexes then resolve `gin_trgm_ops` from.
+- **hydra**: the schema is not a migration history here but the `pg_dump` Ory
+  keeps in `internal/testhelpers/sql_schemas` to check its migrations against,
+  so it loads the way the Rails group above does, through
+  `sample-db-pgdump-schema`: the line emptying `search_path` goes, the
+  `public` qualifier comes off, and the `SET search_path TO public` at the
+  tail and everything after it is cut. It installs `uuid-ossp`, which is
+  contrib, and then uses nothing from it, so no column default has to resolve
+  through the extension.
 - **hyperswitch**: the schema ships as Diesel migrations, 530 directories each
   holding an `up.sql`, replayed in name order. The repository tarball is fetched
   once and only the migrations directory is extracted, the way lemmy's is. Every
@@ -1301,6 +1344,11 @@ targets strip only what is irrelevant to a schema round trip:
   just recreated. Every `commit` in the reference data loads warns that there is
   no transaction in progress, so `client_min_messages` is raised to `error` as
   it is for ranger.
+- **vaultwarden**: the schema ships as Diesel migrations like hyperswitch's,
+  one directory per migration holding an `up.sql`, and the repository carries
+  a set per backend. Only `postgresql` is extracted, every directory in it is
+  named for a date, so name order is the order Diesel applies them in, and
+  nothing in the files needs rewriting.
 - **windmill**: the schema ships as sqlx migrations, 661 `.up.sql` files
   replayed in name order. The repository tarball is fetched once and only the
   migrations directory is extracted. It names no schema, so `windmill` is
