@@ -776,7 +776,7 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Fifty of the 102 samples declare
+Routines are concentrated the same way. Fifty of the 105 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
 musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,785. Two in three of
 them, 1,193, return `trigger`, though not every one of those has a trigger to
@@ -821,7 +821,7 @@ further, to `error`, from its `SAMPLES` record.
 Every loader that installs a contrib extension into `public` follows the
 install with `ALTER EXTENSION ... SET SCHEMA public`. The install alone is
 enough in `make test-samples`, where `reset-db` drops every extension before
-each sample, and not enough in `make schema`, where all 102 load after one
+each sample, and not enough in `make schema`, where all 105 load after one
 `clean-schema`: `CREATE EXTENSION IF NOT EXISTS ... WITH SCHEMA public`
 places a new extension but does not move one, so once boundary has put
 `pgcrypto` in its own schema, lemmy `pg_trgm` in its, windmill `uuid-ossp` in
