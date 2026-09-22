@@ -195,6 +195,9 @@ its loader says why.
 | omop | omop | [OHDSI/CommonDataModel](https://github.com/OHDSI/CommonDataModel) |
 | zed | zed | [zed-industries/zed](https://github.com/zed-industries/zed) |
 | gravitino | gravitino | [apache/gravitino](https://github.com/apache/gravitino) |
+| formbricks | formbricks | [formbricks/formbricks](https://github.com/formbricks/formbricks) |
+| hoppscotch | hoppscotch | [hoppscotch/hoppscotch](https://github.com/hoppscotch/hoppscotch) |
+| streampark | streampark | [apache/streampark](https://github.com/apache/streampark) |
 
 ## Coverage
 
@@ -219,8 +222,8 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, roundcube,
   shenyu, and nacos the same day on the same.
 - openreplay and logto 2026-09-20 on 16.13, and omero, concourse, affine, and
-  teable 2026-09-21 on 15.18, and uyuni, lobehub, hexpm, omop, zed, and
-  gravitino the same day on 16.13.
+  teable 2026-09-21 on 15.18, and uyuni, lobehub, hexpm, omop, zed,
+  gravitino, formbricks, hoppscotch, and streampark the same day on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -348,11 +351,14 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | omop | 39 | 432 | 98 | 176 | 28 | 0 | 0 | 0 | 0 | 0 |
 | zed | 29 | 221 | 78 | 42 | 29 | 0 | 0 | 0 | 0 | 0 |
 | gravitino | 20 | 186 | 52 | 0 | 39 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **9,819** | **84,352** | **30,031** | **13,265** | **16,476** | **2,310** | **664** | **849** | **1,976** | **1,781** |
+| formbricks | 59 | 559 | 186 | 91 | 58 | 0 | 32 | 0 | 11 | 2 |
+| hoppscotch | 23 | 171 | 49 | 22 | 25 | 0 | 4 | 0 | 2 | 1 |
+| streampark | 26 | 290 | 42 | 0 | 27 | 0 | 0 | 24 | 8 | 1 |
+| **Total** | **9,927** | **85,372** | **30,308** | **13,378** | **16,586** | **2,310** | **700** | **873** | **1,997** | **1,785** |
 
 ### Size
 
-The 99 dumps come to about 282,000 lines of SQL. chado is 43,700 of them, the
+The 102 dumps come to about 285,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
 about a quarter of the constraints, a fifth of the indexes and the foreign
 keys, a sixth of the columns, and a seventh of the tables; dhis2, uyuni,
@@ -422,7 +428,11 @@ always reach.
   over four columns, which needs `btree_gist` (osm).
 - **btree and gin indexes naming an operator class**: five of mattermost's nine
   btree indexes over `lower()` name `text_pattern_ops`, and its two gin indexes
-  over a `->` expression name `jsonb_path_ops`.
+  over a `->` expression name `jsonb_path_ops`. hoppscotch's four gin indexes
+  split two ways: two name `gin_trgm_ops` over a title, resolving from the
+  schema the sample installs `pg_trgm` into, and two are over a `jsonb`
+  column at the default operator class, so the dump has to write one pair
+  with the class and the other without.
 - **gist indexes over a function the schema defines itself**: chado's three name
   `boxrange`, one of them partial and declared from another schema.
 - **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
@@ -466,7 +476,9 @@ always reach.
   them, the SI-prefixed symbols of the units a measurement can carry, so many
   of the labels reach past ASCII, and each domain carries one anonymous CHECK
   bounding a number. concourse declares 5 enums, affine 11 with 40 labels, and
-  teable 8. uyuni goes the other way for its size: 4 enums with 10 labels
+  teable 8. formbricks's 32 over 59 tables type 32 of its columns, one apiece,
+  with 109 labels between them, and hoppscotch's 4 type 8 columns with 11.
+  uyuni goes the other way for its size: 4 enums with 10 labels
   between them over 433 tables, since what it constrains it constrains with a
   CHECK instead.
 - **Identity columns**: openreplay. Nineteen of its 62 tables draw their
@@ -515,15 +527,22 @@ always reach.
   shape: 541 of its 550 name ON DELETE, 417 CASCADE, 117 SET NULL and 7
   RESTRICT, and not one names ON UPDATE. uyuni mixes the two: 432 of its
   692 name ON DELETE, 371 CASCADE, 59 SET NULL and 2 RESTRICT, the other 260
-  name nothing, and not one names ON UPDATE.
+  name nothing, and not one names ON UPDATE. formbricks names ON UPDATE
+  CASCADE on all 91 of its and ON DELETE on 90, 77 CASCADE, 11 SET NULL and 2
+  RESTRICT, and hoppscotch names ON UPDATE CASCADE on all 22 of its and
+  ON DELETE CASCADE on 20.
 - **Foreign keys over more than one column**: 3 of zed's 42, each naming two
   columns on both sides, so the dump has to write a pair of column lists back;
   one points a worktree's settings files at `worktrees(project_id, id)`, that
-  table's composite primary key.
+  table's composite primary key. formbricks has 9 of 91, more than any other
+  sample, and every one of them pairs the id it references with the
+  `"workspaceId"` beside it, so a row can only ever point at a row of its own
+  tenant. One of the nine names the referencing columns in two spellings at
+  once, `feedback_source_id` and `"workspaceId"`.
 - **Column comments**: gravitino comments 183 of its 186 columns and every one
   of its 20 tables, the densest share of any sample; shenyu 360 of its 391
   columns and 6 of its 45 tables; nacos 102 of 175 and 10 of 16; glific 274 of
-  its 590 columns.
+  its 590 columns; streampark 114 of its 290 and not one of its 26 tables.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
   its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
   `mimiciv_hosp`, 4 of chado's 472 point from `frange` into `chado`, and every
@@ -542,7 +561,11 @@ always reach.
   are read by the application alone. uyuni declares more than any other sample,
   207 for its 433 tables, and names exactly one of them in a DEFAULT: they are
   the Oracle schema's sequences, and Java asks each for the next value before
-  it inserts.
+  it inserts. streampark declares 24 for its 26 tables and is Java too, but
+  wires 23 of them into the DEFAULT of the `id` they feed and leaves the
+  application to read only the twenty-fourth, `t_flink_app`'s. Every one of
+  the 24 carries a non-default `START WITH 10000` and `MINVALUE 10000`, so
+  the dump has to write both back.
 - **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
   tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with 747
   of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, documenso,
@@ -550,7 +573,9 @@ always reach.
   451 of 532 columns and half the tables and views are camelCase. langfuse is
   the Prisma schema that went the other way: only 2 of its 74 tables and 3 of
   its 757 columns are quoted and the rest are snake_case, though all 35 of its
-  enum types are PascalCase.
+  enum types are PascalCase. formbricks is back to the usual Prisma spelling,
+  58 of its 59 tables and 258 of its 559 columns, and hoppscotch quotes every
+  one of its 23 tables and 115 of its 171 columns.
 - **Width without variety**: openolat, whose 382 tables are behind only gitlab
   and dhis2, has every one of its 1,239 indexes btree and every one of its 632
   foreign keys left at NO ACTION. omero is the same shape one size down: all
@@ -589,11 +614,13 @@ always reach.
   primary keys and 19 unique constraints, declares no CHECK, and leaves all but
   3 of the references between them to the application. mediawiki, temporal,
   imdb, dolphinscheduler, nightingale, joomla, hyperswitch, icinga_ido,
-  bareos, opencms, kamailio, shenyu, nacos, and gravitino declare no foreign
-  key at all, and openfire declares exactly one, over 35 tables. gravitino is
-  the one of them that keys everything else: a primary key on each of its 20
-  tables and 19 unique constraints beside them back 39 of its 52 indexes, so
-  the references alone are what it leaves to the application. shenyu goes furthest:
+  bareos, opencms, kamailio, shenyu, nacos, gravitino, and streampark declare
+  no foreign key at all, and openfire declares exactly one, over 35 tables.
+  gravitino is the one of them that keys everything else: a primary key on
+  each of its 20 tables and 19 unique constraints beside them back 39 of its
+  52 indexes, so the references alone are what it leaves to the application.
+  streampark keys as tightly for its size, a primary key on each of its 26
+  tables and one unique constraint beside them. shenyu goes furthest:
   half its tables are unkeyed either way, 22 of 45 without a primary key, and
   its 45 tables carry 24 constraints between them, 23 primary keys and one
   CHECK. icinga_ido is the widest of them: 61
@@ -623,7 +650,12 @@ always reach.
   their own. Of the 35 indexes that are not unique, 2 are gin over a name
   with `gin_trgm_ops`, the operator class resolving from the `public` the
   extension sits in as citizenlab's hnsw one does, and the other 33 are
-  btree.
+  btree. formbricks is the shape again from Prisma rather than Drizzle: 58
+  primary keys over 59 tables, no unique constraint and no CHECK at all, so
+  its 58 constraints are primary keys and nothing else, and 51 of its 109
+  unique indexes stand on their own. hoppscotch, Prisma as well, goes the
+  other way for four of them: 21 primary keys and 4 unique constraints over
+  23 tables leave 15 of its 40 unique indexes bare.
 - **Materialized views**: adventureworks, pagila, listmonk, whose three views
   are all materialized, lago, mattermost, whose six are all materialized and
   one of which carries an index, and marquez, where one of the four is. hexpm
@@ -636,7 +668,10 @@ always reach.
   defaults call `shared_extensions.gen_random_uuid()` and two of its indexes
   name an operator class from there. windmill does the same with `uuid-ossp`
   in an `extensions` schema, and lemmy installs its three into the schema it
-  loads into.
+  loads into, as hoppscotch does with `pg_trgm`. formbricks is the odd one:
+  it installs pgvector into its own schema and uses nothing from it, since
+  the three tables that carried its `vector(512)` columns were dropped by a
+  later migration and the extension was left behind.
 - **Views at scale**: chado's 1,864 are nearly ten times every other sample put
   together, and 1,832 of them are the Sequence Ontology views in its `so`
   schema, each selecting from tables in `chado`; bigbluebutton's 86 over 54
@@ -684,7 +719,14 @@ always reach.
   on 54 of its 161 tables, every one of them row-level, and 4 are deferrable
   constraint triggers that guard a privilege change. affine's 16 sit on 11 of
   its 72 tables and 4 of them fire `BEFORE UPDATE OF` a column list, one of
-  four columns, so the dump has to write the list back. concourse's 7 sit on 5
+  four columns, so the dump has to write the list back. formbricks's 11 are
+  that shape throughout: 10 of them fire `AFTER INSERT OR DELETE OR UPDATE OF`
+  a column list, one of four columns, and all 11 call the same function with
+  three arguments apiece, so the dump has to write the argument list back as
+  well. streampark's 8 are the uyuni trigger done the cheap way: a row-level
+  `BEFORE UPDATE` stamping a `modify_time`, but one function shared by all 8
+  rather than one written per table. hoppscotch's 2 are
+  `BEFORE INSERT OR UPDATE OF` a single column. concourse's 7 sit on 5
   tables: 2 call `pg_notify`, 4 create or drop a child table with INHERITS as a
   pipeline or a team comes and goes, so none of those children is in the dump,
   and 1 stands in for a foreign key.
@@ -702,18 +744,21 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Forty-seven of the 99 samples declare
+Routines are concentrated the same way. Fifty of the 102 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
-musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,781. Two in three of
-them, 1,190, return `trigger`, though not every one of those has a trigger to
+musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,785. Two in three of
+them, 1,193, return `trigger`, though not every one of those has a trigger to
 call it: musicbrainz's 89 do not, since its loader concatenates a file list
 that leaves triggers out.
 
-1,666 are written in plpgsql and 115 in sql. omero's 57, the next largest after
+1,669 are written in plpgsql and 116 in sql. omero's 57, the next largest after
 lemmy's 74, are 56 of the plpgsql and one of the sql, and 49 of them return
 `trigger`; concourse and affine declare 7 each, 6 of concourse's and all of
-affine's returning `trigger`, and teable 2. uyuni's 412 are 407 plpgsql and 5
-sql, and 224 of them return `trigger`. sourcegraph declares one procedure,
+affine's returning `trigger`, and teable 2. formbricks declares 2, a plpgsql
+trigger function and an sql one taking two `jsonb` arguments, and hoppscotch
+and streampark 1 each, both plpgsql and both returning `trigger`. uyuni's 412
+are 407 plpgsql and 5 sql, and 224 of them return `trigger`. sourcegraph
+declares one procedure,
 thingsboard three, and lemmy and uyuni two each, the only procedures any sample
 has, and inaturalist the only aggregate, which `--manage-routine` does not read
 and so is in neither count; uyuni declares one as well, for the composite type
@@ -912,6 +957,21 @@ targets strip only what is irrelevant to a schema round trip:
   differ for a reason other than where the schema lives: at the tip the
   primary key file leaves out `vocabulary`'s, which two foreign keys need, so
   the load stops on the first of them, and 5.5's files have the same gap.
+- **formbricks**: the schema ships as a Prisma migration history like calcom's,
+  175 directories holding a `migration.sql`, but `sample-db-prisma` cannot
+  replay it. Two of its migrations ask the catalog whether an earlier rename
+  has already happened and look in `public` to do it, and a later migration
+  drops, unguarded, the index that rename produces: loaded anywhere else the
+  guards answer no, the rename is skipped, and the drop fails on an index
+  nobody renamed. `sample-db-formbricks` is `sample-db-prisma` with those two
+  lookups pointed at `current_schema()`, and the unscoped `conname` lookup
+  beside them narrowed to the sample's schema the way lemmy's is, so that a
+  constraint another sample left behind cannot answer for this one. The
+  schema also installs pgvector, which the official postgres image does not
+  ship and `compose.yaml` adds for discourse and citizenlab already. Nothing
+  the check reads uses it: the three tables that carried its `vector(512)`
+  columns were dropped by a later migration and the extension was left
+  behind.
 - **glific**, **plausible**, **hexpm**: the schema is Ecto's `structure.sql`,
   the same `pg_dump` output as the group above, so it loads the same way. None
   has a `SET search_path` line before its migration versions, so those rows go
@@ -939,6 +999,12 @@ targets strip only what is irrelevant to a schema round trip:
   it is `pg_dump` output that sets `search_path` to `public` itself, which
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
   the `hive` schema.
+- **hoppscotch**: the schema ships as a Prisma migration history like calcom's,
+  22 directories replayed through `sample-db-prisma`, so it needs no loader of
+  its own. It qualifies nothing with `public`, so the sed that strips the
+  qualifier has nothing to strip, and its `CREATE EXTENSION IF NOT EXISTS
+  pg_trgm` lands in the sample's own schema, which is where the two gin
+  indexes over a title then resolve `gin_trgm_ops` from.
 - **hyperswitch**: the schema ships as Diesel migrations, 530 directories each
   holding an `up.sql`, replayed in name order. The repository tarball is fetched
   once and only the migrations directory is extracted, the way lemmy's is. Every
@@ -1152,6 +1218,14 @@ targets strip only what is irrelevant to a schema round trip:
   the file opens each table with `DROP TABLE IF EXISTS "public"."<name>"`, and
   in `make schema`, where every sample shares one database, several of those
   names belong to another sample.
+- **streampark**: the schema ships as one file that qualifies every name in it
+  with `"public"` exactly as shenyu's does, the sequences and the `DEFAULT
+  nextval` that reads them included, so it gets a loader of shenyu's shape and
+  the quoted qualifier is stripped. It opens with a `DROP TABLE IF EXISTS`
+  per table and a `DROP SEQUENCE IF EXISTS` per sequence, but only 23 of the
+  24 sequences it goes on to create, so a second load into a schema it
+  already owns stops on `streampark_t_resource_id_seq`. The check loads each
+  sample once into a schema of its own, so it never reaches that.
 - **teable**: the schema ships as a Prisma migration history like calcom's,
   115 directories replayed in name order into a schema of its own.
 - **thingsboard**: the schema ships as one file per part, loaded in the order
