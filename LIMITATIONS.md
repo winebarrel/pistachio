@@ -697,6 +697,48 @@ GENERATED, index, policy and trigger expression would have to be read instead.
 
 Origin: routine support.
 
+## A bare builtin type name resolves to a managed object of that name
+
+`toposort.resolveTypeDep` models the search path as the object's own schema
+and then `public`. PostgreSQL puts `pg_catalog` ahead of both, so a bare
+`text`, `json` or `date` in a column type or a domain's base type means the
+builtin whatever else carries the name. pistachio has only the objects it
+manages to look in, so a table, view or sequence named after a builtin takes
+the edge instead:
+
+```sql
+CREATE DOMAIN public.d1 AS text;
+CREATE TABLE public.text (v public.d1);
+```
+
+The domain takes an edge to the table, the table takes one to the domain, and
+the pair closes a cycle. `dump --sort-by-deps` fails with `cycle detected`, and
+`plan` falls back to ordering by category. It takes both references. The table
+alone is nothing: its own `text` column resolves to itself and is skipped. One
+other object written `text`, another table's column or a domain's base type,
+takes the spurious edge and orders the table first, which changes nothing else.
+
+Closing it takes the set of builtin type names in the resolver, so that a bare
+name in the set resolves to nothing. That is about a hundred names, one per
+`pg_catalog` type, and a new PostgreSQL release adds to it. pg_query cannot
+stand in for the set: it qualifies the spellings its grammar maps, `json`
+parses to `pg_catalog.json`, and leaves `text` bare, and `dump` has no parse
+tree to read at all. An object named after a builtin is rare enough that the
+list has not been worth carrying.
+
+Resolving a type position among enums, domains and composite types alone
+closes the cycle with no list to keep. What it costs is the edge a column
+typed with another table's row type takes today, which is rarer still than the
+collision, so the two are worth weighing together whenever this is taken up.
+
+Workaround: do not name a relation after a builtin type. Qualifying the type
+in the schema file does not help, since the catalog reports it bare and the
+two spellings would then drift on every run. `dump` without `--sort-by-deps`
+writes the same schema in name order, and `plan` orders by category, which is
+what it falls back to here.
+
+Origin: review of [#676](https://github.com/winebarrel/pistachio/pull/676).
+
 ## Schema mapping does not rewrite a routine body
 
 `-m old=new` rewrites the schema of a routine and the type names in its

@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* A table named after the type one of its own columns is written with, `text` among them, no longer breaks the dependency sort, and neither does a domain named after its base type. The name resolved to the object itself, and that self-edge was read as a cycle: `dump --sort-by-deps` failed with `cycle detected`, and `plan` fell back to ordering by category, which creates a domain before the domain it is built on. A name that matches the object it is written on now carries on along the search path, so `CREATE DOMAIN app.rating AS rating` written where `public.rating` is the base type keeps that dependency.
+
 ## [1.60.0] - 2026-09-22
 
 * `plan --out` writes the plan to a file and `apply-from` runs it. `apply-from` reads no schema file and diffs nothing: it reads the database to check that the schema is still what the plan was computed against, and stops when it is not. `--force` runs the plan anyway and reports the drift as a warning. The file records the options that decide what the plan read, so `apply-from` reads the database the same way, and a `-- pista:execute` check is evaluated once, when the file is written.

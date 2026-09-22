@@ -1,0 +1,20 @@
+# The table named after its own column type is a self-edge in the dependency
+# graph, not a cycle, so the domains keep their order: the one a domain is
+# built on comes first.
+init: ""
+desired: |
+  CREATE TABLE public.text (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT text_pkey PRIMARY KEY (id)
+  );
+  CREATE DOMAIN public.d2 AS public.d1;
+  CREATE DOMAIN public.d1 AS integer;
+plan: |
+  CREATE DOMAIN public.d1 AS integer;
+  CREATE DOMAIN public.d2 AS public.d1;
+  CREATE TABLE public.text (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT text_pkey PRIMARY KEY (id)
+  );

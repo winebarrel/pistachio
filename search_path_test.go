@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -190,4 +191,45 @@ CREATE VIEW `+model.Ident(role)+`.active_users AS SELECT id FROM `+model.Ident(r
 	got, err = client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "FROM users")
+}
+
+// A domain named after the type it is built on. app.rating is written as
+// "rating" because the path reaches public.rating, and app.rating shadows that
+// name only once it exists, so the base type is the one in public. The dump
+// has to put public.rating first or what it writes does not reload.
+func TestDump_SortByDeps_DomainShadowingItsBaseType(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	testutil.SetupDB(t, ctx, conn, `CREATE DOMAIN public.rating AS integer;`)
+	connString := setupSchemaDB(t, ctx, "app", `
+SET search_path TO app, public;
+CREATE DOMAIN app.rating AS rating;
+CREATE TABLE app.orders (
+    id integer NOT NULL,
+    score rating
+);`)
+
+	searchPath := "public"
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"app", "public"},
+		SearchPath: &searchPath,
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{SortByDeps: true})
+	require.NoError(t, err)
+
+	output := got.String()
+	t.Log(output)
+
+	// Both statements have to be there for the positions below to compare
+	// anything: a missing one indexes to -1, which is less than any position.
+	assert.Contains(t, output, "CREATE DOMAIN public.rating AS integer;")
+	assert.Contains(t, output, "CREATE DOMAIN app.rating AS rating;")
+	assert.Less(t,
+		strings.Index(output, "CREATE DOMAIN public.rating"),
+		strings.Index(output, "CREATE DOMAIN app.rating"),
+		"public.rating comes before the domain named after it")
 }
