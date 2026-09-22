@@ -369,8 +369,8 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 
 The 105 dumps come to about 286,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
-about a quarter of the constraints, a fifth of the indexes and the foreign
-keys, a sixth of the columns, and a seventh of the tables; dhis2, uyuni,
+about a quarter of the constraints, a fifth of the indexes, a sixth of the
+foreign keys and of the columns, and a seventh of the tables; dhis2, uyuni,
 openolat, musicbrainz, and discourse are the largest of what remains, and chado
 is nearly all of the views.
 
