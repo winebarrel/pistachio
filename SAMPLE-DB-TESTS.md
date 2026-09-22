@@ -976,7 +976,12 @@ targets strip only what is irrelevant to a schema round trip:
   `make schema`, where an earlier sample has already installed pgvector
   somewhere else; the loader installs it into `public` up front the way
   affine's does and puts `public` second in the search path, and the columns
-  the migration declares then resolve. Nothing the check reads is typed by
+  the migration declares then resolve. `WITH SCHEMA public` places a new
+  extension rather than moving one, so an `ALTER EXTENSION vector SET SCHEMA
+  public` follows it for the case citizenlab leaves behind, its five
+  extensions in `shared_extensions`. Relocating moves the member objects and
+  leaves the indexes already built on them alone, and it is a no-op when the
+  extension is in `public` already. Nothing the check reads is typed by
   it: the three tables that carried those `vector(512)` columns were dropped
   by a later migration and the extension was left behind.
 - **glific**, **plausible**, **hexpm**: the schema is Ecto's `structure.sql`,
@@ -1015,7 +1020,10 @@ targets strip only what is irrelevant to a schema round trip:
   operator class does not resolve. `sample-db-hoppscotch` is
   `sample-db-prisma` with the extension installed into `public` up front the
   way affine's is and `public` second in the search path, which is where the
-  two gin indexes then resolve `gin_trgm_ops` from.
+  two gin indexes then resolve `gin_trgm_ops` from. An `ALTER EXTENSION
+  pg_trgm SET SCHEMA public` follows the install for the case lemmy leaves
+  behind, `pg_trgm` in the schema lemmy loads into, since `WITH SCHEMA
+  public` places a new extension rather than moving one.
 - **hyperswitch**: the schema ships as Diesel migrations, 530 directories each
   holding an `up.sql`, replayed in name order. The repository tarball is fetched
   once and only the migrations directory is extracted, the way lemmy's is. Every

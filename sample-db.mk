@@ -1468,16 +1468,22 @@ sample-db-omop:
 # pgvector is installed into `public` up front the way affine's is, with
 # `public` second in the search path, since the `CREATE EXTENSION IF NOT
 # EXISTS` one of the migrations writes names no schema and gets nothing when
-# another sample already installed it somewhere else. Nothing in the schema
-# the check reads is typed by it -- the tables that carried its `vector(512)`
-# columns were dropped by a later migration -- but the statement declaring
-# those columns still has to run.
+# another sample already installed it somewhere else. The ALTER beside it is
+# for where that has already happened: `WITH SCHEMA public` places a new
+# extension, it does not move one, and in `make schema` citizenlab has put
+# pgvector in `shared_extensions` long before this runs. Relocating it moves
+# the member objects and leaves the indexes already built on them alone, and
+# it is a no-op when the extension is in `public` already. Nothing in the
+# schema the check reads is typed by it -- the tables that carried its
+# `vector(512)` columns were dropped by a later migration -- but the
+# statement declaring those columns still has to run.
 FORMBRICKS_SHA = 55ade3bc2a5a612e286f32e0bf2fd84cdf287073
 
 sample-db-formbricks: PGOPTS = -c search_path=formbricks,public
 .PHONY: sample-db-formbricks
 sample-db-formbricks:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION vector SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS formbricks'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
 	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/formbricks/formbricks/tar.gz/$(FORMBRICKS_SHA) \
@@ -1495,7 +1501,10 @@ sample-db-formbricks:
 # path. It goes into `public` up front the way affine's does, with `public`
 # second in the search path, since the `CREATE EXTENSION IF NOT EXISTS` the
 # migration writes names no schema and gets nothing when another sample
-# already installed it somewhere else.
+# already installed it somewhere else. The ALTER beside it relocates one that
+# is already installed elsewhere, which `WITH SCHEMA public` does not do: in
+# `make schema` lemmy has put `pg_trgm` in its own schema long before this
+# runs. It is a no-op when the extension is in `public` already.
 HOPPSCOTCH_SHA = d86e59f6e9574c69f01b300691b9f4396eeb38d2
 HOPPSCOTCH_DIR = packages/hoppscotch-backend/prisma/migrations
 
@@ -1503,6 +1512,7 @@ sample-db-hoppscotch: PGOPTS = -c search_path=hoppscotch,public
 .PHONY: sample-db-hoppscotch
 sample-db-hoppscotch:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION pg_trgm SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hoppscotch'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
 	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/hoppscotch/hoppscotch/tar.gz/$(HOPPSCOTCH_SHA) \
