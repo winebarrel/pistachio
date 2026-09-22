@@ -14,6 +14,10 @@ Commands:
   apply <files> ... [flags]
     Apply schema changes to the database.
 
+  apply-from <plan-file> [flags]
+    Apply a plan file written by plan --out. The statements are the plan's;
+    the database is only checked for changes since.
+
   plan <files> ... [flags]
     Print the schema diff SQL without applying it.
 
@@ -136,6 +140,11 @@ Flags:
                                 table with what it does, what its lock blocks,
                                 and the table's row and byte estimate from
                                 pg_class ($PISTA_EXPLAIN).
+      --out=FILE                Also write the plan to this file, for pista
+                                apply-from to execute later. The plan is fixed
+                                when it is written: apply-from runs these
+                                statements, and only checks that the schema has
+                                not changed under them ($PISTA_OUT).
       --check                   Exit with code 2 when the plan contains
                                 executable changes ($PISTA_CHECK).
 ```
@@ -341,6 +350,60 @@ Flags:
 </details>
 
 <details>
+<summary><code>pista apply-from --help</code></summary>
+
+```
+Usage: pista apply-from <plan-file> [flags]
+
+Apply a plan file written by plan --out. The statements are the plan's;
+the database is only checked for changes since.
+
+Arguments:
+  <plan-file>    Path to the plan file written by plan --out.
+
+Flags:
+  -h, --help                       Show context-sensitive help.
+  -C, --config=FILE                Load options from a YAML file
+                                   ($PISTA_CONFIG).
+      --version
+      --[no-]pager                 Force paging via $PISTA_PAGER even when
+                                   stdout is not a TTY. PISTA_PAGER must be set.
+
+  -c, --conn-string="postgres://postgres@localhost/postgres"
+                                   PostgreSQL connection string. See
+                                   https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+                                   ($PISTA_CONN_STR)
+  -d, --dbname=STRING              PostgreSQL database name. Overrides the
+                                   dbname in --conn-string ($PISTA_DBNAME).
+      --password=STRING            PostgreSQL password ($PISTA_PASSWORD).
+      --with-tx                    Execute pre-SQL and schema changes in a
+                                   transaction ($PISTA_WITH_TX).
+      --try-tx                     Execute pre-SQL and schema changes in
+                                   a transaction when possible. A diff
+                                   containing CONCURRENTLY index DDL runs
+                                   without a transaction instead of failing
+                                   ($PISTA_TRY_TX).
+      --timing                     Write each statement's elapsed time after
+                                   it as a comment. Measured on the client,
+                                   so it covers the round trip and any lock wait
+                                   ($PISTA_TIMING).
+      --exclusive                  Make apply runs on the same database
+                                   mutually exclusive: fail immediately
+                                   when another exclusive apply is running
+                                   ($PISTA_EXCLUSIVE).
+      --exclusive-wait=DURATION    Like --exclusive, but wait up to
+                                   the given duration (0 waits without
+                                   limit) for the other apply to finish
+                                   ($PISTA_EXCLUSIVE_WAIT).
+      --force                      Apply the plan file even where the database
+                                   has drifted since it was written. The drift
+                                   is reported as a warning instead of an error
+                                   ($PISTA_FORCE).
+```
+
+</details>
+
+<details>
 <summary><code>pista dump --help</code></summary>
 
 ```
@@ -496,6 +559,13 @@ Use `--explain` to comment each statement that scans or rewrites a table that al
 
 ```bash
 pista plan --explain schema.sql
+```
+
+Use `--out` to write the plan to a file `apply-from` executes later. Also available as `$PISTA_OUT`. See [Plan files](../guides/plan-files.md).
+
+```bash
+pista plan --out plan.json schema.sql
+pista apply-from plan.json
 ```
 
 `plan` and `dump` open a read-only connection, so they cannot write to the database. Pass `--no-read-only` (env `$PISTA_NO_READ_ONLY`) to use a read-write connection.
@@ -693,6 +763,34 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. T
     Only pure removals of constraints, foreign keys, and indexes (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index`. Definition changes still execute regardless of `--allow-drop`: constraints and foreign keys as DROP + ADD, and indexes as DROP + CREATE, because PostgreSQL has no `ALTER CONSTRAINT` and no general `ALTER INDEX` form for definition changes.
 
     Foreign-key drops emitted because the owning table is being dropped follow the table-drop policy (not `foreign_key`): if the table drop is suppressed, the FK drop is suppressed too and surfaces as `-- skipped:` alongside the table.
+
+
+## apply-from
+
+Execute a plan file written by `plan --out`.
+
+```bash
+pista plan --out plan.json schema.sql
+pista apply-from plan.json
+```
+
+The statements are the plan's. `apply-from` reads no schema file and diffs nothing: it reads the database to check that it is still the state the plan was computed against, then runs what the file holds. See [Plan files](../guides/plan-files.md).
+
+Where the database has changed under the plan, the command fails and nothing runs:
+
+```
+pista: error: the database has drifted since plan file plan.json was written: run plan again, or pass --force to apply it as it is
+```
+
+Use `--force` to run it anyway. The drift is reported as a warning instead:
+
+```sql
+-- Warning: the database has drifted since the plan was written
+```
+
+Also available as `$PISTA_FORCE`.
+
+`--with-tx`, `--try-tx`, `--timing`, `--exclusive` and `--exclusive-wait` work as they do on `apply`. The flags that decide what is read or what is run are not offered: the plan file holds them, and one given here would either be ignored or turn the plan's own scope into drift.
 
 
 ## dump
