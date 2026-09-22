@@ -23,7 +23,7 @@ func writePlan(t *testing.T, ctx context.Context, desiredSQL string, scope Scope
 	out := filepath.Join(dir, "plan.json")
 
 	client := NewClient(&Options{
-		ConnOptions:  ConnOptions{ConnString: testutil.ConnString()},
+		ConnString:   testutil.ConnString(),
 		ScopeOptions: scope,
 	})
 	_, err := client.Plan(ctx, &PlanOptions{
@@ -39,7 +39,7 @@ func writePlan(t *testing.T, ctx context.Context, desiredSQL string, scope Scope
 // does: the scope is the plan file's.
 func applyFrom(t *testing.T, ctx context.Context, path string, force bool) (*ApplyResult, string, error) {
 	t.Helper()
-	client := NewClient(&Options{ConnOptions: ConnOptions{ConnString: testutil.ConnString()}})
+	client := NewClient(&Options{ConnString: testutil.ConnString()})
 	var buf bytes.Buffer
 	result, err := client.ApplyFrom(ctx, &ApplyFromOptions{PlanFile: path, Force: force}, &buf)
 	return result, buf.String(), err
@@ -125,8 +125,8 @@ CREATE TABLE public.users (
 CREATE TABLE public.users (id integer NOT NULL);
 CREATE TABLE public.posts (id integer NOT NULL);`)
 		scope := ScopeOptions{
-			Schemas:       []string{"public"},
-			FilterOptions: FilterOptions{Exclude: []string{"posts"}},
+			Schemas: []string{"public"},
+			Exclude: []string{"posts"},
 		}
 		path := writePlan(t, ctx, `
 CREATE TABLE public.users (

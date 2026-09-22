@@ -18,9 +18,9 @@ import (
 // stateHash fingerprints the current-side schema a plan was computed against,
 // so apply-from can tell whether the database still is what the plan assumed.
 //
-// It covers what the diff read and nothing else. The maps it takes are the
-// ones handed to diff.Diff*: filtered, and with the storage parameters
-// cleared where they are not managed. An object a filter left out cannot
+// It covers what the diff read and nothing else. It is called on the objects
+// handed to diff.Diff*: filtered, and with the storage parameters cleared
+// where they are not managed. An object a filter left out cannot
 // change the plan, so it cannot change this either, and an autovacuum setting
 // nobody manages does not report drift.
 //
@@ -32,28 +32,28 @@ import (
 // The model carries each object's OID, so a table dropped and created again
 // with the same definition is a different state, which is what the plan
 // assumed it away from.
-func stateHash(current *schemaObjects) (string, error) {
+func (o *schemaObjects) stateHash() (string, error) {
 	var digests []string
 
-	if err := appendDigests(&digests, "table", current.Tables); err != nil {
+	if err := appendDigests(&digests, "table", o.Tables); err != nil {
 		return "", err
 	}
-	if err := appendDigests(&digests, "view", current.Views); err != nil {
+	if err := appendDigests(&digests, "view", o.Views); err != nil {
 		return "", err
 	}
-	if err := appendDigests(&digests, "enum", current.Enums); err != nil {
+	if err := appendDigests(&digests, "enum", o.Enums); err != nil {
 		return "", err
 	}
-	if err := appendDigests(&digests, "domain", current.Domains); err != nil {
+	if err := appendDigests(&digests, "domain", o.Domains); err != nil {
 		return "", err
 	}
-	if err := appendDigests(&digests, "composite_type", current.CompositeTypes); err != nil {
+	if err := appendDigests(&digests, "composite_type", o.CompositeTypes); err != nil {
 		return "", err
 	}
-	if err := appendDigests(&digests, "sequence", current.Sequences); err != nil {
+	if err := appendDigests(&digests, "sequence", o.Sequences); err != nil {
 		return "", err
 	}
-	if err := appendDigests(&digests, "routine", current.Routines); err != nil {
+	if err := appendDigests(&digests, "routine", o.Routines); err != nil {
 		return "", err
 	}
 

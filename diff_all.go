@@ -252,7 +252,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	var currentStateHash string
 	if options.StateHash {
 		var err error
-		if currentStateHash, err = stateHash(narrowed); err != nil {
+		if currentStateHash, err = narrowed.stateHash(); err != nil {
 			return nil, err
 		}
 	}

@@ -21,7 +21,7 @@ func hashNow(t *testing.T, ctx context.Context, client *Client) string {
 	defer conn.Close(ctx) //nolint:errcheck
 	current, err := client.currentState(ctx, conn)
 	require.NoError(t, err)
-	hash, err := stateHash(current)
+	hash, err := current.stateHash()
 	require.NoError(t, err)
 	assert.Len(t, hash, 64)
 	return hash

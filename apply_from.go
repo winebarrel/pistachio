@@ -66,7 +66,7 @@ func (client *Client) ApplyFrom(ctx context.Context, options *ApplyFromOptions, 
 	if err != nil {
 		return nil, err
 	}
-	stateHash, err := stateHash(current)
+	stateHash, err := current.stateHash()
 	if err != nil {
 		return nil, err
 	}
