@@ -430,6 +430,29 @@ CREATE TABLE public.users (
 		assert.Equal(t, "schema myschema", result.Count.SchemaLabel())
 	})
 
+	// An ignored object is hashed on both sides, since apply-from reads no
+	// desired schema and cannot tell which objects the plan ignored. A change
+	// to one is drift, although the statements do not touch it.
+	t.Run("a change to an ignored object is drift", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (id integer NOT NULL);
+CREATE TABLE public.owned_elsewhere (id integer NOT NULL);`)
+		path := writePlan(t, ctx, `
+-- pista:ignore
+CREATE TABLE public.owned_elsewhere (id integer NOT NULL);
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text
+);`, publicScope)
+
+		execSQL(t, ctx, conn, `ALTER TABLE public.owned_elsewhere ADD COLUMN note text`)
+
+		_, _, err := applyFrom(t, ctx, path, false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "drift")
+	})
+
 	t.Run("a missing plan file is reported", func(t *testing.T) {
 		_, _, err := applyFrom(t, ctx, filepath.Join(t.TempDir(), "nope.json"), false)
 		require.Error(t, err)

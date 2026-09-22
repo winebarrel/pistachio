@@ -24,6 +24,12 @@ import (
 // change the plan, so it cannot change this either, and an autovacuum setting
 // nobody manages does not report drift.
 //
+// An object the desired schema marks -- pista:ignore is the exception: it is
+// hashed, because removeIgnored drops it from the current side after this runs.
+// apply-from reads no desired schema and could not tell which objects those
+// are, so hashing them on both sides is what keeps the two readings the same.
+// A change to one reports drift although the statements do not touch it.
+//
 // Every object is hashed on its own and the digests are sorted, so the value
 // does not depend on the order the catalog returned them in. An object list
 // added to the plan file later can therefore name what drifted without the
