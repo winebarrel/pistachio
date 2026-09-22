@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* `apply --timing` writes the elapsed time of each statement it runs, as a comment after the statement. Pre-SQL, concurrently-pre-SQL, the schema DDL, the `-- pista:execute` statements, and a transaction's `BEGIN` and `COMMIT` are all timed. The time is the client's wall clock around the round trip, so it covers any wait for a lock.
+
 ## [1.59.2] - 2026-09-20
 
 * `CREATE UNLOGGED SEQUENCE` is ordered by its dependencies, as `CREATE SEQUENCE` already was. The plan placed a statement by its prefix and had no prefix for the unlogged spelling, so the statement ran before every other create. The plan now reads the parse tree, and the spelling no longer decides where a statement runs.

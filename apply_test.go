@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -32,6 +33,7 @@ type applyTestCase struct {
 	ForceIndexConcurrently   bool             `yaml:"force_index_concurrently,omitempty"`
 	BulkAlter                bool             `yaml:"bulk_alter,omitempty"`
 	AssumeValidated          bool             `yaml:"assume_validated,omitempty"`
+	Timing                   bool             `yaml:"timing,omitempty"`
 	Include                  []string         `yaml:"include,omitempty"`
 	Exclude                  []string         `yaml:"exclude,omitempty"`
 	Enable                   []string         `yaml:"enable,omitempty"`
@@ -59,6 +61,15 @@ type applyTestCase struct {
 
 type applyDropPolicy struct {
 	AllowDrop []string `yaml:"allow_drop"`
+}
+
+// timingComment matches the comment --timing writes after a statement. The
+// elapsed time varies from run to run, so a fixture writes the line as
+// "-- Time: <elapsed>" and the runner rewrites the real output to match.
+var timingCommentRE = regexp.MustCompile(`-- Time: [0-9]+\.[0-9]+ ms`)
+
+func normalizeTimings(s string) string {
+	return timingCommentRE.ReplaceAllString(s, "-- Time: <elapsed>")
 }
 
 func (tc *applyTestCase) expectedApplied(major int) string {
@@ -134,6 +145,7 @@ func TestApply(t *testing.T) {
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 				BulkAlter:                tc.BulkAlter,
 				AssumeValidated:          tc.AssumeValidated,
+				Timing:                   tc.Timing,
 				PreSQL:                   tc.PreSQL,
 				PreSQLFile:               preSQLFile,
 				ConcurrentlyPreSQL:       tc.ConcurrentlyPreSQL,
@@ -141,7 +153,7 @@ func TestApply(t *testing.T) {
 			}, &buf)
 			require.NoError(t, err)
 			if tc.AppliedSQL != nil {
-				assert.Equal(t, strings.TrimSpace(*tc.AppliedSQL), strings.TrimSpace(buf.String()))
+				assert.Equal(t, strings.TrimSpace(*tc.AppliedSQL), strings.TrimSpace(normalizeTimings(buf.String())))
 			}
 			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(result.DisallowedDrops))
 			assertExpectedCount(t, tc.Count, result.Count)
@@ -341,6 +353,47 @@ func TestApply_WithTx_Success(t *testing.T) {
 	got, dumpErr := client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, dumpErr)
 	assert.Contains(t, got.String(), "CREATE TABLE public.users")
+}
+
+// --timing also times the transaction control statements, which the fixtures
+// cannot reach because they never open a transaction. COMMIT is the one that
+// matters: with --with-tx, work the server defers to commit time shows up
+// there rather than on the statement that caused it.
+func TestApply_Timing_WithTx(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &ApplyOptions{
+		Files:  []string{desiredFile},
+		WithTx: true,
+		Timing: true,
+	}, &buf)
+	require.NoError(t, err)
+
+	assert.Equal(t, `-- Transaction started
+-- Time: <elapsed>
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+-- Time: <elapsed>
+-- Transaction committed
+-- Time: <elapsed>`, strings.TrimSpace(normalizeTimings(buf.String())))
 }
 
 func TestApply_WithTx_NoChanges_OmitsTransactionComments(t *testing.T) {

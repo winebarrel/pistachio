@@ -1,0 +1,34 @@
+# --timing writes the elapsed time of every statement apply executes, after
+# the statement itself. Pre-SQL and -- pista:execute statements are timed the
+# same way as schema DDL. The times vary from run to run, so the runner
+# rewrites them to <elapsed> before comparing.
+timing: true
+pre_sql: "SET statement_timeout = '30s';"
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
+  CREATE OR REPLACE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  SET statement_timeout = '30s';
+  -- Time: <elapsed>
+  -- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
+  CREATE OR REPLACE FUNCTION public.lower_v(t text) RETURNS text AS $$ SELECT lower(t) $$ LANGUAGE sql IMMUTABLE;
+  -- Time: <elapsed>
+  ALTER TABLE public.users ADD COLUMN email text;
+  -- Time: <elapsed>
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

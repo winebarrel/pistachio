@@ -324,6 +324,10 @@ Flags:
                                    constraint, and foreign key as validated:
                                    ignore NOT VALID and never emit VALIDATE
                                    CONSTRAINT ($PISTA_ASSUME_VALIDATED).
+      --timing                     Write each executed statement's elapsed time
+                                   after it as a comment. The time is measured
+                                   on the client, so it covers the round trip
+                                   and any lock wait ($PISTA_TIMING).
       --exclusive                  Make apply runs on the same database
                                    mutually exclusive: fail immediately
                                    when another exclusive apply is running
@@ -636,6 +640,29 @@ Use `--assume-validated` to treat every table constraint, domain constraint, and
 pista plan --assume-validated schema.sql
 pista apply --assume-validated schema.sql
 ```
+
+Use `--timing` to record how long each statement took, as a comment after it. Also available as `$PISTA_TIMING`.
+
+```bash
+pista apply --timing --with-tx schema.sql
+```
+
+```sql
+-- Transaction started
+-- Time: 0.264 ms
+ALTER TABLE public.users ADD COLUMN email text;
+-- Time: 0.326 ms
+CREATE INDEX idx_users_email ON public.users USING btree (email);
+-- Time: 4213.882 ms
+-- Transaction committed
+-- Time: 0.921 ms
+```
+
+Every statement apply sends and writes out is timed: pre-SQL, concurrently-pre-SQL, the schema DDL, the `-- pista:execute` statements, and the transaction's `BEGIN` and `COMMIT`. The `search_path` setup is neither written nor timed, and neither is the check SQL of a `-- pista:execute` directive. The time is the client's wall clock around the round trip, so it covers the network and any wait for a lock, which is what a statement costs the deployment; it is not the server-side execution time alone.
+
+`COMMIT` is worth reading with `--with-tx`. Work the server defers to commit time shows up there rather than on the statement that caused it.
+
+The comment follows the statement, so an apply that fails leaves the statement it stopped at as the one without a time.
 
 Use `--exclusive` to make apply runs on the same database mutually exclusive: while another exclusive apply is running, the command fails at once. `--exclusive-wait` waits for the other apply instead, up to the given duration (`0` waits without limit). The two flags conflict. Also available as `$PISTA_EXCLUSIVE` / `$PISTA_EXCLUSIVE_WAIT`. See [Preventing concurrent applies](../guides/exclusive-apply.md).
 
