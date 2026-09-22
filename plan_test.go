@@ -388,8 +388,15 @@ func TestPlan(t *testing.T) {
 				require.NoError(t, os.WriteFile(concurrentlyPreSQLFile, []byte(tc.ConcurrentlyPreSQLFile), 0o644))
 			}
 			client := NewClient(&Options{
-				ConnString: conn.Config().ConnString(),
-				Schemas:    []string{"public"},
+				ConnString:         conn.Config().ConnString(),
+				Schemas:            []string{"public"},
+				Include:            tc.Include,
+				Exclude:            tc.Exclude,
+				Enable:             tc.Enable,
+				Disable:            tc.Disable,
+				ManageRoutine:      tc.ManageRoutine,
+				ManageStorageParam: tc.ManageStorageParam,
+				SkipPartitionChild: tc.SkipPartitionChild,
 			})
 
 			dropPolicy := DropPolicy{AllowDrop: []string{"all"}}
@@ -398,13 +405,6 @@ func TestPlan(t *testing.T) {
 			}
 			got, err := client.Plan(ctx, &PlanOptions{
 				DropPolicy:               dropPolicy,
-				Include:                  tc.Include,
-				Exclude:                  tc.Exclude,
-				Enable:                   tc.Enable,
-				Disable:                  tc.Disable,
-				ManageRoutine:            tc.ManageRoutine,
-				ManageStorageParam:       tc.ManageStorageParam,
-				SkipPartitionChild:       tc.SkipPartitionChild,
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,

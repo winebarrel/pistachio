@@ -15,7 +15,6 @@ import (
 )
 
 type DumpOptions struct {
-	FilterOptions
 	Split      string `xor:"split-sort-by-deps,json-split" help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
 	SortByDeps bool   `xor:"split-sort-by-deps,json-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle."`
@@ -571,7 +570,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 
 	// pg_proc is read only when --manage-routine asked for it.
 	routines := orderedmap.New[string, *model.Routine]()
-	if options.ManageRoutine {
+	if client.ManageRoutine {
 		routines, err = catalog.Routines(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch routines: %w", err)
@@ -586,15 +585,15 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		}
 	}
 
-	filteredTables := options.filterTables(client.remapTableSchemas(tables))
-	filteredViews := options.filterViews(client.remapViewSchemas(views))
-	filteredEnums := options.filterEnums(client.remapEnumSchemas(enums))
-	filteredDomains := options.filterDomains(client.remapDomainSchemas(domains))
-	filteredCompositeTypes := options.filterCompositeTypes(client.remapCompositeTypeSchemas(compositeTypes))
-	filteredSequences := options.filterSequences(client.remapSequenceSchemas(sequences))
-	filteredRoutines := options.filterRoutines(client.remapRoutineSchemas(routines))
+	filteredTables := client.filterTables(client.remapTableSchemas(tables))
+	filteredViews := client.filterViews(client.remapViewSchemas(views))
+	filteredEnums := client.filterEnums(client.remapEnumSchemas(enums))
+	filteredDomains := client.filterDomains(client.remapDomainSchemas(domains))
+	filteredCompositeTypes := client.filterCompositeTypes(client.remapCompositeTypeSchemas(compositeTypes))
+	filteredSequences := client.filterSequences(client.remapSequenceSchemas(sequences))
+	filteredRoutines := client.filterRoutines(client.remapRoutineSchemas(routines))
 
-	if !options.ManageStorageParam {
+	if !client.ManageStorageParam {
 		clearStorageParams(filteredTables)
 		clearMatViewStorageParams(filteredViews)
 	}
@@ -629,7 +628,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 			Domains:        filteredDomains.Len(),
 			CompositeTypes: filteredCompositeTypes.Len(),
 			Sequences:      filteredSequences.Len(),
-			Routines:       routineCount(options.ManageRoutine, filteredRoutines),
+			Routines:       routineCount(client.ManageRoutine, filteredRoutines),
 		},
 	}, nil
 }

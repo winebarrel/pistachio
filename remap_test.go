@@ -1587,15 +1587,14 @@ CREATE FUNCTION myschema.label(s myschema.status DEFAULT 'active'::myschema.stat
 	// the signature is remapped rather than reported bare.
 	searchPath := ""
 	client := NewClient(&Options{
-		ConnString: connString,
-		Schemas:    []string{"myschema"},
-		SchemaMap:  map[string]string{"myschema": "public"},
-		SearchPath: &searchPath,
-	})
-
-	got, err := client.Dump(ctx, &DumpOptions{
+		ConnString:    connString,
+		Schemas:       []string{"myschema"},
+		SchemaMap:     map[string]string{"myschema": "public"},
+		SearchPath:    &searchPath,
 		ManageRoutine: true,
 	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 
 	out := got.String()
@@ -1627,16 +1626,16 @@ CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
 
 	searchPath := ""
 	client := NewClient(&Options{
-		ConnString: connString,
-		Schemas:    []string{"myschema"},
-		SchemaMap:  map[string]string{"myschema": "public"},
-		SearchPath: &searchPath,
+		ConnString:    connString,
+		Schemas:       []string{"myschema"},
+		SchemaMap:     map[string]string{"myschema": "public"},
+		SearchPath:    &searchPath,
+		ManageRoutine: true,
 	})
 
 	got, err := client.Plan(ctx, &PlanOptions{
-		AllowDrop:     []string{"all"},
-		ManageRoutine: true,
-		Files:         []string{desiredFile},
+		AllowDrop: []string{"all"},
+		Files:     []string{desiredFile},
 	})
 	require.NoError(t, err)
 

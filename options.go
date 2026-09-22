@@ -29,16 +29,43 @@ import (
 // does.
 const DefaultSearchPath = "public"
 
-type Options struct {
-	ConnString string            `short:"c" env:"PISTA_CONN_STR" default:"postgres://postgres@localhost/postgres" help:"PostgreSQL connection string. See https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING"`
-	DBName     string            `name:"dbname" short:"d" env:"PISTA_DBNAME" help:"PostgreSQL database name. Overrides the dbname in --conn-string."`
-	Password   string            `env:"PISTA_PASSWORD" help:"PostgreSQL password."`
-	Schemas    []string          `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schemas to inspect and modify."`
-	SchemaMap  map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
+// ConnOptions is how a command reaches the database. It decides nothing about
+// what is read once connected, so a command that takes its scope from
+// somewhere else than the command line (apply-from, which reads it from the
+// plan file) embeds this alone.
+type ConnOptions struct {
+	ConnString string `short:"c" env:"PISTA_CONN_STR" default:"postgres://postgres@localhost/postgres" help:"PostgreSQL connection string. See https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING"`
+	DBName     string `name:"dbname" short:"d" env:"PISTA_DBNAME" help:"PostgreSQL database name. Overrides the dbname in --conn-string."`
+	Password   string `env:"PISTA_PASSWORD" help:"PostgreSQL password."`
+}
+
+// ScopeOptions decides the shape of the current-side schema a run reads: which
+// schemas the catalog is read from, how its output is qualified, and which of
+// the objects it returns are managed. Two runs that agree on every field here
+// read the same model out of an unchanged database, which is what the plan
+// file's state hash compares, so a plan file records this struct whole and
+// apply-from restores it rather than taking it from the command line.
+//
+// A new option that changes what the diff reads belongs here. One that only
+// shapes the statements the diff writes (--bulk-alter, the pre-SQL, the drop
+// policy) does not: the plan file holds those statements already.
+//
+// No connection field belongs here either. The struct is written to the plan
+// file as it stands, and a password cannot be written to a file it never
+// reaches.
+type ScopeOptions struct {
+	Schemas   []string          `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schemas to inspect and modify."`
+	SchemaMap map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
 	// SearchPath is a pointer so that an empty value is a path of its own,
 	// under which the catalog qualifies everything, rather than a request for
 	// the default. nil means the default.
 	SearchPath *string `env:"PISTA_SEARCH_PATH" default:"public" help:"search_path for the database connection. The catalog reports an object reachable through it without its schema, so this decides how dump writes that object. Pass an empty value to qualify everything."`
+	FilterOptions
+}
+
+type Options struct {
+	ConnOptions
+	ScopeOptions
 }
 
 type FilterOptions struct {
@@ -152,7 +179,7 @@ func (f *FilterOptions) ValidatePatterns() error {
 // the second source, then validates the schema map. Two sources that differ
 // only in whitespace are an error rather than one entry with either
 // destination.
-func (o *Options) AfterApply() error {
+func (o *ScopeOptions) AfterApply() error {
 	for i, s := range o.Schemas {
 		o.Schemas[i] = strings.TrimSpace(s)
 	}
@@ -179,7 +206,7 @@ func (o *Options) AfterApply() error {
 // the same on every run; a Go map iterates in a random one, and three sources
 // on one destination then produced a different message each time the same
 // command was run.
-func (o *Options) ValidateSchemaMap() error {
+func (o *ScopeOptions) ValidateSchemaMap() error {
 	seen := make(map[string]string, len(o.SchemaMap))
 	for _, from := range slices.Sorted(maps.Keys(o.SchemaMap)) {
 		to := o.SchemaMap[from]
@@ -197,7 +224,7 @@ func (o *Options) ValidateSchemaMap() error {
 	return nil
 }
 
-func (o *Options) RemapSchema(schema string) string {
+func (o *ScopeOptions) RemapSchema(schema string) string {
 	if o.SchemaMap == nil {
 		return schema
 	}
@@ -207,7 +234,7 @@ func (o *Options) RemapSchema(schema string) string {
 	return schema
 }
 
-func (o *Options) ReverseRemapSchema(schema string) string {
+func (o *ScopeOptions) ReverseRemapSchema(schema string) string {
 	if o.SchemaMap == nil {
 		return schema
 	}

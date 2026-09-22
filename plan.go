@@ -10,7 +10,6 @@ import (
 )
 
 type PlanOptions struct {
-	FilterOptions
 	DropPolicy
 	Files                    []string `arg:"" help:"Path to the desired schema SQL file(s)."`
 	PreSQL                   string   `xor:"pre-sql" env:"PISTA_PRE_SQL" help:"SQL to prepend to the plan output."`
@@ -100,7 +99,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	defer conn.Close(ctx) //nolint:errcheck
 
 	result, err := client.diffAll(ctx, conn, &diffAllOptions{
-		FilterOptions:            options.FilterOptions,
+		FilterOptions:            client.FilterOptions,
 		DropPolicy:               options.DropPolicy,
 		Desired:                  desired,
 		DisableIndexConcurrently: options.DisableIndexConcurrently,

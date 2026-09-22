@@ -241,11 +241,10 @@ CREATE TABLE public.posts (
 	client := NewClient(&Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
+		Exclude:    []string{"posts"},
 	})
 
-	got, err := client.Dump(ctx, &DumpOptions{
-		Exclude: []string{"posts"},
-	})
+	got, err := client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, 1, got.Count.Tables)
 	assert.Equal(t, "1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences", got.Count.Summary())
@@ -899,12 +898,8 @@ func TestDump(t *testing.T) {
 			}
 			testutil.SetupDB(t, ctx, conn, tc.Init)
 			client := NewClient(&Options{
-				ConnString: conn.Config().ConnString(),
-				Schemas:    []string{"public"},
-			})
-			got, err := client.Dump(ctx, &DumpOptions{
-				OmitSchema:         tc.OmitSchema,
-				SortByDeps:         tc.SortByDeps,
+				ConnString:         conn.Config().ConnString(),
+				Schemas:            []string{"public"},
 				Include:            tc.Include,
 				Exclude:            tc.Exclude,
 				Enable:             tc.Enable,
@@ -912,7 +907,11 @@ func TestDump(t *testing.T) {
 				ManageRoutine:      tc.ManageRoutine,
 				ManageStorageParam: tc.ManageStorageParam,
 				SkipPartitionChild: tc.SkipPartitionChild,
-				Explain:            tc.Explain,
+			})
+			got, err := client.Dump(ctx, &DumpOptions{
+				OmitSchema: tc.OmitSchema,
+				SortByDeps: tc.SortByDeps,
+				Explain:    tc.Explain,
 			})
 			require.NoError(t, err)
 			expected := strings.TrimSpace(expandToday(tc.expectedDump(pgMajor)))
@@ -941,13 +940,12 @@ CREATE FUNCTION public.f(a text) RETURNS text LANGUAGE sql AS $$ SELECT a $$;
 CREATE PROCEDURE public.p() LANGUAGE sql AS $$ SELECT $$;`)
 
 	client := NewClient(&Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &DumpOptions{
+		ConnString:    conn.Config().ConnString(),
+		Schemas:       []string{"public"},
 		ManageRoutine: true,
 	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 
 	files := got.Files()
