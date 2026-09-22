@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* `apply --timing` writes each statement's elapsed time as a comment after it. Pre-SQL, the schema DDL, the `-- pista:execute` statements, and `BEGIN` and `COMMIT` are timed. The time is measured on the client, so it covers any wait for a lock.
+* `apply --timing` writes each statement's elapsed time as a comment after it. Every statement it writes out is timed, `BEGIN` and `COMMIT` included. The time is measured on the client, so it covers any wait for a lock.
 
 ## [1.59.2] - 2026-09-20
 
