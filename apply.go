@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/pistachio/parser"
 )
 
@@ -17,14 +18,23 @@ type ApplyOptions struct {
 	PreSQLFile               string   `type:"path" xor:"pre-sql" env:"PISTA_PRE_SQL_FILE" help:"Path to a SQL file to execute before applying changes."`
 	ConcurrentlyPreSQL       string   `xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL" help:"SQL to execute before CONCURRENTLY index DDL (e.g. SET lock_timeout). Runs outside any transaction, only when the diff contains CONCURRENTLY index DDL."`
 	ConcurrentlyPreSQLFile   string   `type:"path" xor:"concurrently-pre-sql" env:"PISTA_CONCURRENTLY_PRE_SQL_FILE" help:"Path to a SQL file to execute before CONCURRENTLY index DDL."`
-	WithTx                   bool     `xor:"tx-mode,tx-choice" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
-	TryTx                    bool     `xor:"tx-choice" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. A diff containing CONCURRENTLY index DDL runs without a transaction instead of failing."`
 	DisableIndexConcurrently bool     `xor:"index-concurrently" env:"PISTA_DISABLE_INDEX_CONCURRENTLY" help:"Ignore CONCURRENTLY opt-ins (directive and inline) and emit plain CREATE/DROP INDEX."`
 	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
-	Timing                   bool     `env:"PISTA_TIMING" help:"Write each statement's elapsed time after it as a comment. Measured on the client, so it covers the round trip and any lock wait."`
-	Exclusive                bool     `xor:"exclusive" env:"PISTA_EXCLUSIVE" help:"Make apply runs on the same database mutually exclusive: fail immediately when another exclusive apply is running."`
+	ExecOptions
+}
+
+// ExecOptions decides how the statements are run rather than what they are, so
+// apply and apply-from, which takes its statements from a plan file, share it.
+type ExecOptions struct {
+	WithTx bool `xor:"tx-mode,tx-choice" env:"PISTA_WITH_TX" help:"Execute pre-SQL and schema changes in a transaction."`
+	TryTx  bool `xor:"tx-choice" env:"PISTA_TRY_TX" help:"Execute pre-SQL and schema changes in a transaction when possible. A diff containing CONCURRENTLY index DDL runs without a transaction instead of failing."`
+	Timing bool `env:"PISTA_TIMING" help:"Write each statement's elapsed time after it as a comment. Measured on the client, so it covers the round trip and any lock wait."`
+	// Exclusive and ExclusiveWait guard the database rather than one apply, so
+	// apply-from takes them too: a plan file executed beside another apply
+	// would be checked against a state that apply is still changing.
+	Exclusive bool `xor:"exclusive" env:"PISTA_EXCLUSIVE" help:"Make apply runs on the same database mutually exclusive: fail immediately when another exclusive apply is running."`
 	// ExclusiveWait enables the same mutual exclusion as Exclusive and waits
 	// for the other apply instead of failing. A pointer because 0 is a valid
 	// value (wait without limit) and must be distinguishable from "not set".
@@ -36,6 +46,20 @@ type ApplyOptions struct {
 	// over, so it passes the terminal here. nil writes the line to the
 	// output writer.
 	WaitWriter io.Writer `kong:"-"`
+}
+
+// applyInput is the statement set an apply runs, whichever it came from: the
+// diff this run computed, or the plan file an earlier run wrote. They are held
+// apart rather than joined into one script because apply treats each kind
+// differently: pre-SQL runs before the search_path is set, the CONCURRENTLY
+// pre-SQL only where there is CONCURRENTLY index DDL, and an execute statement
+// writes its directive to the output.
+type applyInput struct {
+	PreSQL               string
+	ConcurrentlyPreSQL   string
+	HasConcurrentlyIndex bool
+	Stmts                []string
+	ExecuteStmts         []*parser.ExecuteStmt
 }
 
 // ApplyResult holds the result of an Apply operation.
@@ -86,14 +110,8 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// Acquire the exclusion before the catalog is read, so the diff below
 	// cannot be computed against a state another exclusive apply is still
 	// changing. Released when the connection closes.
-	if options.Exclusive || options.ExclusiveWait != nil {
-		waitWriter := options.WaitWriter
-		if waitWriter == nil {
-			waitWriter = w
-		}
-		if err := acquireExclusive(ctx, conn, options.ExclusiveWait, waitWriter); err != nil {
-			return nil, err
-		}
+	if err := acquireExclusiveIfAsked(ctx, conn, &options.ExecOptions, w); err != nil {
+		return nil, err
 	}
 
 	result, err := client.diffAll(ctx, conn, &diffAllOptions{
@@ -109,23 +127,62 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		return nil, err
 	}
 
-	// --with-tx is an explicit all-or-nothing request, so CONCURRENTLY index
-	// DDL (which PostgreSQL cannot run inside a transaction) stays an error.
-	// --try-tx asks for a transaction only when one is possible, so the same
-	// diff runs without one.
-	if options.WithTx && result.HasConcurrentlyIndex {
-		return nil, fmt.Errorf("--with-tx cannot be used with CONCURRENTLY index operations")
-	}
-	withTx := options.WithTx || (options.TryTx && !result.HasConcurrentlyIndex)
-
 	applyResult := &ApplyResult{
 		Count:           result.Count,
 		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
 		Ignored:         strings.Join(result.Ignored, "\n"),
 	}
 
-	if len(result.Stmts) == 0 && len(result.ExecuteStmts) == 0 {
-		return applyResult, nil
+	if err := client.applyStmts(ctx, conn, &applyInput{
+		PreSQL:               result.PreSQL,
+		ConcurrentlyPreSQL:   result.ConcurrentlyPreSQL,
+		HasConcurrentlyIndex: result.HasConcurrentlyIndex,
+		Stmts:                result.Stmts,
+		ExecuteStmts:         result.ExecuteStmts,
+	}, &options.ExecOptions, w, applyResult); err != nil {
+		return nil, err
+	}
+
+	return applyResult, nil
+}
+
+// acquireExclusiveIfAsked takes the exclusion when one was asked for. Both
+// entry points call it before they read the catalog, so neither is checked
+// against, or computed against, a state another exclusive apply is still
+// changing.
+func acquireExclusiveIfAsked(ctx context.Context, conn *pgx.Conn, options *ExecOptions, w io.Writer) error {
+	if !options.Exclusive && options.ExclusiveWait == nil {
+		return nil
+	}
+	waitWriter := options.WaitWriter
+	if waitWriter == nil {
+		waitWriter = w
+	}
+	return acquireExclusive(ctx, conn, options.ExclusiveWait, waitWriter)
+}
+
+// applyStmts runs the statements and writes them to w, filling in the Applied
+// and Duration of result. Apply hands it the diff it just computed and
+// apply-from the plan file it read, so the two run a change the same way.
+func (client *Client) applyStmts(
+	ctx context.Context,
+	conn *pgx.Conn,
+	input *applyInput,
+	options *ExecOptions,
+	w io.Writer,
+	result *ApplyResult,
+) error {
+	// --with-tx is an explicit all-or-nothing request, so CONCURRENTLY index
+	// DDL (which PostgreSQL cannot run inside a transaction) stays an error.
+	// --try-tx asks for a transaction only when one is possible, so the same
+	// diff runs without one.
+	if options.WithTx && input.HasConcurrentlyIndex {
+		return fmt.Errorf("--with-tx cannot be used with CONCURRENTLY index operations")
+	}
+	withTx := options.WithTx || (options.TryTx && !input.HasConcurrentlyIndex)
+
+	if len(input.Stmts) == 0 && len(input.ExecuteStmts) == 0 {
+		return nil
 	}
 
 	start := time.Now()
@@ -159,7 +216,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		txStart := time.Now()
 		tx, err := conn.Begin(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to begin transaction: %w", err)
+			return fmt.Errorf("failed to begin transaction: %w", err)
 		}
 		fmt.Fprintln(w, "-- Transaction started") //nolint:errcheck
 		writeTiming(time.Since(txStart))
@@ -192,10 +249,10 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// not schema changes, so they do not mark the apply as applied. Whether
 	// "-- No changes" is reported depends only on actual schema DDL and
 	// executed -- pista:execute statements.
-	if result.PreSQL != "" {
-		fmt.Fprintln(w, result.PreSQL) //nolint:errcheck
-		if err := execTimed(ctx, result.PreSQL); err != nil {
-			return nil, fmt.Errorf("failed to execute pre-SQL: %w", err)
+	if input.PreSQL != "" {
+		fmt.Fprintln(w, input.PreSQL) //nolint:errcheck
+		if err := execTimed(ctx, input.PreSQL); err != nil {
+			return fmt.Errorf("failed to execute pre-SQL: %w", err)
 		}
 	}
 
@@ -203,10 +260,10 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// when there is CONCURRENTLY index DDL to apply. WithTx + HasConcurrentlyIndex
 	// is rejected above and TryTx opens no transaction in that case, so this
 	// always runs outside a transaction.
-	if result.ConcurrentlyPreSQL != "" && result.HasConcurrentlyIndex {
-		fmt.Fprintln(w, result.ConcurrentlyPreSQL) //nolint:errcheck
-		if err := execTimed(ctx, result.ConcurrentlyPreSQL); err != nil {
-			return nil, fmt.Errorf("failed to execute concurrently-pre-SQL: %w", err)
+	if input.ConcurrentlyPreSQL != "" && input.HasConcurrentlyIndex {
+		fmt.Fprintln(w, input.ConcurrentlyPreSQL) //nolint:errcheck
+		if err := execTimed(ctx, input.ConcurrentlyPreSQL); err != nil {
+			return fmt.Errorf("failed to execute concurrently-pre-SQL: %w", err)
 		}
 	}
 
@@ -215,7 +272,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// a column or attribute definition (e.g. "home addr") resolves. It is not
 	// written to the output writer, matching the emitted-SQL contract.
 	if _, err := exec(ctx, client.searchPathSQL()); err != nil {
-		return nil, fmt.Errorf("failed to set search_path: %w", err)
+		return fmt.Errorf("failed to set search_path: %w", err)
 	}
 
 	// runExecuteStmts runs the -- pista:execute statements whose First flag
@@ -223,7 +280,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 	// point the statement runs, so an execute-first check sees the pre-change
 	// schema while a plain execute check sees the post-change schema.
 	runExecuteStmts := func(first bool) error {
-		for _, es := range result.ExecuteStmts {
+		for _, es := range input.ExecuteStmts {
 			if es.First != first {
 				continue
 			}
@@ -249,30 +306,30 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 	// Execute -- pista:execute-first statements before schema changes.
 	if err := runExecuteStmts(true); err != nil {
-		return nil, err
+		return err
 	}
 
-	for _, stmt := range result.Stmts {
+	for _, stmt := range input.Stmts {
 		fmt.Fprintln(w, stmt) //nolint:errcheck
 		if err := execTimed(ctx, stmt); err != nil {
-			return nil, fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
+			return fmt.Errorf("failed to execute SQL: %s: %w", stmt, err)
 		}
 		applied = true
 	}
 
 	// Execute -- pista:execute statements after schema changes.
 	if err := runExecuteStmts(false); err != nil {
-		return nil, err
+		return err
 	}
 
 	if err := commit(ctx); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	applyResult.Applied = applied
+	result.Applied = applied
 	if applied {
-		applyResult.Duration = time.Since(start)
+		result.Duration = time.Since(start)
 	}
 
-	return applyResult, nil
+	return nil
 }

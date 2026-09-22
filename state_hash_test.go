@@ -19,7 +19,9 @@ func hashNow(t *testing.T, ctx context.Context, client *Client) string {
 	conn, err := client.connect(ctx, true)
 	require.NoError(t, err)
 	defer conn.Close(ctx) //nolint:errcheck
-	hash, err := client.currentStateHash(ctx, conn)
+	current, err := client.currentState(ctx, conn)
+	require.NoError(t, err)
+	hash, err := stateHash(current)
 	require.NoError(t, err)
 	assert.Len(t, hash, 64)
 	return hash

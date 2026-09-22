@@ -84,22 +84,22 @@ func appendDigests[V any](digests *[]string, kind string, objects *orderedmap.Ma
 	return nil
 }
 
-// currentStateHash reads the current schema and hashes it the way a plan run
-// does. apply-from uses it: it has no desired schema to diff against, only the
-// statements the plan file already holds, so it reads the catalog for this
-// alone.
-func (client *Client) currentStateHash(ctx context.Context, conn *pgx.Conn) (string, error) {
+// currentState reads the current schema and narrows it the way a plan run
+// does. apply-from has no desired schema to diff against, only the statements
+// the plan file already holds, so it reads the catalog for the state hash and
+// the object count alone.
+func (client *Client) currentState(ctx context.Context, conn *pgx.Conn) (*schemaObjects, error) {
 	cat, err := catalog.NewCatalog(conn, client.Schemas)
 	if err != nil {
-		return "", fmt.Errorf("failed to create catalog: %w", err)
+		return nil, fmt.Errorf("failed to create catalog: %w", err)
 	}
 
 	current, err := readCurrent(ctx, cat, &client.FilterOptions)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return stateHash(client.currentSide(current))
+	return client.currentSide(current), nil
 }
 
 // currentSide narrows what the catalog returned to what the diff compares:

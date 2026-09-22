@@ -21,12 +21,13 @@ type cli struct {
 	Version kong.VersionFlag
 	Pager   *bool `name:"pager" negatable:"" help:"Force paging via $PISTA_PAGER even when stdout is not a TTY. PISTA_PAGER must be set."`
 
-	Apply command.Apply `cmd:"" help:"Apply schema changes to the database."`
-	Plan  command.Plan  `cmd:"" help:"Print the schema diff SQL without applying it."`
-	Diff  command.Diff  `cmd:"" help:"Print the DDL that takes one schema SQL file to another, or one git revision of it to another. No database is read."`
-	Dump  command.Dump  `cmd:"" help:"Dump the current database schema as SQL."`
-	Fmt   command.Fmt   `cmd:"" help:"Format schema SQL files in place."`
-	Parse command.Parse `cmd:"" help:"Parse schema SQL files and print the result as JSON."`
+	Apply     command.Apply     `cmd:"" help:"Apply schema changes to the database."`
+	ApplyFrom command.ApplyFrom `cmd:"" help:"Apply a plan file written by plan --out. The statements are the plan's; the database is only checked for changes since."`
+	Plan      command.Plan      `cmd:"" help:"Print the schema diff SQL without applying it."`
+	Diff      command.Diff      `cmd:"" help:"Print the DDL that takes one schema SQL file to another, or one git revision of it to another. No database is read."`
+	Dump      command.Dump      `cmd:"" help:"Dump the current database schema as SQL."`
+	Fmt       command.Fmt       `cmd:"" help:"Format schema SQL files in place."`
+	Parse     command.Parse     `cmd:"" help:"Parse schema SQL files and print the result as JSON."`
 }
 
 func main() {

@@ -207,6 +207,26 @@ func readCurrent(ctx context.Context, cat *catalog.Catalog, filter *FilterOption
 	return current, nil
 }
 
+// count reports how many objects of each kind a run inspected, for the line
+// plan and apply write above their output. The routine slot is left out
+// unless routines are managed, so the line reads as it did before they were.
+func (o *schemaObjects) count(schemas []string, manageRoutine bool) ObjectCount {
+	count := ObjectCount{
+		Schemas:        schemas,
+		Tables:         o.Tables.Len(),
+		Views:          o.Views.Len(),
+		Enums:          o.Enums.Len(),
+		Domains:        o.Domains.Len(),
+		CompositeTypes: o.CompositeTypes.Len(),
+		Sequences:      o.Sequences.Len(),
+	}
+	if manageRoutine {
+		n := o.Routines.Len()
+		count.Routines = &n
+	}
+	return count
+}
+
 // diffObjects diffs the desired schema against an already-loaded current side
 // and orders the statements. diffAll hands it the catalog's view of the
 // database; Diff hands it a parsed schema file.
@@ -265,19 +285,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		ignoredComments[i] = "-- ignored: " + fqn
 	}
 
-	count := ObjectCount{
-		Schemas:        client.Schemas,
-		Tables:         filteredTables.Len(),
-		Views:          filteredViews.Len(),
-		Enums:          filteredEnums.Len(),
-		Domains:        filteredDomains.Len(),
-		CompositeTypes: filteredCompositeTypes.Len(),
-		Sequences:      filteredSequences.Len(),
-	}
-	if options.ManageRoutine {
-		n := filteredRoutines.Len()
-		count.Routines = &n
-	}
+	count := narrowed.count(client.Schemas, options.ManageRoutine)
 
 	// The current side is cleared by currentSide, above, so that the state
 	// hash reads what the diff compares.
