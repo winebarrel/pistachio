@@ -37,10 +37,12 @@ func OrderFromSchema(
 		g.AddNode(k)
 	}
 
-	// Domains: may depend on enums or other domains via base type
+	// Domains: may depend on enums or other domains via base type. A domain
+	// named after its own base type, text among them, resolves to itself, and
+	// that self-edge would be read as a cycle.
 	for k, d := range domains.All() {
 		g.AddNode(k)
-		if dep := resolveTypeDep(d.BaseType, d.Schema, defined); dep != "" {
+		if dep := resolveTypeDep(d.BaseType, d.Schema, defined); dep != "" && dep != k {
 			g.AddEdge(k, dep)
 		}
 	}

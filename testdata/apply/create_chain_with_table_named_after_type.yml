@@ -1,0 +1,26 @@
+# A table named after the type its own column is written with made the
+# dependency sort report a cycle, and the diff fell back to ordering by
+# category, which creates a domain before the domain it is built on. The
+# apply failed there.
+init: ""
+desired: |
+  CREATE TABLE public.text (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT text_pkey PRIMARY KEY (id)
+  );
+  CREATE DOMAIN public.d2 AS public.d1;
+  CREATE DOMAIN public.d1 AS text;
+applied: |
+  -- public.d1
+  CREATE DOMAIN public.d1 AS text;
+
+  -- public.d2
+  CREATE DOMAIN public.d2 AS d1;
+
+  -- public.text
+  CREATE TABLE public.text (
+      id integer NOT NULL,
+      body text,
+      CONSTRAINT text_pkey PRIMARY KEY (id)
+  );

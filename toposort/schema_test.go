@@ -291,6 +291,78 @@ func TestOrderFromSchema_ColumnTypeNamingOwnTable(t *testing.T) {
 	assert.Equal(t, []string{"public.text"}, order)
 }
 
+// The qualified spelling of the column type reaches the same node as the bare
+// one, so it is the same self-edge.
+func TestOrderFromSchema_QualifiedColumnTypeNamingOwnTable(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	tables := orderedmap.New[string, *model.Table]()
+
+	text := &model.Table{Schema: "public", Name: "text"}
+	text.Columns = orderedmap.New[string, *model.Column]()
+	text.Columns.Set("v", &model.Column{Name: "v", TypeName: "public.text"})
+	text.Columns.Set("vs", &model.Column{Name: "vs", TypeName: "public.text[]"})
+	text.Indexes = orderedmap.New[string, *model.Index]()
+	text.Constraints = orderedmap.New[string, *model.Constraint]()
+	text.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.text", text)
+
+	order, err := orderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"public.text"}, order)
+}
+
+// A domain named after its own base type resolves to itself, as a table named
+// after a column type does.
+func TestOrderFromSchema_DomainNamingOwnBaseType(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	views := orderedmap.New[string, *model.View]()
+	tables := orderedmap.New[string, *model.Table]()
+
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set("public.text", &model.Domain{Schema: "public", Name: "text", BaseType: "text"})
+	// A domain built on that one still comes after it.
+	domains.Set("public.label", &model.Domain{Schema: "public", Name: "label", BaseType: "public.text"})
+
+	order, err := orderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+
+	idx := make(map[string]int, len(order))
+	for i, name := range order {
+		idx[name] = i
+	}
+
+	assert.Len(t, order, 2)
+	assert.Less(t, idx["public.text"], idx["public.label"], "base domain before the domain built on it")
+}
+
+// A composite type named after the type one of its attributes is written with
+// resolves to itself too.
+func TestOrderFromSchema_CompositeAttributeNamingOwnType(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	tables := orderedmap.New[string, *model.Table]()
+	views := orderedmap.New[string, *model.View]()
+	sequences := orderedmap.New[string, *model.Sequence]()
+	routines := orderedmap.New[string, *model.Routine]()
+
+	compositeTypes := orderedmap.New[string, *model.CompositeType]()
+	compositeTypes.Set("public.text", &model.CompositeType{
+		Schema: "public",
+		Name:   "text",
+		Attributes: []*model.CompositeAttribute{
+			{Name: "a", TypeName: "text"},
+			{Name: "b", TypeName: "text[]"},
+		},
+	})
+
+	order, err := toposort.OrderFromSchema(enums, domains, compositeTypes, tables, views, sequences, routines)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"public.text"}, order)
+}
+
 func TestOrderFromSchema_ViewToView(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()
