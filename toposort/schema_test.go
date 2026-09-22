@@ -266,6 +266,31 @@ func TestOrderFromSchema_SelfReferencingFK(t *testing.T) {
 	assert.ElementsMatch(t, []string{"public.nodes", "public.edges"}, order)
 }
 
+// A table named after the type one of its own columns is written with, text
+// among them, resolves to itself. That is a self-edge, not a cycle: nothing
+// has to be created before the table. The array form resolves the same way.
+func TestOrderFromSchema_ColumnTypeNamingOwnTable(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	domains := orderedmap.New[string, *model.Domain]()
+	views := orderedmap.New[string, *model.View]()
+
+	tables := orderedmap.New[string, *model.Table]()
+
+	text := &model.Table{Schema: "public", Name: "text"}
+	text.Columns = orderedmap.New[string, *model.Column]()
+	text.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer"})
+	text.Columns.Set("body", &model.Column{Name: "body", TypeName: "text"})
+	text.Columns.Set("tags", &model.Column{Name: "tags", TypeName: "text[]"})
+	text.Indexes = orderedmap.New[string, *model.Index]()
+	text.Constraints = orderedmap.New[string, *model.Constraint]()
+	text.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
+	tables.Set("public.text", text)
+
+	order, err := orderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"public.text"}, order)
+}
+
 func TestOrderFromSchema_ViewToView(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()

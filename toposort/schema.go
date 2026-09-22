@@ -61,10 +61,14 @@ func OrderFromSchema(
 	for k, t := range tables.All() {
 		g.AddNode(k)
 
-		// Column type dependencies
+		// Column type dependencies.
+		//
+		// A table named after the type one of its columns is written with,
+		// text among them, resolves to itself. Nothing has to be created
+		// before the table, so a self-edge here would be read as a cycle.
 		if t.Columns != nil {
 			for _, col := range t.Columns.CollectValues() {
-				if dep := resolveTypeDep(col.TypeName, t.Schema, defined); dep != "" {
+				if dep := resolveTypeDep(col.TypeName, t.Schema, defined); dep != "" && dep != k {
 					g.AddEdge(k, dep)
 				}
 				if col.Default != nil {
