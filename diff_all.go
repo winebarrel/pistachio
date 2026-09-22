@@ -26,6 +26,10 @@ type diffAllOptions struct {
 	ForceIndexConcurrently   bool
 	BulkAlter                bool
 	AssumeValidated          bool
+	// StateHash asks for the hash of the current side the diff read. Only a
+	// run that writes a plan file needs it, so every other run pays nothing
+	// for the extra encoding.
+	StateHash bool
 }
 
 // desiredInput is what a run reads from the file system: the parsed desired
@@ -90,6 +94,9 @@ type diffAllResult struct {
 	// drop, for the dependent check diffAll makes against the catalog. Diff
 	// reads no catalog and leaves it alone.
 	DroppedViews []string
+	// StateHash fingerprints the current side the statements were computed
+	// against. Empty unless the run asked for it.
+	StateHash string
 }
 
 // schemaObjects holds one side of a diff: one map per object kind. On the
@@ -129,7 +136,33 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to create catalog: %w", err)
 	}
 
+	current, err := readCurrent(ctx, cat, &options.FilterOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.diffObjects(current, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only a plan that drops a view pays for the dependent read, so the
+	// common run makes no extra query.
+	if len(result.DroppedViews) > 0 {
+		if err := checkViewDependents(ctx, cat, result.DroppedViews); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+// readCurrent reads every object kind the diff compares out of the system
+// catalogs. apply-from reads the same way for its state hash, so the two see
+// one schema rather than two readings of it.
+func readCurrent(ctx context.Context, cat *catalog.Catalog, filter *FilterOptions) (*schemaObjects, error) {
 	current := &schemaObjects{}
+	var err error
 
 	current.Tables, err = cat.Tables(ctx)
 	if err != nil {
@@ -164,27 +197,14 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	// pg_proc is read only when --manage-routine asked for it. Skipping the
 	// query keeps the extra round trip off every other run.
 	current.Routines = orderedmap.New[string, *model.Routine]()
-	if options.ManageRoutine {
+	if filter.ManageRoutine {
 		current.Routines, err = cat.Routines(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch routines: %w", err)
 		}
 	}
 
-	result, err := client.diffObjects(current, options)
-	if err != nil {
-		return nil, err
-	}
-
-	// Only a plan that drops a view pays for the dependent read, so the
-	// common run makes no extra query.
-	if len(result.DroppedViews) > 0 {
-		if err := checkViewDependents(ctx, cat, result.DroppedViews); err != nil {
-			return nil, err
-		}
-	}
-
-	return result, nil
+	return current, nil
 }
 
 // diffObjects diffs the desired schema against an already-loaded current side
@@ -192,24 +212,30 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 // database; Diff hands it a parsed schema file.
 func (client *Client) diffObjects(current *schemaObjects, options *diffAllOptions) (*diffAllResult, error) {
 	currentTables := current.Tables
-	currentViews := current.Views
-	currentEnums := current.Enums
-	currentDomains := current.Domains
-	currentCompositeTypes := current.CompositeTypes
-	currentSequences := current.Sequences
-	currentRoutines := current.Routines
 
 	desired := options.Desired.schema
 
 	filterDesiredBySchemas(desired, client.Schemas, client.SchemaMap)
 
-	filteredTables := options.filterTables(currentTables)
-	filteredViews := options.filterViews(currentViews)
-	filteredEnums := options.filterEnums(currentEnums)
-	filteredDomains := options.filterDomains(currentDomains)
-	filteredCompositeTypes := options.filterCompositeTypes(currentCompositeTypes)
-	filteredSequences := options.filterSequences(currentSequences)
-	filteredRoutines := options.filterRoutines(currentRoutines)
+	narrowed := options.currentSide(current)
+	filteredTables := narrowed.Tables
+	filteredViews := narrowed.Views
+	filteredEnums := narrowed.Enums
+	filteredDomains := narrowed.Domains
+	filteredCompositeTypes := narrowed.CompositeTypes
+	filteredSequences := narrowed.Sequences
+	filteredRoutines := narrowed.Routines
+
+	// Hashed here, before the transforms below rewrite what they touch:
+	// --assume-validated and --force-index-concurrently reach into the
+	// current side too, and the hash is of the database as it was read.
+	var currentStateHash string
+	if options.StateHash {
+		var err error
+		if currentStateHash, err = stateHash(narrowed); err != nil {
+			return nil, err
+		}
+	}
 
 	desiredEnums := options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums))
 	desiredDomains := options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains))
@@ -253,9 +279,11 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		count.Routines = &n
 	}
 
+	// The current side is cleared by currentSide, above, so that the state
+	// hash reads what the diff compares.
 	if !options.ManageStorageParam {
-		clearStorageParams(filteredTables, desiredTables)
-		clearMatViewStorageParams(filteredViews, desiredViews)
+		clearStorageParams(desiredTables)
+		clearMatViewStorageParams(desiredViews)
 	}
 
 	switch {
@@ -375,6 +403,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		DesiredTables:        desiredTables,
 		DesiredDomains:       desiredDomains,
 		DroppedViews:         viewDiff.DroppedViews,
+		StateHash:            currentStateHash,
 	}, nil
 }
 
