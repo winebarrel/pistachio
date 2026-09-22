@@ -54,12 +54,12 @@ type ConnOptions struct {
 // file as it stands, and a password cannot be written to a file it never
 // reaches.
 type ScopeOptions struct {
-	Schemas   []string          `short:"n" env:"PISTA_SCHEMAS" default:"public" help:"Schemas to inspect and modify."`
-	SchemaMap map[string]string `short:"m" help:"Schema name mapping (e.g. -m old=new)."`
+	Schemas   []string          `short:"n" env:"PISTA_SCHEMAS" default:"public" json:"schemas" help:"Schemas to inspect and modify."`
+	SchemaMap map[string]string `short:"m" json:"schema_map" help:"Schema name mapping (e.g. -m old=new)."`
 	// SearchPath is a pointer so that an empty value is a path of its own,
 	// under which the catalog qualifies everything, rather than a request for
 	// the default. nil means the default.
-	SearchPath *string `env:"PISTA_SEARCH_PATH" default:"public" help:"search_path for the database connection. The catalog reports an object reachable through it without its schema, so this decides how dump writes that object. Pass an empty value to qualify everything."`
+	SearchPath *string `env:"PISTA_SEARCH_PATH" default:"public" json:"search_path" help:"search_path for the database connection. The catalog reports an object reachable through it without its schema, so this decides how dump writes that object. Pass an empty value to qualify everything."`
 	FilterOptions
 }
 
@@ -69,15 +69,15 @@ type Options struct {
 }
 
 type FilterOptions struct {
-	Include []string `short:"I" env:"PISTA_INCLUDE" help:"Include only tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?; /re/ for a regular expression)."`
-	Exclude []string `short:"E" env:"PISTA_EXCLUDE" help:"Exclude tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?; /re/ for a regular expression)."`
-	Enable  []string `enum:"table,view,enum,domain,composite_type,sequence,routine" env:"PISTA_ENABLE" help:"Enable only specified object types (can be repeated)."`
-	Disable []string `enum:"table,view,enum,domain,composite_type,sequence,routine" env:"PISTA_DISABLE" help:"Disable specified object types (can be repeated)."`
+	Include []string `short:"I" env:"PISTA_INCLUDE" json:"include" help:"Include only tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?; /re/ for a regular expression)."`
+	Exclude []string `short:"E" env:"PISTA_EXCLUDE" json:"exclude" help:"Exclude tables/views/enums/domains/composite types/sequences/routines matching the pattern (wildcard: *, ?; /re/ for a regular expression)."`
+	Enable  []string `enum:"table,view,enum,domain,composite_type,sequence,routine" env:"PISTA_ENABLE" json:"enable" help:"Enable only specified object types (can be repeated)."`
+	Disable []string `enum:"table,view,enum,domain,composite_type,sequence,routine" env:"PISTA_DISABLE" json:"disable" help:"Disable specified object types (can be repeated)."`
 	// ManageRoutine opts into functions and procedures. They are unmanaged by
 	// default: a schema that has been maintained with -- pista:execute holds
 	// routines the desired schema does not declare, and reading pg_proc
 	// unasked would report every one of them as a drop.
-	ManageRoutine bool `env:"PISTA_MANAGE_ROUTINE" help:"Manage functions and procedures. Off by default; --allow-drop routine still gates dropping them."`
+	ManageRoutine bool `env:"PISTA_MANAGE_ROUTINE" json:"manage_routine" help:"Manage functions and procedures. Off by default; --allow-drop routine still gates dropping them."`
 	// ManageStorageParam opts into the storage parameters of a table and a
 	// materialized view, the WITH clause. They are unmanaged by default: the
 	// autovacuum settings a relation is tuned with are usually set on the
@@ -85,12 +85,12 @@ type FilterOptions struct {
 	// RESET every parameter the desired schema does not name. A plain view's
 	// two parameters are managed either way; they decide what the view means
 	// rather than how it is stored.
-	ManageStorageParam bool `env:"PISTA_MANAGE_STORAGE_PARAM" help:"Manage the storage parameters of a table and a materialized view, the WITH (...) clause. Off by default; without it the clause is ignored on both sides and dump does not write it. A plain view's security_barrier and security_invoker are managed either way."`
+	ManageStorageParam bool `env:"PISTA_MANAGE_STORAGE_PARAM" json:"manage_storage_param" help:"Manage the storage parameters of a table and a materialized view, the WITH (...) clause. Off by default; without it the clause is ignored on both sides and dump does not write it. A plain view's security_barrier and security_invoker are managed either way."`
 	// SkipPartitionChild leaves the partitions of a partitioned table
 	// unmanaged. Where another tool creates them, their names follow no
 	// pattern --exclude can state, and a schema file that declares the parent
 	// alone would plan a DROP for each one.
-	SkipPartitionChild bool `env:"PISTA_SKIP_PARTITION_CHILD" help:"Manage a partitioned table without its partitions. For a schema whose partitions another tool creates. An INHERITS child is unaffected."`
+	SkipPartitionChild bool `env:"PISTA_SKIP_PARTITION_CHILD" json:"skip_partition_child" help:"Manage a partitioned table without its partitions. For a schema whose partitions another tool creates. An INHERITS child is unaffected."`
 }
 
 // IsTypeEnabled returns true if the given object type should be included.
@@ -222,6 +222,15 @@ func (o *ScopeOptions) ValidateSchemaMap() error {
 		seen[to] = from
 	}
 	return nil
+}
+
+// searchPath returns the search_path the connection is opened with: the value
+// given, which may be empty, or the default when none was.
+func (o *ScopeOptions) searchPath() string {
+	if o.SearchPath != nil {
+		return *o.SearchPath
+	}
+	return DefaultSearchPath
 }
 
 func (o *ScopeOptions) RemapSchema(schema string) string {
