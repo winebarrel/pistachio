@@ -35,26 +35,21 @@ import (
 func (o *schemaObjects) stateHash() (string, error) {
 	var digests []string
 
-	if err := appendDigests(&digests, "table", o.Tables); err != nil {
-		return "", err
-	}
-	if err := appendDigests(&digests, "view", o.Views); err != nil {
-		return "", err
-	}
-	if err := appendDigests(&digests, "enum", o.Enums); err != nil {
-		return "", err
-	}
-	if err := appendDigests(&digests, "domain", o.Domains); err != nil {
-		return "", err
-	}
-	if err := appendDigests(&digests, "composite_type", o.CompositeTypes); err != nil {
-		return "", err
-	}
-	if err := appendDigests(&digests, "sequence", o.Sequences); err != nil {
-		return "", err
-	}
-	if err := appendDigests(&digests, "routine", o.Routines); err != nil {
-		return "", err
+	// One call per kind, since each map is of its own type. They are listed
+	// rather than called in sequence so that the failure of any of them is
+	// reported in one place.
+	for _, appendKind := range []func() error{
+		func() error { return appendDigests(&digests, "table", o.Tables) },
+		func() error { return appendDigests(&digests, "view", o.Views) },
+		func() error { return appendDigests(&digests, "enum", o.Enums) },
+		func() error { return appendDigests(&digests, "domain", o.Domains) },
+		func() error { return appendDigests(&digests, "composite_type", o.CompositeTypes) },
+		func() error { return appendDigests(&digests, "sequence", o.Sequences) },
+		func() error { return appendDigests(&digests, "routine", o.Routines) },
+	} {
+		if err := appendKind(); err != nil {
+			return "", err
+		}
 	}
 
 	slices.Sort(digests)
@@ -70,9 +65,6 @@ func (o *schemaObjects) stateHash() (string, error) {
 // The JSON is the document pista parse and pista dump write, through the same
 // marshalers, so one description of the model serves all three.
 func appendDigests[V any](digests *[]string, kind string, objects *orderedmap.Map[string, V]) error {
-	if objects == nil {
-		return nil
-	}
 	for key, object := range objects.All() {
 		encoded, err := json.Marshal(object, json.Deterministic(true), model.JSONMarshalers)
 		if err != nil {

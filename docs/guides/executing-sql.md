@@ -66,5 +66,5 @@ CREATE TABLE public.users (
 
 The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after.
 
-With `plan --out` the check is evaluated once, when the plan file is written, and the file holds what it decided. Both kinds of check therefore see the schema before the change, and a check that cannot be evaluated fails the plan instead of being left to `apply`. See [Plan files](plan-files.md).
+With `plan --out` the check is evaluated when the plan file is written, and the file holds the statements it selected. Both kinds of check therefore see the schema before the change, and a check that cannot be evaluated fails the plan instead of being left to `apply`. See [Plan files](plan-files.md).
 

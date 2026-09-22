@@ -561,7 +561,7 @@ Use `--explain` to comment each statement that scans or rewrites a table that al
 pista plan --explain schema.sql
 ```
 
-Use `--out` to write the plan to a file `apply-from` executes later. Also available as `$PISTA_OUT`. See [Plan files](../guides/plan-files.md).
+Use `--out` to write the plan to a file that `apply-from` runs later. Also available as `$PISTA_OUT`. See [Plan files](../guides/plan-files.md).
 
 ```bash
 pista plan --out plan.json schema.sql
@@ -774,9 +774,9 @@ pista plan --out plan.json schema.sql
 pista apply-from plan.json
 ```
 
-The statements are the plan's. `apply-from` reads no schema file and diffs nothing: it reads the database to check that it is still the state the plan was computed against, then runs what the file holds. See [Plan files](../guides/plan-files.md).
+`apply-from` reads no schema file and diffs nothing. It reads the database to check that the schema is still what the plan was computed against, then runs the statements the file holds. See [Plan files](../guides/plan-files.md).
 
-Where the database has changed under the plan, the command fails and nothing runs:
+When the schema has changed since, the command fails and nothing runs:
 
 ```
 pista: error: the database has drifted since plan file plan.json was written: run plan again, or pass --force to apply it as it is
@@ -790,7 +790,7 @@ Use `--force` to run it anyway. The drift is reported as a warning instead:
 
 Also available as `$PISTA_FORCE`.
 
-`--with-tx`, `--try-tx`, `--timing`, `--exclusive` and `--exclusive-wait` work as they do on `apply`. The flags that decide what is read or what is run are not offered: the plan file holds them, and one given here would either be ignored or turn the plan's own scope into drift.
+`--with-tx`, `--try-tx`, `--timing`, `--exclusive` and `--exclusive-wait` work as they do on `apply`. The flags that decide what is read or what is run are not accepted. The plan file holds those, and one given here would report drift that is not there.
 
 
 ## dump

@@ -161,6 +161,50 @@ SELECT 1;`), 0o644))
 		assert.NoFileExists(t, out, "a plan file is not left behind by a failed plan")
 	})
 
+	// The CONCURRENTLY pre-SQL and the flag that gates it are the plan's, so
+	// apply-from does not have to read the statements again to decide.
+	t.Run("the CONCURRENTLY pre-SQL is recorded with the flag that gates it", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL, name text);`)
+		dir := t.TempDir()
+		desiredFile := filepath.Join(dir, "desired.sql")
+		require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text
+);
+
+CREATE INDEX CONCURRENTLY users_name_idx ON public.users (name);`), 0o644))
+		out := filepath.Join(dir, "plan.json")
+
+		_, err := client.Plan(ctx, &PlanOptions{
+			AllowDrop:          []string{"all"},
+			Files:              []string{desiredFile},
+			ConcurrentlyPreSQL: "SET lock_timeout = '5s';",
+			Out:                out,
+		})
+		require.NoError(t, err)
+
+		planFile, err := readPlanFile(out)
+		require.NoError(t, err)
+		assert.True(t, planFile.HasConcurrentlyIndex)
+		assert.Equal(t, "SET lock_timeout = '5s';", planFile.ConcurrentlyPreSQL)
+	})
+
+	t.Run("a plan file that cannot be written is reported", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
+		dir := t.TempDir()
+		desiredFile := filepath.Join(dir, "desired.sql")
+		require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (id integer NOT NULL);`), 0o644))
+
+		_, err := client.Plan(ctx, &PlanOptions{
+			AllowDrop: []string{"all"},
+			Files:     []string{desiredFile},
+			Out:       filepath.Join(dir, "no-such-dir", "plan.json"),
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "write the plan file")
+	})
+
 	t.Run("a plan file of another format version is refused", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "plan.json")
 		require.NoError(t, os.WriteFile(path, []byte(`{"version":0}`), 0o644))
