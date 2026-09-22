@@ -149,11 +149,7 @@ func (client *Client) connect(ctx context.Context, readOnly bool) (*pgx.Conn, er
 	//
 	// A startup parameter costs no extra round-trip. An invalid value fails the
 	// connection with the server's own message.
-	searchPath := DefaultSearchPath
-	if client.SearchPath != nil {
-		searchPath = *client.SearchPath
-	}
-	cfg.RuntimeParams["search_path"] = searchPath
+	cfg.RuntimeParams["search_path"] = client.searchPath()
 
 	conn, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil {

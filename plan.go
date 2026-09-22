@@ -10,7 +10,6 @@ import (
 )
 
 type PlanOptions struct {
-	FilterOptions
 	DropPolicy
 	Files                    []string `arg:"" help:"Path to the desired schema SQL file(s)."`
 	PreSQL                   string   `xor:"pre-sql" env:"PISTA_PRE_SQL" help:"SQL to prepend to the plan output."`
@@ -23,21 +22,22 @@ type PlanOptions struct {
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
 	NoReadOnly               bool     `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default plan uses a read-only connection."`
 	Explain                  bool     `env:"PISTA_EXPLAIN" help:"Comment each statement that scans or rewrites a table with what it does, what its lock blocks, and the table's row and byte estimate from pg_class."`
+	Out                      string   `type:"path" env:"PISTA_OUT" placeholder:"FILE" help:"Also write the plan to this file, for pista apply-from to execute later. The plan is fixed when it is written: apply-from runs these statements, and only checks that the schema has not changed under them."`
 }
 
 // ObjectCount holds the number of objects inspected by type.
 type ObjectCount struct {
-	Schemas        []string
-	Tables         int
-	Views          int
-	Enums          int
-	Domains        int
-	CompositeTypes int
-	Sequences      int
+	Schemas        []string `json:"schemas"`
+	Tables         int      `json:"tables"`
+	Views          int      `json:"views"`
+	Enums          int      `json:"enums"`
+	Domains        int      `json:"domains"`
+	CompositeTypes int      `json:"composite_types"`
+	Sequences      int      `json:"sequences"`
 	// Routines is nil unless --manage-routine is set. A nil value leaves the
 	// slot out of Summary entirely, so the line reads exactly as it did
 	// before routines were managed.
-	Routines *int
+	Routines *int `json:"routines"`
 }
 
 func (c ObjectCount) SchemaLabel() string {
@@ -100,17 +100,24 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	defer conn.Close(ctx) //nolint:errcheck
 
 	result, err := client.diffAll(ctx, conn, &diffAllOptions{
-		FilterOptions:            options.FilterOptions,
+		FilterOptions:            client.FilterOptions,
 		DropPolicy:               options.DropPolicy,
 		Desired:                  desired,
 		DisableIndexConcurrently: options.DisableIndexConcurrently,
 		ForceIndexConcurrently:   options.ForceIndexConcurrently,
 		BulkAlter:                options.BulkAlter,
 		AssumeValidated:          options.AssumeValidated,
+		StateHash:                options.Out != "",
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	// The statements as the diff wrote them. --explain rewrites result.Stmts
+	// with a comment above each statement it has something to say about,
+	// which belongs in the output a person reads rather than in the file
+	// apply-from executes.
+	planStmts := result.Stmts
 
 	// The type names --explain resolves were printed under the connection's
 	// search_path, so this runs before the SET below changes it. A plan with
@@ -151,7 +158,12 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 	// time. Such a statement is kept in the plan, as it was before checks were
 	// evaluated at all, with the reason recorded; failing here would take the
 	// unrelated DDL down with it.
-	appendExecuteStmts := func(stmts []string, first bool) []string {
+	//
+	// --out is the exception: a plan file says what apply-from will run, and
+	// there is no apply left to decide. Writing the guess as a promise is
+	// worse than failing here with the reason.
+	var decided []*parser.ExecuteStmt
+	appendExecuteStmts := func(stmts []string, first bool) ([]string, error) {
 		for _, es := range result.ExecuteStmts {
 			if es.First != first {
 				continue
@@ -160,21 +172,36 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 			note := ""
 			if es.CheckSQL != "" {
 				if err := conn.QueryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
+					if options.Out != "" {
+						return nil, fmt.Errorf(
+							"failed to evaluate check SQL for --out: %s: %w (plan connects read-only; --no-read-only answers a check that writes)",
+							es.CheckSQL, err,
+						)
+					}
 					shouldExecute = true
 					note = "check SQL could not be evaluated at plan time: " + err.Error() + "; apply will decide"
 				}
 			}
 			if shouldExecute {
 				stmts = append(stmts, parser.FormatExecuteStmtWithNote(es, note))
+				// The plan file holds the decision, not the condition: the
+				// statement is one apply-from runs.
+				decided = append(decided, &parser.ExecuteStmt{SQL: es.SQL, First: es.First})
 			}
 		}
-		return stmts
+		return stmts, nil
 	}
 
 	var stmts []string
-	stmts = appendExecuteStmts(stmts, true)
+	stmts, err = appendExecuteStmts(stmts, true)
+	if err != nil {
+		return nil, err
+	}
 	stmts = append(stmts, result.Stmts...)
-	stmts = appendExecuteStmts(stmts, false)
+	stmts, err = appendExecuteStmts(stmts, false)
+	if err != nil {
+		return nil, err
+	}
 
 	hasChanges := len(stmts) > 0
 
@@ -190,6 +217,36 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 			prefix = append(prefix, result.ConcurrentlyPreSQL)
 		}
 		stmts = append(prefix, stmts...)
+	}
+
+	if options.Out != "" {
+		scope := client.ScopeOptions
+		// The effective value, so that apply-from opens its connection the
+		// way this run did even where the default applied.
+		searchPath := scope.searchPath()
+		scope.SearchPath = &searchPath
+
+		serverVersion, err := serverMajorVersion(ctx, conn)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := writePlanFile(options.Out, &planFile{
+			Version:              planFileVersion,
+			ServerVersion:        serverVersion,
+			Scope:                scope,
+			StateHash:            result.StateHash,
+			Count:                result.Count,
+			PreSQL:               result.PreSQL,
+			ConcurrentlyPreSQL:   result.ConcurrentlyPreSQL,
+			HasConcurrentlyIndex: result.HasConcurrentlyIndex,
+			Stmts:                planStmts,
+			ExecuteStmts:         decided,
+			DisallowedDrops:      result.DisallowedDrops,
+			IgnoredObjects:       result.IgnoredObjects,
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	return &PlanResult{

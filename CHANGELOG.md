@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* `plan --out` writes the plan to a file and `apply-from` runs it. `apply-from` reads no schema file and diffs nothing: it reads the database to check that the schema is still what the plan was computed against, and stops when it is not. `--force` runs the plan anyway and reports the drift as a warning. The file records the options that decide what the plan read, so `apply-from` reads the database the same way, and a `-- pista:execute` check is evaluated once, when the file is written.
+
 * `apply --timing` writes each statement's elapsed time as a comment after it. Every statement it writes out is timed, `BEGIN` and `COMMIT` included. The time is measured on the client, so it covers any wait for a lock.
 
 ## [1.59.2] - 2026-09-20

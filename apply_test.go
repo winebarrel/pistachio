@@ -123,8 +123,15 @@ func TestApply(t *testing.T) {
 				require.NoError(t, os.WriteFile(concurrentlyPreSQLFile, []byte(tc.ConcurrentlyPreSQLFile), 0o644))
 			}
 			client := NewClient(&Options{
-				ConnString: conn.Config().ConnString(),
-				Schemas:    []string{"public"},
+				ConnString:         conn.Config().ConnString(),
+				Schemas:            []string{"public"},
+				Include:            tc.Include,
+				Exclude:            tc.Exclude,
+				Enable:             tc.Enable,
+				Disable:            tc.Disable,
+				ManageRoutine:      tc.ManageRoutine,
+				ManageStorageParam: tc.ManageStorageParam,
+				SkipPartitionChild: tc.SkipPartitionChild,
 			})
 			dropPolicy := DropPolicy{AllowDrop: []string{"all"}}
 			if tc.DropPolicy != nil {
@@ -133,13 +140,6 @@ func TestApply(t *testing.T) {
 			var buf bytes.Buffer
 			result, err := client.Apply(ctx, &ApplyOptions{
 				DropPolicy:               dropPolicy,
-				Include:                  tc.Include,
-				Exclude:                  tc.Exclude,
-				Enable:                   tc.Enable,
-				Disable:                  tc.Disable,
-				ManageRoutine:            tc.ManageRoutine,
-				ManageStorageParam:       tc.ManageStorageParam,
-				SkipPartitionChild:       tc.SkipPartitionChild,
 				Files:                    []string{desiredFile},
 				DisableIndexConcurrently: tc.DisableIndexConcurrently,
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
@@ -158,24 +158,22 @@ func TestApply(t *testing.T) {
 			assert.Equal(t, strings.TrimSpace(tc.DisallowedDrops), strings.TrimSpace(result.DisallowedDrops))
 			assertExpectedCount(t, tc.Count, result.Count)
 
-			// Verify
-			got, err := client.Dump(ctx, &DumpOptions{
+			// Verify. The dump takes a client of its own: the applied schema
+			// is checked whole, including the objects --include and friends
+			// left out of the apply, and the filters now sit on the client.
+			dumpClient := NewClient(&Options{
+				ConnString:         conn.Config().ConnString(),
+				Schemas:            []string{"public"},
 				ManageRoutine:      tc.ManageRoutine,
 				ManageStorageParam: tc.ManageStorageParam,
 			})
+			got, err := dumpClient.Dump(ctx, &DumpOptions{})
 			require.NoError(t, err)
 			assert.Equal(t, strings.TrimSpace(tc.expectedApplied(pgMajor)), strings.TrimSpace(got.String()))
 
 			if !tc.SkipDriftCheck {
 				plan, err := client.Plan(ctx, &PlanOptions{
 					DropPolicy:               dropPolicy,
-					Include:                  tc.Include,
-					Exclude:                  tc.Exclude,
-					Enable:                   tc.Enable,
-					Disable:                  tc.Disable,
-					ManageRoutine:            tc.ManageRoutine,
-					ManageStorageParam:       tc.ManageStorageParam,
-					SkipPartitionChild:       tc.SkipPartitionChild,
 					Files:                    []string{desiredFile},
 					DisableIndexConcurrently: tc.DisableIndexConcurrently,
 					ForceIndexConcurrently:   tc.ForceIndexConcurrently,

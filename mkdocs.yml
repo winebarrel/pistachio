@@ -67,6 +67,7 @@ nav:
       - guides/transactions.md
       - guides/exclusive-apply.md
       - guides/executing-sql.md
+      - guides/plan-files.md
       - guides/splitting.md
       - guides/diffing.md
       - guides/formatting.md

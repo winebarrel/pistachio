@@ -26,6 +26,10 @@ type diffAllOptions struct {
 	ForceIndexConcurrently   bool
 	BulkAlter                bool
 	AssumeValidated          bool
+	// StateHash asks for the hash of the current side the diff read. Only a
+	// run that writes a plan file needs it, so every other run pays nothing
+	// for the extra encoding.
+	StateHash bool
 }
 
 // desiredInput is what a run reads from the file system: the parsed desired
@@ -90,6 +94,25 @@ type diffAllResult struct {
 	// drop, for the dependent check diffAll makes against the catalog. Diff
 	// reads no catalog and leaves it alone.
 	DroppedViews []string
+	// StateHash fingerprints the current side the statements were computed
+	// against. Empty unless the run asked for it.
+	StateHash string
+	// IgnoredObjects names what the desired schema marked -- pista:ignore, by
+	// the key the current side holds it under. Ignored is the same list as the
+	// comments the output carries; the plan file records these so apply-from
+	// can drop them from its read before it hashes it.
+	IgnoredObjects []string
+}
+
+// ignoredObjectComments renders the -- ignored: line of each name. plan writes
+// them from the diff and apply-from from the plan file, so both spell it the
+// same way.
+func ignoredObjectComments(names []string) []string {
+	comments := make([]string, len(names))
+	for i, name := range names {
+		comments[i] = "-- ignored: " + name
+	}
+	return comments
 }
 
 // schemaObjects holds one side of a diff: one map per object kind. On the
@@ -129,7 +152,33 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		return nil, fmt.Errorf("failed to create catalog: %w", err)
 	}
 
+	current, err := readCurrent(ctx, cat, &options.FilterOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.diffObjects(current, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only a plan that drops a view pays for the dependent read, so the
+	// common run makes no extra query.
+	if len(result.DroppedViews) > 0 {
+		if err := checkViewDependents(ctx, cat, result.DroppedViews); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+// readCurrent reads every object kind the diff compares out of the system
+// catalogs. apply-from reads the same way for its state hash, so the two see
+// one schema rather than two readings of it.
+func readCurrent(ctx context.Context, cat *catalog.Catalog, filter *FilterOptions) (*schemaObjects, error) {
 	current := &schemaObjects{}
+	var err error
 
 	current.Tables, err = cat.Tables(ctx)
 	if err != nil {
@@ -164,27 +213,34 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	// pg_proc is read only when --manage-routine asked for it. Skipping the
 	// query keeps the extra round trip off every other run.
 	current.Routines = orderedmap.New[string, *model.Routine]()
-	if options.ManageRoutine {
+	if filter.ManageRoutine {
 		current.Routines, err = cat.Routines(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch routines: %w", err)
 		}
 	}
 
-	result, err := client.diffObjects(current, options)
-	if err != nil {
-		return nil, err
-	}
+	return current, nil
+}
 
-	// Only a plan that drops a view pays for the dependent read, so the
-	// common run makes no extra query.
-	if len(result.DroppedViews) > 0 {
-		if err := checkViewDependents(ctx, cat, result.DroppedViews); err != nil {
-			return nil, err
-		}
+// count reports how many objects of each kind a run inspected, for the line
+// plan and apply write above their output. The routine slot is left out
+// unless routines are managed, so the line reads as it did before they were.
+func (o *schemaObjects) count(schemas []string, manageRoutine bool) ObjectCount {
+	count := ObjectCount{
+		Schemas:        schemas,
+		Tables:         o.Tables.Len(),
+		Views:          o.Views.Len(),
+		Enums:          o.Enums.Len(),
+		Domains:        o.Domains.Len(),
+		CompositeTypes: o.CompositeTypes.Len(),
+		Sequences:      o.Sequences.Len(),
 	}
-
-	return result, nil
+	if manageRoutine {
+		n := o.Routines.Len()
+		count.Routines = &n
+	}
+	return count
 }
 
 // diffObjects diffs the desired schema against an already-loaded current side
@@ -192,24 +248,19 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 // database; Diff hands it a parsed schema file.
 func (client *Client) diffObjects(current *schemaObjects, options *diffAllOptions) (*diffAllResult, error) {
 	currentTables := current.Tables
-	currentViews := current.Views
-	currentEnums := current.Enums
-	currentDomains := current.Domains
-	currentCompositeTypes := current.CompositeTypes
-	currentSequences := current.Sequences
-	currentRoutines := current.Routines
 
 	desired := options.Desired.schema
 
 	filterDesiredBySchemas(desired, client.Schemas, client.SchemaMap)
 
-	filteredTables := options.filterTables(currentTables)
-	filteredViews := options.filterViews(currentViews)
-	filteredEnums := options.filterEnums(currentEnums)
-	filteredDomains := options.filterDomains(currentDomains)
-	filteredCompositeTypes := options.filterCompositeTypes(currentCompositeTypes)
-	filteredSequences := options.filterSequences(currentSequences)
-	filteredRoutines := options.filterRoutines(currentRoutines)
+	narrowed := options.currentSide(current)
+	filteredTables := narrowed.Tables
+	filteredViews := narrowed.Views
+	filteredEnums := narrowed.Enums
+	filteredDomains := narrowed.Domains
+	filteredCompositeTypes := narrowed.CompositeTypes
+	filteredSequences := narrowed.Sequences
+	filteredRoutines := narrowed.Routines
 
 	desiredEnums := options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums))
 	desiredDomains := options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains))
@@ -234,28 +285,27 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	ignored = append(ignored, removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore })...)
 	ignored = append(ignored, removeIgnored(desiredRoutines, filteredRoutines, func(r *model.Routine) bool { return r.Ignore })...)
 	sort.Strings(ignored)
-	ignoredComments := make([]string, len(ignored))
-	for i, fqn := range ignored {
-		ignoredComments[i] = "-- ignored: " + fqn
+
+	// Hashed here: after removeIgnored, so an object the desired schema
+	// ignores is out of it, and before the transforms below, which reach into
+	// the current side too (--assume-validated, --force-index-concurrently).
+	// The plan file records the ignored names, and apply-from drops them from
+	// its own read before hashing, so the two see the same objects.
+	var currentStateHash string
+	if options.StateHash {
+		var err error
+		if currentStateHash, err = narrowed.stateHash(); err != nil {
+			return nil, err
+		}
 	}
 
-	count := ObjectCount{
-		Schemas:        client.Schemas,
-		Tables:         filteredTables.Len(),
-		Views:          filteredViews.Len(),
-		Enums:          filteredEnums.Len(),
-		Domains:        filteredDomains.Len(),
-		CompositeTypes: filteredCompositeTypes.Len(),
-		Sequences:      filteredSequences.Len(),
-	}
-	if options.ManageRoutine {
-		n := filteredRoutines.Len()
-		count.Routines = &n
-	}
+	count := narrowed.count(client.Schemas, options.ManageRoutine)
 
+	// The current side is cleared by currentSide, above, so that the state
+	// hash reads what the diff compares.
 	if !options.ManageStorageParam {
-		clearStorageParams(filteredTables, desiredTables)
-		clearMatViewStorageParams(filteredViews, desiredViews)
+		clearStorageParams(desiredTables)
+		clearMatViewStorageParams(desiredViews)
 	}
 
 	switch {
@@ -365,7 +415,8 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	return &diffAllResult{
 		Stmts:                stmts,
 		DisallowedDrops:      disallowed,
-		Ignored:              ignoredComments,
+		Ignored:              ignoredObjectComments(ignored),
+		IgnoredObjects:       ignored,
 		PreSQL:               options.Desired.preSQL,
 		ConcurrentlyPreSQL:   options.Desired.concurrentlyPreSQL,
 		Count:                count,
@@ -375,6 +426,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		DesiredTables:        desiredTables,
 		DesiredDomains:       desiredDomains,
 		DroppedViews:         viewDiff.DroppedViews,
+		StateHash:            currentStateHash,
 	}, nil
 }
 
