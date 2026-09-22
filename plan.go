@@ -27,17 +27,17 @@ type PlanOptions struct {
 
 // ObjectCount holds the number of objects inspected by type.
 type ObjectCount struct {
-	Schemas        []string
-	Tables         int
-	Views          int
-	Enums          int
-	Domains        int
-	CompositeTypes int
-	Sequences      int
+	Schemas        []string `json:"schemas"`
+	Tables         int      `json:"tables"`
+	Views          int      `json:"views"`
+	Enums          int      `json:"enums"`
+	Domains        int      `json:"domains"`
+	CompositeTypes int      `json:"composite_types"`
+	Sequences      int      `json:"sequences"`
 	// Routines is nil unless --manage-routine is set. A nil value leaves the
 	// slot out of Summary entirely, so the line reads exactly as it did
 	// before routines were managed.
-	Routines *int
+	Routines *int `json:"routines"`
 }
 
 func (c ObjectCount) SchemaLabel() string {
@@ -113,6 +113,12 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		return nil, err
 	}
 
+	// The statements as the diff wrote them. --explain rewrites result.Stmts
+	// with a comment above each statement it has something to say about,
+	// which belongs in the output a person reads rather than in the file
+	// apply-from executes.
+	planStmts := result.Stmts
+
 	// The type names --explain resolves were printed under the connection's
 	// search_path, so this runs before the SET below changes it. A plan with
 	// no statements is left alone, so the common no-drift run pays for no
@@ -167,7 +173,10 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 			if es.CheckSQL != "" {
 				if err := conn.QueryRow(ctx, es.CheckSQL).Scan(&shouldExecute); err != nil {
 					if options.Out != "" {
-						return nil, fmt.Errorf("failed to evaluate check SQL for --out: %s: %w", es.CheckSQL, err)
+						return nil, fmt.Errorf(
+							"failed to evaluate check SQL for --out: %s: %w (plan connects read-only; --no-read-only answers a check that writes)",
+							es.CheckSQL, err,
+						)
 					}
 					shouldExecute = true
 					note = "check SQL could not be evaluated at plan time: " + err.Error() + "; apply will decide"
@@ -227,10 +236,11 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 			ServerVersion:        serverVersion,
 			Scope:                scope,
 			StateHash:            result.StateHash,
+			Count:                result.Count,
 			PreSQL:               result.PreSQL,
 			ConcurrentlyPreSQL:   result.ConcurrentlyPreSQL,
 			HasConcurrentlyIndex: result.HasConcurrentlyIndex,
-			Stmts:                result.Stmts,
+			Stmts:                planStmts,
 			ExecuteStmts:         decided,
 			DisallowedDrops:      result.DisallowedDrops,
 			Ignored:              result.Ignored,

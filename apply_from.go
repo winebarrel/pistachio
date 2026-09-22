@@ -14,7 +14,10 @@ const driftWarning = "-- Warning: the database has drifted since the plan was wr
 type ApplyFromOptions struct {
 	ExecOptions
 	PlanFile string `arg:"" type:"path" help:"Path to the plan file written by plan --out."`
-	Force    bool   `env:"PISTA_FORCE" help:"Apply the plan file even where the database has drifted since it was written. The drift is reported as a warning instead of an error."`
+	// No env var: --force stands down the one check the plan file is for, and
+	// a variable exported once in a CI environment would stand it down for
+	// every run there. It is typed where it is meant.
+	Force bool `help:"Apply the plan file even where the database has drifted since it was written. The drift is reported as a warning instead of an error."`
 }
 
 // ApplyFrom executes a plan file. The statements are the plan's, decided when
@@ -31,12 +34,12 @@ func (client *Client) ApplyFrom(ctx context.Context, options *ApplyFromOptions, 
 	}
 
 	// The connection is this run's, everything else the plan file's.
-	client = NewClient(&Options{ConnOptions: client.ConnOptions, ScopeOptions: plan.Scope})
-	if err := client.validateSchemas(); err != nil {
+	scoped := NewClient(&Options{ConnOptions: client.ConnOptions, ScopeOptions: plan.Scope})
+	if err := scoped.validateSchemas(); err != nil {
 		return nil, err
 	}
 
-	conn, err := client.connect(ctx, false)
+	conn, err := scoped.connect(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +65,7 @@ func (client *Client) ApplyFrom(ctx context.Context, options *ApplyFromOptions, 
 		)
 	}
 
-	current, err := client.currentState(ctx, conn)
+	current, err := scoped.currentState(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -82,12 +85,12 @@ func (client *Client) ApplyFrom(ctx context.Context, options *ApplyFromOptions, 
 	}
 
 	result := &ApplyResult{
-		Count:           current.count(client.Schemas, client.ManageRoutine),
+		Count:           plan.Count,
 		DisallowedDrops: strings.Join(plan.DisallowedDrops, "\n"),
 		Ignored:         strings.Join(plan.Ignored, "\n"),
 	}
 
-	if err := client.applyStmts(ctx, conn, &applyInput{
+	if err := scoped.applyStmts(ctx, conn, &applyInput{
 		PreSQL:               plan.PreSQL,
 		ConcurrentlyPreSQL:   plan.ConcurrentlyPreSQL,
 		HasConcurrentlyIndex: plan.HasConcurrentlyIndex,

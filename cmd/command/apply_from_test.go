@@ -141,6 +141,9 @@ CREATE TABLE public.users (
 		PlanFile:   path,
 	}
 	require.NoError(t, cmd.Run(ctx, &buf))
+	// The count is the plan's, which leaves the ignored table out. apply-from
+	// reads no desired schema and could not tell which object that is.
+	assert.Contains(t, buf.String(), "-- Apply to schema public (1 table,")
 	assert.Contains(t, buf.String(), "-- ignored: public.legacy")
 	assert.Contains(t, buf.String(), "-- skipped: DROP TABLE public.old;")
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")

@@ -190,6 +190,61 @@ CREATE INDEX CONCURRENTLY users_name_idx ON public.users (name);`), 0o644))
 		assert.Equal(t, "SET lock_timeout = '5s';", planFile.ConcurrentlyPreSQL)
 	})
 
+	// --explain writes a comment above the statements it has something to say
+	// about. That belongs in the output a person reads; the file holds the
+	// statements apply-from executes.
+	t.Run("the explain comments stay out of the plan file", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (id integer NOT NULL, n integer);
+INSERT INTO public.users SELECT g, g FROM generate_series(1, 3) g;
+ANALYZE public.users;`)
+		dir := t.TempDir()
+		desiredFile := filepath.Join(dir, "desired.sql")
+		require.NoError(t, os.WriteFile(desiredFile, []byte(`
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    n integer,
+    CONSTRAINT users_n_positive CHECK (n > 0)
+);`), 0o644))
+		out := filepath.Join(dir, "plan.json")
+
+		result, err := client.Plan(ctx, &PlanOptions{
+			AllowDrop: []string{"all"},
+			Files:     []string{desiredFile},
+			Explain:   true,
+			Out:       out,
+		})
+		require.NoError(t, err)
+		require.Contains(t, result.SQL, "-- scan, blocks reads and writes")
+
+		planFile, err := readPlanFile(out)
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users ADD CONSTRAINT users_n_positive CHECK (n > 0);",
+		}, planFile.Stmts)
+	})
+
+	// The count is the plan's. An object the desired schema ignores is left
+	// out of it, and apply-from, which reads no desired schema, could not tell
+	// which those are.
+	t.Run("the count is recorded and leaves an ignored object out", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+CREATE TABLE public.users (id integer NOT NULL);
+CREATE TABLE public.legacy (id integer NOT NULL, name text);`)
+
+		result, planFile := planOut(t, ctx, client, `
+-- pista:ignore
+CREATE TABLE public.legacy (id integer NOT NULL);
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text
+);`)
+
+		assert.Equal(t, 1, result.Count.Tables)
+		assert.Equal(t, result.Count, planFile.Count)
+	})
+
 	t.Run("a plan file that cannot be written is reported", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
 		dir := t.TempDir()

@@ -44,7 +44,13 @@ type planFile struct {
 	Scope ScopeOptions `json:"scope"`
 	// StateHash fingerprints the current-side schema the statements were
 	// computed against.
-	StateHash            string                `json:"state_hash"`
+	StateHash string `json:"state_hash"`
+	// Count is what the plan inspected, for the line apply-from writes above
+	// its output. It is the plan's rather than a count apply-from takes of
+	// its own read: an object the desired schema marks -- pista:ignore is
+	// left out of the plan's count, and apply-from, which reads no desired
+	// schema, cannot tell which those are.
+	Count                ObjectCount           `json:"count"`
 	PreSQL               string                `json:"pre_sql"`
 	ConcurrentlyPreSQL   string                `json:"concurrently_pre_sql"`
 	HasConcurrentlyIndex bool                  `json:"has_concurrently_index"`
@@ -76,16 +82,25 @@ func readPlanFile(path string) (*planFile, error) {
 		return nil, fmt.Errorf("failed to read the plan file: %w", err)
 	}
 
+	// The version is read on its own first. A file of another format may no
+	// longer decode into this struct at all, and "run plan again" is a better
+	// answer to that than a parse error naming a field.
+	var version struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(encoded, &version); err != nil {
+		return nil, fmt.Errorf("failed to parse the plan file: %w", err)
+	}
+	if version.Version != planFileVersion {
+		return nil, fmt.Errorf(
+			"plan file %s is version %d, and this pista writes version %d: run plan again",
+			path, version.Version, planFileVersion,
+		)
+	}
+
 	plan := &planFile{}
 	if err := json.Unmarshal(encoded, plan); err != nil {
 		return nil, fmt.Errorf("failed to parse the plan file: %w", err)
-	}
-
-	if plan.Version != planFileVersion {
-		return nil, fmt.Errorf(
-			"plan file %s is version %d, and this pista writes version %d: run plan again",
-			path, plan.Version, planFileVersion,
-		)
 	}
 
 	return plan, nil

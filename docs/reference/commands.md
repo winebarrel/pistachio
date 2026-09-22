@@ -309,13 +309,6 @@ Flags:
                                    Path to a SQL file to execute
                                    before CONCURRENTLY index DDL
                                    ($PISTA_CONCURRENTLY_PRE_SQL_FILE).
-      --with-tx                    Execute pre-SQL and schema changes in a
-                                   transaction ($PISTA_WITH_TX).
-      --try-tx                     Execute pre-SQL and schema changes in
-                                   a transaction when possible. A diff
-                                   containing CONCURRENTLY index DDL runs
-                                   without a transaction instead of failing
-                                   ($PISTA_TRY_TX).
       --disable-index-concurrently
                                    Ignore CONCURRENTLY opt-ins (directive and
                                    inline) and emit plain CREATE/DROP INDEX
@@ -333,6 +326,13 @@ Flags:
                                    constraint, and foreign key as validated:
                                    ignore NOT VALID and never emit VALIDATE
                                    CONSTRAINT ($PISTA_ASSUME_VALIDATED).
+      --with-tx                    Execute pre-SQL and schema changes in a
+                                   transaction ($PISTA_WITH_TX).
+      --try-tx                     Execute pre-SQL and schema changes in
+                                   a transaction when possible. A diff
+                                   containing CONCURRENTLY index DDL runs
+                                   without a transaction instead of failing
+                                   ($PISTA_TRY_TX).
       --timing                     Write each statement's elapsed time after
                                    it as a comment. Measured on the client,
                                    so it covers the round trip and any lock wait
@@ -397,8 +397,7 @@ Flags:
                                    ($PISTA_EXCLUSIVE_WAIT).
       --force                      Apply the plan file even where the database
                                    has drifted since it was written. The drift
-                                   is reported as a warning instead of an error
-                                   ($PISTA_FORCE).
+                                   is reported as a warning instead of an error.
 ```
 
 </details>
@@ -787,8 +786,6 @@ Use `--force` to run it anyway. The drift is reported as a warning instead:
 ```sql
 -- Warning: the database has drifted since the plan was written
 ```
-
-Also available as `$PISTA_FORCE`.
 
 `--with-tx`, `--try-tx`, `--timing`, `--exclusive` and `--exclusive-wait` work as they do on `apply`. The flags that decide what is read or what is run are not accepted. The plan file holds those, and one given here would report drift that is not there.
 
