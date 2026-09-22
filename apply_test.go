@@ -355,10 +355,8 @@ func TestApply_WithTx_Success(t *testing.T) {
 	assert.Contains(t, got.String(), "CREATE TABLE public.users")
 }
 
-// --timing also times the transaction control statements, which the fixtures
-// cannot reach because they never open a transaction. COMMIT is the one that
-// matters: with --with-tx, work the server defers to commit time shows up
-// there rather than on the statement that caused it.
+// --timing times BEGIN and COMMIT, which the fixtures cannot reach because
+// they never open a transaction.
 func TestApply_Timing_WithTx(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -394,6 +392,85 @@ CREATE TABLE public.users (
 -- Time: <elapsed>
 -- Transaction committed
 -- Time: <elapsed>`, strings.TrimSpace(normalizeTimings(buf.String())))
+}
+
+// A statement that fails is left without a time, so the output names where the
+// apply stopped.
+func TestApply_Timing_StatementFailure(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, "")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &ApplyOptions{
+		Files:  []string{desiredFile},
+		PreSQL: "SELECT * FROM public.missing_table;",
+		Timing: true,
+	}, &buf)
+	require.Error(t, err)
+
+	assert.Equal(t, "SELECT * FROM public.missing_table;", strings.TrimSpace(buf.String()))
+}
+
+// COMMIT can fail on its own, with every statement before it timed. A deferred
+// foreign key is checked at commit time, so the INSERT succeeds and the commit
+// does not.
+func TestApply_Timing_CommitFailure(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	schemaSQL := `CREATE TABLE public.parent (
+    id integer NOT NULL,
+    CONSTRAINT parent_pkey PRIMARY KEY (id)
+);
+
+CREATE TABLE public.child (
+    id integer NOT NULL,
+    parent_id integer,
+    CONSTRAINT child_pkey PRIMARY KEY (id),
+    CONSTRAINT child_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parent(id) DEFERRABLE INITIALLY DEFERRED
+);`
+	testutil.SetupDB(t, ctx, conn, schemaSQL)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(schemaSQL+`
+
+-- pista:execute
+INSERT INTO public.child (id, parent_id) VALUES (1, 999);`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	var buf bytes.Buffer
+	_, err := client.Apply(ctx, &ApplyOptions{
+		Files:  []string{desiredFile},
+		WithTx: true,
+		Timing: true,
+	}, &buf)
+	require.ErrorContains(t, err, "failed to commit transaction")
+
+	assert.Equal(t, `-- Transaction started
+-- Time: <elapsed>
+-- pista:execute
+INSERT INTO public.child (id, parent_id) VALUES (1, 999);
+-- Time: <elapsed>
+-- Transaction rolled back`, strings.TrimSpace(normalizeTimings(buf.String())))
 }
 
 func TestApply_WithTx_NoChanges_OmitsTransactionComments(t *testing.T) {

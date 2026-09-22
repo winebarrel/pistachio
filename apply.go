@@ -24,7 +24,7 @@ type ApplyOptions struct {
 	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
-	Timing                   bool     `env:"PISTA_TIMING" help:"Write each executed statement's elapsed time after it as a comment. The time is measured on the client, so it covers the round trip and any lock wait."`
+	Timing                   bool     `env:"PISTA_TIMING" help:"Write each statement's elapsed time after it as a comment. Measured on the client, so it covers the round trip and any lock wait."`
 	Exclusive                bool     `xor:"exclusive" env:"PISTA_EXCLUSIVE" help:"Make apply runs on the same database mutually exclusive: fail immediately when another exclusive apply is running."`
 	// ExclusiveWait enables the same mutual exclusion as Exclusive and waits
 	// for the other apply instead of failing. A pointer because 0 is a valid
@@ -58,10 +58,9 @@ type ApplyResult struct {
 	Duration time.Duration
 }
 
-// timingComment renders an elapsed time the way psql's \timing does, in
-// milliseconds with three decimals. Most DDL finishes in well under a
-// millisecond, which a Go duration rounded to milliseconds would report as
-// "0s".
+// timingComment renders an elapsed time as psql's \timing does, in
+// milliseconds with three decimals. A Go duration rounded to milliseconds
+// reports the sub-millisecond time of most DDL as "0s".
 func timingComment(elapsed time.Duration) string {
 	return fmt.Sprintf("-- Time: %.3f ms", float64(elapsed.Nanoseconds())/float64(time.Millisecond))
 }
@@ -145,9 +144,9 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		}
 	}
 
-	// execTimed runs a statement already written to w and reports its elapsed
-	// time after it. The comment follows the statement, so the one a failed
-	// apply stopped at is the statement left without a time.
+	// execTimed runs a statement already written to w and writes its elapsed
+	// time after it. A statement that fails is left without a time, so the
+	// output names where the apply stopped.
 	execTimed := func(ctx context.Context, stmt string) error {
 		stmtStart := time.Now()
 		if _, err := exec(ctx, stmt); err != nil {
