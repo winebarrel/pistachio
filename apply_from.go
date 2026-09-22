@@ -69,6 +69,9 @@ func (client *Client) ApplyFrom(ctx context.Context, options *ApplyFromOptions, 
 	if err != nil {
 		return nil, err
 	}
+	// The plan did not compare what the desired schema ignores, and this run
+	// has no desired schema to find them from, so the plan file names them.
+	current.remove(plan.IgnoredObjects)
 	stateHash, err := current.stateHash()
 	if err != nil {
 		return nil, err
@@ -87,7 +90,7 @@ func (client *Client) ApplyFrom(ctx context.Context, options *ApplyFromOptions, 
 	result := &ApplyResult{
 		Count:           plan.Count,
 		DisallowedDrops: strings.Join(plan.DisallowedDrops, "\n"),
-		Ignored:         strings.Join(plan.Ignored, "\n"),
+		Ignored:         strings.Join(ignoredObjectComments(plan.IgnoredObjects), "\n"),
 	}
 
 	if err := scoped.applyStmts(ctx, conn, &applyInput{

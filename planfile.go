@@ -57,7 +57,11 @@ type planFile struct {
 	Stmts                []string              `json:"statements"`
 	ExecuteStmts         []*parser.ExecuteStmt `json:"execute_statements"`
 	DisallowedDrops      []string              `json:"disallowed_drops"`
-	Ignored              []string              `json:"ignored"`
+	// IgnoredObjects names what the desired schema marked -- pista:ignore.
+	// apply-from drops them from its read before it hashes it, so an object
+	// the plan did not compare cannot report drift, and renders the
+	// -- ignored: lines of the output from the same list.
+	IgnoredObjects []string `json:"ignored_objects"`
 }
 
 // writePlanFile writes the plan file as indented JSON, with the newline a text

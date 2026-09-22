@@ -243,7 +243,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 			Stmts:                planStmts,
 			ExecuteStmts:         decided,
 			DisallowedDrops:      result.DisallowedDrops,
-			Ignored:              result.Ignored,
+			IgnoredObjects:       result.IgnoredObjects,
 		}); err != nil {
 			return nil, err
 		}

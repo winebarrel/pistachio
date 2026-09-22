@@ -430,10 +430,10 @@ CREATE TABLE public.users (
 		assert.Equal(t, "schema myschema", result.Count.SchemaLabel())
 	})
 
-	// An ignored object is hashed on both sides, since apply-from reads no
-	// desired schema and cannot tell which objects the plan ignored. A change
-	// to one is drift, although the statements do not touch it.
-	t.Run("a change to an ignored object is drift", func(t *testing.T) {
+	// The plan did not compare what the desired schema ignores, so a change to
+	// one is not drift. apply-from finds them by the names the plan file
+	// records.
+	t.Run("a change to an ignored object is not drift", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 CREATE TABLE public.users (id integer NOT NULL);
 CREATE TABLE public.owned_elsewhere (id integer NOT NULL);`)
@@ -448,7 +448,15 @@ CREATE TABLE public.users (
 
 		execSQL(t, ctx, conn, `ALTER TABLE public.owned_elsewhere ADD COLUMN note text`)
 
-		_, _, err := applyFrom(t, ctx, path, false)
+		result, out, err := applyFrom(t, ctx, path, false)
+		require.NoError(t, err)
+		assert.True(t, result.Applied)
+		assert.NotContains(t, out, "Warning")
+		assert.Equal(t, "-- ignored: public.owned_elsewhere", result.Ignored)
+
+		// The table it does compare is still guarded.
+		execSQL(t, ctx, conn, `ALTER TABLE public.users ADD COLUMN other text`)
+		_, _, err = applyFrom(t, ctx, path, false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "drift")
 	})

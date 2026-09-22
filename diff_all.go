@@ -97,6 +97,22 @@ type diffAllResult struct {
 	// StateHash fingerprints the current side the statements were computed
 	// against. Empty unless the run asked for it.
 	StateHash string
+	// IgnoredObjects names what the desired schema marked -- pista:ignore, by
+	// the key the current side holds it under. Ignored is the same list as the
+	// comments the output carries; the plan file records these so apply-from
+	// can drop them from its read before it hashes it.
+	IgnoredObjects []string
+}
+
+// ignoredObjectComments renders the -- ignored: line of each name. plan writes
+// them from the diff and apply-from from the plan file, so both spell it the
+// same way.
+func ignoredObjectComments(names []string) []string {
+	comments := make([]string, len(names))
+	for i, name := range names {
+		comments[i] = "-- ignored: " + name
+	}
+	return comments
 }
 
 // schemaObjects holds one side of a diff: one map per object kind. On the
@@ -246,17 +262,6 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	filteredSequences := narrowed.Sequences
 	filteredRoutines := narrowed.Routines
 
-	// Hashed here, before the transforms below rewrite what they touch:
-	// --assume-validated and --force-index-concurrently reach into the
-	// current side too, and the hash is of the database as it was read.
-	var currentStateHash string
-	if options.StateHash {
-		var err error
-		if currentStateHash, err = narrowed.stateHash(); err != nil {
-			return nil, err
-		}
-	}
-
 	desiredEnums := options.filterEnums(client.reverseRemapEnumSchemas(desired.Enums))
 	desiredDomains := options.filterDomains(client.reverseRemapDomainSchemas(desired.Domains))
 	desiredCompositeTypes := options.filterCompositeTypes(client.reverseRemapCompositeTypeSchemas(desired.CompositeTypes))
@@ -280,9 +285,18 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	ignored = append(ignored, removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore })...)
 	ignored = append(ignored, removeIgnored(desiredRoutines, filteredRoutines, func(r *model.Routine) bool { return r.Ignore })...)
 	sort.Strings(ignored)
-	ignoredComments := make([]string, len(ignored))
-	for i, fqn := range ignored {
-		ignoredComments[i] = "-- ignored: " + fqn
+
+	// Hashed here: after removeIgnored, so an object the desired schema
+	// ignores is out of it, and before the transforms below, which reach into
+	// the current side too (--assume-validated, --force-index-concurrently).
+	// The plan file records the ignored names, and apply-from drops them from
+	// its own read before hashing, so the two see the same objects.
+	var currentStateHash string
+	if options.StateHash {
+		var err error
+		if currentStateHash, err = narrowed.stateHash(); err != nil {
+			return nil, err
+		}
 	}
 
 	count := narrowed.count(client.Schemas, options.ManageRoutine)
@@ -401,7 +415,8 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	return &diffAllResult{
 		Stmts:                stmts,
 		DisallowedDrops:      disallowed,
-		Ignored:              ignoredComments,
+		Ignored:              ignoredObjectComments(ignored),
+		IgnoredObjects:       ignored,
 		PreSQL:               options.Desired.preSQL,
 		ConcurrentlyPreSQL:   options.Desired.concurrentlyPreSQL,
 		Count:                count,

@@ -243,6 +243,11 @@ CREATE TABLE public.users (
 
 		assert.Equal(t, 1, result.Count.Tables)
 		assert.Equal(t, result.Count, planFile.Count)
+
+		// The names are recorded so apply-from can drop them from its read.
+		// The hash is of what the plan compared, which is not them.
+		assert.Equal(t, []string{"public.legacy"}, planFile.IgnoredObjects)
+		assert.Equal(t, "-- ignored: public.legacy", result.Ignored)
 	})
 
 	t.Run("a plan file that cannot be written is reported", func(t *testing.T) {

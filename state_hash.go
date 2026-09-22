@@ -24,11 +24,10 @@ import (
 // change the plan, so it cannot change this either, and an autovacuum setting
 // nobody manages does not report drift.
 //
-// An object the desired schema marks -- pista:ignore is the exception: it is
-// hashed, because removeIgnored drops it from the current side after this runs.
-// apply-from reads no desired schema and could not tell which objects those
-// are, so hashing them on both sides is what keeps the two readings the same.
-// A change to one reports drift although the statements do not touch it.
+// An object the desired schema marks -- pista:ignore is out of it too:
+// removeIgnored drops it from the current side before the plan hashes it, and
+// apply-from, which has no desired schema to find them from, drops the names
+// the plan file records.
 //
 // Every object is hashed on its own and the digests are sorted, so the value
 // does not depend on the order the catalog returned them in. An object list
@@ -98,6 +97,21 @@ func (client *Client) currentState(ctx context.Context, conn *pgx.Conn) (*schema
 	}
 
 	return client.currentSide(current), nil
+}
+
+// remove drops the named objects from every kind. The names are keys of the
+// maps the catalog filled, so the kind a name belongs to does not have to be
+// known: the six it does not belong to hold nothing under it.
+func (o *schemaObjects) remove(names []string) {
+	for _, name := range names {
+		o.Tables.Delete(name)
+		o.Views.Delete(name)
+		o.Enums.Delete(name)
+		o.Domains.Delete(name)
+		o.CompositeTypes.Delete(name)
+		o.Sequences.Delete(name)
+		o.Routines.Delete(name)
+	}
 }
 
 // currentSide narrows what the catalog returned to what the diff compares:

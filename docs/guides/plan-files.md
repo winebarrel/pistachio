@@ -25,7 +25,7 @@ pista: error: the database has drifted since plan file plan.json was written: ru
 
 The hash covers what the plan compared. An object left out by `--include` or `--exclude` is not in it, and neither are the storage parameters under the default `--manage-storage-param`. A table dropped and created again with the same definition does change it, since each object's OID is part of it.
 
-An object the desired schema marks `-- pista:ignore` goes the other way: it is in the hash. `apply-from` reads no desired schema and cannot tell which objects those are, so it hashes them too. A change to one therefore reports drift and stops the apply, although the statements do not touch it. Where something else owns the object and changes it, plan again or pass `--force`.
+An object the desired schema marks `-- pista:ignore` is out of it as well. The plan file names those objects, and `apply-from` drops them from its read before it hashes it, so something else can own such a table and change it without standing between a plan and its apply.
 
 Data is not covered, and neither is which database the connection points at. A plan applies to another database whose schema is identical.
 
