@@ -77,11 +77,11 @@ check() {
 }
 
 # require_extension <extension> <package> <samples>
-# The discourse and citizenlab samples need pgvector, and the osm, inaturalist,
-# and citizenlab samples and the dhis2 loader need PostGIS, neither of which the
-# official postgres image ships. Say so up front:
-# without them the sample fails at load time and the reason is buried in psql's
-# output.
+# The discourse, citizenlab, affine, lobehub, and formbricks samples need
+# pgvector, and the osm, inaturalist, and citizenlab samples and the dhis2
+# loader need PostGIS, neither of which the official postgres image ships. Say
+# so up front: without them the sample fails at load time and the reason is
+# buried in psql's output.
 require_extension() {
   local ext="$1" pkg="$2" sample="$3"
   if [ -z "$(psql -X -q -At -c "SELECT 1 FROM pg_available_extensions WHERE name = '$ext'")" ]; then
@@ -92,7 +92,7 @@ require_extension() {
   fi
 }
 
-require_extension vector pgvector "the discourse and citizenlab samples"
+require_extension vector pgvector "the discourse, citizenlab, affine, lobehub, and formbricks samples"
 require_extension postgis PostGIS "the osm, inaturalist, dhis2, and citizenlab samples"
 
 echo "Building pista..."

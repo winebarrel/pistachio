@@ -121,6 +121,9 @@ hexpm|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/hexpm/hexpm/
 omop|sample-db-omop||omop
 zed|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/zed-industries/zed/418f89714891f9d8105a3e92e60b9a7a5084d232/crates/collab/migrations/20251208000000_test_schema.sql SCHEMA=zed|zed
 gravitino|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/gravitino/7f303cadad7623dfe8438ae8c2b9269f8e21e919/scripts/postgresql/schema-0.9.0-postgresql.sql SCHEMA=gravitino|gravitino
+formbricks|sample-db-formbricks||formbricks
+hoppscotch|sample-db-hoppscotch||hoppscotch
+streampark|sample-db-streampark|URL=https://raw.githubusercontent.com/apache/streampark/829466b5470d749773793193f1fc1d46e8613d61/streampark-console/streampark-console-service/src/main/assembly/script/schema/pgsql-schema.sql SCHEMA=streampark|streampark
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1451,6 +1454,84 @@ sample-db-omop:
 	  echo; \
 	done \
 	  | sed 's/@cdmDatabaseSchema/omop/g' \
+	  | $(PSQL)
+
+# Formbricks is a Prisma schema like calcom's, but sample-db-prisma cannot load
+# it: two of its migrations ask the catalog whether an earlier rename already
+# happened and look in `public` to do it, and a later one drops, unguarded, the
+# index that rename produces. Loaded anywhere else the guards answer no, the
+# rename is skipped, and the drop fails on an index nobody renamed, so the
+# lookups have to follow the schema the sample loads into. The unscoped
+# `conname` lookup beside them is narrowed the same way lemmy's is, so that a
+# constraint another sample left behind cannot answer for this one.
+#
+# pgvector is installed into `public` up front the way affine's is, with
+# `public` second in the search path, since the `CREATE EXTENSION IF NOT
+# EXISTS` one of the migrations writes names no schema and gets nothing when
+# another sample already installed it somewhere else. The ALTER beside it is
+# for where that has already happened: `WITH SCHEMA public` places a new
+# extension, it does not move one, and in `make schema` citizenlab has put
+# pgvector in `shared_extensions` long before this runs. Relocating it moves
+# the member objects and leaves the indexes already built on them alone, and
+# it is a no-op when the extension is in `public` already. Nothing in the
+# schema the check reads is typed by it -- the tables that carried its
+# `vector(512)` columns were dropped by a later migration -- but the
+# statement declaring those columns still has to run.
+FORMBRICKS_SHA = 55ade3bc2a5a612e286f32e0bf2fd84cdf287073
+
+sample-db-formbricks: PGOPTS = -c search_path=formbricks,public
+.PHONY: sample-db-formbricks
+sample-db-formbricks:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION vector SET SCHEMA public'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS formbricks'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/formbricks/formbricks/tar.gz/$(FORMBRICKS_SHA) \
+	  | tar xz -C "$$dir" --strip-components=4 formbricks-$(FORMBRICKS_SHA)/packages/database/migration && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | sed -E "s/\"public\"\.//g; s/([^A-Za-z0-9_])public\./\1/g; \
+	            s/(nspname|schemaname) = 'public'/\1 = current_schema()/g; \
+	            s/WHERE conname = /WHERE connamespace = 'formbricks'::regnamespace AND conname = /g" \
+	  | $(PSQL)
+
+# Hoppscotch is a Prisma migration history sample-db-prisma could replay as
+# it stands, but one of its migrations installs `pg_trgm` and two later ones
+# name `gin_trgm_ops`, so the extension has to be resolvable from the search
+# path. It goes into `public` up front the way affine's does, with `public`
+# second in the search path, since the `CREATE EXTENSION IF NOT EXISTS` the
+# migration writes names no schema and gets nothing when another sample
+# already installed it somewhere else. The ALTER beside it relocates one that
+# is already installed elsewhere, which `WITH SCHEMA public` does not do: in
+# `make schema` lemmy has put `pg_trgm` in its own schema long before this
+# runs. It is a no-op when the extension is in `public` already.
+HOPPSCOTCH_SHA = d86e59f6e9574c69f01b300691b9f4396eeb38d2
+HOPPSCOTCH_DIR = packages/hoppscotch-backend/prisma/migrations
+
+sample-db-hoppscotch: PGOPTS = -c search_path=hoppscotch,public
+.PHONY: sample-db-hoppscotch
+sample-db-hoppscotch:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION pg_trgm SET SCHEMA public'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hoppscotch'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/hoppscotch/hoppscotch/tar.gz/$(HOPPSCOTCH_SHA) \
+	  | tar xz -C "$$dir" --strip-components=5 hoppscotch-$(HOPPSCOTCH_SHA)/$(HOPPSCOTCH_DIR) && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
+	  | $(PSQL)
+
+# StreamPark ships one file for the whole console schema and qualifies every
+# name in it with `"public"`, the sequences and the `DEFAULT nextval` that
+# reads them included, so it loads the way shenyu does: the qualifier is
+# always quoted, which no shared loader's sed strips, and off it comes.
+sample-db-streampark: PGOPTS = -c search_path=$(SCHEMA)
+.PHONY: sample-db-streampark
+sample-db-streampark:
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
+	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	  | sed -E 's/"public"\.//g' \
 	  | $(PSQL)
 
 .PHONY: test-samples
