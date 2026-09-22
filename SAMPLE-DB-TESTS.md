@@ -429,10 +429,10 @@ always reach.
 - **btree and gin indexes naming an operator class**: five of mattermost's nine
   btree indexes over `lower()` name `text_pattern_ops`, and its two gin indexes
   over a `->` expression name `jsonb_path_ops`. hoppscotch's four gin indexes
-  split two ways: two name `gin_trgm_ops` over a title, resolving from the
-  schema the sample installs `pg_trgm` into, and two are over a `jsonb`
-  column at the default operator class, so the dump has to write one pair
-  with the class and the other without.
+  split two ways: two name `gin_trgm_ops` over a title, the operator class
+  resolving from the `public` its loader installs `pg_trgm` into, and two are
+  over a `jsonb` column at the default operator class, so the dump has to
+  write one pair with the class and the other without.
 - **gist indexes over a function the schema defines itself**: chado's three name
   `boxrange`, one of them partial and declared from another schema.
 - **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
@@ -668,10 +668,13 @@ always reach.
   defaults call `shared_extensions.gen_random_uuid()` and two of its indexes
   name an operator class from there. windmill does the same with `uuid-ossp`
   in an `extensions` schema, and lemmy installs its three into the schema it
-  loads into, as hoppscotch does with `pg_trgm`. formbricks is the odd one:
-  it installs pgvector into its own schema and uses nothing from it, since
-  the three tables that carried its `vector(512)` columns were dropped by a
-  later migration and the extension was left behind.
+  loads into.
+- **An extension installed and then left unused**: formbricks. One of its
+  migrations declares three tables with a `vector(512)` column and installs
+  pgvector for them, a later one drops all three, and the extension stays.
+  Nothing in the schema the check reads is typed by it, but the load still
+  needs it on the server, so the sample sits with discourse and citizenlab
+  in what `run.sh` asks for up front.
 - **Views at scale**: chado's 1,864 are nearly ten times every other sample put
   together, and 1,832 of them are the Sequence Ontology views in its `so`
   schema, each selecting from tables in `chado`; bigbluebutton's 86 over 54
@@ -968,10 +971,14 @@ targets strip only what is irrelevant to a schema round trip:
   beside them narrowed to the sample's schema the way lemmy's is, so that a
   constraint another sample left behind cannot answer for this one. The
   schema also installs pgvector, which the official postgres image does not
-  ship and `compose.yaml` adds for discourse and citizenlab already. Nothing
-  the check reads uses it: the three tables that carried its `vector(512)`
-  columns were dropped by a later migration and the extension was left
-  behind.
+  ship and `compose.yaml` adds for discourse and citizenlab already. That
+  `CREATE EXTENSION IF NOT EXISTS` names no schema, so it gets nothing in
+  `make schema`, where an earlier sample has already installed pgvector
+  somewhere else; the loader installs it into `public` up front the way
+  affine's does and puts `public` second in the search path, and the columns
+  the migration declares then resolve. Nothing the check reads is typed by
+  it: the three tables that carried those `vector(512)` columns were dropped
+  by a later migration and the extension was left behind.
 - **glific**, **plausible**, **hexpm**: the schema is Ecto's `structure.sql`,
   the same `pg_dump` output as the group above, so it loads the same way. None
   has a `SET search_path` line before its migration versions, so those rows go
@@ -1000,11 +1007,15 @@ targets strip only what is irrelevant to a schema round trip:
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
   the `hive` schema.
 - **hoppscotch**: the schema ships as a Prisma migration history like calcom's,
-  22 directories replayed through `sample-db-prisma`, so it needs no loader of
-  its own. It qualifies nothing with `public`, so the sed that strips the
-  qualifier has nothing to strip, and its `CREATE EXTENSION IF NOT EXISTS
-  pg_trgm` lands in the sample's own schema, which is where the two gin
-  indexes over a title then resolve `gin_trgm_ops` from.
+  22 directories replayed in name order, and `sample-db-prisma` would replay
+  it as it stands but for one thing: a migration installs `pg_trgm` with a
+  `CREATE EXTENSION IF NOT EXISTS` that names no schema, and two later ones
+  name `gin_trgm_ops`. In `make schema`, where an earlier sample has already
+  installed `pg_trgm` somewhere else, that statement gets nothing and the
+  operator class does not resolve. `sample-db-hoppscotch` is
+  `sample-db-prisma` with the extension installed into `public` up front the
+  way affine's is and `public` second in the search path, which is where the
+  two gin indexes then resolve `gin_trgm_ops` from.
 - **hyperswitch**: the schema ships as Diesel migrations, 530 directories each
   holding an `up.sql`, replayed in name order. The repository tarball is fetched
   once and only the migrations directory is extracted, the way lemmy's is. Every

@@ -122,7 +122,7 @@ omop|sample-db-omop||omop
 zed|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/zed-industries/zed/418f89714891f9d8105a3e92e60b9a7a5084d232/crates/collab/migrations/20251208000000_test_schema.sql SCHEMA=zed|zed
 gravitino|sample-db-url-schema|URL=https://raw.githubusercontent.com/apache/gravitino/7f303cadad7623dfe8438ae8c2b9269f8e21e919/scripts/postgresql/schema-0.9.0-postgresql.sql SCHEMA=gravitino|gravitino
 formbricks|sample-db-formbricks||formbricks
-hoppscotch|sample-db-prisma|REPO=hoppscotch/hoppscotch SHA=d86e59f6e9574c69f01b300691b9f4396eeb38d2 DIR=packages/hoppscotch-backend/prisma/migrations SCHEMA=hoppscotch|hoppscotch
+hoppscotch|sample-db-hoppscotch||hoppscotch
 streampark|sample-db-streampark|URL=https://raw.githubusercontent.com/apache/streampark/829466b5470d749773793193f1fc1d46e8613d61/streampark-console/streampark-console-service/src/main/assembly/script/schema/pgsql-schema.sql SCHEMA=streampark|streampark
 endef
 
@@ -1464,11 +1464,20 @@ sample-db-omop:
 # lookups have to follow the schema the sample loads into. The unscoped
 # `conname` lookup beside them is narrowed the same way lemmy's is, so that a
 # constraint another sample left behind cannot answer for this one.
+#
+# pgvector is installed into `public` up front the way affine's is, with
+# `public` second in the search path, since the `CREATE EXTENSION IF NOT
+# EXISTS` one of the migrations writes names no schema and gets nothing when
+# another sample already installed it somewhere else. Nothing in the schema
+# the check reads is typed by it -- the tables that carried its `vector(512)`
+# columns were dropped by a later migration -- but the statement declaring
+# those columns still has to run.
 FORMBRICKS_SHA = 55ade3bc2a5a612e286f32e0bf2fd84cdf287073
 
-sample-db-formbricks: PGOPTS = -c search_path=formbricks
+sample-db-formbricks: PGOPTS = -c search_path=formbricks,public
 .PHONY: sample-db-formbricks
 sample-db-formbricks:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS formbricks'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
 	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/formbricks/formbricks/tar.gz/$(FORMBRICKS_SHA) \
@@ -1478,6 +1487,29 @@ sample-db-formbricks:
 	  | sed -E "s/\"public\"\.//g; s/([^A-Za-z0-9_])public\./\1/g; \
 	            s/(nspname|schemaname) = 'public'/\1 = current_schema()/g; \
 	            s/WHERE conname = /WHERE connamespace = 'formbricks'::regnamespace AND conname = /g" \
+	  | $(PSQL)
+
+# Hoppscotch is a Prisma migration history sample-db-prisma could replay as
+# it stands, but one of its migrations installs `pg_trgm` and two later ones
+# name `gin_trgm_ops`, so the extension has to be resolvable from the search
+# path. It goes into `public` up front the way affine's does, with `public`
+# second in the search path, since the `CREATE EXTENSION IF NOT EXISTS` the
+# migration writes names no schema and gets nothing when another sample
+# already installed it somewhere else.
+HOPPSCOTCH_SHA = d86e59f6e9574c69f01b300691b9f4396eeb38d2
+HOPPSCOTCH_DIR = packages/hoppscotch-backend/prisma/migrations
+
+sample-db-hoppscotch: PGOPTS = -c search_path=hoppscotch,public
+.PHONY: sample-db-hoppscotch
+sample-db-hoppscotch:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hoppscotch'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/hoppscotch/hoppscotch/tar.gz/$(HOPPSCOTCH_SHA) \
+	  | tar xz -C "$$dir" --strip-components=5 hoppscotch-$(HOPPSCOTCH_SHA)/$(HOPPSCOTCH_DIR) && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | sed -E 's/"public"\.//g; s/([^A-Za-z0-9_])public\./\1/g' \
 	  | $(PSQL)
 
 # StreamPark ships one file for the whole console schema and qualifies every
