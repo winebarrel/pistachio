@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.60.0] - 2026-09-22
 
 * `plan --out` writes the plan to a file and `apply-from` runs it. `apply-from` reads no schema file and diffs nothing: it reads the database to check that the schema is still what the plan was computed against, and stops when it is not. `--force` runs the plan anyway and reports the drift as a warning. The file records the options that decide what the plan read, so `apply-from` reads the database the same way, and a `-- pista:execute` check is evaluated once, when the file is written.
 
