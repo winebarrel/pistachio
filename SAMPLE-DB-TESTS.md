@@ -789,6 +789,22 @@ each says so on a fresh database; none of it is about the schema under test,
 and the runner passes a loader's stderr through. ranger raises the level
 further, to `error`, from its `SAMPLES` record.
 
+Every loader that installs a contrib extension into `public` follows the
+install with `ALTER EXTENSION ... SET SCHEMA public`. The install alone is
+enough in `make test-samples`, where `reset-db` drops every extension before
+each sample, and not enough in `make schema`, where all 102 load after one
+`clean-schema`: `CREATE EXTENSION IF NOT EXISTS ... WITH SCHEMA public`
+places a new extension but does not move one, so once boundary has put
+`pgcrypto` in its own schema, lemmy `pg_trgm` in its, windmill `uuid-ossp` in
+`extensions`, and citizenlab its five in `shared_extensions`, the install is a
+no-op and the later sample's type, function, or operator class does not
+resolve. The relocation moves the member objects, leaves the indexes already
+built on them alone, and is a no-op when the extension is in `public`
+already. penpot, openreplay, concourse, affine, uyuni, lobehub, formbricks,
+and hoppscotch all need it. dhis2 does not get one: PostGIS is not
+relocatable, and the sample that installs PostGIS anywhere else, citizenlab,
+loads after it.
+
 Some upstream dumps cannot be piped into `psql` as they are, either. The loader
 targets strip only what is irrelevant to a schema round trip:
 
@@ -975,15 +991,11 @@ targets strip only what is irrelevant to a schema round trip:
   `CREATE EXTENSION IF NOT EXISTS` names no schema, so it gets nothing in
   `make schema`, where an earlier sample has already installed pgvector
   somewhere else; the loader installs it into `public` up front the way
-  affine's does and puts `public` second in the search path, and the columns
-  the migration declares then resolve. `WITH SCHEMA public` places a new
-  extension rather than moving one, so an `ALTER EXTENSION vector SET SCHEMA
-  public` follows it for the case citizenlab leaves behind, its five
-  extensions in `shared_extensions`. Relocating moves the member objects and
-  leaves the indexes already built on them alone, and it is a no-op when the
-  extension is in `public` already. Nothing the check reads is typed by
-  it: the three tables that carried those `vector(512)` columns were dropped
-  by a later migration and the extension was left behind.
+  affine's does, relocates one already installed elsewhere the way the note
+  above describes, and puts `public` second in the search path, and the
+  columns the migration declares then resolve. Nothing the check reads is
+  typed by it: the three tables that carried those `vector(512)` columns
+  were dropped by a later migration and the extension was left behind.
 - **glific**, **plausible**, **hexpm**: the schema is Ecto's `structure.sql`,
   the same `pg_dump` output as the group above, so it loads the same way. None
   has a `SET search_path` line before its migration versions, so those rows go
@@ -1019,11 +1031,9 @@ targets strip only what is irrelevant to a schema round trip:
   installed `pg_trgm` somewhere else, that statement gets nothing and the
   operator class does not resolve. `sample-db-hoppscotch` is
   `sample-db-prisma` with the extension installed into `public` up front the
-  way affine's is and `public` second in the search path, which is where the
-  two gin indexes then resolve `gin_trgm_ops` from. An `ALTER EXTENSION
-  pg_trgm SET SCHEMA public` follows the install for the case lemmy leaves
-  behind, `pg_trgm` in the schema lemmy loads into, since `WITH SCHEMA
-  public` places a new extension rather than moving one.
+  way affine's is, relocated there when an earlier sample has installed it
+  somewhere else, and `public` second in the search path, which is where the
+  two gin indexes then resolve `gin_trgm_ops` from.
 - **hyperswitch**: the schema ships as Diesel migrations, 530 directories each
   holding an `up.sql`, replayed in name order. The repository tarball is fetched
   once and only the migrations directory is extracted, the way lemmy's is. Every

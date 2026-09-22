@@ -149,6 +149,25 @@ CLIENT_MIN_MESSAGES ?= warning
 PGOPTS =
 PSQL = PGOPTIONS='$(strip -c client_min_messages=$(CLIENT_MIN_MESSAGES) $(PGOPTS))' psql -v ON_ERROR_STOP=1
 
+# A loader that needs a contrib extension in `public` installs it and then
+# relocates it:
+#
+#   $(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public'
+#   $(PSQL) -c 'ALTER EXTENSION pgcrypto SET SCHEMA public'
+#
+# The install alone is enough in test-samples, where reset-db drops every
+# extension before each sample, and not enough in `schema`, where every sample
+# loads after one clean-schema. `WITH SCHEMA public` places a new extension; it
+# does not move one. So once boundary has installed pgcrypto in its own schema,
+# lemmy pg_trgm in its, windmill uuid-ossp in `extensions`, and citizenlab its
+# five in `shared_extensions`, IF NOT EXISTS finds the extension, does nothing,
+# and the type, function, or operator class the sample names does not resolve.
+# The ALTER moves the member objects, leaves the indexes already built on them
+# alone, and does nothing at all when the extension is in `public` already.
+# PostGIS is the one that cannot be moved -- it is not relocatable -- so dhis2
+# installs it and stops there; the only sample that puts PostGIS anywhere else,
+# citizenlab, loads after dhis2.
+
 # Print the sample manifest, one record per line, for shell consumers.
 .PHONY: print-samples
 print-samples:
@@ -923,6 +942,7 @@ sample-db-penpot: PGOPTS = -c search_path=penpot,public
 .PHONY: sample-db-penpot
 sample-db-penpot:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION "uuid-ossp" SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS penpot'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
 	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/penpot/penpot/tar.gz/$(PENPOT_SHA) \
@@ -1082,7 +1102,9 @@ sample-db-openreplay: PGOPTS = -c search_path=$(SCHEMA),public
 .PHONY: sample-db-openreplay
 sample-db-openreplay:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION pg_trgm SET SCHEMA public'
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION pgcrypto SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
 	  | sed -E "/^SET client_min_messages TO /d; s/table_schema = 'public'/table_schema = current_schema()/; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
@@ -1215,6 +1237,7 @@ sample-db-concourse: PGOPTS = -c search_path=concourse,public
 .PHONY: sample-db-concourse
 sample-db-concourse:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION pgcrypto SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS concourse'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
 	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/concourse/concourse/tar.gz/$(CONCOURSE_SHA) \
@@ -1249,7 +1272,9 @@ sample-db-affine: PGOPTS = -c search_path=affine,public
 .PHONY: sample-db-affine
 sample-db-affine:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION vector SET SCHEMA public'
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION pgcrypto SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS affine'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
 	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/toeverything/AFFiNE/tar.gz/$(AFFINE_SHA) \
@@ -1331,6 +1356,7 @@ sample-db-uyuni: PGOPTS = -c search_path=uyuni,public
 .PHONY: sample-db-uyuni
 sample-db-uyuni:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION pg_trgm SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS uyuni'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
 	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/uyuni-project/uyuni/tar.gz/$(UYUNI_SHA) \
@@ -1399,6 +1425,7 @@ sample-db-lobehub: PGOPTS = -c search_path=lobehub,public
 .PHONY: sample-db-lobehub
 sample-db-lobehub:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION vector SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lobehub'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
 	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/lobehub/lobehub/tar.gz/$(LOBEHUB_SHA) \
@@ -1465,18 +1492,12 @@ sample-db-omop:
 # `conname` lookup beside them is narrowed the same way lemmy's is, so that a
 # constraint another sample left behind cannot answer for this one.
 #
-# pgvector is installed into `public` up front the way affine's is, with
-# `public` second in the search path, since the `CREATE EXTENSION IF NOT
-# EXISTS` one of the migrations writes names no schema and gets nothing when
-# another sample already installed it somewhere else. The ALTER beside it is
-# for where that has already happened: `WITH SCHEMA public` places a new
-# extension, it does not move one, and in `make schema` citizenlab has put
-# pgvector in `shared_extensions` long before this runs. Relocating it moves
-# the member objects and leaves the indexes already built on them alone, and
-# it is a no-op when the extension is in `public` already. Nothing in the
-# schema the check reads is typed by it -- the tables that carried its
-# `vector(512)` columns were dropped by a later migration -- but the
-# statement declaring those columns still has to run.
+# pgvector is installed and relocated the way the PSQL comment above
+# describes, with `public` second in the search path, since the `CREATE
+# EXTENSION IF NOT EXISTS` one of the migrations writes names no schema.
+# Nothing in the schema the check reads is typed by it -- the tables that
+# carried its `vector(512)` columns were dropped by a later migration -- but
+# the statement declaring those columns still has to run.
 FORMBRICKS_SHA = 55ade3bc2a5a612e286f32e0bf2fd84cdf287073
 
 sample-db-formbricks: PGOPTS = -c search_path=formbricks,public
@@ -1498,13 +1519,9 @@ sample-db-formbricks:
 # Hoppscotch is a Prisma migration history sample-db-prisma could replay as
 # it stands, but one of its migrations installs `pg_trgm` and two later ones
 # name `gin_trgm_ops`, so the extension has to be resolvable from the search
-# path. It goes into `public` up front the way affine's does, with `public`
-# second in the search path, since the `CREATE EXTENSION IF NOT EXISTS` the
-# migration writes names no schema and gets nothing when another sample
-# already installed it somewhere else. The ALTER beside it relocates one that
-# is already installed elsewhere, which `WITH SCHEMA public` does not do: in
-# `make schema` lemmy has put `pg_trgm` in its own schema long before this
-# runs. It is a no-op when the extension is in `public` already.
+# path. It is installed and relocated the way the PSQL comment above
+# describes, with `public` second in the search path, since the `CREATE
+# EXTENSION IF NOT EXISTS` the migration writes names no schema.
 HOPPSCOTCH_SHA = d86e59f6e9574c69f01b300691b9f4396eeb38d2
 HOPPSCOTCH_DIR = packages/hoppscotch-backend/prisma/migrations
 
