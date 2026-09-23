@@ -286,8 +286,21 @@ func extractViewDeps(definition, defaultSchema string, defined map[string]bool) 
 	}
 
 	for _, stmt := range result.Stmts {
+		// An unqualified name a CTE declares is the CTE, not a relation. Scope
+		// is not tracked, so the CTE hides the name across the whole
+		// definition.
+		ctes := map[string]bool{}
+		pgast.Walk(stmt.Stmt, pgast.WalkOptions{}, func(_ pgast.Ctx, node *pg_query.Node) *pg_query.Node {
+			if cte := node.GetCommonTableExpr(); cte != nil {
+				ctes[cte.Ctename] = true
+			}
+			return node
+		})
 		pgast.Walk(stmt.Stmt, pgast.WalkOptions{}, func(_ pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 			if rv := node.GetRangeVar(); rv != nil {
+				if rv.Schemaname == "" && ctes[rv.Relname] {
+					return node
+				}
 				if name := qualifyRangeVar(rv, defaultSchema, defined); name != "" {
 					seen[name] = true
 				}

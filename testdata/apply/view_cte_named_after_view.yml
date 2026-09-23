@@ -1,0 +1,37 @@
+# A CTE named after another view is the CTE, so v does not depend on a and
+# is created first.
+#
+# PostgreSQL 15 qualifies a view's column references with the relation, 16 and
+# later do not, so the dump is written per version.
+init: ""
+desired: |
+  CREATE VIEW public.a AS SELECT id FROM public.v;
+  CREATE VIEW public.v AS WITH a AS (SELECT 1 AS id) SELECT id FROM a;
+applied: |
+  -- public.a
+  CREATE OR REPLACE VIEW public.a AS
+  SELECT v.id
+     FROM v;
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  WITH a AS (
+           SELECT 1 AS id
+          )
+   SELECT a.id
+     FROM a;
+applied_pg16: &applied_pg16plus |
+  -- public.a
+  CREATE OR REPLACE VIEW public.a AS
+  SELECT id
+     FROM v;
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  WITH a AS (
+           SELECT 1 AS id
+          )
+   SELECT id
+     FROM a;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

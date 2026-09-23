@@ -852,6 +852,42 @@ func TestOrderFromSchema_ViewWithCTE(t *testing.T) {
 	assert.Less(t, idx["public.users"], idx["public.cte_view"], "table before view with CTE")
 }
 
+// A CTE named after another view is the CTE, not that view. Reading it as the
+// view closed a cycle between v and a.
+func TestOrderFromSchema_ViewCTENamedAfterView(t *testing.T) {
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.a", &model.View{Schema: "public", Name: "a", Definition: "SELECT id FROM public.v"})
+	views.Set("public.v", &model.View{Schema: "public", Name: "v", Definition: "WITH a AS (SELECT 1 AS id) SELECT id FROM a"})
+
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](), orderedmap.New[string, *model.Domain](), orderedmap.New[string, *model.Table](), views)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"public.v", "public.a"}, order)
+}
+
+// A qualified name is never a CTE, so it keeps its edge.
+func TestOrderFromSchema_ViewQualifiedNameMatchingCTE(t *testing.T) {
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.a", &model.View{Schema: "public", Name: "a", Definition: "SELECT 1 AS id"})
+	views.Set("public.v", &model.View{Schema: "public", Name: "v", Definition: "WITH a AS (SELECT id FROM public.a) SELECT id FROM a"})
+
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](), orderedmap.New[string, *model.Domain](), orderedmap.New[string, *model.Table](), views)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"public.a", "public.v"}, order)
+}
+
+// A recursive CTE reads its own name, and a CTE in a subquery hides the name
+// across the whole definition.
+func TestOrderFromSchema_ViewRecursiveAndNestedCTE(t *testing.T) {
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.a", &model.View{Schema: "public", Name: "a", Definition: "SELECT id FROM public.r UNION ALL SELECT id FROM public.n"})
+	views.Set("public.r", &model.View{Schema: "public", Name: "r", Definition: "WITH RECURSIVE a(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM a WHERE id < 3) SELECT id FROM a"})
+	views.Set("public.n", &model.View{Schema: "public", Name: "n", Definition: "SELECT id FROM (WITH a AS (SELECT 1 AS id) SELECT id FROM a) s"})
+
+	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](), orderedmap.New[string, *model.Domain](), orderedmap.New[string, *model.Table](), views)
+	require.NoError(t, err)
+	assert.Equal(t, "public.a", order[len(order)-1])
+}
+
 func TestOrderFromSchema_ViewWithHavingSubquery(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()

@@ -1,0 +1,11 @@
+# A CTE named after another view is the CTE, so v does not depend on a and
+# is created first.
+init: ""
+desired: |
+  CREATE VIEW public.a AS SELECT id FROM public.v;
+  CREATE VIEW public.v AS WITH a AS (SELECT 1 AS id) SELECT id FROM a;
+plan: |
+  CREATE OR REPLACE VIEW public.v AS
+  WITH a AS (SELECT 1 AS id) SELECT id FROM a;
+  CREATE OR REPLACE VIEW public.a AS
+  SELECT id FROM public.v;
