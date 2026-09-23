@@ -163,9 +163,9 @@ func (t Table) inlineConstraintDefs() []string {
 // its unvalidated entries are the clones the parent's statement creates. An
 // INHERITS child carries only its own constraints, so it renders them the way
 // a plain table does; writing one inline would restore it validated.
-func (t Table) NotValidConSQL() string {
+func (t Table) NotValidConSQL() []string {
 	if t.IsPartitionChild() {
-		return ""
+		return nil
 	}
 	only := "ONLY "
 	if t.Partitioned {
@@ -178,7 +178,7 @@ func (t Table) NotValidConSQL() string {
 		}
 		stmts = append(stmts, "ALTER TABLE "+only+t.FQTN()+" ADD CONSTRAINT "+Ident(con.Name)+" "+con.Definition+" NOT VALID;")
 	}
-	return strings.Join(stmts, "\n")
+	return stmts
 }
 
 func (t Table) IdxSQL() string {
@@ -203,7 +203,7 @@ func (t Table) FkSQL() string {
 	return strings.Join(stmts, "\n")
 }
 
-func (t Table) RLSSQL() string {
+func (t Table) RLSSQL() []string {
 	var stmts []string
 	if t.RowSecurity {
 		stmts = append(stmts, "ALTER TABLE "+t.FQTN()+" ENABLE ROW LEVEL SECURITY;")
@@ -216,12 +216,12 @@ func (t Table) RLSSQL() string {
 			stmts = append(stmts, p.SQL())
 		}
 	}
-	return strings.Join(stmts, "\n")
+	return stmts
 }
 
 // TrigSQL renders the table's triggers, each followed by the ALTER TABLE that
 // puts it in a non-default enable state.
-func (t Table) TrigSQL() string {
+func (t Table) TrigSQL() []string {
 	var stmts []string
 	if t.Triggers != nil {
 		for _, trg := range t.Triggers.CollectValues() {
@@ -231,7 +231,7 @@ func (t Table) TrigSQL() string {
 			}
 		}
 	}
-	return strings.Join(stmts, "\n")
+	return stmts
 }
 
 // SortedStorageParams turns a name -> value map of storage parameters into an
@@ -296,9 +296,9 @@ func SetCompressionSQL(fqtn, col, compression string) string {
 // default. A partition child and an INHERITS child declare no columns of their
 // own, and a partition copies both off the parent attribute as it is created,
 // so neither is rendered.
-func (t Table) StorageSQL() string {
+func (t Table) StorageSQL() []string {
 	if t.PartitionOf != nil {
-		return ""
+		return nil
 	}
 	var stmts []string
 	for _, col := range t.Columns.CollectValues() {
@@ -309,10 +309,10 @@ func (t Table) StorageSQL() string {
 			stmts = append(stmts, SetCompressionSQL(t.FQTN(), col.Name, col.Compression))
 		}
 	}
-	return strings.Join(stmts, "\n")
+	return stmts
 }
 
-func (t Table) CommentSQL() string {
+func (t Table) CommentSQL() []string {
 	var stmts []string
 	if t.Comment != nil {
 		stmts = append(stmts, "COMMENT ON TABLE "+Ident(t.Schema, t.Name)+" IS "+QuoteLiteral(*t.Comment)+";")
@@ -327,7 +327,7 @@ func (t Table) CommentSQL() string {
 			stmts = append(stmts, s)
 		}
 	}
-	return strings.Join(stmts, "\n")
+	return stmts
 }
 
 // sizedHeader writes the comment dump puts above a relation, with the size
@@ -341,27 +341,21 @@ func sizedHeader(name, size string) string {
 
 func TableToSQL(t *Table) string {
 	parts := []string{sizedHeader(t.FQTN(), t.Size), t.SQL()}
-	if s := t.NotValidConSQL(); s != "" {
-		parts = append(parts, s)
-	}
-	if s := t.StorageSQL(); s != "" {
-		parts = append(parts, s)
-	}
+	parts = append(parts, t.NotValidConSQL()...)
+	parts = append(parts, t.StorageSQL()...)
 	if s := t.IdxSQL(); s != "" {
 		parts = append(parts, s)
 	}
 	if s := t.FkSQL(); s != "" {
 		parts = append(parts, "\n"+s)
 	}
-	if s := t.RLSSQL(); s != "" {
-		parts = append(parts, "\n"+s)
+	if s := t.RLSSQL(); len(s) > 0 {
+		parts = append(parts, "\n"+strings.Join(s, "\n"))
 	}
-	if s := t.TrigSQL(); s != "" {
-		parts = append(parts, "\n"+s)
+	if s := t.TrigSQL(); len(s) > 0 {
+		parts = append(parts, "\n"+strings.Join(s, "\n"))
 	}
-	if s := t.CommentSQL(); s != "" {
-		parts = append(parts, s)
-	}
+	parts = append(parts, t.CommentSQL()...)
 	return strings.Join(parts, "\n")
 }
 

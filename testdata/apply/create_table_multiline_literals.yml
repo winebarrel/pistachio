@@ -1,0 +1,56 @@
+# A string literal spanning lines applies on a new table and on an existing
+# one: each statement runs whole.
+init: |
+  CREATE TABLE public.logs (id integer);
+  CREATE FUNCTION public.noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+desired: |
+  CREATE TABLE public.logs (id integer);
+  COMMENT ON TABLE public.logs IS 'line one
+  line two';
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      note text
+  );
+  ALTER TABLE public.users ADD CONSTRAINT users_note_check CHECK (note <> 'a
+  b') NOT VALID;
+  CREATE INDEX idx_users_note ON public.users USING btree (note);
+  ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.users USING (note <> 'c
+  d');
+  CREATE TRIGGER t BEFORE INSERT ON public.users FOR EACH ROW WHEN (NEW.note <> 'e
+  f') EXECUTE FUNCTION public.noop();
+  COMMENT ON TABLE public.users IS 'line one
+  line two';
+  COMMENT ON COLUMN public.users.note IS 'line one
+  line two';
+  COMMENT ON INDEX public.idx_users_note IS 'line one
+  line two';
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer
+  );
+  COMMENT ON TABLE public.logs IS 'line one
+  line two';
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      note text
+  );
+  ALTER TABLE ONLY public.users ADD CONSTRAINT users_note_check CHECK (note <> 'a
+  b'::text) NOT VALID;
+  CREATE INDEX idx_users_note ON public.users USING btree (note);
+
+  ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.users USING ((note <> 'c
+  d'::text));
+
+  CREATE TRIGGER t BEFORE INSERT ON users FOR EACH ROW WHEN (new.note <> 'e
+  f'::text) EXECUTE FUNCTION noop();
+  COMMENT ON TABLE public.users IS 'line one
+  line two';
+  COMMENT ON COLUMN public.users.note IS 'line one
+  line two';
+  COMMENT ON INDEX public.idx_users_note IS 'line one
+  line two';

@@ -79,11 +79,11 @@ func TestTable_TrigSQL(t *testing.T) {
 			&model.Trigger{Schema: "public", Table: "events", Name: "b", Definition: "CREATE TRIGGER b BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp()", State: 'D'},
 		),
 	}
-	assert.Equal(t,
-		"CREATE TRIGGER a BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();\n"+
-			"CREATE TRIGGER b BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();\n"+
-			"ALTER TABLE public.events DISABLE TRIGGER b;",
-		tbl.TrigSQL())
+	assert.Equal(t, []string{
+		"CREATE TRIGGER a BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();",
+		"CREATE TRIGGER b BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();",
+		"ALTER TABLE public.events DISABLE TRIGGER b;",
+	}, tbl.TrigSQL())
 	assert.Contains(t, model.TableToSQL(tbl), "CREATE TRIGGER a BEFORE INSERT")
 }
 

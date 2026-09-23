@@ -28,17 +28,17 @@ func TestTable_RLSSQL_Empty(t *testing.T) {
 func TestTable_RLSSQL_EnableOnly(t *testing.T) {
 	tbl := newTable("public", "users")
 	tbl.RowSecurity = true
-	assert.Equal(t, "ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;", tbl.RLSSQL())
+	assert.Equal(t, []string{"ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;"}, tbl.RLSSQL())
 }
 
 func TestTable_RLSSQL_EnableAndForce(t *testing.T) {
 	tbl := newTable("public", "users")
 	tbl.RowSecurity = true
 	tbl.ForceRowSecurity = true
-	assert.Equal(t,
-		"ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;\n"+
-			"ALTER TABLE public.users FORCE ROW LEVEL SECURITY;",
-		tbl.RLSSQL())
+	assert.Equal(t, []string{
+		"ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;",
+		"ALTER TABLE public.users FORCE ROW LEVEL SECURITY;",
+	}, tbl.RLSSQL())
 }
 
 func TestTable_RLSSQL_WithPolicies(t *testing.T) {
@@ -49,9 +49,10 @@ func TestTable_RLSSQL_WithPolicies(t *testing.T) {
 		Name: "p", Schema: "public", Table: "users",
 		Permissive: true, Command: 'r', Using: &using,
 	})
-	got := tbl.RLSSQL()
-	assert.Contains(t, got, "ENABLE ROW LEVEL SECURITY;")
-	assert.Contains(t, got, "CREATE POLICY p ON public.users FOR SELECT USING (owner = current_user);")
+	assert.Equal(t, []string{
+		"ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;",
+		"CREATE POLICY p ON public.users FOR SELECT USING (owner = current_user);",
+	}, tbl.RLSSQL())
 }
 
 // nil-Policies guard: an older Table built without orderedmap-init must not
@@ -351,11 +352,11 @@ func TestTable_CommentSQL(t *testing.T) {
 		Definition: "CREATE INDEX idx_users_id ON public.users USING btree (id)",
 	})
 
-	sql := tbl.CommentSQL()
-	assert.Contains(t, sql, "COMMENT ON TABLE public.users IS 'Main users table';")
-	assert.Contains(t, sql, "COMMENT ON COLUMN public.users.name IS 'User name';")
-	assert.Contains(t, sql, "COMMENT ON INDEX public.idx_users_name IS 'Lookup by name';")
-	assert.NotContains(t, sql, "idx_users_id")
+	assert.Equal(t, []string{
+		"COMMENT ON TABLE public.users IS 'Main users table';",
+		"COMMENT ON COLUMN public.users.name IS 'User name';",
+		"COMMENT ON INDEX public.idx_users_name IS 'Lookup by name';",
+	}, tbl.CommentSQL())
 }
 
 func TestTable_CommentSQL_noComments(t *testing.T) {
@@ -419,10 +420,10 @@ func TestTable_StorageSQL(t *testing.T) {
 	tbl.Columns.Set("body", &model.Column{Name: "body", TypeName: "text", StorageType: "external", TypeStorage: "extended"})
 	tbl.Columns.Set("note", &model.Column{Name: "note", TypeName: "text", StorageType: "extended", TypeStorage: "extended", Compression: "pglz"})
 
-	assert.Equal(t,
-		"ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;\n"+
-			"ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;",
-		tbl.StorageSQL())
+	assert.Equal(t, []string{
+		"ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;",
+		"ALTER TABLE public.docs ALTER COLUMN note SET COMPRESSION pglz;",
+	}, tbl.StorageSQL())
 }
 
 func TestTable_StorageSQL_Empty(t *testing.T) {
@@ -562,7 +563,7 @@ func TestTable_NotValidConSQL(t *testing.T) {
 	})
 
 	assert.Equal(t,
-		"ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;",
+		[]string{"ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;"},
 		tbl.NotValidConSQL())
 }
 
@@ -587,7 +588,7 @@ func TestTable_NotValidConSQL_partitioned(t *testing.T) {
 	})
 
 	assert.Equal(t,
-		"ALTER TABLE public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;",
+		[]string{"ALTER TABLE public.orders ADD CONSTRAINT orders_qty_check CHECK (qty > 0) NOT VALID;"},
 		tbl.NotValidConSQL())
 }
 
@@ -682,6 +683,6 @@ func TestTable_NotValidConSQL_inheritsChild(t *testing.T) {
 		"CREATE TABLE public.child (\n    v integer\n)\nINHERITS (public.parent);",
 		tbl.SQL())
 	assert.Equal(t,
-		"ALTER TABLE ONLY public.child ADD CONSTRAINT child_v_check CHECK (v > 0) NOT VALID;",
+		[]string{"ALTER TABLE ONLY public.child ADD CONSTRAINT child_v_check CHECK (v > 0) NOT VALID;"},
 		tbl.NotValidConSQL())
 }
