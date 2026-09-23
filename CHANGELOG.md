@@ -1,3 +1,5 @@
+<!-- On release, rename [Unreleased] to the version and date. Do not leave an [Unreleased] section behind. -->
+
 # Changelog
 
 ## [Unreleased]
