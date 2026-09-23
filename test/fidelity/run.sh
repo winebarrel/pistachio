@@ -8,9 +8,13 @@
 # wrote, so they only cover what someone thought to write down.
 #
 # Here PostgreSQL decides. For each schema the check loads it, records
-# `pg_dump -s`, loads `pista dump` into an empty database, and records
+# `pg_dump -s`, applies `pista dump` to an empty database, and records
 # `pg_dump -s` again. The two have to be identical. Nothing pistachio drops
 # can hide, whether or not anyone knew to look for it.
+#
+# apply parses the dump and writes its own DDL, so the dump text never reaches
+# the database as written. A rendering fault the parser reads back correctly
+# does not show here.
 #
 # A schema file therefore states what pistachio manages. Adding a construct it
 # does not manage fails the check, which is the point: it is a decision to
@@ -87,18 +91,16 @@ check() {
     return
   fi
 
-  # --sort-by-deps because the reload below goes through psql, which needs a
-  # table to exist before the one referencing it. `dump` is otherwise sorted
-  # by name, which is what the other suites read.
-  if ! "$PISTA" dump --sort-by-deps >"$WORK/dumped.sql" 2>"$WORK/dump.err"; then
+  if ! "$PISTA" dump >"$WORK/dumped.sql" 2>"$WORK/dump.err"; then
     echo "FAIL (dump)"
     indent <"$WORK/dump.err" >&2
     _fail=$((_fail + 1))
     return
   fi
 
+  # The dump is in name order. apply creates objects in dependency order.
   reset_db >/dev/null 2>&1
-  if ! psql -X -q -v ON_ERROR_STOP=1 -f "$WORK/dumped.sql" >"$WORK/reload.log" 2>&1; then
+  if ! "$PISTA" apply "$WORK/dumped.sql" >"$WORK/reload.log" 2>&1; then
     echo "FAIL (reload)"
     indent <"$WORK/reload.log" >&2
     _fail=$((_fail + 1))

@@ -1,4 +1,4 @@
-sort_by_deps: true
+# A table named after a builtin type its own columns use.
 init: |
   CREATE TABLE public.text (
       id integer NOT NULL,

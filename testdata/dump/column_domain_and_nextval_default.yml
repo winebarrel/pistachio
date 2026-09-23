@@ -1,6 +1,4 @@
-# items depends on the domain pos_int (column type) and the sequence id_seq
-# (nextval default), so both are emitted before the table.
-sort_by_deps: true
+# A column typed with a domain and defaulting to a standalone sequence.
 init: |
   CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
   CREATE SEQUENCE public.id_seq;
@@ -10,6 +8,10 @@ init: |
       CONSTRAINT items_pkey PRIMARY KEY (id)
   );
 dump: |
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK ((VALUE > 0));
+
   -- public.id_seq
   CREATE SEQUENCE public.id_seq
       AS bigint
@@ -18,10 +20,6 @@ dump: |
       MINVALUE 1
       MAXVALUE 9223372036854775807
       CACHE 1;
-
-  -- public.pos_int
-  CREATE DOMAIN public.pos_int AS integer
-      CONSTRAINT pos_check CHECK ((VALUE > 0));
 
   -- public.items
   CREATE TABLE public.items (

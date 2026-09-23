@@ -1,6 +1,5 @@
-# Routines sort after the types their signature names and before the tables.
+# A routine argument typed with an enum is written with the type unqualified.
 manage_routine: true
-sort_by_deps: true
 init: |
   CREATE TYPE public.status AS ENUM ('active');
   CREATE TABLE public.users (id integer);

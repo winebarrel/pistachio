@@ -463,9 +463,6 @@ Flags:
                                 type/sequence as a separate file in the
                                 specified directory.
       --omit-schema             Omit schema name from the dump output.
-      --sort-by-deps            Order the dump output by object dependency
-                                instead of by name. Errors when the dependency
-                                graph has a cycle.
       --no-read-only            Open the database connection read-write.
                                 By default dump uses a read-only connection
                                 ($PISTA_NO_READ_ONLY).
@@ -829,10 +826,9 @@ SELECT users.id,
 
 An index, a comment, a policy and a trigger are written with the table they belong to rather than in a section of their own. `status` appears unqualified because the catalog reports an object that `search_path` reaches without its schema; `--search-path=` qualifies everything.
 
-Objects are ordered by type and then by name. `--sort-by-deps` orders them so each one follows what it depends on, which makes the file loadable from top to bottom, and errors when the dependencies form a cycle. `--split` writes one file per object into a directory instead:
+Objects are ordered by type and then by name. `--split` writes one file per object into a directory instead:
 
 ```bash
-pista dump --sort-by-deps > schema.sql
 pista dump --split ./schema/
 ```
 
@@ -863,7 +859,7 @@ CREATE TABLE public.users (
 CREATE INDEX users_name_idx ON public.users USING btree (name);
 ```
 
-`--json` writes JSON instead of SQL, in the same shape `pista parse` writes. Also available as `$PISTA_DUMP_JSON`. `--split`, `--sort-by-deps` and `--no-format` lay SQL out, and `--explain` writes SQL comments, so none of them can be used with it. See [Parsing schema files](../guides/parsing.md) for the shape of the document.
+`--json` writes JSON instead of SQL, in the same shape `pista parse` writes. Also available as `$PISTA_DUMP_JSON`. `--split` and `--no-format` lay SQL out, and `--explain` writes SQL comments, so none of them can be used with it. See [Parsing schema files](../guides/parsing.md) for the shape of the document.
 
 
 ## fmt

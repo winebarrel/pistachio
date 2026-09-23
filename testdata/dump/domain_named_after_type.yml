@@ -1,4 +1,4 @@
-sort_by_deps: true
+# A domain named after its base type.
 init: |
   CREATE DOMAIN public.text AS text NOT NULL;
   CREATE TABLE public.t (
