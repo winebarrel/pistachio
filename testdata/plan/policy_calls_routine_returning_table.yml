@@ -1,0 +1,23 @@
+# A routine whose signature names one table is still created before another
+# table whose policy calls it.
+manage_routine: true
+init: ""
+desired: |
+  CREATE TABLE public.users (id integer);
+  CREATE FUNCTION public.first_user() RETURNS public.users LANGUAGE sql AS $$ SELECT * FROM public.users LIMIT 1 $$;
+  CREATE TABLE public.docs (owner_id integer);
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.docs USING (owner_id = (public.first_user()).id);
+plan: |
+  CREATE TABLE public.users (
+      id integer
+  );
+  CREATE OR REPLACE FUNCTION public.first_user()
+      RETURNS public.users
+      LANGUAGE sql
+      AS $$ SELECT * FROM public.users LIMIT 1 $$;
+  CREATE TABLE public.docs (
+      owner_id integer
+  );
+  ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.docs USING (owner_id = (public.first_user()).id);

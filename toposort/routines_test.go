@@ -124,8 +124,8 @@ func TestOrderFromSchema_RoutineDependsOnReturnType(t *testing.T) {
 	assert.Less(t, indexOf(t, order, "public.zzz_status"), indexOf(t, order, "routine:public.aaa_f"))
 }
 
-// A signature can name a relation as well as a type. The routine then follows
-// that relation rather than preceding every table.
+// A signature can name a relation as well as a type. The routine follows that
+// relation and still precedes every other table, which may call it.
 func TestOrderFromSchema_RoutineReturningATable(t *testing.T) {
 	tables := orderedmap.New[string, *model.Table]()
 	tables.Set("public.users", &model.Table{Schema: "public", Name: "users", Columns: orderedmap.New[string, *model.Column]()})
@@ -138,6 +138,7 @@ func TestOrderFromSchema_RoutineReturningATable(t *testing.T) {
 	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, orderedmap.New[string, *model.View](), routines)
 
 	assert.Less(t, indexOf(t, order, "public.users"), indexOf(t, order, "routine:public.all_users"))
+	assert.Less(t, indexOf(t, order, "routine:public.all_users"), indexOf(t, order, "public.other"))
 }
 
 // The same holds for a table row type used as a parameter.

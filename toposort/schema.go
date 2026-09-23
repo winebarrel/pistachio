@@ -408,10 +408,10 @@ func RoutineNode(qualifiedName string) string {
 // expression, since the answer is the same "routine first" either way.
 //
 // A signature can name a relation as well as a type: RETURNS SETOF <table>, or
-// a table row type as a parameter. Such a routine gets no wholesale edge and
-// lands after the relation it names. Holding it before every other relation
-// would close a cycle as soon as two routines name two different relations,
-// each having to precede the other's relation while following its own.
+// a table row type as a parameter. The routine then follows that relation, and
+// a table or view it reaches that way gets no wholesale edge, which would
+// close a cycle. When two routines name two different relations, the first
+// still precedes the other relation and the second follows both.
 //
 // The reverse direction is otherwise absent. A LANGUAGE sql body that reads a
 // table would want the table first, which cannot hold at the same time as the
@@ -429,14 +429,6 @@ func addRoutineDeps(
 
 	nodes := make([]string, 0, routines.Len())
 	seen := make(map[string]bool, routines.Len())
-	// The routines whose signature names a relation, which the wholesale edge
-	// skips. Overloads share a node, so one naming a relation marks the node.
-	namesRelation := make(map[string]bool, routines.Len())
-	isRelation := func(k string) bool {
-		_, isTable := tables.GetOk(k)
-		_, isView := views.GetOk(k)
-		return isTable || isView
-	}
 
 	for _, r := range routines.All() {
 		node := RoutineNode(model.Ident(r.Schema, r.Name))
@@ -451,19 +443,20 @@ func addRoutineDeps(
 		for _, a := range r.Args {
 			if dep := resolveTypeDep(a.Type, r.Schema, "", defined); dep != "" {
 				g.AddEdge(node, dep)
-				namesRelation[node] = namesRelation[node] || isRelation(dep)
 			}
 		}
 		if dep := resolveTypeDep(r.ReturnType, r.Schema, "", defined); dep != "" {
 			g.AddEdge(node, dep)
-			namesRelation[node] = namesRelation[node] || isRelation(dep)
 		}
 	}
 
+	// An edge into a routine does not change what the routine reaches, so one
+	// walk per routine covers every table and view.
 	addDependents := func(keys func(func(string) bool)) {
-		for k := range keys {
-			for _, node := range nodes {
-				if namesRelation[node] {
+		for _, node := range nodes {
+			reach := g.reachable(node)
+			for k := range keys {
+				if reach[k] {
 					continue
 				}
 				g.AddEdge(k, node)

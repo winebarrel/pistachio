@@ -87,3 +87,21 @@ func (g *graph) Sort() ([]string, error) {
 
 	return result, nil
 }
+
+// reachable returns every node that from depends on, directly or through
+// other nodes.
+func (g *graph) reachable(from string) map[string]bool {
+	seen := make(map[string]bool)
+	stack := []string{from}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		for _, to := range g.edges[n] {
+			if !seen[to] {
+				seen[to] = true
+				stack = append(stack, to)
+			}
+		}
+	}
+	return seen
+}

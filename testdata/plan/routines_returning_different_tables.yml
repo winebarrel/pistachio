@@ -11,13 +11,13 @@ plan: |
   CREATE TABLE public.a (
       id integer
   );
-  CREATE TABLE public.b (
-      id integer
-  );
   CREATE OR REPLACE FUNCTION public.fa()
       RETURNS public.a
       LANGUAGE plpgsql
       AS $$ BEGIN RETURN NULL; END $$;
+  CREATE TABLE public.b (
+      id integer
+  );
   CREATE OR REPLACE FUNCTION public.fb()
       RETURNS public.b
       LANGUAGE plpgsql
