@@ -171,6 +171,8 @@ func TestOrderFromSchema_RoutinesReturningDifferentTables(t *testing.T) {
 	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, orderedmap.New[string, *model.View](), routines)
 	assert.Less(t, indexOf(t, order, "public.a"), indexOf(t, order, "routine:public.fa"))
 	assert.Less(t, indexOf(t, order, "public.b"), indexOf(t, order, "routine:public.fb"))
+	// The first routine still precedes the other table.
+	assert.Less(t, indexOf(t, order, "routine:public.fa"), indexOf(t, order, "public.b"))
 }
 
 // Overloads share a node, so one overload naming a relation takes the whole
