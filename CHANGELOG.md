@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.62.0] - 2026-09-23
 
 * A new table's policy that reads a table or view created later in the same run no longer fails to apply. A new table's policies now run after every table and view.
 
