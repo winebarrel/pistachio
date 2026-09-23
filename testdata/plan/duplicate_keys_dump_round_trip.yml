@@ -1,0 +1,11 @@
+# The dump of a table with a repeated key plans clean.
+init: |
+  CREATE TABLE public.roles (id text NOT NULL, CONSTRAINT roles_pkey PRIMARY KEY (id));
+  ALTER TABLE public.roles ADD CONSTRAINT roles_id_unique UNIQUE (id);
+desired: |
+  CREATE TABLE public.roles (
+      id text NOT NULL,
+      CONSTRAINT roles_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.roles ADD CONSTRAINT roles_id_unique UNIQUE (id);
+plan: ""

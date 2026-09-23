@@ -1,0 +1,20 @@
+# A repeated key is written after the table, where PostgreSQL keeps it.
+init: |
+  CREATE TABLE public.roles (id text NOT NULL, CONSTRAINT roles_pkey PRIMARY KEY (id));
+  ALTER TABLE public.roles ADD CONSTRAINT roles_id_unique UNIQUE (id);
+  CREATE TABLE public.items (code text, CONSTRAINT items_code_key UNIQUE (code));
+  ALTER TABLE public.items ADD CONSTRAINT items_code_unique UNIQUE (code);
+dump: |
+  -- public.items
+  CREATE TABLE public.items (
+      code text,
+      CONSTRAINT items_code_key UNIQUE (code)
+  );
+  ALTER TABLE ONLY public.items ADD CONSTRAINT items_code_unique UNIQUE (code);
+
+  -- public.roles
+  CREATE TABLE public.roles (
+      id text NOT NULL,
+      CONSTRAINT roles_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.roles ADD CONSTRAINT roles_id_unique UNIQUE (id);
