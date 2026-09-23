@@ -684,6 +684,12 @@ expression, a policy or a trigger can call one. The edge from a table to a
 routine is drawn wholesale in `addRoutineDeps` rather than by reading the
 expressions, since the answer is the same "routine first" either way.
 
+A routine whose signature names a table or view, as `RETURNS SETOF <table>`
+does, gets no such edge and follows that relation instead. A `CHECK`,
+`GENERATED`, index or policy expression that calls it is therefore not ordered
+after it. Holding it before the other tables would close a cycle as soon as
+two routines name two different relations.
+
 The reverse direction is not modeled at all. A `LANGUAGE sql` routine whose
 body reads a table created in the same run fails to apply, because PostgreSQL
 parses a SQL body at creation time; so does one that calls another routine

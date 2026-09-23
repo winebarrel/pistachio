@@ -408,9 +408,10 @@ func RoutineNode(qualifiedName string) string {
 // expression, since the answer is the same "routine first" either way.
 //
 // A signature can name a relation as well as a type: RETURNS SETOF <table>, or
-// a table row type as a parameter. That relation is skipped when the wholesale
-// edge is drawn, or the pair would close a cycle and the sort would fail. Such
-// a routine lands after its own relation and before every other one.
+// a table row type as a parameter. Such a routine gets no wholesale edge and
+// lands after the relation it names. Holding it before every other relation
+// would close a cycle as soon as two routines name two different relations,
+// each having to precede the other's relation while following its own.
 //
 // The reverse direction is otherwise absent. A LANGUAGE sql body that reads a
 // table would want the table first, which cannot hold at the same time as the
@@ -428,16 +429,20 @@ func addRoutineDeps(
 
 	nodes := make([]string, 0, routines.Len())
 	seen := make(map[string]bool, routines.Len())
-	// What each routine's own signature names, so the wholesale edge can skip
-	// those pairs. Overloads share a node, so the sets merge per node.
-	named := make(map[string]map[string]bool, routines.Len())
+	// The routines whose signature names a relation, which the wholesale edge
+	// skips. Overloads share a node, so one naming a relation marks the node.
+	namesRelation := make(map[string]bool, routines.Len())
+	isRelation := func(k string) bool {
+		_, isTable := tables.GetOk(k)
+		_, isView := views.GetOk(k)
+		return isTable || isView
+	}
 
 	for _, r := range routines.All() {
 		node := RoutineNode(model.Ident(r.Schema, r.Name))
 		if !seen[node] {
 			seen[node] = true
 			nodes = append(nodes, node)
-			named[node] = map[string]bool{}
 		}
 		g.AddNode(node)
 
@@ -446,19 +451,19 @@ func addRoutineDeps(
 		for _, a := range r.Args {
 			if dep := resolveTypeDep(a.Type, r.Schema, "", defined); dep != "" {
 				g.AddEdge(node, dep)
-				named[node][dep] = true
+				namesRelation[node] = namesRelation[node] || isRelation(dep)
 			}
 		}
 		if dep := resolveTypeDep(r.ReturnType, r.Schema, "", defined); dep != "" {
 			g.AddEdge(node, dep)
-			named[node][dep] = true
+			namesRelation[node] = namesRelation[node] || isRelation(dep)
 		}
 	}
 
 	addDependents := func(keys func(func(string) bool)) {
 		for k := range keys {
 			for _, node := range nodes {
-				if named[node][k] {
+				if namesRelation[node] {
 					continue
 				}
 				g.AddEdge(k, node)
