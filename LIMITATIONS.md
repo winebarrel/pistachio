@@ -711,12 +711,12 @@ CREATE DOMAIN public.d1 AS text;
 CREATE TABLE public.text (v public.d1);
 ```
 
-The domain takes an edge to the table, the table takes one to the domain, and
-the pair closes a cycle. `dump --sort-by-deps` fails with `cycle detected`, and
-`plan` falls back to ordering by category. It takes both references. The table
-alone is nothing: its own `text` column resolves to itself and is skipped. One
-other object written `text`, another table's column or a domain's base type,
-takes the spurious edge and orders the table first, which changes nothing else.
+The domain takes an edge to the table and the table takes one to the domain.
+The pair closes a cycle, and `plan` falls back to ordering by category. It
+takes both references. The table alone is nothing: its own `text` column
+resolves to itself and is skipped. One other object written `text`, another
+table's column or a domain's base type, takes the spurious edge and orders the
+table first, which changes nothing else.
 
 Closing it takes the set of builtin type names in the resolver, so that a bare
 name in the set resolves to nothing. That is about a hundred names, one per
@@ -733,9 +733,8 @@ collision, so the two are worth weighing together whenever this is taken up.
 
 Workaround: do not name a relation after a builtin type. Qualifying the type
 in the schema file does not help, since the catalog reports it bare and the
-two spellings would then drift on every run. `dump` without `--sort-by-deps`
-writes the same schema in name order, and `plan` orders by category, which is
-what it falls back to here.
+two spellings would then drift on every run. `plan` orders by category, which
+is what it falls back to here.
 
 Origin: review of [#676](https://github.com/winebarrel/pistachio/pull/676).
 

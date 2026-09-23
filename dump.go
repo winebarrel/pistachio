@@ -3,7 +3,6 @@ package pistachio
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/winebarrel/orderedmap/v2"
@@ -11,19 +10,17 @@ import (
 	"github.com/winebarrel/pistachio/format"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
-	"github.com/winebarrel/pistachio/toposort"
 )
 
 type DumpOptions struct {
-	Split      string `xor:"split-sort-by-deps,json-split" help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
+	Split      string `xor:"json-split" help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
-	SortByDeps bool   `xor:"split-sort-by-deps,json-sort-by-deps" help:"Order the dump output by object dependency instead of by name. Errors when the dependency graph has a cycle."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
 	NoFormat   bool   `xor:"json-no-format" env:"PISTA_NO_FORMAT" help:"Write the dump as the model renders it, without the layout pista fmt applies."`
 	// JSON writes the dump as JSON rather than SQL, in the shape `pista parse`
 	// writes, so the same schema describes both. The flags that lay SQL out have nothing to
 	// change in it, so kong refuses them alongside it.
-	JSON bool `xor:"json-split,json-sort-by-deps,json-no-format,json-explain" env:"PISTA_DUMP_JSON" help:"Write the dump as JSON instead of SQL."`
+	JSON bool `xor:"json-split,json-no-format,json-explain" env:"PISTA_DUMP_JSON" help:"Write the dump as JSON instead of SQL."`
 	// Explain writes the size estimate of each table, materialized view and
 	// index into the comment above it. The JSON carries no comment to hold it.
 	Explain bool `xor:"json-explain" env:"PISTA_DUMP_EXPLAIN" help:"Comment each table, materialized view and index with its size estimate from pg_class."`
@@ -38,7 +35,6 @@ type DumpResult struct {
 	Sequences      *orderedmap.Map[string, *model.Sequence]
 	Routines       *orderedmap.Map[string, *model.Routine]
 	OmitSchema     bool
-	SortByDeps     bool
 	NoFormat       bool
 	Count          ObjectCount
 }
@@ -263,130 +259,7 @@ func (r *DumpResult) Document() *parser.ParseResult {
 }
 
 func (r *DumpResult) String() string {
-	if r.SortByDeps {
-		if sql, ok := r.dependencyOrderedSQL(); ok {
-			return sql
-		}
-	}
 	return r.formatSchemaSQL(r.enums(), r.domains(), r.compositeTypes(), r.sequences(), r.routines(), r.tables(), r.views())
-}
-
-// dumpItem carries an object's rendered SQL together with its position in the
-// dependency order.
-type dumpItem struct {
-	pos int
-	sql string
-}
-
-// dependencyOrderedSQL renders all objects in a single dependency order
-// (dependencies first) rather than the category grouping used by
-// formatSchemaSQL. It returns ok=false when the graph cannot be sorted. Client.Dump
-// validates the same graph up front and errors on a cycle, so the ok=false path
-// is not reached through the CLI; a directly built DumpResult still degrades to
-// the name order rather than panicking.
-//
-// The topological order is computed from the original schema-qualified maps so
-// foreign-key and other cross-object references resolve correctly, then applied
-// to the (possibly schema-stripped) objects produced by the helper methods.
-// Both iterate in the same order, so positions align by index.
-func (r *DumpResult) dependencyOrderedSQL() (string, bool) {
-	order, err := toposort.OrderFromSchema(
-		orEmpty(r.Enums), orEmpty(r.Domains), orEmpty(r.CompositeTypes),
-		orEmpty(r.Tables), orEmpty(r.Views), orEmpty(r.Sequences), orEmpty(r.Routines),
-	)
-	if err != nil {
-		return "", false
-	}
-	pos := make(map[string]int, len(order))
-	for i, name := range order {
-		pos[name] = i
-	}
-	// A routine's graph node is keyed by name alone under a routine: prefix,
-	// while the dump map is keyed by FQRN, so alias each FQRN onto its node's
-	// position. Without this every routine misses the lookup below and the
-	// whole dump degrades to the name order. An FQRN always carries its
-	// parentheses, so it cannot collide with another kind of key. Overloads
-	// share a node and so share a position; the stable sort keeps their map
-	// order.
-	for k, rt := range orEmpty(r.Routines).All() {
-		if p, ok := pos[toposort.RoutineNode(model.Ident(rt.Schema, rt.Name))]; ok {
-			pos[k] = p
-		}
-	}
-
-	var items []dumpItem
-	var ok bool
-	if items, ok = appendDumpItems(items, r.Enums, r.enums().CollectValues(), pos, model.EnumToSQL); !ok {
-		return "", false
-	}
-	if items, ok = appendDumpItems(items, r.Domains, r.domains().CollectValues(), pos, model.DomainToSQL); !ok {
-		return "", false
-	}
-	if items, ok = appendDumpItems(items, r.CompositeTypes, r.compositeTypes().CollectValues(), pos, model.CompositeTypeToSQL); !ok {
-		return "", false
-	}
-	if items, ok = appendDumpItems(items, r.Sequences, r.sequences().CollectValues(), pos, model.SequenceToSQL); !ok {
-		return "", false
-	}
-	if items, ok = appendDumpItems(items, r.Routines, r.routines().CollectValues(), pos, model.RoutineToSQL); !ok {
-		return "", false
-	}
-	if items, ok = appendDumpItems(items, r.Tables, r.tables().CollectValues(), pos, model.TableToSQL); !ok {
-		return "", false
-	}
-	if items, ok = appendDumpItems(items, r.Views, r.views().CollectValues(), pos, model.ViewToSQL); !ok {
-		return "", false
-	}
-
-	sort.SliceStable(items, func(i, j int) bool {
-		return items[i].pos < items[j].pos
-	})
-
-	parts := make([]string, len(items))
-	for i, it := range items {
-		parts[i] = it.sql
-	}
-	return strings.TrimSuffix(r.formatSQL(strings.Join(parts, "\n\n")), "\n"), true
-}
-
-// appendDumpItems zips the original schema-qualified map (source of the
-// dependency-order keys) with the already schema-adjusted objects (source of
-// the rendered SQL). The helper methods preserve iteration order and count, so
-// the i-th key in orig corresponds to the i-th value in adjusted, and pos holds
-// every key because OrderFromSchema saw the same maps.
-//
-// Those invariants hold today, but rather than trust them blindly it returns
-// ok=false when a key is missing from pos or the counts disagree, so the caller
-// falls back to the name order instead of mis-sorting or panicking.
-func appendDumpItems[V any](
-	items []dumpItem,
-	orig *orderedmap.Map[string, V],
-	adjusted []V,
-	pos map[string]int,
-	toSQL func(V) string,
-) ([]dumpItem, bool) {
-	if orig == nil {
-		return items, true
-	}
-	i := 0
-	for k := range orig.Keys() {
-		p, ok := pos[k]
-		if !ok || i >= len(adjusted) {
-			return items, false
-		}
-		items = append(items, dumpItem{pos: p, sql: toSQL(adjusted[i])})
-		i++
-	}
-	return items, true
-}
-
-// orEmpty returns an empty map when m is nil, so callers can pass optional
-// DumpResult collections to code that dereferences them.
-func orEmpty[V any](m *orderedmap.Map[string, V]) *orderedmap.Map[string, V] {
-	if m == nil {
-		return orderedmap.New[string, V]()
-	}
-	return m
 }
 
 // formatSchemaSQL formats enums, domains, composite types, sequences, tables,
@@ -598,17 +471,6 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		clearMatViewStorageParams(filteredViews)
 	}
 
-	// Validate the dependency order up front so a cycle is a hard error rather
-	// than a silent fall back to name order. String() renders in this order.
-	if options.SortByDeps {
-		if _, err := toposort.OrderFromSchema(
-			filteredEnums, filteredDomains, filteredCompositeTypes,
-			filteredTables, filteredViews, filteredSequences, filteredRoutines,
-		); err != nil {
-			return nil, fmt.Errorf("failed to order dump by dependency: %w", err)
-		}
-	}
-
 	return &DumpResult{
 		Tables:         filteredTables,
 		Views:          filteredViews,
@@ -618,7 +480,6 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		Sequences:      filteredSequences,
 		Routines:       filteredRoutines,
 		OmitSchema:     options.OmitSchema,
-		SortByDeps:     options.SortByDeps,
 		NoFormat:       options.NoFormat,
 		Count: ObjectCount{
 			Schemas:        client.Schemas,

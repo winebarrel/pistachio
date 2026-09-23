@@ -11,13 +11,3 @@ pista dump --split ./schema/
 ```
 
 
-## Sort by dependency
-
-By default the dump orders objects by name within each type. Use `--sort-by-deps` to order them by dependency instead, so each object comes after the objects it depends on. For example, a table is placed after the types it uses and after the tables its foreign keys reference.
-
-```bash
-pista dump --sort-by-deps
-```
-
-The output can then be loaded from top to bottom without forward references. If the dependency graph has a cycle, such as two tables with mutual foreign keys, the dump cannot be ordered and errors. The flag cannot be combined with `--split`, which writes each object to a separate file with no inter-file order.
-

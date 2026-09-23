@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+* **BREAKING**: Remove `dump --sort-by-deps`. It failed on mutual foreign keys, and `pg_dump -s` writes a file `psql` can load. To load a dump into an empty database, use `apply`.
+
 ## [1.60.1] - 2026-09-22
 
 * A table named after the type one of its own columns is written with, `text` among them, no longer breaks the dependency sort, and neither does a domain named after its base type. The name resolved to the object itself, and that self-edge was read as a cycle: `dump --sort-by-deps` failed with `cycle detected`, and `plan` fell back to ordering by category, which creates a domain before the domain it is built on. A name that matches the object it is written on now carries on along the search path, so `CREATE DOMAIN app.rating AS rating` written where `public.rating` is the base type keeps that dependency.

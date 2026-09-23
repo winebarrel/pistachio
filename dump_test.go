@@ -25,7 +25,6 @@ type dumpTestCase struct {
 	DumpPG17           string   `yaml:"dump_pg17,omitempty"`
 	DumpPG18           string   `yaml:"dump_pg18,omitempty"`
 	OmitSchema         bool     `yaml:"omit_schema"`
-	SortByDeps         bool     `yaml:"sort_by_deps"`
 	Include            []string `yaml:"include,omitempty"`
 	Exclude            []string `yaml:"exclude,omitempty"`
 	Enable             []string `yaml:"enable,omitempty"`
@@ -200,6 +199,16 @@ CREATE VIEW public.v AS SELECT u.id, (SELECT max(x.id) FROM public.users x WHERE
 
 	assert.Equal(t, formatted.String(), raw.String())
 	assert.Equal(t, formatted.Files(), raw.Files())
+}
+
+// A model built by hand can render SQL that does not parse, here a sequence
+// with no type. The dump returns that SQL as rendered instead of failing.
+func TestDumpResult_String_UnparsableKeptAsRendered(t *testing.T) {
+	seqs := orderedmap.New[string, *model.Sequence]()
+	seqs.Set("public.s", &model.Sequence{Schema: "public", Name: "s"})
+	result := &DumpResult{Sequences: seqs}
+
+	assert.Equal(t, model.SequencesToSQL(seqs), result.String())
 }
 
 func TestDump_Count_Empty(t *testing.T) {
@@ -688,197 +697,6 @@ func TestDumpResult_Files_DuplicateFileNameCaseInsensitive(t *testing.T) {
 	assert.Len(t, files, 2)
 }
 
-func TestDumpResult_SortByDeps_NilMaps(t *testing.T) {
-	// A DumpResult built by hand may leave optional collections nil. With
-	// SortByDeps the dependency sort must still run over just the tables and
-	// order the referenced parent before the child.
-	newTable := func(name string) *model.Table {
-		tbl := &model.Table{
-			Schema:      "public",
-			Name:        name,
-			Columns:     orderedmap.New[string, *model.Column](),
-			Constraints: orderedmap.New[string, *model.Constraint](),
-			ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
-			Indexes:     orderedmap.New[string, *model.Index](),
-		}
-		tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
-		return tbl
-	}
-
-	parent := newTable("parent")
-	child := newTable("child")
-	refSchema, refTable := "public", "parent"
-	child.ForeignKeys.Set("child_parent_fkey", &model.ForeignKey{
-		Name:       "child_parent_fkey",
-		Definition: "FOREIGN KEY (id) REFERENCES parent(id)",
-		Validated:  true,
-		Schema:     "public",
-		Table:      "child",
-		RefSchema:  &refSchema,
-		RefTable:   &refTable,
-	})
-
-	tables := orderedmap.New[string, *model.Table]()
-	// Insert child first so name order would emit it before parent; the
-	// dependency order must reverse that.
-	tables.Set("public.child", child)
-	tables.Set("public.parent", parent)
-
-	// Views/Enums/Domains/CompositeTypes/Sequences are left nil on purpose.
-	result := &DumpResult{Tables: tables, SortByDeps: true}
-
-	s := result.String()
-	assert.Less(t,
-		strings.Index(s, "CREATE TABLE public.parent"),
-		strings.Index(s, "CREATE TABLE public.child"),
-		"referenced parent table comes before child")
-
-	// A DumpResult with every collection nil renders to an empty string.
-	assert.Empty(t, (&DumpResult{SortByDeps: true}).String())
-}
-
-func TestDumpResult_SortByDeps_CycleFallsBackInString(t *testing.T) {
-	// Client.Dump rejects a cyclic schema, but String() has no error channel.
-	// A DumpResult built by hand with a cycle degrades to name order rather
-	// than panicking or emitting a partial order.
-	newTable := func(name string, refTable string) *model.Table {
-		tbl := &model.Table{
-			Schema:      "public",
-			Name:        name,
-			Columns:     orderedmap.New[string, *model.Column](),
-			Constraints: orderedmap.New[string, *model.Constraint](),
-			ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
-			Indexes:     orderedmap.New[string, *model.Index](),
-		}
-		tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
-		refSchema := "public"
-		ref := refTable
-		tbl.ForeignKeys.Set(name+"_fkey", &model.ForeignKey{
-			Name:       name + "_fkey",
-			Definition: "FOREIGN KEY (id) REFERENCES " + refTable + "(id)",
-			Validated:  true,
-			Schema:     "public",
-			Table:      name,
-			RefSchema:  &refSchema,
-			RefTable:   &ref,
-		})
-		return tbl
-	}
-
-	tables := orderedmap.New[string, *model.Table]()
-	tables.Set("public.a", newTable("a", "b"))
-	tables.Set("public.b", newTable("b", "a")) // a <-> b cycle
-
-	result := &DumpResult{Tables: tables, SortByDeps: true}
-	s := result.String()
-
-	// Fallback is name order: a before b.
-	assert.Less(t, strings.Index(s, "CREATE TABLE public.a"), strings.Index(s, "CREATE TABLE public.b"))
-}
-
-func TestDump_SortByDeps_CycleErrors(t *testing.T) {
-	// Mutual foreign keys form a dependency cycle. --sort-by-deps cannot order
-	// the objects, so Dump returns an error rather than falling back.
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.a (
-    id integer NOT NULL,
-    b_id integer,
-    CONSTRAINT a_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.b (
-    id integer NOT NULL,
-    a_id integer,
-    CONSTRAINT b_pkey PRIMARY KEY (id)
-);
-ALTER TABLE ONLY public.a ADD CONSTRAINT a_b_fkey FOREIGN KEY (b_id) REFERENCES b(id);
-ALTER TABLE ONLY public.b ADD CONSTRAINT b_a_fkey FOREIGN KEY (a_id) REFERENCES a(id);`)
-
-	client := NewClient(&Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	_, err := client.Dump(ctx, &DumpOptions{SortByDeps: true})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to order dump by dependency")
-
-	// Without --sort-by-deps the same schema dumps fine in name order.
-	_, err = client.Dump(ctx, &DumpOptions{})
-	require.NoError(t, err)
-}
-
-func TestDump_SortByDeps_TogglesOrder(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	// posts references users via FK, so the dependency order is users then
-	// posts. The default name order is the reverse (alphabetical).
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.posts (
-    id integer NOT NULL,
-    user_id integer,
-    CONSTRAINT posts_pkey PRIMARY KEY (id)
-);
-ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);`)
-
-	client := NewClient(&Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	def, err := client.Dump(ctx, &DumpOptions{})
-	require.NoError(t, err)
-	assert.Less(t, strings.Index(def.String(), "public.posts"), strings.Index(def.String(), "public.users"),
-		"default dump is in name order: posts before users")
-
-	sorted, err := client.Dump(ctx, &DumpOptions{SortByDeps: true})
-	require.NoError(t, err)
-	assert.Less(t, strings.Index(sorted.String(), "public.users"), strings.Index(sorted.String(), "public.posts"),
-		"dependency order puts the referenced users before posts")
-}
-
-func TestDump_SortByDeps_OmitSchema(t *testing.T) {
-	ctx := context.Background()
-	conn := testutil.ConnectDB(t)
-	defer conn.Close(ctx)
-
-	// With --omit-schema the objects are schema-stripped before rendering, but
-	// the dependency order is still computed from the schema-qualified graph, so
-	// the FK from posts to users must still be honored.
-	testutil.SetupDB(t, ctx, conn, `
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.posts (
-    id integer NOT NULL,
-    user_id integer,
-    CONSTRAINT posts_pkey PRIMARY KEY (id)
-);
-ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);`)
-
-	client := NewClient(&Options{
-		ConnString: conn.Config().ConnString(),
-		Schemas:    []string{"public"},
-	})
-
-	got, err := client.Dump(ctx, &DumpOptions{SortByDeps: true, OmitSchema: true})
-	require.NoError(t, err)
-	s := got.String()
-	assert.NotContains(t, s, "public.")
-	assert.Less(t, strings.Index(s, "CREATE TABLE users"), strings.Index(s, "CREATE TABLE posts"),
-		"dependency order is preserved with --omit-schema")
-}
-
 func TestDump(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -910,7 +728,6 @@ func TestDump(t *testing.T) {
 			})
 			got, err := client.Dump(ctx, &DumpOptions{
 				OmitSchema: tc.OmitSchema,
-				SortByDeps: tc.SortByDeps,
 				Explain:    tc.Explain,
 			})
 			require.NoError(t, err)
@@ -977,115 +794,6 @@ CREATE TABLE public.users (id integer);`)
 	files := got.Files()
 	assert.Len(t, files, 1)
 	assert.Contains(t, files, "public.users.sql")
-}
-
-func TestDumpResult_SortByDeps_OmitSchemaCollisionFallsBackInString(t *testing.T) {
-	// Client.Dump rejects --omit-schema with several schemas, but String() has
-	// no error channel. In a directly built DumpResult, stripping the schema
-	// off two same-named objects collapses them onto one key, the adjusted
-	// collection comes up short against the dependency order, and String()
-	// degrades to the name order instead of panicking. One sub-case per
-	// collection so every appendDumpItems call sees its own short map.
-	newTable := func(schema string) *model.Table {
-		tbl := &model.Table{
-			Schema:      schema,
-			Name:        "x",
-			Columns:     orderedmap.New[string, *model.Column](),
-			Constraints: orderedmap.New[string, *model.Constraint](),
-			ForeignKeys: orderedmap.New[string, *model.ForeignKey](),
-			Indexes:     orderedmap.New[string, *model.Index](),
-		}
-		tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "integer", NotNull: true})
-		return tbl
-	}
-
-	tests := []struct {
-		name   string
-		result *DumpResult
-		want   string
-	}{
-		{
-			name: "enums",
-			result: func() *DumpResult {
-				m := orderedmap.New[string, *model.Enum]()
-				m.Set("a.x", &model.Enum{Schema: "a", Name: "x", Values: []string{"v"}})
-				m.Set("b.x", &model.Enum{Schema: "b", Name: "x", Values: []string{"v"}})
-				return &DumpResult{Enums: m}
-			}(),
-			want: "CREATE TYPE x AS ENUM",
-		},
-		{
-			name: "domains",
-			result: func() *DumpResult {
-				m := orderedmap.New[string, *model.Domain]()
-				m.Set("a.x", &model.Domain{Schema: "a", Name: "x", BaseType: "text"})
-				m.Set("b.x", &model.Domain{Schema: "b", Name: "x", BaseType: "text"})
-				return &DumpResult{Domains: m}
-			}(),
-			want: "CREATE DOMAIN x AS text",
-		},
-		{
-			name: "composite types",
-			result: func() *DumpResult {
-				m := orderedmap.New[string, *model.CompositeType]()
-				m.Set("a.x", &model.CompositeType{Schema: "a", Name: "x", Attributes: []*model.CompositeAttribute{{Name: "n", TypeName: "text"}}})
-				m.Set("b.x", &model.CompositeType{Schema: "b", Name: "x", Attributes: []*model.CompositeAttribute{{Name: "n", TypeName: "text"}}})
-				return &DumpResult{CompositeTypes: m}
-			}(),
-			want: "CREATE TYPE x AS (",
-		},
-		{
-			name: "sequences",
-			result: func() *DumpResult {
-				m := orderedmap.New[string, *model.Sequence]()
-				m.Set("a.x", &model.Sequence{Schema: "a", Name: "x"})
-				m.Set("b.x", &model.Sequence{Schema: "b", Name: "x"})
-				return &DumpResult{Sequences: m}
-			}(),
-			want: "CREATE SEQUENCE x",
-		},
-		{
-			name: "routines",
-			result: func() *DumpResult {
-				m := orderedmap.New[string, *model.Routine]()
-				m.Set("a.x()", &model.Routine{Schema: "a", Name: "x", Language: "sql", ReturnType: "integer", Body: " SELECT 1 "})
-				m.Set("b.x()", &model.Routine{Schema: "b", Name: "x", Language: "sql", ReturnType: "integer", Body: " SELECT 1 "})
-				return &DumpResult{Routines: m}
-			}(),
-			want: "CREATE OR REPLACE FUNCTION x()",
-		},
-		{
-			name: "tables",
-			result: func() *DumpResult {
-				m := orderedmap.New[string, *model.Table]()
-				m.Set("a.x", newTable("a"))
-				m.Set("b.x", newTable("b"))
-				return &DumpResult{Tables: m}
-			}(),
-			want: "CREATE TABLE x",
-		},
-		{
-			name: "views",
-			result: func() *DumpResult {
-				m := orderedmap.New[string, *model.View]()
-				m.Set("a.x", &model.View{Schema: "a", Name: "x", Definition: "SELECT 1"})
-				m.Set("b.x", &model.View{Schema: "b", Name: "x", Definition: "SELECT 1"})
-				return &DumpResult{Views: m}
-			}(),
-			want: "CREATE OR REPLACE VIEW x",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.result.SortByDeps = true
-			tt.result.OmitSchema = true
-			s := tt.result.String()
-			assert.Contains(t, s, tt.want)
-			// The two originals collapsed onto one unqualified object.
-			assert.Equal(t, 1, strings.Count(s, tt.want))
-		})
-	}
 }
 
 // Document carries every object kind the dump holds, so a JSON dump reports
