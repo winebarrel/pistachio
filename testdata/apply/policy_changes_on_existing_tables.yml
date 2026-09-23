@@ -1,0 +1,37 @@
+# An existing table's policy changes stay with the table: a recreated policy's
+# CREATE follows its DROP, and RLS turned on comes right before the new
+# policies. Only the new table's work comes later.
+init: |
+  CREATE TABLE public.a_docs (id integer);
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs FOR SELECT USING (true);
+  CREATE TABLE public.b_docs (id integer);
+desired: |
+  CREATE TABLE public.a_docs (id integer);
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs USING (true);
+  CREATE TABLE public.b_docs (id integer);
+  ALTER TABLE public.b_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY q ON public.b_docs USING (true);
+  CREATE TABLE public.c_other (id integer);
+applied: |
+  -- public.a_docs
+  CREATE TABLE public.a_docs (
+      id integer
+  );
+
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs USING (true);
+
+  -- public.b_docs
+  CREATE TABLE public.b_docs (
+      id integer
+  );
+
+  ALTER TABLE public.b_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY q ON public.b_docs USING (true);
+
+  -- public.c_other
+  CREATE TABLE public.c_other (
+      id integer
+  );

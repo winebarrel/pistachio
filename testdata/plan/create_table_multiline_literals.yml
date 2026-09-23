@@ -36,8 +36,6 @@ plan: |
   b') NOT VALID;
   CREATE INDEX idx_users_note ON public.users USING btree (note);
   ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY p ON public.users USING (note <> 'c
-  d');
   CREATE TRIGGER t BEFORE INSERT ON public.users FOR EACH ROW WHEN (new.note <> 'e
   f') EXECUTE FUNCTION public.noop();
   COMMENT ON TABLE public.users IS 'line one
@@ -46,3 +44,5 @@ plan: |
   line two';
   COMMENT ON INDEX public.idx_users_note IS 'line one
   line two';
+  CREATE POLICY p ON public.users USING (note <> 'c
+  d');

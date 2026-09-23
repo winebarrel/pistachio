@@ -49,10 +49,9 @@ func TestTable_RLSSQL_WithPolicies(t *testing.T) {
 		Name: "p", Schema: "public", Table: "users",
 		Permissive: true, Command: 'r', Using: &using,
 	})
-	assert.Equal(t, []string{
-		"ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;",
-		"CREATE POLICY p ON public.users FOR SELECT USING (owner = current_user);",
-	}, tbl.RLSSQL())
+	assert.Equal(t, []string{"ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;"}, tbl.RLSSQL())
+	assert.Equal(t, []string{"CREATE POLICY p ON public.users FOR SELECT USING (owner = current_user);"}, tbl.PolicySQL())
+	assert.Contains(t, model.TableToSQL(tbl), "ENABLE ROW LEVEL SECURITY;\nCREATE POLICY p")
 }
 
 // nil-Policies guard: an older Table built without orderedmap-init must not

@@ -4185,13 +4185,13 @@ func TestDiffTables_newTable_withStorageRLSAndTrigger(t *testing.T) {
 
 	result, err := DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
-	require.Len(t, result.Stmts, 6)
+	require.Len(t, result.Stmts, 5)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.docs")
 	assert.Equal(t, "ALTER TABLE public.docs ALTER COLUMN body SET STORAGE EXTERNAL;", result.Stmts[1])
 	assert.Equal(t, "ALTER TABLE public.docs ALTER COLUMN body SET COMPRESSION pglz;", result.Stmts[2])
 	assert.Equal(t, "ALTER TABLE public.docs ENABLE ROW LEVEL SECURITY;", result.Stmts[3])
-	assert.Equal(t, "CREATE POLICY p ON public.docs FOR SELECT USING (true);", result.Stmts[4])
-	assert.Equal(t, "CREATE TRIGGER stamp BEFORE INSERT ON public.docs FOR EACH ROW EXECUTE FUNCTION stamp();", result.Stmts[5])
+	assert.Equal(t, "CREATE TRIGGER stamp BEFORE INSERT ON public.docs FOR EACH ROW EXECUTE FUNCTION stamp();", result.Stmts[4])
+	assert.Equal(t, []string{"CREATE POLICY p ON public.docs FOR SELECT USING (true);"}, result.PolicyStmts)
 	assert.False(t, result.HasConcurrently)
 }
 

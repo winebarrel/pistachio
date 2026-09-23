@@ -132,6 +132,18 @@ diff has no reason to walk otherwise.
 
 Origin: review of [#442](https://github.com/winebarrel/pistachio/pull/442).
 
+## An existing table's policy cannot read a relation the same run creates
+
+A new table's policies are created after every table and view. An existing
+table's policy changes stay with the table: turning RLS on, adding a policy,
+recreating one and `ALTER POLICY` run next to each other at the table's place
+in the plan, so a live table is never left without its RLS or its policies.
+Such a policy fails when its expression reads a table or view created in the
+same run. Workaround: create the relation first and change the policy in a
+later run.
+
+Origin: moving `CREATE POLICY` after the views, 2026-09-23.
+
 ## Policy USING / WITH CHECK normalization for subquery column refs
 
 Priority: low.

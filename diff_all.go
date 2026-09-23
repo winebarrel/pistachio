@@ -704,7 +704,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	})
 
 	// Assemble:
-	// FK drops -> view drops -> creates/alters -> table/domain/enum drops -> FK adds -> view creates
+	// FK drops -> view drops -> creates/alters -> table/domain/enum drops -> FK adds -> view creates -> policy creates
 	var stmts []string
 	for _, ts := range tagStatements(diffs.Tables.FKDropStmts, dropPosMap) {
 		stmts = append(stmts, ts.sql)
@@ -729,6 +729,8 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	for _, ts := range viewCreateStmts {
 		stmts = append(stmts, ts.sql)
 	}
+	// A policy can read any table or view, so it is created once all exist.
+	stmts = append(stmts, diffs.Tables.PolicyStmts...)
 
 	return stmts
 }
@@ -758,6 +760,7 @@ func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string
 	stmts = append(stmts, diffs.Enums.DropStmts...)
 	stmts = append(stmts, diffs.Tables.FKAddStmts...)
 	stmts = append(stmts, sortViewStmts(diffs.Views.CreateStmts, desired.Views, false)...)
+	stmts = append(stmts, diffs.Tables.PolicyStmts...)
 	return stmts
 }
 

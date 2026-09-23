@@ -24,9 +24,14 @@ type TableDiffResult struct {
 	// order PostgreSQL accepts. They are kept out of Stmts because the caller
 	// sorts that by object dependency, which is the right order for one
 	// direction and the wrong one for the other.
-	PersistenceStmts    []string
-	Stmts               []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
-	FKAddStmts          []string // FK adds and renames (should run last)
+	PersistenceStmts []string
+	Stmts            []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
+	FKAddStmts       []string // FK adds and renames (should run last)
+	// PolicyStmts holds a new table's policies. They run after every table and
+	// view, since a policy can read any of them. An existing table's policies
+	// stay in Stmts, next to its RLS change, so a live table is never left
+	// without them or without its RLS.
+	PolicyStmts         []string
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
 	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
@@ -53,6 +58,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			}
 			result.Stmts = append(result.Stmts, stmts...)
 			result.FKAddStmts = append(result.FKAddStmts, fkStmts...)
+			result.PolicyStmts = append(result.PolicyStmts, v.PolicySQL()...)
 			if extraHasConcurrently {
 				result.HasConcurrently = true
 			}
