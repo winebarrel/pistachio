@@ -269,6 +269,13 @@ func (t Table) RLSSQL() []string {
 	if t.ForceRowSecurity {
 		stmts = append(stmts, "ALTER TABLE "+t.FQTN()+" FORCE ROW LEVEL SECURITY;")
 	}
+	return stmts
+}
+
+// PolicySQL renders the table's policies. dump writes them with the table; the
+// plan runs them after every table and view.
+func (t Table) PolicySQL() []string {
+	var stmts []string
 	if t.Policies != nil {
 		for _, p := range t.Policies.CollectValues() {
 			stmts = append(stmts, p.SQL())
@@ -408,7 +415,7 @@ func TableToSQL(t *Table) string {
 	if s := t.FkSQL(); s != "" {
 		parts = append(parts, "\n"+s)
 	}
-	if s := t.RLSSQL(); len(s) > 0 {
+	if s := slices.Concat(t.RLSSQL(), t.PolicySQL()); len(s) > 0 {
 		parts = append(parts, "\n"+strings.Join(s, "\n"))
 	}
 	if s := t.TrigSQL(); len(s) > 0 {

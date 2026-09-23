@@ -32,7 +32,9 @@ func diffRLS(fqtn string, current, desired *model.Table) []string {
 }
 
 // diffPolicies emits CREATE POLICY / ALTER POLICY / DROP POLICY statements for
-// changes between current and desired policies on the same table.
+// changes between current and desired policies on the same table. CREATE
+// POLICY is returned separately, since the plan runs it after every table and
+// view.
 //
 // Pure removals (policy absent from desired) honor the policy-drop policy via
 // dc; definition changes still run as DROP+CREATE when a property that cannot
@@ -42,7 +44,7 @@ func diffPolicies(
 	fqtn string,
 	current, desired *orderedmap.Map[string, *model.Policy],
 	dc DropChecker,
-) (stmts []string, disallowed []string, err error) {
+) (stmts, creates, disallowed []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Callers (diffTable) always pass initialized maps from parser/catalog,
@@ -52,7 +54,7 @@ func diffPolicies(
 	// under its new name in the adjusted current map.
 	current, renamedFrom, err := detectPolicyRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Renamed policies whose definition also requires DROP+CREATE: skip the
@@ -110,12 +112,8 @@ func diffPolicies(
 	// Add new or recreated policies, then ALTER for in-place changes.
 	for name, des := range desired.All() {
 		cur, ok := current.GetOk(name)
-		if !ok {
-			stmts = append(stmts, des.SQL())
-			continue
-		}
-		if needsRecreate(cur, des) {
-			stmts = append(stmts, des.SQL())
+		if !ok || needsRecreate(cur, des) {
+			creates = append(creates, des.SQL())
 			continue
 		}
 		if alterStmt := alterPolicySQL(fqtn, cur, des); alterStmt != "" {
@@ -123,7 +121,7 @@ func diffPolicies(
 		}
 	}
 
-	return stmts, disallowed, nil
+	return stmts, creates, disallowed, nil
 }
 
 // needsRecreate reports whether two policies differ in a way that cannot be

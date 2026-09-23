@@ -1,0 +1,28 @@
+# A new or recreated policy on an existing table can read a table the same run
+# creates.
+init: |
+  CREATE TABLE public.a_docs (tenant_id text);
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs FOR SELECT USING (true);
+desired: |
+  CREATE TABLE public.a_docs (tenant_id text);
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs USING (tenant_id IN (SELECT z_tenants.id FROM z_tenants));
+  CREATE POLICY q ON public.a_docs FOR INSERT WITH CHECK (tenant_id IN (SELECT z_tenants.id FROM z_tenants));
+  CREATE TABLE public.z_tenants (id text);
+applied: |
+  -- public.a_docs
+  CREATE TABLE public.a_docs (
+      tenant_id text
+  );
+
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs USING ((tenant_id IN (SELECT z_tenants.id
+      FROM z_tenants)));
+  CREATE POLICY q ON public.a_docs FOR INSERT WITH CHECK ((tenant_id IN (SELECT z_tenants.id
+      FROM z_tenants)));
+
+  -- public.z_tenants
+  CREATE TABLE public.z_tenants (
+      id text
+  );

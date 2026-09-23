@@ -160,14 +160,18 @@ func TestOrderStatements_Fallback(t *testing.T) {
 
 	diffs := emptyDiffs()
 	diffs.Enums = &diff.EnumDiffResult{Stmts: []string{"CREATE TYPE public.s AS ENUM ('x');"}}
-	diffs.Tables = &diff.TableDiffResult{Stmts: []string{"CREATE TABLE public.a (id integer);"}}
+	diffs.Tables = &diff.TableDiffResult{
+		Stmts:       []string{"CREATE TABLE public.a (id integer);"},
+		PolicyStmts: []string{"CREATE POLICY p ON public.a USING (true);"},
+	}
 
 	result := orderStatements(emptySchema(), desired, diffs)
 
-	// Should still produce output (via fallback)
-	require.NotEmpty(t, result)
+	// Should still produce output (via fallback), policies last.
+	require.Len(t, result, 3)
 	assert.Contains(t, result[0], "CREATE TYPE")
 	assert.Contains(t, result[1], "CREATE TABLE")
+	assert.Contains(t, result[2], "CREATE POLICY")
 }
 
 func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {

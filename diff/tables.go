@@ -24,9 +24,12 @@ type TableDiffResult struct {
 	// order PostgreSQL accepts. They are kept out of Stmts because the caller
 	// sorts that by object dependency, which is the right order for one
 	// direction and the wrong one for the other.
-	PersistenceStmts    []string
-	Stmts               []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
-	FKAddStmts          []string // FK adds and renames (should run last)
+	PersistenceStmts []string
+	Stmts            []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
+	FKAddStmts       []string // FK adds and renames (should run last)
+	// PolicyStmts holds CREATE POLICY, which runs after every table and view
+	// because a policy can read any of them.
+	PolicyStmts         []string
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
 	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
@@ -53,6 +56,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			}
 			result.Stmts = append(result.Stmts, stmts...)
 			result.FKAddStmts = append(result.FKAddStmts, fkStmts...)
+			result.PolicyStmts = append(result.PolicyStmts, v.PolicySQL()...)
 			if extraHasConcurrently {
 				result.HasConcurrently = true
 			}
@@ -75,6 +79,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			result.FKDropStmts = append(result.FKDropStmts, tableResult.FKDropStmts...)
 			result.Stmts = append(result.Stmts, tableResult.Stmts...)
 			result.FKAddStmts = append(result.FKAddStmts, tableResult.FKAddStmts...)
+			result.PolicyStmts = append(result.PolicyStmts, tableResult.PolicyStmts...)
 			result.DisallowedDropStmts = append(result.DisallowedDropStmts, tableResult.DisallowedDropStmts...)
 			if tableResult.HasConcurrently {
 				result.HasConcurrently = true
@@ -142,6 +147,7 @@ type tableDiffResult struct {
 	FKDropStmts         []string
 	Stmts               []string
 	FKAddStmts          []string
+	PolicyStmts         []string
 	DisallowedDropStmts []string
 	HasConcurrently     bool
 }
@@ -175,11 +181,12 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 
 		result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
-		polStmts, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
+		polStmts, polCreates, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
 		if err != nil {
 			return nil, err
 		}
 		result.Stmts = append(result.Stmts, polStmts...)
+		result.PolicyStmts = append(result.PolicyStmts, polCreates...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
 
 		trgStmts, trgDisallowed, err := diffTriggers(fqtn, current.Triggers, desired.Triggers, dc)
@@ -254,11 +261,12 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// policy DROP that the user may have stacked alongside.
 	result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
 
-	polStmts, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
+	polStmts, polCreates, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
 	if err != nil {
 		return nil, err
 	}
 	result.Stmts = append(result.Stmts, polStmts...)
+	result.PolicyStmts = append(result.PolicyStmts, polCreates...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
 
 	trgStmts, trgDisallowed, err := diffTriggers(fqtn, current.Triggers, desired.Triggers, dc)

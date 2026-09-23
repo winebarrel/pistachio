@@ -1,0 +1,24 @@
+# A policy can read a table or view created later in the run.
+init: ""
+desired: |
+  CREATE TABLE public.a_docs (tenant_id text);
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs USING (tenant_id = (SELECT z_tenants.id FROM z_tenants WHERE z_tenants.db_user = current_user));
+  CREATE TABLE public.z_tenants (id text, db_user text);
+  ALTER TABLE public.z_tenants ENABLE ROW LEVEL SECURITY;
+  CREATE VIEW public.b_view AS SELECT id FROM z_tenants;
+  CREATE POLICY q ON public.z_tenants USING (id IN (SELECT b_view.id FROM b_view));
+plan: |
+  CREATE TABLE public.a_docs (
+      tenant_id text
+  );
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE TABLE public.z_tenants (
+      id text,
+      db_user text
+  );
+  ALTER TABLE public.z_tenants ENABLE ROW LEVEL SECURITY;
+  CREATE OR REPLACE VIEW public.b_view AS
+  SELECT id FROM z_tenants;
+  CREATE POLICY p ON public.a_docs USING (tenant_id = (SELECT z_tenants.id FROM z_tenants WHERE z_tenants.db_user = current_user));
+  CREATE POLICY q ON public.z_tenants USING (id IN (SELECT b_view.id FROM b_view));
