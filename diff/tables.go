@@ -117,6 +117,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 // newTableExtras returns non-FK extras and FK statements separately.
 func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcurrently bool, err error) {
 	stmts = append(stmts, t.NotValidConSQL()...)
+	stmts = append(stmts, t.FoldedKeySQL()...)
 	stmts = append(stmts, t.StorageSQL()...)
 	for _, idx := range t.Indexes.CollectValues() {
 		stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)

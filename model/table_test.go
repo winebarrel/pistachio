@@ -686,3 +686,72 @@ func TestTable_NotValidConSQL_inheritsChild(t *testing.T) {
 		[]string{"ALTER TABLE ONLY public.child ADD CONSTRAINT child_v_check CHECK (v > 0) NOT VALID;"},
 		tbl.NotValidConSQL())
 }
+
+func keyTable(cons ...*model.Constraint) *model.Table {
+	tbl := newTable("public", "t")
+	tbl.Columns.Set("c", &model.Column{Name: "c", TypeName: "integer"})
+	for _, con := range cons {
+		tbl.Constraints.Set(con.Name, con)
+	}
+	return tbl
+}
+
+// A repeated key moves to an ALTER TABLE. The primary key stays inline even
+// when it comes later.
+func TestTable_FoldedKeySQL(t *testing.T) {
+	tbl := keyTable(
+		&model.Constraint{Name: "t_c_key", Type: 'u', Definition: "UNIQUE (c)"},
+		&model.Constraint{Name: "t_pkey", Type: 'p', Definition: "PRIMARY KEY (c)"},
+		&model.Constraint{Name: "t_c_again", Type: 'u', Definition: "UNIQUE (c)"},
+		&model.Constraint{Name: "t_c_excl", Type: 'x', Definition: "EXCLUDE USING btree (c WITH =)"},
+		&model.Constraint{Name: "t_c_excl2", Type: 'x', Definition: "EXCLUDE USING btree (c WITH =)"},
+	)
+	assert.Equal(t, []string{
+		"ALTER TABLE ONLY public.t ADD CONSTRAINT t_c_key UNIQUE (c);",
+		"ALTER TABLE ONLY public.t ADD CONSTRAINT t_c_again UNIQUE (c);",
+		"ALTER TABLE ONLY public.t ADD CONSTRAINT t_c_excl2 EXCLUDE USING btree (c WITH =);",
+	}, tbl.FoldedKeySQL())
+	assert.Equal(t, "CREATE TABLE public.t (\n    c integer,\n    CONSTRAINT t_pkey PRIMARY KEY (c),\n    CONSTRAINT t_c_excl EXCLUDE USING btree (c WITH =)\n);", tbl.SQL())
+}
+
+// Keys that differ in deferral or NULLS NOT DISTINCT are both kept.
+func TestTable_FoldedKeySQL_DistinctKeys(t *testing.T) {
+	tbl := keyTable(
+		&model.Constraint{Name: "t_a", Type: 'u', Definition: "UNIQUE (c)"},
+		&model.Constraint{Name: "t_b", Type: 'u', Definition: "UNIQUE (c) DEFERRABLE"},
+		&model.Constraint{Name: "t_c", Type: 'u', Definition: "UNIQUE NULLS NOT DISTINCT (c)"},
+		&model.Constraint{Name: "t_d", Type: 'c', Definition: "CHECK (c > 0)", Validated: true},
+		&model.Constraint{Name: "t_e", Type: 'c', Definition: "CHECK (c > 0)", Validated: true},
+	)
+	assert.Empty(t, tbl.FoldedKeySQL())
+}
+
+func TestTable_FoldedKeySQL_Partitioned(t *testing.T) {
+	tbl := keyTable(
+		&model.Constraint{Name: "t_a", Type: 'u', Definition: "UNIQUE (c)"},
+		&model.Constraint{Name: "t_b", Type: 'u', Definition: "UNIQUE (c)"},
+	)
+	tbl.Partitioned = true
+	assert.Equal(t, []string{"ALTER TABLE public.t ADD CONSTRAINT t_b UNIQUE (c);"}, tbl.FoldedKeySQL())
+
+	parent := "public.p"
+	tbl.Partitioned = false
+	tbl.PartitionOf = &parent
+	bound := "FOR VALUES IN (1)"
+	tbl.PartitionBound = &bound
+	assert.Empty(t, tbl.FoldedKeySQL())
+}
+
+// Keys that differ only in storage parameters or tablespace still match.
+func TestTable_FoldedKeySQL_IgnoresStorage(t *testing.T) {
+	tbl := keyTable(
+		&model.Constraint{Name: "t_a", Type: 'u', Definition: "UNIQUE (c)"},
+		&model.Constraint{Name: "t_b", Type: 'u', Definition: "UNIQUE (c) WITH (fillfactor='70')"},
+		&model.Constraint{Name: "t_c", Type: 'u', Definition: `UNIQUE (c) USING INDEX TABLESPACE "my space" DEFERRABLE`},
+		&model.Constraint{Name: "t_d", Type: 'u', Definition: "UNIQUE (c) DEFERRABLE"},
+	)
+	assert.Equal(t, []string{
+		"ALTER TABLE ONLY public.t ADD CONSTRAINT t_b UNIQUE (c) WITH (fillfactor='70');",
+		"ALTER TABLE ONLY public.t ADD CONSTRAINT t_d UNIQUE (c) DEFERRABLE;",
+	}, tbl.FoldedKeySQL())
+}

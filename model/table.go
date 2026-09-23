@@ -2,6 +2,7 @@ package model
 
 import (
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -145,11 +146,13 @@ func (t Table) SQL() string {
 // inlineConstraintDefs renders the constraints written inside CREATE TABLE.
 // A NOT VALID check is left out, since the clause cannot be spelled there and
 // writing the constraint without it would restore it validated; NotValidConSQL
+// adds it back. A key foldedKeys finds is left out as well, and FoldedKeySQL
 // adds it back.
 func (t Table) inlineConstraintDefs() []string {
+	folded := t.foldedKeys()
 	var defs []string
 	for _, con := range t.Constraints.CollectValues() {
-		if con.Type.IsCheckConstraint() && !con.Validated {
+		if con.Type.IsCheckConstraint() && !con.Validated || folded[con.Name] {
 			continue
 		}
 		defs = append(defs, "    CONSTRAINT "+Ident(con.Name)+" "+con.Definition)
@@ -157,9 +160,68 @@ func (t Table) inlineConstraintDefs() []string {
 	return defs
 }
 
+// foldedKeys returns the keys CREATE TABLE would drop. Of two matching primary
+// key, unique or exclusion constraints, PostgreSQL keeps one, the primary key
+// first. The comparison treats a primary key as unique and ignores the index's
+// storage parameters and tablespace.
+func (t Table) foldedKeys() map[string]bool {
+	folded := map[string]bool{}
+	seen := map[string]bool{}
+	visit := func(con *Constraint, def string) {
+		def = keyStorageRE.ReplaceAllString(def, ")")
+		def = keyTablespaceRE.ReplaceAllString(def, "")
+		if seen[def] {
+			folded[con.Name] = true
+		}
+		seen[def] = true
+	}
+	cons := t.Constraints.CollectValues()
+	for _, con := range cons {
+		if con.Type.IsPrimaryKeyConstraint() {
+			visit(con, "UNIQUE"+strings.TrimPrefix(con.Definition, "PRIMARY KEY"))
+		}
+	}
+	for _, con := range cons {
+		if con.Type.IsUniqueConstraint() || con.Type.IsExclusionConstraint() {
+			visit(con, con.Definition)
+		}
+	}
+	return folded
+}
+
+var (
+	keyStorageRE    = regexp.MustCompile(`\) WITH \((?:[^()]|\([^()]*\))*\)`)
+	keyTablespaceRE = regexp.MustCompile(` USING INDEX TABLESPACE (?:"(?:[^"]|"")*"|[^ ]+)`)
+)
+
+// alterPrefix starts an ALTER TABLE that adds a constraint. ONLY is left off on
+// a partitioned table, which rejects it once a partition exists.
+func (t Table) alterPrefix() string {
+	if t.Partitioned {
+		return "ALTER TABLE " + t.FQTN()
+	}
+	return "ALTER TABLE ONLY " + t.FQTN()
+}
+
+// FoldedKeySQL adds the keys foldedKeys finds after the table, where
+// PostgreSQL keeps them. A partition child adds nothing: its keys come from the
+// parent.
+func (t Table) FoldedKeySQL() []string {
+	if t.IsPartitionChild() {
+		return nil
+	}
+	folded := t.foldedKeys()
+	var stmts []string
+	for _, con := range t.Constraints.CollectValues() {
+		if folded[con.Name] {
+			stmts = append(stmts, t.alterPrefix()+" ADD CONSTRAINT "+Ident(con.Name)+" "+con.Definition+";")
+		}
+	}
+	return stmts
+}
+
 // NotValidConSQL renders the table's NOT VALID check constraints, each as its
-// own ALTER TABLE after the table. ONLY is dropped on a partitioned table,
-// which rejects it once a partition exists. A partition child renders nothing:
+// own ALTER TABLE after the table. A partition child renders nothing:
 // its unvalidated entries are the clones the parent's statement creates. An
 // INHERITS child carries only its own constraints, so it renders them the way
 // a plain table does; writing one inline would restore it validated.
@@ -167,16 +229,12 @@ func (t Table) NotValidConSQL() []string {
 	if t.IsPartitionChild() {
 		return nil
 	}
-	only := "ONLY "
-	if t.Partitioned {
-		only = ""
-	}
 	var stmts []string
 	for _, con := range t.Constraints.CollectValues() {
 		if !con.Type.IsCheckConstraint() || con.Validated {
 			continue
 		}
-		stmts = append(stmts, "ALTER TABLE "+only+t.FQTN()+" ADD CONSTRAINT "+Ident(con.Name)+" "+con.Definition+" NOT VALID;")
+		stmts = append(stmts, t.alterPrefix()+" ADD CONSTRAINT "+Ident(con.Name)+" "+con.Definition+" NOT VALID;")
 	}
 	return stmts
 }
@@ -342,6 +400,7 @@ func sizedHeader(name, size string) string {
 func TableToSQL(t *Table) string {
 	parts := []string{sizedHeader(t.FQTN(), t.Size), t.SQL()}
 	parts = append(parts, t.NotValidConSQL()...)
+	parts = append(parts, t.FoldedKeySQL()...)
 	parts = append(parts, t.StorageSQL()...)
 	if s := t.IdxSQL(); s != "" {
 		parts = append(parts, s)

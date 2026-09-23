@@ -1,0 +1,40 @@
+# PostgreSQL drops a key that repeats another in the same CREATE TABLE, so the
+# repeat is added after the table.
+init: ""
+desired: |
+  CREATE TABLE public.roles (
+      id text NOT NULL,
+      CONSTRAINT roles_pkey PRIMARY KEY (id),
+      CONSTRAINT roles_id_unique UNIQUE (id)
+  );
+  CREATE TABLE public.items (
+      code text,
+      CONSTRAINT items_code_key UNIQUE (code),
+      CONSTRAINT items_code_unique UNIQUE (code)
+  );
+  CREATE TABLE public.tags (
+      name text,
+      CONSTRAINT tags_name_key UNIQUE (name),
+      CONSTRAINT tags_name_packed UNIQUE (name) WITH (fillfactor=70)
+  );
+applied: |
+  -- public.items
+  CREATE TABLE public.items (
+      code text,
+      CONSTRAINT items_code_key UNIQUE (code)
+  );
+  ALTER TABLE ONLY public.items ADD CONSTRAINT items_code_unique UNIQUE (code);
+
+  -- public.roles
+  CREATE TABLE public.roles (
+      id text NOT NULL,
+      CONSTRAINT roles_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.roles ADD CONSTRAINT roles_id_unique UNIQUE (id);
+
+  -- public.tags
+  CREATE TABLE public.tags (
+      name text,
+      CONSTRAINT tags_name_key UNIQUE (name)
+  );
+  ALTER TABLE ONLY public.tags ADD CONSTRAINT tags_name_packed UNIQUE (name) WITH (fillfactor='70');
