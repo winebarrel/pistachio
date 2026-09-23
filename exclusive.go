@@ -52,12 +52,6 @@ func (d *UnsignedDuration) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// releaseExclusive gives the exclusion back.
-func releaseExclusive(ctx context.Context, conn *pgx.Conn) error {
-	_, err := conn.Exec(ctx, "SELECT pg_advisory_unlock($1, hashtext(current_database()))", exclusiveLockClassID)
-	return err
-}
-
 // tryExclusive makes one non-blocking attempt at the exclusion.
 func tryExclusive(ctx context.Context, conn *pgx.Conn) (bool, error) {
 	var acquired bool
@@ -74,8 +68,8 @@ func tryExclusive(ctx context.Context, conn *pgx.Conn) (bool, error) {
 //
 // The lock is session-level on purpose: it is unaffected by transaction
 // boundaries, so it behaves the same with --with-tx, without it, and across
-// CONCURRENTLY index DDL. The run gives it back before closing the connection,
-// and a closing connection frees it too, including on a crash.
+// CONCURRENTLY index DDL, and it is released when the connection closes,
+// including on a crash.
 //
 // With wait == nil a held lock is an immediate error. Otherwise the attempt is
 // retried on a timer until the holder is gone, bounded by *wait through a
