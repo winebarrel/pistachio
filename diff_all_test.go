@@ -146,22 +146,27 @@ func emptyDiffs() *objectDiffs {
 	}
 }
 
-// A dependency cycle is an error. Foreign keys draw no edge, so two tables
-// referencing each other are not one; two domains built on each other are,
-// which PostgreSQL rejects, on either side of the diff.
-func TestOrderStatements_Cycle(t *testing.T) {
-	cyclic := func() *schemaObjects {
-		s := emptySchema()
-		s.Domains.Set("public.a", &model.Domain{Schema: "public", Name: "a", BaseType: "public.b"})
-		s.Domains.Set("public.b", &model.Domain{Schema: "public", Name: "b", BaseType: "public.a"})
-		return s
-	}
+func TestOrderStatements_Fallback(t *testing.T) {
+	// Test that fallbackOrder is used when topological sort would fail. A
+	// domain built on text and a table named text holding it read as a cycle,
+	// since the bare text resolves to the table.
+	desired := emptySchema()
+	desired.Domains.Set("public.d1", &model.Domain{Schema: "public", Name: "d1", BaseType: "text"})
+	tbl := &model.Table{Schema: "public", Name: "text"}
+	tbl.Columns = orderedmap.New[string, *model.Column]()
+	tbl.Columns.Set("v", &model.Column{Name: "v", TypeName: "public.d1"})
+	desired.Tables.Set("public.text", tbl)
 
-	_, err := orderStatements(emptySchema(), cyclic(), emptyDiffs())
-	require.ErrorContains(t, err, "failed to order the desired schema")
+	diffs := emptyDiffs()
+	diffs.Enums = &diff.EnumDiffResult{Stmts: []string{"CREATE TYPE public.s AS ENUM ('x');"}}
+	diffs.Tables = &diff.TableDiffResult{Stmts: []string{"CREATE TABLE public.a (id integer);"}}
 
-	_, err = orderStatements(cyclic(), emptySchema(), emptyDiffs())
-	require.ErrorContains(t, err, "failed to order the current schema")
+	result := orderStatements(emptySchema(), desired, diffs)
+
+	// Should still produce output (via fallback)
+	require.NotEmpty(t, result)
+	assert.Contains(t, result[0], "CREATE TYPE")
+	assert.Contains(t, result[1], "CREATE TABLE")
 }
 
 func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
@@ -202,8 +207,7 @@ func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
 		},
 	}
 
-	result, err := orderStatements(current, desired, diffs)
-	require.NoError(t, err)
+	result := orderStatements(current, desired, diffs)
 
 	require.Len(t, result, 2)
 	// view_b depends on view_a -> view_b must be dropped first (reverse topo order)
@@ -240,8 +244,7 @@ func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
 		DropStmts: []string{"DROP TABLE public.a;", "DROP TABLE public.b;"},
 	}
 
-	result, err := orderStatements(current, emptySchema(), diffs)
-	require.NoError(t, err)
+	result := orderStatements(current, emptySchema(), diffs)
 
 	// Should still produce output via fallback (not panic or error)
 	require.Len(t, result, 2)
@@ -280,8 +283,7 @@ func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {
 		},
 	}
 
-	result, err := orderStatements(current, desired, diffs)
-	require.NoError(t, err)
+	result := orderStatements(current, desired, diffs)
 
 	require.Len(t, result, 2)
 	// RENAME (unknown pos) must come before ADD COLUMN (known pos)
@@ -312,8 +314,7 @@ func TestOrderStatements_CreateUniqueIndexAfterTable(t *testing.T) {
 		},
 	}
 
-	result, err := orderStatements(emptySchema(), desired, diffs)
-	require.NoError(t, err)
+	result := orderStatements(emptySchema(), desired, diffs)
 
 	require.Len(t, result, 2)
 	assert.Contains(t, result[0], "CREATE TABLE", "table must be created first")

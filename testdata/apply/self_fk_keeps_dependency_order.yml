@@ -1,6 +1,7 @@
 # nodes carries a key pointing at its own primary key. That used to be read as
-# a cycle, the sort failed, and a_view was created before the b_view it selects
-# from. The file order is the wrong order on purpose.
+# a cycle, and orderStatements falls back to category order for the whole run
+# when the sort fails, so a_view was created before the b_view it selects from
+# and the apply failed. The file order is the wrong order on purpose.
 init: ""
 desired: |
   CREATE TABLE public.nodes (

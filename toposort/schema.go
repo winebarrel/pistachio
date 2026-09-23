@@ -97,6 +97,33 @@ func OrderFromSchema(
 	return order, nil
 }
 
+// OrderViews returns the views in dependency order, with nothing else in the
+// graph. It is for a caller that has a set of views to order and no whole
+// schema to hand over, which OrderFromSchema wants.
+//
+// A reference to anything but another view in the set resolves to nothing and
+// drops out, so what is left are the view-to-view edges. Those cannot hold a
+// cycle, since PostgreSQL rejects a view that reads a view reading it back,
+// which is what lets this succeed where OrderFromSchema fails on a cycle
+// elsewhere in the schema.
+func OrderViews(views *orderedmap.Map[string, *model.View]) ([]string, error) {
+	g := newGraph()
+
+	defined := make(map[string]bool, views.Len())
+	for k := range views.Keys() {
+		defined[k] = true
+	}
+
+	addViewDeps(g, views, defined)
+
+	order, err := g.Sort()
+	if err != nil {
+		return nil, fmt.Errorf("view dependency sort failed: %w", err)
+	}
+
+	return order, nil
+}
+
 // addViewDeps gives each view a node and an edge to every object in defined
 // that its definition reads.
 func addViewDeps(g *graph, views *orderedmap.Map[string, *model.View], defined map[string]bool) {
