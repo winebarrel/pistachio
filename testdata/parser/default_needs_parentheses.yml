@@ -1,0 +1,11 @@
+input: |
+  CREATE TABLE public.events (
+      created_at timestamp DEFAULT (now() AT TIME ZONE 'utc'),
+      name text DEFAULT 'unknown'::text
+  );
+expected: |
+  -- public.events
+  CREATE TABLE public.events (
+      created_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'utc'),
+      name text DEFAULT 'unknown'::text
+  );

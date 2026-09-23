@@ -4,6 +4,8 @@
 
 * A string literal spanning lines in a new table's comment, policy, trigger `WHEN` or `NOT VALID` check no longer fails the apply. The statement was split at the line break.
 
+* A column or domain `DEFAULT` that needs parentheses, `(now() AT TIME ZONE 'utc')` for one, keeps them in the plan. Without them the statement failed with a syntax error, and a trailing `COLLATE` set the column's collation instead.
+
 ## [1.61.0] - 2026-09-23
 
 * **BREAKING**: Remove `dump --sort-by-deps`. It failed on mutual foreign keys, and `pg_dump -s` writes a file `psql` can load. To load a dump into an empty database, use `apply`.

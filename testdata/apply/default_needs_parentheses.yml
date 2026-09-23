@@ -1,0 +1,36 @@
+# DEFAULT in a column or domain definition takes a restricted expression, so
+# AT TIME ZONE there has to stay in parentheses. Without them a trailing
+# COLLATE would set the column's collation instead.
+init: |
+  CREATE TABLE public.logs (id integer);
+desired: |
+  CREATE DOMAIN public.utc_ts AS timestamp DEFAULT (now() AT TIME ZONE 'utc');
+  CREATE DOMAIN public.c_text AS text DEFAULT ('x' COLLATE "C");
+  CREATE TABLE public.logs (
+      id integer,
+      created_at timestamp DEFAULT (now() AT TIME ZONE 'utc')
+  );
+  CREATE TABLE public.events (
+      created_at timestamp DEFAULT (now() AT TIME ZONE 'utc'),
+      expires_at timestamp DEFAULT ((now() AT TIME ZONE 'utc') + interval '1 day'),
+      code text DEFAULT ('x' COLLATE "C")
+  );
+applied: |
+  -- public.c_text
+  CREATE DOMAIN public.c_text AS text DEFAULT ('x'::text COLLATE "C");
+
+  -- public.utc_ts
+  CREATE DOMAIN public.utc_ts AS timestamp without time zone DEFAULT (now() AT TIME ZONE 'utc'::text);
+
+  -- public.events
+  CREATE TABLE public.events (
+      created_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'utc'::text),
+      expires_at timestamp without time zone DEFAULT ((now() AT TIME ZONE 'utc'::text) + '1 day'::interval),
+      code text DEFAULT ('x'::text COLLATE "C")
+  );
+
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer,
+      created_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'utc'::text)
+  );

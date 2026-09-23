@@ -3012,6 +3012,36 @@ func TestParseSQL_DomainWithDefault(t *testing.T) {
 	assert.Equal(t, "1", *d.Default)
 }
 
+func TestParseSQL_DomainWithDefaultNeedingParentheses(t *testing.T) {
+	sql := `CREATE DOMAIN public.utc_ts AS timestamp DEFAULT (now() AT TIME ZONE 'utc');`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	d := result.Domains.Get("public.utc_ts")
+	require.NotNil(t, d)
+	require.NotNil(t, d.Default)
+	assert.Equal(t, "(now() AT TIME ZONE 'utc')", *d.Default)
+}
+
+func TestParenthesizeDefault(t *testing.T) {
+	tests := []struct {
+		def  string
+		want string
+	}{
+		{"now() AT TIME ZONE 'utc'", "(now() AT TIME ZONE 'utc')"},
+		{"'x' COLLATE \"C\"", "('x' COLLATE \"C\")"},
+		{"true AND false", "(true AND false)"},
+		{"1 IS NULL", "(1 IS NULL)"},
+		{"'x'::text", "'x'::text"},
+		{"1 + 2", "1 + 2"},
+		{"1 IS DISTINCT FROM 2", "1 IS DISTINCT FROM 2"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, parenthesizeDefault(tt.def), tt.def)
+	}
+}
+
 func TestParseSQL_DomainWithComment(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer;
 COMMENT ON DOMAIN public.pos_int IS 'Positive integer';`
