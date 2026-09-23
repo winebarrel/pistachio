@@ -833,7 +833,7 @@ Origin: routine support.
 
 `CREATE RULE` in a schema file is skipped with the unsupported-statement
 warning, `dump` does not write a rule, and `plan` does not drop one the
-database holds. A database restored from `pista dump` has no rules.
+database holds. A database restored from `pista dump` loses them.
 
 Workaround: write the rule as `CREATE OR REPLACE RULE` under
 `-- pista:execute`. The statement runs on every apply, and the plain
