@@ -829,6 +829,18 @@ symmetric. `CREATE AGGREGATE` has a shape `model.Routine` does not cover.
 
 Origin: routine support.
 
+## Rules are not managed
+
+`CREATE RULE` in a schema file is skipped with the unsupported-statement
+warning, `dump` does not write a rule, and `plan` does not drop one the
+database holds. A database restored from `pista dump` loses them.
+
+Workaround: write the rule as `CREATE OR REPLACE RULE` under
+`-- pista:execute`. The statement runs on every apply, and the plain
+`CREATE RULE` fails the second time.
+
+Origin: pg_dump fidelity comparison of the sample databases, 2026-09-23.
+
 ## A comment on a constraint, a trigger or a policy is not managed
 
 Priority: low.
