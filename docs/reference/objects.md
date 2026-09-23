@@ -114,7 +114,7 @@ Adding or removing a parameter is not a modification either. The argument types 
 
 An attribute left at its default is not written back. PostgreSQL reports `VOLATILE`, `PARALLEL UNSAFE` and the default `COST` as absent, so a desired schema may spell them out or leave them off.
 
-A routine is created after the types its signature names and before every table, because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call one. A signature can name a relation instead of a type, as `RETURNS SETOF <table>` does; such a routine comes after its own relation and before every other one. Dropping runs the other way: views, then tables, then routines, then types.
+A routine is created after the types its signature names and before every table, because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call one. A signature can name a table instead of a type, as `RETURNS SETOF <table>` does; such a routine comes after that table, and before every other table where that does not form a cycle. Dropping runs the other way: views, then tables, then routines, then types.
 
 !!! info
     That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later. `plpgsql` is unaffected. Mark such a routine `-- pista:ignore` and create it with `-- pista:execute` instead.

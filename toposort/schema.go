@@ -408,9 +408,10 @@ func RoutineNode(qualifiedName string) string {
 // expression, since the answer is the same "routine first" either way.
 //
 // A signature can name a relation as well as a type: RETURNS SETOF <table>, or
-// a table row type as a parameter. That relation is skipped when the wholesale
-// edge is drawn, or the pair would close a cycle and the sort would fail. Such
-// a routine lands after its own relation and before every other one.
+// a table row type as a parameter. The routine then follows that relation, and
+// a table or view it reaches that way gets no wholesale edge, which would
+// close a cycle. When two routines name two different relations, the first
+// still precedes the other relation and the second follows both.
 //
 // The reverse direction is otherwise absent. A LANGUAGE sql body that reads a
 // table would want the table first, which cannot hold at the same time as the
@@ -428,16 +429,12 @@ func addRoutineDeps(
 
 	nodes := make([]string, 0, routines.Len())
 	seen := make(map[string]bool, routines.Len())
-	// What each routine's own signature names, so the wholesale edge can skip
-	// those pairs. Overloads share a node, so the sets merge per node.
-	named := make(map[string]map[string]bool, routines.Len())
 
 	for _, r := range routines.All() {
 		node := RoutineNode(model.Ident(r.Schema, r.Name))
 		if !seen[node] {
 			seen[node] = true
 			nodes = append(nodes, node)
-			named[node] = map[string]bool{}
 		}
 		g.AddNode(node)
 
@@ -446,19 +443,20 @@ func addRoutineDeps(
 		for _, a := range r.Args {
 			if dep := resolveTypeDep(a.Type, r.Schema, "", defined); dep != "" {
 				g.AddEdge(node, dep)
-				named[node][dep] = true
 			}
 		}
 		if dep := resolveTypeDep(r.ReturnType, r.Schema, "", defined); dep != "" {
 			g.AddEdge(node, dep)
-			named[node][dep] = true
 		}
 	}
 
+	// An edge into a routine does not change what the routine reaches, so one
+	// walk per routine covers every table and view.
 	addDependents := func(keys func(func(string) bool)) {
-		for k := range keys {
-			for _, node := range nodes {
-				if named[node][k] {
+		for _, node := range nodes {
+			reach := g.reachable(node)
+			for k := range keys {
+				if reach[k] {
 					continue
 				}
 				g.AddEdge(k, node)

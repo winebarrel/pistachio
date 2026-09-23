@@ -684,6 +684,16 @@ expression, a policy or a trigger can call one. The edge from a table to a
 routine is drawn wholesale in `addRoutineDeps` rather than by reading the
 expressions, since the answer is the same "routine first" either way.
 
+A routine whose signature names a table, as `RETURNS SETOF <table>` does,
+follows that table instead, and a table it reaches through its signature gets
+no edge to it, which would close a cycle. When two routines name two different
+tables, one of them comes after both, and a `CHECK`, `GENERATED`, index or
+policy expression on the other table that calls it fails to apply.
+
+A routine whose signature names a view cannot be created in the same run as
+the view. The plan creates every view after every routine, whatever the
+dependency sort says.
+
 The reverse direction is not modeled at all. A `LANGUAGE sql` routine whose
 body reads a table created in the same run fails to apply, because PostgreSQL
 parses a SQL body at creation time; so does one that calls another routine

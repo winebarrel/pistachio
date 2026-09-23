@@ -1,0 +1,31 @@
+# Two routines returning two different tables. Each is created after its own
+# table.
+manage_routine: true
+init: ""
+desired: |
+  CREATE TABLE public.a (id integer);
+  CREATE TABLE public.b (id integer);
+  CREATE FUNCTION public.fa() RETURNS public.a LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+  CREATE FUNCTION public.fb() RETURNS public.b LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+applied: |
+  -- public.fa()
+  CREATE OR REPLACE FUNCTION public.fa()
+      RETURNS a
+      LANGUAGE plpgsql
+      AS $$ BEGIN RETURN NULL; END $$;
+
+  -- public.fb()
+  CREATE OR REPLACE FUNCTION public.fb()
+      RETURNS b
+      LANGUAGE plpgsql
+      AS $$ BEGIN RETURN NULL; END $$;
+
+  -- public.a
+  CREATE TABLE public.a (
+      id integer
+  );
+
+  -- public.b
+  CREATE TABLE public.b (
+      id integer
+  );

@@ -124,8 +124,8 @@ func TestOrderFromSchema_RoutineDependsOnReturnType(t *testing.T) {
 	assert.Less(t, indexOf(t, order, "public.zzz_status"), indexOf(t, order, "routine:public.aaa_f"))
 }
 
-// A signature can name a relation as well as a type. The wholesale table to
-// routine edge has to skip that pair, or it closes a cycle and the sort fails.
+// A signature can name a relation as well as a type. The routine follows that
+// relation and still precedes every other table, which may call it.
 func TestOrderFromSchema_RoutineReturningATable(t *testing.T) {
 	tables := orderedmap.New[string, *model.Table]()
 	tables.Set("public.users", &model.Table{Schema: "public", Name: "users", Columns: orderedmap.New[string, *model.Column]()})
@@ -137,7 +137,6 @@ func TestOrderFromSchema_RoutineReturningATable(t *testing.T) {
 
 	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, orderedmap.New[string, *model.View](), routines)
 
-	// After its own table, and still before every other one.
 	assert.Less(t, indexOf(t, order, "public.users"), indexOf(t, order, "routine:public.all_users"))
 	assert.Less(t, indexOf(t, order, "routine:public.all_users"), indexOf(t, order, "public.other"))
 }
@@ -154,4 +153,39 @@ func TestOrderFromSchema_RoutineTakingATableRowType(t *testing.T) {
 
 	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, orderedmap.New[string, *model.View](), routines)
 	assert.Less(t, indexOf(t, order, "public.users"), indexOf(t, order, "routine:public.label"))
+}
+
+// Two routines returning two different tables. Were either held before every
+// other table, each would have to precede the other's table while following
+// its own, and the sort would fail on the cycle.
+func TestOrderFromSchema_RoutinesReturningDifferentTables(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("public.a", &model.Table{Schema: "public", Name: "a", Columns: orderedmap.New[string, *model.Column]()})
+	tables.Set("public.b", &model.Table{Schema: "public", Name: "b", Columns: orderedmap.New[string, *model.Column]()})
+
+	routines := routineMap(
+		&model.Routine{Schema: "public", Name: "fa", ReturnType: "public.a", Language: "plpgsql"},
+		&model.Routine{Schema: "public", Name: "fb", ReturnType: "public.b", Language: "plpgsql"},
+	)
+
+	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, orderedmap.New[string, *model.View](), routines)
+	assert.Less(t, indexOf(t, order, "public.a"), indexOf(t, order, "routine:public.fa"))
+	assert.Less(t, indexOf(t, order, "public.b"), indexOf(t, order, "routine:public.fb"))
+	// The first routine still precedes the other table.
+	assert.Less(t, indexOf(t, order, "routine:public.fa"), indexOf(t, order, "public.b"))
+}
+
+// Overloads share a node, so one overload naming a relation takes the whole
+// set out of the routines held before every table.
+func TestOrderFromSchema_OverloadNamingATable(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("public.users", &model.Table{Schema: "public", Name: "users", Columns: orderedmap.New[string, *model.Column]()})
+
+	routines := routineMap(
+		&model.Routine{Schema: "public", Name: "f", ReturnType: "integer", Language: "sql", Args: []*model.RoutineArg{{Name: "a", Type: "integer"}}},
+		&model.Routine{Schema: "public", Name: "f", ReturnType: "public.users", Language: "sql", Args: []*model.RoutineArg{{Name: "a", Type: "text"}}},
+	)
+
+	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, orderedmap.New[string, *model.View](), routines)
+	assert.Less(t, indexOf(t, order, "public.users"), indexOf(t, order, "routine:public.f"))
 }
