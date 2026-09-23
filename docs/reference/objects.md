@@ -117,7 +117,7 @@ An attribute left at its default is not written back. PostgreSQL reports `VOLATI
 A routine is created after the types its signature names and before every table, because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call one. A signature can name a table instead of a type, as `RETURNS SETOF <table>` does; such a routine comes after that table, and before every other table where that does not form a cycle. Dropping runs the other way: views, then tables, then routines, then types.
 
 !!! info
-    That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later. `plpgsql` is unaffected. Mark such a routine `-- pista:ignore` and create it with `-- pista:execute` instead.
+    That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later, and for a `plpgsql` routine whose `DECLARE` uses a table's row type or `%TYPE`. Applying with `--pre-sql 'SET check_function_bodies = off'` skips that check. Marking the routine `-- pista:ignore` and creating it with `-- pista:execute` also works.
 
 Argument and return types are reported without their schema when `search_path` reaches them, the same as any other name pistachio reads back. A desired schema may write a type in the routine's own schema either way; the two spellings are one routine. A comment goes on the full signature:
 
