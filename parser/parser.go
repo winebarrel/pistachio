@@ -861,6 +861,7 @@ func parseColumnDef(cd *pg_query.ColumnDef) (*model.Column, error) {
 				if err != nil {
 					return nil, fmt.Errorf("failed to deparse default for column %s: %w", cd.Colname, err)
 				}
+				def = parenthesizeDefault(def)
 				col.Default = &def
 			}
 		case pg_query.ConstrType_CONSTR_IDENTITY:
@@ -1605,6 +1606,7 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, defaultSchema string) 
 				if err != nil {
 					return nil, fmt.Errorf("failed to deparse default for domain %s: %w", name, err)
 				}
+				def = parenthesizeDefault(def)
 				domain.Default = &def
 			}
 		case pg_query.ConstrType_CONSTR_CHECK:
@@ -2533,6 +2535,21 @@ func deparseExpr(node *pg_query.Node) (string, error) {
 		return "", fmt.Errorf("unexpected deparse output for expression: %s", sql)
 	}
 	return strings.TrimSpace(sql[len(prefix):]), nil
+}
+
+// parenthesizeDefault wraps a deparsed column or domain DEFAULT expression in
+// parentheses when it does not stand there on its own. The grammar takes a
+// restricted expression after DEFAULT, and deparseExpr renders a SELECT
+// target, so AT TIME ZONE, AND and the like come out without the parentheses
+// DEFAULT needs. A trailing COLLATE parses, but as the column's collation
+// rather than part of the default. Any other expression is left as
+// deparseExpr writes it.
+func parenthesizeDefault(def string) string {
+	tree, err := pg_query.Parse("CREATE TABLE t (c int DEFAULT " + def + ")")
+	if err != nil || tree.Stmts[0].Stmt.GetCreateStmt().TableElts[0].GetColumnDef().CollClause != nil {
+		return "(" + def + ")"
+	}
+	return def
 }
 
 func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
