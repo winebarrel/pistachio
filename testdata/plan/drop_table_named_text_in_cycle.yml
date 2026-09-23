@@ -1,0 +1,11 @@
+# A domain built on text and a table named text read as a cycle on the current
+# side only, so the drops still go through fallbackOrder.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE DOMAIN public.d1 AS text;
+  CREATE TABLE public.text (v public.d1);
+desired: |
+  CREATE DOMAIN public.d1 AS text;
+plan: |
+  DROP TABLE public.text;

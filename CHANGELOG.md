@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+* Foreign keys no longer order tables in a plan, so two tables referencing each other no longer push the whole plan into a fixed order that created routines before tables.
+
 * A string literal spanning lines in a new table's comment, policy, trigger `WHEN` or `NOT VALID` check no longer fails the apply. The statement was split at the line break.
 
 * A column or domain `DEFAULT` that needs parentheses, `(now() AT TIME ZONE 'utc')` for one, keeps them in the plan. Without them the statement failed with a syntax error, and a trailing `COLLATE` set the column's collation instead.

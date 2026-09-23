@@ -8,6 +8,7 @@ import (
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/toposort"
 )
 
 func TestExtractObjectName(t *testing.T) {
@@ -147,40 +148,15 @@ func emptyDiffs() *objectDiffs {
 }
 
 func TestOrderStatements_Fallback(t *testing.T) {
-	// Test that fallbackOrder is used when topological sort would fail
-	// (cyclic FK dependencies between desired tables)
-
-	// Create two tables with mutual FK references -> cycle
-	refA := "a"
-	refB := "b"
-	schemaPublic := "public"
-	desiredTables := orderedmap.New[string, *model.Table]()
-	tblA := &model.Table{Schema: "public", Name: "a"}
-	tblA.Columns = orderedmap.New[string, *model.Column]()
-	tblA.Indexes = orderedmap.New[string, *model.Index]()
-	tblA.Constraints = orderedmap.New[string, *model.Constraint]()
-	tblA.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	tblA.ForeignKeys.Set("a_b_fk", &model.ForeignKey{
-		Name:      "a_b_fk",
-		RefSchema: &schemaPublic,
-		RefTable:  &refB,
-	})
-	desiredTables.Set("public.a", tblA)
-
-	tblB := &model.Table{Schema: "public", Name: "b"}
-	tblB.Columns = orderedmap.New[string, *model.Column]()
-	tblB.Indexes = orderedmap.New[string, *model.Index]()
-	tblB.Constraints = orderedmap.New[string, *model.Constraint]()
-	tblB.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	tblB.ForeignKeys.Set("b_a_fk", &model.ForeignKey{
-		Name:      "b_a_fk",
-		RefSchema: &schemaPublic,
-		RefTable:  &refA,
-	})
-	desiredTables.Set("public.b", tblB)
-
+	// Test that fallbackOrder is used when topological sort would fail. A
+	// domain built on text and a table named text holding it read as a cycle,
+	// since the bare text resolves to the table.
 	desired := emptySchema()
-	desired.Tables = desiredTables
+	desired.Domains.Set("public.d1", &model.Domain{Schema: "public", Name: "d1", BaseType: "text"})
+	tbl := &model.Table{Schema: "public", Name: "text"}
+	tbl.Columns = orderedmap.New[string, *model.Column]()
+	tbl.Columns.Set("v", &model.Column{Name: "v", TypeName: "public.d1"})
+	desired.Tables.Set("public.text", tbl)
 
 	diffs := emptyDiffs()
 	diffs.Enums = &diff.EnumDiffResult{Stmts: []string{"CREATE TYPE public.s AS ENUM ('x');"}}
@@ -241,38 +217,24 @@ func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
 }
 
 func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
-	// Current schema has cyclic FK -> drop ordering should fall back
-	refA := "a"
-	refB := "b"
-	schemaPublic := "public"
-
-	currentTables := orderedmap.New[string, *model.Table]()
-	for _, cfg := range []struct{ name, ref string }{{"a", refB}, {"b", refA}} {
-		tbl := &model.Table{Schema: "public", Name: cfg.name}
-		tbl.Columns = orderedmap.New[string, *model.Column]()
-		tbl.Indexes = orderedmap.New[string, *model.Index]()
-		tbl.Constraints = orderedmap.New[string, *model.Constraint]()
-		tbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-		tbl.ForeignKeys.Set(cfg.name+"_fk", &model.ForeignKey{
-			Name:      cfg.name + "_fk",
-			RefSchema: &schemaPublic,
-			RefTable:  &cfg.ref,
-		})
-		currentTables.Set("public."+cfg.name, tbl)
-	}
-
+	// A domain built on text and a table named text read as a cycle on the
+	// current side, so drop ordering falls back.
 	current := emptySchema()
-	current.Tables = currentTables
+	current.Domains.Set("public.d1", &model.Domain{Schema: "public", Name: "d1", BaseType: "text"})
+	tbl := &model.Table{Schema: "public", Name: "text"}
+	tbl.Columns = orderedmap.New[string, *model.Column]()
+	tbl.Columns.Set("v", &model.Column{Name: "v", TypeName: "public.d1"})
+	current.Tables.Set("public.text", tbl)
+
+	_, err := toposort.OrderFromSchema(current.Enums, current.Domains, current.CompositeTypes, current.Tables, current.Views, current.Sequences, current.Routines)
+	require.Error(t, err, "the current schema has to fail the sort for the fallback to run")
 
 	diffs := emptyDiffs()
-	diffs.Tables = &diff.TableDiffResult{
-		DropStmts: []string{"DROP TABLE public.a;", "DROP TABLE public.b;"},
-	}
+	diffs.Tables = &diff.TableDiffResult{DropStmts: []string{"DROP TABLE public.text;"}}
+	diffs.Domains = &diff.DomainDiffResult{DropStmts: []string{"DROP DOMAIN public.d1;"}}
 
 	result := orderStatements(current, emptySchema(), diffs)
-
-	// Should still produce output via fallback (not panic or error)
-	require.Len(t, result, 2)
+	assert.Equal(t, []string{"DROP TABLE public.text;", "DROP DOMAIN public.d1;"}, result)
 }
 
 func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {

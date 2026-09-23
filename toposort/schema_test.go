@@ -183,89 +183,6 @@ func TestOrderFromSchemaWithSequences_NextvalUnreadable(t *testing.T) {
 	}
 }
 
-func TestOrderFromSchema_ForeignKey(t *testing.T) {
-	enums := orderedmap.New[string, *model.Enum]()
-	domains := orderedmap.New[string, *model.Domain]()
-	views := orderedmap.New[string, *model.View]()
-
-	tables := orderedmap.New[string, *model.Table]()
-
-	refTable := "users"
-	refSchema := "public"
-
-	posts := &model.Table{Schema: "public", Name: "posts"}
-	posts.Columns = orderedmap.New[string, *model.Column]()
-	posts.Indexes = orderedmap.New[string, *model.Index]()
-	posts.Constraints = orderedmap.New[string, *model.Constraint]()
-	posts.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	posts.ForeignKeys.Set("posts_user_fk", &model.ForeignKey{
-		Name:      "posts_user_fk",
-		RefSchema: &refSchema,
-		RefTable:  &refTable,
-	})
-	tables.Set("public.posts", posts)
-
-	users := &model.Table{Schema: "public", Name: "users"}
-	users.Columns = orderedmap.New[string, *model.Column]()
-	users.Indexes = orderedmap.New[string, *model.Index]()
-	users.Constraints = orderedmap.New[string, *model.Constraint]()
-	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	tables.Set("public.users", users)
-
-	order, err := orderFromSchema(enums, domains, tables, views)
-	require.NoError(t, err)
-
-	idx := make(map[string]int)
-	for i, name := range order {
-		idx[name] = i
-	}
-
-	assert.Less(t, idx["public.users"], idx["public.posts"], "FK target before FK source")
-}
-
-// A tree table whose FK points at its own primary key is a self-edge, not a
-// cycle: the table is created in one statement and the key resolves within it.
-// Both the qualified and the unqualified reference reach the same node.
-func TestOrderFromSchema_SelfReferencingFK(t *testing.T) {
-	enums := orderedmap.New[string, *model.Enum]()
-	domains := orderedmap.New[string, *model.Domain]()
-	views := orderedmap.New[string, *model.View]()
-
-	tables := orderedmap.New[string, *model.Table]()
-
-	refNodes := "nodes"
-	refSchema := "public"
-
-	nodes := &model.Table{Schema: "public", Name: "nodes"}
-	nodes.Columns = orderedmap.New[string, *model.Column]()
-	nodes.Indexes = orderedmap.New[string, *model.Index]()
-	nodes.Constraints = orderedmap.New[string, *model.Constraint]()
-	nodes.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	nodes.ForeignKeys.Set("nodes_parent_fk", &model.ForeignKey{
-		Name:      "nodes_parent_fk",
-		RefSchema: &refSchema,
-		RefTable:  &refNodes,
-	})
-	tables.Set("public.nodes", nodes)
-
-	refEdges := "edges"
-
-	edges := &model.Table{Schema: "public", Name: "edges"}
-	edges.Columns = orderedmap.New[string, *model.Column]()
-	edges.Indexes = orderedmap.New[string, *model.Index]()
-	edges.Constraints = orderedmap.New[string, *model.Constraint]()
-	edges.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	edges.ForeignKeys.Set("edges_parent_fk", &model.ForeignKey{
-		Name:     "edges_parent_fk",
-		RefTable: &refEdges,
-	})
-	tables.Set("public.edges", edges)
-
-	order, err := orderFromSchema(enums, domains, tables, views)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"public.nodes", "public.edges"}, order)
-}
-
 // A table named after the type one of its own columns is written with, text
 // among them, resolves to itself. That is a self-edge, not a cycle: nothing
 // has to be created before the table. The array form resolves the same way.
@@ -519,6 +436,8 @@ func TestOrderFromSchema_ArrayColumnType(t *testing.T) {
 	assert.Less(t, idx["public.status"], idx["public.users"], "enum before table with array type dep")
 }
 
+// Foreign keys are added after every table exists, so they do not order the
+// tables, and two tables referencing each other do not fail the sort.
 func TestOrderFromSchema_CyclicFK(t *testing.T) {
 	enums := orderedmap.New[string, *model.Enum]()
 	domains := orderedmap.New[string, *model.Domain]()
@@ -555,6 +474,17 @@ func TestOrderFromSchema_CyclicFK(t *testing.T) {
 	tables.Set("public.b", tblB)
 
 	_, err := orderFromSchema(enums, domains, tables, views)
+	require.NoError(t, err)
+}
+
+// A cycle still fails the sort. PostgreSQL rejects two domains built on each
+// other, but a desired schema can say so.
+func TestOrderFromSchema_Cycle(t *testing.T) {
+	domains := orderedmap.New[string, *model.Domain]()
+	domains.Set("public.a", &model.Domain{Schema: "public", Name: "a", BaseType: "public.b"})
+	domains.Set("public.b", &model.Domain{Schema: "public", Name: "b", BaseType: "public.a"})
+
+	_, err := orderFromSchema(orderedmap.New[string, *model.Enum](), domains, orderedmap.New[string, *model.Table](), orderedmap.New[string, *model.View]())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cycle detected")
 }
@@ -694,27 +624,6 @@ func TestOrderFromSchema_UnqualifiedTypeShadowedByDefaultSchema(t *testing.T) {
 	assert.Less(t, idx["app.name_t"], idx["app.t"], "default schema wins over public when both define the same type")
 }
 
-func TestOrderFromSchema_UnqualifiedFKInPublicFromOtherSchema(t *testing.T) {
-	tables := orderedmap.New[string, *model.Table]()
-	users := newTable("public", "users", &model.Column{Name: "id", TypeName: "integer"})
-	tables.Set("public.users", users)
-
-	refTable := "users"
-	posts := newTable("app", "posts", &model.Column{Name: "user_id", TypeName: "integer"})
-	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Name: "fk_user", RefTable: &refTable})
-	tables.Set("app.posts", posts)
-
-	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
-		orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
-	require.NoError(t, err)
-
-	idx := make(map[string]int)
-	for i, name := range order {
-		idx[name] = i
-	}
-	assert.Less(t, idx["public.users"], idx["app.posts"], "public table referenced by unqualified FK from other schema is ordered first")
-}
-
 func TestOrderFromSchema_ViewInOtherSchemaReferencesUnqualifiedPublicTable(t *testing.T) {
 	tables := orderedmap.New[string, *model.Table]()
 	tables.Set("public.users", newTable("public", "users", &model.Column{Name: "id", TypeName: "integer"}))
@@ -735,25 +644,6 @@ func TestOrderFromSchema_ViewInOtherSchemaReferencesUnqualifiedPublicTable(t *te
 		idx[name] = i
 	}
 	assert.Less(t, idx["public.users"], idx["app.user_summary"], "view in other schema referencing unqualified public table is ordered after it")
-}
-
-// FK with a nil RefTable can occur when a model.ForeignKey lacks the
-// reference target metadata (e.g. partial parse output). The toposort must
-// skip it without panicking and without adding a spurious edge.
-func TestOrderFromSchema_FKWithNilRefTable(t *testing.T) {
-	tables := orderedmap.New[string, *model.Table]()
-	tbl := newTable("public", "events", &model.Column{Name: "id", TypeName: "integer"})
-	tbl.ForeignKeys.Set("orphan_fk", &model.ForeignKey{
-		Name: "orphan_fk",
-		// RefTable intentionally nil
-	})
-	tables.Set("public.events", tbl)
-
-	require.NotPanics(t, func() {
-		_, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
-			orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
-		require.NoError(t, err)
-	})
 }
 
 // A view body referencing an explicitly schema-qualified table that is not in
@@ -795,26 +685,6 @@ func TestOrderFromSchema_UnqualifiedTypeInQuoteRequiringSchema(t *testing.T) {
 		idx[name] = i
 	}
 	assert.Less(t, idx[d.FQDN()], idx[tbl.FQTN()], "domain in quote-requiring schema before table referencing its type unqualified")
-}
-
-func TestOrderFromSchema_UnqualifiedFKInQuoteRequiringSchema(t *testing.T) {
-	users := newTable("MySchema", "users", &model.Column{Name: "id", TypeName: "integer"})
-	refTable := "users"
-	posts := newTable("MySchema", "posts", &model.Column{Name: "user_id", TypeName: "integer"})
-	posts.ForeignKeys.Set("fk_user", &model.ForeignKey{Name: "fk_user", RefTable: &refTable})
-
-	tables := orderedmap.New[string, *model.Table]()
-	tables.Set(users.FQTN(), users)
-	tables.Set(posts.FQTN(), posts)
-
-	order, err := orderFromSchema(orderedmap.New[string, *model.Enum](),
-		orderedmap.New[string, *model.Domain](), tables, orderedmap.New[string, *model.View]())
-	require.NoError(t, err)
-	idx := make(map[string]int)
-	for i, name := range order {
-		idx[name] = i
-	}
-	assert.Less(t, idx[users.FQTN()], idx[posts.FQTN()], "FK target in quote-requiring schema resolved when referenced unqualified")
 }
 
 func TestOrderFromSchema_ViewBodyTableRefInQuoteRequiringSchema(t *testing.T) {
@@ -897,174 +767,6 @@ func TestOrderFromSchema_PartitionChild(t *testing.T) {
 	}
 
 	assert.Less(t, idx["public.events"], idx["public.events_2024"], "partition parent before child")
-}
-
-func TestOrderFromSchema_FKWithQuotedRefTable(t *testing.T) {
-	enums := orderedmap.New[string, *model.Enum]()
-	domains := orderedmap.New[string, *model.Domain]()
-	views := orderedmap.New[string, *model.View]()
-
-	// Both names require quoting (mixed case). Source ("Comments") sorts
-	// before target ("Users") alphabetically, so without the FK edge being
-	// registered, the toposort fallback would emit source first; which is
-	// wrong. The edge can only be registered when the FK lookup uses the
-	// same quoted form as the map keys.
-	refTable := "Users"
-	refSchema := "public"
-
-	tables := orderedmap.New[string, *model.Table]()
-
-	users := &model.Table{Schema: "public", Name: "Users"}
-	users.Columns = orderedmap.New[string, *model.Column]()
-	users.Indexes = orderedmap.New[string, *model.Index]()
-	users.Constraints = orderedmap.New[string, *model.Constraint]()
-	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	tables.Set(model.Ident("public", "Users"), users)
-
-	comments := &model.Table{Schema: "public", Name: "Comments"}
-	comments.Columns = orderedmap.New[string, *model.Column]()
-	comments.Indexes = orderedmap.New[string, *model.Index]()
-	comments.Constraints = orderedmap.New[string, *model.Constraint]()
-	comments.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	comments.ForeignKeys.Set("comments_user_fk", &model.ForeignKey{
-		Name:      "comments_user_fk",
-		RefSchema: &refSchema,
-		RefTable:  &refTable,
-	})
-	tables.Set(model.Ident("public", "Comments"), comments)
-
-	order, err := orderFromSchema(enums, domains, tables, views)
-	require.NoError(t, err)
-
-	idx := make(map[string]int)
-	for i, name := range order {
-		idx[name] = i
-	}
-
-	assert.Less(t, idx[model.Ident("public", "Users")], idx[model.Ident("public", "Comments")], "FK target before source for quoted ref table")
-}
-
-func TestOrderFromSchema_FKWithReservedWordRefTable(t *testing.T) {
-	enums := orderedmap.New[string, *model.Enum]()
-	domains := orderedmap.New[string, *model.Domain]()
-	views := orderedmap.New[string, *model.View]()
-
-	// "order" is a reserved word; both names quoted so alphabetical fallback
-	// puts source ("Items") before target ("order").
-	refTable := "order"
-	refSchema := "public"
-
-	tables := orderedmap.New[string, *model.Table]()
-
-	orderTbl := &model.Table{Schema: "public", Name: "order"}
-	orderTbl.Columns = orderedmap.New[string, *model.Column]()
-	orderTbl.Indexes = orderedmap.New[string, *model.Index]()
-	orderTbl.Constraints = orderedmap.New[string, *model.Constraint]()
-	orderTbl.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	tables.Set(model.Ident("public", "order"), orderTbl)
-
-	items := &model.Table{Schema: "public", Name: "Items"}
-	items.Columns = orderedmap.New[string, *model.Column]()
-	items.Indexes = orderedmap.New[string, *model.Index]()
-	items.Constraints = orderedmap.New[string, *model.Constraint]()
-	items.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	items.ForeignKeys.Set("items_order_fk", &model.ForeignKey{
-		Name:      "items_order_fk",
-		RefSchema: &refSchema,
-		RefTable:  &refTable,
-	})
-	tables.Set(model.Ident("public", "Items"), items)
-
-	sorted, err := orderFromSchema(enums, domains, tables, views)
-	require.NoError(t, err)
-
-	idx := make(map[string]int)
-	for i, name := range sorted {
-		idx[name] = i
-	}
-
-	assert.Less(t, idx[model.Ident("public", "order")], idx[model.Ident("public", "Items")], "FK target before source for reserved-word ref table")
-}
-
-func TestOrderFromSchema_FKWithQuotedRefSchema(t *testing.T) {
-	enums := orderedmap.New[string, *model.Enum]()
-	domains := orderedmap.New[string, *model.Domain]()
-	views := orderedmap.New[string, *model.View]()
-
-	// Quoted schema name. Source schema "AppPublic" sorts before target
-	// schema "Refs" alphabetically, so without the edge, source would come first.
-	refTable := "users"
-	refSchema := "Refs"
-
-	tables := orderedmap.New[string, *model.Table]()
-
-	users := &model.Table{Schema: "Refs", Name: "users"}
-	users.Columns = orderedmap.New[string, *model.Column]()
-	users.Indexes = orderedmap.New[string, *model.Index]()
-	users.Constraints = orderedmap.New[string, *model.Constraint]()
-	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	tables.Set(model.Ident("Refs", "users"), users)
-
-	posts := &model.Table{Schema: "AppPublic", Name: "posts"}
-	posts.Columns = orderedmap.New[string, *model.Column]()
-	posts.Indexes = orderedmap.New[string, *model.Index]()
-	posts.Constraints = orderedmap.New[string, *model.Constraint]()
-	posts.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	posts.ForeignKeys.Set("posts_user_fk", &model.ForeignKey{
-		Name:      "posts_user_fk",
-		RefSchema: &refSchema,
-		RefTable:  &refTable,
-	})
-	tables.Set(model.Ident("AppPublic", "posts"), posts)
-
-	order, err := orderFromSchema(enums, domains, tables, views)
-	require.NoError(t, err)
-
-	idx := make(map[string]int)
-	for i, name := range order {
-		idx[name] = i
-	}
-
-	assert.Less(t, idx[model.Ident("Refs", "users")], idx[model.Ident("AppPublic", "posts")], "FK target before source across quoted schemas")
-}
-
-func TestOrderFromSchema_FKWithDefaultSchema(t *testing.T) {
-	enums := orderedmap.New[string, *model.Enum]()
-	domains := orderedmap.New[string, *model.Domain]()
-	views := orderedmap.New[string, *model.View]()
-
-	// FK with nil RefSchema (should default to "public")
-	refTable := "users"
-
-	tables := orderedmap.New[string, *model.Table]()
-	users := &model.Table{Schema: "public", Name: "users"}
-	users.Columns = orderedmap.New[string, *model.Column]()
-	users.Indexes = orderedmap.New[string, *model.Index]()
-	users.Constraints = orderedmap.New[string, *model.Constraint]()
-	users.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	tables.Set("public.users", users)
-
-	posts := &model.Table{Schema: "public", Name: "posts"}
-	posts.Columns = orderedmap.New[string, *model.Column]()
-	posts.Indexes = orderedmap.New[string, *model.Index]()
-	posts.Constraints = orderedmap.New[string, *model.Constraint]()
-	posts.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	posts.ForeignKeys.Set("posts_user_fk", &model.ForeignKey{
-		Name:      "posts_user_fk",
-		RefSchema: nil, // nil schema -> defaults to "public"
-		RefTable:  &refTable,
-	})
-	tables.Set("public.posts", posts)
-
-	order, err := orderFromSchema(enums, domains, tables, views)
-	require.NoError(t, err)
-
-	idx := make(map[string]int)
-	for i, name := range order {
-		idx[name] = i
-	}
-
-	assert.Less(t, idx["public.users"], idx["public.posts"], "FK target before source with nil schema")
 }
 
 func TestOrderFromSchema_NonPublicSchema(t *testing.T) {

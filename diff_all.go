@@ -763,8 +763,7 @@ func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string
 
 // sortViewStmts orders statements by the dependency order of the views alone,
 // reversed for drops. It is the fallback's stand-in for the whole-schema sort,
-// which fails on a cycle the views cannot be part of: two tables with foreign
-// keys to each other are one, and a schema people write.
+// which can fail on a cycle the views are not part of.
 //
 // A sort that fails even so leaves the statements as they were, the way the
 // fallback left every statement before.

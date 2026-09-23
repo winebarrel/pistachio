@@ -1,0 +1,80 @@
+# The plan fixture of the same name pins the statement order; this one runs it
+# against the database, which is what says the order is one PostgreSQL accepts.
+# Without the views sorted among themselves the apply fails on the first DROP.
+#
+# PostgreSQL 15 qualifies a view's column references with the relation, 16 and
+# later do not, so the dump is written per version.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE DOMAIN public.d1 AS text;
+  CREATE TABLE public.text (v public.d1);
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.a_base AS SELECT id, name, dept, salary FROM public.employees;
+  CREATE VIEW public.b_top AS SELECT id, name, salary FROM public.a_base;
+desired: |
+  CREATE DOMAIN public.d1 AS text;
+  CREATE TABLE public.text (v public.d1);
+  CREATE TABLE public.employees (id integer NOT NULL, name text, dept text, salary integer);
+  CREATE VIEW public.a_base AS SELECT id, name, dept FROM public.employees;
+  CREATE VIEW public.b_top AS SELECT id, name FROM public.a_base;
+applied: |
+  -- public.d1
+  CREATE DOMAIN public.d1 AS text;
+
+  -- public.employees
+  CREATE TABLE public.employees (
+      id integer NOT NULL,
+      name text,
+      dept text,
+      salary integer
+  );
+
+  -- public.text
+  CREATE TABLE public.text (
+      v d1
+  );
+
+  -- public.a_base
+  CREATE OR REPLACE VIEW public.a_base AS
+  SELECT employees.id,
+      employees.name,
+      employees.dept
+     FROM employees;
+
+  -- public.b_top
+  CREATE OR REPLACE VIEW public.b_top AS
+  SELECT a_base.id,
+      a_base.name
+     FROM a_base;
+applied_pg16: &applied_pg16plus |
+  -- public.d1
+  CREATE DOMAIN public.d1 AS text;
+
+  -- public.employees
+  CREATE TABLE public.employees (
+      id integer NOT NULL,
+      name text,
+      dept text,
+      salary integer
+  );
+
+  -- public.text
+  CREATE TABLE public.text (
+      v d1
+  );
+
+  -- public.a_base
+  CREATE OR REPLACE VIEW public.a_base AS
+  SELECT id,
+      name,
+      dept
+     FROM employees;
+
+  -- public.b_top
+  CREATE OR REPLACE VIEW public.b_top AS
+  SELECT id,
+      name
+     FROM a_base;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

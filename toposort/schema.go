@@ -56,8 +56,9 @@ func OrderFromSchema(
 		}
 	}
 
-	// Tables: may depend on enums/domains (column types), sequences (column
-	// defaults via nextval), and other tables (FKs)
+	// Tables: may depend on enums/domains (column types) and sequences (column
+	// defaults via nextval). Foreign keys draw no edge. The plan drops them
+	// before the tables and adds them after, so they never order the tables.
 	for k, t := range tables.All() {
 		g.AddNode(k)
 
@@ -71,33 +72,6 @@ func OrderFromSchema(
 					for _, dep := range extractSeqDeps(*col.Default, t.Schema, defined) {
 						g.AddEdge(k, dep)
 					}
-				}
-			}
-		}
-
-		// FK dependencies. Use model.Ident so the lookup matches the map keys
-		// (which are also model.Ident-formed) for non-safe identifiers like
-		// quoted or reserved-word names.
-		//
-		// A key pointing at the table's own primary key, the parent_id of a
-		// tree, is skipped: the table is created in one statement and the key
-		// resolves within it, so a self-edge here would be read as a cycle.
-		//
-		// The name is not carried further along the path the way a type name
-		// is: a key is added to a table that already exists, so an unqualified
-		// name reaching the table itself means the table itself.
-		if t.ForeignKeys != nil {
-			for _, fk := range t.ForeignKeys.CollectValues() {
-				if fk.RefTable == nil {
-					continue
-				}
-				if fk.RefSchema != nil {
-					ref := model.Ident(*fk.RefSchema, *fk.RefTable)
-					if defined[ref] && ref != k {
-						g.AddEdge(k, ref)
-					}
-				} else if ref := resolveUnqualified(model.Ident(*fk.RefTable), t.Schema, "", defined); ref != "" && ref != k {
-					g.AddEdge(k, ref)
 				}
 			}
 		}
@@ -130,8 +104,8 @@ func OrderFromSchema(
 // A reference to anything but another view in the set resolves to nothing and
 // drops out, so what is left are the view-to-view edges. Those cannot hold a
 // cycle, since PostgreSQL rejects a view that reads a view reading it back,
-// which is what lets this succeed where OrderFromSchema fails on a pair of
-// tables with foreign keys to each other.
+// which is what lets this succeed where OrderFromSchema fails on a cycle
+// elsewhere in the schema.
 func OrderViews(views *orderedmap.Map[string, *model.View]) ([]string, error) {
 	g := newGraph()
 

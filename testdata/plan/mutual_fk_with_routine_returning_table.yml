@@ -1,0 +1,27 @@
+# Two tables with foreign keys to each other still get the dependency order,
+# so a routine returning one of them is created after it.
+manage_routine: true
+init: ""
+desired: |
+  CREATE TABLE public.a (id integer NOT NULL, b_id integer, CONSTRAINT a_pkey PRIMARY KEY (id));
+  CREATE TABLE public.b (id integer NOT NULL, a_id integer, CONSTRAINT b_pkey PRIMARY KEY (id));
+  ALTER TABLE ONLY public.a ADD CONSTRAINT a_b_id_fkey FOREIGN KEY (b_id) REFERENCES public.b (id);
+  ALTER TABLE ONLY public.b ADD CONSTRAINT b_a_id_fkey FOREIGN KEY (a_id) REFERENCES public.a (id);
+  CREATE FUNCTION public.first_a() RETURNS public.a LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+plan: |
+  CREATE TABLE public.a (
+      id integer NOT NULL,
+      b_id integer,
+      CONSTRAINT a_pkey PRIMARY KEY (id)
+  );
+  CREATE OR REPLACE FUNCTION public.first_a()
+      RETURNS public.a
+      LANGUAGE plpgsql
+      AS $$ BEGIN RETURN NULL; END $$;
+  CREATE TABLE public.b (
+      id integer NOT NULL,
+      a_id integer,
+      CONSTRAINT b_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.a ADD CONSTRAINT a_b_id_fkey FOREIGN KEY (b_id) REFERENCES public.b (id);
+  ALTER TABLE ONLY public.b ADD CONSTRAINT b_a_id_fkey FOREIGN KEY (a_id) REFERENCES public.a (id);
