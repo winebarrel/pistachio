@@ -698,8 +698,8 @@ The reverse direction is not modeled at all. A `LANGUAGE sql` routine whose
 body reads a table created in the same run fails to apply, because PostgreSQL
 parses a SQL body at creation time; so does one that calls another routine
 defined later in the file. A `plpgsql` routine fails too when its `DECLARE`
-uses a table's row type or `%TYPE`. PostgreSQL 16 and earlier report a missing
-table in `%TYPE` as `syntax error at or near "%"`.
+uses a table's row type or `%TYPE`. On older servers a missing table in
+`%TYPE` shows up as a syntax error.
 
 Turning the check off works around both:
 
