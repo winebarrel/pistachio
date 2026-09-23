@@ -34,11 +34,6 @@ func holdExclusive(t *testing.T, ctx context.Context, conn *pgx.Conn) {
 	require.NoError(t, err)
 }
 
-func releaseExclusive(ctx context.Context, conn *pgx.Conn) error {
-	_, err := conn.Exec(ctx, "SELECT pg_advisory_unlock($1, hashtext(current_database()))", exclusiveLockClassID)
-	return err
-}
-
 // waitingWriter closes waiting when apply writes that it is waiting for the
 // exclusion. A test that releases or cancels on that signal rather than after
 // a fixed sleep cannot act before apply has made its first attempt, which a
@@ -313,6 +308,34 @@ func TestApplyExclusiveWithTx(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, acquired)
 	require.NoError(t, releaseExclusive(ctx, conn))
+}
+
+// The exclusion is given back before the run returns, while its connection is
+// still open, so a run started right after does not find it held.
+func TestAcquireExclusiveIfAskedRelease(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	testutil.SetupDB(t, ctx, conn, "")
+	other := testutil.ConnectDB(t)
+	defer other.Close(ctx)
+
+	release, err := acquireExclusiveIfAsked(ctx, conn, &ExecOptions{Exclusive: true}, io.Discard)
+	require.NoError(t, err)
+	acquired, err := tryExclusive(ctx, other)
+	require.NoError(t, err)
+	assert.False(t, acquired)
+
+	release()
+	acquired, err = tryExclusive(ctx, other)
+	require.NoError(t, err)
+	assert.True(t, acquired)
+	require.NoError(t, releaseExclusive(ctx, other))
+
+	// Not asked for: nothing to give back.
+	release, err = acquireExclusiveIfAsked(ctx, conn, &ExecOptions{}, io.Discard)
+	require.NoError(t, err)
+	release()
 }
 
 func TestApplyExclusiveWaitCanceled(t *testing.T) {

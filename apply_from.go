@@ -47,9 +47,11 @@ func (client *Client) ApplyFrom(ctx context.Context, options *ApplyFromOptions, 
 
 	// Before the state is read, as apply does, so the plan is not checked
 	// against a state another exclusive apply is still changing.
-	if err := acquireExclusiveIfAsked(ctx, conn, &options.ExecOptions, w); err != nil {
+	release, err := acquireExclusiveIfAsked(ctx, conn, &options.ExecOptions, w)
+	if err != nil {
 		return nil, err
 	}
+	defer release()
 
 	// The major version decides what the catalog reads and what DDL the server
 	// takes, so a plan file does not travel between two of them. --force is

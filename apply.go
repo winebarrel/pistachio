@@ -109,10 +109,12 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 
 	// Acquire the exclusion before the catalog is read, so the diff below
 	// cannot be computed against a state another exclusive apply is still
-	// changing. Released when the connection closes.
-	if err := acquireExclusiveIfAsked(ctx, conn, &options.ExecOptions, w); err != nil {
+	// changing.
+	release, err := acquireExclusiveIfAsked(ctx, conn, &options.ExecOptions, w)
+	if err != nil {
 		return nil, err
 	}
+	defer release()
 
 	result, err := client.diffAll(ctx, conn, &diffAllOptions{
 		FilterOptions:            client.FilterOptions,
@@ -150,15 +152,26 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 // entry points call it before they read the catalog, so neither is checked
 // against, or computed against, a state another exclusive apply is still
 // changing.
-func acquireExclusiveIfAsked(ctx context.Context, conn *pgx.Conn, options *ExecOptions, w io.Writer) error {
+//
+// The returned function gives the exclusion back. The caller defers it, so it
+// runs before the connection closes and the exclusion is free by the time the
+// run returns. A closing connection frees it too, but the server does that
+// after the client has moved on, so a run started right after could find it
+// still held.
+func acquireExclusiveIfAsked(ctx context.Context, conn *pgx.Conn, options *ExecOptions, w io.Writer) (func(), error) {
 	if !options.Exclusive && options.ExclusiveWait == nil {
-		return nil
+		return func() {}, nil
 	}
 	waitWriter := options.WaitWriter
 	if waitWriter == nil {
 		waitWriter = w
 	}
-	return acquireExclusive(ctx, conn, options.ExclusiveWait, waitWriter)
+	if err := acquireExclusive(ctx, conn, options.ExclusiveWait, waitWriter); err != nil {
+		return nil, err
+	}
+	return func() {
+		releaseExclusive(ctx, conn) //nolint:errcheck
+	}, nil
 }
 
 // applyStmts runs the statements and writes them to w, filling in the Applied
