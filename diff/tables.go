@@ -27,10 +27,10 @@ type TableDiffResult struct {
 	PersistenceStmts []string
 	Stmts            []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
 	FKAddStmts       []string // FK adds and renames (should run last)
-	// PolicyStmts holds the new policies, which run after every table and view
-	// because a policy can read any of them. RLS turned on for an existing
-	// table comes with them, so the table does not deny every row until its
-	// policies exist.
+	// PolicyStmts holds a new table's policies. They run after every table and
+	// view, since a policy can read any of them. An existing table's policies
+	// stay in Stmts, next to its RLS change, so a live table is never left
+	// without them or without its RLS.
 	PolicyStmts         []string
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
 	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
@@ -81,7 +81,6 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			result.FKDropStmts = append(result.FKDropStmts, tableResult.FKDropStmts...)
 			result.Stmts = append(result.Stmts, tableResult.Stmts...)
 			result.FKAddStmts = append(result.FKAddStmts, tableResult.FKAddStmts...)
-			result.PolicyStmts = append(result.PolicyStmts, tableResult.PolicyStmts...)
 			result.DisallowedDropStmts = append(result.DisallowedDropStmts, tableResult.DisallowedDropStmts...)
 			if tableResult.HasConcurrently {
 				result.HasConcurrently = true
@@ -149,7 +148,6 @@ type tableDiffResult struct {
 	FKDropStmts         []string
 	Stmts               []string
 	FKAddStmts          []string
-	PolicyStmts         []string
 	DisallowedDropStmts []string
 	HasConcurrently     bool
 }
@@ -182,15 +180,12 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 
-		rlsStmts, rlsEnables := diffRLS(fqtn, current, desired)
-		result.Stmts = append(result.Stmts, rlsStmts...)
-		result.PolicyStmts = append(result.PolicyStmts, rlsEnables...)
-		polStmts, polCreates, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
+		result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
+		polStmts, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
 		if err != nil {
 			return nil, err
 		}
 		result.Stmts = append(result.Stmts, polStmts...)
-		result.PolicyStmts = append(result.PolicyStmts, polCreates...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
 
 		trgStmts, trgDisallowed, err := diffTriggers(fqtn, current.Triggers, desired.Triggers, dc)
@@ -260,18 +255,16 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 
-	// Disabling RLS comes before any policy DROP that the user may have stacked
-	// alongside. Enabling it waits for the new policies.
-	rlsStmts, rlsEnables := diffRLS(fqtn, current, desired)
-	result.Stmts = append(result.Stmts, rlsStmts...)
-	result.PolicyStmts = append(result.PolicyStmts, rlsEnables...)
+	// RLS toggles run before CREATE POLICY so a newly enabled table has its
+	// flag set when policies attach. Disabling RLS likewise comes before any
+	// policy DROP that the user may have stacked alongside.
+	result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
 
-	polStmts, polCreates, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
+	polStmts, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
 	if err != nil {
 		return nil, err
 	}
 	result.Stmts = append(result.Stmts, polStmts...)
-	result.PolicyStmts = append(result.PolicyStmts, polCreates...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, polDisallowed...)
 
 	trgStmts, trgDisallowed, err := diffTriggers(fqtn, current.Triggers, desired.Triggers, dc)

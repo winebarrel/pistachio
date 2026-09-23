@@ -1,4 +1,4 @@
-# A policy can read a table or view created later in the run.
+# A new table's policy can read a table or view created later in the run.
 #
 # PostgreSQL 15 qualifies a view's column references with the relation, 16 and
 # later do not, so the dump is written per version.

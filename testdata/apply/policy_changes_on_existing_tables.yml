@@ -1,6 +1,6 @@
-# A recreated policy keeps its CREATE next to its DROP, and RLS turned on for
-# an existing table waits for its new policies, so neither table is left
-# without them while the rest of the plan runs.
+# An existing table's policy changes stay with the table: a recreated policy's
+# CREATE follows its DROP, and RLS turned on comes right before the new
+# policies. Only the new table's work comes later.
 init: |
   CREATE TABLE public.a_docs (id integer);
   ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;

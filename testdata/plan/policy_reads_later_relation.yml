@@ -1,4 +1,4 @@
-# A policy can read a table or view created later in the run.
+# A new table's policy can read a table or view created later in the run.
 init: ""
 desired: |
   CREATE TABLE public.a_docs (tenant_id text);

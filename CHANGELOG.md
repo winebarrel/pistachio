@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-* A new policy that reads a table or view created in the same run no longer fails to apply. `CREATE POLICY` now runs after every table and view.
+* A new table's policy that reads a table or view created later in the same run no longer fails to apply. A new table's policies now run after every table and view.
 
 * A primary key or unique constraint that repeats another on the same table is no longer lost when the table is created. `CREATE TABLE` drops the repeat, so the plan and `dump` now add it after the table.
 

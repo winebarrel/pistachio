@@ -11,32 +11,28 @@ import (
 )
 
 // diffRLS emits ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL
-// SECURITY statements for changes to the table-level RLS flags. Turning a flag
-// off stays in stmts; turning one on comes back in enables, which the plan runs
-// with the new policies.
-func diffRLS(fqtn string, current, desired *model.Table) (stmts, enables []string) {
+// SECURITY statements for changes to the table-level RLS flags.
+func diffRLS(fqtn string, current, desired *model.Table) []string {
+	var stmts []string
 	if current.RowSecurity != desired.RowSecurity {
 		if desired.RowSecurity {
-			enables = append(enables, "ALTER TABLE "+fqtn+" ENABLE ROW LEVEL SECURITY;")
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" ENABLE ROW LEVEL SECURITY;")
 		} else {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" DISABLE ROW LEVEL SECURITY;")
 		}
 	}
 	if current.ForceRowSecurity != desired.ForceRowSecurity {
 		if desired.ForceRowSecurity {
-			enables = append(enables, "ALTER TABLE "+fqtn+" FORCE ROW LEVEL SECURITY;")
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" FORCE ROW LEVEL SECURITY;")
 		} else {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" NO FORCE ROW LEVEL SECURITY;")
 		}
 	}
-	return stmts, enables
+	return stmts
 }
 
 // diffPolicies emits CREATE POLICY / ALTER POLICY / DROP POLICY statements for
-// changes between current and desired policies on the same table. A new
-// policy's CREATE POLICY is returned separately, since the plan runs it after
-// every table and view. A recreated policy's CREATE stays next to its DROP, so
-// the table is not left without it while the rest of the plan runs.
+// changes between current and desired policies on the same table.
 //
 // Pure removals (policy absent from desired) honor the policy-drop policy via
 // dc; definition changes still run as DROP+CREATE when a property that cannot
@@ -46,7 +42,7 @@ func diffPolicies(
 	fqtn string,
 	current, desired *orderedmap.Map[string, *model.Policy],
 	dc DropChecker,
-) (stmts, creates, disallowed []string, err error) {
+) (stmts []string, disallowed []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Callers (diffTable) always pass initialized maps from parser/catalog,
@@ -56,7 +52,7 @@ func diffPolicies(
 	// under its new name in the adjusted current map.
 	current, renamedFrom, err := detectPolicyRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// Renamed policies whose definition also requires DROP+CREATE: skip the
@@ -115,7 +111,7 @@ func diffPolicies(
 	for name, des := range desired.All() {
 		cur, ok := current.GetOk(name)
 		if !ok {
-			creates = append(creates, des.SQL())
+			stmts = append(stmts, des.SQL())
 			continue
 		}
 		if needsRecreate(cur, des) {
@@ -127,7 +123,7 @@ func diffPolicies(
 		}
 	}
 
-	return stmts, creates, disallowed, nil
+	return stmts, disallowed, nil
 }
 
 // needsRecreate reports whether two policies differ in a way that cannot be
