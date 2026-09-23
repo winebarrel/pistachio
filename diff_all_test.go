@@ -146,52 +146,22 @@ func emptyDiffs() *objectDiffs {
 	}
 }
 
-func TestOrderStatements_Fallback(t *testing.T) {
-	// Test that fallbackOrder is used when topological sort would fail
-	// (cyclic FK dependencies between desired tables)
+// A dependency cycle is an error. Foreign keys draw no edge, so two tables
+// referencing each other are not one; two domains built on each other are,
+// which PostgreSQL rejects, on either side of the diff.
+func TestOrderStatements_Cycle(t *testing.T) {
+	cyclic := func() *schemaObjects {
+		s := emptySchema()
+		s.Domains.Set("public.a", &model.Domain{Schema: "public", Name: "a", BaseType: "public.b"})
+		s.Domains.Set("public.b", &model.Domain{Schema: "public", Name: "b", BaseType: "public.a"})
+		return s
+	}
 
-	// Create two tables with mutual FK references -> cycle
-	refA := "a"
-	refB := "b"
-	schemaPublic := "public"
-	desiredTables := orderedmap.New[string, *model.Table]()
-	tblA := &model.Table{Schema: "public", Name: "a"}
-	tblA.Columns = orderedmap.New[string, *model.Column]()
-	tblA.Indexes = orderedmap.New[string, *model.Index]()
-	tblA.Constraints = orderedmap.New[string, *model.Constraint]()
-	tblA.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	tblA.ForeignKeys.Set("a_b_fk", &model.ForeignKey{
-		Name:      "a_b_fk",
-		RefSchema: &schemaPublic,
-		RefTable:  &refB,
-	})
-	desiredTables.Set("public.a", tblA)
+	_, err := orderStatements(emptySchema(), cyclic(), emptyDiffs())
+	require.ErrorContains(t, err, "failed to order the desired schema")
 
-	tblB := &model.Table{Schema: "public", Name: "b"}
-	tblB.Columns = orderedmap.New[string, *model.Column]()
-	tblB.Indexes = orderedmap.New[string, *model.Index]()
-	tblB.Constraints = orderedmap.New[string, *model.Constraint]()
-	tblB.ForeignKeys = orderedmap.New[string, *model.ForeignKey]()
-	tblB.ForeignKeys.Set("b_a_fk", &model.ForeignKey{
-		Name:      "b_a_fk",
-		RefSchema: &schemaPublic,
-		RefTable:  &refA,
-	})
-	desiredTables.Set("public.b", tblB)
-
-	desired := emptySchema()
-	desired.Tables = desiredTables
-
-	diffs := emptyDiffs()
-	diffs.Enums = &diff.EnumDiffResult{Stmts: []string{"CREATE TYPE public.s AS ENUM ('x');"}}
-	diffs.Tables = &diff.TableDiffResult{Stmts: []string{"CREATE TABLE public.a (id integer);"}}
-
-	result := orderStatements(emptySchema(), desired, diffs)
-
-	// Should still produce output (via fallback)
-	require.NotEmpty(t, result)
-	assert.Contains(t, result[0], "CREATE TYPE")
-	assert.Contains(t, result[1], "CREATE TABLE")
+	_, err = orderStatements(cyclic(), emptySchema(), emptyDiffs())
+	require.ErrorContains(t, err, "failed to order the current schema")
 }
 
 func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
@@ -232,7 +202,8 @@ func TestOrderStatements_DropUsesCurrentSchema(t *testing.T) {
 		},
 	}
 
-	result := orderStatements(current, desired, diffs)
+	result, err := orderStatements(current, desired, diffs)
+	require.NoError(t, err)
 
 	require.Len(t, result, 2)
 	// view_b depends on view_a -> view_b must be dropped first (reverse topo order)
@@ -269,7 +240,8 @@ func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
 		DropStmts: []string{"DROP TABLE public.a;", "DROP TABLE public.b;"},
 	}
 
-	result := orderStatements(current, emptySchema(), diffs)
+	result, err := orderStatements(current, emptySchema(), diffs)
+	require.NoError(t, err)
 
 	// Should still produce output via fallback (not panic or error)
 	require.Len(t, result, 2)
@@ -308,7 +280,8 @@ func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {
 		},
 	}
 
-	result := orderStatements(current, desired, diffs)
+	result, err := orderStatements(current, desired, diffs)
+	require.NoError(t, err)
 
 	require.Len(t, result, 2)
 	// RENAME (unknown pos) must come before ADD COLUMN (known pos)
@@ -339,7 +312,8 @@ func TestOrderStatements_CreateUniqueIndexAfterTable(t *testing.T) {
 		},
 	}
 
-	result := orderStatements(emptySchema(), desired, diffs)
+	result, err := orderStatements(emptySchema(), desired, diffs)
+	require.NoError(t, err)
 
 	require.Len(t, result, 2)
 	assert.Contains(t, result[0], "CREATE TABLE", "table must be created first")

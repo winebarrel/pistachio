@@ -1,7 +1,7 @@
 # A signature that names a relation used to close a cycle in the dependency
 # graph: every table depends on every routine, and the routine depends back on
-# its own table. plan fell through to the fallback order and put the routine
-# first, so the apply failed on a fresh schema.
+# its own table. The sort failed and the routine came first, so the apply
+# failed on a fresh schema.
 manage_routine: true
 init: ""
 desired: |

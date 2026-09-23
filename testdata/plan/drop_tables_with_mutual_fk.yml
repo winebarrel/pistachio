@@ -1,0 +1,12 @@
+# Two tables referencing each other are dropped after both keys.
+init: |
+  CREATE TABLE public.a (id integer NOT NULL, b_id integer, CONSTRAINT a_pkey PRIMARY KEY (id));
+  CREATE TABLE public.b (id integer NOT NULL, a_id integer, CONSTRAINT b_pkey PRIMARY KEY (id));
+  ALTER TABLE ONLY public.a ADD CONSTRAINT a_b_id_fkey FOREIGN KEY (b_id) REFERENCES public.b (id);
+  ALTER TABLE ONLY public.b ADD CONSTRAINT b_a_id_fkey FOREIGN KEY (a_id) REFERENCES public.a (id);
+desired: ""
+plan: |
+  ALTER TABLE public.a DROP CONSTRAINT a_b_id_fkey;
+  ALTER TABLE public.b DROP CONSTRAINT b_a_id_fkey;
+  DROP TABLE public.b;
+  DROP TABLE public.a;

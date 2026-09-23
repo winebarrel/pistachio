@@ -1,9 +1,9 @@
-# Two tables with foreign keys to each other are a cycle, so the whole-schema
-# sort fails and the statements go through fallbackOrder. The views still have
-# to come apart deepest first and go back together base first: b_top reads
-# a_base, and the map order puts a_base first. checkViewDependents lets a
-# dependent the same plan drops through on exactly this guarantee, so without
-# it the plan reads clean and apply fails on the DROP.
+# Two tables with foreign keys to each other used to fail the whole-schema
+# sort. The views still have to come apart deepest first and go back together
+# base first: b_top reads a_base, and the map order puts a_base first.
+# checkViewDependents lets a dependent the same plan drops through on exactly
+# this guarantee, so without it the plan reads clean and apply fails on the
+# DROP.
 drop_policy:
   allow_drop: [all]
 init: |

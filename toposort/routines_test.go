@@ -189,3 +189,17 @@ func TestOrderFromSchema_OverloadNamingATable(t *testing.T) {
 	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, orderedmap.New[string, *model.View](), routines)
 	assert.Less(t, indexOf(t, order, "public.users"), indexOf(t, order, "routine:public.f"))
 }
+
+// A procedure has no return type, so only its arguments order it.
+func TestOrderFromSchema_Procedure(t *testing.T) {
+	enums := orderedmap.New[string, *model.Enum]()
+	enums.Set("public.zzz_status", &model.Enum{Schema: "public", Name: "zzz_status", Values: []string{"active"}})
+
+	routines := routineMap(&model.Routine{
+		Schema: "public", Name: "aaa_p", Procedure: true, Language: "sql",
+		Args: []*model.RoutineArg{{Name: "s", Type: "public.zzz_status"}},
+	})
+
+	order := orderWithRoutines(t, enums, orderedmap.New[string, *model.Table](), orderedmap.New[string, *model.View](), routines)
+	assert.Less(t, indexOf(t, order, "public.zzz_status"), indexOf(t, order, "routine:public.aaa_p"))
+}

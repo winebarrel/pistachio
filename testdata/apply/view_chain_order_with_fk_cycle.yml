@@ -1,6 +1,6 @@
 # The plan fixture of the same name pins the statement order; this one runs it
 # against the database, which is what says the order is one PostgreSQL accepts.
-# Without the view sort in fallbackOrder the apply fails on the first DROP.
+# Without the views sorted among themselves the apply fails on the first DROP.
 #
 # PostgreSQL 15 qualifies a view's column references with the relation, 16 and
 # later do not, so the dump is written per version.

@@ -373,7 +373,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		return nil, fmt.Errorf("failed to diff routines: %w", err)
 	}
 
-	stmts := orderStatements(
+	stmts, err := orderStatements(
 		&schemaObjects{
 			Tables:         filteredTables,
 			Views:          filteredViews,
@@ -402,6 +402,9 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 			Routines:       routineDiff,
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	var disallowed []string
 	disallowed = append(disallowed, viewDiff.DisallowedDropStmts...)
@@ -625,15 +628,16 @@ func forceConcurrentlyDirectives(
 }
 
 // orderStatements uses topological sort to determine the correct execution
-// order for diff statements based on object dependencies.
-// Falls back to the default category-based ordering if topological sort fails.
-func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []string {
+// order for diff statements based on object dependencies. A cycle is an error:
+// foreign keys draw no edge and routines draw none that closes one, so what is
+// left is a schema PostgreSQL rejects, such as two domains built on each other.
+func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) ([]string, error) {
 	// Build topological order from desired schema for creates
 	createOrder, err := toposort.OrderFromSchema(
 		desired.Enums, desired.Domains, desired.CompositeTypes, desired.Tables, desired.Views, desired.Sequences, desired.Routines,
 	)
 	if err != nil {
-		return fallbackOrder(current, desired, diffs)
+		return nil, fmt.Errorf("failed to order the desired schema: %w", err)
 	}
 
 	createPosMap := make(map[string]int, len(createOrder))
@@ -649,7 +653,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 		current.Enums, current.Domains, current.CompositeTypes, current.Tables, current.Views, current.Sequences, current.Routines,
 	)
 	if err != nil {
-		return fallbackOrder(current, desired, diffs)
+		return nil, fmt.Errorf("failed to order the current schema: %w", err)
 	}
 
 	dropPosMap := make(map[string]int, len(dropOrder))
@@ -730,70 +734,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 		stmts = append(stmts, ts.sql)
 	}
 
-	return stmts
-}
-
-// fallbackOrder is the original hardcoded ordering logic used as fallback.
-//
-// The view statements are still sorted among themselves. A view chain has to
-// come apart deepest first and go back together base first, whatever made the
-// whole-schema sort fail, and checkViewDependents counts on that when it lets
-// a dependent the same plan drops through.
-func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string {
-	var stmts []string
-	stmts = append(stmts, diffs.Enums.Stmts...)
-	stmts = append(stmts, diffs.Domains.Stmts...)
-	stmts = append(stmts, diffs.CompositeTypes.Stmts...)
-	stmts = append(stmts, diffs.Sequences.Stmts...)
-	stmts = append(stmts, diffs.Routines.Stmts...)
-	stmts = append(stmts, sortViewStmts(diffs.Views.DropStmts, current.Views, true)...)
-	stmts = append(stmts, diffs.Tables.FKDropStmts...)
-	stmts = append(stmts, diffs.Tables.Stmts...)
-	stmts = append(stmts, diffs.Tables.PersistenceStmts...)
-	stmts = append(stmts, diffs.Tables.DropStmts...)
-	stmts = append(stmts, diffs.Sequences.DropStmts...)
-	stmts = append(stmts, diffs.Routines.DropStmts...)
-	stmts = append(stmts, diffs.CompositeTypes.DropStmts...)
-	stmts = append(stmts, diffs.Domains.DropStmts...)
-	stmts = append(stmts, diffs.Enums.DropStmts...)
-	stmts = append(stmts, diffs.Tables.FKAddStmts...)
-	stmts = append(stmts, sortViewStmts(diffs.Views.CreateStmts, desired.Views, false)...)
-	return stmts
-}
-
-// sortViewStmts orders statements by the dependency order of the views alone,
-// reversed for drops. It is the fallback's stand-in for the whole-schema sort,
-// which fails on a cycle the views cannot be part of: two tables with foreign
-// keys to each other are one, and a schema people write.
-//
-// A sort that fails even so leaves the statements as they were, the way the
-// fallback left every statement before.
-func sortViewStmts(stmts []string, views *orderedmap.Map[string, *model.View], reverse bool) []string {
-	if len(stmts) == 0 || views == nil {
-		return stmts
-	}
-
-	order, err := toposort.OrderViews(views)
-	if err != nil {
-		return stmts
-	}
-
-	posMap := make(map[string]int, len(order))
-	for i, name := range order {
-		posMap[name] = i
-	}
-	addIndexPositions(posMap, orderedmap.New[string, *model.Table](), views)
-
-	tagged := tagStatements(stmts, posMap)
-	sort.SliceStable(tagged, func(i, j int) bool {
-		return compareTaggedPos(tagged[i].pos, tagged[j].pos, reverse)
-	})
-
-	sorted := make([]string, len(tagged))
-	for i, ts := range tagged {
-		sorted[i] = ts.sql
-	}
-	return sorted
+	return stmts, nil
 }
 
 // addIndexPositions gives every index the position of the relation it sits on.

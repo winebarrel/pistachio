@@ -1,0 +1,6 @@
+# A dependency cycle in the desired schema fails the plan.
+init: ""
+desired: |
+  CREATE DOMAIN public.a AS public.b;
+  CREATE DOMAIN public.b AS public.a;
+error: "failed to order the desired schema: schema dependency sort failed: cycle detected"
