@@ -85,11 +85,12 @@ func TestApplyExclusive(t *testing.T) {
 	assert.True(t, result.Applied)
 	assert.Contains(t, buf.String(), "CREATE TABLE")
 
-	// Apply's connection is closed, so the exclusion must be free again.
-	var acquired bool
-	err = conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1, hashtext(current_database()))", exclusiveLockClassID).Scan(&acquired)
-	require.NoError(t, err)
-	assert.True(t, acquired)
+	// Apply's connection is closed, so the exclusion is free again once the
+	// server has ended that session, which can be a moment after apply returns.
+	assert.Eventually(t, func() bool {
+		acquired, err := tryExclusive(ctx, conn)
+		return err == nil && acquired
+	}, 5*time.Second, 10*time.Millisecond)
 	require.NoError(t, releaseExclusive(ctx, conn))
 }
 
@@ -308,10 +309,12 @@ func TestApplyExclusiveWithTx(t *testing.T) {
 	assert.True(t, result.Applied)
 	assert.Contains(t, buf.String(), "-- Transaction committed")
 
-	var acquired bool
-	err = conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1, hashtext(current_database()))", exclusiveLockClassID).Scan(&acquired)
-	require.NoError(t, err)
-	assert.True(t, acquired)
+	// The server ends apply's session after apply has returned, so the lock
+	// can still be held for a moment.
+	assert.Eventually(t, func() bool {
+		acquired, err := tryExclusive(ctx, conn)
+		return err == nil && acquired
+	}, 5*time.Second, 10*time.Millisecond)
 	require.NoError(t, releaseExclusive(ctx, conn))
 }
 
