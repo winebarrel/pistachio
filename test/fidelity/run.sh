@@ -12,6 +12,10 @@
 # `pg_dump -s` again. The two have to be identical. Nothing pistachio drops
 # can hide, whether or not anyone knew to look for it.
 #
+# apply parses the dump and writes its own DDL, so the dump text never reaches
+# the database as written. A rendering fault the parser reads back correctly
+# does not show here.
+#
 # A schema file therefore states what pistachio manages. Adding a construct it
 # does not manage fails the check, which is the point: it is a decision to
 # make, not a diff to silence.

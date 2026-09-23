@@ -1,0 +1,16 @@
+# A domain named after its base type.
+init: |
+  CREATE DOMAIN public.text AS text NOT NULL;
+  CREATE TABLE public.t (
+      id integer,
+      v public.text
+  );
+dump: |
+  -- public.text
+  CREATE DOMAIN public.text AS text NOT NULL;
+
+  -- public.t
+  CREATE TABLE public.t (
+      id integer,
+      v public.text
+  );

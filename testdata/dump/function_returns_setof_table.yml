@@ -1,0 +1,17 @@
+# A routine returning the rows of a table.
+manage_routine: true
+init: |
+  CREATE TABLE public.users (id integer NOT NULL);
+  CREATE FUNCTION public.all_users() RETURNS SETOF public.users
+      LANGUAGE sql AS $$ SELECT * FROM public.users $$;
+dump: |
+  -- public.all_users()
+  CREATE OR REPLACE FUNCTION public.all_users()
+      RETURNS SETOF users
+      LANGUAGE sql
+      AS $$ SELECT * FROM public.users $$;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  );

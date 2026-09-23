@@ -1,0 +1,16 @@
+# A table named after a builtin type its own columns use.
+init: |
+  CREATE TABLE public.text (
+      id integer NOT NULL,
+      body text,
+      tags text[],
+      CONSTRAINT text_pkey PRIMARY KEY (id)
+  );
+dump: |
+  -- public.text
+  CREATE TABLE public.text (
+      id integer NOT NULL,
+      body text,
+      tags text[],
+      CONSTRAINT text_pkey PRIMARY KEY (id)
+  );
