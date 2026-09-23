@@ -116,12 +116,8 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 
 // newTableExtras returns non-FK extras and FK statements separately.
 func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcurrently bool, err error) {
-	if notValidSQL := t.NotValidConSQL(); notValidSQL != "" {
-		stmts = append(stmts, strings.Split(notValidSQL, "\n")...)
-	}
-	if storageSQL := t.StorageSQL(); storageSQL != "" {
-		stmts = append(stmts, strings.Split(storageSQL, "\n")...)
-	}
+	stmts = append(stmts, t.NotValidConSQL()...)
+	stmts = append(stmts, t.StorageSQL()...)
 	for _, idx := range t.Indexes.CollectValues() {
 		stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)
 		if err != nil {
@@ -135,15 +131,9 @@ func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcur
 	for _, fk := range t.ForeignKeys.CollectValues() {
 		fkStmts = append(fkStmts, fk.SQL(t.Partitioned))
 	}
-	if rlsSQL := t.RLSSQL(); rlsSQL != "" {
-		stmts = append(stmts, strings.Split(rlsSQL, "\n")...)
-	}
-	if trigSQL := t.TrigSQL(); trigSQL != "" {
-		stmts = append(stmts, strings.Split(trigSQL, "\n")...)
-	}
-	if commentSQL := t.CommentSQL(); commentSQL != "" {
-		stmts = append(stmts, strings.Split(commentSQL, "\n")...)
-	}
+	stmts = append(stmts, t.RLSSQL()...)
+	stmts = append(stmts, t.TrigSQL()...)
+	stmts = append(stmts, t.CommentSQL()...)
 	return
 }
 
