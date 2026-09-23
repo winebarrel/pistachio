@@ -1,0 +1,24 @@
+# A recreated policy keeps its CREATE next to its DROP, and RLS turned on for
+# an existing table waits for its new policies, so neither table is left
+# without them while the rest of the plan runs.
+init: |
+  CREATE TABLE public.a_docs (id integer);
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs FOR SELECT USING (true);
+  CREATE TABLE public.b_docs (id integer);
+desired: |
+  CREATE TABLE public.a_docs (id integer);
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs USING (true);
+  CREATE TABLE public.b_docs (id integer);
+  ALTER TABLE public.b_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY q ON public.b_docs USING (true);
+  CREATE TABLE public.c_other (id integer);
+plan: |
+  DROP POLICY p ON public.a_docs;
+  CREATE POLICY p ON public.a_docs USING (true);
+  CREATE TABLE public.c_other (
+      id integer
+  );
+  ALTER TABLE public.b_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY q ON public.b_docs USING (true);

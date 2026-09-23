@@ -11,30 +11,32 @@ import (
 )
 
 // diffRLS emits ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL
-// SECURITY statements for changes to the table-level RLS flags.
-func diffRLS(fqtn string, current, desired *model.Table) []string {
-	var stmts []string
+// SECURITY statements for changes to the table-level RLS flags. Turning a flag
+// off stays in stmts; turning one on comes back in enables, which the plan runs
+// with the new policies.
+func diffRLS(fqtn string, current, desired *model.Table) (stmts, enables []string) {
 	if current.RowSecurity != desired.RowSecurity {
 		if desired.RowSecurity {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" ENABLE ROW LEVEL SECURITY;")
+			enables = append(enables, "ALTER TABLE "+fqtn+" ENABLE ROW LEVEL SECURITY;")
 		} else {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" DISABLE ROW LEVEL SECURITY;")
 		}
 	}
 	if current.ForceRowSecurity != desired.ForceRowSecurity {
 		if desired.ForceRowSecurity {
-			stmts = append(stmts, "ALTER TABLE "+fqtn+" FORCE ROW LEVEL SECURITY;")
+			enables = append(enables, "ALTER TABLE "+fqtn+" FORCE ROW LEVEL SECURITY;")
 		} else {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" NO FORCE ROW LEVEL SECURITY;")
 		}
 	}
-	return stmts
+	return stmts, enables
 }
 
 // diffPolicies emits CREATE POLICY / ALTER POLICY / DROP POLICY statements for
-// changes between current and desired policies on the same table. CREATE
-// POLICY is returned separately, since the plan runs it after every table and
-// view.
+// changes between current and desired policies on the same table. A new
+// policy's CREATE POLICY is returned separately, since the plan runs it after
+// every table and view. A recreated policy's CREATE stays next to its DROP, so
+// the table is not left without it while the rest of the plan runs.
 //
 // Pure removals (policy absent from desired) honor the policy-drop policy via
 // dc; definition changes still run as DROP+CREATE when a property that cannot
@@ -112,8 +114,12 @@ func diffPolicies(
 	// Add new or recreated policies, then ALTER for in-place changes.
 	for name, des := range desired.All() {
 		cur, ok := current.GetOk(name)
-		if !ok || needsRecreate(cur, des) {
+		if !ok {
 			creates = append(creates, des.SQL())
+			continue
+		}
+		if needsRecreate(cur, des) {
+			stmts = append(stmts, des.SQL())
 			continue
 		}
 		if alterStmt := alterPolicySQL(fqtn, cur, des); alterStmt != "" {

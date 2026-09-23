@@ -33,36 +33,39 @@ func renameFrom(s string) func(*model.Policy) { return func(p *model.Policy) { p
 func TestDiffRLS_NoChange(t *testing.T) {
 	cur := &model.Table{RowSecurity: true, ForceRowSecurity: true}
 	des := &model.Table{RowSecurity: true, ForceRowSecurity: true}
-	assert.Empty(t, diffRLS("public.documents", cur, des))
+	stmts, enables := diffRLS("public.documents", cur, des)
+	assert.Empty(t, stmts)
+	assert.Empty(t, enables)
 }
 
 func TestDiffRLS_EnableDisable(t *testing.T) {
 	cur := &model.Table{}
 	des := &model.Table{RowSecurity: true}
-	assert.Equal(t,
-		[]string{"ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;"},
-		diffRLS("public.documents", cur, des))
+	stmts, enables := diffRLS("public.documents", cur, des)
+	assert.Empty(t, stmts)
+	assert.Equal(t, []string{"ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;"}, enables)
 
 	cur, des = &model.Table{RowSecurity: true}, &model.Table{}
-	assert.Equal(t,
-		[]string{"ALTER TABLE public.documents DISABLE ROW LEVEL SECURITY;"},
-		diffRLS("public.documents", cur, des))
+	stmts, enables = diffRLS("public.documents", cur, des)
+	assert.Equal(t, []string{"ALTER TABLE public.documents DISABLE ROW LEVEL SECURITY;"}, stmts)
+	assert.Empty(t, enables)
 }
 
 func TestDiffRLS_ForceNoForce(t *testing.T) {
 	cur := &model.Table{}
 	des := &model.Table{ForceRowSecurity: true}
-	assert.Equal(t,
-		[]string{"ALTER TABLE public.documents FORCE ROW LEVEL SECURITY;"},
-		diffRLS("public.documents", cur, des))
+	stmts, enables := diffRLS("public.documents", cur, des)
+	assert.Empty(t, stmts)
+	assert.Equal(t, []string{"ALTER TABLE public.documents FORCE ROW LEVEL SECURITY;"}, enables)
 
 	cur, des = &model.Table{ForceRowSecurity: true}, &model.Table{}
-	assert.Equal(t,
-		[]string{"ALTER TABLE public.documents NO FORCE ROW LEVEL SECURITY;"},
-		diffRLS("public.documents", cur, des))
+	stmts, enables = diffRLS("public.documents", cur, des)
+	assert.Equal(t, []string{"ALTER TABLE public.documents NO FORCE ROW LEVEL SECURITY;"}, stmts)
+	assert.Empty(t, enables)
 }
 
-// CREATE POLICY comes back apart from the rest, which runs in place.
+// A new policy's CREATE comes back apart. A recreated one stays next to its
+// DROP.
 func TestDiffPolicies_CreatesApart(t *testing.T) {
 	cur := orderedmap.New[string, *model.Policy]()
 	des := orderedmap.New[string, *model.Policy]()
@@ -81,12 +84,10 @@ func TestDiffPolicies_CreatesApart(t *testing.T) {
 		"ALTER POLICY old_name ON public.documents RENAME TO new_name;",
 		"DROP POLICY gone ON public.documents;",
 		"DROP POLICY recreated ON public.documents;",
+		"CREATE POLICY recreated ON public.documents FOR UPDATE USING (true);",
 		"ALTER POLICY altered ON public.documents USING (false);",
 	}, stmts)
-	assert.Equal(t, []string{
-		"CREATE POLICY recreated ON public.documents FOR UPDATE USING (true);",
-		"CREATE POLICY added ON public.documents FOR SELECT USING (true);",
-	}, creates)
+	assert.Equal(t, []string{"CREATE POLICY added ON public.documents FOR SELECT USING (true);"}, creates)
 }
 
 func TestDiffPolicies_NoChange(t *testing.T) {

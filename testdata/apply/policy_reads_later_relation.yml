@@ -1,4 +1,7 @@
 # A policy can read a table or view created later in the run.
+#
+# PostgreSQL 15 qualifies a view's column references with the relation, 16 and
+# later do not, so the dump is written per version.
 init: ""
 desired: |
   CREATE TABLE public.a_docs (tenant_id text);
@@ -33,3 +36,30 @@ applied: |
   CREATE OR REPLACE VIEW public.b_view AS
   SELECT z_tenants.id
      FROM z_tenants;
+applied_pg16: &applied_pg16plus |
+  -- public.a_docs
+  CREATE TABLE public.a_docs (
+      tenant_id text
+  );
+
+  ALTER TABLE public.a_docs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.a_docs USING ((tenant_id = (SELECT z_tenants.id
+      FROM z_tenants
+      WHERE (z_tenants.db_user = CURRENT_USER))));
+
+  -- public.z_tenants
+  CREATE TABLE public.z_tenants (
+      id text,
+      db_user text
+  );
+
+  ALTER TABLE public.z_tenants ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY q ON public.z_tenants USING ((id IN (SELECT b_view.id
+      FROM b_view)));
+
+  -- public.b_view
+  CREATE OR REPLACE VIEW public.b_view AS
+  SELECT id
+     FROM z_tenants;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

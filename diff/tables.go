@@ -27,8 +27,10 @@ type TableDiffResult struct {
 	PersistenceStmts []string
 	Stmts            []string // CREATE/ALTER TABLE, columns, constraints, indexes, comments
 	FKAddStmts       []string // FK adds and renames (should run last)
-	// PolicyStmts holds CREATE POLICY, which runs after every table and view
-	// because a policy can read any of them.
+	// PolicyStmts holds the new policies, which run after every table and view
+	// because a policy can read any of them. RLS turned on for an existing
+	// table comes with them, so the table does not deny every row until its
+	// policies exist.
 	PolicyStmts         []string
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
 	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
@@ -180,7 +182,9 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 		result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 
-		result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
+		rlsStmts, rlsEnables := diffRLS(fqtn, current, desired)
+		result.Stmts = append(result.Stmts, rlsStmts...)
+		result.PolicyStmts = append(result.PolicyStmts, rlsEnables...)
 		polStmts, polCreates, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
 		if err != nil {
 			return nil, err
@@ -256,10 +260,11 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	result.FKAddStmts = append(result.FKAddStmts, fkAdds...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, fkDisallowed...)
 
-	// RLS toggles run before CREATE POLICY so a newly enabled table has its
-	// flag set when policies attach. Disabling RLS likewise comes before any
-	// policy DROP that the user may have stacked alongside.
-	result.Stmts = append(result.Stmts, diffRLS(fqtn, current, desired)...)
+	// Disabling RLS comes before any policy DROP that the user may have stacked
+	// alongside. Enabling it waits for the new policies.
+	rlsStmts, rlsEnables := diffRLS(fqtn, current, desired)
+	result.Stmts = append(result.Stmts, rlsStmts...)
+	result.PolicyStmts = append(result.PolicyStmts, rlsEnables...)
 
 	polStmts, polCreates, polDisallowed, err := diffPolicies(fqtn, current.Policies, desired.Policies, dc)
 	if err != nil {

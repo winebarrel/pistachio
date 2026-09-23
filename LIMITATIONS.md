@@ -132,13 +132,14 @@ diff has no reason to walk otherwise.
 
 Origin: review of [#442](https://github.com/winebarrel/pistachio/pull/442).
 
-## An altered policy cannot read a relation the same run creates
+## A changed policy cannot read a relation the same run creates
 
-`CREATE POLICY` runs after every table and view. `ALTER POLICY` runs with the
-table's other changes, before any table the run drops, because the policy may
-stop reading that table. An `ALTER POLICY` whose new expression reads a table
-or view created in the same run fails. Workaround: create the relation first
-and change the policy in a later run.
+A new policy is created after every table and view. A changed one runs
+earlier. `ALTER POLICY` goes before any table the run drops, since the policy
+may stop reading it, and a recreated policy's `CREATE` follows its `DROP` so
+the table is never without it. Such a policy fails when its new expression
+reads a table or view created in the same run. Workaround: create the relation
+first and change the policy in a later run.
 
 Origin: moving `CREATE POLICY` after the views, 2026-09-23.
 

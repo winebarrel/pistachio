@@ -730,9 +730,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 		stmts = append(stmts, ts.sql)
 	}
 	// A policy can read any table or view, so it is created once all exist.
-	for _, ts := range tagStatements(diffs.Tables.PolicyStmts, createPosMap) {
-		stmts = append(stmts, ts.sql)
-	}
+	stmts = append(stmts, diffs.Tables.PolicyStmts...)
 
 	return stmts
 }
