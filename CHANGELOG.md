@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A column whose default draws from a sequence it owns no longer plans `SET DEFAULT` on every run when the desired schema writes that default out, as in `id bigint DEFAULT nextval('custom_user_id_seq')` with `ALTER SEQUENCE custom_user_id_seq OWNED BY users.id`. The column was read as `bigserial` without its default.
+
+* The plan file version is now 2, since the state hash of a database with a serial column changes. `apply-from` refuses a file written by an earlier version: run `plan --out` again.
+
 ## [1.62.0] - 2026-09-23
 
 * A new table's policy that reads a table or view created later in the same run no longer fails to apply. A new table's policies now run after every table and view.

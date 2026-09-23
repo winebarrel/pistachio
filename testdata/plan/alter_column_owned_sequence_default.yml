@@ -1,0 +1,14 @@
+# A default the desired schema writes is compared with the one the serial
+# column carries, so a different one is set.
+init: |
+  CREATE SEQUENCE public.custom_user_id_seq;
+  CREATE TABLE public.users (
+      id bigint DEFAULT nextval('custom_user_id_seq') NOT NULL
+  );
+  ALTER SEQUENCE public.custom_user_id_seq OWNED BY public.users.id;
+desired: |
+  CREATE TABLE public.users (
+      id bigint DEFAULT 0 NOT NULL
+  );
+plan: |
+  ALTER TABLE public.users ALTER COLUMN id SET DEFAULT 0;

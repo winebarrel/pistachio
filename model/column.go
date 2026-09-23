@@ -65,6 +65,8 @@ type Column struct {
 	// SerialSequence names the sequence a serial column owns, schema
 	// qualified. Only the catalog fills it: a type name says the column is a
 	// serial, but not what PostgreSQL called its sequence. nil otherwise.
+	// Default still holds the nextval() the serial type implies, which
+	// PostgreSQL refuses alongside the type, so it is not written out.
 	SerialSequence *string        `json:"serial_sequence"`
 	NotNull        bool           `json:"not_null"`
 	NotNullName    *string        `json:"not_null_name"`

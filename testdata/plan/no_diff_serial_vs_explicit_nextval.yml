@@ -1,0 +1,12 @@
+# A serial column written out as the default and ownership serial expands to.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+desired: |
+  CREATE SEQUENCE public.t_id_seq AS integer;
+  CREATE TABLE public.t (
+      id integer DEFAULT nextval('t_id_seq'::regclass) NOT NULL
+  );
+  ALTER SEQUENCE public.t_id_seq OWNED BY public.t.id;
+plan: ""

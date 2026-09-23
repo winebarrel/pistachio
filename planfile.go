@@ -19,7 +19,7 @@ import (
 // field to a model struct changes it for an unchanged database: a file
 // written before that change would otherwise be reported as drift, and the
 // operator would go looking at the database for it.
-const planFileVersion = 1
+const planFileVersion = 2
 
 // planFile is what plan --out writes: the statements apply-from is to run, the
 // scope they were computed under, and the fingerprint of the schema they were

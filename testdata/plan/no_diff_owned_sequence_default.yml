@@ -1,0 +1,18 @@
+# A column whose default draws from a sequence it owns reads back as serial.
+# The default written out in the desired schema matches the one in the
+# database, so there is nothing to set.
+init: |
+  CREATE SEQUENCE public.custom_user_id_seq;
+  CREATE TABLE public.users (
+      id bigint DEFAULT nextval('custom_user_id_seq') NOT NULL,
+      name text NOT NULL
+  );
+  ALTER SEQUENCE public.custom_user_id_seq OWNED BY public.users.id;
+desired: |
+  CREATE SEQUENCE public.custom_user_id_seq;
+  CREATE TABLE public.users (
+      id bigint DEFAULT nextval('custom_user_id_seq') NOT NULL,
+      name text NOT NULL
+  );
+  ALTER SEQUENCE public.custom_user_id_seq OWNED BY public.users.id;
+plan: ""

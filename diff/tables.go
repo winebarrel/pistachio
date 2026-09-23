@@ -495,7 +495,14 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// identity: we explicitly DROP DEFAULT above as part of the ADD
 	// IDENTITY transition.
 	if !current.Generated.IsStoredGeneratedColumn() && !desired.Generated.IsStoredGeneratedColumn() && !desIsIdent {
-		if !equalDefault(current.Default, desired.Default) {
+		// A serial column's nextval() comes with the type, so a desired side
+		// that writes no default leaves it alone. One that writes a default is
+		// compared with it.
+		currentDefault := current.Default
+		if current.SerialSequence != nil && desired.Default == nil {
+			currentDefault = nil
+		}
+		if !equalDefault(currentDefault, desired.Default) {
 			if desired.Default != nil {
 				stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" SET DEFAULT "+*desired.Default+";")
 			} else {
@@ -636,7 +643,7 @@ func identityKind(id model.ColumnIdentity) string {
 
 // isSerialType reports whether the type name corresponds to a Postgres serial
 // pseudo-type. catalog/columns.go renders these explicitly as "serial" /
-// "bigserial" / "smallserial" while leaving the column's Default field nil,
+// "bigserial" / "smallserial". A desired serial column carries no Default,
 // so callers that need to drop the underlying nextval() default before an
 // ALTER must check the type name to detect this case.
 func isSerialType(typeName string) bool {

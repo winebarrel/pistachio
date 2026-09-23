@@ -47,11 +47,9 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			-- contype='n' and a single conkey entry. Pre-PG18 has no such row,
 			-- so the LEFT JOIN yields NULL there.
 			nn.conname AS not_null_name,
-			CASE
-				WHEN s.is_serial
-				THEN NULL
-				ELSE pg_catalog.pg_get_expr(ad.adbin, ad.adrelid)
-			END AS default,
+			-- Kept on a serial column too, for a desired schema that writes
+			-- the nextval() default out rather than the serial type.
+			pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) AS default,
 			a.attidentity,
 			a.attgenerated,
 			quote_ident(con.nspname) || '.' || quote_ident(co.collname) AS collation,
