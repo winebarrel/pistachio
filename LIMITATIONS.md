@@ -697,13 +697,23 @@ dependency sort says.
 The reverse direction is not modeled at all. A `LANGUAGE sql` routine whose
 body reads a table created in the same run fails to apply, because PostgreSQL
 parses a SQL body at creation time; so does one that calls another routine
-defined later in the file. `plpgsql` is unaffected. The workaround is
-`-- pista:ignore` plus `-- pista:execute`.
+defined later in the file. A `plpgsql` routine fails too when its `DECLARE`
+uses a table's row type or `%TYPE`. A missing table in `%TYPE` is reported as
+`syntax error at or near "%"`.
 
-Fixing it means reading the body for the relations and routines it names and
-ordering on that. Both directions would then live in one graph, which holds
-only per pair, so the wholesale edge would have to go and every CHECK,
-GENERATED, index, policy and trigger expression would have to be read instead.
+Turning the check off works around both:
+
+```sh
+pista apply --pre-sql 'SET check_function_bodies = off' schema.sql
+```
+
+Errors in a body then show up when the routine is called. Types in the
+signature are still checked.
+
+One fix is to apply with the check off and run each routine's validator at the
+end. The other is to read the body and order on what it names. That puts both
+directions in one graph, so the wholesale edge would have to go and every
+CHECK, GENERATED, index, policy and trigger expression would have to be read.
 
 Origin: routine support.
 
