@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.61.0] - 2026-09-23
 
 * **BREAKING**: Remove `dump --sort-by-deps`. It failed on mutual foreign keys, and `pg_dump -s` writes a file `psql` can load. To load a dump into an empty database, use `apply`.
 
