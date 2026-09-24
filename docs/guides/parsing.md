@@ -109,7 +109,7 @@ It is reflected off the structs the parser fills, so it says what the command wr
 
 `pista dump --json` writes a document of this shape for a database.
 
-Some values can differ. A database knows what a schema file does not state: the catalog gives every column a `storage_type` while `parse` fills it only where the file writes `SET STORAGE`, and it spells an expression its own way, so a view's `definition` reads differently. A database also holds no `-- pista:execute` statements, so `execute_stmts` is empty.
+Some values can differ. A database knows what a schema file does not state: the catalog gives every column a `storage_type` while `parse` fills it only where the file writes `SET STORAGE`, and it spells an expression its own way, so a view's `definition` reads differently. A serial column's `default` holds the `nextval` call PostgreSQL gave it, where `parse` leaves it `null`. A database also holds no `-- pista:execute` statements, so `execute_stmts` is empty.
 
 
 ## What it is not

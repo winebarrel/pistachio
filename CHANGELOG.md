@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A column whose default draws from a sequence it owns no longer plans `SET DEFAULT` on every run when the desired schema writes the default out. The column was read as a serial without its default.
+
+* `dump --json` writes the `nextval` default of a serial column in `default`, where it wrote `null`.
+
+* The plan file version is now 2. `apply-from` refuses a file written by an earlier version, so run `plan --out` again.
+
 ## [1.62.0] - 2026-09-23
 
 * A new table's policy that reads a table or view created later in the same run no longer fails to apply. A new table's policies now run after every table and view.

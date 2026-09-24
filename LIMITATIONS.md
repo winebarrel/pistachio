@@ -917,6 +917,31 @@ cannot type keeps its default and its sequence surfaces as a standalone one.
 
 Origin: review of the serial retype fix, 2026-09-08.
 
+## A sequence a column owns loses its name in `dump`
+
+Priority: low.
+
+A column that owns a sequence and draws its default from it is read as a
+serial, whatever the sequence is called:
+
+```sql
+CREATE SEQUENCE public.custom_user_id_seq;
+CREATE TABLE public.users (id bigint DEFAULT nextval('custom_user_id_seq') NOT NULL);
+ALTER SEQUENCE public.custom_user_id_seq OWNED BY public.users.id;
+```
+
+`pista dump` writes `id bigserial NOT NULL` and no `CREATE SEQUENCE`. The plan
+of that dump is clean, but loading it into an empty database creates
+`users_id_seq`, and options set on the sequence go back to their defaults.
+Use `pg_dump -s` to copy such a database.
+
+Closing it means reading a column as a serial only when its sequence has the
+name and options serial gives it, and writing any other column as the sequence,
+the `nextval` default and the `OWNED BY`. The plan of that dump also needs a
+desired `OWNED BY` to keep the sequence managed, which it does not today.
+
+Origin: sequence ownership review, 2026-09-23.
+
 ## Perpetual drift on an array written with dimensions or a bound
 
 Priority: low.

@@ -158,7 +158,8 @@ func TestListColumnsByTables(t *testing.T) {
 		id, ok := tbl.Columns.GetOk("id")
 		require.True(t, ok)
 		assert.Equal(t, "serial", id.TypeName)
-		assert.Nil(t, id.Default)
+		require.NotNil(t, id.Default)
+		assert.Equal(t, "nextval('users_id_seq'::regclass)", *id.Default)
 	})
 
 	t.Run("bigserial", func(t *testing.T) {
@@ -177,7 +178,8 @@ func TestListColumnsByTables(t *testing.T) {
 		id, ok := tbl.Columns.GetOk("id")
 		require.True(t, ok)
 		assert.Equal(t, "bigserial", id.TypeName)
-		assert.Nil(t, id.Default)
+		require.NotNil(t, id.Default)
+		assert.Equal(t, "nextval('users_id_seq'::regclass)", *id.Default)
 	})
 
 	t.Run("smallserial", func(t *testing.T) {
@@ -196,7 +198,8 @@ func TestListColumnsByTables(t *testing.T) {
 		id, ok := tbl.Columns.GetOk("id")
 		require.True(t, ok)
 		assert.Equal(t, "smallserial", id.TypeName)
-		assert.Nil(t, id.Default)
+		require.NotNil(t, id.Default)
+		assert.Equal(t, "nextval('users_id_seq'::regclass)", *id.Default)
 	})
 
 	t.Run("identity always", func(t *testing.T) {
