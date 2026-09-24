@@ -45,7 +45,7 @@ PISTA_EXCLUDE='tmp_*' pista plan schema.sql
 ```
 
 !!! note
-    `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference); use them for inspection (`dump`, `plan`), not `apply`. `routine` narrows what `--manage-routine` turned on; it does not turn routines on by itself.
+    `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference); use them for inspection (`dump`, `plan`, `diff`), not `apply`. `routine` narrows what `--manage-routine` turned on; it does not turn routines on by itself.
 
 !!! note
     When both a CLI flag and its corresponding environment variable are set, the CLI flag overrides the environment variable (values are not merged). For example, running `PISTA_EXCLUDE='tmp_*' pista plan -E 'foo_*' schema.sql` excludes only `foo_*`; `tmp_*` is ignored.
