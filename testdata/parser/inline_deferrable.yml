@@ -1,0 +1,33 @@
+input: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code text UNIQUE DEFERRABLE,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer PRIMARY KEY DEFERRABLE INITIALLY IMMEDIATE,
+      user_id integer REFERENCES public.users (id) DEFERRABLE INITIALLY DEFERRED,
+      editor_id integer REFERENCES public.users (id) INITIALLY DEFERRED,
+      reviewer_id integer REFERENCES public.users (id) NOT DEFERRABLE
+  );
+expected: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code text,
+      CONSTRAINT users_code_key UNIQUE (code) DEFERRABLE,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      editor_id integer,
+      reviewer_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id) DEFERRABLE
+  );
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id) DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_editor_id_fkey FOREIGN KEY (editor_id) REFERENCES public.users (id) DEFERRABLE INITIALLY DEFERRED;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.users (id);

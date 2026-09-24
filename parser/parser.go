@@ -1286,15 +1286,19 @@ func autoNameColumnConstraint(tableName, colName string, con *pg_query.Constrain
 // GENERATED) are skipped as they are handled by parseColumnDef.
 // Unnamed constraints are auto-named following PostgreSQL's naming convention.
 func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema, defaultSchema string) error {
+	foldConstraintAttrs(cd.Constraints)
 	for _, conNode := range cd.Constraints {
 		con := conNode.GetConstraint()
 		if con == nil {
 			continue
 		}
-		// Skip column-attribute constraints (NOT NULL, DEFAULT, IDENTITY, GENERATED)
+		// Skip column-attribute constraints (NOT NULL, DEFAULT, IDENTITY,
+		// GENERATED) and the DEFERRABLE attributes folded in above.
 		switch con.Contype {
 		case pg_query.ConstrType_CONSTR_NOTNULL, pg_query.ConstrType_CONSTR_DEFAULT,
-			pg_query.ConstrType_CONSTR_IDENTITY, pg_query.ConstrType_CONSTR_GENERATED:
+			pg_query.ConstrType_CONSTR_IDENTITY, pg_query.ConstrType_CONSTR_GENERATED,
+			pg_query.ConstrType_CONSTR_ATTR_DEFERRABLE, pg_query.ConstrType_CONSTR_ATTR_NOT_DEFERRABLE,
+			pg_query.ConstrType_CONSTR_ATTR_DEFERRED, pg_query.ConstrType_CONSTR_ATTR_IMMEDIATE:
 			continue
 		}
 		if con.Conname == "" {
@@ -1345,6 +1349,44 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 		}
 	}
 	return nil
+}
+
+// foldConstraintAttrs applies the DEFERRABLE / INITIALLY clauses written on a
+// column to the constraint before them. The grammar gives each clause its own
+// node in ColumnDef.Constraints rather than setting it on the constraint, as
+// PostgreSQL's transformConstraintAttrs does. INITIALLY DEFERRED alone implies
+// DEFERRABLE there too.
+func foldConstraintAttrs(nodes []*pg_query.Node) {
+	var last *pg_query.Constraint
+	for _, n := range nodes {
+		con := n.GetConstraint()
+		if con == nil {
+			continue
+		}
+		switch con.Contype {
+		case pg_query.ConstrType_CONSTR_ATTR_DEFERRABLE, pg_query.ConstrType_CONSTR_ATTR_NOT_DEFERRABLE,
+			pg_query.ConstrType_CONSTR_ATTR_DEFERRED, pg_query.ConstrType_CONSTR_ATTR_IMMEDIATE:
+		default:
+			last = con
+			continue
+		}
+		// A clause with no constraint before it is an error PostgreSQL
+		// reports when the statement runs.
+		if last == nil {
+			continue
+		}
+		switch con.Contype {
+		case pg_query.ConstrType_CONSTR_ATTR_DEFERRABLE:
+			last.Deferrable = true
+		case pg_query.ConstrType_CONSTR_ATTR_NOT_DEFERRABLE:
+			last.Deferrable = false
+		case pg_query.ConstrType_CONSTR_ATTR_DEFERRED:
+			last.Initdeferred = true
+			last.Deferrable = true
+		case pg_query.ConstrType_CONSTR_ATTR_IMMEDIATE:
+			last.Initdeferred = false
+		}
+	}
 }
 
 func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Constraint, error) {

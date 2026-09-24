@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* A `DEFERRABLE` or `INITIALLY DEFERRED` written on a column constraint, such as `REFERENCES users (id) DEFERRABLE INITIALLY DEFERRED`, is now read. It was dropped, so the constraint was created not deferrable.
+
 * Error messages no longer repeat the program name, as in `pista: error: pistachio: ...`. The schema errors name `--schemas` instead of `Options.Schemas`, and a failed connection reads `failed to connect to database`.
 
 ## [1.63.0] - 2026-09-24
