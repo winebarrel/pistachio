@@ -1,0 +1,17 @@
+# A parameter default changed without a cast applies, and the next plan is
+# clean although the catalog reads it back with the cast.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.fd(a text DEFAULT 'x', b integer DEFAULT NULL) RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+desired: |
+  CREATE FUNCTION public.fd(a text DEFAULT 'y', b integer DEFAULT NULL) RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+applied: |
+  -- public.fd(text, integer)
+  CREATE OR REPLACE FUNCTION public.fd(a text DEFAULT 'y'::text, b integer DEFAULT NULL::int)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;

@@ -75,10 +75,28 @@ func normalizeTypes(r *model.Routine) *model.Routine {
 	return &c
 }
 
+// alignDefaults gives desired the current spelling of each parameter default
+// that is the same expression. The catalog writes a default with its type, so
+// 'x' reads back as 'x'::text, and comparing the text alone would read as a
+// change on every run. It only looks at lists of the same shape; any other
+// difference is a change regardless of the defaults.
+func alignDefaults(current, desired *model.Routine) {
+	if !equalArgShapes(current.Args, desired.Args) {
+		return
+	}
+	for i, c := range current.Args {
+		d := desired.Args[i]
+		if c.Default != "" && d.Default != "" && equalDefault(&c.Default, &d.Default) {
+			d.Default = c.Default
+		}
+	}
+}
+
 // diffRoutine returns the statements that bring one routine in line, plus any
 // drop the policy suppressed.
 func diffRoutine(current, desired *model.Routine, dropAllowed bool) (stmts, disallowed []string) {
 	currentNorm, desiredNorm := normalizeTypes(current), normalizeTypes(desired)
+	alignDefaults(currentNorm, desiredNorm)
 
 	if currentNorm.SQL() != desiredNorm.SQL() {
 		if needsDropCreate(currentNorm, desiredNorm) {

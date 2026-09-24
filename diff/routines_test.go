@@ -244,3 +244,34 @@ func TestDiffRoutines_DropNamesTypesAsRead(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP FUNCTION public.f(public.dom);"}, result.DropStmts)
 }
+
+// The catalog writes a parameter default with its type, so a default written
+// without the cast is the same default. One that differs in value is not.
+func TestDiffRoutines_ArgDefaultCast(t *testing.T) {
+	withDefault := func(def string) *model.Routine {
+		return newRoutine(func(r *model.Routine) { r.Args[0].Default = def })
+	}
+
+	for _, tc := range []struct {
+		current, desired string
+		changed          bool
+	}{
+		{"1", "1", false},
+		{"NULL::integer", "NULL", false},
+		{"'{}'::integer[]", "'{}'", false},
+		{"1", "2", true},
+		{"NULL::integer", "1", true},
+	} {
+		t.Run(tc.current+" "+tc.desired, func(t *testing.T) {
+			result, err := DiffRoutines(newRoutineMap(withDefault(tc.current)), newRoutineMap(withDefault(tc.desired)), allowAllDrops{})
+			require.NoError(t, err)
+			if tc.changed {
+				require.Len(t, result.Stmts, 1)
+				assert.Contains(t, result.Stmts[0], "DEFAULT "+tc.desired+")")
+			} else {
+				assert.Empty(t, result.Stmts)
+			}
+			assert.Empty(t, result.DropStmts)
+		})
+	}
+}

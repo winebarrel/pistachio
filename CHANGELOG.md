@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* With `--manage-routine`, a routine parameter default written without a cast, such as `a text DEFAULT 'x'`, no longer plans `CREATE OR REPLACE FUNCTION` on every run. The catalog reads it back as `'x'::text`, which was compared as text.
+
 * Renaming an enum, domain, composite type or sequence with `-- pista:renamed-from` no longer retypes the columns that use it or resets their `nextval()` default. The extra statements failed the apply when a view read such a column, and a domain over a renamed type stopped the plan with a base type error.
 
 * A `DEFERRABLE` or `INITIALLY DEFERRED` written on a column constraint, such as `REFERENCES users (id) DEFERRABLE INITIALLY DEFERRED`, is now read. It was dropped, so the constraint was created not deferrable. A combination PostgreSQL rejects, such as `NOT DEFERRABLE INITIALLY DEFERRED`, is an error.
