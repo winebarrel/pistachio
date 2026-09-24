@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* `-- pista:renamed-from` on an index of a materialized view now plans `ALTER INDEX ... RENAME TO`. The directive was ignored, so the index was dropped and created again.
+
 * Renaming a materialized view with `-- pista:renamed-from` no longer drops and re-creates its indexes.
 
 * With `--manage-routine`, a routine parameter default written without a cast, such as `a text DEFAULT 'x'`, no longer plans `CREATE OR REPLACE FUNCTION` on every run. The catalog reads it back as `'x'::text`, which was compared as text.

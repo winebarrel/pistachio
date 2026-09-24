@@ -1,0 +1,28 @@
+# A materialized view and one of its indexes renamed in the same plan: the
+# view rename points the indexes at the new name, then the index rename is
+# detected, so only the two renames are planned.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name FROM public.users;
+  CREATE INDEX idx_user_names_id ON public.user_names USING btree (id);
+  CREATE INDEX idx_user_names_name ON public.user_names USING btree (name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  -- pista:renamed-from public.user_names
+  CREATE MATERIALIZED VIEW public.member_names AS
+  SELECT id, name FROM public.users;
+  CREATE INDEX idx_user_names_id ON public.member_names USING btree (id);
+  -- pista:renamed-from idx_user_names_name
+  CREATE INDEX idx_member_names_name ON public.member_names USING btree (name);
+plan: |
+  ALTER MATERIALIZED VIEW public.user_names RENAME TO member_names;
+  ALTER INDEX public.idx_user_names_name RENAME TO idx_member_names_name;

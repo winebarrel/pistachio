@@ -1,0 +1,24 @@
+# The rename runs first, then the index is rebuilt under its new name.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name FROM public.users;
+  CREATE INDEX idx_user_names_name ON public.user_names USING btree (name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name FROM public.users;
+  -- pista:renamed-from idx_user_names_name
+  CREATE INDEX idx_user_names_display_name ON public.user_names USING hash (name);
+plan: |
+  ALTER INDEX public.idx_user_names_name RENAME TO idx_user_names_display_name;
+  DROP INDEX public.idx_user_names_display_name;
+  CREATE INDEX idx_user_names_display_name ON public.user_names USING hash (name);

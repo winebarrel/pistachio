@@ -499,6 +499,12 @@ func diffViewIndexes(current, desired *model.View, dc DropChecker) (stmts []stri
 		desiredIndexes = desired.Indexes
 	}
 
+	renameStmts, currentIndexes, err := detectIndexRenames(currentIndexes, desiredIndexes)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	stmts = append(stmts, renameStmts...)
+
 	sameDef := equalIndexDefs(currentIndexes, desiredIndexes)
 
 	// Drop removed or changed indexes. Pure removals honor the index-drop

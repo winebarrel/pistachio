@@ -1,0 +1,26 @@
+# A materialized view whose definition changes is recreated, and its indexes
+# are created under their desired names, so there is nothing to rename.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name FROM public.users;
+  CREATE INDEX idx_user_names_name ON public.user_names USING btree (name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name, 1 AS n FROM public.users;
+  -- pista:renamed-from idx_user_names_name
+  CREATE INDEX idx_user_names_display_name ON public.user_names USING btree (name);
+plan: |
+  DROP MATERIALIZED VIEW public.user_names;
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name, 1 AS n FROM public.users;
+  CREATE INDEX idx_user_names_display_name ON public.user_names USING btree (name);
