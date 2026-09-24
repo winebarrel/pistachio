@@ -79,22 +79,28 @@ jobs:
       # A PostgreSQL backend on Windows is a new process rather than a fork,
       # and Defender scans every one of them. The tests open a connection per
       # fixture, so that scan sits on the hot path more than a thousand times.
-      # Excluding the server's own files and executable takes it off. This only
+      # go test also links a large cgo test binary per package under TEMP and
+      # runs it, and each new executable is scanned too. Real-time protection
+      # has nothing to guard on a throwaway runner, so turn it off. This only
       # buys time, so warn and carry on if the image stops allowing it.
-      - name: Exclude PostgreSQL from Defender
+      - name: Disable Defender real-time protection
         shell: pwsh
         run: |
           try {
-            Add-MpPreference -ExclusionPath $env:PGBIN, $env:PGDATA -ErrorAction Stop
-            Add-MpPreference -ExclusionProcess postgres.exe -ErrorAction Stop
+            Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop
           } catch {
-            Write-Warning "could not add Defender exclusions: $_"
+            Write-Warning "could not disable Defender real-time protection: $_"
           }
       # PostgreSQL is preinstalled on the runner image but the service is
       # stopped and disabled by default. PGDATA / PGBIN are set by the image
       # and point at that install. Switch it to trust auth to match the Linux
       # jobs (POSTGRES_HOST_AUTH_METHOD=trust), then start it. Fail loudly if
       # the image ever stops providing these paths.
+      #
+      # Every fixture drops and recreates `public`, and each of those commits
+      # waits on a WAL flush, which is slow on the runner's disk. The database
+      # is thrown away with the runner, so durability buys nothing here; the
+      # settings go in before the service starts so no restart is needed.
       - name: Start PostgreSQL
         shell: pwsh
         run: |
@@ -103,8 +109,10 @@ jobs:
             throw "PGDATA/PGBIN not set by the runner image; update this step"
           }
           Set-Content -Path "$env:PGDATA\pg_hba.conf" -Value "host all all 127.0.0.1/32 trust`nhost all all ::1/128 trust"
+          Add-Content -Path "$env:PGDATA\postgresql.conf" -Value "`nfsync = off`nsynchronous_commit = off`nfull_page_writes = off"
           Get-Service -Name postgresql* | Set-Service -StartupType Manual -PassThru | Start-Service
           & "$env:PGBIN\pg_isready" -h localhost -t 30
+          & "$env:PGBIN\psql" -h localhost -U postgres -Atc "SHOW fsync"
           # `make test` wipes the database through psql first, and the image
           # leaves PGBIN off PATH, so put it on.
           Add-Content -Path $env:GITHUB_PATH -Value $env:PGBIN
