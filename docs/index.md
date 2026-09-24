@@ -18,17 +18,6 @@ schema in SQL; pistachio generates the DDL diff.
     runs `pista diff` on two schemas you edit in the page and shows the DDL it
     generates. Nothing to install.
 
-!!! warning "Changed in 1.52.0"
-    Options such as `-c` and `-n` now go after the subcommand, not before it.
-
-    ```bash
-    pista -n myschema -c postgres://user@host/db dump   # before 1.52.0
-    pista dump -n myschema -c postgres://user@host/db   # 1.52.0 and later
-    ```
-
-    `-C` / `--config`, `--pager` and `--version` are unchanged, and so are the
-    environment variables and the config file.
-
 ![pistachio workflow](workflow.svg)
 
 <video src="https://github.com/user-attachments/assets/7db0e761-2446-47cd-9e00-f37b1152dcff"

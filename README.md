@@ -10,18 +10,6 @@ Declarative schema management tool for PostgreSQL with a Terraform-like plan/app
 > [!TIP]
 > **[Try pistachio in your browser](https://pistachio-demo.winebarrel.workers.dev)**: edit two schemas and see the DDL `pista diff` generates. Nothing to install.
 
-<!-- Keeps the two alerts apart. -->
-
-> [!WARNING]
-> **Changed in 1.52.0**: Options such as `-c` and `-n` now go after the subcommand, not before it.
->
-> ```bash
-> pista -n myschema -c postgres://user@host/db dump   # before 1.52.0
-> pista dump -n myschema -c postgres://user@host/db   # 1.52.0 and later
-> ```
->
-> `-C` / `--config`, `--pager` and `--version` are unchanged, and so are the environment variables and the config file.
-
 **[Documentation](https://winebarrel.github.io/pistachio/)** | [Getting Started](https://winebarrel.github.io/pistachio/getting-started/) | [Commands](https://winebarrel.github.io/pistachio/reference/commands/) | [Supported objects](https://winebarrel.github.io/pistachio/reference/objects/) | [Design and scope](https://winebarrel.github.io/pistachio/about/design/)
 
 ## Workflow
