@@ -7,6 +7,9 @@
 
 Declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL; pistachio generates the DDL diff.
 
+> [!TIP]
+> **[Try pistachio in your browser](https://pistachio-demo.winebarrel.workers.dev)**: edit two schemas and see the DDL `pista diff` generates. Nothing to install.
+
 > [!WARNING]
 > **Changed in 1.52.0**: Options such as `-c` and `-n` now go after the subcommand, not before it.
 >
@@ -51,6 +54,12 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 | Windows | amd64        |
 
 ## Demo
+
+### In the browser
+
+The [pistachio playground](https://pistachio-demo.winebarrel.workers.dev) runs `pista diff` on two schemas you edit in the page. No database is involved, so it shows the DDL without applying it.
+
+### With Docker
 
 A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
 

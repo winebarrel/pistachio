@@ -13,6 +13,11 @@ plan/apply workflow, built on
 [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired
 schema in SQL; pistachio generates the DDL diff.
 
+!!! tip "Try it in your browser"
+    The **[pistachio playground](https://pistachio-demo.winebarrel.workers.dev)**
+    runs `pista diff` on two schemas you edit in the page and shows the DDL it
+    generates. Nothing to install.
+
 !!! warning "Changed in 1.52.0"
     Options such as `-c` and `-n` now go after the subcommand, not before it.
 
@@ -29,6 +34,13 @@ schema in SQL; pistachio generates the DDL diff.
 <video src="https://github.com/user-attachments/assets/7db0e761-2446-47cd-9e00-f37b1152dcff"
        width="800" style="max-width: 100%"
        controls autoplay muted loop playsinline></video>
+
+## Try it in your browser
+
+The [pistachio playground](https://pistachio-demo.winebarrel.workers.dev)
+runs `pista diff` on two schemas you edit in the page. No database is involved,
+so it shows the DDL without applying it. To run `plan` and `apply` against a
+real database, use the Docker image below.
 
 ## Try it with Docker
 
