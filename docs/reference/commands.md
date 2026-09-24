@@ -223,6 +223,12 @@ Flags:
                                 and foreign key as validated: ignore NOT
                                 VALID and never emit VALIDATE CONSTRAINT
                                 ($PISTA_ASSUME_VALIDATED).
+      --explain                 Comment each statement that scans or rewrites
+                                a table with what it does and what its lock
+                                blocks. No database is read, so no size
+                                is shown, and a type change or a default
+                                that calls a function reads as may rewrite
+                                ($PISTA_EXPLAIN).
       --check                   Exit with code 2 when the diff contains
                                 executable changes ($PISTA_CHECK).
 ```
@@ -597,6 +603,8 @@ pista diff --git origin/main...HEAD schema/tables.sql schema/indexes.sql
 pista diff --check --git origin/main...HEAD schema.sql
 echo $?  # 0: no changes, 2: changes, 1: error
 ```
+
+`--explain` comments each statement the way `plan --explain` does. No database is read, so the comment carries no size, and a column type change or an added column whose default calls a function reads `may rewrite`, since only the server can say whether it rewrites the table. Also available as `$PISTA_EXPLAIN`. See [Explaining a plan](../guides/explaining-plans.md).
 
 A `-- pista:execute` statement is not part of the output: it is not schema state, and its check SQL cannot be evaluated without a database. `apply` runs execute statements as usual.
 

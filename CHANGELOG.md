@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Add `--explain` to `diff`. It comments each statement the way `plan --explain` does, without the table sizes, and a type change or a default that calls a function reads `may rewrite`, since there is no server to ask.
+
 ## [1.64.0] - 2026-09-24
 
 * A view that selects a bare string or `NULL` constant, such as `SELECT id, 'i' AS src FROM items`, no longer plans `CREATE OR REPLACE VIEW` on every run. The catalog prints the constant as `'i'::text`.
