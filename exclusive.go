@@ -56,7 +56,7 @@ func (d *UnsignedDuration) UnmarshalText(text []byte) error {
 func tryExclusive(ctx context.Context, conn *pgx.Conn) (bool, error) {
 	var acquired bool
 	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1, hashtext(current_database()))", exclusiveLockClassID).Scan(&acquired); err != nil {
-		return false, fmt.Errorf("pistachio: failed to acquire the apply exclusion: %w", err)
+		return false, fmt.Errorf("failed to acquire the apply exclusion: %w", err)
 	}
 	return acquired, nil
 }
@@ -93,7 +93,7 @@ func acquireExclusive(ctx context.Context, conn *pgx.Conn, wait *UnsignedDuratio
 		return nil
 	}
 	if wait == nil {
-		return errors.New("pistachio: another exclusive apply is running (--exclusive-wait waits for it)")
+		return errors.New("another exclusive apply is running (--exclusive-wait waits for it)")
 	}
 
 	fmt.Fprintln(w, "-- Waiting for another exclusive apply to finish") //nolint:errcheck
@@ -114,9 +114,9 @@ func acquireExclusive(ctx context.Context, conn *pgx.Conn, wait *UnsignedDuratio
 			// The caller's own context going away, Ctrl-C for example, is not
 			// the wait running out.
 			if ctx.Err() != nil {
-				return fmt.Errorf("pistachio: failed to acquire the apply exclusion: %w", ctx.Err())
+				return fmt.Errorf("failed to acquire the apply exclusion: %w", ctx.Err())
 			}
-			return fmt.Errorf("pistachio: another exclusive apply did not finish within %s", time.Duration(*wait))
+			return fmt.Errorf("another exclusive apply did not finish within %s", time.Duration(*wait))
 		case <-ticker.C:
 		}
 

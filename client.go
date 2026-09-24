@@ -36,11 +36,11 @@ func NewClient(options *Options) *Client {
 // route changes through search_path into an unintended schema.
 func (client *Client) validateSchemas() error {
 	if len(client.Schemas) == 0 {
-		return errors.New("pistachio: at least one schema must be specified in Options.Schemas")
+		return errors.New("at least one schema must be specified with --schemas")
 	}
 	for _, s := range client.Schemas {
 		if strings.TrimSpace(s) == "" {
-			return errors.New("pistachio: Options.Schemas must not contain empty or whitespace-only entries")
+			return errors.New("--schemas must not contain empty or whitespace-only entries")
 		}
 	}
 	return nil
@@ -49,7 +49,7 @@ func (client *Client) validateSchemas() error {
 func (client *Client) buildConnConfig() (*pgx.ConnConfig, error) {
 	cfg, err := pgx.ParseConfig(client.ConnString)
 	if err != nil {
-		return nil, fmt.Errorf("pistachio: failed to parse connection string: %w", err)
+		return nil, fmt.Errorf("failed to parse connection string: %w", err)
 	}
 
 	if client.DBName != "" {
@@ -153,7 +153,7 @@ func (client *Client) connect(ctx context.Context, readOnly bool) (*pgx.Conn, er
 
 	conn, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("pistachio: failed to connect database: %w", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	return conn, nil

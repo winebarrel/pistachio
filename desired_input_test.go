@@ -37,7 +37,7 @@ func TestPlan_SyntaxErrorWithoutDatabase(t *testing.T) {
 	_, err := unreachableClient().Plan(context.Background(), &PlanOptions{Files: []string{path}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `syntax error at or near "TABEL"`)
-	assert.NotContains(t, err.Error(), "failed to connect database")
+	assert.NotContains(t, err.Error(), "failed to connect to database")
 }
 
 func TestApply_SyntaxErrorWithoutDatabase(t *testing.T) {
@@ -46,7 +46,7 @@ func TestApply_SyntaxErrorWithoutDatabase(t *testing.T) {
 	_, err := unreachableClient().Apply(context.Background(), &ApplyOptions{Files: []string{path}}, io.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `syntax error at or near "TABEL"`)
-	assert.NotContains(t, err.Error(), "failed to connect database")
+	assert.NotContains(t, err.Error(), "failed to connect to database")
 }
 
 func TestPlan_MissingDesiredFileWithoutDatabase(t *testing.T) {
@@ -55,7 +55,7 @@ func TestPlan_MissingDesiredFileWithoutDatabase(t *testing.T) {
 	_, err := unreachableClient().Plan(context.Background(), &PlanOptions{Files: []string{missing}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read SQL file")
-	assert.NotContains(t, err.Error(), "failed to connect database")
+	assert.NotContains(t, err.Error(), "failed to connect to database")
 }
 
 func TestPlan_MissingPreSQLFileWithoutDatabase(t *testing.T) {
@@ -68,7 +68,7 @@ func TestPlan_MissingPreSQLFileWithoutDatabase(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read pre-SQL file")
-	assert.NotContains(t, err.Error(), "failed to connect database")
+	assert.NotContains(t, err.Error(), "failed to connect to database")
 }
 
 func TestApply_MissingConcurrentlyPreSQLFileWithoutDatabase(t *testing.T) {
@@ -81,7 +81,7 @@ func TestApply_MissingConcurrentlyPreSQLFileWithoutDatabase(t *testing.T) {
 	}, io.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read concurrently-pre-SQL file")
-	assert.NotContains(t, err.Error(), "failed to connect database")
+	assert.NotContains(t, err.Error(), "failed to connect to database")
 }
 
 // A schema file that parses still needs the database, so the run gets no
@@ -91,5 +91,5 @@ func TestPlan_ValidSchemaStillNeedsDatabase(t *testing.T) {
 
 	_, err := unreachableClient().Plan(context.Background(), &PlanOptions{Files: []string{path}})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to connect database")
+	assert.Contains(t, err.Error(), "failed to connect to database")
 }

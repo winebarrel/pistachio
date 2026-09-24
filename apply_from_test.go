@@ -385,7 +385,7 @@ CREATE TABLE public.users (
 		var buf bytes.Buffer
 		_, err := client.ApplyFrom(ctx, &ApplyFromOptions{PlanFile: path}, &buf)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to connect database")
+		assert.Contains(t, err.Error(), "failed to connect to database")
 	})
 
 	// The schemas, the schema map and the search path are restored from the
