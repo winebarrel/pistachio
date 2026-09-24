@@ -1351,31 +1351,17 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 	return nil
 }
 
-// foldConstraintAttrs applies the DEFERRABLE / INITIALLY clauses written on a
-// column to the constraint before them. The grammar gives each clause its own
-// node in ColumnDef.Constraints rather than setting it on the constraint, as
-// PostgreSQL's transformConstraintAttrs does. INITIALLY DEFERRED alone implies
-// DEFERRABLE there too.
+// foldConstraintAttrs applies the DEFERRABLE and INITIALLY clauses written on
+// a column to the constraint before them, as PostgreSQL's
+// transformConstraintAttrs does. The grammar gives each clause its own node in
+// ColumnDef.Constraints. INITIALLY DEFERRED implies DEFERRABLE.
 func foldConstraintAttrs(nodes []*pg_query.Node) {
-	var last *pg_query.Constraint
+	// A clause with no constraint before it lands here. PostgreSQL rejects
+	// the statement when it runs.
+	last := &pg_query.Constraint{}
 	for _, n := range nodes {
 		con := n.GetConstraint()
-		if con == nil {
-			continue
-		}
-		switch con.Contype {
-		case pg_query.ConstrType_CONSTR_ATTR_DEFERRABLE, pg_query.ConstrType_CONSTR_ATTR_NOT_DEFERRABLE,
-			pg_query.ConstrType_CONSTR_ATTR_DEFERRED, pg_query.ConstrType_CONSTR_ATTR_IMMEDIATE:
-		default:
-			last = con
-			continue
-		}
-		// A clause with no constraint before it is an error PostgreSQL
-		// reports when the statement runs.
-		if last == nil {
-			continue
-		}
-		switch con.Contype {
+		switch con.GetContype() {
 		case pg_query.ConstrType_CONSTR_ATTR_DEFERRABLE:
 			last.Deferrable = true
 		case pg_query.ConstrType_CONSTR_ATTR_NOT_DEFERRABLE:
@@ -1385,6 +1371,10 @@ func foldConstraintAttrs(nodes []*pg_query.Node) {
 			last.Deferrable = true
 		case pg_query.ConstrType_CONSTR_ATTR_IMMEDIATE:
 			last.Initdeferred = false
+		default:
+			if con != nil {
+				last = con
+			}
 		}
 	}
 }
