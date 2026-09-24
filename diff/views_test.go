@@ -286,6 +286,39 @@ func TestDiffViews_rename_sourceNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "rename source")
 }
 
+func TestDiffViews_rename_matviewKeepsIndexes(t *testing.T) {
+	currentIndexes := orderedmap.New[string, *model.Index]()
+	currentIndexes.Set("mv_ix", &model.Index{Schema: "public", Name: "mv_ix", Table: "mv", Definition: "CREATE INDEX mv_ix ON public.mv USING btree (a)"})
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{Schema: "public", Name: "mv", Materialized: true, Definition: "SELECT 1 AS a", Indexes: currentIndexes})
+
+	oldName := "public.mv"
+	desiredIndexes := orderedmap.New[string, *model.Index]()
+	desiredIndexes.Set("mv_ix", &model.Index{Schema: "public", Name: "mv_ix", Table: "mv2", Definition: "CREATE INDEX mv_ix ON public.mv2 USING btree (a)"})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv2", &model.View{Schema: "public", Name: "mv2", RenameFrom: &oldName, Materialized: true, Definition: "SELECT 1 AS a", Indexes: desiredIndexes})
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER MATERIALIZED VIEW public.mv RENAME TO mv2;"}, result.CreateStmts)
+	assert.Empty(t, result.DropStmts)
+}
+
+func TestDiffViews_rename_matviewInvalidIndex_error(t *testing.T) {
+	currentIndexes := orderedmap.New[string, *model.Index]()
+	currentIndexes.Set("mv_ix", &model.Index{Schema: "public", Name: "mv_ix", Table: "mv", Definition: "NOT VALID SQL"})
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.mv", &model.View{Schema: "public", Name: "mv", Materialized: true, Definition: "SELECT 1 AS a", Indexes: currentIndexes})
+
+	oldName := "public.mv"
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.mv2", &model.View{Schema: "public", Name: "mv2", RenameFrom: &oldName, Materialized: true, Definition: "SELECT 1 AS a"})
+
+	_, err := DiffViews(current, desired, allowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse index definition")
+}
+
 func TestEqualViewDef_same(t *testing.T) {
 	assert.True(t, equalViewDef("SELECT 1", "SELECT 1"))
 }
