@@ -220,13 +220,14 @@ func stripSetOpBranchNames(node *pg_query.Node) {
 }
 
 func clearSetOpNames(ss *pg_query.SelectStmt, leftmost bool) {
+	// A branch's own ORDER BY can sort by its output names, so they count
+	// there. On a nested set operation those are the names of its leftmost
+	// SELECT.
 	if ss.Op != pg_query.SetOperation_SETOP_NONE {
-		clearSetOpNames(ss.Larg, leftmost)
+		clearSetOpNames(ss.Larg, leftmost || len(ss.SortClause) > 0)
 		clearSetOpNames(ss.Rarg, false)
 		return
 	}
-	// A branch's own ORDER BY can sort by its output names, so they count
-	// there.
 	if leftmost || len(ss.SortClause) > 0 {
 		return
 	}

@@ -431,6 +431,11 @@ func TestEqualViewDef_setOpBranchOrderBy(t *testing.T) {
 		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
 		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
 	))
+	// A nested set operation's ORDER BY can sort by its leftmost names.
+	assert.False(t, equalViewDef(
+		"SELECT 0 AS a, 0 AS b UNION ALL (SELECT 1 AS x, 9 AS y UNION ALL SELECT 3, 2 ORDER BY x LIMIT 1)",
+		"SELECT 0 AS a, 0 AS b UNION ALL (SELECT 1 AS y, 9 AS x UNION ALL SELECT 3, 2 ORDER BY x LIMIT 1)",
+	))
 	// Without an ORDER BY, a LIMIT does not refer to the names.
 	assert.True(t, equalViewDef(
 		"SELECT a FROM t UNION (SELECT t.b AS a FROM t LIMIT 1)",
