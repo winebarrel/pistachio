@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.t (
+      a timestamp with time zone DEFAULT now()::timestamp(0) with time zone
+  );
+desired: |
+  CREATE TABLE public.t (
+      a timestamp with time zone DEFAULT now()::timestamp(3) with time zone
+  );
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a timestamp with time zone DEFAULT (now())::timestamp(3) with time zone
+  );

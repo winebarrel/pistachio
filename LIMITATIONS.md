@@ -549,6 +549,27 @@ off where the elements already have the type.
 
 Origin: expression normalization review, 2026-09-20.
 
+## Some casts in a DEFAULT are not compared
+
+Priority: low.
+
+The catalog writes a literal with its type and drops a cast that changes
+nothing. So a cast on a literal is ignored, and so is a cast on an expression
+that only the desired side has. A cast in either place that changes the value
+goes unnoticed:
+
+```sql
+-- database
+CREATE TABLE t (n numeric DEFAULT 1.5, s text DEFAULT now());
+-- desired
+CREATE TABLE t (n numeric DEFAULT 1.5::integer, s text DEFAULT now()::date);
+```
+
+The plan reports no changes. Telling the two kinds of cast apart needs the
+type of the expression under the cast, which only the database knows.
+
+Origin: default cast review, 2026-09-24.
+
 ## Perpetual drift on a schema-qualified sequence in a column DEFAULT
 
 Priority: low.
@@ -569,7 +590,8 @@ normalization of any kind beyond the walk.
 A function moved between two schemas is the cost of the symmetric strip:
 `a.f(v)` and `b.f(v)` compare equal, so the move produces no diff. This is the
 tradeoff a view body's table reference already carries, and an exclusion
-element's `OPERATOR(a.=)` carries it too since #507. Telling them apart
+element's `OPERATOR(a.=)` carries it too since #507, as does the type of a
+cast on an expression in a DEFAULT. Telling them apart
 means the search_path-aware stripping described in the cross-schema user-type
 entry above, which the diff cannot do today because it does not thread the
 schema list.

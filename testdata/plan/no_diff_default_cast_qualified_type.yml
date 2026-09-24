@@ -1,0 +1,13 @@
+# The catalog writes the type in a cast without its schema when the schema is
+# on the search_path, so a desired cast that names the schema still matches.
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.t (
+      s public.status DEFAULT lower('ACTIVE')::public.status
+  );
+desired: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.t (
+      s public.status DEFAULT lower('ACTIVE')::public.status
+  );
+plan: ""

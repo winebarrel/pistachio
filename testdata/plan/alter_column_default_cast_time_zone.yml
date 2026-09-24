@@ -1,0 +1,12 @@
+# Dropping the time zone from a cast in a timestamptz default is a change of
+# type, so it is set.
+init: |
+  CREATE TABLE public.t (
+      a timestamp(0) with time zone NOT NULL DEFAULT now()::timestamp(0) with time zone
+  );
+desired: |
+  CREATE TABLE public.t (
+      a timestamp(0) with time zone NOT NULL DEFAULT now()::timestamp(0)
+  );
+plan: |
+  ALTER TABLE public.t ALTER COLUMN a SET DEFAULT now()::timestamp(0);

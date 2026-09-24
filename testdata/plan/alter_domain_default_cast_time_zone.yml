@@ -1,0 +1,7 @@
+# A domain default is compared the way a column default is.
+init: |
+  CREATE DOMAIN public.ts AS timestamp with time zone DEFAULT now()::timestamp(0) with time zone;
+desired: |
+  CREATE DOMAIN public.ts AS timestamp with time zone DEFAULT now()::timestamp(0);
+plan: |
+  ALTER DOMAIN public.ts SET DEFAULT now()::timestamp(0);
