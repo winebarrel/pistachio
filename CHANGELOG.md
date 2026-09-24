@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.65.0] - 2026-09-25
 
 * Add `--explain` to `diff`. It writes the comment `plan --explain` does, without sizes, and marks a type change or a default that calls a function `may rewrite`.
 
