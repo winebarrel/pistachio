@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.64.0] - 2026-09-24
 
 * A view that selects a bare string or `NULL` constant, such as `SELECT id, 'i' AS src FROM items`, no longer plans `CREATE OR REPLACE VIEW` on every run. The catalog prints the constant as `'i'::text`.
 
