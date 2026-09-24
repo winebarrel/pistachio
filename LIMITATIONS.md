@@ -23,6 +23,14 @@ PostgreSQL updates such a reference itself on RENAME, so the second run is
 clean and only the first plan carries a redundant drop and create for the
 dependent object. Closing it needs cross-object awareness in the diff phase.
 
+A rename of an enum, domain, composite type or sequence is carried into the
+type of a column, a composite attribute or a domain, and into a `nextval()`
+default. It is not carried into a type named inside an expression, such as a
+cast in a CHECK constraint, an index expression or a view, or into a routine's
+arguments, so the first plan drops and adds such a constraint. A reference
+written without its schema is carried only when that schema is on
+`--search-path`, since the catalog writes it that way only then.
+
 A column rename does not reach a partition child either. `diffTable` takes a
 separate branch for one, which returns before the rewrite block, and a
 `PARTITION OF` child declares no columns, so its own rename map is empty. A

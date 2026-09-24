@@ -1,0 +1,21 @@
+init: |
+  CREATE DOMAIN public.positive_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+  CREATE TYPE public.measure AS (value public.positive_int);
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty public.positive_int,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.item_qty AS SELECT id, qty FROM public.items;
+desired: |
+  -- pista:renamed-from public.positive_int
+  CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+  CREATE TYPE public.measure AS (value public.pos_int);
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      qty public.pos_int,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.item_qty AS SELECT id, qty FROM public.items;
+plan: |
+  ALTER DOMAIN public.positive_int RENAME TO pos_int;

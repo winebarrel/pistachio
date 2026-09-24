@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -324,6 +325,27 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		assumeValidatedConstraints(filteredTables, desiredTables, filteredDomains, desiredDomains)
 	}
 
+	// The Diff* functions below read the current side with renamed types and
+	// sequences carried into their references. orderStatements keeps the
+	// catalog's names, which the drop order of the current side is built on.
+	currentTables, currentDomains, currentCompositeTypes := filteredTables, filteredDomains, filteredCompositeTypes
+	refs := &referenceRenames{
+		types: slices.Concat(
+			collectRenames(filteredEnums, desiredEnums, func(e *model.Enum) (string, string, *string) { return e.Schema, e.Name, e.RenameFrom }),
+			collectRenames(filteredDomains, desiredDomains, func(d *model.Domain) (string, string, *string) { return d.Schema, d.Name, d.RenameFrom }),
+			collectRenames(filteredCompositeTypes, desiredCompositeTypes, func(ct *model.CompositeType) (string, string, *string) {
+				return ct.Schema, ct.Name, ct.RenameFrom
+			}),
+		),
+		sequences:  collectRenames(filteredSequences, desiredSequences, func(s *model.Sequence) (string, string, *string) { return s.Schema, s.Name, s.RenameFrom }),
+		searchPath: splitSearchPath(client.searchPath()),
+	}
+	if len(refs.types) > 0 || len(refs.sequences) > 0 {
+		currentTables = refs.applyTables(filteredTables)
+		currentDomains = refs.applyDomains(filteredDomains)
+		currentCompositeTypes = refs.applyCompositeTypes(filteredCompositeTypes)
+	}
+
 	enumDiff, err := diff.DiffEnums(filteredEnums, desiredEnums, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff enums: %w", err)
@@ -334,17 +356,17 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		return nil, fmt.Errorf("failed to diff sequences: %w", err)
 	}
 
-	domainDiff, err := diff.DiffDomains(filteredDomains, desiredDomains, &options.DropPolicy)
+	domainDiff, err := diff.DiffDomains(currentDomains, desiredDomains, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff domains: %w", err)
 	}
 
-	compositeTypeDiff, err := diff.DiffCompositeTypes(filteredCompositeTypes, desiredCompositeTypes, &options.DropPolicy)
+	compositeTypeDiff, err := diff.DiffCompositeTypes(currentCompositeTypes, desiredCompositeTypes, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff composite types: %w", err)
 	}
 
-	tableDiff, err := diff.DiffTables(filteredTables, desiredTables, &options.DropPolicy)
+	tableDiff, err := diff.DiffTables(currentTables, desiredTables, &options.DropPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}

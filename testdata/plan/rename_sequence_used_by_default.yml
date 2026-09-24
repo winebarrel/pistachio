@@ -1,0 +1,21 @@
+init: |
+  CREATE SEQUENCE public.order_seq;
+  CREATE SEQUENCE public."Invoice_Seq";
+  CREATE TABLE public.orders (
+      id integer DEFAULT nextval('public.order_seq') NOT NULL,
+      invoice_no integer DEFAULT nextval('public."Invoice_Seq"'),
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:renamed-from public.order_seq
+  CREATE SEQUENCE public.order_id_seq;
+  -- pista:renamed-from public."Invoice_Seq"
+  CREATE SEQUENCE public."InvoiceNo_Seq";
+  CREATE TABLE public.orders (
+      id integer DEFAULT nextval('order_id_seq'::regclass) NOT NULL,
+      invoice_no integer DEFAULT nextval('"InvoiceNo_Seq"'::regclass),
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER SEQUENCE public.order_seq RENAME TO order_id_seq;
+  ALTER SEQUENCE public."Invoice_Seq" RENAME TO "InvoiceNo_Seq";

@@ -1,0 +1,20 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status public.status,
+      note public.status,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+desired: |
+  -- pista:renamed-from public.status
+  CREATE TYPE public.user_status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status public.user_status,
+      note text,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TYPE public.status RENAME TO user_status;
+  ALTER TABLE public.users ALTER COLUMN note SET DATA TYPE text;

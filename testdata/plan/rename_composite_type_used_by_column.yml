@@ -1,0 +1,21 @@
+init: |
+  CREATE TYPE public.address AS (street text, city text);
+  CREATE TYPE public.contact AS (home public.address, others public.address[]);
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      addr public.address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_addrs AS SELECT id, addr FROM public.users;
+desired: |
+  -- pista:renamed-from public.address
+  CREATE TYPE public.postal_address AS (street text, city text);
+  CREATE TYPE public.contact AS (home public.postal_address, others public.postal_address[]);
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      addr public.postal_address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_addrs AS SELECT id, addr FROM public.users;
+plan: |
+  ALTER TYPE public.address RENAME TO postal_address;
