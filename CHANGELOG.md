@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* Renaming a table or view with `-- pista:renamed-from` no longer re-creates its unchanged triggers. PostgreSQL moves the triggers with the rename.
+
 * A view or materialized view over `UNION`, `INTERSECT` or `EXCEPT` no longer plans a replacement on every run. The output names PostgreSQL writes onto the later `SELECT`s are ignored in the comparison.
 
 * `-- pista:renamed-from` on an index of a materialized view now plans `ALTER INDEX ... RENAME TO`. The directive was ignored, so the index was dropped and created again.

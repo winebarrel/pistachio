@@ -506,3 +506,62 @@ func TestRewriteColumnRefsInGenerated_NoCascadeOnChain(t *testing.T) {
 	require.True(t, ok)
 	assert.Contains(t, *got.Default, "b + c")
 }
+
+func triggersOnOldT(defs ...string) *orderedmap.Map[string, *model.Trigger] {
+	m := orderedmap.New[string, *model.Trigger]()
+	for i, def := range defs {
+		name := string(rune('a' + i))
+		m.Set(name, &model.Trigger{Schema: "public", Table: "old_t", Name: name, Definition: def})
+	}
+	return m
+}
+
+func TestRenameTriggerRelation(t *testing.T) {
+	got, err := renameTriggerRelation(triggersOnOldT(
+		"CREATE TRIGGER a BEFORE INSERT ON old_t FOR EACH ROW EXECUTE FUNCTION f()",
+		"CREATE TRIGGER b BEFORE INSERT ON s.old_t FOR EACH ROW EXECUTE FUNCTION f()",
+	), "new_t")
+	require.NoError(t, err)
+	assert.Equal(t, "new_t", got.Get("a").Table)
+	assert.Equal(t, "CREATE TRIGGER a BEFORE INSERT ON new_t FOR EACH ROW EXECUTE FUNCTION f()", got.Get("a").Definition)
+	assert.Equal(t, "CREATE TRIGGER b BEFORE INSERT ON s.new_t FOR EACH ROW EXECUTE FUNCTION f()", got.Get("b").Definition)
+}
+
+func TestRenameTriggerRelation_ParseError(t *testing.T) {
+	_, err := renameTriggerRelation(triggersOnOldT("NOT VALID SQL"), "new_t")
+	require.ErrorContains(t, err, "failed to parse trigger definition")
+}
+
+func TestRenameTriggerRelation_EmptyInput(t *testing.T) {
+	_, err := renameTriggerRelation(triggersOnOldT(""), "new_t")
+	require.ErrorContains(t, err, "unexpected parse result for trigger definition")
+}
+
+func TestRenameTriggerRelation_NotTriggerStmt(t *testing.T) {
+	_, err := renameTriggerRelation(triggersOnOldT("SELECT 1"), "new_t")
+	require.ErrorContains(t, err, "expected CreateTrigStmt")
+}
+
+func TestDiffTables_RenameWithBadTrigger(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	cur := newTable("public", "old_t")
+	cur.Triggers = triggersOnOldT("NOT VALID SQL")
+	current.Set("public.old_t", cur)
+	desired := orderedmap.New[string, *model.Table]()
+	des := newTable("public", "new_t")
+	des.RenameFrom = new("public.old_t")
+	desired.Set("public.new_t", des)
+
+	_, err := DiffTables(current, desired, allowAllDrops{})
+	require.ErrorContains(t, err, "failed to parse trigger definition")
+}
+
+func TestDiffViews_RenameWithBadTrigger(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Triggers: triggersOnOldT("NOT VALID SQL")})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v2", &model.View{Schema: "public", Name: "v2", RenameFrom: new("public.v1"), Definition: "SELECT 1"})
+
+	_, err := DiffViews(current, desired, allowAllDrops{})
+	require.ErrorContains(t, err, "failed to parse trigger definition")
+}
