@@ -309,11 +309,11 @@ every plan when the type's schema differs from the container's own schema. The
 catalog reads the type via `format_type`, which returns it unqualified when its
 schema is on `--search-path`, while the desired parser keeps the qualified form.
 The diff (`equalTypeName`) strips the container's own schema from both sides, so
-`home public.addr` on a table in `public` no longer drifts, but a type in a
-schema other than its table's or composite type's that `--search-path` also
-names (`--search-path public,shared` for a type in `shared`) is still compared
-qualified-vs-unqualified and emits a redundant `SET DATA TYPE`. With the default
-`--search-path public` it does not happen.
+`home public.addr` on a table in `public` no longer drifts, but a type whose
+schema is on `--search-path` and differs from its table's or composite type's is
+still compared qualified-vs-unqualified and emits a redundant `SET DATA TYPE`.
+With the default `--search-path public`, that is a `public` type used from a
+table in another schema, such as `a public.addr` on `app.t`.
 
 Closing it fully needs the target-schema list in the diff (to strip any
 search-path schema, not just the container's own), which the diff does not
