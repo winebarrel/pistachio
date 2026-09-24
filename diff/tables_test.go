@@ -1839,6 +1839,9 @@ func TestDiffForeignKeys_crossSchemaRef(t *testing.T) {
 		// A hand-written bare name for a table in the owning table's schema
 		// matches the catalog's qualified one, whatever the parser took it for.
 		{"bare in owning schema", fk("FOREIGN KEY (base_id) REFERENCES app.base(id)", "app"), fk(bare, "public"), false},
+		// The catalog qualifies public.base under an empty search_path, and a
+		// bare desired name the parser put in public matches it.
+		{"bare desired in public", fk("FOREIGN KEY (base_id) REFERENCES public.base(id)", "public"), fk(bare, "public"), false},
 		{"moved to another schema", fk(bare, "public"), fk("FOREIGN KEY (base_id) REFERENCES other.base(id)", "other"), true},
 	}
 	for _, tt := range tests {
