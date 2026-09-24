@@ -835,7 +835,7 @@ func (ex *explainer) render(eff explainEffect) string {
 	}
 	parts := make([]string, len(eff.targets))
 	for i, tg := range eff.targets {
-		parts[i] = ex.renderTarget(tg)
+		parts[i] = ex.renderTarget(tg, eff.touch == touchMayRewrite)
 	}
 	return fmt.Sprintf("-- %s, %s: %s", eff.touch, eff.block, strings.Join(parts, ", "))
 }
@@ -850,7 +850,7 @@ func (ex *explainer) render(eff explainEffect) string {
 // zone, and over several relations it is the oldest of them, since the sum is
 // no fresher than its stalest part. It is left out when the server no longer
 // remembers a time.
-func (ex *explainer) renderTarget(tg explainTarget) string {
+func (ex *explainer) renderTarget(tg explainTarget, mayRewrite bool) string {
 	t, ok := ex.current.GetOk(tg.key)
 	if !ok {
 		if old, aliased := ex.tableAlias[tg.key]; aliased {
@@ -870,7 +870,11 @@ func (ex *explainer) renderTarget(tg explainTarget) string {
 		details = sizeDetails(ex.stats, relations)
 	}
 	if tg.rebuilt > 0 {
-		details = append(details, plural(tg.rebuilt, "index", "indexes")+" rebuilt")
+		rebuilt := " rebuilt"
+		if mayRewrite {
+			rebuilt = " may be rebuilt"
+		}
+		details = append(details, plural(tg.rebuilt, "index", "indexes")+rebuilt)
 	}
 	if tg.descendants > 0 {
 		details = append(details, pluralize(tg.descendants, tg.descendantKind))

@@ -29,12 +29,12 @@ diff: |
       id integer NOT NULL
   );
   CREATE INDEX items_id_idx ON public.items USING btree (id);
-  -- may rewrite, blocks reads and writes: public.orders (2 indexes rebuilt)
+  -- may rewrite, blocks reads and writes: public.orders (2 indexes may be rebuilt)
   ALTER TABLE public.orders ADD COLUMN created_at timestamp with time zone DEFAULT now();
   ALTER TABLE public.orders ADD COLUMN flag integer DEFAULT 0;
   -- rewrite, blocks reads and writes: public.orders (2 indexes rebuilt)
   ALTER TABLE public.orders ADD COLUMN seq integer GENERATED ALWAYS AS IDENTITY;
-  -- may rewrite, blocks reads and writes: public.orders (2 indexes rebuilt)
+  -- may rewrite, blocks reads and writes: public.orders (2 indexes may be rebuilt)
   ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE bigint;
   -- scan, blocks reads and writes: public.orders
   ALTER TABLE public.orders ALTER COLUMN note SET NOT NULL;
