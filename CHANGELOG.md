@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.63.0] - 2026-09-24
 
 * A column or domain `DEFAULT` whose cast on an expression changes is now planned, such as `now()::date` becoming `now()`, or `::timestamp(0) with time zone` becoming `::timestamp(0)`. The cast was ignored in the comparison.
 
