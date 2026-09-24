@@ -35,9 +35,9 @@ signature next to a drop of the old one.
 A reference written without its schema is carried only when that schema is on
 `--search-path`, since the catalog writes it that way only then. `$user` in the
 path is not expanded, so a schema named after the role counts only when the
-path names it. When two
-schemas on the path hold a type of the same name, a bare reference is taken to
-mean the renamed one even where it resolves to the other.
+path names it. When two schemas on the path hold a type of the same name, a
+bare reference is taken to mean the renamed one even where it resolves to the
+other.
 
 A column rename does not reach a partition child either. `diffTable` takes a
 separate branch for one, which returns before the rewrite block, and a
@@ -321,6 +321,35 @@ search-path schema, not just the container's own), which the diff does not
 thread today. Workaround: write such a reference unqualified.
 
 Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
+
+## A foreign key moved between same-named tables in two schemas is missed
+
+A foreign key reference written without a schema on one side and with it on
+the other is matched in two ways: through the schema the key records for the
+referenced table, and through the owning table's schema, which the diff also
+tries for the bare name since a hand-written one often means it. The second
+match hides a real change when two schemas hold a table of the same name. With
+`-n public,app` and both `public.base` and `app.base`:
+
+- A key on `app.item` that references `public.base` reads back from the
+  catalog as `REFERENCES base(id)`. A desired `REFERENCES app.base (id)`
+  matches it through the owning schema, so moving the key to `app.base`
+  plans nothing.
+- A key that references `app.base` reads back qualified. A desired bare
+  `REFERENCES base (id)`, which apply resolves to `public.base`, matches it
+  the same way.
+
+Matching the catalog side through its recorded schema alone would close the
+first case, but `pista diff` reads the current side from a file, where the
+schema recorded for a bare name is only the parser's first target schema, and
+it would then plan a change for a reference that only switched between the
+bare and the qualified spelling.
+
+Workaround: qualify a reference to a table outside the owning table's schema,
+which avoids the second case, and drop and re-add a key moved between
+same-named tables by hand.
+
+Origin: [#706](https://github.com/winebarrel/pistachio/pull/706).
 
 ## Sequence ownership transitions: `OWNED BY NONE` plans an unusable CREATE
 
@@ -720,11 +749,13 @@ A bare string or `NULL` constant on a view's `SELECT` target resolves to
 the bare constant. In a `UNION`, `INTERSECT` or `EXCEPT` the constant is
 resolved against the other branches instead: `SELECT name::varchar FROM t UNION
 SELECT 'x'` comes back with `'x'::character varying`, and `SELECT 1 UNION SELECT
-NULL` with `NULL::integer`. Those casts are compared, so the view is replaced on
-every plan. Accepting them would need the type of the leftmost branch's column,
-which the diff does not have. For the same reason, removing an explicit
-`::text` from a branch whose sibling is `varchar`, which changes the output
-type, is not seen as a change.
+NULL` with `NULL::integer`. Those casts are compared, so every plan drops and
+re-creates the view, and under the default drop policy it prints
+`-- skipped: DROP VIEW` and leaves the view as it was. Accepting the casts would
+need the type of the leftmost branch's column, which the diff does not have. For
+the same reason, removing an explicit `::text` from a branch that comes before
+a `varchar` one, which changes the output type from `text` to
+`character varying`, is not seen as a change.
 
 Workaround: write the constant the way `pista dump` emits it.
 
