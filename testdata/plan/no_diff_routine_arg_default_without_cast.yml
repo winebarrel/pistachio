@@ -2,11 +2,25 @@
 # 'x'::text. A default written without the cast is the same default.
 manage_routine: true
 init: |
+  CREATE TYPE public.mood AS ENUM ('happy', 'sad');
   CREATE FUNCTION public.fd(a text DEFAULT 'x', b integer DEFAULT NULL, c integer[] DEFAULT '{}') RETURNS text
       LANGUAGE sql
       AS $$ SELECT a $$;
+  CREATE FUNCTION public.fe(a varchar DEFAULT 'x', b public.mood DEFAULT 'happy', c text[] DEFAULT ARRAY['a', 'b'], d timestamptz DEFAULT now() - interval '1 day') RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+  CREATE PROCEDURE public.pd(IN "Arg" text DEFAULT 'x')
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;
 desired: |
+  CREATE TYPE public.mood AS ENUM ('happy', 'sad');
   CREATE FUNCTION public.fd(a text DEFAULT 'x', b integer DEFAULT NULL, c integer[] DEFAULT '{}') RETURNS text
       LANGUAGE sql
       AS $$ SELECT a $$;
+  CREATE FUNCTION public.fe(a varchar DEFAULT 'x', b public.mood DEFAULT 'happy', c text[] DEFAULT ARRAY['a', 'b'], d timestamptz DEFAULT now() - interval '1 day') RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+  CREATE PROCEDURE public.pd(IN "Arg" text DEFAULT 'x')
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;
 plan: ""

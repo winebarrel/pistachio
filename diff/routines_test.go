@@ -275,3 +275,19 @@ func TestDiffRoutines_ArgDefaultCast(t *testing.T) {
 		})
 	}
 }
+
+// A routine replaced for another reason is written with the default as the
+// desired side spells it.
+func TestDiffRoutines_ArgDefaultCastWithBodyChange(t *testing.T) {
+	current := newRoutine(func(r *model.Routine) { r.Args[0].Default = "NULL::integer" })
+	desired := newRoutine(func(r *model.Routine) {
+		r.Args[0].Default = "NULL"
+		r.Body = " SELECT a + 1 "
+	})
+	result, err := DiffRoutines(newRoutineMap(current), newRoutineMap(desired), allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.Stmts, 1)
+	assert.Contains(t, result.Stmts[0], "public.f(a integer DEFAULT NULL)")
+	assert.Contains(t, result.Stmts[0], "SELECT a + 1")
+	assert.Empty(t, result.DropStmts)
+}
