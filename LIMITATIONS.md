@@ -322,6 +322,35 @@ thread today. Workaround: write such a reference unqualified.
 
 Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
 
+## A foreign key moved between same-named tables in two schemas is missed
+
+A foreign key reference written without a schema on one side and with it on
+the other is matched in two ways: through the schema the key records for the
+referenced table, and through the owning table's schema, which is what a
+hand-written bare name usually means. The second match hides a real change
+when two schemas hold a table of the same name. With `-n public,app` and both
+`public.base` and `app.base`:
+
+- A key on `app.item` that references `public.base` reads back from the
+  catalog as `REFERENCES base(id)`. A desired `REFERENCES app.base (id)`
+  matches it through the owning schema, so moving the key to `app.base`
+  plans nothing.
+- A key that references `app.base` reads back qualified. A desired bare
+  `REFERENCES base (id)`, which apply resolves to `public.base`, matches it
+  the same way.
+
+Matching the catalog side through its recorded schema alone would close the
+first case, but `pista diff` reads the current side from a file, where the
+schema recorded for a bare name is only the parser's first target schema, and
+it would then plan a change for a reference that only switched between the
+bare and the qualified spelling.
+
+Workaround: qualify a reference to a table outside the owning table's schema,
+which avoids the second case, and drop and re-add a key moved between
+same-named tables by hand.
+
+Origin: [#706](https://github.com/winebarrel/pistachio/pull/706).
+
 ## Sequence ownership transitions: `OWNED BY NONE` plans an unusable CREATE
 
 Detaching a sequence from its column cannot be expressed. The parser reads
