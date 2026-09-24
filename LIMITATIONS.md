@@ -32,7 +32,9 @@ replaces a view that does, and plans a routine that takes the type as a new
 signature next to a drop of the old one.
 
 A reference written without its schema is carried only when that schema is on
-`--search-path`, since the catalog writes it that way only then. When two
+`--search-path`, since the catalog writes it that way only then. `$user` in the
+path is not expanded, so a schema named after the role counts only when the
+path names it. When two
 schemas on the path hold a type of the same name, a bare reference is taken to
 mean the renamed one even where it resolves to the other.
 
