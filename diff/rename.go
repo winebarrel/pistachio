@@ -143,21 +143,11 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 		renamed := *oldTable
 		renamed.Name = desiredTable.Name
 
-		// Update index definitions to reflect the new table name via pg_query parse/deparse
-		if renamed.Indexes.Len() > 0 {
-			newIndexes := orderedmap.New[string, *model.Index]()
-			for idxName, idx := range renamed.Indexes.All() {
-				idxCopy := *idx
-				idxCopy.Table = desiredTable.Name
-				updatedDef, err := updateIndexTableName(idx.Definition, desiredTable.Name)
-				if err != nil {
-					return nil, nil, err
-				}
-				idxCopy.Definition = updatedDef
-				newIndexes.Set(idxName, &idxCopy)
-			}
-			renamed.Indexes = newIndexes
+		indexes, err := renameIndexesRelation(renamed.Indexes, desiredTable.Name)
+		if err != nil {
+			return nil, nil, err
 		}
+		renamed.Indexes = indexes
 
 		// Update FK table name
 		if renamed.ForeignKeys.Len() > 0 {
@@ -174,6 +164,26 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 	}
 
 	return stmts, adjusted, nil
+}
+
+// renameIndexesRelation returns copies of indexes pointing at the renamed
+// relation, so a rename alone does not drop and re-create them.
+func renameIndexesRelation(indexes *orderedmap.Map[string, *model.Index], newName string) (*orderedmap.Map[string, *model.Index], error) {
+	if indexes == nil || indexes.Len() == 0 {
+		return indexes, nil
+	}
+	renamed := orderedmap.New[string, *model.Index]()
+	for idxName, idx := range indexes.All() {
+		idxCopy := *idx
+		idxCopy.Table = newName
+		def, err := updateIndexTableName(idx.Definition, newName)
+		if err != nil {
+			return nil, err
+		}
+		idxCopy.Definition = def
+		renamed.Set(idxName, &idxCopy)
+	}
+	return renamed, nil
 }
 
 // updateIndexTableName parses an index definition, updates the table name,
@@ -242,6 +252,11 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 		adjusted.Delete(oldKey)
 		renamed := *oldView
 		renamed.Name = desiredView.Name
+		indexes, err := renameIndexesRelation(renamed.Indexes, desiredView.Name)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		renamed.Indexes = indexes
 		adjusted.Set(newKey, &renamed)
 		renamedFrom[newKey] = oldKey
 	}
