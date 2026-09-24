@@ -24,8 +24,8 @@ var metaFlagTypes = map[reflect.Type]bool{
 // YAMLConfig is a kong.ConfigurationLoader that reads options from a YAML file.
 // Keys must exactly match CLI flag names (e.g. "conn-string"); snake_case or
 // camelCase variants are not accepted. Keys that do not match any flag are
-// rejected. Values only apply to flags not set on the command line; a config
-// file passed with --config takes precedence over environment variables.
+// rejected. Values only apply to flags not set on the command line or by an
+// environment variable.
 func YAMLConfig(r io.Reader) (kong.Resolver, error) {
 	values := map[string]any{}
 	if err := yaml.NewDecoder(r).Decode(&values); err != nil && !errors.Is(err, io.EOF) {
