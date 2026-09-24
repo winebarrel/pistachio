@@ -1641,6 +1641,48 @@ func TestEqualDefault_customNumericNamedTypeNotCoerced(t *testing.T) {
 	))
 }
 
+// A cast on an expression stays in the catalog only when it was written and
+// changes something, so it is compared rather than stripped.
+func TestEqualDefault_expressionCast(t *testing.T) {
+	cur := "(now())::timestamp(0) with time zone"
+
+	t.Run("same cast", func(t *testing.T) {
+		assert.True(t, equalDefault(new(cur), new("now()::timestamp(0) with time zone")))
+		assert.True(t, equalDefault(new(cur), new("now()::timestamptz(0)")))
+	})
+
+	t.Run("time zone dropped", func(t *testing.T) {
+		assert.False(t, equalDefault(new(cur), new("now()::timestamp(0)")))
+	})
+
+	t.Run("precision changed", func(t *testing.T) {
+		assert.False(t, equalDefault(new(cur), new("now()::timestamp(3) with time zone")))
+	})
+
+	t.Run("internal type name", func(t *testing.T) {
+		assert.True(t, equalDefault(new("(length('x'::text))::bigint"), new("length('x')::int8")))
+	})
+
+	t.Run("user-defined type", func(t *testing.T) {
+		// Only pg_catalog is dropped, so a type of the same name in another
+		// schema stays apart.
+		assert.False(t, equalDefault(new("(now())::myapp.timestamptz"), new("now()::timestamptz")))
+	})
+
+	t.Run("other type", func(t *testing.T) {
+		assert.False(t, equalDefault(new("(now())::date"), new("now()::timestamp")))
+	})
+
+	t.Run("cast removed", func(t *testing.T) {
+		assert.False(t, equalDefault(new("(now())::date"), new("now()")))
+	})
+
+	t.Run("cast that changes nothing", func(t *testing.T) {
+		// PostgreSQL drops it, so the catalog has none.
+		assert.True(t, equalDefault(new("now()"), new("now()::timestamptz")))
+	})
+}
+
 func TestCompareFKDef_formatting(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES users (id)"

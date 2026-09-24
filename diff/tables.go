@@ -2034,13 +2034,14 @@ func schemaOf(fqtn string) string {
 // pg_get_expr, and comparing the canonical deparsed forms.
 //
 // The handling has three layers:
-//  1. Top-level cast strip is symmetric; pg_get_expr always wraps DEFAULT
-//     values in a cast, while users routinely omit it; users who *do* write
-//     an explicit cast (`DEFAULT 0::integer`) also need to match a DB form
-//     that PG happened to store natively (`0`), so neither side keeps the
-//     wrapper. When the stripped Sval parses as a number and the peer side
-//     is a numeric A_Const, the Sval is coerced to Ival / Fval so the two
-//     deparse identically.
+//  1. A top-level cast on a literal is stripped on both sides; pg_get_expr
+//     spells a literal with its type, while users routinely omit it; users
+//     who *do* write an explicit cast (`DEFAULT 0::integer`) also need to
+//     match a DB form that PG happened to store natively (`0`), so neither
+//     side keeps the wrapper. When the stripped Sval parses as a number and
+//     the peer side is a numeric A_Const, the Sval is coerced to Ival / Fval
+//     so the two deparse identically. A top-level cast on an expression is
+//     compared instead, as the comment in the body describes.
 //  2. normalizeCheckExpr handles symmetric text-like cast strip, paren
 //     cleanup, and `= ANY(ARRAY[...])` <-> `IN (...)` on both sides.
 //  3. alignCurrentCasts handles the inner asymmetric strip (current has
@@ -2062,8 +2063,26 @@ func equalDefault(current, desired *string) bool {
 	if parseErrCur != nil || parseErrDes != nil {
 		return *current == *desired
 	}
-	curTarget.Val = stripDefaultTopLevelCast(curTarget.Val, desTarget.Val)
-	desTarget.Val = stripDefaultTopLevelCast(desTarget.Val, curTarget.Val)
+	// A cast on a literal is how the catalog spells the literal's type, so it
+	// is stripped. A cast on an expression stays in the catalog only when it
+	// was written and changes something: it is compared, and a desired side
+	// that drops it is a change. PostgreSQL drops a cast that changes nothing,
+	// now()::timestamptz among them, so a desired one the catalog lacks is
+	// stripped.
+	curCast := expressionCast(curTarget.Val)
+	desCast := expressionCast(desTarget.Val)
+	switch {
+	case curCast != nil && desCast != nil:
+		unqualifyCatalogType(curCast.TypeName)
+		unqualifyCatalogType(desCast.TypeName)
+	case curCast != nil && desTarget.Val.GetTypeCast() == nil:
+		return false
+	case desCast != nil && curTarget.Val.GetTypeCast() == nil:
+		desTarget.Val = desCast.Arg
+	default:
+		curTarget.Val = stripDefaultTopLevelCast(curTarget.Val, desTarget.Val)
+		desTarget.Val = stripDefaultTopLevelCast(desTarget.Val, curTarget.Val)
+	}
 	curTarget.Val = normalizeCheckExpr(curTarget.Val)
 	desTarget.Val = normalizeCheckExpr(desTarget.Val)
 	curTarget.Val = alignCurrentCasts(desTarget.Val, curTarget.Val)
@@ -2073,6 +2092,29 @@ func equalDefault(current, desired *string) bool {
 		return *current == *desired
 	}
 	return curStr == desStr
+}
+
+// expressionCast returns node's TypeCast when it casts something other than a
+// literal, and nil otherwise.
+func expressionCast(node *pg_query.Node) *pg_query.TypeCast {
+	tc := node.GetTypeCast()
+	if tc == nil || tc.Arg == nil || tc.Arg.GetAConst() != nil {
+		return nil
+	}
+	return tc
+}
+
+// unqualifyCatalogType drops a pg_catalog qualifier from tn. The parser
+// qualifies a type spelled as SQL keywords, `timestamp with time zone`, and
+// leaves its internal name, `timestamptz`, as written, so the two compare
+// equal only once the qualifier is gone.
+func unqualifyCatalogType(tn *pg_query.TypeName) {
+	if tn == nil || len(tn.Names) != 2 {
+		return
+	}
+	if s := tn.Names[0].GetString_(); s != nil && s.Sval == "pg_catalog" {
+		tn.Names = tn.Names[1:]
+	}
 }
 
 // stripDefaultTopLevelCast removes a top-level TypeCast wrapper from node,

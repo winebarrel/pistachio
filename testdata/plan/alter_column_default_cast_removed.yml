@@ -1,0 +1,15 @@
+# The cast in the default goes with the date type. Without SET DEFAULT the
+# column would keep truncating new rows to the day.
+init: |
+  CREATE TABLE public.ev (
+      id integer,
+      happened_on date DEFAULT now()::date
+  );
+desired: |
+  CREATE TABLE public.ev (
+      id integer,
+      happened_on timestamp with time zone DEFAULT now()
+  );
+plan: |
+  ALTER TABLE public.ev ALTER COLUMN happened_on SET DATA TYPE timestamp with time zone;
+  ALTER TABLE public.ev ALTER COLUMN happened_on SET DEFAULT now();

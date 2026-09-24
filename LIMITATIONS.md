@@ -549,6 +549,28 @@ off where the elements already have the type.
 
 Origin: expression normalization review, 2026-09-20.
 
+## A cast the catalog does not keep is not compared in a column DEFAULT
+
+Priority: low.
+
+The catalog spells a literal with its type and drops a cast that changes
+nothing, so `equalDefault` strips a cast on a literal on both sides, and a cast
+on an expression that only the desired side writes. A cast that does change the
+value goes unnoticed in those two places:
+
+```sql
+-- database
+CREATE TABLE t (n numeric DEFAULT 1.5, s text DEFAULT now());
+-- desired
+CREATE TABLE t (n numeric DEFAULT 1.5::integer, s text DEFAULT now()::date);
+```
+
+The plan reports no changes. Telling a cast that changes the value from one
+that does not needs the type of the expression under it, which only the
+database knows.
+
+Origin: default cast review, 2026-09-24.
+
 ## Perpetual drift on a schema-qualified sequence in a column DEFAULT
 
 Priority: low.

@@ -1,0 +1,16 @@
+init: |
+  CREATE TABLE public.ev (
+      id integer,
+      happened_on date DEFAULT now()::date
+  );
+desired: |
+  CREATE TABLE public.ev (
+      id integer,
+      happened_on timestamp with time zone DEFAULT now()
+  );
+applied: |
+  -- public.ev
+  CREATE TABLE public.ev (
+      id integer,
+      happened_on timestamp with time zone DEFAULT now()
+  );

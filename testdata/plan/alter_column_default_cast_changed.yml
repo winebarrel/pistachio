@@ -1,0 +1,11 @@
+# A cast on an expression is compared, precision and time zone included.
+init: |
+  CREATE TABLE public.t (
+      a timestamp with time zone DEFAULT now()::timestamp(0) with time zone
+  );
+desired: |
+  CREATE TABLE public.t (
+      a timestamp with time zone DEFAULT now()::timestamp(3) with time zone
+  );
+plan: |
+  ALTER TABLE public.t ALTER COLUMN a SET DEFAULT now()::timestamp (3) with time zone;

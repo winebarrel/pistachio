@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* A change to a cast on an expression in a column or domain `DEFAULT` is planned, as when `now()::date` becomes `now()` or `::timestamp(0) with time zone` becomes `::timestamp(0)`. The cast was stripped before the comparison.
+
 * A column whose default draws from a sequence it owns no longer plans `SET DEFAULT` on every run when the desired schema writes the default out. The column was read as a serial without its default.
 
 * `dump --json` writes the `nextval` default of a serial column in `default`, where it wrote `null`.
