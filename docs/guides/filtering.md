@@ -4,7 +4,7 @@ Use `-I` / `--include` to include only matching objects by name, or `-E` / `--ex
 
 Use `--enable` to restrict operations to specific object types, or `--disable` to exclude specific types. Valid types: `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`. Can be repeated. Also available as `$PISTA_ENABLE` / `$PISTA_DISABLE` environment variables.
 
-These flags are available on the `dump`, `plan`, and `apply` subcommands.
+These flags are available on the `dump`, `plan`, `apply`, and `diff` subcommands.
 
 ```bash
 # Dump only objects matching "user*"
@@ -45,7 +45,7 @@ PISTA_EXCLUDE='tmp_*' pista plan schema.sql
 ```
 
 !!! note
-    `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference); use them for inspection (`dump`, `plan`), not `apply`. `routine` narrows what `--manage-routine` turned on; it does not turn routines on by itself.
+    `--enable` takes precedence over `--disable`. When `--enable` is set, only the specified types are included regardless of `--disable`. These flags may exclude dependent objects (e.g. `--enable table` omits enums/domains that table columns may reference); use them for inspection (`dump`, `plan`, `diff`), not `apply`. `routine` narrows what `--manage-routine` turned on; it does not turn routines on by itself.
 
 !!! note
     When both a CLI flag and its corresponding environment variable are set, the CLI flag overrides the environment variable (values are not merged). For example, running `PISTA_EXCLUDE='tmp_*' pista plan -E 'foo_*' schema.sql` excludes only `foo_*`; `tmp_*` is ignored.
@@ -68,7 +68,7 @@ Each ignored object is reported as an `-- ignored: <name>` comment in `plan` and
 
 ## Skipping partition children
 
-Use `--skip-partition-child` to manage a partitioned table without its partitions. `dump` writes the parent alone, and `plan` / `apply` neither create a partition the schema file declares nor drop one the database holds. Available on `dump`, `plan` and `apply`, and as `$PISTA_SKIP_PARTITION_CHILD`.
+Use `--skip-partition-child` to manage a partitioned table without its partitions. `dump` writes the parent alone, and `plan` / `apply` neither create a partition the schema file declares nor drop one the database holds. Available on `dump`, `plan`, `apply` and `diff`, and as `$PISTA_SKIP_PARTITION_CHILD`.
 
 Use it where another tool creates the partitions, pg_partman for example. Without it, a schema file that declares the parent alone plans a `DROP TABLE` for every partition, and `-E` only reaches names that carry a pattern.
 
