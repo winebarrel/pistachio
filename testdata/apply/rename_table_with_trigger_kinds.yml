@@ -1,0 +1,41 @@
+# A table rename carries a constraint trigger, a trigger with WHEN and
+# UPDATE OF on a column renamed in the same run, and one with a transition
+# table. The new name needs quoting.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text
+  );
+  CREATE CONSTRAINT TRIGGER users_check AFTER INSERT ON public.users
+      DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER users_name BEFORE UPDATE OF name ON public.users
+      FOR EACH ROW WHEN (OLD.name IS DISTINCT FROM NEW.name) EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER users_audit AFTER INSERT ON public.users
+      REFERENCING NEW TABLE AS inserted FOR EACH STATEMENT EXECUTE FUNCTION public.stamp();
+desired: |
+  -- pista:renamed-from public.users
+  CREATE TABLE public."Accounts" (
+      id integer NOT NULL,
+      -- pista:renamed-from name
+      label text
+  );
+  CREATE CONSTRAINT TRIGGER users_check AFTER INSERT ON "Accounts"
+      DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp();
+  CREATE TRIGGER users_name BEFORE UPDATE OF label ON "Accounts"
+      FOR EACH ROW WHEN (OLD.label IS DISTINCT FROM NEW.label) EXECUTE FUNCTION stamp();
+  CREATE TRIGGER users_audit AFTER INSERT ON "Accounts"
+      REFERENCING NEW TABLE AS inserted FOR EACH STATEMENT EXECUTE FUNCTION stamp();
+applied_sql: |
+  ALTER TABLE public.users RENAME TO "Accounts";
+  ALTER TABLE public."Accounts" RENAME COLUMN name TO label;
+applied: |
+  -- public."Accounts"
+  CREATE TABLE public."Accounts" (
+      id integer NOT NULL,
+      label text
+  );
+
+  CREATE TRIGGER users_audit AFTER INSERT ON "Accounts" REFERENCING NEW TABLE AS inserted FOR EACH STATEMENT EXECUTE FUNCTION stamp();
+  CREATE CONSTRAINT TRIGGER users_check AFTER INSERT ON "Accounts" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp();
+  CREATE TRIGGER users_name BEFORE UPDATE OF label ON "Accounts" FOR EACH ROW WHEN (old.label IS DISTINCT FROM new.label) EXECUTE FUNCTION stamp();

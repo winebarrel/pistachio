@@ -1,0 +1,20 @@
+# RENAME TO carries a view's INSTEAD OF triggers with it, so the plan holds
+# the rename alone.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  );
+  CREATE VIEW public.active_users AS SELECT id FROM public.users;
+  CREATE TRIGGER active_users_ins INSTEAD OF INSERT ON public.active_users
+      FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  );
+  -- pista:renamed-from public.active_users
+  CREATE VIEW public.user_list AS SELECT id FROM public.users;
+  CREATE TRIGGER active_users_ins INSTEAD OF INSERT ON user_list
+      FOR EACH ROW EXECUTE FUNCTION stamp();
+plan: |
+  ALTER VIEW public.active_users RENAME TO user_list;

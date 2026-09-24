@@ -12,8 +12,8 @@ Writing the schema the way `dump` writes it avoids it.
 rename rather than a drop and a create. The adjustment reaches the renamed
 object's own dependents alone: a column's indexes, constraints, foreign keys,
 triggers, policies and generated expressions on the same table, a table's own
-indexes and foreign keys, and a materialized view's own indexes. Two references
-are left as they were:
+indexes, foreign keys and triggers, and a view's own triggers and indexes. Two
+references are left as they were:
 
 - A view or materialized view definition that names the renamed table or
   selects the renamed column.

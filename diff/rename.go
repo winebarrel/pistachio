@@ -160,6 +160,14 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 			renamed.ForeignKeys = newFKs
 		}
 
+		if renamed.Triggers != nil {
+			newTriggers, err := renameTriggerRelation(renamed.Triggers, desiredTable.Name)
+			if err != nil {
+				return nil, nil, err
+			}
+			renamed.Triggers = newTriggers
+		}
+
 		adjusted.Set(newKey, &renamed)
 	}
 
@@ -203,6 +211,44 @@ func updateIndexTableName(def string, newTableName string) (string, error) {
 		return "", fmt.Errorf("failed to deparse index definition: %w", err)
 	}
 	return deparsed, nil
+}
+
+// renameTriggerRelation returns a clone of triggers moved onto the renamed
+// table or view, the way the catalog reports them after RENAME TO. Without it
+// the comparison reads the old relation name in each definition as a change
+// and emits a redundant CREATE OR REPLACE TRIGGER, or a DROP and CREATE for a
+// constraint trigger.
+func renameTriggerRelation(triggers *orderedmap.Map[string, *model.Trigger], newName string) (*orderedmap.Map[string, *model.Trigger], error) {
+	out := orderedmap.New[string, *model.Trigger]()
+	for name, trg := range triggers.All() {
+		result, err := pg_query.Parse(trg.Definition)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse trigger definition: %w", err)
+		}
+		if len(result.Stmts) != 1 {
+			return nil, fmt.Errorf("unexpected parse result for trigger definition: %s", trg.Definition)
+		}
+		ct := result.Stmts[0].Stmt.GetCreateTrigStmt()
+		if ct == nil {
+			return nil, fmt.Errorf("expected CreateTrigStmt in trigger definition: %s", trg.Definition)
+		}
+		// A constraint trigger's FROM can name its own table, which the
+		// rename moves too. A bare name there means the same table.
+		if from := ct.Constrrel; from != nil && from.Relname == ct.Relation.Relname &&
+			(from.Schemaname == "" || from.Schemaname == ct.Relation.Schemaname) {
+			from.Relname = newName
+		}
+		ct.Relation.Relname = newName
+		def, err := pg_query.Deparse(result)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deparse trigger definition: %w", err)
+		}
+		clone := *trg
+		clone.Table = newName
+		clone.Definition = def
+		out.Set(name, &clone)
+	}
+	return out, nil
 }
 
 // detectViewRenames finds desired views with RenameFrom that match a current view.
@@ -257,6 +303,13 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 			return nil, nil, nil, err
 		}
 		renamed.Indexes = indexes
+		if renamed.Triggers != nil {
+			newTriggers, err := renameTriggerRelation(renamed.Triggers, desiredView.Name)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			renamed.Triggers = newTriggers
+		}
 		adjusted.Set(newKey, &renamed)
 		renamedFrom[newKey] = oldKey
 	}

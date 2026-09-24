@@ -1,0 +1,19 @@
+# A trigger that changes along with the table rename is still replaced, under
+# the new table name.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  );
+  CREATE TRIGGER users_stamp BEFORE INSERT ON public.users
+      FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  -- pista:renamed-from public.users
+  CREATE TABLE public.accounts (
+      id integer NOT NULL
+  );
+  CREATE TRIGGER users_stamp BEFORE INSERT OR UPDATE ON accounts
+      FOR EACH ROW EXECUTE FUNCTION stamp();
+plan: |
+  ALTER TABLE public.users RENAME TO accounts;
+  CREATE OR REPLACE TRIGGER users_stamp BEFORE INSERT OR UPDATE ON public.accounts FOR EACH ROW EXECUTE FUNCTION stamp();
