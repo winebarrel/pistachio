@@ -216,7 +216,8 @@ func updateIndexTableName(def string, newTableName string) (string, error) {
 // renameTriggerRelation returns a clone of triggers moved onto the renamed
 // table or view, the way the catalog reports them after RENAME TO. Without it
 // the comparison reads the old relation name in each definition as a change
-// and emits a redundant CREATE OR REPLACE TRIGGER.
+// and emits a redundant CREATE OR REPLACE TRIGGER, or a DROP and CREATE for a
+// constraint trigger.
 func renameTriggerRelation(triggers *orderedmap.Map[string, *model.Trigger], newName string) (*orderedmap.Map[string, *model.Trigger], error) {
 	out := orderedmap.New[string, *model.Trigger]()
 	for name, trg := range triggers.All() {

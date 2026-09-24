@@ -351,6 +351,49 @@ CREATE INDEX idx_events_time ON myschema.events (event_time);`), 0o644))
 	assert.Equal(t, "ALTER TABLE myschema.events RENAME COLUMN occurred_at TO event_time;", strings.TrimSpace(got.SQL))
 }
 
+// Outside the search_path the catalog writes a trigger's relation with its
+// schema, so the rename has to keep that schema in the definition.
+func TestPlan_RenameTableAndView_Triggers_NonPublicSchema(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE FUNCTION myschema.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+CREATE TABLE myschema.users (id integer NOT NULL);
+CREATE CONSTRAINT TRIGGER users_check AFTER INSERT ON myschema.users
+    FOR EACH ROW EXECUTE FUNCTION myschema.stamp();
+CREATE TRIGGER users_stamp BEFORE UPDATE ON myschema.users
+    FOR EACH ROW WHEN (OLD.id <> NEW.id) EXECUTE FUNCTION myschema.stamp();
+CREATE TABLE myschema.items (id integer NOT NULL);
+CREATE VIEW myschema.active_users AS SELECT id FROM myschema.items;
+CREATE TRIGGER active_users_ins INSTEAD OF INSERT ON myschema.active_users
+    FOR EACH ROW EXECUTE FUNCTION myschema.stamp();
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`-- pista:renamed-from myschema.users
+CREATE TABLE myschema.accounts (id integer NOT NULL);
+CREATE CONSTRAINT TRIGGER users_check AFTER INSERT ON myschema.accounts
+    FOR EACH ROW EXECUTE FUNCTION myschema.stamp();
+CREATE TRIGGER users_stamp BEFORE UPDATE ON myschema.accounts
+    FOR EACH ROW WHEN (OLD.id <> NEW.id) EXECUTE FUNCTION myschema.stamp();
+CREATE TABLE myschema.items (id integer NOT NULL);
+-- pista:renamed-from myschema.active_users
+CREATE VIEW myschema.user_list AS SELECT id FROM myschema.items;
+CREATE TRIGGER active_users_ins INSTEAD OF INSERT ON myschema.user_list
+    FOR EACH ROW EXECUTE FUNCTION myschema.stamp();`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Equal(t, `ALTER TABLE myschema.users RENAME TO accounts;
+ALTER VIEW myschema.active_users RENAME TO user_list;`, strings.TrimSpace(got.SQL))
+	assert.Empty(t, got.DisallowedDrops)
+}
+
 func TestPlan(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
