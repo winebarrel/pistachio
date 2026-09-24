@@ -13,7 +13,7 @@ import (
 )
 
 type DumpOptions struct {
-	Split      string `xor:"json-split" help:"Output each table/view/enum/domain/composite type/sequence as a separate file in the specified directory."`
+	Split      string `xor:"json-split" help:"Output each table/view/enum/domain/composite type/sequence/routine as a separate file in the specified directory."`
 	OmitSchema bool   `help:"Omit schema name from the dump output."`
 	NoReadOnly bool   `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default dump uses a read-only connection."`
 	NoFormat   bool   `xor:"json-no-format" env:"PISTA_NO_FORMAT" help:"Write the dump as the model renders it, without the layout pista fmt applies."`

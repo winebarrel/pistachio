@@ -1,7 +1,7 @@
 # Splitting the schema across files
 
 
-Use `--split` to output each table/view/enum/domain/composite type as a separate file in the specified directory.
+Use `--split` to output each table/view/enum/domain/composite type/standalone sequence as a separate file in the specified directory, and each routine as well with `--manage-routine`.
 
 ```bash
 pista dump --split ./schema/

@@ -119,7 +119,7 @@ pista apply schema.sql                 # apply it
 Or split the schema across multiple files:
 
 ```bash
-pista dump --split ./schema/       # dump per table/view/enum/domain/composite type
+pista dump --split ./schema/       # dump per table/view/enum/domain/composite type/sequence
 pista plan ./schema/*.sql          # review the diff
 pista apply ./schema/*.sql         # apply it
 ```
