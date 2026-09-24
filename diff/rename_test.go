@@ -527,6 +527,20 @@ func TestRenameTriggerRelation(t *testing.T) {
 	assert.Equal(t, "CREATE TRIGGER b BEFORE INSERT ON s.new_t FOR EACH ROW EXECUTE FUNCTION f()", got.Get("b").Definition)
 }
 
+func TestRenameTriggerRelation_ConstraintTriggerFrom(t *testing.T) {
+	got, err := renameTriggerRelation(triggersOnOldT(
+		"CREATE CONSTRAINT TRIGGER a AFTER INSERT ON s.old_t FROM s.old_t FOR EACH ROW EXECUTE FUNCTION f()",
+		"CREATE CONSTRAINT TRIGGER b AFTER INSERT ON s.old_t FROM old_t FOR EACH ROW EXECUTE FUNCTION f()",
+		"CREATE CONSTRAINT TRIGGER c AFTER INSERT ON s.old_t FROM other FOR EACH ROW EXECUTE FUNCTION f()",
+		"CREATE CONSTRAINT TRIGGER d AFTER INSERT ON s.old_t FROM x.old_t FOR EACH ROW EXECUTE FUNCTION f()",
+	), "new_t")
+	require.NoError(t, err)
+	assert.Equal(t, "CREATE CONSTRAINT TRIGGER a AFTER INSERT ON s.new_t FROM s.new_t FOR EACH ROW EXECUTE FUNCTION f()", got.Get("a").Definition)
+	assert.Equal(t, "CREATE CONSTRAINT TRIGGER b AFTER INSERT ON s.new_t FROM new_t FOR EACH ROW EXECUTE FUNCTION f()", got.Get("b").Definition)
+	assert.Equal(t, "CREATE CONSTRAINT TRIGGER c AFTER INSERT ON s.new_t FROM other FOR EACH ROW EXECUTE FUNCTION f()", got.Get("c").Definition)
+	assert.Equal(t, "CREATE CONSTRAINT TRIGGER d AFTER INSERT ON s.new_t FROM x.old_t FOR EACH ROW EXECUTE FUNCTION f()", got.Get("d").Definition)
+}
+
 func TestRenameTriggerRelation_ParseError(t *testing.T) {
 	_, err := renameTriggerRelation(triggersOnOldT("NOT VALID SQL"), "new_t")
 	require.ErrorContains(t, err, "failed to parse trigger definition")

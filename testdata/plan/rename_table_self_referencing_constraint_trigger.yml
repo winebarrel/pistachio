@@ -1,0 +1,21 @@
+# A constraint trigger whose FROM names its own table follows the rename in
+# both places, so the plan holds the rename alone. One whose FROM names
+# another table keeps it.
+init: |
+  CREATE FUNCTION public.check_row() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+  CREATE TABLE public.parents (id integer NOT NULL);
+  CREATE TABLE public.users (id integer NOT NULL);
+  CREATE CONSTRAINT TRIGGER users_self AFTER INSERT ON public.users FROM public.users
+      DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.check_row();
+  CREATE CONSTRAINT TRIGGER users_parent AFTER INSERT ON public.users FROM public.parents
+      FOR EACH ROW EXECUTE FUNCTION public.check_row();
+desired: |
+  CREATE TABLE public.parents (id integer NOT NULL);
+  -- pista:renamed-from public.users
+  CREATE TABLE public.accounts (id integer NOT NULL);
+  CREATE CONSTRAINT TRIGGER users_self AFTER INSERT ON public.accounts FROM accounts
+      DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_row();
+  CREATE CONSTRAINT TRIGGER users_parent AFTER INSERT ON public.accounts FROM parents
+      FOR EACH ROW EXECUTE FUNCTION check_row();
+plan: |
+  ALTER TABLE public.users RENAME TO accounts;

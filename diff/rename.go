@@ -232,6 +232,12 @@ func renameTriggerRelation(triggers *orderedmap.Map[string, *model.Trigger], new
 		if ct == nil {
 			return nil, fmt.Errorf("expected CreateTrigStmt in trigger definition: %s", trg.Definition)
 		}
+		// A constraint trigger's FROM can name its own table, which the
+		// rename moves too. A bare name there means the same table.
+		if from := ct.Constrrel; from != nil && from.Relname == ct.Relation.Relname &&
+			(from.Schemaname == "" || from.Schemaname == ct.Relation.Schemaname) {
+			from.Relname = newName
+		}
 		ct.Relation.Relname = newName
 		def, err := pg_query.Deparse(result)
 		if err != nil {
