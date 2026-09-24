@@ -460,7 +460,7 @@ Flags:
                                 another tool creates. An INHERITS child is
                                 unaffected ($PISTA_SKIP_PARTITION_CHILD).
       --split=STRING            Output each table/view/enum/domain/composite
-                                type/sequence as a separate file in the
+                                type/sequence/routine as a separate file in the
                                 specified directory.
       --omit-schema             Omit schema name from the dump output.
       --no-read-only            Open the database connection read-write.

@@ -113,7 +113,7 @@ The rows and bytes are the estimates the last VACUUM or ANALYZE wrote, with the 
 Or split the schema across multiple files:
 
 ```bash
-pista dump --split ./schema/       # dump per table/view/enum/domain/composite type
+pista dump --split ./schema/       # dump per table/view/enum/domain/composite type/sequence/routine
 pista plan ./schema/*.sql          # review the diff
 pista apply ./schema/*.sql         # apply it
 ```
