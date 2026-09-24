@@ -1,0 +1,17 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      status public.status
+  ) PARTITION BY RANGE (id);
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (100);
+desired: |
+  -- pista:renamed-from public.status
+  CREATE TYPE public.event_status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      status public.event_status
+  ) PARTITION BY RANGE (id);
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (0) TO (100);
+plan: |
+  ALTER TYPE public.status RENAME TO event_status;

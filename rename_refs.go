@@ -15,16 +15,13 @@ type objectRename struct {
 }
 
 // referenceRenames carries a type or sequence rename into the current side's
-// references to it: the type of a column, a composite attribute and a domain,
-// and the sequence in a nextval() default. PostgreSQL follows such a rename
-// by OID, so the reference needs no statement of its own, but the catalog was
-// read before the rename and still names the old object. Without this the
-// diff retypes every column of a renamed type, which fails when a view reads
-// the column.
+// references to it: the type of a column, a composite attribute or a domain,
+// and the sequence in a nextval() default. PostgreSQL follows the rename by
+// OID, but the catalog was read before it and still names the old object, so
+// without this the diff retypes every column of the renamed type.
 //
-// The catalog writes a name without its schema when the schema is on the
-// connection's search_path, so a bare name is taken to mean the renamed
-// object only when its schema is on the path.
+// The catalog writes a name without its schema only when the schema is on the
+// search_path, so a bare name counts only then.
 type referenceRenames struct {
 	types, sequences []objectRename
 	searchPath       []string
