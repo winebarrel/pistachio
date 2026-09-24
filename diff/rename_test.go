@@ -556,6 +556,20 @@ func TestDiffTables_RenameWithBadTrigger(t *testing.T) {
 	require.ErrorContains(t, err, "failed to parse trigger definition")
 }
 
+func TestDiffTables_RenameWithBadIndex(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	cur := newTable("public", "old_t")
+	cur.Indexes.Set("idx", &model.Index{Schema: "public", Table: "old_t", Name: "idx", Definition: "NOT VALID SQL"})
+	current.Set("public.old_t", cur)
+	desired := orderedmap.New[string, *model.Table]()
+	des := newTable("public", "new_t")
+	des.RenameFrom = new("public.old_t")
+	desired.Set("public.new_t", des)
+
+	_, err := DiffTables(current, desired, allowAllDrops{})
+	require.ErrorContains(t, err, "failed to parse index definition")
+}
+
 func TestDiffViews_RenameWithBadTrigger(t *testing.T) {
 	current := orderedmap.New[string, *model.View]()
 	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1", Triggers: triggersOnOldT("NOT VALID SQL")})
@@ -564,4 +578,45 @@ func TestDiffViews_RenameWithBadTrigger(t *testing.T) {
 
 	_, err := DiffViews(current, desired, allowAllDrops{})
 	require.ErrorContains(t, err, "failed to parse trigger definition")
+}
+
+func triggerOn(table, def string) *orderedmap.Map[string, *model.Trigger] {
+	m := orderedmap.New[string, *model.Trigger]()
+	m.Set("a", &model.Trigger{Schema: "public", Table: table, Name: "a", Definition: def})
+	return m
+}
+
+func TestDiffTables_RenameCarriesTriggers(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	cur := newTable("public", "old_t")
+	cur.Triggers = triggerOn("old_t", "CREATE TRIGGER a BEFORE INSERT ON old_t FOR EACH ROW EXECUTE FUNCTION f()")
+	current.Set("public.old_t", cur)
+	desired := orderedmap.New[string, *model.Table]()
+	des := newTable("public", "new_t")
+	des.RenameFrom = new("public.old_t")
+	des.Triggers = triggerOn("new_t", "CREATE TRIGGER a BEFORE INSERT ON new_t FOR EACH ROW EXECUTE FUNCTION f()")
+	desired.Set("public.new_t", des)
+
+	got, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.old_t RENAME TO new_t;"}, got.Stmts)
+	assert.Empty(t, got.DropStmts)
+}
+
+func TestDiffViews_RenameCarriesTriggers(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{
+		Schema: "public", Name: "v1", Definition: "SELECT 1",
+		Triggers: triggerOn("v1", "CREATE TRIGGER a INSTEAD OF INSERT ON v1 FOR EACH ROW EXECUTE FUNCTION f()"),
+	})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v2", &model.View{
+		Schema: "public", Name: "v2", RenameFrom: new("public.v1"), Definition: "SELECT 1",
+		Triggers: triggerOn("v2", "CREATE TRIGGER a INSTEAD OF INSERT ON v2 FOR EACH ROW EXECUTE FUNCTION f()"),
+	})
+
+	got, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER VIEW public.v1 RENAME TO v2;"}, got.CreateStmts)
+	assert.Empty(t, got.DropStmts)
 }
