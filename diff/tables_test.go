@@ -1664,9 +1664,9 @@ func TestEqualDefault_expressionCast(t *testing.T) {
 	})
 
 	t.Run("user-defined type", func(t *testing.T) {
-		// Only pg_catalog is dropped, so a type of the same name in another
-		// schema stays apart.
-		assert.False(t, equalDefault(new("(now())::myapp.timestamptz"), new("now()::timestamptz")))
+		// The catalog leaves out a schema on the search_path.
+		assert.True(t, equalDefault(new("(lower('X'::text))::status"), new("lower('X')::public.status")))
+		assert.False(t, equalDefault(new("(lower('X'::text))::status"), new("lower('X')::public.mood")))
 	})
 
 	t.Run("other type", func(t *testing.T) {

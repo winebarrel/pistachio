@@ -2072,8 +2072,8 @@ func equalDefault(current, desired *string) bool {
 	desCast := expressionCast(desTarget.Val)
 	switch {
 	case curCast != nil && desCast != nil:
-		unqualifyCatalogType(curCast.TypeName)
-		unqualifyCatalogType(desCast.TypeName)
+		unqualifyType(curCast.TypeName)
+		unqualifyType(desCast.TypeName)
 	case curCast != nil && desTarget.Val.GetTypeCast() == nil:
 		return false
 	case desCast != nil && curTarget.Val.GetTypeCast() == nil:
@@ -2103,16 +2103,14 @@ func expressionCast(node *pg_query.Node) *pg_query.TypeCast {
 	return tc
 }
 
-// unqualifyCatalogType drops a pg_catalog qualifier from tn. The parser
-// qualifies a type spelled as SQL keywords, `timestamp with time zone`, and
-// leaves its internal name, `timestamptz`, as written, so the two compare
-// equal only once the qualifier is gone.
-func unqualifyCatalogType(tn *pg_query.TypeName) {
-	if tn == nil || len(tn.Names) != 2 {
-		return
-	}
-	if s := tn.Names[0].GetString_(); s != nil && s.Sval == "pg_catalog" {
-		tn.Names = tn.Names[1:]
+// unqualifyType drops the schema qualifier from tn, as stripFuncSchema does
+// for a function name. The parser qualifies a type spelled as SQL keywords,
+// `timestamp with time zone`, with pg_catalog and leaves its internal name,
+// `timestamptz`, as written, and pg_get_expr leaves out a schema on the
+// search_path. A type moved between two schemas produces no diff.
+func unqualifyType(tn *pg_query.TypeName) {
+	if tn != nil {
+		tn.Names = lastNamePart(tn.Names)
 	}
 }
 
