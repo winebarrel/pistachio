@@ -6,13 +6,18 @@ init: |
   CREATE TABLE public.other (id integer, qty integer);
   CREATE VIEW public.v_branch AS SELECT id FROM public.items UNION SELECT qty FROM public.other;
   CREATE VIEW public.v_name AS SELECT id FROM public.items UNION SELECT qty FROM public.other;
+  CREATE MATERIALIZED VIEW public.mv_branch AS SELECT id FROM public.items EXCEPT SELECT qty FROM public.other;
 desired: |
   CREATE TABLE public.items (id integer, qty integer);
   CREATE TABLE public.other (id integer, qty integer);
   CREATE VIEW public.v_branch AS SELECT id FROM public.items UNION SELECT id AS qty FROM public.other;
   CREATE VIEW public.v_name AS SELECT id AS n FROM public.items UNION SELECT qty FROM public.other;
+  CREATE MATERIALIZED VIEW public.mv_branch AS SELECT id FROM public.items EXCEPT SELECT id AS qty FROM public.other;
 plan: |
   DROP VIEW public.v_name;
+  DROP MATERIALIZED VIEW public.mv_branch;
+  CREATE MATERIALIZED VIEW public.mv_branch AS
+  SELECT id FROM public.items EXCEPT SELECT id AS qty FROM public.other;
   CREATE OR REPLACE VIEW public.v_branch AS
   SELECT id FROM public.items UNION SELECT id AS qty FROM public.other;
   CREATE OR REPLACE VIEW public.v_name AS

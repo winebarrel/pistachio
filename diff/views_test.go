@@ -393,6 +393,15 @@ func TestEqualViewDef_setOpBranchNames(t *testing.T) {
 		"SELECT s.n FROM (SELECT items.id AS n FROM items UNION SELECT other.qty FROM other) s",
 		"SELECT s.n FROM (SELECT id AS n FROM items UNION SELECT qty AS m FROM other) s",
 	))
+	assert.True(t, equalViewDef(
+		"WITH c AS (SELECT items.id AS a FROM items UNION SELECT other.qty FROM other) SELECT c.a FROM c",
+		"WITH c AS (SELECT id AS a FROM items UNION SELECT qty AS b FROM other) SELECT a FROM c",
+	))
+	// A sub-query inside a later branch keeps its own names.
+	assert.False(t, equalViewDef(
+		"SELECT items.id FROM items UNION SELECT s.q AS id FROM (SELECT other.qty AS q FROM other) s",
+		"SELECT id FROM items UNION SELECT s.q FROM (SELECT qty AS r FROM other) s",
+	))
 }
 
 func TestEqualViewDef_setOpLeftmostName(t *testing.T) {
