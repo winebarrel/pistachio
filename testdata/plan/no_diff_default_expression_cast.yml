@@ -7,7 +7,13 @@ init: |
       b timestamp with time zone DEFAULT now()::timestamptz,
       c date DEFAULT now()::date,
       d timestamp with time zone DEFAULT now()::timestamptz(0),
-      e timestamp with time zone DEFAULT now()::timestamp(0)
+      e timestamp with time zone DEFAULT now()::timestamp(0),
+      f text[] DEFAULT ARRAY[]::text[],
+      g date DEFAULT CURRENT_TIMESTAMP::date,
+      h date DEFAULT ('now'::text)::date,
+      i text DEFAULT gen_random_uuid()::text,
+      j bigint DEFAULT (extract(epoch from now()) * 1000)::bigint,
+      k timestamp DEFAULT timezone('utc', now())::timestamp(0)
   );
 desired: |
   CREATE TABLE public.t (
@@ -15,6 +21,12 @@ desired: |
       b timestamp with time zone DEFAULT now()::timestamptz,
       c date DEFAULT now()::date,
       d timestamp with time zone DEFAULT now()::timestamptz(0),
-      e timestamp with time zone DEFAULT now()::timestamp(0)
+      e timestamp with time zone DEFAULT now()::timestamp(0),
+      f text[] DEFAULT ARRAY[]::text[],
+      g date DEFAULT CURRENT_TIMESTAMP::date,
+      h date DEFAULT ('now'::text)::date,
+      i text DEFAULT gen_random_uuid()::text,
+      j bigint DEFAULT (extract(epoch from now()) * 1000)::bigint,
+      k timestamp DEFAULT timezone('utc', now())::timestamp(0)
   );
 plan: ""

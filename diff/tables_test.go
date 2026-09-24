@@ -1677,6 +1677,15 @@ func TestEqualDefault_expressionCast(t *testing.T) {
 		assert.False(t, equalDefault(new("(now())::date"), new("now()")))
 	})
 
+	t.Run("literal on one side", func(t *testing.T) {
+		assert.False(t, equalDefault(new("(now())::date"), new("'2020-01-01'::date")))
+		assert.False(t, equalDefault(new("'2020-01-01'::date"), new("now()::date")))
+	})
+
+	t.Run("cast on a cast", func(t *testing.T) {
+		assert.True(t, equalDefault(new("('now'::text)::date"), new("'now'::text::date")))
+	})
+
 	t.Run("cast that changes nothing", func(t *testing.T) {
 		// PostgreSQL drops it, so the catalog has none.
 		assert.True(t, equalDefault(new("now()"), new("now()::timestamptz")))

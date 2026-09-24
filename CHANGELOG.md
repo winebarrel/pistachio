@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* A change to a cast on an expression in a column or domain `DEFAULT` is planned, as when `now()::date` becomes `now()` or `::timestamp(0) with time zone` becomes `::timestamp(0)`. The cast was stripped before the comparison.
+* A column or domain `DEFAULT` whose cast on an expression changes is now planned, such as `now()::date` becoming `now()`, or `::timestamp(0) with time zone` becoming `::timestamp(0)`. The cast was ignored in the comparison.
 
 * A column whose default draws from a sequence it owns no longer plans `SET DEFAULT` on every run when the desired schema writes the default out. The column was read as a serial without its default.
 

@@ -2063,12 +2063,11 @@ func equalDefault(current, desired *string) bool {
 	if parseErrCur != nil || parseErrDes != nil {
 		return *current == *desired
 	}
-	// A cast on a literal is how the catalog spells the literal's type, so it
-	// is stripped. A cast on an expression stays in the catalog only when it
-	// was written and changes something: it is compared, and a desired side
-	// that drops it is a change. PostgreSQL drops a cast that changes nothing,
-	// now()::timestamptz among them, so a desired one the catalog lacks is
-	// stripped.
+	// The catalog writes a literal with its type, so a cast on a literal is
+	// stripped. It keeps a cast on an expression only when the cast was
+	// written and changes something, so such a cast is compared, and one the
+	// desired side drops is a change. It drops a cast that changes nothing,
+	// such as now()::timestamptz, so a desired cast it lacks is stripped.
 	curCast := expressionCast(curTarget.Val)
 	desCast := expressionCast(desTarget.Val)
 	switch {
