@@ -185,6 +185,24 @@ func TestParseSQLFiles_DuplicateColumnLocation(t *testing.T) {
   |     ^`, err.Error())
 }
 
+func TestParseSQLFiles_ConstraintAttrLocation(t *testing.T) {
+	paths := writeSQLFiles(t, map[string]string{
+		"posts.sql": `CREATE TABLE public.posts (
+    id integer PRIMARY KEY,
+    user_id integer REFERENCES public.users (id) NOT DEFERRABLE INITIALLY DEFERRED
+);
+`,
+	})
+
+	_, err := ParseSQLFilesWithSchema(paths, "public")
+	require.Error(t, err)
+	assert.Equal(t, `constraint declared INITIALLY DEFERRED must be DEFERRABLE
+ --> `+paths[0]+`:3:65
+  |
+3 |     user_id integer REFERENCES public.users (id) NOT DEFERRABLE INITIALLY DEFERRED
+  |                                                                 ^`, err.Error())
+}
+
 func TestParseSQLFiles_DuplicateConstraintLocation(t *testing.T) {
 	paths := writeSQLFiles(t, map[string]string{
 		"users.sql": `CREATE TABLE public.users (

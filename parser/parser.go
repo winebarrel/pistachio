@@ -1286,15 +1286,21 @@ func autoNameColumnConstraint(tableName, colName string, con *pg_query.Constrain
 // GENERATED) are skipped as they are handled by parseColumnDef.
 // Unnamed constraints are auto-named following PostgreSQL's naming convention.
 func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema, defaultSchema string) error {
+	if err := foldConstraintAttrs(cd.Constraints); err != nil {
+		return err
+	}
 	for _, conNode := range cd.Constraints {
 		con := conNode.GetConstraint()
 		if con == nil {
 			continue
 		}
-		// Skip column-attribute constraints (NOT NULL, DEFAULT, IDENTITY, GENERATED)
+		// Skip column-attribute constraints (NOT NULL, DEFAULT, IDENTITY,
+		// GENERATED) and the DEFERRABLE attributes folded in above.
 		switch con.Contype {
 		case pg_query.ConstrType_CONSTR_NOTNULL, pg_query.ConstrType_CONSTR_DEFAULT,
-			pg_query.ConstrType_CONSTR_IDENTITY, pg_query.ConstrType_CONSTR_GENERATED:
+			pg_query.ConstrType_CONSTR_IDENTITY, pg_query.ConstrType_CONSTR_GENERATED,
+			pg_query.ConstrType_CONSTR_ATTR_DEFERRABLE, pg_query.ConstrType_CONSTR_ATTR_NOT_DEFERRABLE,
+			pg_query.ConstrType_CONSTR_ATTR_DEFERRED, pg_query.ConstrType_CONSTR_ATTR_IMMEDIATE:
 			continue
 		}
 		if con.Conname == "" {
@@ -1345,6 +1351,69 @@ func extractColumnConstraints(cd *pg_query.ColumnDef, table *model.Table, schema
 		}
 	}
 	return nil
+}
+
+// foldConstraintAttrs applies the DEFERRABLE and INITIALLY clauses written on
+// a column to the constraint before them, and rejects the ones PostgreSQL
+// rejects, as its transformConstraintAttrs does. The grammar gives each clause
+// its own node in ColumnDef.Constraints, so the parse lets them all through.
+// INITIALLY DEFERRED implies DEFERRABLE.
+func foldConstraintAttrs(nodes []*pg_query.Node) error {
+	var last *pg_query.Constraint
+	var sawDeferrability, sawInitially bool
+	for _, n := range nodes {
+		con := n.GetConstraint()
+		clause, ok := constraintAttrClauses[con.GetContype()]
+		if !ok {
+			last = con
+			sawDeferrability, sawInitially = false, false
+			continue
+		}
+		fail := func(msg string) error {
+			return &locatedError{msg: msg, offset: int(con.Location)}
+		}
+		if !supportsConstraintAttrs(last) {
+			return fail("misplaced " + clause + " clause")
+		}
+		switch con.Contype {
+		case pg_query.ConstrType_CONSTR_ATTR_DEFERRABLE, pg_query.ConstrType_CONSTR_ATTR_NOT_DEFERRABLE:
+			if sawDeferrability {
+				return fail("multiple DEFERRABLE/NOT DEFERRABLE clauses not allowed")
+			}
+			sawDeferrability = true
+			last.Deferrable = con.Contype == pg_query.ConstrType_CONSTR_ATTR_DEFERRABLE
+		default:
+			if sawInitially {
+				return fail("multiple INITIALLY IMMEDIATE/DEFERRED clauses not allowed")
+			}
+			sawInitially = true
+			last.Initdeferred = con.Contype == pg_query.ConstrType_CONSTR_ATTR_DEFERRED
+			if last.Initdeferred && !sawDeferrability {
+				last.Deferrable = true
+			}
+		}
+		if last.Initdeferred && !last.Deferrable {
+			return fail("constraint declared INITIALLY DEFERRED must be DEFERRABLE")
+		}
+	}
+	return nil
+}
+
+var constraintAttrClauses = map[pg_query.ConstrType]string{
+	pg_query.ConstrType_CONSTR_ATTR_DEFERRABLE:     "DEFERRABLE",
+	pg_query.ConstrType_CONSTR_ATTR_NOT_DEFERRABLE: "NOT DEFERRABLE",
+	pg_query.ConstrType_CONSTR_ATTR_DEFERRED:       "INITIALLY DEFERRED",
+	pg_query.ConstrType_CONSTR_ATTR_IMMEDIATE:      "INITIALLY IMMEDIATE",
+}
+
+// supportsConstraintAttrs reports whether con takes DEFERRABLE and INITIALLY.
+func supportsConstraintAttrs(con *pg_query.Constraint) bool {
+	switch con.GetContype() {
+	case pg_query.ConstrType_CONSTR_PRIMARY, pg_query.ConstrType_CONSTR_UNIQUE,
+		pg_query.ConstrType_CONSTR_EXCLUSION, pg_query.ConstrType_CONSTR_FOREIGN:
+		return true
+	}
+	return false
 }
 
 func parseTableConstraint(con *pg_query.Constraint, tableName string) (*model.Constraint, error) {
