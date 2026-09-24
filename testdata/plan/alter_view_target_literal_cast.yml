@@ -1,0 +1,12 @@
+# A bare string constant on a SELECT target resolves to text, so a cast to
+# another type written in the desired schema changes the view column's type
+# and must still produce DDL.
+init: |
+  CREATE TABLE public.items (id integer);
+  CREATE VIEW public.item_sources AS SELECT id, 'i' AS src FROM public.items;
+desired: |
+  CREATE TABLE public.items (id integer);
+  CREATE VIEW public.item_sources AS SELECT id, 'i'::varchar AS src FROM public.items;
+plan: |
+  CREATE OR REPLACE VIEW public.item_sources AS
+  SELECT id, 'i'::varchar AS src FROM public.items;

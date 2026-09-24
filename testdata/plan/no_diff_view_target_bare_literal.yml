@@ -1,0 +1,14 @@
+# pg_get_viewdef prints an untyped string or NULL constant on a SELECT target
+# with the text type it resolved to ('i'::text, NULL::text). The bare constant
+# written in the desired schema resolves to the same type: no drift.
+init: |
+  CREATE TABLE public.items (id integer);
+  CREATE VIEW public.item_sources AS SELECT id, 'i' AS src, NULL AS note, 'a' || 'b' AS ab FROM public.items;
+  CREATE VIEW public.item_kinds AS SELECT id, 'x' AS kind FROM public.items UNION ALL SELECT s.id, s.kind FROM (SELECT id, 'y' AS kind FROM public.items) s;
+  CREATE MATERIALIZED VIEW public.item_sources_mv AS SELECT id, 'i' AS src FROM public.items;
+desired: |
+  CREATE TABLE public.items (id integer);
+  CREATE VIEW public.item_sources AS SELECT id, 'i' AS src, NULL AS note, 'a' || 'b' AS ab FROM public.items;
+  CREATE VIEW public.item_kinds AS SELECT id, 'x' AS kind FROM public.items UNION ALL SELECT s.id, s.kind FROM (SELECT id, 'y' AS kind FROM public.items) s;
+  CREATE MATERIALIZED VIEW public.item_sources_mv AS SELECT id, 'i' AS src FROM public.items;
+plan: ""

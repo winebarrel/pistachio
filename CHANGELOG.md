@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* A view that selects a bare string or `NULL` constant, such as `SELECT id, 'i' AS src FROM items`, no longer plans `CREATE OR REPLACE VIEW` on every run. The catalog prints the constant as `'i'::text`.
+
 * Renaming a table or view with `-- pista:renamed-from` no longer re-creates its unchanged triggers. PostgreSQL moves the triggers with the rename.
 
 * A view or materialized view over `UNION`, `INTERSECT` or `EXCEPT` no longer plans a replacement on every run. The output names PostgreSQL writes onto the later `SELECT`s are ignored in the comparison.

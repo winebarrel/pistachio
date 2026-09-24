@@ -939,6 +939,20 @@ func isTextLikeTypeName(tn *pg_query.TypeName) bool {
 	return false
 }
 
+// isTextTypeName reports whether the TypeName is a bare text, the way the
+// catalog prints the built-in type, and not an array of it.
+func isTextTypeName(tn *pg_query.TypeName) bool {
+	return tn != nil && len(tn.ArrayBounds) == 0 && len(tn.Names) == 1 &&
+		tn.Names[0].GetString_().GetSval() == "text"
+}
+
+// isUntypedConst reports whether the node is a string or NULL constant, the
+// constants PostgreSQL leaves typed unknown until their context resolves them.
+func isUntypedConst(node *pg_query.Node) bool {
+	ac := node.GetAConst()
+	return ac != nil && (ac.Isnull || ac.GetSval() != nil)
+}
+
 // isNumericTypeName returns true if the TypeName refers to a built-in
 // Postgres numeric scalar. pg_query canonicalises integer / bigint /
 // smallint to int4 / int8 / int2 and double precision / real to float8 /
@@ -1180,7 +1194,14 @@ func alignCastNode(ctx pgast.Ctx, desired, current *pg_query.Node) *pg_query.Nod
 	// side carrying it and the other not is a difference rather than something
 	// to strip. Below a cast matched on both sides the normal rule applies
 	// again, because the position is then a cast argument rather than a target.
+	//
+	// The exception is a bare string or NULL constant. It resolves to text on
+	// a target, and pg_get_viewdef prints that type ('i'::text), so the cast
+	// changes nothing there.
 	if ctx.IsSelectTarget() && desired.GetTypeCast() == nil && current.GetTypeCast() != nil {
+		if ct := current.GetTypeCast(); isTextTypeName(ct.TypeName) && isUntypedConst(desired) && isUntypedConst(ct.Arg) {
+			return ct.Arg
+		}
 		return current
 	}
 	for {
