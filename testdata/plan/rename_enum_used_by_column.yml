@@ -1,0 +1,25 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE DOMAIN public.status_domain AS public.status;
+  CREATE TYPE public.status_pair AS (current public.status, history public.status[]);
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status public.status,
+      history public.status[],
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, status FROM public.users;
+desired: |
+  -- pista:renamed-from public.status
+  CREATE TYPE public.user_status AS ENUM ('active', 'inactive');
+  CREATE DOMAIN public.status_domain AS public.user_status;
+  CREATE TYPE public.status_pair AS (current public.user_status, history public.user_status[]);
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      status public.user_status,
+      history public.user_status[],
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.active_users AS SELECT id, status FROM public.users;
+plan: |
+  ALTER TYPE public.status RENAME TO user_status;

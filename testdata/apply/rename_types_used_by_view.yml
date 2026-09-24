@@ -1,0 +1,203 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('active', 'inactive');
+  CREATE DOMAIN public.positive_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+  CREATE TYPE public.address AS (street text, city text);
+  CREATE SEQUENCE public.user_seq;
+  CREATE TABLE public.users (
+      id integer DEFAULT nextval('user_seq'::regclass) NOT NULL,
+      status public.status,
+      score public.positive_int,
+      addr public.address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_summary AS SELECT id, status, score, addr FROM public.users;
+desired: |
+  -- pista:renamed-from public.status
+  CREATE TYPE public.user_status AS ENUM ('active', 'inactive');
+  -- pista:renamed-from public.positive_int
+  CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+  -- pista:renamed-from public.address
+  CREATE TYPE public.postal_address AS (street text, city text);
+  -- pista:renamed-from public.user_seq
+  CREATE SEQUENCE public.user_id_seq;
+  CREATE TABLE public.users (
+      id integer DEFAULT nextval('user_id_seq'::regclass) NOT NULL,
+      status public.user_status,
+      score public.pos_int,
+      addr public.postal_address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.user_summary AS SELECT id, status, score, addr FROM public.users;
+applied_sql: |
+  ALTER TYPE public.status RENAME TO user_status;
+  ALTER DOMAIN public.positive_int RENAME TO pos_int;
+  ALTER TYPE public.address RENAME TO postal_address;
+  ALTER SEQUENCE public.user_seq RENAME TO user_id_seq;
+applied: |
+  -- public.user_status
+  CREATE TYPE public.user_status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK ((VALUE > 0));
+
+  -- public.postal_address
+  CREATE TYPE public.postal_address AS (
+      street text,
+      city text
+  );
+
+  -- public.user_id_seq
+  CREATE SEQUENCE public.user_id_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer DEFAULT nextval('user_id_seq'::regclass) NOT NULL,
+      status user_status,
+      score pos_int,
+      addr postal_address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_summary
+  CREATE OR REPLACE VIEW public.user_summary AS
+  SELECT users.id,
+      users.status,
+      users.score,
+      users.addr
+     FROM users;
+applied_pg16: |
+  -- public.user_status
+  CREATE TYPE public.user_status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK ((VALUE > 0));
+
+  -- public.postal_address
+  CREATE TYPE public.postal_address AS (
+      street text,
+      city text
+  );
+
+  -- public.user_id_seq
+  CREATE SEQUENCE public.user_id_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer DEFAULT nextval('user_id_seq'::regclass) NOT NULL,
+      status user_status,
+      score pos_int,
+      addr postal_address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_summary
+  CREATE OR REPLACE VIEW public.user_summary AS
+  SELECT id,
+      status,
+      score,
+      addr
+     FROM users;
+applied_pg17: |
+  -- public.user_status
+  CREATE TYPE public.user_status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK ((VALUE > 0));
+
+  -- public.postal_address
+  CREATE TYPE public.postal_address AS (
+      street text,
+      city text
+  );
+
+  -- public.user_id_seq
+  CREATE SEQUENCE public.user_id_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer DEFAULT nextval('user_id_seq'::regclass) NOT NULL,
+      status user_status,
+      score pos_int,
+      addr postal_address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_summary
+  CREATE OR REPLACE VIEW public.user_summary AS
+  SELECT id,
+      status,
+      score,
+      addr
+     FROM users;
+applied_pg18: |
+  -- public.user_status
+  CREATE TYPE public.user_status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK ((VALUE > 0));
+
+  -- public.postal_address
+  CREATE TYPE public.postal_address AS (
+      street text,
+      city text
+  );
+
+  -- public.user_id_seq
+  CREATE SEQUENCE public.user_id_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer DEFAULT nextval('user_id_seq'::regclass) NOT NULL,
+      status user_status,
+      score pos_int,
+      addr postal_address,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_summary
+  CREATE OR REPLACE VIEW public.user_summary AS
+  SELECT id,
+      status,
+      score,
+      addr
+     FROM users;

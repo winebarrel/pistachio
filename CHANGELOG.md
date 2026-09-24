@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* Renaming an enum, domain, composite type or sequence with `-- pista:renamed-from` no longer retypes the columns that use it or resets their `nextval()` default. The extra statements failed the apply when a view read such a column, and a domain over a renamed type stopped the plan with a base type error.
+
 * A `DEFERRABLE` or `INITIALLY DEFERRED` written on a column constraint, such as `REFERENCES users (id) DEFERRABLE INITIALLY DEFERRED`, is now read. It was dropped, so the constraint was created not deferrable. A combination PostgreSQL rejects, such as `NOT DEFERRABLE INITIALLY DEFERRED`, is an error.
 
 * Error messages no longer repeat the program name, as in `pista: error: pistachio: ...`. The schema errors name `--schemas` instead of `Options.Schemas`, and a failed connection reads `failed to connect to database`.
