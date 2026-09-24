@@ -10,6 +10,8 @@ Declarative schema management tool for PostgreSQL with a Terraform-like plan/app
 > [!TIP]
 > **[Try pistachio in your browser](https://pistachio-demo.winebarrel.workers.dev)**: edit two schemas and see the DDL `pista diff` generates. Nothing to install.
 
+<!-- Keeps the two alerts apart. -->
+
 > [!WARNING]
 > **Changed in 1.52.0**: Options such as `-c` and `-n` now go after the subcommand, not before it.
 >
