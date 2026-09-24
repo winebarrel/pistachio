@@ -921,9 +921,8 @@ Origin: review of the serial retype fix, 2026-09-08.
 
 Priority: low.
 
-A column is read as a serial when it owns a sequence and its default draws from
-that sequence, whatever the sequence is called. `pista dump` writes such a
-column as a serial type, which names no sequence:
+A column that owns a sequence and draws its default from it is read as a
+serial, whatever the sequence is called:
 
 ```sql
 CREATE SEQUENCE public.custom_user_id_seq;
@@ -932,20 +931,14 @@ ALTER SEQUENCE public.custom_user_id_seq OWNED BY public.users.id;
 ```
 
 `pista dump` writes `id bigserial NOT NULL` and no `CREATE SEQUENCE`. The plan
-of that dump reports no changes, but loading it into an empty database creates
-`users_id_seq` in place of `custom_user_id_seq`, and options set on the
-sequence by hand go back to their defaults. A sequence named and set up the
-way serial would create it restores unchanged.
+of that dump is clean, but loading it into an empty database creates
+`users_id_seq`, and options set on the sequence go back to their defaults.
+Use `pg_dump -s` to copy such a database.
 
-`pg_dump -s` writes the sequence, the default and the ownership as they are,
-so it restores such a database.
-
-Closing it means reading a column as a serial only when its sequence carries
-the name and options serial would give it, and writing any other as the
-sequence, the column with its `nextval` default, and the `OWNED BY`. A desired
-side that writes the `OWNED BY` leaves the sequence unmanaged today (see the
-sequence ownership entry above), so the plan of such a dump would need that
-changed as well.
+Closing it means reading a column as a serial only when its sequence has the
+name and options serial gives it, and writing any other column as the sequence,
+the `nextval` default and the `OWNED BY`. The plan of that dump also needs a
+desired `OWNED BY` to keep the sequence managed, which it does not today.
 
 Origin: sequence ownership review, 2026-09-23.
 

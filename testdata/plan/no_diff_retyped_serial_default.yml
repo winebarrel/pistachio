@@ -1,0 +1,12 @@
+# A serial column moved to a type a sequence cannot hold keeps its sequence
+# and its default. The desired schema writes the default out, and it matches.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+  ALTER TABLE public.t ALTER COLUMN id SET DATA TYPE text;
+desired: |
+  CREATE TABLE public.t (
+      id text DEFAULT nextval('t_id_seq'::regclass) NOT NULL
+  );
+plan: ""

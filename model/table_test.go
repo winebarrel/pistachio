@@ -141,6 +141,18 @@ func TestTable_SQL_withDefault(t *testing.T) {
 	assert.Contains(t, tbl.SQL(), "DEFAULT 0")
 }
 
+// PostgreSQL refuses a default next to a serial type, so the one the catalog
+// reads for a serial column is not written.
+func TestTable_SQL_serialOmitsDefault(t *testing.T) {
+	tbl := newTable("public", "users")
+	seq := "public.users_id_seq"
+	def := "nextval('users_id_seq'::regclass)"
+	tbl.Columns.Set("id", &model.Column{Name: "id", TypeName: "bigserial", NotNull: true, SerialSequence: &seq, Default: &def})
+
+	assert.Contains(t, tbl.SQL(), "    id bigserial NOT NULL\n")
+	assert.NotContains(t, tbl.SQL(), "DEFAULT")
+}
+
 func TestTable_SQL_withCollation(t *testing.T) {
 	tbl := newTable("public", "users")
 	coll := `"en_US"`

@@ -4365,6 +4365,38 @@ func TestAlterColumnSQL_SerialWidening(t *testing.T) {
 	}, alterColumnSQL("public.users", current, desired))
 }
 
+// A serial column's default is left alone when the desired side writes none,
+// and compared with the one the desired side writes.
+func TestAlterColumnSQL_SerialDefault(t *testing.T) {
+	seq := "public.users_id_seq"
+	def := "nextval('users_id_seq'::regclass)"
+	current := &model.Column{Name: "id", TypeName: "bigserial", NotNull: true, SerialSequence: &seq, Default: &def}
+
+	t.Run("serial", func(t *testing.T) {
+		desired := &model.Column{Name: "id", TypeName: "bigserial", NotNull: true}
+		assert.Empty(t, alterColumnSQL("public.users", current, desired))
+	})
+
+	t.Run("no default", func(t *testing.T) {
+		desired := &model.Column{Name: "id", TypeName: "bigint", NotNull: true}
+		assert.Empty(t, alterColumnSQL("public.users", current, desired))
+	})
+
+	t.Run("same default", func(t *testing.T) {
+		d := "nextval('users_id_seq')"
+		desired := &model.Column{Name: "id", TypeName: "bigint", NotNull: true, Default: &d}
+		assert.Empty(t, alterColumnSQL("public.users", current, desired))
+	})
+
+	t.Run("other default", func(t *testing.T) {
+		d := "0"
+		desired := &model.Column{Name: "id", TypeName: "bigint", NotNull: true, Default: &d}
+		assert.Equal(t, []string{
+			"ALTER TABLE public.users ALTER COLUMN id SET DEFAULT 0;",
+		}, alterColumnSQL("public.users", current, desired))
+	})
+}
+
 // A partition holds a copy of its parent's foreign key that PostgreSQL refuses
 // to drop on its own, and the copy goes with the partition, so dropping the
 // partition takes one statement. A key the table owns still takes its own.
