@@ -58,7 +58,7 @@ Two cases read coarser than PostgreSQL treats them. A binary-coercible type chan
 
 ## In a diff
 
-`pista diff --explain` writes the same comment without a database. It has no size to show, so a table is named alone, with the indexes a rewrite builds again and the number of partitions. Two answers come from the server in `plan`, whether a column type change is a relabel and whether a default calls a volatile function, and `diff` has no server to ask, so such a statement reads `may rewrite`.
+`pista diff --explain` writes the same comment without a database. A table carries the indexes a rewrite builds again and its number of partitions, but no size. A column type change and an added column whose default calls a function read `may rewrite`: `plan` asks the server whether the change is a relabel and whether the function is volatile, and `diff` has no server to ask.
 
 ```sql
 $ pista diff --explain old.sql new.sql

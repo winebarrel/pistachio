@@ -604,7 +604,7 @@ pista diff --check --git origin/main...HEAD schema.sql
 echo $?  # 0: no changes, 2: changes, 1: error
 ```
 
-`--explain` comments each statement the way `plan --explain` does. No database is read, so the comment carries no size, and a column type change or an added column whose default calls a function reads `may rewrite`, since only the server can say whether it rewrites the table. Also available as `$PISTA_EXPLAIN`. See [Explaining a plan](../guides/explaining-plans.md).
+`--explain` comments each statement the way `plan --explain` does, without a database: the comment carries no size, and a column type change or an added column whose default calls a function reads `may rewrite`. Also available as `$PISTA_EXPLAIN`. See [Explaining a plan](../guides/explaining-plans.md).
 
 A `-- pista:execute` statement is not part of the output: it is not schema state, and its check SQL cannot be evaluated without a database. `apply` runs execute statements as usual.
 

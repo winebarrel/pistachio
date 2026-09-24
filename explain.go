@@ -45,9 +45,8 @@ const (
 	// touchScan reads every row once: a constraint validation, an index
 	// build, a NOT NULL check.
 	touchScan
-	// touchMayRewrite is a statement that rewrites the table or changes the
-	// catalog alone depending on what only the server can say, when there is
-	// no server to ask: diff has none.
+	// touchMayRewrite is a rewrite or a catalog-only change that only the
+	// server can tell apart, for diff, which has no server to ask.
 	touchMayRewrite
 	// touchRewrite copies the table into a new file and rebuilds every index
 	// on it.
@@ -145,8 +144,8 @@ type explainer struct {
 	// domains is the desired side, read for ADD COLUMN: a column of a domain
 	// that carries a constraint is verified by a rewrite.
 	domains *orderedmap.Map[string, *model.Domain]
-	// offline is set when there is no server to ask, for diff. No size is
-	// read, and a statement only the server can place reads as may rewrite.
+	// offline is set for diff, which has no server: no size is shown, and a
+	// statement only the server can place reads as may rewrite.
 	offline  bool
 	stats    map[string]catalog.TableStat
 	types    map[catalog.TypeChange]catalog.TypeChangeInfo

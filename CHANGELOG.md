@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* Add `--explain` to `diff`. It comments each statement the way `plan --explain` does, without the table sizes, and a type change or a default that calls a function reads `may rewrite`, since there is no server to ask.
+* Add `--explain` to `diff`. It writes the comment `plan --explain` does, without sizes, and marks a type change or a default that calls a function `may rewrite`.
 
 ## [1.64.0] - 2026-09-24
 
