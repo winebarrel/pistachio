@@ -629,6 +629,44 @@ func TestEqualViewDef_currentOnlyTypeCast_rangeSubselect(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_targetBareLiteral(t *testing.T) {
+	// pg_get_viewdef prints an untyped constant on a target with the text type
+	// it resolved to.
+	assert.True(t, equalViewDef(
+		"SELECT t.id, 'i'::text AS src, NULL::text AS note FROM t",
+		"SELECT id, 'i' AS src, NULL AS note FROM t",
+	))
+}
+
+func TestEqualViewDef_targetBareLiteral_otherType(t *testing.T) {
+	// A bare constant resolves to text only, so another type on the current
+	// side is a different output column type.
+	assert.False(t, equalViewDef(
+		"SELECT 'i'::character varying AS src FROM t",
+		"SELECT 'i' AS src FROM t",
+	))
+	// A cast the desired side writes is compared as written.
+	assert.False(t, equalViewDef(
+		"SELECT 'i'::text AS src FROM t",
+		"SELECT 'i'::varchar AS src FROM t",
+	))
+}
+
+func TestEqualViewDef_targetBareLiteral_notConstant(t *testing.T) {
+	assert.False(t, equalViewDef(
+		"SELECT t.id::text AS src FROM t",
+		"SELECT id AS src FROM t",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT 'i'::text AS src FROM t",
+		"SELECT 'j' AS src FROM t",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT 1::text AS src FROM t",
+		"SELECT 1 AS src FROM t",
+	))
+}
+
 func TestEqualViewDef_inVsAnyArray_orderBy(t *testing.T) {
 	// ORDER BY can contain a comparison expression (sorts by the boolean
 	// result). Covers the SortClause walker position.
