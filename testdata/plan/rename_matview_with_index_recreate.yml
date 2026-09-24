@@ -1,0 +1,14 @@
+init: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE MATERIALIZED VIEW public.mv AS SELECT a FROM public.t;
+  CREATE INDEX mv_ix ON public.mv (a);
+desired: |
+  CREATE TABLE public.t (a integer, b integer);
+  -- pista:renamed-from public.mv
+  CREATE MATERIALIZED VIEW public.mv2 AS SELECT a, b FROM public.t;
+  CREATE INDEX mv_ix ON public.mv2 (a);
+plan: |
+  DROP MATERIALIZED VIEW public.mv;
+  CREATE MATERIALIZED VIEW public.mv2 AS
+  SELECT a, b FROM public.t;
+  CREATE INDEX mv_ix ON public.mv2 USING btree (a);

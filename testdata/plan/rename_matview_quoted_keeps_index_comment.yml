@@ -1,0 +1,13 @@
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE MATERIALIZED VIEW public."Mv" AS SELECT a FROM public.t;
+  CREATE INDEX "Mv_ix" ON public."Mv" (a);
+  COMMENT ON INDEX public."Mv_ix" IS 'kept';
+desired: |
+  CREATE TABLE public.t (a integer);
+  -- pista:renamed-from public."Mv"
+  CREATE MATERIALIZED VIEW public."My View" AS SELECT a FROM public.t;
+  CREATE INDEX "Mv_ix" ON public."My View" (a);
+  COMMENT ON INDEX public."Mv_ix" IS 'kept';
+plan: |
+  ALTER MATERIALIZED VIEW public."Mv" RENAME TO "My View";

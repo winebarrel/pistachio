@@ -11,8 +11,9 @@ Writing the schema the way `dump` writes it avoids it.
 `-- pista:renamed-from` adjusts the current side so the change is planned as a
 rename rather than a drop and a create. The adjustment reaches the renamed
 object's own dependents alone: a column's indexes, constraints, foreign keys,
-triggers, policies and generated expressions on the same table, and a table's
-own indexes and foreign keys. Two references are left as they were:
+triggers, policies and generated expressions on the same table, a table's own
+indexes and foreign keys, and a materialized view's own indexes. Two references
+are left as they were:
 
 - A view or materialized view definition that names the renamed table or
   selects the renamed column.
