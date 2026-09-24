@@ -20,6 +20,8 @@ import (
 //   - schema/column qualification stripping (pg_get_viewdef adds
 //     table-qualified columns and omits the default schema, parsed SQL is
 //     the opposite),
+//   - output name stripping on every SELECT of a set operation but the
+//     leftmost, where pg_get_viewdef repeats the leftmost names,
 //   - symmetric expression normalization via normalizeCheckExpr:
 //     paren / text-like cast stripping and `= ANY(ARRAY[...])` -> `IN (...)`,
 //   - asymmetric current-only cast alignment via alignCurrentCasts: strips
@@ -27,7 +29,7 @@ import (
 //     didn't write. Top-level casts at the target list are preserved on
 //     both sides since they affect the resulting view's column type.
 //
-// All three walk the whole statement, so a nested SELECT, a join qualifier,
+// All of them walk the whole statement, so a nested SELECT, a join qualifier,
 // a DISTINCT ON element, a named WINDOW or a sub-query gets the same
 // treatment as the target list without any of them being enumerated here.
 //
@@ -45,10 +47,12 @@ func equalViewDef(current, desired string) bool {
 	}
 	for _, stmt := range curResult.Stmts {
 		stripQualifications(stmt.Stmt)
+		stripSetOpBranchNames(stmt.Stmt)
 		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
 	}
 	for _, stmt := range desResult.Stmts {
 		stripQualifications(stmt.Stmt)
+		stripSetOpBranchNames(stmt.Stmt)
 		stmt.Stmt = normalizeCheckExpr(stmt.Stmt)
 	}
 	if len(curResult.Stmts) == 1 && len(desResult.Stmts) == 1 {
@@ -193,6 +197,45 @@ func stripQualifications(node *pg_query.Node) {
 		}
 		return n
 	})
+}
+
+// stripSetOpBranchNames removes the target names from every SELECT of a
+// UNION / INTERSECT / EXCEPT other than the leftmost one and one with its own
+// ORDER BY. The output column
+// names come from the leftmost SELECT alone, and pg_get_viewdef writes them
+// onto the later SELECTs as well (`SELECT other.qty AS id`), so a name there
+// means nothing and is dropped on both sides.
+//
+// The arms of a set operation are SelectStmts rather than Nodes, so the walk
+// visits the outermost SelectStmt of each set operation only, and
+// clearSetOpNames goes down its arms. A set operation in a sub-query or CTE
+// is a Node of its own and gets the same treatment.
+func stripSetOpBranchNames(node *pg_query.Node) {
+	pgast.Walk(node, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+		if ss := n.GetSelectStmt(); ss != nil && ss.Op != pg_query.SetOperation_SETOP_NONE {
+			clearSetOpNames(ss, true)
+		}
+		return n
+	})
+}
+
+func clearSetOpNames(ss *pg_query.SelectStmt, leftmost bool) {
+	// A branch's own ORDER BY can sort by its output names, so they count
+	// there. On a nested set operation those are the names of its leftmost
+	// SELECT.
+	if ss.Op != pg_query.SetOperation_SETOP_NONE {
+		clearSetOpNames(ss.Larg, leftmost || len(ss.SortClause) > 0)
+		clearSetOpNames(ss.Rarg, false)
+		return
+	}
+	if leftmost || len(ss.SortClause) > 0 {
+		return
+	}
+	for _, t := range ss.TargetList {
+		if rt := t.GetResTarget(); rt != nil {
+			rt.Name = ""
+		}
+	}
 }
 
 // ViewDiffResult separates view DROP and CREATE/MODIFY statements.

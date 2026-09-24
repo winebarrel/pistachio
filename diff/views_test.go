@@ -379,6 +379,70 @@ func TestEqualViewDef_unionDifference(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_setOpBranchNames(t *testing.T) {
+	// pg_get_viewdef names the later branches after the leftmost SELECT.
+	assert.True(t, equalViewDef(
+		"SELECT items.id FROM items UNION SELECT other.qty AS id FROM other",
+		"SELECT id FROM public.items UNION SELECT qty FROM public.other",
+	))
+	assert.True(t, equalViewDef(
+		"(SELECT items.id AS a, items.qty FROM items UNION ALL SELECT other.qty AS a, other.id AS qty FROM other) EXCEPT SELECT third.id AS a, third.qty FROM third",
+		"SELECT id AS a, qty FROM items UNION ALL SELECT qty AS x, id FROM other EXCEPT SELECT id, qty FROM third",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT s.n FROM (SELECT items.id AS n FROM items UNION SELECT other.qty FROM other) s",
+		"SELECT s.n FROM (SELECT id AS n FROM items UNION SELECT qty AS m FROM other) s",
+	))
+	assert.True(t, equalViewDef(
+		"WITH c AS (SELECT items.id AS a FROM items UNION SELECT other.qty FROM other) SELECT c.a FROM c",
+		"WITH c AS (SELECT id AS a FROM items UNION SELECT qty AS b FROM other) SELECT a FROM c",
+	))
+	// A sub-query inside a later branch keeps its own names.
+	assert.False(t, equalViewDef(
+		"SELECT items.id FROM items UNION SELECT s.q AS id FROM (SELECT other.qty AS q FROM other) s",
+		"SELECT id FROM items UNION SELECT s.q FROM (SELECT qty AS r FROM other) s",
+	))
+}
+
+func TestEqualViewDef_setOpLeftmostName(t *testing.T) {
+	// The leftmost SELECT names the output columns, so its names still count.
+	assert.False(t, equalViewDef(
+		"SELECT items.id FROM items UNION SELECT other.qty AS id FROM other",
+		"SELECT id AS n FROM items UNION SELECT qty FROM other",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT items.id FROM items UNION SELECT other.qty AS id FROM other",
+		"SELECT id FROM items UNION SELECT id FROM other",
+	))
+}
+
+func TestEqualViewDef_setOpBranchOrderBy(t *testing.T) {
+	// A later branch with its own ORDER BY can sort by its output names, so
+	// the names there still count.
+	assert.False(t, equalViewDef(
+		"SELECT id, qty FROM t UNION ALL (SELECT qty AS x, id AS y FROM u ORDER BY x LIMIT 1)",
+		"SELECT id, qty FROM t UNION ALL (SELECT qty AS y, id AS x FROM u ORDER BY x LIMIT 1)",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
+		"SELECT a FROM t UNION (SELECT b FROM t ORDER BY a LIMIT 1)",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
+		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
+	))
+	// A nested set operation's ORDER BY can sort by its leftmost names.
+	assert.False(t, equalViewDef(
+		"SELECT 0 AS a, 0 AS b UNION ALL (SELECT 1 AS x, 9 AS y UNION ALL SELECT 3, 2 ORDER BY x LIMIT 1)",
+		"SELECT 0 AS a, 0 AS b UNION ALL (SELECT 1 AS y, 9 AS x UNION ALL SELECT 3, 2 ORDER BY x LIMIT 1)",
+	))
+	// Without an ORDER BY, a LIMIT does not refer to the names.
+	assert.True(t, equalViewDef(
+		"SELECT a FROM t UNION (SELECT t.b AS a FROM t LIMIT 1)",
+		"SELECT a FROM t UNION (SELECT b FROM t LIMIT 1)",
+	))
+}
+
 func TestEqualViewDef_subselect(t *testing.T) {
 	// Covers RangeSubselect path
 	assert.True(t, equalViewDef(
