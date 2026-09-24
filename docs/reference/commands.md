@@ -737,7 +737,7 @@ pista apply schema.sql --exclusive
 pista apply schema.sql --exclusive-wait=5m
 ```
 
-By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, columns, constraints, foreign keys, or indexes. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type. `routine` covers functions and procedures, and also gates the drop half of a recreate.
+By default, `plan` and `apply` do not drop tables, views, enums, domains, composite types, sequences, routines, columns, constraints, foreign keys, indexes, policies, or triggers. Use `--allow-drop` to enable dropping specific object types (`all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`). Also available as `$PISTA_ALLOW_DROP`. `constraint` covers CHECK / UNIQUE / PRIMARY KEY / EXCLUSION; foreign keys are governed by `foreign_key` separately. `composite_type` also gates `DROP ATTRIBUTE` on a composite type. `routine` covers functions and procedures, and also gates the drop half of a recreate.
 
 ```bash
 # Allow all drops
@@ -756,7 +756,7 @@ Suppressed drops are emitted as commented-out DDL prefixed with `-- skipped:`. T
 ```
 
 !!! note
-    Only pure removals of constraints, foreign keys, and indexes (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index`. Definition changes still execute regardless of `--allow-drop`: constraints and foreign keys as DROP + ADD, and indexes as DROP + CREATE, because PostgreSQL has no `ALTER CONSTRAINT` and no general `ALTER INDEX` form for definition changes.
+    Only pure removals of constraints, foreign keys, indexes, and policies (those absent from the desired schema) are governed by `--allow-drop=constraint` / `--allow-drop=foreign_key` / `--allow-drop=index` / `--allow-drop=policy`. Definition changes still execute regardless of `--allow-drop`: constraints and foreign keys as DROP + ADD, and indexes as DROP + CREATE, because PostgreSQL has no `ALTER CONSTRAINT` and no general `ALTER INDEX` form for definition changes. A policy is recreated as DROP + CREATE when its command or permissiveness changes or a `USING` / `WITH CHECK` clause is removed, since `ALTER POLICY` cannot make those changes.
 
     Foreign-key drops emitted because the owning table is being dropped follow the table-drop policy (not `foreign_key`): if the table drop is suppressed, the FK drop is suppressed too and surfaces as `-- skipped:` alongside the table.
 
