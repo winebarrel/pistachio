@@ -1,0 +1,15 @@
+# A default that differs in value is still a change, written or not with a cast.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.fd(a text DEFAULT 'x', b integer DEFAULT 1) RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+desired: |
+  CREATE FUNCTION public.fd(a text DEFAULT 'y', b integer DEFAULT 1) RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+plan: |
+  CREATE OR REPLACE FUNCTION public.fd(a text DEFAULT 'y', b integer DEFAULT 1)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
