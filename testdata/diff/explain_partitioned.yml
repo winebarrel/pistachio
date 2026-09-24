@@ -1,0 +1,20 @@
+# A partitioned table names its partitions in place of a size.
+explain: true
+current: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.events_2025 PARTITION OF public.events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE INDEX events_at_idx ON public.events (at);
+diff: |
+  -- scan, blocks writes: public.events (2 partitions)
+  CREATE INDEX events_at_idx ON public.events USING btree (at);

@@ -30,6 +30,9 @@ type diffTestCase struct {
 	ManageRoutine            bool            `yaml:"manage_routine,omitempty"`
 	ManageStorageParam       bool            `yaml:"manage_storage_param,omitempty"`
 	SkipPartitionChild       bool            `yaml:"skip_partition_child,omitempty"`
+	// Explain sets --explain, so the diff carries a comment before each
+	// statement that scans or rewrites a table.
+	Explain bool `yaml:"explain,omitempty"`
 }
 
 // TestDiff runs the fixture suite. Diff reads no database, so unlike the plan
@@ -71,6 +74,7 @@ func TestDiff(t *testing.T) {
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 				BulkAlter:                tc.BulkAlter,
 				AssumeValidated:          tc.AssumeValidated,
+				Explain:                  tc.Explain,
 			})
 			if tc.Error != "" {
 				require.Error(t, err)

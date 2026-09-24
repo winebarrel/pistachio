@@ -22,6 +22,7 @@ type DiffOptions struct {
 	ForceIndexConcurrently   bool     `xor:"index-concurrently" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
+	Explain                  bool     `env:"PISTA_EXPLAIN" help:"Comment each statement that scans or rewrites a table with what it does and what its lock blocks. No database is read, so no size is shown, and a type change or a default that calls a function reads as may rewrite."`
 }
 
 // Diff diffs two schemas without a database: the first stands in for the
@@ -72,6 +73,10 @@ func (client *Client) Diff(options *DiffOptions) (*PlanResult, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if options.Explain {
+		result.Stmts = client.explainStmtsOffline(result.Stmts, result.CurrentTables, result.DesiredTables, result.DesiredDomains)
 	}
 
 	// A -- pista:execute statement is not part of the diff: it is not schema

@@ -45,6 +45,9 @@ const (
 	// touchScan reads every row once: a constraint validation, an index
 	// build, a NOT NULL check.
 	touchScan
+	// touchMayRewrite is a rewrite or a catalog-only change that only the
+	// server can tell apart, for diff, which has no server to ask.
+	touchMayRewrite
 	// touchRewrite copies the table into a new file and rebuilds every index
 	// on it.
 	touchRewrite
@@ -69,6 +72,8 @@ func (k touchKind) String() string {
 	switch k {
 	case touchScan:
 		return "scan"
+	case touchMayRewrite:
+		return "may rewrite"
 	case touchRewrite:
 		return "rewrite"
 	}
@@ -138,7 +143,10 @@ type explainer struct {
 	columnAlias map[string]map[string]string
 	// domains is the desired side, read for ADD COLUMN: a column of a domain
 	// that carries a constraint is verified by a rewrite.
-	domains  *orderedmap.Map[string, *model.Domain]
+	domains *orderedmap.Map[string, *model.Domain]
+	// offline is set for diff, which has no server: no size is shown, and a
+	// statement only the server can place reads as may rewrite.
+	offline  bool
 	stats    map[string]catalog.TableStat
 	types    map[catalog.TypeChange]catalog.TypeChangeInfo
 	volatile map[string]bool
@@ -153,8 +161,78 @@ func (client *Client) explainStmts(
 	current, desired *orderedmap.Map[string, *model.Table],
 	domains *orderedmap.Map[string, *model.Domain],
 ) ([]string, error) {
+	ex := newExplainer(client.Schemas, current, desired, domains)
+	parsed := parseStmts(stmts)
+
+	var changes []catalog.TypeChange
+	var funcs []string
+	seenChange := map[catalog.TypeChange]bool{}
+	seenFunc := map[string]bool{}
+	for _, node := range parsed {
+		if node == nil {
+			continue
+		}
+		for _, ch := range ex.typeChangesOf(node) {
+			if !seenChange[ch] {
+				seenChange[ch] = true
+				changes = append(changes, ch)
+			}
+		}
+		for _, f := range defaultFuncsOf(node) {
+			if !seenFunc[f] {
+				seenFunc[f] = true
+				funcs = append(funcs, f)
+			}
+		}
+	}
+
+	// The type and volatility answers decide what a statement does to the
+	// rows, so they come before the classification. Each is skipped when the
+	// plan holds nothing that needs it.
+	var err error
+	if ex.types, err = cat.TypeChanges(ctx, changes); err != nil {
+		return nil, err
+	}
+	if ex.volatile, err = cat.VolatileFunctions(ctx, funcs); err != nil {
+		return nil, err
+	}
+
+	effects, sized := ex.classifyAll(parsed)
+
+	// The sizes are read only once a statement is known to want one, so a plan
+	// that creates and drops alone touches pg_class no more than plan does
+	// without the flag.
+	if sized {
+		if ex.stats, err = cat.TableStats(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	return ex.annotate(stmts, effects), nil
+}
+
+// explainStmtsOffline is explainStmts without a server, for diff. No size is
+// shown, and a statement only the server can place reads as may rewrite.
+func (client *Client) explainStmtsOffline(
+	stmts []string,
+	current, desired *orderedmap.Map[string, *model.Table],
+	domains *orderedmap.Map[string, *model.Domain],
+) []string {
+	ex := newExplainer(client.Schemas, current, desired, domains)
+	ex.offline = true
+	effects, _ := ex.classifyAll(parseStmts(stmts))
+	return ex.annotate(stmts, effects)
+}
+
+// newExplainer indexes the current tables by parent and the desired rename
+// directives by new name.
+func newExplainer(
+	schemas []string,
+	current, desired *orderedmap.Map[string, *model.Table],
+	domains *orderedmap.Map[string, *model.Domain],
+) *explainer {
 	ex := &explainer{
-		schemas:     client.Schemas,
+		schemas:     schemas,
 		current:     current,
 		children:    map[string][]*model.Table{},
 		tableAlias:  map[string]string{},
@@ -179,43 +257,21 @@ func (client *Client) explainStmts(
 			}
 		}
 	}
+	return ex
+}
 
+func parseStmts(stmts []string) []*pg_query.Node {
 	parsed := make([]*pg_query.Node, len(stmts))
-	var changes []catalog.TypeChange
-	var funcs []string
-	seenChange := map[catalog.TypeChange]bool{}
-	seenFunc := map[string]bool{}
 	for i, sql := range stmts {
 		parsed[i] = parseOneStmt(sql)
-		if parsed[i] == nil {
-			continue
-		}
-		for _, ch := range ex.typeChangesOf(parsed[i]) {
-			if !seenChange[ch] {
-				seenChange[ch] = true
-				changes = append(changes, ch)
-			}
-		}
-		for _, f := range defaultFuncsOf(parsed[i]) {
-			if !seenFunc[f] {
-				seenFunc[f] = true
-				funcs = append(funcs, f)
-			}
-		}
 	}
+	return parsed
+}
 
-	// The type and volatility answers decide what a statement does to the
-	// rows, so they come before the classification. Each is skipped when the
-	// plan holds nothing that needs it.
-	var err error
-	if ex.types, err = cat.TypeChanges(ctx, changes); err != nil {
-		return nil, err
-	}
-	if ex.volatile, err = cat.VolatileFunctions(ctx, funcs); err != nil {
-		return nil, err
-	}
-
-	effects := make([]explainEffect, len(stmts))
+// classifyAll classifies each parsed statement and reports whether any of
+// them touches a table, which is when a size is wanted.
+func (ex *explainer) classifyAll(parsed []*pg_query.Node) ([]explainEffect, bool) {
+	effects := make([]explainEffect, len(parsed))
 	sized := false
 	for i, node := range parsed {
 		if node == nil {
@@ -224,16 +280,11 @@ func (client *Client) explainStmts(
 		effects[i] = ex.classify(node)
 		sized = sized || len(effects[i].targets) > 0
 	}
+	return effects, sized
+}
 
-	// The sizes are read only once a statement is known to want one, so a plan
-	// that creates and drops alone touches pg_class no more than plan does
-	// without the flag.
-	if sized {
-		if ex.stats, err = cat.TableStats(ctx); err != nil {
-			return nil, err
-		}
-	}
-
+// annotate prepends each statement's comment, if it has one.
+func (ex *explainer) annotate(stmts []string, effects []explainEffect) []string {
 	out := make([]string, len(stmts))
 	for i, sql := range stmts {
 		out[i] = sql
@@ -241,7 +292,7 @@ func (client *Client) explainStmts(
 			out[i] = line + "\n" + sql
 		}
 	}
-	return out, nil
+	return out
 }
 
 // parseOneStmt parses a statement the diff emitted. Anything that does not
@@ -367,7 +418,7 @@ func (ex *explainer) classifyAlterTable(as *pg_query.AlterTableStmt) explainEffe
 func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse bool, cmd *pg_query.AlterTableCmd) explainEffect {
 	self := func(touch touchKind, block blockKind) explainEffect {
 		tg := ex.target(key, t, recurse)
-		if touch == touchRewrite {
+		if touch >= touchMayRewrite {
 			tg.rebuilt = indexCount(t)
 		}
 		return explainEffect{touch: touch, block: block, targets: []explainTarget{tg}}
@@ -441,6 +492,7 @@ func (ex *explainer) addColumnTouch(cd *pg_query.ColumnDef) touchKind {
 	}
 	notNull := false
 	hasDefault := false
+	mayRewrite := false
 	for _, n := range cd.GetConstraints() {
 		con := n.GetConstraint()
 		switch con.GetContype() {
@@ -451,11 +503,16 @@ func (ex *explainer) addColumnTouch(cd *pg_query.ColumnDef) touchKind {
 		case pg_query.ConstrType_CONSTR_DEFAULT:
 			hasDefault = true
 			for _, f := range funcNamesOf(con.GetRawExpr()) {
-				if ex.volatile[f] {
+				if ex.offline {
+					mayRewrite = true
+				} else if ex.volatile[f] {
 					return touchRewrite
 				}
 			}
 		}
+	}
+	if mayRewrite {
+		return touchMayRewrite
 	}
 	if notNull && !hasDefault {
 		return touchScan
@@ -482,6 +539,9 @@ func (ex *explainer) isConstrainedDomain(tn *pg_query.TypeName) bool {
 // server answered as a plain relabel changes the catalog alone, and so does a
 // wider modifier on the same type. Everything else converts every row.
 func (ex *explainer) alterTypeTouch(current string, desired *pg_query.TypeName) touchKind {
+	if ex.offline {
+		return touchMayRewrite
+	}
 	ch := catalog.TypeChange{Src: baseTypeString(current), Dst: typeNameString(desired)}
 	info, ok := ex.types[ch]
 	if !ok || !info.Known {
@@ -775,7 +835,7 @@ func (ex *explainer) render(eff explainEffect) string {
 	}
 	parts := make([]string, len(eff.targets))
 	for i, tg := range eff.targets {
-		parts[i] = ex.renderTarget(tg)
+		parts[i] = ex.renderTarget(tg, eff.touch == touchMayRewrite)
 	}
 	return fmt.Sprintf("-- %s, %s: %s", eff.touch, eff.block, strings.Join(parts, ", "))
 }
@@ -790,7 +850,7 @@ func (ex *explainer) render(eff explainEffect) string {
 // zone, and over several relations it is the oldest of them, since the sum is
 // no fresher than its stalest part. It is left out when the server no longer
 // remembers a time.
-func (ex *explainer) renderTarget(tg explainTarget) string {
+func (ex *explainer) renderTarget(tg explainTarget, mayRewrite bool) string {
 	t, ok := ex.current.GetOk(tg.key)
 	if !ok {
 		if old, aliased := ex.tableAlias[tg.key]; aliased {
@@ -805,12 +865,22 @@ func (ex *explainer) renderTarget(tg explainTarget) string {
 	if tg.descendants > 0 {
 		relations = append(relations, ex.descendants(t)...)
 	}
-	details := sizeDetails(ex.stats, relations)
+	var details []string
+	if !ex.offline {
+		details = sizeDetails(ex.stats, relations)
+	}
 	if tg.rebuilt > 0 {
-		details = append(details, plural(tg.rebuilt, "index", "indexes")+" rebuilt")
+		rebuilt := " rebuilt"
+		if mayRewrite {
+			rebuilt = " may be rebuilt"
+		}
+		details = append(details, plural(tg.rebuilt, "index", "indexes")+rebuilt)
 	}
 	if tg.descendants > 0 {
 		details = append(details, pluralize(tg.descendants, tg.descendantKind))
+	}
+	if len(details) == 0 {
+		return tg.key
 	}
 	return tg.key + " (" + strings.Join(details, ", ") + ")"
 }

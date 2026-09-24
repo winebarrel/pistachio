@@ -1,0 +1,44 @@
+# Without a database there is no size to show, and a change the server would
+# judge, a type change or a default that calls a function, reads as
+# "may rewrite". A table the diff creates takes no comment.
+explain: true
+current: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount integer,
+      note text,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX orders_amount_idx ON public.orders (amount);
+desired: |
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      amount bigint,
+      note text NOT NULL,
+      created_at timestamp with time zone DEFAULT now(),
+      flag integer DEFAULT 0,
+      seq integer GENERATED ALWAYS AS IDENTITY,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX orders_amount_idx ON public.orders (amount);
+  CREATE INDEX orders_note_idx ON public.orders (note);
+  CREATE TABLE public.items (id integer NOT NULL);
+  CREATE INDEX items_id_idx ON public.items (id);
+diff: |
+  CREATE TABLE public.items (
+      id integer NOT NULL
+  );
+  CREATE INDEX items_id_idx ON public.items USING btree (id);
+  -- may rewrite, blocks reads and writes: public.orders (2 indexes may be rebuilt)
+  ALTER TABLE public.orders ADD COLUMN created_at timestamp with time zone DEFAULT now();
+  ALTER TABLE public.orders ADD COLUMN flag integer DEFAULT 0;
+  -- rewrite, blocks reads and writes: public.orders (2 indexes rebuilt)
+  ALTER TABLE public.orders ADD COLUMN seq integer GENERATED ALWAYS AS IDENTITY;
+  -- may rewrite, blocks reads and writes: public.orders (2 indexes may be rebuilt)
+  ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE bigint;
+  -- scan, blocks reads and writes: public.orders
+  ALTER TABLE public.orders ALTER COLUMN note SET NOT NULL;
+  -- scan, blocks writes: public.orders
+  CREATE INDEX orders_note_idx ON public.orders USING btree (note);
+count:
+  tables: 1

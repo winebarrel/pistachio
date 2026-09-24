@@ -1,0 +1,26 @@
+# A foreign key names both tables, a domain change names the tables that use
+# the domain, and a renamed table is named by its new name. Without a server a
+# widened varchar reads as may rewrite too.
+explain: true
+current: |
+  CREATE DOMAIN public.code AS text;
+  CREATE TABLE public.parents (id integer NOT NULL, CONSTRAINT parents_pkey PRIMARY KEY (id));
+  CREATE TABLE public.users (id integer NOT NULL, parent_id integer, name varchar(10), c public.code);
+  CREATE TABLE public.old_items (id integer NOT NULL, qty integer);
+desired: |
+  CREATE DOMAIN public.code AS text NOT NULL;
+  CREATE TABLE public.parents (id integer NOT NULL, CONSTRAINT parents_pkey PRIMARY KEY (id));
+  CREATE TABLE public.users (id integer NOT NULL, parent_id integer, name varchar(20), c public.code,
+    CONSTRAINT users_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parents (id));
+  -- pista:renamed-from public.old_items
+  CREATE TABLE public.items (id integer NOT NULL, qty bigint);
+diff: |
+  ALTER TABLE public.old_items RENAME TO items;
+  -- scan, blocks writes: public.users
+  ALTER DOMAIN public.code SET NOT NULL;
+  -- may rewrite, blocks reads and writes: public.items
+  ALTER TABLE public.items ALTER COLUMN qty SET DATA TYPE bigint;
+  -- may rewrite, blocks reads and writes: public.users
+  ALTER TABLE public.users ALTER COLUMN name SET DATA TYPE character varying(20);
+  -- scan, blocks writes: public.users, public.parents
+  ALTER TABLE ONLY public.users ADD CONSTRAINT users_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parents (id);

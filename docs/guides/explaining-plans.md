@@ -56,6 +56,19 @@ It reports the lock the statement takes, not the wait to get it. An ACCESS EXCLU
 Two cases read coarser than PostgreSQL treats them. A binary-coercible type change that still changes an index's operator class, `integer` to `oid`, rebuilds that index and takes no comment. An `ALTER TABLE` on an `INHERITS` parent counts every child even for `ADD CONSTRAINT ... PRIMARY KEY` and `ADD CONSTRAINT ... FOREIGN KEY`, which do not recurse; pistachio writes foreign keys with `ONLY`, so nothing it emits reaches this.
 
 
+## In a diff
+
+`pista diff --explain` writes the same comment without a database. A table carries the indexes a rewrite builds again, as `may be rebuilt` for `may rewrite`, and its number of partitions, but no size. A column type change and an added column whose default calls a function read `may rewrite`: `plan` asks the server whether the change is a relabel and whether the function is volatile, and `diff` has no server to ask.
+
+```sql
+$ pista diff --explain old.sql new.sql
+-- may rewrite, blocks reads and writes: public.orders (2 indexes may be rebuilt)
+ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE bigint;
+-- scan, blocks writes: public.orders
+CREATE INDEX orders_note_idx ON public.orders USING btree (note);
+```
+
+
 ## Sizes in a dump
 
 `pista dump --explain` writes the same size after the name of each table and materialized view, and the size of each index in a comment above it.
