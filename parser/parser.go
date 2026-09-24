@@ -2431,11 +2431,11 @@ func deparseTypeName(tn *pg_query.TypeName) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("unexpected deparse output for type: %s", sql)
 	}
-	lastParen := strings.LastIndex(rest, ")")
-	if lastParen < 0 {
+	typeName, _, ok := strings.CutLast(rest, ")")
+	if !ok {
 		return "", fmt.Errorf("unexpected deparse output for type: %s", sql)
 	}
-	typeName := strings.TrimSpace(rest[:lastParen])
+	typeName = strings.TrimSpace(typeName)
 	// pg_query may qualify built-in types with "pg_catalog." (e.g. json -> pg_catalog.json).
 	// Strip the prefix so the result matches format_type() output.
 	typeName = strings.TrimPrefix(typeName, "pg_catalog.")
@@ -2700,9 +2700,8 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 	}
 
 	const fallbackMarker = " ADD "
-	idx := strings.LastIndex(sql, fallbackMarker)
-	if idx != -1 {
-		return restorePlaceholders(strings.TrimSpace(sql[idx+len(fallbackMarker):])), nil
+	if _, after, ok := strings.CutLast(sql, fallbackMarker); ok {
+		return restorePlaceholders(strings.TrimSpace(after)), nil
 	}
 
 	return "", fmt.Errorf("could not extract constraint definition from: %s", sql)
