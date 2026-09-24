@@ -200,7 +200,8 @@ func stripQualifications(node *pg_query.Node) {
 }
 
 // stripSetOpBranchNames removes the target names from every SELECT of a
-// UNION / INTERSECT / EXCEPT other than the leftmost one. The output column
+// UNION / INTERSECT / EXCEPT other than the leftmost one and one with its own
+// ORDER BY. The output column
 // names come from the leftmost SELECT alone, and pg_get_viewdef writes them
 // onto the later SELECTs as well (`SELECT other.qty AS id`), so a name there
 // means nothing and is dropped on both sides.
@@ -224,7 +225,9 @@ func clearSetOpNames(ss *pg_query.SelectStmt, leftmost bool) {
 		clearSetOpNames(ss.Rarg, false)
 		return
 	}
-	if leftmost {
+	// A branch's own ORDER BY can sort by its output names, so they count
+	// there.
+	if leftmost || len(ss.SortClause) > 0 {
 		return
 	}
 	for _, t := range ss.TargetList {

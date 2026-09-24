@@ -416,6 +416,28 @@ func TestEqualViewDef_setOpLeftmostName(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_setOpBranchOrderBy(t *testing.T) {
+	// A later branch with its own ORDER BY can sort by its output names, so
+	// the names there still count.
+	assert.False(t, equalViewDef(
+		"SELECT id, qty FROM t UNION ALL (SELECT qty AS x, id AS y FROM u ORDER BY x LIMIT 1)",
+		"SELECT id, qty FROM t UNION ALL (SELECT qty AS y, id AS x FROM u ORDER BY x LIMIT 1)",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
+		"SELECT a FROM t UNION (SELECT b FROM t ORDER BY a LIMIT 1)",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
+		"SELECT a FROM t UNION (SELECT b AS a FROM t ORDER BY a LIMIT 1)",
+	))
+	// Without an ORDER BY, a LIMIT does not refer to the names.
+	assert.True(t, equalViewDef(
+		"SELECT a FROM t UNION (SELECT t.b AS a FROM t LIMIT 1)",
+		"SELECT a FROM t UNION (SELECT b FROM t LIMIT 1)",
+	))
+}
+
 func TestEqualViewDef_subselect(t *testing.T) {
 	// Covers RangeSubselect path
 	assert.True(t, equalViewDef(
