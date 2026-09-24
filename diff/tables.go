@@ -1534,8 +1534,8 @@ func createIndexSQL(def string, concurrently bool) (string, error) {
 }
 
 // foreignKeyChanges compares every foreign key present on both sides once.
-// schema is the owning table's, which stands in for a key that carries no
-// RefSchema.
+// schema is the owning table's, which a bare reference may mean and which
+// stands in for a key that carries no RefSchema.
 func foreignKeyChanges(current, desired *orderedmap.Map[string, *model.ForeignKey], schema string) map[string]definitionChange {
 	changes := make(map[string]definitionChange, desired.Len())
 	for name, desiredFk := range desired.All() {
@@ -1554,7 +1554,7 @@ func foreignKeyChanges(current, desired *orderedmap.Map[string, *model.ForeignKe
 			changes[name] = definitionChange{}
 			continue
 		}
-		sameDef, deferralOnly := compareFKDef(currentFk.Definition, desiredFk.Definition, fkRefSchema(currentFk, schema), fkRefSchema(desiredFk, schema))
+		sameDef, deferralOnly := compareFKDef(currentFk.Definition, desiredFk.Definition, fkRefSchema(currentFk, schema), fkRefSchema(desiredFk, schema), schema)
 		change := newDefinitionChange(sameDef, currentFk.Validated, desiredFk.Validated)
 		switch {
 		case !deferralOnly:
@@ -1945,38 +1945,53 @@ func fkRefSchema(fk *model.ForeignKey, schema string) string {
 	return schema
 }
 
-// normalizeFKSchema fills in the referenced table's schema name in a FK
-// constraint node when the definition leaves it out.
-func normalizeFKSchema(con *pg_query.Constraint, schema string) {
-	if con.Pktable != nil && con.Pktable.Schemaname == "" {
-		con.Pktable.Schemaname = schema
-	}
+// isBareFKRef reports that a FK constraint node names the referenced table
+// without a schema.
+func isBareFKRef(con *pg_query.Constraint) bool {
+	return con.Pktable != nil && con.Pktable.Schemaname == ""
 }
 
 // compareFKDef compares two FK constraint definitions by their parse trees, so
 // that formatting differences do not cause false diffs. refSchemaA and
-// refSchemaB are the schemas each side's referenced table is in.
+// refSchemaB are the schemas each side's referenced table is in, and schema is
+// the owning table's.
 //
 // The catalog leaves the schema out of a reference the search_path reaches.
-// When one side leaves it out and the other does not, the bare side takes its
-// own schema, so a bare name matches a qualified one. When both leave it out,
-// both resolve through the search_path and are compared as written: the
-// parser puts a bare name in the first target schema, which need not be where
-// the search_path lands.
+// When one side leaves it out and the other does not, the bare side matches
+// if the other names the bare side's RefSchema, which is exact for the
+// catalog, or the owning table's schema, which is what a hand-written bare
+// name usually means. When both leave it out, both resolve through the
+// search_path and are compared as written: the parser puts a bare name in the
+// first target schema, which need not be where the search_path lands.
 //
 // deferralOnly reports that the deferral clause is the only thing between the
 // two, which routes the change to ALTER CONSTRAINT rather than a drop and an
 // add that rescans the table.
-func compareFKDef(a, b, refSchemaA, refSchemaB string) (equal, deferralOnly bool) {
+func compareFKDef(a, b, refSchemaA, refSchemaB, schema string) (equal, deferralOnly bool) {
 	nodeA, errA := parseFKDef(a)
 	nodeB, errB := parseFKDef(b)
 	if errA != nil || errB != nil {
 		return a == b, false
 	}
-	if (nodeA.Pktable.GetSchemaname() == "") != (nodeB.Pktable.GetSchemaname() == "") {
-		normalizeFKSchema(nodeA, refSchemaA)
-		normalizeFKSchema(nodeB, refSchemaB)
+	bareA, bareB := isBareFKRef(nodeA), isBareFKRef(nodeB)
+	if bareA == bareB {
+		return compareFKNodes(nodeA, nodeB)
 	}
+	bare, refSchema := nodeA, refSchemaA
+	if bareB {
+		bare, refSchema = nodeB, refSchemaB
+	}
+	bare.Pktable.Schemaname = refSchema
+	if equal, deferralOnly = compareFKNodes(nodeA, nodeB); equal {
+		return true, false
+	}
+	bare.Pktable.Schemaname = schema
+	equal, ownDeferralOnly := compareFKNodes(nodeA, nodeB)
+	return equal, !equal && (deferralOnly || ownDeferralOnly)
+}
+
+// compareFKNodes is compareFKDef on two parsed definitions.
+func compareFKNodes(nodeA, nodeB *pg_query.Constraint) (equal, deferralOnly bool) {
 	if proto.Equal(nodeA, nodeB) {
 		return true, false
 	}

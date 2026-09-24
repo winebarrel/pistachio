@@ -69,21 +69,28 @@ CREATE TABLE app.item (id integer PRIMARY KEY, base_id integer REFERENCES public
 	}
 }
 
-// The reference moved to a table of the same name in the owning table's
-// schema is a change. Filling the bare catalog reference with the owning
-// table's schema used to hide it.
-func TestPlan_CrossSchemaFK_MovedToOwnSchema(t *testing.T) {
-	connString := setupCrossSchemaFK(t, "app")
-	sql := planCrossSchemaFK(t, &Options{
-		ConnString: connString,
-		Schemas:    []string{"public", "app"},
-	}, `
-CREATE TABLE public.base (id integer PRIMARY KEY);
+// A hand-written file often names a table in the owning table's schema bare.
+// The catalog qualifies app.base, since app is not on the search_path, and
+// the bare name matches it whichever schema comes first in -n.
+func TestPlan_CrossSchemaFK_BareSameSchema(t *testing.T) {
+	const desired = `
+CREATE TABLE app.base (id integer PRIMARY KEY);
+CREATE TABLE app.item (id integer PRIMARY KEY, base_id integer REFERENCES base (id));`
+
+	for _, schemas := range [][]string{{"public", "app"}, {"app", "public"}} {
+		t.Run(schemas[0]+" first", func(t *testing.T) {
+			ctx := context.Background()
+			conn := testutil.ConnectDB(t)
+			defer conn.Close(ctx) //nolint:errcheck
+
+			testutil.SetupDB(t, ctx, conn, "")
+			connString := setupSchemaDB(t, ctx, "app", `
 CREATE TABLE app.base (id integer PRIMARY KEY);
 CREATE TABLE app.item (id integer PRIMARY KEY, base_id integer REFERENCES app.base (id));`)
 
-	assert.Contains(t, sql, "ALTER TABLE app.item DROP CONSTRAINT item_base_id_fkey;")
-	assert.Contains(t, sql, "REFERENCES app.base (id)")
+			assert.Empty(t, planCrossSchemaFK(t, &Options{ConnString: connString, Schemas: schemas}, desired))
+		})
+	}
 }
 
 // dump writes the reference bare, which plans clean whichever schema comes

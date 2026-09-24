@@ -1695,14 +1695,14 @@ func TestEqualDefault_expressionCast(t *testing.T) {
 func TestCompareFKDef_formatting(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES users (id)"
-	equal, _ := compareFKDef(a, b, "public", "public")
+	equal, _ := compareFKDef(a, b, "public", "public", "public")
 	assert.True(t, equal)
 }
 
 func TestCompareFKDef_different(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES orders(id)"
-	equal, deferralOnly := compareFKDef(a, b, "public", "public")
+	equal, deferralOnly := compareFKDef(a, b, "public", "public", "public")
 	assert.False(t, equal)
 	assert.False(t, deferralOnly)
 }
@@ -1731,31 +1731,50 @@ func TestDiffTables_newTable_withForeignKey(t *testing.T) {
 func TestCompareFKDef_implicitPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (user_id) REFERENCES users(id)"
 	b := "FOREIGN KEY (user_id) REFERENCES public.users(id)"
-	equal, _ := compareFKDef(a, b, "public", "public")
+	equal, _ := compareFKDef(a, b, "public", "public", "public")
 	assert.True(t, equal)
 }
 
 func TestCompareFKDef_implicitNonPublicSchema(t *testing.T) {
 	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
 	b := "FOREIGN KEY (item_id) REFERENCES myapp.items(id)"
-	equal, _ := compareFKDef(a, b, "myapp", "myapp")
+	equal, _ := compareFKDef(a, b, "myapp", "myapp", "myapp")
 	assert.True(t, equal)
 }
 
 func TestCompareFKDef_implicitNonPublicSchema_different(t *testing.T) {
 	a := "FOREIGN KEY (item_id) REFERENCES items(id)"
 	b := "FOREIGN KEY (item_id) REFERENCES other.items(id)"
-	equal, _ := compareFKDef(a, b, "myapp", "myapp")
+	equal, _ := compareFKDef(a, b, "myapp", "myapp", "myapp")
 	assert.False(t, equal)
+}
+
+// A bare reference and a qualified one, apart from the deferral clause: the
+// bare side's RefSchema and the owning schema both find the match.
+func TestCompareFKDef_bareDeferralOnly(t *testing.T) {
+	const bare = "FOREIGN KEY (base_id) REFERENCES base(id)"
+	const deferred = "FOREIGN KEY (base_id) REFERENCES public.base(id) DEFERRABLE"
+
+	equal, deferralOnly := compareFKDef(bare, deferred, "public", "public", "app")
+	assert.False(t, equal)
+	assert.True(t, deferralOnly)
+
+	equal, deferralOnly = compareFKDef(deferred, bare, "public", "app", "public")
+	assert.False(t, equal)
+	assert.True(t, deferralOnly)
+
+	equal, deferralOnly = compareFKDef(bare, "FOREIGN KEY (base_id) REFERENCES other.base(id) DEFERRABLE", "public", "other", "app")
+	assert.False(t, equal)
+	assert.False(t, deferralOnly)
 }
 
 func TestCompareFKDef_parseError(t *testing.T) {
 	// When both fail to parse, falls back to string comparison
-	equal, deferralOnly := compareFKDef("not sql", "not sql", "public", "public")
+	equal, deferralOnly := compareFKDef("not sql", "not sql", "public", "public", "public")
 	assert.True(t, equal)
 	assert.False(t, deferralOnly)
 
-	equal, _ = compareFKDef("not sql", "other", "public", "public")
+	equal, _ = compareFKDef("not sql", "other", "public", "public", "public")
 	assert.False(t, equal)
 }
 
@@ -1792,9 +1811,9 @@ func TestDiffForeignKeys_change(t *testing.T) {
 	assert.Contains(t, addStmts[0], "ADD CONSTRAINT fk_user")
 }
 
-// A key in app referencing public.base: the catalog prints the reference bare
-// when public is on the search_path, and a missing schema is filled from the
-// key's own RefSchema rather than from the owning table's.
+// A key in app referencing base: the catalog prints the reference bare when
+// its schema is on the search_path, and a missing schema is filled from the
+// key's own RefSchema or from the owning table's.
 func TestDiffForeignKeys_crossSchemaRef(t *testing.T) {
 	fk := func(def, refSchema string) *orderedmap.Map[string, *model.ForeignKey] {
 		m := orderedmap.New[string, *model.ForeignKey]()
@@ -1817,7 +1836,10 @@ func TestDiffForeignKeys_crossSchemaRef(t *testing.T) {
 		// Both bare: both resolve through the search_path, whatever the
 		// parser took for the default schema.
 		{"both bare", fk(bare, "public"), fk(bare, "app"), false},
-		{"moved to app", fk(bare, "public"), fk("FOREIGN KEY (base_id) REFERENCES app.base(id)", "app"), true},
+		// A hand-written bare name for a table in the owning table's schema
+		// matches the catalog's qualified one, whatever the parser took it for.
+		{"bare in owning schema", fk("FOREIGN KEY (base_id) REFERENCES app.base(id)", "app"), fk(bare, "public"), false},
+		{"moved to another schema", fk(bare, "public"), fk("FOREIGN KEY (base_id) REFERENCES other.base(id)", "other"), true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2020,17 +2042,17 @@ func TestCompareFKDef_deferralOnly(t *testing.T) {
 	const plain = "FOREIGN KEY (user_id) REFERENCES users(id)"
 	const deferred = "FOREIGN KEY (user_id) REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED"
 
-	equal, deferralOnly := compareFKDef(plain, deferred, "public", "public")
+	equal, deferralOnly := compareFKDef(plain, deferred, "public", "public", "public")
 	assert.False(t, equal)
 	assert.True(t, deferralOnly)
 
-	equal, deferralOnly = compareFKDef(plain, "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE DEFERRABLE", "public", "public")
+	equal, deferralOnly = compareFKDef(plain, "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE DEFERRABLE", "public", "public", "public")
 	assert.False(t, equal)
 	assert.False(t, deferralOnly)
 
 	// Two identical definitions are equal, which is not the same answer as
 	// the deferral clause being all that differs.
-	equal, deferralOnly = compareFKDef(deferred, deferred, "public", "public")
+	equal, deferralOnly = compareFKDef(deferred, deferred, "public", "public", "public")
 	assert.True(t, equal)
 	assert.False(t, deferralOnly)
 }
