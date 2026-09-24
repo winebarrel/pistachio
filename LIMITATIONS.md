@@ -711,6 +711,25 @@ Workaround: write the alias the way `pista dump` emits it.
 
 Origin: [#371](https://github.com/winebarrel/pistachio/pull/371).
 
+## View drift on a constant a set operation resolves to another type
+
+Priority: low.
+
+A bare string or `NULL` constant on a view's `SELECT` target resolves to
+`text`, and the `'x'::text` that `pg_get_viewdef` prints for it is treated as
+the bare constant. In a `UNION`, `INTERSECT` or `EXCEPT` the constant is
+resolved against the other branches instead: `SELECT name::varchar FROM t UNION
+SELECT 'x'` comes back with `'x'::character varying`, and `SELECT 1 UNION SELECT
+NULL` with `NULL::integer`. Those casts are compared, so the view is replaced on
+every plan. Accepting them would need the type of the leftmost branch's column,
+which the diff does not have. For the same reason, removing an explicit
+`::text` from a branch whose sibling is `varchar`, which changes the output
+type, is not seen as a change.
+
+Workaround: write the constant the way `pista dump` emits it.
+
+Origin: [#710](https://github.com/winebarrel/pistachio/pull/710).
+
 ## Routine renaming is not supported
 
 `-- pista:renamed-from` works on tables, views, enums, domains, composite
