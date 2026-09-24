@@ -10,6 +10,8 @@
 
 * A `DEFERRABLE` or `INITIALLY DEFERRED` written on a column constraint, such as `REFERENCES users (id) DEFERRABLE INITIALLY DEFERRED`, is now read. It was dropped, so the constraint was created not deferrable. A combination PostgreSQL rejects, such as `NOT DEFERRABLE INITIALLY DEFERRED`, is an error.
 
+* A foreign key that references a table in another schema by its qualified name, such as `REFERENCES public.base (id)` on a table in `app`, no longer drops and re-adds itself on every plan.
+
 * Error messages no longer repeat the program name, as in `pista: error: pistachio: ...`. The schema errors name `--schemas` instead of `Options.Schemas`, and a failed connection reads `failed to connect to database`.
 
 ## [1.63.0] - 2026-09-24
