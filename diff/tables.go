@@ -452,9 +452,9 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	switch {
 	case !curIsIdent && desIsIdent:
 		// none -> identity: clear default and ensure NOT NULL, then ADD IDENTITY.
-		// Catalog reports Default=nil for serial/bigserial/smallserial columns
-		// even though they carry a hidden nextval() default that would block
-		// ADD IDENTITY, so detect those by TypeName as well.
+		// A serial column's nextval() default blocks ADD IDENTITY. The catalog
+		// reads it into Default, but a column built from a schema file carries
+		// none, so detect those by TypeName as well.
 		if current.Default != nil || isSerialType(current.TypeName) {
 			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
 		}
