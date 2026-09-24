@@ -1,0 +1,21 @@
+# pg_get_viewdef writes the leftmost SELECT's output names onto the later
+# branches of a set operation (SELECT other.qty AS id). Those names mean
+# nothing, so a definition written without them, or with other ones, is the
+# same view.
+init: |
+  CREATE TABLE public.items (id integer, qty integer);
+  CREATE TABLE public.other (id integer, qty integer);
+  CREATE TABLE public.third (id integer, qty integer);
+  CREATE VIEW public.v_union AS SELECT id FROM public.items UNION SELECT qty FROM public.other;
+  CREATE VIEW public.v_chain AS SELECT id AS a, qty FROM public.items UNION ALL SELECT qty, id FROM public.other EXCEPT SELECT id, qty FROM public.third;
+  CREATE VIEW public.v_nested AS SELECT id FROM public.items INTERSECT (SELECT qty FROM public.other UNION SELECT id FROM public.third);
+  CREATE VIEW public.v_subquery AS SELECT s.n FROM (SELECT id AS n FROM public.items UNION SELECT qty FROM public.other) s;
+desired: |
+  CREATE TABLE public.items (id integer, qty integer);
+  CREATE TABLE public.other (id integer, qty integer);
+  CREATE TABLE public.third (id integer, qty integer);
+  CREATE VIEW public.v_union AS SELECT id FROM public.items UNION SELECT qty FROM public.other;
+  CREATE VIEW public.v_chain AS SELECT id AS a, qty FROM public.items UNION ALL SELECT qty AS x, id AS y FROM public.other EXCEPT SELECT id, qty FROM public.third;
+  CREATE VIEW public.v_nested AS SELECT id FROM public.items INTERSECT (SELECT qty FROM public.other UNION SELECT id FROM public.third);
+  CREATE VIEW public.v_subquery AS SELECT s.n FROM (SELECT id AS n FROM public.items UNION SELECT qty AS m FROM public.other) s;
+plan: ""

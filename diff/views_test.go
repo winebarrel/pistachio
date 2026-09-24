@@ -379,6 +379,34 @@ func TestEqualViewDef_unionDifference(t *testing.T) {
 	))
 }
 
+func TestEqualViewDef_setOpBranchNames(t *testing.T) {
+	// pg_get_viewdef names the later branches after the leftmost SELECT.
+	assert.True(t, equalViewDef(
+		"SELECT items.id FROM items UNION SELECT other.qty AS id FROM other",
+		"SELECT id FROM public.items UNION SELECT qty FROM public.other",
+	))
+	assert.True(t, equalViewDef(
+		"(SELECT items.id AS a, items.qty FROM items UNION ALL SELECT other.qty AS a, other.id AS qty FROM other) EXCEPT SELECT third.id AS a, third.qty FROM third",
+		"SELECT id AS a, qty FROM items UNION ALL SELECT qty AS x, id FROM other EXCEPT SELECT id, qty FROM third",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT s.n FROM (SELECT items.id AS n FROM items UNION SELECT other.qty FROM other) s",
+		"SELECT s.n FROM (SELECT id AS n FROM items UNION SELECT qty AS m FROM other) s",
+	))
+}
+
+func TestEqualViewDef_setOpLeftmostName(t *testing.T) {
+	// The leftmost SELECT names the output columns, so its names still count.
+	assert.False(t, equalViewDef(
+		"SELECT items.id FROM items UNION SELECT other.qty AS id FROM other",
+		"SELECT id AS n FROM items UNION SELECT qty FROM other",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT items.id FROM items UNION SELECT other.qty AS id FROM other",
+		"SELECT id FROM items UNION SELECT id FROM other",
+	))
+}
+
 func TestEqualViewDef_subselect(t *testing.T) {
 	// Covers RangeSubselect path
 	assert.True(t, equalViewDef(
