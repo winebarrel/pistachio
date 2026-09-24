@@ -942,6 +942,43 @@ func TestDiffViews_matviewIndexDrop(t *testing.T) {
 	assert.Contains(t, result.CreateStmts[0], "DROP INDEX")
 }
 
+func TestDiffViews_matviewIndexRename(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	cur := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	cur.Indexes.Set("idx_mv_n", &model.Index{
+		Schema: "public", Name: "idx_mv_n", Table: "mv",
+		Definition: "CREATE INDEX idx_mv_n ON public.mv USING btree (n)",
+	})
+	current.Set("public.mv", cur)
+	desired := orderedmap.New[string, *model.View]()
+	des := &model.View{
+		Schema: "public", Name: "mv", Materialized: true,
+		Definition: "SELECT 1 AS n", Indexes: orderedmap.New[string, *model.Index](),
+	}
+	old := "idx_mv_n"
+	des.Indexes.Set("idx_mv_n2", &model.Index{
+		Schema: "public", Name: "idx_mv_n2", Table: "mv", RenameFrom: &old,
+		Definition: "CREATE INDEX idx_mv_n2 ON public.mv USING btree (n)",
+	})
+	desired.Set("public.mv", des)
+
+	result, err := DiffViews(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.DropStmts)
+	assert.Equal(t, []string{"ALTER INDEX public.idx_mv_n RENAME TO idx_mv_n2;"}, result.CreateStmts)
+
+	missing := "idx_missing"
+	des.Indexes.Set("idx_mv_n2", &model.Index{
+		Schema: "public", Name: "idx_mv_n2", Table: "mv", RenameFrom: &missing,
+		Definition: "CREATE INDEX idx_mv_n2 ON public.mv USING btree (n)",
+	})
+	_, err = DiffViews(current, desired, allowAllDrops{})
+	require.EqualError(t, err, "rename source index idx_missing not found")
+}
+
 func TestDiffViews_matviewIndexAdd_concurrently_parseError(t *testing.T) {
 	// createIndexSQL with concurrently=true parses the definition through
 	// pg_query; an unparseable definition surfaces as a wrapped error from

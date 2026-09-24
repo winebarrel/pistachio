@@ -1,0 +1,49 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name FROM public.users;
+  CREATE INDEX idx_user_names_name ON public.user_names USING btree (name);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id, name FROM public.users;
+  -- pista:renamed-from idx_user_names_name
+  CREATE INDEX idx_user_names_display_name ON public.user_names USING btree (name);
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_names
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT users.id,
+      users.name
+     FROM users;
+  CREATE INDEX idx_user_names_display_name ON public.user_names USING btree (name);
+applied_pg16: &applied_pg16plus |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_names
+  CREATE MATERIALIZED VIEW public.user_names AS
+  SELECT id,
+      name
+     FROM users;
+  CREATE INDEX idx_user_names_display_name ON public.user_names USING btree (name);
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus
