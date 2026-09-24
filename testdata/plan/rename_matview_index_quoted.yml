@@ -1,0 +1,21 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      "Name" text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public."User Names" AS
+  SELECT id, "Name" FROM public.users;
+  CREATE INDEX "Idx Name" ON public."User Names" USING btree ("Name");
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      "Name" text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public."User Names" AS
+  SELECT id, "Name" FROM public.users;
+  -- pista:renamed-from "Idx Name"
+  CREATE INDEX "Idx Display Name" ON public."User Names" USING btree ("Name");
+plan: |
+  ALTER INDEX public."Idx Name" RENAME TO "Idx Display Name";
