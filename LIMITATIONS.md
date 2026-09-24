@@ -42,7 +42,7 @@ other.
 A column rename does not reach a partition child either. `diffTable` takes a
 separate branch for one, which returns before the rewrite block, and a
 `PARTITION OF` child declares no columns, so its own rename map is empty. A
-trigger or policy created directly on a child is in the model, since the
+trigger, policy or index created directly on a child is in the model, since the
 catalog excludes only the clones the parent pushes down, so a rename on the
 parent leaves a redundant statement on such a child. Carrying the rename there
 needs the parent's map.
@@ -76,7 +76,7 @@ Workaround: write the reference unqualified, which is what `pista dump` emits.
 from the catalog and parsed from the desired schema, but the diff reads none of
 them: `Table.IsPartitionChild` tests the first two against nil to pick a
 branch, and no value is ever compared. Each of these plans `-- No changes` on a
-table that already exists, verified on 15 and 16:
+table that already exists, verified on 15 and 18:
 
 - Turning `PARTITION BY RANGE (r)` into `PARTITION BY LIST (r)`.
 - Moving a partition's `FOR VALUES` bound.
@@ -164,43 +164,41 @@ Origin: moving `CREATE POLICY` after the views, 2026-09-23.
 
 Priority: low.
 
-`pg_get_expr` qualifies column references inside subqueries (e.g. emits
-`SELECT allowed.id FROM myschema.allowed` for a USING that the user wrote
-as `SELECT id FROM myschema.allowed`). The desired-side parser deparses
-without that qualification, so even semantically-identical USING /
-WITH CHECK expressions produce a spurious `ALTER POLICY` when subqueries
-are involved.
+`pg_get_expr` qualifies the column references in a policy's sub-query. A
+`USING (owner IN (SELECT id FROM allowed))` comes back as
+`owner IN (SELECT allowed.id FROM allowed)`, and a correlated reference to the
+policy's own table is qualified too: `WHERE a.id = owner` comes back as
+`WHERE a.id = docs.owner`. The catalog also prints `= ANY (SELECT ...)` as
+`IN (SELECT ...)`. The desired side keeps what the file wrote, so a policy
+with a sub-query plans an `ALTER POLICY` on every run.
 
-`equalSelectExpr` (formerly `equalPolicyExpr`, renamed in #207 for shared
-use across policy / generated-column expressions) reuses `normalizeCheckExpr`
-from constraint diffs, which strips text-like casts and canonicalizes
-`= ANY(ARRAY[...])` -> `IN (...)`, but does not walk into subqueries and
-rewrite ColumnRef qualifications.
+`equalSelectExpr` compares policy expressions through `normalizeCheckExpr`,
+whose walk reaches sub-queries, but none of its normalizations strips a column
+qualifier. Closing it means dropping a qualifier that names the sub-query's
+own relation or alias, or the policy's table, which `normalizeCheckExpr` does
+not know today.
 
-Fix would be to walk `SubLink` / `RangeSubselect` nodes and strip column
-qualifiers that match the FROM-clause table alias. The same approach
-would also benefit constraint CHECK expressions if they ever contain
-subqueries (uncommon; PostgreSQL discourages them).
+Workaround: write the sub-query the way `pista dump` emits it, or wrap it in a
+function.
 
-Origin: post-RLS-support audit. Workaround: avoid subqueries in policy
-expressions, or use a function that wraps the subquery.
+Origin: post-RLS-support audit.
 
 ## Named NOT NULL constraints: name add/remove on existing columns
 
 `Column.NotNullName` round-trips on PG18, and a name change between two
-named NOT NULL constraints is emitted as `RENAME CONSTRAINT`. The
-following transitions are no-ops in v1:
+named NOT NULL constraints is emitted as `RENAME CONSTRAINT`. Two transitions
+leave the name alone:
 
-- nullable -> NOT NULL with an explicit desired name: emits `SET NOT NULL`
-  (PG auto-generates a name) but does not apply the desired name.
-- NOT NULL with explicit current name -> still NOT NULL but unnamed: keeps
-  the current name in place.
+- A nullable column that becomes NOT NULL with a desired name gets
+  `SET NOT NULL`, and PostgreSQL gives the constraint its own name.
+- A named NOT NULL that the desired side declares unnamed keeps its name.
 
-Both require PG18's standalone `ALTER TABLE ... ADD CONSTRAINT name NOT NULL col`
-syntax, which the parser cannot read: `pg_query_go` v6 embeds PostgreSQL 17.7
-and has no 18 release. libpg_query, the C library under it, shipped 18 on
-2026-05-21, so the Go binding is what is waited on. Once it lands, the parser
-can accept the standalone form and the diff can drop the no-op branches.
+Neither needs new syntax: a `RENAME CONSTRAINT` after the `SET NOT NULL`
+gives the first the desired name, and a `RENAME CONSTRAINT` to the name
+PostgreSQL would choose covers the second. Reading PG18's standalone
+`ALTER TABLE ... ADD CONSTRAINT name NOT NULL col` in a desired file is what
+waits on the parser: `pg_query_go` v6 embeds PostgreSQL 17.7 and has no 18
+release.
 
 A second limitation: `catalog.ListColumnsByTables` strips any constraint
 name with the `_not_null` suffix to mask PG18's auto-naming (which does
@@ -218,13 +216,11 @@ since the parser reads the name back and the diff emits a rename only
 when both sides are named, so this is drift in the output rather than a
 plan that repeats.
 
-A third limitation: on PG<18 the parser still captures the inline name,
-but PostgreSQL silently drops it at apply time. The diff layer treats
-the resulting "current has no name, desired has a name" mismatch as a
-no-op (the same v1 behavior used for adding a name to an existing
-NOT NULL on PG18), so no drift loop occurs; the explicit name is
-simply not honored on PG<18. This is a PG18-only feature and should
-be documented as such if it ever surfaces in user-facing docs.
+A third limitation: on PG<18 the parser still captures the inline name, but
+PostgreSQL drops it at apply time. The diff treats the resulting "current has
+no name, desired has a name" mismatch as a no-op, the same way it treats the
+first transition above on PG18, so no drift loop occurs; the name is simply
+not kept before PG18.
 
 Origin: [#157](https://github.com/winebarrel/pistachio/pull/157).
 
@@ -232,7 +228,7 @@ Origin: [#157](https://github.com/winebarrel/pistachio/pull/157).
 
 `canCreateOrReplaceView` (`diff/views.go`) decides between
 `CREATE OR REPLACE VIEW` and `DROP`+`CREATE` by comparing the output
-column *names* in order. When only a column's *type* changes but the name
+column names in order. When only a column's type changes but the name
 stays (e.g. `SELECT n FROM t` -> `SELECT n::bigint AS n FROM t`), the names
 still line up, so the plan emits `CREATE OR REPLACE VIEW`. PostgreSQL then
 rejects it at apply time with `cannot change data type of view column`,
@@ -258,9 +254,11 @@ plan instead. Two statements in the same family are not checked:
 - `DROP TABLE`, where a view reads the table.
 - `ALTER TABLE ... DROP COLUMN`, where a view reads the column.
 
-Neither fails unless pistachio cannot see the view. A view it manages is
-dropped in the same plan, so it never blocks anything. Hiding one takes
-`--include` / `--exclude`, or a schema outside `-n`.
+Neither fails unless the view stays in place. A view pistachio manages is
+dropped in the same plan, so it never blocks anything. It stays when
+`--include` / `--exclude` or a schema outside `-n` hides it, or when
+`--allow-drop` names `table` but not `view`, which skips the view's drop and
+keeps the table's.
 
 The view case is checked because it fails with no filters at all. A definition
 change becomes a drop and a create whenever `CREATE OR REPLACE VIEW` cannot
@@ -305,16 +303,17 @@ Origin: [#331](https://github.com/winebarrel/pistachio/pull/331).
 
 Priority: low.
 
-A table column, or a composite type attribute, whose type is a user-defined
-type (enum, domain, or composite) written schema-qualified in desired SQL
-drifts on every plan when the type's schema differs from the container's own
-schema. The catalog reads the type via `format_type`, which returns it
-unqualified when it is in the search_path, while the desired parser keeps the
-qualified form. The diff (`equalTypeName`) strips the container's own schema
-from both sides, so `home public.addr` on a table in `public` no longer
-drifts, but a type in a different search-path schema than its table or
-composite type (e.g. a `shared` schema on the search_path) is still compared
-qualified-vs-unqualified and emits a redundant `SET DATA TYPE`.
+A table column, or a composite type attribute, whose type is a user-defined type
+(enum, domain, or composite) written schema-qualified in desired SQL drifts on
+every plan when the type's schema differs from the container's own schema. The
+catalog reads the type via `format_type`, which returns it unqualified when its
+schema is on `--search-path`, while the desired parser keeps the qualified form.
+The diff (`equalTypeName`) strips the container's own schema from both sides, so
+`home public.addr` on a table in `public` no longer drifts, but a type whose
+schema is on `--search-path` and differs from its table's or composite type's is
+still compared qualified-vs-unqualified and emits a redundant `SET DATA TYPE`.
+With the default `--search-path public`, that is a `public` type used from a
+table in another schema, such as `a public.addr` on `app.t`.
 
 Closing it fully needs the target-schema list in the diff (to strip any
 search-path schema, not just the container's own), which the diff does not
@@ -351,22 +350,22 @@ same-named tables by hand.
 
 Origin: [#706](https://github.com/winebarrel/pistachio/pull/706).
 
-## Sequence ownership transitions: `OWNED BY NONE` plans an unusable CREATE
+## A sequence a column owns in the database plans an unusable CREATE
 
-Detaching a sequence from its column cannot be expressed. The parser reads
-`ALTER SEQUENCE ... OWNED BY NONE` and clears the owner, so the statement is
-accepted, but nothing emits the detaching DDL. A desired schema carrying it
-for a sequence the database still owns plans a `CREATE SEQUENCE` for a
-sequence that already exists, and apply fails with
-`relation "..." already exists` (SQLSTATE 42P07).
+A desired standalone sequence whose name matches a sequence a column owns in
+the database plans a `CREATE SEQUENCE` for a sequence that already exists, and
+apply fails with `relation "..." already exists` (SQLSTATE 42P07). A plain
+`CREATE SEQUENCE s;` does it, and so does one followed by
+`ALTER SEQUENCE ... OWNED BY NONE`, the way a file would detach the sequence:
+the parser reads `OWNED BY NONE` and clears the owner, but nothing emits the
+detaching DDL.
 
 `catalog.Sequences` drops every sequence with an owner, so the current side
-never sees it. After `OWNED BY NONE` the desired side holds no owner, which
-makes the sequence a managed standalone object, and the diff reads the
-missing current entry as "not created yet". The opposite direction is
-handled: `ALTER SEQUENCE ... OWNED BY <column>` marks the sequence unmanaged
-on the desired side, matching the catalog, so an owned sequence no longer
-replans forever.
+never sees it. A desired sequence with no owner is a managed standalone object,
+so the diff reads the missing current entry as "not created yet". The opposite
+direction is handled: `ALTER SEQUENCE ... OWNED BY <column>` marks the sequence
+unmanaged on the desired side, matching the catalog, so an owned sequence no
+longer replans forever.
 
 Closing this means letting the catalog surface sequences that are merely
 owned, kept apart from the serial and identity ones that stay column
@@ -409,7 +408,8 @@ Priority: low.
 `attislocal` separates a column the child declares from one it only inherits,
 but a desired schema can only say "declared", so a flip in either direction has
 no DDL the diff can emit and the plan emits the column statement instead. Both
-shapes fail at apply and come back on every later plan, verified on 15.
+shapes fail at apply and come back on every later plan, verified on 15 and
+18.
 
 With `parent (id, n)` and a child created as `child (extra) INHERITS (parent)`,
 a desired schema that redeclares the column:
@@ -504,29 +504,30 @@ Origin: [#459](https://github.com/winebarrel/pistachio/pull/459),
 
 Priority: low.
 
-A constant written with a type name is stored as the value that type's input
-function produced, not as the text that produced it. `CHECK (a > timestamp
-'2000-01-01')` comes back from `pg_get_constraintdef` as
-`CHECK ((a > '2000-01-01 00:00:00'::timestamp without time zone))`, so the two
-sides never compare equal and the `CHECK` is dropped and re-added on every
-plan, revalidating the whole table. An index predicate, a view body, a policy,
-a trigger `WHEN` and a domain `CHECK` drift the same way, and a generated
-column fails the run, since it cannot be altered in place.
+A constant is stored as the value its type's input function produced, not as the
+text that produced it, and the catalog prints it back in the type's output form.
+A literal whose text differs from that form never compares equal, whether or not
+it names the type: `CHECK (a > timestamp '2000-01-01')` and, on a `timestamp`
+column, `CHECK (a > '2000-01-01')` both come back from `pg_get_constraintdef` as
+`CHECK ((a > '2000-01-01 00:00:00'::timestamp without time zone))`, so the
+`CHECK` is dropped and re-added on every plan, revalidating the whole table.
+`timestamp '2000-01-01 00:00:00'` plans clean. An index predicate, a view body,
+a policy, a trigger `WHEN` and a domain `CHECK` drift the same way, and a
+generated column fails the run, since it cannot be altered in place.
 
 `a AT TIME ZONE 'UTC' > '2000-01-01'` is the same case: the right operand
 resolves to `timestamp without time zone` and is re-printed in that type's
 output form.
 
-This is the one rewrite `diff/desugar.go` does not undo. The others are
-syntactic, so the fold is a tree rewrite the grammar already defines. Matching
-a literal means running the type's input and output functions over it, which
-would put a query to the server in the middle of the comparison.
+Unlike the syntactic rewrites `diff/desugar.go` undoes, matching a literal
+means running the type's input and output functions over it, which would put
+a query to the server in the middle of the comparison.
 
 `dump` writes the catalog form, so a dump fed back plans clean and only a
 hand-written literal reaches this.
 
-Workaround: write the literal the way `pg_get_constraintdef` prints it, or
-leave the type off.
+Workaround: write the literal in the type's output form, the way
+`pg_get_constraintdef` prints it.
 
 Origin: expression normalization review, 2026-08-30.
 
@@ -554,8 +555,9 @@ Either way the written list never matches what comes back, so its `CHECK` is
 dropped and added again on every plan, revalidating the whole table. An index
 predicate, a view body, a policy and a trigger `WHEN` drift the same way, and a
 generated column fails the run, since it cannot be altered in place. A
-one-element list is the exception both ways: `a IN (b)` is stored as `a = b`,
-which `foldSingleElementIn` produces.
+one-element list of a single column is the exception, for `IN` and `NOT IN`
+alike: `a IN (b)` is stored as `a = b`, which `foldSingleElementIn` produces.
+A one-row list of a row, `(a, b) IN ((1, 2))`, still drifts.
 
 Closing it means writing those expansions out, which is more than rewriting an
 operator. The row form needs a comparison per column and an OR per row, and the
@@ -574,14 +576,15 @@ Origin: expression normalization review, 2026-09-20.
 
 Priority: low.
 
-Parse analysis moves a cast on an array constructor onto the elements, and
-drops a cast the elements already carry: `ARRAY[1]::integer[]` is stored as
+Parse analysis moves a cast on an array constructor onto the elements, and drops
+a cast the elements already carry: `ARRAY[1]::integer[]` is stored as
 `ARRAY[1]`, `ARRAY[1]::bigint[]` as `ARRAY[(1)::bigint]`, and
 `ARRAY['2020-01-01']::date[]` as `ARRAY['2020-01-01'::date]`. The written cast
-sits on the array, so it never matches what comes back, and the `CHECK`
-holding it is dropped and added again on every plan. A text-like cast is the
-exception, since `normalizeCheckExpr` strips `::text[]` and `::varchar[]` from
-both sides; that is the form `pg_dump` writes for a `varchar` column.
+sits on the array, so it never matches what comes back, and the `CHECK` holding
+it is dropped and added again on every plan. An index predicate and a view body
+drift the same way. A text-like cast is the exception, since
+`normalizeCheckExpr` strips `::text[]` and `::varchar[]` from both sides; that
+is the form `pg_dump` writes for a `varchar` column.
 
 Matching the rest means knowing what each element's type already is, which is
 what decides whether the cast moves or goes. The tree alone does not say.
@@ -629,8 +632,8 @@ The call itself no longer drifts: `stripFuncSchema` (`diff/tables.go`) drops
 the schema from a `FuncCall` name symmetrically, which reaches every site
 `normalizeCheckExpr` covers. The sequence here is not in that name. It sits
 inside a string literal argument, so reaching it means reading the regclass
-literal, quoted identifiers included. `equalDefault` applies no schema
-normalization of any kind beyond the walk.
+literal, quoted identifiers included. Beyond the walk, `equalDefault` drops
+a schema only from the type of a top-level cast, never from a literal.
 
 A function moved between two schemas is the cost of the symmetric strip:
 `a.f(v)` and `b.f(v)` compare equal, so the move produces no diff. This is the
@@ -763,11 +766,11 @@ Origin: [#710](https://github.com/winebarrel/pistachio/pull/710).
 
 ## Routine renaming is not supported
 
-`-- pista:renamed-from` works on tables, views, enums, domains, composite
-types, sequences, columns, constraints, foreign keys, indexes, policies and
-triggers. It does not work on a function or a procedure: the directive on a
-`CREATE FUNCTION` or `CREATE PROCEDURE` is an error rather than an
-`ALTER FUNCTION ... RENAME TO`.
+`-- pista:renamed-from` works on tables, views, enums, enum values, domains,
+composite types, composite attributes, sequences, columns, constraints, foreign
+keys, indexes, policies and triggers. It does not work on a function or a
+procedure: the directive on a `CREATE FUNCTION` or `CREATE PROCEDURE` is an
+error rather than an `ALTER FUNCTION ... RENAME TO`.
 
 Dropping and recreating a routine loses no data, so a rename would mostly keep
 the plan readable rather than protect anything. The identity carries the
@@ -832,11 +835,16 @@ CREATE TABLE public.text (v public.d1);
 ```
 
 The domain takes an edge to the table and the table takes one to the domain.
-The pair closes a cycle, and `plan` falls back to ordering by category. It
-takes both references. The table alone is nothing: its own `text` column
-resolves to itself and is skipped. One other object written `text`, another
-table's column or a domain's base type, takes the spurious edge and orders the
-table first, which changes nothing else.
+The pair closes a cycle, and the whole plan, not just the pair, falls back to
+ordering by category. That breaks creates elsewhere that need the dependency
+order: next to the pair above, `CREATE TABLE public.x`, a composite type with an
+attribute of type `public.x` and a function returning `SETOF public.x` are
+planned with the table last, and apply fails with
+`type "public.x" does not exist`. It takes both references to close the cycle.
+The table alone is nothing: its own `text` column resolves to itself and is
+skipped. One other object written `text`, another table's column or a domain's
+base type, takes the spurious edge and orders the table first, which changes
+nothing else.
 
 Closing it takes the set of builtin type names in the resolver, so that a bare
 name in the set resolves to nothing. That is about a hundred names, one per
@@ -853,8 +861,7 @@ collision, so the two are worth weighing together whenever this is taken up.
 
 Workaround: do not name a relation after a builtin type. Qualifying the type
 in the schema file does not help, since the catalog reports it bare and the
-two spellings would then drift on every run. `plan` orders by category, which
-is what it falls back to here.
+two spellings would then drift on every run.
 
 Origin: review of [#676](https://github.com/winebarrel/pistachio/pull/676).
 
@@ -901,7 +908,8 @@ pg_query parses and deparses the form. The obstacle is that PostgreSQL resolves
 such a body at creation time and records real `pg_depend` entries on whatever it
 reads, so the routine cannot be created ahead of the tables the way every other
 routine is, and a referenced table cannot be dropped while it exists. Supporting
-it needs the body-dependency work in the entry above.
+it needs the body-dependency work in "Routine create order ignores what the
+body reads".
 
 `pg_get_functiondef` also re-deparses the stored parse tree, so the body comes
 back with names resolved (`SELECT a FROM t` reads back as `SELECT t.a FROM t`),
@@ -1076,7 +1084,7 @@ ALTER TABLE public.t ALTER COLUMN id DROP NOT NULL;
 ```
 
 which fails with `column "id" is in a primary key`, so the run does not
-converge, verified on 16.
+converge, verified on 15 and 18.
 
 Closing it means resolving the constraint's columns through the index the
 desired schema declares next to it, which is where the column list lives.
@@ -1102,7 +1110,7 @@ libpg_query's deparse, which drops the pair and returns
 redefaulted on every plan, and the statement it emits is a syntax error:
 
 ```
-ALTER TABLE public.t ALTER COLUMN e SET DEFAULT ARRAY[1, 2, 3][1];
+ALTER TABLE public.t ALTER COLUMN e SET DEFAULT (ARRAY[1, 2, 3][1]);
 ```
 
 A `pista dump` round trip is broken, not merely drifting, so this is not
