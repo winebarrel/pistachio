@@ -115,7 +115,7 @@ func TestApplyExclusiveConflict(t *testing.T) {
 		Files:     []string{writeDesiredFile(t, exclusiveDesired)},
 		Exclusive: true,
 	}, &buf)
-	require.ErrorContains(t, err, "another exclusive apply is running")
+	require.EqualError(t, err, "another exclusive apply is running (--exclusive-wait waits for it)")
 	assert.Empty(t, buf.String())
 
 	// Nothing may have been applied.
@@ -149,7 +149,7 @@ func TestApplyExclusiveWaitTimeout(t *testing.T) {
 		ExclusiveWait: durationPtr(wait),
 	}, &buf)
 	elapsed := time.Since(start)
-	require.ErrorContains(t, err, "did not finish within")
+	require.EqualError(t, err, "another exclusive apply did not finish within 300ms")
 	assert.GreaterOrEqual(t, elapsed, wait)
 	// The wait ends on its own deadline, not on the next poll.
 	assert.Less(t, elapsed, exclusivePollInterval)

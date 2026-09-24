@@ -203,7 +203,7 @@ func TestPlan_EmptySchemas(t *testing.T) {
 
 	_, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "at least one schema must be specified")
+	assert.EqualError(t, err, "at least one schema must be specified with --schemas")
 }
 
 func TestPlan_BlankSchemaName(t *testing.T) {
@@ -223,7 +223,7 @@ func TestPlan_BlankSchemaName(t *testing.T) {
 
 			_, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "must not contain empty or whitespace-only entries")
+			assert.EqualError(t, err, "--schemas must not contain empty or whitespace-only entries")
 		})
 	}
 }
