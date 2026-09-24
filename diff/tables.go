@@ -1534,8 +1534,8 @@ func createIndexSQL(def string, concurrently bool) (string, error) {
 }
 
 // foreignKeyChanges compares every foreign key present on both sides once.
-// schema is the owning table's, which fills in an implicit one on the
-// referenced table.
+// schema is the owning table's, which stands in for a key that carries no
+// RefSchema.
 func foreignKeyChanges(current, desired *orderedmap.Map[string, *model.ForeignKey], schema string) map[string]definitionChange {
 	changes := make(map[string]definitionChange, desired.Len())
 	for name, desiredFk := range desired.All() {
@@ -1554,7 +1554,7 @@ func foreignKeyChanges(current, desired *orderedmap.Map[string, *model.ForeignKe
 			changes[name] = definitionChange{}
 			continue
 		}
-		sameDef, deferralOnly := compareFKDef(currentFk.Definition, desiredFk.Definition, schema)
+		sameDef, deferralOnly := compareFKDef(currentFk.Definition, desiredFk.Definition, fkRefSchema(currentFk, schema), fkRefSchema(desiredFk, schema))
 		change := newDefinitionChange(sameDef, currentFk.Validated, desiredFk.Validated)
 		switch {
 		case !deferralOnly:
@@ -1936,9 +1936,17 @@ func parseFKDef(def string) (*pg_query.Constraint, error) {
 	return con, nil
 }
 
-// normalizeFKSchema normalizes the referenced table's schema name in a FK
-// constraint node so that an empty schema (implicit via search_path) is
-// treated the same as the explicit schema of the owning table.
+// fkRefSchema returns the schema of the table a foreign key references, or
+// schema when the key does not carry one.
+func fkRefSchema(fk *model.ForeignKey, schema string) string {
+	if fk.RefSchema != nil {
+		return *fk.RefSchema
+	}
+	return schema
+}
+
+// normalizeFKSchema fills in the referenced table's schema name in a FK
+// constraint node when the definition leaves it out.
 func normalizeFKSchema(con *pg_query.Constraint, schema string) {
 	if con.Pktable != nil && con.Pktable.Schemaname == "" {
 		con.Pktable.Schemaname = schema
@@ -1946,21 +1954,29 @@ func normalizeFKSchema(con *pg_query.Constraint, schema string) {
 }
 
 // compareFKDef compares two FK constraint definitions by their parse trees, so
-// that formatting differences do not cause false diffs. schema is the schema of
-// the table that owns the FK constraint and is used to fill in an implicit
-// (empty) schema on the referenced table.
+// that formatting differences do not cause false diffs. refSchemaA and
+// refSchemaB are the schemas each side's referenced table is in.
+//
+// The catalog leaves the schema out of a reference the search_path reaches.
+// When one side leaves it out and the other does not, the bare side takes its
+// own schema, so a bare name matches a qualified one. When both leave it out,
+// both resolve through the search_path and are compared as written: the
+// parser puts a bare name in the first target schema, which need not be where
+// the search_path lands.
 //
 // deferralOnly reports that the deferral clause is the only thing between the
 // two, which routes the change to ALTER CONSTRAINT rather than a drop and an
 // add that rescans the table.
-func compareFKDef(a, b, schema string) (equal, deferralOnly bool) {
+func compareFKDef(a, b, refSchemaA, refSchemaB string) (equal, deferralOnly bool) {
 	nodeA, errA := parseFKDef(a)
 	nodeB, errB := parseFKDef(b)
 	if errA != nil || errB != nil {
 		return a == b, false
 	}
-	normalizeFKSchema(nodeA, schema)
-	normalizeFKSchema(nodeB, schema)
+	if (nodeA.Pktable.GetSchemaname() == "") != (nodeB.Pktable.GetSchemaname() == "") {
+		normalizeFKSchema(nodeA, refSchemaA)
+		normalizeFKSchema(nodeB, refSchemaB)
+	}
 	if proto.Equal(nodeA, nodeB) {
 		return true, false
 	}
