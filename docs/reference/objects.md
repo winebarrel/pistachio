@@ -70,7 +70,7 @@ A type or collation change goes out as `ALTER TABLE ... ALTER COLUMN ... SET DAT
 pista: error: cannot change the type of public.t.n: view public.v depends on it
 ```
 
-A trigger blocks even when the column is only in its `UPDATE OF` list. A view the same plan drops does not block. Indexes and constraints do not block, since PostgreSQL rebuilds them. Dependents on a partition's or an `INHERITS` child's column are not checked.
+A trigger blocks even when the column is only in its `UPDATE OF` list. The change reaches the table's partitions and `INHERITS` children, so a dependent on their copy of the column blocks too. A view the same plan drops does not block. A trigger, a policy or a generated column the plan drops still does, since those drops run after the type change. Indexes and constraints do not block, since PostgreSQL rebuilds them.
 
 ## Table inheritance
 

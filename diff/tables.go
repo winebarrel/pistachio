@@ -54,9 +54,11 @@ type RetypedColumn struct {
 }
 
 // retypedColumns lists the table's columns that go out as SET DATA TYPE.
-// currentFQTN is the table's name before any rename. A partition declares no
-// columns.
-func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table) []RetypedColumn {
+// currentFQTN is the table's name before any rename. The change reaches the
+// table's partitions and INHERITS children, which original holds under their
+// names before any rename, so their copies of the column are listed too. A
+// partition declares no columns of its own.
+func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table, original *orderedmap.Map[string, *model.Table]) []RetypedColumn {
 	if desired.IsPartitionChild() {
 		return nil
 	}
@@ -73,9 +75,26 @@ func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table) []R
 				Name:    fqtn + "." + model.Ident(name),
 				Current: currentFQTN + "." + model.Ident(currentName),
 			})
+			for _, child := range descendants(original, currentFQTN) {
+				key := child + "." + model.Ident(currentName)
+				cols = append(cols, RetypedColumn{Name: key, Current: key})
+			}
 		}
 	}
 	return cols
+}
+
+// descendants lists the partitions and INHERITS children of the table, at
+// every level below it.
+func descendants(tables *orderedmap.Map[string, *model.Table], fqtn string) []string {
+	var keys []string
+	for k, t := range tables.All() {
+		if t.PartitionOf != nil && *t.PartitionOf == fqtn {
+			keys = append(keys, k)
+			keys = append(keys, descendants(tables, k)...)
+		}
+	}
+	return keys
 }
 
 // partitionedIndexStmts is one partitioned table's share of
@@ -162,7 +181,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 					currentKey = *desiredTable.RenameFrom
 				}
 			}
-			result.RetypedColumns = append(result.RetypedColumns, retypedColumns(k, currentKey, currentTable, desiredTable)...)
+			result.RetypedColumns = append(result.RetypedColumns, retypedColumns(k, currentKey, currentTable, desiredTable, original)...)
 			tableResult, err := diffTable(currentTable, desiredTable, dc)
 			if err != nil {
 				return nil, err

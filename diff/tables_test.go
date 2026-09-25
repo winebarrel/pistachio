@@ -207,7 +207,8 @@ func TestDiffTables_retypedColumns(t *testing.T) {
 	dt.Columns.Set("c", &model.Column{Name: "c", TypeName: "text"})
 	desired.Set("public.t", dt)
 
-	// A partition declares no columns.
+	// The change reaches every level of partitions, which declare no columns
+	// of their own and are listed under the parent's column.
 	cp := newTable("public", "t_1")
 	cp.PartitionOf = new("public.t")
 	cp.PartitionBound = new("DEFAULT")
@@ -218,12 +219,21 @@ func TestDiffTables_retypedColumns(t *testing.T) {
 	dp.PartitionBound = new("DEFAULT")
 	dp.Columns.Set("a", &model.Column{Name: "a", TypeName: "bigint"})
 	desired.Set("public.t_1", dp)
+	cpp := newTable("public", "t_1_x")
+	cpp.PartitionOf = new("public.t_1")
+	cpp.PartitionBound = new("DEFAULT")
+	current.Set("public.t_1_x", cpp)
+	desired.Set("public.t_1_x", cpp)
 
 	result, err := DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []RetypedColumn{
 		{Name: "public.t.a", Current: "public.t.a"},
+		{Name: "public.t_1.a", Current: "public.t_1.a"},
+		{Name: "public.t_1_x.a", Current: "public.t_1_x.a"},
 		{Name: "public.t.b", Current: "public.t.b"},
+		{Name: "public.t_1.b", Current: "public.t_1.b"},
+		{Name: "public.t_1_x.b", Current: "public.t_1_x.b"},
 	}, result.RetypedColumns)
 }
 
