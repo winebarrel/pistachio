@@ -268,8 +268,10 @@ func (c *Catalog) KeyDependents(ctx context.Context) (map[string][]Dependent, ma
 	var isConstraint bool
 	var targetSchema, targetTable, targetName, kind, identity string
 	var viewSchema, viewName, fkSchema, fkTable, fkName *string
-	dest := []any{&isConstraint, &targetSchema, &targetTable, &targetName, &kind,
-		&viewSchema, &viewName, &fkSchema, &fkTable, &fkName, &identity}
+	dest := []any{
+		&isConstraint, &targetSchema, &targetTable, &targetName, &kind,
+		&viewSchema, &viewName, &fkSchema, &fkTable, &fkName, &identity,
+	}
 	err := c.eachRow(ctx, "key dependents", q, dest, func() {
 		dep := Dependent{Kind: kind, Name: identity}
 		switch {
