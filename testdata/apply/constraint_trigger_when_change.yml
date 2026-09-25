@@ -1,0 +1,21 @@
+# A constraint trigger changing only its WHEN condition. The drop and the
+# create leave the new condition in the catalog, and the re-plan finds no drift.
+init: |
+  CREATE FUNCTION public.check_invoice() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.invoices (invoice_no bigint NOT NULL, status text NOT NULL, amount numeric(12,2) NOT NULL);
+  CREATE CONSTRAINT TRIGGER invoices_settled AFTER UPDATE ON public.invoices DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.status IS DISTINCT FROM OLD.status) EXECUTE FUNCTION public.check_invoice();
+desired: |
+  CREATE TABLE public.invoices (invoice_no bigint NOT NULL, status text NOT NULL, amount numeric(12,2) NOT NULL);
+  CREATE CONSTRAINT TRIGGER invoices_settled AFTER UPDATE ON public.invoices DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.status IS DISTINCT FROM OLD.status OR NEW.amount <> OLD.amount) EXECUTE FUNCTION check_invoice();
+drop_policy:
+  allow_drop:
+    - trigger
+applied: |
+  -- public.invoices
+  CREATE TABLE public.invoices (
+      invoice_no bigint NOT NULL,
+      status text NOT NULL,
+      amount numeric(12,2) NOT NULL
+  );
+
+  CREATE CONSTRAINT TRIGGER invoices_settled AFTER UPDATE ON invoices DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (new.status IS DISTINCT FROM old.status OR new.amount <> old.amount) EXECUTE FUNCTION check_invoice();
