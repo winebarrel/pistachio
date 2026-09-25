@@ -1,0 +1,24 @@
+# pg_get_triggerdef always writes the deferral of a constraint trigger, so the
+# catalog reads NOT DEFERRABLE INITIALLY IMMEDIATE back even when the desired
+# schema leaves it out. The two spellings mean the same thing and must not plan
+# a drop and a create.
+init: |
+  CREATE FUNCTION public.verify_shipment() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.shipments (
+      shipment_id bigint NOT NULL,
+      carrier text NOT NULL,
+      CONSTRAINT shipments_pkey PRIMARY KEY (shipment_id)
+  );
+  CREATE CONSTRAINT TRIGGER shipments_carrier AFTER UPDATE OF carrier ON public.shipments
+      FOR EACH ROW EXECUTE FUNCTION public.verify_shipment();
+desired: |
+  CREATE TABLE public.shipments (
+      shipment_id bigint NOT NULL,
+      carrier text NOT NULL,
+      CONSTRAINT shipments_pkey PRIMARY KEY (shipment_id)
+  );
+  CREATE CONSTRAINT TRIGGER shipments_carrier AFTER UPDATE OF carrier ON public.shipments FOR EACH ROW EXECUTE FUNCTION verify_shipment();
+drop_policy:
+  allow_drop:
+    - all
+plan: ""
