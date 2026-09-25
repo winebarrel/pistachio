@@ -456,37 +456,30 @@ parent, so the field would carry a list for the INHERITS case alone.
 
 Origin: INHERITS local column support.
 
-## A new partition of an indexed table written with its copy of the index
+## A new partition written with its copy of the parent's index
 
-Adding a partition to a partitioned table that already has an index, and
-writing the partition's copy of that index next to it the way `dump` writes
-it, fails the apply:
+Adding a partition to a partitioned table that already has an index fails when
+the file also declares the partition's copy of the index, as `dump` writes it:
 
 ```sql
 CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
 CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at);
 ```
 
-`CREATE TABLE ... PARTITION OF` gives the new partition a copy of every index
-the parent has, named the way the file goes on to name it, so the plan's
-`CREATE INDEX` stops on `relation "logs_2026_at_idx" already exists`. A copy
-the file names differently leaves the partition with two identical indexes.
+`CREATE TABLE ... PARTITION OF` creates the copy under the same name, so the
+`CREATE INDEX` fails with `relation "logs_2026_at_idx" already exists`. Under
+another name, the partition ends up with two identical indexes. Creating the
+parent and its partitions in the same run works, since the parent's index is
+created last.
 
-When the parent and its partitions are created in the same run, the plan
-creates the partitions' indexes first and the parent's after them, which
-attaches them. An existing parent's index is already there when the partition
-is created.
+Workaround: leave the partition's copy out of the file. PostgreSQL creates it,
+and the plan does not report it.
 
-Workaround: leave the new partition's copy out of the file. PostgreSQL creates
-it, and the plan does not report an attached index the file does not declare.
-
-Closing it means leaving out a `CREATE INDEX` on a new partition that matches
-an index of its existing parent, and renaming the copy PostgreSQL made when the
-file names it differently.
+Closing it means skipping a `CREATE INDEX` on a new partition that matches an
+index of its parent, and renaming PostgreSQL's copy when the names differ.
 
 Origin: [#459](https://github.com/winebarrel/pistachio/pull/459),
-[#596](https://github.com/winebarrel/pistachio/pull/596). Narrowed when the
-parent's index began to attach the partitions' in the same run.
+[#596](https://github.com/winebarrel/pistachio/pull/596).
 
 ## Perpetual drift on a typed literal the catalog re-prints
 

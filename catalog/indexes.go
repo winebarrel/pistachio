@@ -94,10 +94,8 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 		}
 		if onPartitioned {
 			// pg_get_indexdef writes ONLY for every index on a partitioned
-			// table, however it was created. Written without it, the index
-			// attaches the partitions' matching indexes when it is created
-			// after them, which is how the plan creates it; with it, the
-			// index is left invalid on the parent alone.
+			// table. Without it, the index attaches the partitions' matching
+			// indexes when the plan creates it after them.
 			idx.Definition = strings.Replace(idx.Definition, " ON ONLY ", " ON ", 1)
 		}
 		indexes = append(indexes, &idx)

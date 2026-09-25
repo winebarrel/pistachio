@@ -1,5 +1,4 @@
-# An index added to an existing partitioned table along with the partitions'
-# copies of it: the copies are created first and the parent's attaches them.
+# The partition's copy is created first, and the parent's index attaches it.
 init: |
   CREATE TABLE public.logs (
       id bigint NOT NULL,

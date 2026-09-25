@@ -1,5 +1,5 @@
-# The parent's index is created after the partitions' own, so PostgreSQL
-# attaches them, under the names the file gives, instead of creating copies.
+# The parent's index is created last and attaches the partitions' indexes
+# under their own names.
 init: ''
 desired: |
   CREATE TABLE public.logs (

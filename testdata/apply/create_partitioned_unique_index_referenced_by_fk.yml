@@ -1,5 +1,5 @@
-# The unique index on a new partitioned table is created after the partitions'
-# indexes and still before the foreign key that needs it.
+# The parent's unique index is created after the partitions' indexes and
+# before the foreign key that needs it.
 init: ''
 desired: |
   CREATE TABLE public.logs (

@@ -32,11 +32,10 @@ type TableDiffResult struct {
 	// stay in Stmts, next to its RLS change, so a live table is never left
 	// without them or without its RLS.
 	PolicyStmts []string
-	// PartitionedIndexStmts holds the CREATE INDEX of an index on a
-	// partitioned table and the comment on it, deepest level first. They run
-	// once the tables and the partitions' own indexes exist, so the index
-	// attaches the partitions' matching indexes rather than creating copies
-	// under the names those go on to take.
+	// PartitionedIndexStmts holds the CREATE INDEX and COMMENT ON INDEX for
+	// indexes on partitioned tables, deepest level first. They run after the
+	// tables and the partitions' own indexes, so each index attaches the
+	// partitions' matching indexes instead of creating copies.
 	PartitionedIndexStmts []string
 	DropStmts             []string // DROP TABLE (separate from Stmts for ordering)
 	DisallowedDropStmts   []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
@@ -44,7 +43,7 @@ type TableDiffResult struct {
 }
 
 // partitionedIndexStmts is one partitioned table's share of
-// PartitionedIndexStmts, with how many levels of partitioning sit above it.
+// PartitionedIndexStmts and its partition depth.
 type partitionedIndexStmts struct {
 	depth int
 	stmts []string
@@ -64,8 +63,8 @@ func partitionDepth(tables *orderedmap.Map[string, *model.Table], t *model.Table
 	return depth
 }
 
-// flattenPartitionedIndexStmts orders the statements deepest level first, so a
-// middle level's index exists before the one above it attaches it.
+// flattenPartitionedIndexStmts orders the groups deepest level first, so a
+// level's index exists before the level above attaches it.
 func flattenPartitionedIndexStmts(groups []partitionedIndexStmts) []string {
 	slices.SortStableFunc(groups, func(a, b partitionedIndexStmts) int {
 		return cmp.Compare(b.depth, a.depth)
@@ -169,9 +168,8 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	return result, nil
 }
 
-// newTableExtras returns non-FK extras and FK statements separately. The
-// indexes of a partitioned table and their comments come back on their own, in
-// idxStmts, for PartitionedIndexStmts.
+// newTableExtras returns non-FK extras and FK statements separately. For a
+// partitioned table, the indexes and their comments go in idxStmts instead.
 func newTableExtras(t *model.Table) (stmts, idxStmts, fkStmts []string, hasConcurrently bool, err error) {
 	stmts = append(stmts, t.NotValidConSQL()...)
 	stmts = append(stmts, t.FoldedKeySQL()...)
@@ -1447,8 +1445,8 @@ func equalIndexDefs(current, desired *orderedmap.Map[string, *model.Index]) map[
 
 type diffIndexesResult struct {
 	Stmts []string
-	// PartitionedStmts holds the CREATE INDEX and the comment of each new or
-	// changed index when the table is partitioned. See PartitionedIndexStmts.
+	// PartitionedStmts holds the CREATE INDEX and comment of each new or
+	// changed index on a partitioned table.
 	PartitionedStmts    []string
 	DisallowedDropStmts []string
 	HasConcurrently     bool

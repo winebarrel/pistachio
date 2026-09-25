@@ -83,8 +83,7 @@ func TestListIndexes(t *testing.T) {
 
 		parent := tables.Get("public.logs").Indexes.Get("logs_at_idx")
 		assert.False(t, parent.Attached)
-		// pg_get_indexdef writes ONLY for the parent's index; it is read
-		// without it.
+		// Read without the ONLY pg_get_indexdef writes.
 		assert.Equal(t, "CREATE INDEX logs_at_idx ON public.logs USING btree (at)", parent.Definition)
 		child := tables.Get("public.logs_2025").Indexes
 		assert.True(t, child.Get("logs_2025_at_idx").Attached)

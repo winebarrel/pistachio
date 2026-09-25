@@ -1,5 +1,4 @@
-# The middle level's index is created before the top's, and both after the
-# leaf's, so each attaches the one below it.
+# The indexes are created leaf first, so each level attaches the one below.
 init: ''
 desired: |
   CREATE TABLE public.metrics (

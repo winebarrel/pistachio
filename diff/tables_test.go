@@ -146,8 +146,8 @@ func TestDiffTables_newPartitionedTable_indexesAfterPartitions(t *testing.T) {
 	result, err := DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 
-	// The table comment stays with the table; the leaf's index, on a table
-	// that is not partitioned, stays with the leaf.
+	// The table comment stays with the table, and the leaf's index with the
+	// leaf.
 	assert.Len(t, result.Stmts, 5)
 	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.m ")
 	assert.Equal(t, "COMMENT ON TABLE public.m IS 'metrics';", result.Stmts[1])
@@ -155,8 +155,7 @@ func TestDiffTables_newPartitionedTable_indexesAfterPartitions(t *testing.T) {
 	assert.Contains(t, result.Stmts[3], "CREATE TABLE public.m_1_a ")
 	assert.Equal(t, "CREATE INDEX m_1_a_id_idx ON public.m_1_a USING btree (id);", result.Stmts[4])
 
-	// The middle level's index comes before the top's, so each attaches the
-	// one below it, and the top's comment follows its index.
+	// The middle level's index comes first, then the top's and its comment.
 	assert.Equal(t, []string{
 		"CREATE INDEX m_1_id_idx ON public.m_1 USING btree (id);",
 		"CREATE INDEX m_id_idx ON public.m USING btree (id);",
@@ -188,7 +187,7 @@ func TestPartitionDepth(t *testing.T) {
 
 	assert.Equal(t, 0, partitionDepth(tables, top))
 	assert.Equal(t, 1, partitionDepth(tables, mid))
-	// A parent the run leaves out, as a filter does, ends the count.
+	// A parent outside the map, as a filter leaves it, ends the count.
 	assert.Equal(t, 0, partitionDepth(tables, partitionedTable("x_1", "x", "x_1_id_idx")))
 }
 
