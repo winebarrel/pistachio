@@ -1,0 +1,32 @@
+# A view the plan drops does not block the recreate, since view drops run
+# first.
+manage_routine: true
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;
+  CREATE TABLE public.t (a integer);
+  CREATE VIEW public.v AS SELECT public.f(a) AS fa FROM public.t;
+desired: |
+  CREATE FUNCTION public.f(a integer) RETURNS bigint LANGUAGE sql IMMUTABLE AS $$SELECT a::bigint$$;
+  CREATE TABLE public.t (a integer);
+applied: |
+  -- public.f(integer)
+  CREATE OR REPLACE FUNCTION public.f(a integer)
+      RETURNS bigint
+      LANGUAGE sql
+      IMMUTABLE
+      AS $$SELECT a::bigint$$;
+
+  -- public.t
+  CREATE TABLE public.t (
+      a integer
+  );
+applied_sql: |
+  DROP VIEW public.v;
+  DROP FUNCTION public.f(integer);
+  CREATE OR REPLACE FUNCTION public.f(a integer)
+      RETURNS bigint
+      LANGUAGE sql
+      IMMUTABLE
+      AS $$SELECT a::bigint$$;

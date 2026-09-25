@@ -89,19 +89,10 @@ func (c *Catalog) ViewDependents(ctx context.Context) (map[string][]Dependent, e
 			1, 2, 3, 4, 5
 	`
 
-	rows, err := c.conn.Query(ctx, q, pgx.NamedArgs{"schemas": c.schemas})
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get view dependents: %w", err)
-	}
-	defer rows.Close()
-
 	dependents := map[string][]Dependent{}
-	for rows.Next() {
-		var targetSchema, targetName, kind, name string
-		var depSchema *string
-		if err := rows.Scan(&targetSchema, &targetName, &kind, &depSchema, &name); err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan view dependents: %w", err)
-		}
+	var targetSchema, targetName, kind, name string
+	var depSchema *string
+	err := c.eachRow(ctx, "view dependents", q, []any{&targetSchema, &targetName, &kind, &depSchema, &name}, func() {
 		dep := Dependent{Kind: kind}
 		if depSchema != nil {
 			dep.Name = model.Ident(*depSchema, name)
@@ -111,9 +102,9 @@ func (c *Catalog) ViewDependents(ctx context.Context) (map[string][]Dependent, e
 		}
 		target := model.Ident(targetSchema, targetName)
 		dependents[target] = append(dependents[target], dep)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan view dependents rows: %w", err)
+	})
+	if err != nil {
+		return nil, err
 	}
 	return dependents, nil
 }
@@ -167,19 +158,10 @@ func (c *Catalog) ColumnDependents(ctx context.Context) (map[string][]Dependent,
 			1, 2, 3, 4, 5, 6, 7, 8
 	`
 
-	rows, err := c.conn.Query(ctx, q, pgx.NamedArgs{"schemas": c.schemas})
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get column dependents: %w", err)
-	}
-	defer rows.Close()
-
 	dependents := map[string][]Dependent{}
-	for rows.Next() {
-		var targetSchema, targetName, column, kind, identity string
-		var depSchema, depRelation, generated *string
-		if err := rows.Scan(&targetSchema, &targetName, &column, &kind, &depSchema, &depRelation, &generated, &identity); err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan column dependents: %w", err)
-		}
+	var targetSchema, targetName, column, kind, identity string
+	var depSchema, depRelation, generated *string
+	err := c.eachRow(ctx, "column dependents", q, []any{&targetSchema, &targetName, &column, &kind, &depSchema, &depRelation, &generated, &identity}, func() {
 		target := model.Ident(targetSchema, targetName)
 		dep := Dependent{Kind: kind, Name: identity}
 		switch {
@@ -191,9 +173,9 @@ func (c *Catalog) ColumnDependents(ctx context.Context) (map[string][]Dependent,
 		}
 		key := target + "." + model.Ident(column)
 		dependents[key] = append(dependents[key], dep)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan column dependents rows: %w", err)
+	})
+	if err != nil {
+		return nil, err
 	}
 	return dependents, nil
 }
@@ -281,22 +263,14 @@ func (c *Catalog) KeyDependents(ctx context.Context) (map[string][]Dependent, ma
 			1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
 	`
 
-	rows, err := c.conn.Query(ctx, q, pgx.NamedArgs{"schemas": c.schemas})
-	if err != nil {
-		return nil, nil, fmt.Errorf("catalog: failed to get key dependents: %w", err)
-	}
-	defer rows.Close()
-
 	constraints := map[string][]Dependent{}
 	indexes := map[string][]Dependent{}
-	for rows.Next() {
-		var isConstraint bool
-		var targetSchema, targetTable, targetName, kind, identity string
-		var viewSchema, viewName, fkSchema, fkTable, fkName *string
-		if err := rows.Scan(&isConstraint, &targetSchema, &targetTable, &targetName, &kind,
-			&viewSchema, &viewName, &fkSchema, &fkTable, &fkName, &identity); err != nil {
-			return nil, nil, fmt.Errorf("catalog: failed to scan key dependents: %w", err)
-		}
+	var isConstraint bool
+	var targetSchema, targetTable, targetName, kind, identity string
+	var viewSchema, viewName, fkSchema, fkTable, fkName *string
+	dest := []any{&isConstraint, &targetSchema, &targetTable, &targetName, &kind,
+		&viewSchema, &viewName, &fkSchema, &fkTable, &fkName, &identity}
+	err := c.eachRow(ctx, "key dependents", q, dest, func() {
 		dep := Dependent{Kind: kind, Name: identity}
 		switch {
 		case viewName != nil:
@@ -312,9 +286,88 @@ func (c *Catalog) KeyDependents(ctx context.Context) (map[string][]Dependent, ma
 			key := model.Ident(targetSchema, targetName)
 			indexes[key] = append(indexes[key], dep)
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, fmt.Errorf("catalog: failed to scan key dependents rows: %w", err)
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 	return constraints, indexes, nil
+}
+
+// RoutineDependents reads what blocks dropping each routine in the managed
+// schemas, keyed by the routine's OID.
+func (c *Catalog) RoutineDependents(ctx context.Context) (map[uint32][]Dependent, error) {
+	q := `
+		SELECT DISTINCT
+			p.oid,
+			CASE
+				WHEN dc.relkind = 'v' THEN 'view'
+				WHEN dc.relkind = 'm' THEN 'materialized view'
+				WHEN ga.attgenerated <> '' THEN 'generated column'
+				ELSE (oi).type
+			END,
+			CASE WHEN dc.relkind IN ('v', 'm') THEN dn.nspname END,
+			CASE WHEN dc.relkind IN ('v', 'm') THEN dc.relname END,
+			CASE WHEN ga.attgenerated <> '' THEN gn.nspname END,
+			CASE WHEN ga.attgenerated <> '' THEN gt.relname END,
+			CASE WHEN ga.attgenerated <> '' THEN ga.attname END,
+			(oi).identity
+		FROM
+			pg_catalog.pg_proc p
+			JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+			JOIN pg_catalog.pg_depend d ON d.refclassid = 'pg_catalog.pg_proc'::regclass
+			AND d.refobjid = p.oid
+			AND d.deptype = 'n'
+			CROSS JOIN LATERAL pg_catalog.pg_identify_object(d.classid, d.objid, 0) oi
+			LEFT JOIN pg_catalog.pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_catalog.pg_rewrite'::regclass
+			LEFT JOIN pg_catalog.pg_class dc ON dc.oid = r.ev_class
+			LEFT JOIN pg_catalog.pg_namespace dn ON dn.oid = dc.relnamespace
+			LEFT JOIN pg_catalog.pg_attrdef ad ON ad.oid = d.objid AND d.classid = 'pg_catalog.pg_attrdef'::regclass
+			LEFT JOIN pg_catalog.pg_attribute ga ON ga.attrelid = ad.adrelid AND ga.attnum = ad.adnum
+			LEFT JOIN pg_catalog.pg_class gt ON gt.oid = ga.attrelid
+			LEFT JOIN pg_catalog.pg_namespace gn ON gn.oid = gt.relnamespace
+		WHERE
+			n.nspname = ANY(@schemas)
+		ORDER BY
+			1, 2, 3, 4, 5, 6, 7, 8
+	`
+
+	dependents := map[uint32][]Dependent{}
+	var oid uint32
+	var kind, identity string
+	var viewSchema, viewName, genSchema, genTable, genColumn *string
+	err := c.eachRow(ctx, "routine dependents", q, []any{&oid, &kind, &viewSchema, &viewName, &genSchema, &genTable, &genColumn, &identity}, func() {
+		dep := Dependent{Kind: kind, Name: identity}
+		switch {
+		case viewName != nil:
+			dep.Name = model.Ident(*viewSchema, *viewName)
+			dep.Relation = dep.Name
+		case genColumn != nil:
+			dep.Name = model.Ident(*genSchema, *genTable) + "." + model.Ident(*genColumn)
+		}
+		dependents[oid] = append(dependents[oid], dep)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return dependents, nil
+}
+
+// eachRow runs q over the managed schemas, scans each row into dest and calls
+// fn after each scan. what names the query in an error.
+func (c *Catalog) eachRow(ctx context.Context, what, q string, dest []any, fn func()) error {
+	rows, err := c.conn.Query(ctx, q, pgx.NamedArgs{"schemas": c.schemas})
+	if err != nil {
+		return fmt.Errorf("catalog: failed to get %s: %w", what, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		if err := rows.Scan(dest...); err != nil {
+			return fmt.Errorf("catalog: failed to scan %s: %w", what, err)
+		}
+		fn()
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("catalog: failed to scan %s rows: %w", what, err)
+	}
+	return nil
 }

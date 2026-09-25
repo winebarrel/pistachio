@@ -16,6 +16,8 @@
 
 * `plan` fails, naming the dependents, when it would drop or change a key or an index that a foreign key or a view depends on. PostgreSQL refuses the drop, so `apply` failed partway.
 
+* With `--manage-routine`, `plan` fails, naming the dependents, when a change it can only make by dropping and recreating a routine meets a constraint, default, index, view, policy or trigger that calls the routine. PostgreSQL refuses the drop, so `apply` failed partway.
+
 ## [1.65.0] - 2026-09-25
 
 * Add `--explain` to `diff`. It writes the comment `plan --explain` does, without sizes, and marks a type change or a default that calls a function `may rewrite`.

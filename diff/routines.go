@@ -11,6 +11,9 @@ type RoutineDiffResult struct {
 	Stmts               []string
 	DropStmts           []string
 	DisallowedDropStmts []string
+	// Recreated lists the current routines Stmts drops and creates again,
+	// for the dependent check diffAll makes against the catalog.
+	Recreated []*model.Routine
 }
 
 // DiffRoutines compares functions and procedures. Both maps are keyed by FQRN,
@@ -39,8 +42,11 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 		if !ok {
 			continue
 		}
-		stmts, disallowed := diffRoutine(currentRoutine, desiredRoutine, dropAllowed)
+		stmts, disallowed, recreated := diffRoutine(currentRoutine, desiredRoutine, dropAllowed)
 		result.Stmts = append(result.Stmts, stmts...)
+		if recreated {
+			result.Recreated = append(result.Recreated, currentRoutine)
+		}
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, disallowed...)
 	}
 
@@ -93,8 +99,8 @@ func alignDefaults(current, desired *model.Routine) {
 }
 
 // diffRoutine returns the statements that bring one routine in line, plus any
-// drop the policy suppressed.
-func diffRoutine(current, desired *model.Routine, dropAllowed bool) (stmts, disallowed []string) {
+// drop the policy suppressed, and whether the statements recreate it.
+func diffRoutine(current, desired *model.Routine, dropAllowed bool) (stmts, disallowed []string, recreated bool) {
 	currentNorm, desiredNorm := normalizeTypes(current), normalizeTypes(desired)
 	alignDefaults(currentNorm, desiredNorm)
 
@@ -104,14 +110,14 @@ func diffRoutine(current, desired *model.Routine, dropAllowed bool) (stmts, disa
 			// routine has to go first. Without the drop policy the current
 			// definition stays, and the comment is left alone with it.
 			if !dropAllowed {
-				return nil, []string{"-- skipped: " + current.DropSQL()}
+				return nil, []string{"-- skipped: " + current.DropSQL()}, false
 			}
 			// A recreated routine loses its comment, so re-apply it.
 			stmts = append(stmts, current.DropSQL(), desired.SQL())
 			if commentSQL := desired.CommentSQL(); commentSQL != "" {
 				stmts = append(stmts, commentSQL)
 			}
-			return stmts, nil
+			return stmts, nil, true
 		}
 		stmts = append(stmts, desired.SQL())
 	}
@@ -124,7 +130,7 @@ func diffRoutine(current, desired *model.Routine, dropAllowed bool) (stmts, disa
 		}
 	}
 
-	return stmts, nil
+	return stmts, nil, false
 }
 
 // needsDropCreate reports whether PostgreSQL refuses to apply the change with

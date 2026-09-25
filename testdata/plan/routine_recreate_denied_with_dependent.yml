@@ -1,0 +1,13 @@
+# A recreate the drop policy skips does not run, so nothing blocks it.
+manage_routine: true
+drop_policy:
+  allow_drop: []
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;
+  CREATE TABLE public.t (a integer, CONSTRAINT t_check CHECK (public.f(a) > 0));
+desired: |
+  CREATE FUNCTION public.f(a integer) RETURNS bigint LANGUAGE sql IMMUTABLE AS $$SELECT a::bigint$$;
+  CREATE TABLE public.t (a integer, CONSTRAINT t_check CHECK (public.f(a) > 0));
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP FUNCTION public.f(integer);
