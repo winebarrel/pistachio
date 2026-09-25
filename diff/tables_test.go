@@ -221,7 +221,36 @@ func TestDiffTables_retypedColumns(t *testing.T) {
 
 	result, err := DiffTables(current, desired, allowAllDrops{})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"public.t.a", "public.t.b"}, result.RetypedColumns)
+	assert.Equal(t, []RetypedColumn{
+		{Name: "public.t.a", Current: "public.t.a"},
+		{Name: "public.t.b", Current: "public.t.b"},
+	}, result.RetypedColumns)
+}
+
+func TestDiffTables_retypedColumns_renamed(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "t")
+	ct.Columns.Set("n", &model.Column{Name: "n", TypeName: "integer"})
+	ct.Columns.Set("k", &model.Column{Name: "k", TypeName: "integer"})
+	current.Set("public.t", ct)
+
+	// The table and a column are renamed in this plan; the catalog knows them
+	// by their old names. A RenameFrom whose source is gone was renamed
+	// already, and the column is looked up by its own name.
+	dt := newTable("public", "u")
+	dt.RenameFrom = new("public.t")
+	dt.Columns.Set("m", &model.Column{Name: "m", TypeName: "bigint", RenameFrom: new("n")})
+	dt.Columns.Set("k", &model.Column{Name: "k", TypeName: "bigint", RenameFrom: new("gone")})
+	desired.Set("public.u", dt)
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []RetypedColumn{
+		{Name: "public.u.m", Current: "public.t.n"},
+		{Name: "public.u.k", Current: "public.t.k"},
+	}, result.RetypedColumns)
 }
 
 func TestDiffTables_dropTable(t *testing.T) {

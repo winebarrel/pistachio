@@ -37,28 +37,47 @@ type TableDiffResult struct {
 	// tables and the partitions' own indexes, so each index attaches the
 	// partitions' matching indexes instead of creating copies.
 	PartitionedIndexStmts []string
-	// RetypedColumns names each column of an existing table that goes out as
-	// SET DATA TYPE, as the table's name, a dot and the column name, for the
-	// dependent check diffAll makes against the catalog.
-	RetypedColumns      []string
+	// RetypedColumns lists each column of an existing table that goes out as
+	// SET DATA TYPE, for the dependent check diffAll makes against the
+	// catalog.
+	RetypedColumns      []RetypedColumn
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
 	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
 }
 
-// retypedColumns names the columns of the table that go out as SET DATA TYPE.
-// A partition declares no columns, and a renamed column is left out.
-func retypedColumns(fqtn string, current, desired *model.Table) []string {
+// RetypedColumn is a column that goes out as SET DATA TYPE. Name is the
+// table's name, a dot and the column name as the desired schema writes them.
+// Current is the same before the plan renames either, which is the name the
+// catalog knows.
+type RetypedColumn struct {
+	Name    string
+	Current string
+}
+
+// retypedColumns lists the columns of the table that go out as SET DATA TYPE.
+// currentFQTN is the table's name before the plan renames it. A partition
+// declares no columns.
+func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table) []RetypedColumn {
 	if desired.IsPartitionChild() {
 		return nil
 	}
-	var names []string
+	var cols []RetypedColumn
 	for name, desiredCol := range desired.Columns.All() {
-		if currentCol, ok := current.Columns.GetOk(name); ok && columnRetyped(fqtn, currentCol, desiredCol) {
-			names = append(names, fqtn+"."+model.Ident(name))
+		currentName := name
+		if desiredCol.RenameFrom != nil {
+			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
+				currentName = *desiredCol.RenameFrom
+			}
+		}
+		if currentCol, ok := current.Columns.GetOk(currentName); ok && columnRetyped(fqtn, currentCol, desiredCol) {
+			cols = append(cols, RetypedColumn{
+				Name:    fqtn + "." + model.Ident(name),
+				Current: currentFQTN + "." + model.Ident(currentName),
+			})
 		}
 	}
-	return names
+	return cols
 }
 
 // partitionedIndexStmts is one partitioned table's share of
@@ -101,6 +120,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	result := &TableDiffResult{}
 
 	// Detect renames
+	original := current
 	renameStmts, current, err := detectTableRenames(current, desired)
 	if err != nil {
 		return nil, err
@@ -138,7 +158,13 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			if pc := diffPersistence(desiredTable.FQTN(), currentTable, desiredTable); pc != nil {
 				persistence = append(persistence, pc)
 			}
-			result.RetypedColumns = append(result.RetypedColumns, retypedColumns(k, currentTable, desiredTable)...)
+			currentKey := k
+			if desiredTable.RenameFrom != nil {
+				if _, ok := original.GetOk(*desiredTable.RenameFrom); ok {
+					currentKey = *desiredTable.RenameFrom
+				}
+			}
+			result.RetypedColumns = append(result.RetypedColumns, retypedColumns(k, currentKey, currentTable, desiredTable)...)
 			tableResult, err := diffTable(currentTable, desiredTable, dc)
 			if err != nil {
 				return nil, err

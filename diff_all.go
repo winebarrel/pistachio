@@ -95,9 +95,9 @@ type diffAllResult struct {
 	// drop, for the dependent check diffAll makes against the catalog. Diff
 	// reads no catalog and leaves it alone.
 	DroppedViews []string
-	// RetypedColumns names the columns the statements change the type of,
+	// RetypedColumns lists the columns the statements change the type of,
 	// for the same check.
-	RetypedColumns []string
+	RetypedColumns []diff.RetypedColumn
 	// StateHash fingerprints the current side the statements were computed
 	// against. Empty unless the run asked for it.
 	StateHash string
@@ -485,12 +485,20 @@ func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []st
 //
 // A view the same plan drops is no obstacle: view drops run before the table
 // changes.
-func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped, droppedViews []string) error {
+func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped []diff.RetypedColumn, droppedViews []string) error {
 	dependents, err := cat.ColumnDependents(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch column dependents: %w", err)
 	}
-	return blockedError("cannot change the type of", retyped, dependents, droppedViews)
+	// The catalog knows a column by its name before the plan renames it; the
+	// message names it the way the schema file does.
+	names := make([]string, 0, len(retyped))
+	byName := make(map[string][]catalog.Dependent, len(retyped))
+	for _, col := range retyped {
+		names = append(names, col.Name)
+		byName[col.Name] = dependents[col.Current]
+	}
+	return blockedError("cannot change the type of", names, byName, droppedViews)
 }
 
 // blockedError names, for each target, the dependents that block the change
