@@ -1,0 +1,9 @@
+# Removing a unique constraint a foreign key references is refused the same
+# way as changing one.
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, code text NOT NULL, CONSTRAINT t_code_key UNIQUE (code));
+  CREATE TABLE public.r (code text, CONSTRAINT r_code_fkey FOREIGN KEY (code) REFERENCES public.t (code));
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, code text NOT NULL);
+  CREATE TABLE public.r (code text, CONSTRAINT r_code_fkey FOREIGN KEY (code) REFERENCES public.t (code));
+error: "cannot drop constraint t_code_key on public.t: foreign key r_code_fkey on public.r depends on it"
