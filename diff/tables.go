@@ -49,15 +49,16 @@ type partitionedIndexStmts struct {
 	stmts []string
 }
 
-// partitionDepth counts the partitioned tables above t among tables.
+// partitionDepth counts the partitioned tables above t. A parent outside
+// tables, as a filter leaves it, counts as one level and ends the count.
 func partitionDepth(tables *orderedmap.Map[string, *model.Table], t *model.Table) int {
 	depth := 0
 	for t.PartitionOf != nil {
+		depth++
 		parent, ok := tables.GetOk(*t.PartitionOf)
 		if !ok {
 			break
 		}
-		depth++
 		t = parent
 	}
 	return depth

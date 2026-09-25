@@ -187,8 +187,9 @@ func TestPartitionDepth(t *testing.T) {
 
 	assert.Equal(t, 0, partitionDepth(tables, top))
 	assert.Equal(t, 1, partitionDepth(tables, mid))
-	// A parent outside the map, as a filter leaves it, ends the count.
-	assert.Equal(t, 0, partitionDepth(tables, partitionedTable("x_1", "x", "x_1_id_idx")))
+	// A parent outside the map, as a filter leaves it, counts as one level
+	// and ends the count, so the partition still comes before a top level.
+	assert.Equal(t, 1, partitionDepth(tables, partitionedTable("x_1", "x", "x_1_id_idx")))
 }
 
 func TestDiffTables_dropTable(t *testing.T) {
