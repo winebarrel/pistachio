@@ -77,10 +77,16 @@ check() {
 }
 
 # require_extension <extension> <package> <samples>
-# The arguments name the samples to check, and none means all of them. A name
-# the manifest does not hold is an error rather than a sample quietly skipped.
+# SAMPLE names the samples to check, separated by commas, and unset or empty
+# means all of them. A name the manifest does not hold is an error rather than
+# a sample quietly skipped. make hands SAMPLE over in the environment rather
+# than on the command line, so the value never passes through a shell.
 _manifest=$(make -s print-samples)
-_selected=("$@")
+_selected=()
+IFS=',' read -r -a _parts <<<"${SAMPLE:-}"
+for _name in "${_parts[@]}"; do
+  [ -n "$_name" ] && _selected+=("$_name")
+done
 for _name in "${_selected[@]}"; do
   if ! cut -d'|' -f1 <<<"$_manifest" | grep -qxF -- "$_name"; then
     echo "No sample named $_name. make print-samples lists them." >&2

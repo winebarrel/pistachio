@@ -1664,10 +1664,12 @@ sample-db-cratesio:
 
 # SAMPLE narrows the check to the samples it names, separated by commas:
 #   make test-samples SAMPLE=lemmy,cratesio
-comma := ,
+# run.sh reads it from the environment, so the value is never pasted into the
+# recipe for the shell to parse.
 .PHONY: test-samples
+test-samples: export SAMPLE := $(SAMPLE)
 test-samples:
-	bash test/samples/run.sh $(subst $(comma), ,$(SAMPLE))
+	bash test/samples/run.sh
 
 # Drop every extension outside pg_catalog. An extension owns tables of its own,
 # PostGIS's spatial_ref_sys among them, and neither DROP TABLE nor DROP SCHEMA
