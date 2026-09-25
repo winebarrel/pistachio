@@ -204,6 +204,7 @@ its loader says why.
 | bonita | bonita | [bonitasoft/bonita-engine](https://github.com/bonitasoft/bonita-engine) |
 | ghostfolio | ghostfolio | [ghostfolio/ghostfolio](https://github.com/ghostfolio/ghostfolio) |
 | typebot | typebot | [baptisteArno/typebot.io](https://github.com/baptisteArno/typebot.io) |
+| cratesio | cratesio | [rust-lang/crates.io](https://github.com/rust-lang/crates.io) |
 
 ## Coverage
 
@@ -232,6 +233,7 @@ Counted 2026-08-08 on PostgreSQL 15.18, except:
   gravitino, formbricks, hoppscotch, and streampark the same day on 16.13,
   and vaultwarden, authelia, hydra, bonita, ghostfolio, and typebot
   2026-09-22 on the same.
+- cratesio 2026-09-25 on 16.13.
 - The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
   Routines, added 2026-08-25, on 15.18 for every sample.
 
@@ -370,11 +372,12 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | bonita | 81 | 707 | 191 | 32 | 115 | 0 | 0 | 0 | 1 | 1 |
 | ghostfolio | 21 | 150 | 74 | 23 | 21 | 0 | 10 | 0 | 0 | 0 |
 | typebot | 31 | 245 | 53 | 31 | 23 | 0 | 5 | 0 | 0 | 0 |
-| **Total** | **10,129** | **87,205** | **30,783** | **13,544** | **16,818** | **2,310** | **715** | **873** | **1,998** | **1,786** |
+| cratesio | 35 | 207 | 85 | 35 | 47 | 1 | 0 | 0 | 25 | 31 |
+| **Total** | **10,164** | **87,412** | **30,868** | **13,579** | **16,865** | **2,311** | **715** | **873** | **2,023** | **1,817** |
 
 ### Size
 
-The 108 dumps come to about 288,000 lines of SQL. chado is 43,700 of them, the
+The 109 dumps come to about 289,000 lines of SQL. chado is 43,700 of them, the
 longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
 about a quarter of the constraints, a fifth of the indexes, a sixth of the
 foreign keys and of the columns, and a seventh of the tables; dhis2, uyuni,
@@ -796,14 +799,14 @@ always reach.
 
 ### Routines
 
-Routines are concentrated the same way. Fifty-one of the 108 samples declare
+Routines are concentrated the same way. Fifty-two of the 109 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
-musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,786. Two in three of
-them, 1,194, return `trigger`, though not every one of those has a trigger to
+musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,817. Two in three of
+them, 1,216, return `trigger`, though not every one of those has a trigger to
 call it: musicbrainz's 89 do not, since its loader concatenates a file list
 that leaves triggers out.
 
-1,670 are written in plpgsql and 116 in sql. omero's 57, the next largest after
+1,695 are written in plpgsql and 122 in sql. omero's 57, the next largest after
 lemmy's 74, are 56 of the plpgsql and one of the sql, and 49 of them return
 `trigger`; concourse and affine declare 7 each, 6 of concourse's and all of
 affine's returning `trigger`, and teable 2. formbricks declares 2, a plpgsql
@@ -841,7 +844,7 @@ further, to `error`, from its `SAMPLES` record.
 Every loader that installs a contrib extension into `public` follows the
 install with `ALTER EXTENSION ... SET SCHEMA public`. The install alone is
 enough in `make test-samples`, where `reset-db` drops every extension before
-each sample, and not enough in `make schema`, where all 108 load after one
+each sample, and not enough in `make schema`, where all 109 load after one
 `clean-schema`: `CREATE EXTENSION IF NOT EXISTS ... WITH SCHEMA public`
 places a new extension but does not move one, so once boundary has put
 `pgcrypto` in its own schema, lemmy `pg_trgm` in its, windmill `uuid-ossp` in
@@ -977,6 +980,19 @@ targets strip only what is irrelevant to a schema round trip:
   upstream drops. One migration installs pgcrypto and hashes rows with
   `digest()` in the same file, so pgcrypto is installed into `public` up front
   and `public` stays second in the search path.
+- **cratesio**: the schema ships as Diesel migrations, 287 directories each
+  holding an `up.sql`. The repository tarball is fetched once and only the
+  migrations directory is extracted, the way lemmy's is. Unlike hyperswitch's,
+  the directories are named in two styles, `20170804200817_` and
+  `2017-09-23-182408_`, which sort apart by name, so the loader orders them the
+  way Diesel does: by the part before the first underscore with the dashes
+  removed. Two files end without a semicolon, so each is followed by a newline
+  and one. The migrations install ltree, pg_trgm, and pgcrypto with `IF NOT
+  EXISTS ... SCHEMA public`, so the three are installed into `public` and
+  relocated up front, and `public` stays second in the search path. Five
+  expression indexes call the schema's own `canon_crate_name` and
+  `canon_username`, one of them with `gin_trgm_ops` from `public`, so the dump
+  has to qualify the function and leave the operator class bare.
 - **dcm4chee**: the schema ships as plain DDL rather than migrations, in three
   files concatenated in dependency order: the tables and their 30 sequences,
   then the indexes over the foreign key columns, then the three
