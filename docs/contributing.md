@@ -27,7 +27,8 @@ it was taken from, comparing `pg_dump` output on both sides. The latter needs a
 
 `make test-samples` checks pista against real-world schemas downloaded from
 their upstream sources: each is loaded into a database of its own, dumped, and
-planned back, and the plan has to come out empty. The sample list, the check
+planned back, and the plan has to come out empty. `SAMPLE=lemmy,cratesio`
+narrows the run to the samples it names. The sample list, the check
 itself, and how to add a sample live in
 [SAMPLE-DB-TESTS.md](https://github.com/winebarrel/pistachio/blob/main/SAMPLE-DB-TESTS.md).
 

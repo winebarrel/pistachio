@@ -130,6 +130,7 @@ hydra|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/ory/hydra/41
 bonita|sample-db-bonita||bonita
 ghostfolio|sample-db-prisma|REPO=ghostfolio/ghostfolio SHA=bbe6af82299ab9882164f495b6124cda2e300d3c DIR=prisma/migrations SCHEMA=ghostfolio|ghostfolio
 typebot|sample-db-prisma|REPO=baptisteArno/typebot.io SHA=61056ff9a98082485add8111e901d3148ca358ef DIR=packages/prisma/postgresql/migrations SCHEMA=typebot|typebot
+cratesio|sample-db-cratesio||cratesio
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1616,7 +1617,57 @@ sample-db-bonita:
 	for f in $(BONITA_SQL_FILES); do cat "$$f.sql"; printf '\n;\n'; done \
 	  | $(PSQL)
 
+# crates.io (rust-lang/crates.io, MIT/Apache-2.0), the Rust package registry.
+# The schema ships as Diesel migrations, 287 directories each holding an
+# up.sql, so the repository tarball is fetched once and only the migrations
+# directory is extracted, as sample-db-lemmy does.
+#
+# Plain name order is not the order Diesel applies them in. Diesel takes the
+# version from the part of the name before the first underscore with the
+# dashes removed, and the directories are named in two styles, 20170804200817_
+# and 2017-09-23-182408_, which sort apart by name: 2017-09-23-182408_move_
+# tokens_to_emails_table would run before the 20170804200817_add_email_table
+# it depends on. So each directory is keyed by its version and sorted on that.
+# One name holds spaces, so the key is split off with a tab and the rest of
+# the line is the directory. Some files end without a semicolon, so each is
+# followed by a newline and one.
+#
+# Nothing in them names a schema or qualifies anything with public, so
+# `cratesio` is created up front and search_path places everything. The
+# exception is the three contrib extensions, ltree, pg_trgm, and pgcrypto,
+# which the migrations install with IF NOT EXISTS ... SCHEMA public. In `make
+# schema`, where lemmy has already installed all three into its own schema,
+# that is a no-op, so they are installed into `public` and relocated up front,
+# as openreplay does, and `public` stays second in the search path for them to
+# resolve from.
+CRATESIO_SHA = e1d2226ae0096ae9cc58157a17c01b348d2245ea
+
+sample-db-cratesio: PGOPTS = -c search_path=cratesio,public
+.PHONY: sample-db-cratesio
+sample-db-cratesio:
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS ltree WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION ltree SET SCHEMA public'
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION pg_trgm SET SCHEMA public'
+	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public'
+	$(PSQL) -c 'ALTER EXTENSION pgcrypto SET SCHEMA public'
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS cratesio'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/rust-lang/crates.io/tar.gz/$(CRATESIO_SHA) \
+	  | tar xz -C "$$dir" --strip-components=2 crates.io-$(CRATESIO_SHA)/migrations && \
+	cd "$$dir" && \
+	for d in */; do echo "$${d%/}"; done \
+	  | awk '{ v = $$0; sub(/_.*/, "", v); gsub(/-/, "", v); print v "\t" $$0 }' \
+	  | LC_ALL=C sort | cut -f2- \
+	  | while IFS= read -r d; do cat "$$d/up.sql" || exit 1; printf '\n;\n'; done \
+	  | $(PSQL)
+
+# SAMPLE narrows the check to the samples it names, separated by commas:
+#   make test-samples SAMPLE=lemmy,cratesio
+# run.sh reads it from the environment, so the value is never pasted into the
+# recipe for the shell to parse.
 .PHONY: test-samples
+test-samples: export SAMPLE := $(SAMPLE)
 test-samples:
 	bash test/samples/run.sh
 

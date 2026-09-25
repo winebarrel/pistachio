@@ -77,23 +77,58 @@ check() {
 }
 
 # require_extension <extension> <package> <samples>
+# SAMPLE names the samples to check, separated by commas, and unset or empty
+# means all of them. A name the manifest does not hold is an error rather than
+# a sample quietly skipped. make hands SAMPLE over in the environment rather
+# than on the command line, so the value never passes through a shell.
+_manifest=$(make -s print-samples)
+_selected=()
+IFS=',' read -r -a _parts <<<"${SAMPLE:-}"
+for _name in "${_parts[@]}"; do
+  [ -n "$_name" ] && _selected+=("$_name")
+done
+for _name in "${_selected[@]}"; do
+  if ! cut -d'|' -f1 <<<"$_manifest" | grep -qxF -- "$_name"; then
+    echo "No sample named $_name. make print-samples lists them." >&2
+    exit 1
+  fi
+done
+
+# selected <name>
+# True when <name> is to be checked.
+selected() {
+  [ ${#_selected[@]} -eq 0 ] && return 0
+  local s
+  for s in "${_selected[@]}"; do
+    [ "$s" = "$1" ] && return 0
+  done
+  return 1
+}
+
 # The discourse, citizenlab, affine, lobehub, and formbricks samples need
 # pgvector, and the osm, inaturalist, and citizenlab samples and the dhis2
 # loader need PostGIS, neither of which the official postgres image ships. Say
 # so up front: without them the sample fails at load time and the reason is
-# buried in psql's output.
+# buried in psql's output. The check is skipped when no selected sample needs
+# the extension.
+# require_extension <extension> <package> <sample>...
 require_extension() {
-  local ext="$1" pkg="$2" sample="$3"
+  local ext="$1" pkg="$2" s needed=()
+  shift 2
+  for s in "$@"; do
+    selected "$s" && needed+=("$s")
+  done
+  [ ${#needed[@]} -gt 0 ] || return 0
   if [ -z "$(psql -X -q -At -c "SELECT 1 FROM pg_available_extensions WHERE name = '$ext'")" ]; then
-    echo "$pkg is not installed on this server. It is needed by $sample." >&2
+    echo "$pkg is not installed on this server. It is needed by ${needed[*]}." >&2
     echo "compose.yaml installs it at container start; recreate the container with" >&2
     echo "  docker compose down && docker compose up -d" >&2
     exit 1
   fi
 }
 
-require_extension vector pgvector "the discourse, citizenlab, affine, lobehub, and formbricks samples"
-require_extension postgis PostGIS "the osm, inaturalist, dhis2, and citizenlab samples"
+require_extension vector pgvector discourse citizenlab affine lobehub formbricks
+require_extension postgis PostGIS osm inaturalist dhis2 citizenlab
 
 echo "Building pista..."
 go build -o pista ./cmd/pista
@@ -111,6 +146,7 @@ make -s clean-schema >/dev/null
 # reset the database and load the schema, then run the drift check here.
 while IFS='|' read -r name target args schemas flags; do
   [ -n "$name" ] || continue
+  selected "$name" || continue
 
   make -s reset-db >/dev/null
   # shellcheck disable=SC2086  # $args must word-split into make VAR=value pairs
@@ -121,7 +157,7 @@ while IFS='|' read -r name target args schemas flags; do
   fi
 
   check "$name" "$schemas" "$flags"
-done < <(make -s print-samples)
+done <<<"$_manifest"
 
 echo ""
 echo "  ${_pass} passed, ${_fail} failed"
