@@ -339,3 +339,32 @@ func TestCompareTaggedPos(t *testing.T) {
 	assert.True(t, compareTaggedPos(2, 1, true))
 	assert.False(t, compareTaggedPos(1, 2, true))
 }
+
+func TestDroppedKeys(t *testing.T) {
+	constraints, indexes := droppedKeys([]string{
+		"ALTER TABLE public.t DROP CONSTRAINT t_pkey;",
+		`ALTER TABLE "My Schema"."T" DROP CONSTRAINT "Key.One";`,
+		"ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY (a, b);",
+		"ALTER TABLE public.t DROP COLUMN n, DROP CONSTRAINT t_n_key;",
+		"DROP INDEX public.t_code_idx;",
+		"DROP INDEX CONCURRENTLY public.t_name_idx;",
+		"DROP VIEW public.v;",
+		"ALTER TABLE public.t DROP CONSTRAINT a b;",
+	})
+	assert.Equal(t, []string{
+		"public.t.t_pkey",
+		`"My Schema"."T"."Key.One"`,
+		"public.t.t_n_key",
+	}, constraints)
+	assert.Equal(t, []string{"public.t_code_idx", "public.t_name_idx"}, indexes)
+}
+
+func TestSplitConstraintKey(t *testing.T) {
+	table, name := splitConstraintKey("public.t.t_pkey")
+	assert.Equal(t, "public.t", table)
+	assert.Equal(t, "t_pkey", name)
+
+	table, name = splitConstraintKey(`"My Schema"."T"."Key.One"`)
+	assert.Equal(t, `"My Schema"."T"`, table)
+	assert.Equal(t, `"Key.One"`, name)
+}

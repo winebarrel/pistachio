@@ -1,0 +1,28 @@
+# A foreign key the same plan drops does not block: foreign key drops run first
+# and adds run last.
+init: |
+  CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a));
+  CREATE TABLE public.r (a integer, b integer, CONSTRAINT r_a_fkey FOREIGN KEY (a) REFERENCES public.t (a));
+desired: |
+  CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a, b));
+  CREATE TABLE public.r (a integer, b integer, CONSTRAINT r_a_fkey FOREIGN KEY (a, b) REFERENCES public.t (a, b));
+applied: |
+  -- public.r
+  CREATE TABLE public.r (
+      a integer,
+      b integer
+  );
+
+  ALTER TABLE ONLY public.r ADD CONSTRAINT r_a_fkey FOREIGN KEY (a, b) REFERENCES t(a, b);
+
+  -- public.t
+  CREATE TABLE public.t (
+      a integer NOT NULL,
+      b integer NOT NULL,
+      CONSTRAINT t_pkey PRIMARY KEY (a, b)
+  );
+applied_sql: |
+  ALTER TABLE public.r DROP CONSTRAINT r_a_fkey;
+  ALTER TABLE public.t DROP CONSTRAINT t_pkey;
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY (a, b);
+  ALTER TABLE ONLY public.r ADD CONSTRAINT r_a_fkey FOREIGN KEY (a, b) REFERENCES public.t (a, b);

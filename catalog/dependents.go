@@ -26,6 +26,10 @@ type Dependent struct {
 	// dependency a view does, so this stays empty for one: the field is what
 	// the caller matches against the views it drops.
 	Relation string
+	// Constraint is <table>.<constraint> when the dependent is a foreign key,
+	// and "" otherwise, for the caller to match against the foreign keys it
+	// drops.
+	Constraint string
 }
 
 func (d Dependent) String() string {
@@ -194,4 +198,122 @@ func (c *Catalog) ColumnDependents(ctx context.Context) (map[string][]Dependent,
 		return nil, fmt.Errorf("catalog: failed to scan column dependents rows: %w", err)
 	}
 	return dependents, nil
+}
+
+// KeyDependents reads what blocks dropping a primary key, unique or exclusion
+// constraint, or a plain index, in the managed schemas. Constraints are keyed
+// by <table>.<constraint>, indexes by their schema-qualified name. A foreign
+// key depends on the index behind the key it references, and a view that
+// groups by a primary key depends on the constraint.
+func (c *Catalog) KeyDependents(ctx context.Context) (map[string][]Dependent, map[string][]Dependent, error) {
+	q := `
+		WITH
+			targets AS (
+				SELECT
+					con.oid AS con_oid,
+					con.conindid AS idx_oid,
+					n.nspname,
+					t.relname AS table_name,
+					con.conname AS name,
+					true AS is_constraint
+				FROM
+					pg_catalog.pg_constraint con
+					JOIN pg_catalog.pg_class t ON t.oid = con.conrelid
+					JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+				WHERE
+					con.contype IN ('p', 'u', 'x')
+					AND n.nspname = ANY(@schemas)
+				UNION ALL
+				SELECT
+					NULL,
+					i.indexrelid,
+					n.nspname,
+					t.relname,
+					ci.relname,
+					false
+				FROM
+					pg_catalog.pg_index i
+					JOIN pg_catalog.pg_class ci ON ci.oid = i.indexrelid
+					JOIN pg_catalog.pg_class t ON t.oid = i.indrelid
+					JOIN pg_catalog.pg_namespace n ON n.oid = ci.relnamespace
+				WHERE
+					n.nspname = ANY(@schemas)
+					-- An index a key owns is reached through the key. A foreign
+					-- key's conindid names the index it references, so the
+					-- owners are told apart by their type.
+					AND NOT EXISTS (
+						SELECT FROM pg_catalog.pg_constraint con
+						WHERE con.conindid = i.indexrelid AND con.contype IN ('p', 'u', 'x')
+					)
+			)
+		SELECT DISTINCT
+			tg.is_constraint,
+			tg.nspname,
+			tg.table_name,
+			tg.name,
+			CASE
+				WHEN dc.relkind = 'v' THEN 'view'
+				WHEN dc.relkind = 'm' THEN 'materialized view'
+				WHEN fk.contype = 'f' THEN 'foreign key'
+				ELSE (oi).type
+			END,
+			CASE WHEN dc.relkind IN ('v', 'm') THEN dn.nspname END,
+			CASE WHEN dc.relkind IN ('v', 'm') THEN dc.relname END,
+			CASE WHEN fk.contype = 'f' THEN fkn.nspname END,
+			CASE WHEN fk.contype = 'f' THEN fkt.relname END,
+			CASE WHEN fk.contype = 'f' THEN fk.conname END,
+			(oi).identity
+		FROM
+			targets tg
+			JOIN pg_catalog.pg_depend d ON d.deptype = 'n' AND (
+				(d.refclassid = 'pg_catalog.pg_class'::regclass AND d.refobjid = tg.idx_oid)
+				OR (d.refclassid = 'pg_catalog.pg_constraint'::regclass AND d.refobjid = tg.con_oid)
+			)
+			CROSS JOIN LATERAL pg_catalog.pg_identify_object(d.classid, d.objid, 0) oi
+			LEFT JOIN pg_catalog.pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_catalog.pg_rewrite'::regclass
+			LEFT JOIN pg_catalog.pg_class dc ON dc.oid = r.ev_class
+			LEFT JOIN pg_catalog.pg_namespace dn ON dn.oid = dc.relnamespace
+			LEFT JOIN pg_catalog.pg_constraint fk ON fk.oid = d.objid AND d.classid = 'pg_catalog.pg_constraint'::regclass
+			LEFT JOIN pg_catalog.pg_class fkt ON fkt.oid = fk.conrelid
+			LEFT JOIN pg_catalog.pg_namespace fkn ON fkn.oid = fkt.relnamespace
+		ORDER BY
+			1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
+	`
+
+	rows, err := c.conn.Query(ctx, q, pgx.NamedArgs{"schemas": c.schemas})
+	if err != nil {
+		return nil, nil, fmt.Errorf("catalog: failed to get key dependents: %w", err)
+	}
+	defer rows.Close()
+
+	constraints := map[string][]Dependent{}
+	indexes := map[string][]Dependent{}
+	for rows.Next() {
+		var isConstraint bool
+		var targetSchema, targetTable, targetName, kind, identity string
+		var viewSchema, viewName, fkSchema, fkTable, fkName *string
+		if err := rows.Scan(&isConstraint, &targetSchema, &targetTable, &targetName, &kind,
+			&viewSchema, &viewName, &fkSchema, &fkTable, &fkName, &identity); err != nil {
+			return nil, nil, fmt.Errorf("catalog: failed to scan key dependents: %w", err)
+		}
+		dep := Dependent{Kind: kind, Name: identity}
+		switch {
+		case viewName != nil:
+			dep.Name = model.Ident(*viewSchema, *viewName)
+			dep.Relation = dep.Name
+		case fkName != nil:
+			dep.Constraint = model.Ident(*fkSchema, *fkTable) + "." + model.Ident(*fkName)
+		}
+		if isConstraint {
+			key := model.Ident(targetSchema, targetTable) + "." + model.Ident(targetName)
+			constraints[key] = append(constraints[key], dep)
+		} else {
+			key := model.Ident(targetSchema, targetName)
+			indexes[key] = append(indexes[key], dep)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("catalog: failed to scan key dependents rows: %w", err)
+	}
+	return constraints, indexes, nil
 }

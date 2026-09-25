@@ -1,0 +1,11 @@
+# A foreign key can reference columns covered by a plain unique index, and
+# then it depends on that index.
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, code text NOT NULL);
+  CREATE UNIQUE INDEX t_code_idx ON public.t (code);
+  CREATE TABLE public.r (code text, CONSTRAINT r_code_fkey FOREIGN KEY (code) REFERENCES public.t (code));
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, code text NOT NULL);
+  CREATE UNIQUE INDEX t_code_idx ON public.t (code) INCLUDE (id);
+  CREATE TABLE public.r (code text, CONSTRAINT r_code_fkey FOREIGN KEY (code) REFERENCES public.t (code));
+error: "cannot drop index public.t_code_idx: foreign key r_code_fkey on public.r depends on it"

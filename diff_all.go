@@ -98,6 +98,12 @@ type diffAllResult struct {
 	// RetypedColumns lists the columns the statements retype, for the same
 	// check.
 	RetypedColumns []diff.RetypedColumn
+	// DroppedConstraints and DroppedIndexes name the constraints, as
+	// <table>.<constraint>, and the indexes the statements drop, and
+	// DroppedForeignKeys the foreign keys among them, for the same check.
+	DroppedConstraints []string
+	DroppedIndexes     []string
+	DroppedForeignKeys []string
 	// StateHash fingerprints the current side the statements were computed
 	// against. Empty unless the run asked for it.
 	StateHash string
@@ -175,6 +181,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 	if len(result.RetypedColumns) > 0 {
 		if err := checkColumnDependents(ctx, cat, result.RetypedColumns, result.DroppedViews); err != nil {
+			return nil, err
+		}
+	}
+	if len(result.DroppedConstraints) > 0 || len(result.DroppedIndexes) > 0 {
+		if err := checkKeyDependents(ctx, cat, result); err != nil {
 			return nil, err
 		}
 	}
@@ -378,6 +389,9 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
+	// Read before --bulk-alter merges the statements.
+	droppedConstraints, droppedIndexes := droppedKeys(tableDiff.Stmts)
+	droppedForeignKeys, _ := droppedKeys(tableDiff.FKDropStmts)
 
 	// --bulk-alter merges every table; the -- pista:bulk-alter directive
 	// opts in individual tables.
@@ -457,6 +471,9 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		DesiredDomains:       desiredDomains,
 		DroppedViews:         viewDiff.DroppedViews,
 		RetypedColumns:       tableDiff.RetypedColumns,
+		DroppedConstraints:   droppedConstraints,
+		DroppedIndexes:       droppedIndexes,
+		DroppedForeignKeys:   droppedForeignKeys,
 		StateHash:            currentStateHash,
 	}, nil
 }
@@ -475,7 +492,7 @@ func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []st
 	if err != nil {
 		return fmt.Errorf("failed to fetch view dependents: %w", err)
 	}
-	return blockedError("cannot drop", dropped, dependents, dropped)
+	return blockedError("cannot drop", dropped, dependents, nameSet(dropped))
 }
 
 // checkColumnDependents fails the plan when a column it retypes has a
@@ -493,22 +510,101 @@ func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped []
 		names = append(names, col.Name)
 		byName[col.Name] = dependents[col.Current]
 	}
-	return blockedError("cannot change the type of", names, byName, droppedViews)
+	return blockedError("cannot change the type of", names, byName, nameSet(droppedViews))
+}
+
+// checkKeyDependents fails the plan when a constraint or an index it drops has
+// a dependent that makes PostgreSQL refuse the drop. A change to a key goes
+// out as a drop and an add, so this covers the changes too. A foreign key or a
+// view the same plan drops does not block, since those drops run first.
+func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffAllResult) error {
+	constraints, indexes, err := cat.KeyDependents(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch key dependents: %w", err)
+	}
+	var targets []string
+	byTarget := map[string][]catalog.Dependent{}
+	for _, k := range result.DroppedConstraints {
+		table, name := splitConstraintKey(k)
+		target := "constraint " + name + " on " + table
+		targets = append(targets, target)
+		byTarget[target] = constraints[k]
+	}
+	for _, k := range result.DroppedIndexes {
+		target := "index " + k
+		targets = append(targets, target)
+		byTarget[target] = indexes[k]
+	}
+	skip := nameSet(result.DroppedViews)
+	for k := range nameSet(result.DroppedForeignKeys) {
+		skip[k] = true
+	}
+	return blockedError("cannot drop", targets, byTarget, skip)
+}
+
+// droppedKeys reads the constraints, as <table>.<constraint>, and the indexes
+// the statements drop.
+func droppedKeys(stmts []string) (constraints, indexes []string) {
+	for _, stmt := range stmts {
+		if !strings.Contains(stmt, " DROP CONSTRAINT ") && !strings.HasPrefix(stmt, "DROP INDEX ") {
+			continue
+		}
+		tree, err := pg_query.Parse(stmt)
+		if err != nil || len(tree.GetStmts()) != 1 {
+			continue
+		}
+		node := tree.GetStmts()[0].GetStmt()
+		if as := node.GetAlterTableStmt(); as != nil {
+			table := rangeVarIdent(as.GetRelation())
+			for _, cmd := range as.GetCmds() {
+				if c := cmd.GetAlterTableCmd(); c.GetSubtype() == pg_query.AlterTableType_AT_DropConstraint {
+					constraints = append(constraints, table+"."+model.Ident(c.GetName()))
+				}
+			}
+		}
+		if ds := node.GetDropStmt(); ds != nil && ds.GetRemoveType() == pg_query.ObjectType_OBJECT_INDEX {
+			for _, obj := range ds.GetObjects() {
+				indexes = append(indexes, objectIdent(obj))
+			}
+		}
+	}
+	return constraints, indexes
+}
+
+// splitConstraintKey splits <table>.<constraint> at the last dot outside
+// double quotes.
+func splitConstraintKey(key string) (table, name string) {
+	inQuote := false
+	last := -1
+	for i, r := range key {
+		switch {
+		case r == '"':
+			inQuote = !inQuote
+		case r == '.' && !inQuote:
+			last = i
+		}
+	}
+	return key[:last], key[last+1:]
+}
+
+// nameSet turns a list of names into a set.
+func nameSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, k := range names {
+		set[k] = true
+	}
+	return set
 }
 
 // blockedError lists, for each target, the dependents that block it, leaving
-// out views the same plan drops. It reports every blocked target at once.
-func blockedError(prefix string, targets []string, dependents map[string][]catalog.Dependent, droppedViews []string) error {
-	dropped := make(map[string]bool, len(droppedViews))
-	for _, k := range droppedViews {
-		dropped[k] = true
-	}
-
+// out a view or a foreign key in skip, which the same plan drops first. It
+// reports every blocked target at once.
+func blockedError(prefix string, targets []string, dependents map[string][]catalog.Dependent, skip map[string]bool) error {
 	var msgs []string
 	for _, k := range targets {
 		var blockers []string
 		for _, dep := range dependents[k] {
-			if dep.Relation != "" && dropped[dep.Relation] {
+			if (dep.Relation != "" && skip[dep.Relation]) || (dep.Constraint != "" && skip[dep.Constraint]) {
 				continue
 			}
 			blockers = append(blockers, dep.String())
