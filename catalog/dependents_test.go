@@ -182,6 +182,49 @@ func TestColumnDependents(t *testing.T) {
 	})
 }
 
+func TestKeyDependents(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	t.Run("foreign keys and views on a key or an index", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.t (
+				a integer NOT NULL, b integer, code text NOT NULL, n integer,
+				CONSTRAINT t_pkey PRIMARY KEY (a),
+				CONSTRAINT t_n_key UNIQUE (n)
+			);
+			CREATE UNIQUE INDEX t_code_idx ON public.t (code);
+			CREATE INDEX t_b_idx ON public.t (b);
+			CREATE TABLE public.r (
+				a integer REFERENCES public.t (a),
+				code text REFERENCES public.t (code)
+			);
+			CREATE VIEW public.v AS SELECT a, b FROM public.t GROUP BY a;
+		`)
+
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		constraints, indexes, err := cat.KeyDependents(ctx)
+		require.NoError(t, err)
+
+		// The foreign key depends on the key's index, the view on the key.
+		assert.Equal(t, []catalog.Dependent{
+			{Kind: "foreign key", Name: "r_a_fkey on public.r", Constraint: "public.r.r_a_fkey"},
+			{Kind: "view", Name: "public.v", Relation: "public.v"},
+		}, constraints["public.t.t_pkey"])
+		assert.Equal(t, []catalog.Dependent{
+			{Kind: "foreign key", Name: "r_code_fkey on public.r", Constraint: "public.r.r_code_fkey"},
+		}, indexes["public.t_code_idx"])
+
+		// Unreferenced keys and indexes are absent, and a key's own index is
+		// not listed.
+		assert.NotContains(t, constraints, "public.t.t_n_key")
+		assert.NotContains(t, indexes, "public.t_b_idx")
+		assert.NotContains(t, indexes, "public.t_pkey")
+	})
+}
+
 func TestDependentString(t *testing.T) {
 	assert.Equal(t, "view public.eng_staff", catalog.Dependent{Kind: "view", Name: "public.eng_staff"}.String())
 	assert.Equal(t, "function public.total()", catalog.Dependent{Kind: "function", Name: "public.total()"}.String())

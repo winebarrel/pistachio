@@ -1,0 +1,19 @@
+# A view the plan drops does not block the key change.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a));
+  CREATE VIEW public.v AS SELECT a, b FROM public.t GROUP BY a;
+desired: |
+  CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a, b));
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer NOT NULL,
+      b integer NOT NULL,
+      CONSTRAINT t_pkey PRIMARY KEY (a, b)
+  );
+applied_sql: |
+  DROP VIEW public.v;
+  ALTER TABLE public.t DROP CONSTRAINT t_pkey;
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY (a, b);
