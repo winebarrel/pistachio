@@ -19,6 +19,17 @@ as well: its schema is a source tree rather than a file, and the loader runs
 the build that turns it into one. The same target runs in CI as the `samples`
 job.
 
+To check some of the samples rather than all of them, name them in `SAMPLE`,
+separated by commas:
+
+```bash
+make test-samples SAMPLE=lemmy,cratesio
+```
+
+They run in manifest order whatever order they are named in, and a name the
+manifest does not hold stops the run. The pgvector and PostGIS checks below
+apply only when a named sample needs the extension.
+
 The runner exports `PISTA_MANAGE_ROUTINE=1` and `PISTA_MANAGE_STORAGE_PARAM=1`,
 so functions, procedures and a table's storage parameters are part of the round
 trip even though they are opt-in on the command line. They are environment
@@ -1465,7 +1476,8 @@ gitlab's 68 `NOT VALID` constraints round-trip without the flag.
    should not land in `public`). Otherwise add a target, and comment why the
    plain pipe does not work.
 3. If the source is on GitHub, put a commit SHA in the URL, not a branch name.
-4. Run `make test-samples` and confirm the new sample reports `PASS`.
+4. Run `make test-samples SAMPLE=<name>` and confirm the new sample reports
+   `PASS`.
 5. Leave `CHANGELOG.md` alone. A sample is test-only, and nothing about it
    reaches someone using pista.
 

@@ -1662,9 +1662,12 @@ sample-db-cratesio:
 	  | while IFS= read -r d; do cat "$$d/up.sql" || exit 1; printf '\n;\n'; done \
 	  | $(PSQL)
 
+# SAMPLE narrows the check to the samples it names, separated by commas:
+#   make test-samples SAMPLE=lemmy,cratesio
+comma := ,
 .PHONY: test-samples
 test-samples:
-	bash test/samples/run.sh
+	bash test/samples/run.sh $(subst $(comma), ,$(SAMPLE))
 
 # Drop every extension outside pg_catalog. An extension owns tables of its own,
 # PostGIS's spatial_ref_sys among them, and neither DROP TABLE nor DROP SCHEMA
