@@ -1,5 +1,4 @@
-# PostgreSQL refuses to change the type of a column a view reads, however
-# small the change.
+# A view blocks even a widening type change.
 init: |
   CREATE TABLE public.t (id integer NOT NULL, n integer);
   CREATE VIEW public.v AS SELECT id, n FROM public.t;

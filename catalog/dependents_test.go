@@ -164,8 +164,8 @@ func TestColumnDependents(t *testing.T) {
 		dependents, err := cat.ColumnDependents(ctx)
 		require.NoError(t, err)
 
-		// The foreign key on id is rebuilt by the type change and is not read; the
-		// views are, one of them in a schema the run does not manage.
+		// The foreign key is rebuilt, so only the views are read, including one
+		// outside the managed schemas.
 		assert.Equal(t, []catalog.Dependent{
 			{Kind: "materialized view", Name: "reporting.mv", Relation: "reporting.mv"},
 			{Kind: "view", Name: "public.v", Relation: "public.v"},
@@ -175,7 +175,7 @@ func TestColumnDependents(t *testing.T) {
 		assert.Equal(t, []catalog.Dependent{{Kind: "rule", Name: "r on public.t"}}, dependents["public.t.c"])
 		assert.Equal(t, []catalog.Dependent{{Kind: "function", Name: "public.total()"}}, dependents["public.t.d"])
 		assert.Equal(t, []catalog.Dependent{{Kind: "generated column", Name: "public.t.g"}}, dependents["public.t.e"])
-		// The index and the check constraint are rebuilt too; only the view blocks.
+		// The index and the check constraint are rebuilt too.
 		assert.Equal(t, []catalog.Dependent{{Kind: "view", Name: "public.v", Relation: "public.v"}}, dependents["public.t.f"])
 		assert.NotContains(t, dependents, "public.t.g")
 		assert.NotContains(t, dependents, "public.r.tid")

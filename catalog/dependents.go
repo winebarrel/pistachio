@@ -116,15 +116,11 @@ func (c *Catalog) ViewDependents(ctx context.Context) (map[string][]Dependent, e
 	return dependents, nil
 }
 
-// ColumnDependents reads what blocks a type change of each column of a table
-// in the managed schemas, keyed by the table's schema-qualified name, a dot
-// and the column name. A column nothing blocks is absent.
-//
-// PostgreSQL rebuilds an index, a constraint or a statistics object on the
-// column as part of ALTER COLUMN ... TYPE, and refuses the change while a
-// view or a rule, a trigger, a policy, a routine or a generated column
-// depends on it. Only the second kind is read. A trigger blocks even when the
-// column appears only in its UPDATE OF list.
+// ColumnDependents reads what blocks a type change of each column in the
+// managed schemas, keyed by <table>.<column>. PostgreSQL refuses ALTER
+// COLUMN ... TYPE while a view, a rule, a trigger, a policy, a routine or a
+// generated column depends on the column. Indexes, constraints and
+// statistics objects are rebuilt instead and are not read.
 func (c *Catalog) ColumnDependents(ctx context.Context) (map[string][]Dependent, error) {
 	q := `
 		SELECT DISTINCT

@@ -64,13 +64,13 @@ Dependents come from the catalog rather than the schema file. A view that `--inc
 
 ## Column type changes
 
-A type or collation change goes out as `ALTER TABLE ... ALTER COLUMN ... SET DATA TYPE`. PostgreSQL refuses it while a view, a materialized view, a rule, a trigger, a policy, a routine with a `BEGIN ATOMIC` body or a generated column depends on the column, however small the change. `plan` fails first and names what depends on it:
+A type or collation change goes out as `ALTER TABLE ... ALTER COLUMN ... SET DATA TYPE`. PostgreSQL refuses it while a view or materialized view, a rule, a trigger, a policy, a `BEGIN ATOMIC` routine or a generated column depends on the column. `plan` fails first and names the dependents:
 
 ```
 pista: error: cannot change the type of public.t.n: view public.v depends on it
 ```
 
-A trigger counts when the column is only in its `UPDATE OF` list. A view the same plan drops is no obstacle, since view drops run before the table changes. An index, a constraint or a statistics object on the column does not block: PostgreSQL rebuilds it. A dependent on a partition's or an `INHERITS` child's copy of the column is not checked and still fails at apply.
+A trigger blocks even when the column is only in its `UPDATE OF` list. A view the same plan drops does not block. Indexes and constraints do not block, since PostgreSQL rebuilds them. Dependents on a partition's or an `INHERITS` child's column are not checked.
 
 ## Table inheritance
 

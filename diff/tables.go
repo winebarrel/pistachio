@@ -37,27 +37,25 @@ type TableDiffResult struct {
 	// tables and the partitions' own indexes, so each index attaches the
 	// partitions' matching indexes instead of creating copies.
 	PartitionedIndexStmts []string
-	// RetypedColumns lists each column of an existing table that goes out as
-	// SET DATA TYPE, for the dependent check diffAll makes against the
-	// catalog.
+	// RetypedColumns lists the columns of existing tables that go out as SET
+	// DATA TYPE.
 	RetypedColumns      []RetypedColumn
 	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
 	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
 	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
 }
 
-// RetypedColumn is a column that goes out as SET DATA TYPE. Name is the
-// table's name, a dot and the column name as the desired schema writes them.
-// Current is the same before the plan renames either, which is the name the
-// catalog knows.
+// RetypedColumn is a column that goes out as SET DATA TYPE. Name is
+// <table>.<column> as the desired schema names it, and Current as the catalog
+// names it, before any rename in the plan.
 type RetypedColumn struct {
 	Name    string
 	Current string
 }
 
-// retypedColumns lists the columns of the table that go out as SET DATA TYPE.
-// currentFQTN is the table's name before the plan renames it. A partition
-// declares no columns.
+// retypedColumns lists the table's columns that go out as SET DATA TYPE.
+// currentFQTN is the table's name before any rename. A partition declares no
+// columns.
 func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table) []RetypedColumn {
 	if desired.IsPartitionChild() {
 		return nil

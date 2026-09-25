@@ -1,5 +1,4 @@
-# --exclude keeps the view out of the diff, but it still reads the column and
-# still blocks the type change.
+# A view hidden by --exclude still blocks.
 exclude: [v]
 init: |
   CREATE TABLE public.t (id integer NOT NULL, n integer);

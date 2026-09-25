@@ -1,6 +1,5 @@
-# Each kind of dependent that blocks a type change, including a collation
-# change, which goes out as SET DATA TYPE too. The rule and the function are
-# not managed; they block from the catalog.
+# One column per kind of dependent. A collation change is also SET DATA TYPE.
+# The rule and the function are unmanaged and block from the catalog.
 init: |
   CREATE FUNCTION public.trg() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$;
   CREATE TABLE public.t (

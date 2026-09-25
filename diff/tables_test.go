@@ -207,7 +207,7 @@ func TestDiffTables_retypedColumns(t *testing.T) {
 	dt.Columns.Set("c", &model.Column{Name: "c", TypeName: "text"})
 	desired.Set("public.t", dt)
 
-	// A partition declares no columns, so none of its columns is named.
+	// A partition declares no columns.
 	cp := newTable("public", "t_1")
 	cp.PartitionOf = new("public.t")
 	cp.PartitionBound = new("DEFAULT")
@@ -236,9 +236,8 @@ func TestDiffTables_retypedColumns_renamed(t *testing.T) {
 	ct.Columns.Set("k", &model.Column{Name: "k", TypeName: "integer"})
 	current.Set("public.t", ct)
 
-	// The table and a column are renamed in this plan; the catalog knows them
-	// by their old names. A RenameFrom whose source is gone was renamed
-	// already, and the column is looked up by its own name.
+	// The catalog knows the renamed table and column by their old names. A
+	// RenameFrom whose source is gone was applied earlier.
 	dt := newTable("public", "u")
 	dt.RenameFrom = new("public.t")
 	dt.Columns.Set("m", &model.Column{Name: "m", TypeName: "bigint", RenameFrom: new("n")})

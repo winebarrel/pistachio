@@ -95,8 +95,8 @@ type diffAllResult struct {
 	// drop, for the dependent check diffAll makes against the catalog. Diff
 	// reads no catalog and leaves it alone.
 	DroppedViews []string
-	// RetypedColumns lists the columns the statements change the type of,
-	// for the same check.
+	// RetypedColumns lists the columns the statements retype, for the same
+	// check.
 	RetypedColumns []diff.RetypedColumn
 	// StateHash fingerprints the current side the statements were computed
 	// against. Empty unless the run asked for it.
@@ -478,20 +478,15 @@ func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []st
 	return blockedError("cannot drop", dropped, dependents, dropped)
 }
 
-// checkColumnDependents fails the plan when it would change the type of a
-// column something still depends on. PostgreSQL refuses ALTER COLUMN ... TYPE
-// while a view, a rule, a trigger, a policy, a routine or a generated column
-// depends on the column, however small the change.
-//
-// A view the same plan drops is no obstacle: view drops run before the table
-// changes.
+// checkColumnDependents fails the plan when a column it retypes has a
+// dependent that makes PostgreSQL refuse the change. A view the same plan
+// drops does not block, since view drops run first.
 func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped []diff.RetypedColumn, droppedViews []string) error {
 	dependents, err := cat.ColumnDependents(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch column dependents: %w", err)
 	}
-	// The catalog knows a column by its name before the plan renames it; the
-	// message names it the way the schema file does.
+	// Look up by the catalog's name and report the desired one.
 	names := make([]string, 0, len(retyped))
 	byName := make(map[string][]catalog.Dependent, len(retyped))
 	for _, col := range retyped {
@@ -501,10 +496,8 @@ func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped []
 	return blockedError("cannot change the type of", names, byName, droppedViews)
 }
 
-// blockedError names, for each target, the dependents that block the change
-// prefix describes, leaving out a view the same plan drops. Every blocked
-// target is reported, not the first one, so one run says everything that has
-// to move.
+// blockedError lists, for each target, the dependents that block it, leaving
+// out views the same plan drops. It reports every blocked target at once.
 func blockedError(prefix string, targets []string, dependents map[string][]catalog.Dependent, droppedViews []string) error {
 	dropped := make(map[string]bool, len(droppedViews))
 	for _, k := range droppedViews {

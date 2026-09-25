@@ -1,6 +1,5 @@
-# A rename in the same plan runs first and keeps the view's dependency, so the
-# type change is still refused. The message names the columns by their new
-# names.
+# A rename runs first but keeps the view's dependency, so the type change is
+# still refused.
 init: |
   CREATE TABLE public.t (id integer NOT NULL, n integer);
   CREATE VIEW public.v AS SELECT id, n FROM public.t;

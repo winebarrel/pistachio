@@ -1,5 +1,4 @@
-# A view the same plan drops and creates again does not block the type change:
-# the drop runs before the table changes.
+# A view the plan drops and recreates does not block the type change.
 drop_policy:
   allow_drop: [all]
 init: |
