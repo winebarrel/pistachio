@@ -113,6 +113,85 @@ func TestDiffTables_modifyTable_addIndex_perDirective(t *testing.T) {
 	assert.True(t, result.HasConcurrently)
 }
 
+// partitionedTable returns a partitioned table with one index on it, the
+// partition of parent when parent is not empty.
+func partitionedTable(name, parent, idxName string) *model.Table {
+	tbl := newTable("public", name)
+	if parent != "" {
+		tbl.PartitionOf = new("public." + parent)
+		tbl.PartitionBound = new("FOR VALUES IN (1)")
+	}
+	tbl.Partitioned = true
+	tbl.PartitionDef = new("LIST (id)")
+	tbl.Indexes.Set(idxName, &model.Index{Schema: "public", Name: idxName, Table: name, Definition: "CREATE INDEX " + idxName + " ON public." + name + " USING btree (id)"})
+	return tbl
+}
+
+func TestDiffTables_newPartitionedTable_indexesAfterPartitions(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	top := partitionedTable("m", "", "m_id_idx")
+	top.Indexes.Get("m_id_idx").Comment = new("by id")
+	top.Comment = new("metrics")
+	mid := partitionedTable("m_1", "m", "m_1_id_idx")
+	leaf := newTable("public", "m_1_a")
+	leaf.PartitionOf = new("public.m_1")
+	leaf.PartitionBound = new("FOR VALUES IN (1)")
+	leaf.Indexes.Set("m_1_a_id_idx", &model.Index{Schema: "public", Name: "m_1_a_id_idx", Table: "m_1_a", Definition: "CREATE INDEX m_1_a_id_idx ON public.m_1_a USING btree (id)"})
+	desired.Set("public.m", top)
+	desired.Set("public.m_1", mid)
+	desired.Set("public.m_1_a", leaf)
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+
+	// The table comment stays with the table; the leaf's index, on a table
+	// that is not partitioned, stays with the leaf.
+	assert.Len(t, result.Stmts, 5)
+	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.m ")
+	assert.Equal(t, "COMMENT ON TABLE public.m IS 'metrics';", result.Stmts[1])
+	assert.Contains(t, result.Stmts[2], "CREATE TABLE public.m_1 ")
+	assert.Contains(t, result.Stmts[3], "CREATE TABLE public.m_1_a ")
+	assert.Equal(t, "CREATE INDEX m_1_a_id_idx ON public.m_1_a USING btree (id);", result.Stmts[4])
+
+	// The middle level's index comes before the top's, so each attaches the
+	// one below it, and the top's comment follows its index.
+	assert.Equal(t, []string{
+		"CREATE INDEX m_1_id_idx ON public.m_1 USING btree (id);",
+		"CREATE INDEX m_id_idx ON public.m USING btree (id);",
+		"COMMENT ON INDEX public.m_id_idx IS 'by id';",
+	}, result.PartitionedIndexStmts)
+}
+
+func TestDiffTables_modifyPartitionedTable_addIndex(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := partitionedTable("logs", "", "logs_id_idx")
+	ct.Indexes = orderedmap.New[string, *model.Index]()
+	current.Set("public.logs", ct)
+	desired.Set("public.logs", partitionedTable("logs", "", "logs_id_idx"))
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Equal(t, []string{"CREATE INDEX logs_id_idx ON public.logs USING btree (id);"}, result.PartitionedIndexStmts)
+}
+
+func TestPartitionDepth(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	top := partitionedTable("m", "", "m_id_idx")
+	mid := partitionedTable("m_1", "m", "m_1_id_idx")
+	tables.Set("public.m", top)
+	tables.Set("public.m_1", mid)
+
+	assert.Equal(t, 0, partitionDepth(tables, top))
+	assert.Equal(t, 1, partitionDepth(tables, mid))
+	// A parent the run leaves out, as a filter does, ends the count.
+	assert.Equal(t, 0, partitionDepth(tables, partitionedTable("x_1", "x", "x_1_id_idx")))
+}
+
 func TestDiffTables_dropTable(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()

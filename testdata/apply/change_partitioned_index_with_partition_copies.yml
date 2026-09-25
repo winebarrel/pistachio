@@ -1,0 +1,34 @@
+# A changed index on a partitioned table, written with the partition's copy the
+# way dump writes it. Dropping the parent's index drops the copy, and the copy
+# is created before the parent's so that the parent's attaches it.
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at, id);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at, id);
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at, id);
+
+  -- public.logs_2025
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at, id);
+applied_sql: |
+  DROP INDEX public.logs_at_idx;
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at, id);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at, id);

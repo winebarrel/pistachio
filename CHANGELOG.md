@@ -4,9 +4,11 @@
 
 ## [Unreleased]
 
-* An index on a partitioned table is created after its partitions' indexes, so it attaches them under their own names. Creating a partitioned table, its partitions and their indexes in one run, as `apply` of a `dump` does on an empty database, failed with `relation ... already exists`, and an index added to an existing partitioned table with its partitions' copies left each partition with two.
+* An index on a partitioned table is created after its partitions' indexes, so it attaches them under their own names. Creating a partitioned table, its partitions and their indexes in one run, as `apply` of a `dump` does on an empty database, failed with `relation ... already exists`, and an index added to or changed on an existing partitioned table, written with its partitions' copies, left each partition with two.
 
 * `dump` writes an index on a partitioned table without `ONLY`. Created with `ONLY`, the index stays invalid until something attaches the partitions' indexes to it, which nothing in the file did.
+
+* The plan file version is now 3, since the index on a partitioned table is read without `ONLY` and the state hash changes with it. `apply-from` refuses a file written by an earlier version, so run `plan --out` again.
 
 ## [1.65.0] - 2026-09-25
 

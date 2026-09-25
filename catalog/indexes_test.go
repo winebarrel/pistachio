@@ -81,9 +81,14 @@ func TestListIndexes(t *testing.T) {
 		tables, err := cat.Tables(ctx)
 		require.NoError(t, err)
 
-		assert.False(t, tables.Get("public.logs").Indexes.Get("logs_at_idx").Attached)
+		parent := tables.Get("public.logs").Indexes.Get("logs_at_idx")
+		assert.False(t, parent.Attached)
+		// pg_get_indexdef writes ONLY for the parent's index; it is read
+		// without it.
+		assert.Equal(t, "CREATE INDEX logs_at_idx ON public.logs USING btree (at)", parent.Definition)
 		child := tables.Get("public.logs_2025").Indexes
 		assert.True(t, child.Get("logs_2025_at_idx").Attached)
+		assert.Equal(t, "CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at)", child.Get("logs_2025_at_idx").Definition)
 		assert.False(t, child.Get("logs_2025_id_idx").Attached)
 	})
 
