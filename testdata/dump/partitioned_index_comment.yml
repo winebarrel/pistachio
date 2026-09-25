@@ -13,7 +13,7 @@ dump: |
       at date NOT NULL
   )
   PARTITION BY RANGE (at);
-  CREATE INDEX logs_at_idx ON ONLY public.logs USING btree (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
   COMMENT ON INDEX public.logs_at_idx IS 'by date';
 
   -- public.logs_2025

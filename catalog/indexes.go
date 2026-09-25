@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/pistachio/model"
@@ -37,7 +38,8 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			pg_catalog.pg_get_indexdef(i.indexrelid) AS definition,
 			ts.spcname,
 			descr.description AS comment,
-			ci.relispartition AS attached
+			ci.relispartition AS attached,
+			ct.relkind = 'p' AS on_partitioned
 		FROM
 			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
 			pg_catalog.pg_index i
@@ -75,6 +77,7 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 	var indexes []*model.Index
 	for rows.Next() {
 		var idx model.Index
+		var onPartitioned bool
 		err := rows.Scan(
 			&idx.OID,
 			&idx.Schema,
@@ -84,9 +87,16 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			&idx.TableSpace,
 			&idx.Comment,
 			&idx.Attached,
+			&onPartitioned,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan index info: %w", err)
+		}
+		if onPartitioned {
+			// pg_get_indexdef writes ONLY for every index on a partitioned
+			// table. Without it, the index attaches the partitions' matching
+			// indexes when the plan creates it after them.
+			idx.Definition = strings.Replace(idx.Definition, " ON ONLY ", " ON ", 1)
 		}
 		indexes = append(indexes, &idx)
 	}

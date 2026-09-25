@@ -13,4 +13,4 @@ dump: |
   )
   PARTITION BY RANGE (at);
   -- 0 bytes
-  CREATE INDEX events_at_idx ON ONLY public.events USING btree (at);
+  CREATE INDEX events_at_idx ON public.events USING btree (at);

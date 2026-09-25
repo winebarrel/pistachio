@@ -2,6 +2,16 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Creating a partitioned table, its partitions and their indexes in one run no longer fails with `relation ... already exists`. This is what `apply` of a `dump` does on an empty database. The index on the partitioned table is now created after the partitions' indexes and attaches them.
+
+* An index added to or changed on an existing partitioned table no longer leaves each partition with two copies when the file also declares the partition's copy.
+
+* `dump` writes an index on a partitioned table without `ONLY`. With `ONLY`, the index was left invalid.
+
+* The plan file version is now 3. `apply-from` refuses a file written by an earlier version, so run `plan --out` again.
+
 ## [1.65.0] - 2026-09-25
 
 * Add `--explain` to `diff`. It writes the comment `plan --explain` does, without sizes, and marks a type change or a default that calls a function `may rewrite`.

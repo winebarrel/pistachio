@@ -1,0 +1,41 @@
+# The parent's index is created last and attaches the partitions' indexes
+# under their own names.
+init: ''
+desired: |
+  CREATE TABLE public.logs (
+      id bigint NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+  CREATE INDEX logs_id_idx ON public.logs USING btree (id);
+  COMMENT ON INDEX public.logs_id_idx IS 'by id';
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at);
+  CREATE INDEX logs_2025_by_id ON public.logs_2025 USING btree (id);
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id bigint NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+  CREATE INDEX logs_id_idx ON public.logs USING btree (id);
+  COMMENT ON INDEX public.logs_id_idx IS 'by id';
+
+  -- public.logs_2025
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at);
+  CREATE INDEX logs_2025_by_id ON public.logs_2025 USING btree (id);
+applied_sql: |
+  CREATE TABLE public.logs (
+      id bigint NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at);
+  CREATE INDEX logs_2025_by_id ON public.logs_2025 USING btree (id);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+  CREATE INDEX logs_id_idx ON public.logs USING btree (id);
+  COMMENT ON INDEX public.logs_id_idx IS 'by id';

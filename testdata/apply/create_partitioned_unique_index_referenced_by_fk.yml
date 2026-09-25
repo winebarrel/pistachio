@@ -1,0 +1,50 @@
+# The parent's unique index is created after the partitions' indexes and
+# before the foreign key that needs it.
+init: ''
+desired: |
+  CREATE TABLE public.logs (
+      id bigint NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE UNIQUE INDEX logs_id_at_idx ON public.logs USING btree (id, at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE UNIQUE INDEX logs_2025_id_at_idx ON public.logs_2025 USING btree (id, at);
+  CREATE TABLE public.notes (
+      log_id bigint NOT NULL,
+      log_at date NOT NULL,
+      CONSTRAINT notes_log_fkey FOREIGN KEY (log_id, log_at) REFERENCES public.logs(id, at)
+  );
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id bigint NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE UNIQUE INDEX logs_id_at_idx ON public.logs USING btree (id, at);
+
+  -- public.logs_2025
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE UNIQUE INDEX logs_2025_id_at_idx ON public.logs_2025 USING btree (id, at);
+
+  -- public.notes
+  CREATE TABLE public.notes (
+      log_id bigint NOT NULL,
+      log_at date NOT NULL
+  );
+
+  ALTER TABLE ONLY public.notes ADD CONSTRAINT notes_log_fkey FOREIGN KEY (log_id, log_at) REFERENCES logs(id, at);
+applied_sql: |
+  CREATE TABLE public.logs (
+      id bigint NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE UNIQUE INDEX logs_2025_id_at_idx ON public.logs_2025 USING btree (id, at);
+  CREATE TABLE public.notes (
+      log_id bigint NOT NULL,
+      log_at date NOT NULL
+  );
+  CREATE UNIQUE INDEX logs_id_at_idx ON public.logs USING btree (id, at);
+  ALTER TABLE ONLY public.notes ADD CONSTRAINT notes_log_fkey FOREIGN KEY (log_id, log_at) REFERENCES public.logs (id, at);

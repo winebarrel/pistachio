@@ -1,6 +1,6 @@
 # An index on a partitioned table written without ONLY, and without the index
-# PostgreSQL creates on each partition. The catalog writes the parent's with
-# ONLY, and a partition's index attached to it is not dropped.
+# PostgreSQL creates on each partition. A partition's index attached to the
+# parent's is not dropped.
 init: |
   CREATE TABLE public.logs (
       id integer NOT NULL,

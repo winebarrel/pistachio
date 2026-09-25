@@ -737,6 +737,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	for _, ts := range createStmts {
 		stmts = append(stmts, ts.sql)
 	}
+	stmts = append(stmts, diffs.Tables.PartitionedIndexStmts...)
 	// The logged <-> unlogged transitions carry their own order, so they are
 	// appended rather than tagged and sorted. They sit after the creates, which
 	// puts them after any rename, and before the FK adds, which together with
@@ -773,6 +774,7 @@ func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string
 	stmts = append(stmts, sortViewStmts(diffs.Views.DropStmts, current.Views, true)...)
 	stmts = append(stmts, diffs.Tables.FKDropStmts...)
 	stmts = append(stmts, diffs.Tables.Stmts...)
+	stmts = append(stmts, diffs.Tables.PartitionedIndexStmts...)
 	stmts = append(stmts, diffs.Tables.PersistenceStmts...)
 	stmts = append(stmts, diffs.Tables.DropStmts...)
 	stmts = append(stmts, diffs.Sequences.DropStmts...)

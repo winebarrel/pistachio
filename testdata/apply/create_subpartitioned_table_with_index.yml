@@ -1,0 +1,41 @@
+# The indexes are created leaf first, so each level attaches the one below.
+init: ''
+desired: |
+  CREATE TABLE public.metrics (
+      at date NOT NULL,
+      kind text NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX metrics_kind_idx ON public.metrics USING btree (kind);
+  CREATE TABLE public.metrics_2025 PARTITION OF public.metrics FOR VALUES FROM ('2025-01-01') TO ('2026-01-01') PARTITION BY LIST (kind);
+  CREATE INDEX metrics_2025_kind_idx ON public.metrics_2025 USING btree (kind);
+  CREATE TABLE public.metrics_2025_cpu PARTITION OF public.metrics_2025 FOR VALUES IN ('cpu');
+  CREATE INDEX metrics_2025_cpu_kind_idx ON public.metrics_2025_cpu USING btree (kind);
+applied: |
+  -- public.metrics
+  CREATE TABLE public.metrics (
+      at date NOT NULL,
+      kind text NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX metrics_kind_idx ON public.metrics USING btree (kind);
+
+  -- public.metrics_2025
+  CREATE TABLE public.metrics_2025 PARTITION OF public.metrics FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')
+  PARTITION BY LIST (kind);
+  CREATE INDEX metrics_2025_kind_idx ON public.metrics_2025 USING btree (kind);
+
+  -- public.metrics_2025_cpu
+  CREATE TABLE public.metrics_2025_cpu PARTITION OF public.metrics_2025 FOR VALUES IN ('cpu');
+  CREATE INDEX metrics_2025_cpu_kind_idx ON public.metrics_2025_cpu USING btree (kind);
+applied_sql: |
+  CREATE TABLE public.metrics (
+      at date NOT NULL,
+      kind text NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE TABLE public.metrics_2025 PARTITION OF public.metrics FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')
+  PARTITION BY LIST (kind);
+  CREATE TABLE public.metrics_2025_cpu PARTITION OF public.metrics_2025 FOR VALUES IN ('cpu');
+  CREATE INDEX metrics_2025_cpu_kind_idx ON public.metrics_2025_cpu USING btree (kind);
+  CREATE INDEX metrics_2025_kind_idx ON public.metrics_2025 USING btree (kind);
+  CREATE INDEX metrics_kind_idx ON public.metrics USING btree (kind);
