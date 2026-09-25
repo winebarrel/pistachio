@@ -37,9 +37,64 @@ type TableDiffResult struct {
 	// tables and the partitions' own indexes, so each index attaches the
 	// partitions' matching indexes instead of creating copies.
 	PartitionedIndexStmts []string
-	DropStmts             []string // DROP TABLE (separate from Stmts for ordering)
-	DisallowedDropStmts   []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
-	HasConcurrently       bool     // true if any index operation uses CONCURRENTLY
+	// RetypedColumns lists the columns of existing tables that go out as SET
+	// DATA TYPE.
+	RetypedColumns      []RetypedColumn
+	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
+	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
+	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
+}
+
+// RetypedColumn is a column that goes out as SET DATA TYPE. Name is
+// <table>.<column> as the desired schema names it, and Current as the catalog
+// names it, before any rename in the plan.
+type RetypedColumn struct {
+	Name    string
+	Current string
+}
+
+// retypedColumns lists the table's columns that go out as SET DATA TYPE.
+// currentFQTN is the table's name before any rename. The change reaches the
+// table's partitions and INHERITS children, which original holds under their
+// names before any rename, so their copies of the column are listed too. A
+// partition declares no columns of its own.
+func retypedColumns(fqtn, currentFQTN string, current, desired *model.Table, original *orderedmap.Map[string, *model.Table]) []RetypedColumn {
+	if desired.IsPartitionChild() {
+		return nil
+	}
+	var cols []RetypedColumn
+	for name, desiredCol := range desired.Columns.All() {
+		currentName := name
+		if desiredCol.RenameFrom != nil {
+			if _, ok := current.Columns.GetOk(*desiredCol.RenameFrom); ok {
+				currentName = *desiredCol.RenameFrom
+			}
+		}
+		if currentCol, ok := current.Columns.GetOk(currentName); ok && columnRetyped(fqtn, currentCol, desiredCol) {
+			cols = append(cols, RetypedColumn{
+				Name:    fqtn + "." + model.Ident(name),
+				Current: currentFQTN + "." + model.Ident(currentName),
+			})
+			for _, child := range descendants(original, currentFQTN) {
+				key := child + "." + model.Ident(currentName)
+				cols = append(cols, RetypedColumn{Name: key, Current: key})
+			}
+		}
+	}
+	return cols
+}
+
+// descendants lists the partitions and INHERITS children of the table, at
+// every level below it.
+func descendants(tables *orderedmap.Map[string, *model.Table], fqtn string) []string {
+	var keys []string
+	for k, t := range tables.All() {
+		if t.PartitionOf != nil && *t.PartitionOf == fqtn {
+			keys = append(keys, k)
+			keys = append(keys, descendants(tables, k)...)
+		}
+	}
+	return keys
 }
 
 // partitionedIndexStmts is one partitioned table's share of
@@ -82,6 +137,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	result := &TableDiffResult{}
 
 	// Detect renames
+	original := current
 	renameStmts, current, err := detectTableRenames(current, desired)
 	if err != nil {
 		return nil, err
@@ -119,6 +175,13 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			if pc := diffPersistence(desiredTable.FQTN(), currentTable, desiredTable); pc != nil {
 				persistence = append(persistence, pc)
 			}
+			currentKey := k
+			if desiredTable.RenameFrom != nil {
+				if _, ok := original.GetOk(*desiredTable.RenameFrom); ok {
+					currentKey = *desiredTable.RenameFrom
+				}
+			}
+			result.RetypedColumns = append(result.RetypedColumns, retypedColumns(k, currentKey, currentTable, desiredTable, original)...)
 			tableResult, err := diffTable(currentTable, desiredTable, dc)
 			if err != nil {
 				return nil, err
@@ -490,6 +553,12 @@ func addColumnSQL(fqtn string, col *model.Column) string {
 	return sql + ";"
 }
 
+// columnRetyped reports whether the column's type or collation changes, which
+// goes out as SET DATA TYPE.
+func columnRetyped(fqtn string, current, desired *model.Column) bool {
+	return !equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) || !equalCollation(current.Collation, desired.Collation)
+}
+
 func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	var stmts []string
 	colIdent := model.Ident(desired.Name)
@@ -497,7 +566,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// Type or collation change. Collation is altered via SET DATA TYPE
 	// because PostgreSQL has no separate "set collation" syntax; re-issuing
 	// SET DATA TYPE without COLLATE reverts to the type's default collation.
-	retyped := !equalTypeName(current.TypeName, desired.TypeName, schemaOf(fqtn)) || !equalCollation(current.Collation, desired.Collation)
+	retyped := columnRetyped(fqtn, current, desired)
 	if retyped {
 		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + alterTypeName(desired.TypeName)
 		if desired.Collation != nil {

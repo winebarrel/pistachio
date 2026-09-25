@@ -1,0 +1,40 @@
+# A view the plan drops and recreates does not block the type change.
+drop_policy:
+  allow_drop: [all]
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, n integer);
+  CREATE VIEW public.v AS SELECT id, n FROM public.t;
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, n bigint);
+  CREATE VIEW public.v AS SELECT n, id FROM public.t;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      n bigint
+  );
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT t.n,
+      t.id
+     FROM t;
+applied_pg16: &applied_pg16plus |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      n bigint
+  );
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT n,
+      id
+     FROM t;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus
+applied_sql: |
+  DROP VIEW public.v;
+  ALTER TABLE public.t ALTER COLUMN n SET DATA TYPE bigint;
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT n, id FROM public.t;

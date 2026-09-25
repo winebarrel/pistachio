@@ -1,0 +1,8 @@
+# A view hidden by --exclude still blocks.
+exclude: [v]
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, n integer);
+  CREATE VIEW public.v AS SELECT id, n FROM public.t;
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, n bigint);
+error: "cannot change the type of public.t.n: view public.v depends on it"

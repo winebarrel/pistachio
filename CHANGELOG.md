@@ -12,6 +12,8 @@
 
 * The plan file version is now 3. `apply-from` refuses a file written by an earlier version, so run `plan --out` again.
 
+* `plan` fails, naming the dependents, when it would change the type of a column that a view, rule, trigger, policy, `BEGIN ATOMIC` routine or generated column depends on. PostgreSQL refuses the change, so `apply` failed partway.
+
 ## [1.65.0] - 2026-09-25
 
 * Add `--explain` to `diff`. It writes the comment `plan --explain` does, without sizes, and marks a type change or a default that calls a function `may rewrite`.

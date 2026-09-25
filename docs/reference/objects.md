@@ -62,6 +62,16 @@ Drops run deepest first, so a dependent the same plan drops is no obstacle. A ch
 
 Dependents come from the catalog rather than the schema file. A view that `--include` / `--exclude` hides, or one outside `-n`, blocks the drop just the same. So do a rule, a policy and a routine, each named the way PostgreSQL names it. A routine counts when it reads the view in a `BEGIN ATOMIC` body or returns the view's row type; one whose body is a string literal records no dependency and does not block anything.
 
+## Column type changes
+
+A type or collation change goes out as `ALTER TABLE ... ALTER COLUMN ... SET DATA TYPE`. PostgreSQL refuses it while a view or materialized view, a rule, a trigger, a policy, a `BEGIN ATOMIC` routine or a generated column depends on the column. `plan` fails first and names the dependents:
+
+```
+pista: error: cannot change the type of public.t.n: view public.v depends on it
+```
+
+A trigger blocks even when the column is only in its `UPDATE OF` list. The change reaches the table's partitions and `INHERITS` children, so a dependent on their copy of the column blocks too. A view the same plan drops does not block. A trigger, a policy or a generated column the plan drops still does, since those drops run after the type change. Indexes and constraints do not block, since PostgreSQL rebuilds them.
+
 ## Table inheritance
 
 An `INHERITS (...)` child is managed as the columns and constraints it declares itself. That is what its `CREATE TABLE` writes, and what `pg_dump` writes for it.

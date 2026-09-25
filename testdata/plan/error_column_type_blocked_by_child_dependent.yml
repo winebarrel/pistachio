@@ -1,0 +1,17 @@
+# The type change reaches the partitions and the INHERITS children, so a view
+# on one of their columns blocks it too.
+init: |
+  CREATE TABLE public.p (id integer NOT NULL, n integer) PARTITION BY RANGE (id);
+  CREATE TABLE public.p_1 PARTITION OF public.p FOR VALUES FROM (0) TO (100);
+  CREATE VIEW public.pv AS SELECT n FROM public.p_1;
+  CREATE TABLE public.base (id integer NOT NULL, n integer);
+  CREATE TABLE public.sub (x integer) INHERITS (public.base);
+  CREATE VIEW public.sv AS SELECT n FROM public.sub;
+desired: |
+  CREATE TABLE public.p (id integer NOT NULL, n bigint) PARTITION BY RANGE (id);
+  CREATE TABLE public.p_1 PARTITION OF public.p FOR VALUES FROM (0) TO (100);
+  CREATE VIEW public.pv AS SELECT n FROM public.p_1;
+  CREATE TABLE public.base (id integer NOT NULL, n bigint);
+  CREATE TABLE public.sub (x integer) INHERITS (public.base);
+  CREATE VIEW public.sv AS SELECT n FROM public.sub;
+error: "cannot change the type of public.p_1.n: view public.pv depends on it; cannot change the type of public.sub.n: view public.sv depends on it"

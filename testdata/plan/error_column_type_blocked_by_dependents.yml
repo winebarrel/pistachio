@@ -1,0 +1,26 @@
+# One column per kind of dependent. A collation change is also SET DATA TYPE.
+# The rule and the function are unmanaged and block from the catalog.
+init: |
+  CREATE FUNCTION public.trg() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$;
+  CREATE TABLE public.t (
+      a integer, b integer, c integer, d integer, e integer, f text,
+      g integer GENERATED ALWAYS AS (e * 2) STORED
+  );
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.t USING (a > 0);
+  CREATE TRIGGER tr BEFORE UPDATE OF b ON public.t FOR EACH ROW EXECUTE FUNCTION public.trg();
+  CREATE RULE r AS ON INSERT TO public.t WHERE (new.c < 0) DO INSTEAD NOTHING;
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT sum(d) FROM public.t; END;
+  CREATE MATERIALIZED VIEW public.mv AS SELECT f FROM public.t;
+desired: |
+  CREATE FUNCTION public.trg() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$;
+  CREATE TABLE public.t (
+      a bigint, b bigint, c bigint, d bigint, e bigint, f text COLLATE "C",
+      g integer GENERATED ALWAYS AS (e * 2) STORED
+  );
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.t USING (a > 0);
+  CREATE TRIGGER tr BEFORE UPDATE OF b ON public.t FOR EACH ROW EXECUTE FUNCTION public.trg();
+  CREATE MATERIALIZED VIEW public.mv AS SELECT f FROM public.t;
+manage_routine: true
+error: "cannot change the type of public.t.a: policy p on public.t depends on it; cannot change the type of public.t.b: trigger tr on public.t depends on it; cannot change the type of public.t.c: rule r on public.t depends on it; cannot change the type of public.t.d: function public.total() depends on it; cannot change the type of public.t.e: generated column public.t.g depends on it; cannot change the type of public.t.f: materialized view public.mv depends on it"
