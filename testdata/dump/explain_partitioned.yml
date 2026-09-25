@@ -17,7 +17,7 @@ dump: |
   )
   PARTITION BY RANGE (at);
   -- 32 kB
-  CREATE INDEX events_at_idx ON ONLY public.events USING btree (at);
+  CREATE INDEX events_at_idx ON public.events USING btree (at);
 
   -- public.events_2024 (~2 rows, 8192 bytes, as of {{today}})
   CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');

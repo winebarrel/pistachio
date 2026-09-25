@@ -40,15 +40,11 @@ type DumpResult struct {
 }
 
 // stripRelationSchemaPrefix removes the schema qualification from the relation
-// an index or a trigger targets, for --omit-schema. pg_get_indexdef emits
-// "... ON <schema>.<rel> ..." for ordinary indexes and
-// "... ON ONLY <schema>.<rel> ..." for indexes on partitioned-table parents,
-// so both forms are rewritten. The two patterns are mutually exclusive per
-// occurrence (the ONLY form has "ONLY " between "ON " and the relation), so
-// applying both replacers never double-processes a match.
-// pg_get_triggerdef writes the same "... ON <schema>.<rel> ..." shape.
+// an index or a trigger targets, for --omit-schema. Both are read as
+// "... ON <schema>.<rel> ...": the catalog drops the ONLY pg_get_indexdef
+// writes for an index on a partitioned table, and pg_get_triggerdef writes the
+// same shape.
 func stripRelationSchemaPrefix(definition, fqrn, relName string) string {
-	definition = strings.ReplaceAll(definition, " ON ONLY "+fqrn+" ", " ON ONLY "+relName+" ")
 	return strings.ReplaceAll(definition, " ON "+fqrn+" ", " ON "+relName+" ")
 }
 

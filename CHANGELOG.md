@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* An index on a partitioned table is created after its partitions' indexes, so it attaches them under their own names. Creating a partitioned table, its partitions and their indexes in one run, as `apply` of a `dump` does on an empty database, failed with `relation ... already exists`, and an index added to an existing partitioned table with its partitions' copies left each partition with two.
+
+* `dump` writes an index on a partitioned table without `ONLY`. Created with `ONLY`, the index stays invalid until something attaches the partitions' indexes to it, which nothing in the file did.
+
 ## [1.65.0] - 2026-09-25
 
 * Add `--explain` to `diff`. It writes the comment `plan --explain` does, without sizes, and marks a type change or a default that calls a function `may rewrite`.

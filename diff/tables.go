@@ -31,10 +31,50 @@ type TableDiffResult struct {
 	// view, since a policy can read any of them. An existing table's policies
 	// stay in Stmts, next to its RLS change, so a live table is never left
 	// without them or without its RLS.
-	PolicyStmts         []string
-	DropStmts           []string // DROP TABLE (separate from Stmts for ordering)
-	DisallowedDropStmts []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
-	HasConcurrently     bool     // true if any index operation uses CONCURRENTLY
+	PolicyStmts []string
+	// PartitionedIndexStmts holds the CREATE INDEX of an index on a
+	// partitioned table and the comment on it, deepest level first. They run
+	// once the tables and the partitions' own indexes exist, so the index
+	// attaches the partitions' matching indexes rather than creating copies
+	// under the names those go on to take.
+	PartitionedIndexStmts []string
+	DropStmts             []string // DROP TABLE (separate from Stmts for ordering)
+	DisallowedDropStmts   []string // DROP TABLE / DROP COLUMN / DROP CONSTRAINT (incl. FK) / DROP INDEX suppressed by DropChecker, with "-- skipped: " prefix
+	HasConcurrently       bool     // true if any index operation uses CONCURRENTLY
+}
+
+// partitionedIndexStmts is one partitioned table's share of
+// PartitionedIndexStmts, with how many levels of partitioning sit above it.
+type partitionedIndexStmts struct {
+	depth int
+	stmts []string
+}
+
+// partitionDepth counts the partitioned tables above t among tables.
+func partitionDepth(tables *orderedmap.Map[string, *model.Table], t *model.Table) int {
+	depth := 0
+	for t.PartitionOf != nil {
+		parent, ok := tables.GetOk(*t.PartitionOf)
+		if !ok {
+			break
+		}
+		depth++
+		t = parent
+	}
+	return depth
+}
+
+// flattenPartitionedIndexStmts orders the statements deepest level first, so a
+// middle level's index exists before the one above it attaches it.
+func flattenPartitionedIndexStmts(groups []partitionedIndexStmts) []string {
+	slices.SortStableFunc(groups, func(a, b partitionedIndexStmts) int {
+		return cmp.Compare(b.depth, a.depth)
+	})
+	var stmts []string
+	for _, g := range groups {
+		stmts = append(stmts, g.stmts...)
+	}
+	return stmts
 }
 
 func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropChecker) (*TableDiffResult, error) {
@@ -48,15 +88,20 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	}
 	result.Stmts = append(result.Stmts, renameStmts...)
 
+	var partitionedIdx []partitionedIndexStmts
+
 	// New tables
 	for k, v := range desired.All() {
 		if _, ok := current.GetOk(k); !ok {
 			result.Stmts = append(result.Stmts, v.SQL())
-			stmts, fkStmts, extraHasConcurrently, err := newTableExtras(v)
+			stmts, idxStmts, fkStmts, extraHasConcurrently, err := newTableExtras(v)
 			if err != nil {
 				return nil, err
 			}
 			result.Stmts = append(result.Stmts, stmts...)
+			if len(idxStmts) > 0 {
+				partitionedIdx = append(partitionedIdx, partitionedIndexStmts{partitionDepth(desired, v), idxStmts})
+			}
 			result.FKAddStmts = append(result.FKAddStmts, fkStmts...)
 			result.PolicyStmts = append(result.PolicyStmts, v.PolicySQL()...)
 			if extraHasConcurrently {
@@ -80,6 +125,9 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			}
 			result.FKDropStmts = append(result.FKDropStmts, tableResult.FKDropStmts...)
 			result.Stmts = append(result.Stmts, tableResult.Stmts...)
+			if len(tableResult.PartitionedIndexStmts) > 0 {
+				partitionedIdx = append(partitionedIdx, partitionedIndexStmts{partitionDepth(desired, desiredTable), tableResult.PartitionedIndexStmts})
+			}
 			result.FKAddStmts = append(result.FKAddStmts, tableResult.FKAddStmts...)
 			result.DisallowedDropStmts = append(result.DisallowedDropStmts, tableResult.DisallowedDropStmts...)
 			if tableResult.HasConcurrently {
@@ -88,6 +136,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 		}
 	}
 	result.PersistenceStmts = orderPersistenceChanges(persistence)
+	result.PartitionedIndexStmts = flattenPartitionedIndexStmts(partitionedIdx)
 
 	// Dropped tables: drop FKs on dropped tables first to avoid dependency errors.
 	// When the table-drop policy disallows it, emit the same DROPs as comments
@@ -120,17 +169,23 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	return result, nil
 }
 
-// newTableExtras returns non-FK extras and FK statements separately.
-func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcurrently bool, err error) {
+// newTableExtras returns non-FK extras and FK statements separately. The
+// indexes of a partitioned table and their comments come back on their own, in
+// idxStmts, for PartitionedIndexStmts.
+func newTableExtras(t *model.Table) (stmts, idxStmts, fkStmts []string, hasConcurrently bool, err error) {
 	stmts = append(stmts, t.NotValidConSQL()...)
 	stmts = append(stmts, t.FoldedKeySQL()...)
 	stmts = append(stmts, t.StorageSQL()...)
 	for _, idx := range t.Indexes.CollectValues() {
 		stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, nil, false, err
 		}
-		stmts = append(stmts, stmt)
+		if t.Partitioned {
+			idxStmts = append(idxStmts, stmt)
+		} else {
+			stmts = append(stmts, stmt)
+		}
 		if idx.Concurrently {
 			hasConcurrently = true
 		}
@@ -140,16 +195,22 @@ func newTableExtras(t *model.Table) (stmts []string, fkStmts []string, hasConcur
 	}
 	stmts = append(stmts, t.RLSSQL()...)
 	stmts = append(stmts, t.TrigSQL()...)
-	stmts = append(stmts, t.CommentSQL()...)
+	if t.Partitioned {
+		stmts = append(stmts, t.RelationCommentSQL()...)
+		idxStmts = append(idxStmts, t.IndexCommentSQL()...)
+	} else {
+		stmts = append(stmts, t.CommentSQL()...)
+	}
 	return
 }
 
 type tableDiffResult struct {
-	FKDropStmts         []string
-	Stmts               []string
-	FKAddStmts          []string
-	DisallowedDropStmts []string
-	HasConcurrently     bool
+	FKDropStmts           []string
+	Stmts                 []string
+	PartitionedIndexStmts []string
+	FKAddStmts            []string
+	DisallowedDropStmts   []string
+	HasConcurrently       bool
 }
 
 func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult, error) {
@@ -163,11 +224,12 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// auto-inherit them), so they're still diffed here, mirroring how
 	// indexes and FKs work.
 	if desired.IsPartitionChild() {
-		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, usingIndexNames(desired.Constraints), dc)
+		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
 		if err != nil {
 			return nil, err
 		}
 		result.Stmts = append(result.Stmts, idxResult.Stmts...)
+		result.PartitionedIndexStmts = append(result.PartitionedIndexStmts, idxResult.PartitionedStmts...)
 		result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult.DisallowedDropStmts...)
 		if idxResult.HasConcurrently {
 			result.HasConcurrently = true
@@ -237,11 +299,12 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// TABLE run that --bulk-alter merges in one piece.
 	result.Stmts = append(result.Stmts, notNullDrops...)
 
-	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, usingIndexNames(desired.Constraints), dc)
+	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
 	if err != nil {
 		return nil, err
 	}
 	result.Stmts = append(result.Stmts, idxResult2.Stmts...)
+	result.PartitionedIndexStmts = append(result.PartitionedIndexStmts, idxResult2.PartitionedStmts...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult2.DisallowedDropStmts...)
 	if idxResult2.HasConcurrently {
 		result.HasConcurrently = true
@@ -1383,7 +1446,10 @@ func equalIndexDefs(current, desired *orderedmap.Map[string, *model.Index]) map[
 }
 
 type diffIndexesResult struct {
-	Stmts               []string
+	Stmts []string
+	// PartitionedStmts holds the CREATE INDEX and the comment of each new or
+	// changed index when the table is partitioned. See PartitionedIndexStmts.
+	PartitionedStmts    []string
 	DisallowedDropStmts []string
 	HasConcurrently     bool
 }
@@ -1403,7 +1469,7 @@ func usingIndexNames(cons *orderedmap.Map[string, *model.Constraint]) map[string
 	return names
 }
 
-func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consumed map[string]bool, dc DropChecker) (*diffIndexesResult, error) {
+func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consumed map[string]bool, partitioned bool, dc DropChecker) (*diffIndexesResult, error) {
 	dc = normalizeDropChecker(dc)
 	result := &diffIndexesResult{}
 
@@ -1475,13 +1541,17 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consume
 		if err != nil {
 			return nil, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
 		}
-		result.Stmts = append(result.Stmts, stmt)
 		if desiredIdx.Concurrently {
 			result.HasConcurrently = true
 		}
 		// A recreated index carries no comment, so the desired one is emitted
 		// against nothing rather than against what the old index had.
-		result.Stmts = append(result.Stmts, indexCommentStmts(nil, desiredIdx)...)
+		stmts := append([]string{stmt}, indexCommentStmts(nil, desiredIdx)...)
+		if partitioned {
+			result.PartitionedStmts = append(result.PartitionedStmts, stmts...)
+		} else {
+			result.Stmts = append(result.Stmts, stmts...)
+		}
 	}
 
 	return result, nil
