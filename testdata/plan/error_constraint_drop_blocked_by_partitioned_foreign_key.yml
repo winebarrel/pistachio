@@ -1,0 +1,10 @@
+# A foreign key on a partitioned table is named once, not once per partition.
+init: |
+  CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a));
+  CREATE TABLE public.r (a integer, k integer NOT NULL, CONSTRAINT r_a_fkey FOREIGN KEY (a) REFERENCES public.t (a)) PARTITION BY RANGE (k);
+  CREATE TABLE public.r_1 PARTITION OF public.r FOR VALUES FROM (0) TO (100);
+desired: |
+  CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a, b), CONSTRAINT t_a_key UNIQUE (a));
+  CREATE TABLE public.r (a integer, k integer NOT NULL, CONSTRAINT r_a_fkey FOREIGN KEY (a) REFERENCES public.t (a)) PARTITION BY RANGE (k);
+  CREATE TABLE public.r_1 PARTITION OF public.r FOR VALUES FROM (0) TO (100);
+error: "cannot drop constraint t_pkey on public.t: foreign key r_a_fkey on public.r depends on it"

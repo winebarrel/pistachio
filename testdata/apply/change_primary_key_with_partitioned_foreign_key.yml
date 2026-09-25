@@ -1,0 +1,30 @@
+# A foreign key on a partitioned table has a copy on each partition. The plan
+# drops the parent's key, which takes the copies with it.
+init: |
+  CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a));
+  CREATE TABLE public.r (a integer, b integer, k integer NOT NULL, CONSTRAINT r_a_fkey FOREIGN KEY (a) REFERENCES public.t (a)) PARTITION BY RANGE (k);
+  CREATE TABLE public.r_1 PARTITION OF public.r FOR VALUES FROM (0) TO (100);
+desired: |
+  CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a, b));
+  CREATE TABLE public.r (a integer, b integer, k integer NOT NULL, CONSTRAINT r_a_fkey FOREIGN KEY (a, b) REFERENCES public.t (a, b)) PARTITION BY RANGE (k);
+  CREATE TABLE public.r_1 PARTITION OF public.r FOR VALUES FROM (0) TO (100);
+applied: |
+  -- public.r
+  CREATE TABLE public.r (
+      a integer,
+      b integer,
+      k integer NOT NULL
+  )
+  PARTITION BY RANGE (k);
+
+  ALTER TABLE public.r ADD CONSTRAINT r_a_fkey FOREIGN KEY (a, b) REFERENCES t(a, b);
+
+  -- public.r_1
+  CREATE TABLE public.r_1 PARTITION OF public.r FOR VALUES FROM (0) TO (100);
+
+  -- public.t
+  CREATE TABLE public.t (
+      a integer NOT NULL,
+      b integer NOT NULL,
+      CONSTRAINT t_pkey PRIMARY KEY (a, b)
+  );

@@ -350,13 +350,20 @@ func TestDroppedKeys(t *testing.T) {
 		"DROP INDEX CONCURRENTLY public.t_name_idx;",
 		"DROP VIEW public.v;",
 		"ALTER TABLE public.t DROP CONSTRAINT a b;",
-	})
+	}, nil)
 	assert.Equal(t, []string{
 		"public.t.t_pkey",
 		`"My Schema"."T"."Key.One"`,
 		"public.t.t_n_key",
 	}, constraints)
 	assert.Equal(t, []string{"public.t_code_idx", "public.t_name_idx"}, indexes)
+
+	// keep decides which constraints to list.
+	constraints, _ = droppedKeys([]string{
+		"ALTER TABLE public.t DROP CONSTRAINT t_pkey;",
+		"ALTER TABLE public.t DROP CONSTRAINT t_check;",
+	}, func(table, name string) bool { return name != "t_check" })
+	assert.Equal(t, []string{"public.t.t_pkey"}, constraints)
 }
 
 func TestSplitConstraintKey(t *testing.T) {

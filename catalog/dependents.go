@@ -273,6 +273,10 @@ func (c *Catalog) KeyDependents(ctx context.Context) (map[string][]Dependent, ma
 			LEFT JOIN pg_catalog.pg_constraint fk ON fk.oid = d.objid AND d.classid = 'pg_catalog.pg_constraint'::regclass
 			LEFT JOIN pg_catalog.pg_class fkt ON fkt.oid = fk.conrelid
 			LEFT JOIN pg_catalog.pg_namespace fkn ON fkn.oid = fkt.relnamespace
+		WHERE
+			-- A partition's copy of a foreign key goes with the parent's,
+			-- which is listed on its own.
+			fk.conparentid IS NULL OR fk.conparentid = 0
 		ORDER BY
 			1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
 	`

@@ -100,8 +100,8 @@ type diffAllResult struct {
 	RetypedColumns []diff.RetypedColumn
 	// DroppedConstraints (<table>.<constraint>), DroppedIndexes and
 	// DroppedForeignKeys name what the statements drop, for the same check.
-	DroppedConstraints []string
-	DroppedIndexes     []string
+	DroppedConstraints []droppedObject
+	DroppedIndexes     []droppedObject
 	DroppedForeignKeys []string
 	// StateHash fingerprints the current side the statements were computed
 	// against. Empty unless the run asked for it.
@@ -388,9 +388,26 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	if err != nil {
 		return nil, fmt.Errorf("failed to diff tables: %w", err)
 	}
-	// Read before --bulk-alter merges the statements.
-	droppedConstraints, droppedIndexes := droppedKeys(tableDiff.Stmts)
-	droppedForeignKeys, _ := droppedKeys(tableDiff.FKDropStmts)
+	// Read before --bulk-alter merges the statements. A check or a not-null
+	// constraint has nothing depending on it, so its drop is left out.
+	tableRenames, indexRenames := renamedTablesAndIndexes(diffTables, desiredTables)
+	droppedConstraintNames, droppedIndexNames := droppedKeys(tableDiff.Stmts, func(table, name string) bool {
+		t, ok := diffTables.GetOk(renamedFrom(tableRenames, table))
+		if !ok {
+			return true
+		}
+		con, ok := t.Constraints.GetOk(name)
+		return !ok || (!con.Type.IsCheckConstraint() && !con.Type.IsNotNullConstraint())
+	})
+	var droppedConstraints, droppedIndexes []droppedObject
+	for _, k := range droppedConstraintNames {
+		table, name := splitConstraintKey(k)
+		droppedConstraints = append(droppedConstraints, droppedObject{Name: k, Current: renamedFrom(tableRenames, table) + "." + name})
+	}
+	for _, k := range droppedIndexNames {
+		droppedIndexes = append(droppedIndexes, droppedObject{Name: k, Current: renamedFrom(indexRenames, k)})
+	}
+	droppedForeignKeys, _ := droppedKeys(tableDiff.FKDropStmts, nil)
 
 	// --bulk-alter merges every table; the -- pista:bulk-alter directive
 	// opts in individual tables.
@@ -521,18 +538,19 @@ func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffA
 	if err != nil {
 		return fmt.Errorf("failed to fetch key dependents: %w", err)
 	}
+	// Look up by the catalog's name and report the desired one.
 	var targets []string
 	byTarget := map[string][]catalog.Dependent{}
-	for _, k := range result.DroppedConstraints {
-		table, name := splitConstraintKey(k)
+	for _, obj := range result.DroppedConstraints {
+		table, name := splitConstraintKey(obj.Name)
 		target := "constraint " + name + " on " + table
 		targets = append(targets, target)
-		byTarget[target] = constraints[k]
+		byTarget[target] = constraints[obj.Current]
 	}
-	for _, k := range result.DroppedIndexes {
-		target := "index " + k
+	for _, obj := range result.DroppedIndexes {
+		target := "index " + obj.Name
 		targets = append(targets, target)
-		byTarget[target] = indexes[k]
+		byTarget[target] = indexes[obj.Current]
 	}
 	skip := nameSet(result.DroppedViews)
 	for k := range nameSet(result.DroppedForeignKeys) {
@@ -541,9 +559,55 @@ func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffA
 	return blockedError("cannot drop", targets, byTarget, skip)
 }
 
+// droppedObject is a constraint or an index a statement drops. Name is how the
+// statement names it, and Current how the catalog does, before any rename in
+// the plan.
+type droppedObject struct {
+	Name    string
+	Current string
+}
+
+// renamedTablesAndIndexes maps the new name of each table and index the plan
+// renames to its current name. An index is named with its schema.
+func renamedTablesAndIndexes(current, desired *orderedmap.Map[string, *model.Table]) (tables, indexes map[string]string) {
+	tables = map[string]string{}
+	indexes = map[string]string{}
+	for k, t := range desired.All() {
+		currentTable := k
+		if t.RenameFrom != nil {
+			if _, ok := current.GetOk(*t.RenameFrom); ok {
+				tables[k] = *t.RenameFrom
+				currentTable = *t.RenameFrom
+			}
+		}
+		ct, ok := current.GetOk(currentTable)
+		if !ok {
+			continue
+		}
+		for name, idx := range t.Indexes.All() {
+			if idx.RenameFrom == nil {
+				continue
+			}
+			if old, ok := ct.Indexes.GetOk(*idx.RenameFrom); ok {
+				indexes[model.Ident(idx.Schema, name)] = model.Ident(old.Schema, old.Name)
+			}
+		}
+	}
+	return tables, indexes
+}
+
+// renamedFrom returns the current name of a table or an index renamed in the
+// plan, or the name itself.
+func renamedFrom(renames map[string]string, name string) string {
+	if old, ok := renames[name]; ok {
+		return old
+	}
+	return name
+}
+
 // droppedKeys reads the constraints, as <table>.<constraint>, and the indexes
-// the statements drop.
-func droppedKeys(stmts []string) (constraints, indexes []string) {
+// the statements drop. keep, when set, decides which constraints to list.
+func droppedKeys(stmts []string, keep func(table, name string) bool) (constraints, indexes []string) {
 	for _, stmt := range stmts {
 		if !strings.Contains(stmt, " DROP CONSTRAINT ") && !strings.HasPrefix(stmt, "DROP INDEX ") {
 			continue
@@ -556,7 +620,8 @@ func droppedKeys(stmts []string) (constraints, indexes []string) {
 		if as := node.GetAlterTableStmt(); as != nil {
 			table := rangeVarIdent(as.GetRelation())
 			for _, cmd := range as.GetCmds() {
-				if c := cmd.GetAlterTableCmd(); c.GetSubtype() == pg_query.AlterTableType_AT_DropConstraint {
+				c := cmd.GetAlterTableCmd()
+				if c.GetSubtype() == pg_query.AlterTableType_AT_DropConstraint && (keep == nil || keep(table, c.GetName())) {
 					constraints = append(constraints, table+"."+model.Ident(c.GetName()))
 				}
 			}
