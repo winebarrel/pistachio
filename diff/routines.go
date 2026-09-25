@@ -11,8 +11,7 @@ type RoutineDiffResult struct {
 	Stmts               []string
 	DropStmts           []string
 	DisallowedDropStmts []string
-	// Recreated lists the current routines Stmts drops and creates again,
-	// for the dependent check diffAll makes against the catalog.
+	// Recreated lists the current routines that Stmts drops and creates again.
 	Recreated []*model.Routine
 }
 

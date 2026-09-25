@@ -1,5 +1,5 @@
-# The routine is recreated before the table changes, so a dependent the same
-# plan changes still blocks.
+# The routine is recreated before the table changes, so changing the dependent
+# in the same plan does not help.
 manage_routine: true
 init: |
   CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;

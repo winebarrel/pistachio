@@ -1,5 +1,4 @@
-# A view the plan drops does not block the recreate, since view drops run
-# first.
+# A view the plan drops does not block, since views are dropped first.
 manage_routine: true
 drop_policy:
   allow_drop: [all]

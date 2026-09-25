@@ -16,7 +16,7 @@
 
 * `plan` fails, naming the dependents, when it would drop or change a key or an index that a foreign key or a view depends on. PostgreSQL refuses the drop, so `apply` failed partway.
 
-* With `--manage-routine`, `plan` fails, naming the dependents, when a change it can only make by dropping and recreating a routine meets a constraint, default, index, view, policy or trigger that calls the routine. PostgreSQL refuses the drop, so `apply` failed partway.
+* With `--manage-routine`, `plan` fails when a routine it has to drop and recreate is used by a constraint, default, index, view, policy or trigger, and names them. PostgreSQL refuses that drop, so `apply` used to fail partway.
 
 ## [1.65.0] - 2026-09-25
 

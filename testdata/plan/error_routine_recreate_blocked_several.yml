@@ -1,5 +1,5 @@
-# Each recreated routine with a dependent is named. A recreated routine
-# without one and an unchanged overload with one are not.
+# Only recreated routines with a dependent are named. h has none, and f(text)
+# is not recreated.
 manage_routine: true
 init: |
   CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;

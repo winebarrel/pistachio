@@ -1,5 +1,5 @@
-# A change CREATE OR REPLACE cannot make recreates the routine, and PostgreSQL
-# refuses the DROP while anything depends on it.
+# A new return type recreates the routine. PostgreSQL refuses the DROP while
+# anything depends on it.
 manage_routine: true
 init: |
   CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;

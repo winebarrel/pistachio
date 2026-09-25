@@ -104,7 +104,7 @@ type diffAllResult struct {
 	DroppedIndexes     []droppedObject
 	DroppedForeignKeys []string
 	// RecreatedRoutines lists the current routines the statements drop and
-	// create again, for the same check.
+	// create again.
 	RecreatedRoutines []*model.Routine
 	// StateHash fingerprints the current side the statements were computed
 	// against. Empty unless the run asked for it.
@@ -570,9 +570,8 @@ func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffA
 }
 
 // checkRoutineDependents fails the plan when a routine it recreates has a
-// dependent that makes PostgreSQL refuse the DROP. The recreate runs before
-// the table changes, so a dependent the plan changes still blocks. A view the
-// plan drops does not, since view drops run first.
+// dependent, since PostgreSQL refuses the DROP. The recreate runs before the
+// table changes, so only a view the plan drops is skipped.
 func checkRoutineDependents(ctx context.Context, cat *catalog.Catalog, recreated []*model.Routine, droppedViews []string) error {
 	dependents, err := cat.RoutineDependents(ctx)
 	if err != nil {
