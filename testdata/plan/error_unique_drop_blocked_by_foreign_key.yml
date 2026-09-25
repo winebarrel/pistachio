@@ -1,5 +1,4 @@
-# Removing a unique constraint a foreign key references is refused the same
-# way as changing one.
+# Removing a referenced unique constraint is blocked like changing it.
 init: |
   CREATE TABLE public.t (id integer NOT NULL, code text NOT NULL, CONSTRAINT t_code_key UNIQUE (code));
   CREATE TABLE public.r (code text, CONSTRAINT r_code_fkey FOREIGN KEY (code) REFERENCES public.t (code));

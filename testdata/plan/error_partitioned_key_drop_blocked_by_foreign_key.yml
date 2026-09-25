@@ -1,5 +1,4 @@
-# A foreign key that references a partitioned table depends on the parent's
-# key as well as on each partition's copy.
+# A foreign key to a partitioned table blocks a change to the parent's key.
 init: |
   CREATE TABLE public.p (a integer NOT NULL, b integer NOT NULL, CONSTRAINT p_pkey PRIMARY KEY (a)) PARTITION BY RANGE (a);
   CREATE TABLE public.p_1 PARTITION OF public.p FOR VALUES FROM (0) TO (100);

@@ -217,8 +217,8 @@ func TestKeyDependents(t *testing.T) {
 			{Kind: "foreign key", Name: "r_code_fkey on public.r", Constraint: "public.r.r_code_fkey"},
 		}, indexes["public.t_code_idx"])
 
-		// A key or an index nothing depends on is absent, and a key's own
-		// index is reached through the key rather than listed.
+		// Unreferenced keys and indexes are absent, and a key's own index is
+		// not listed.
 		assert.NotContains(t, constraints, "public.t.t_n_key")
 		assert.NotContains(t, indexes, "public.t_b_idx")
 		assert.NotContains(t, indexes, "public.t_pkey")

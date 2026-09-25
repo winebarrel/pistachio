@@ -1,5 +1,4 @@
-# A foreign key the same plan drops does not block: foreign key drops run first
-# and adds run last.
+# A foreign key the plan drops and adds back does not block the key change.
 init: |
   CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a));
   CREATE TABLE public.r (a integer, b integer, CONSTRAINT r_a_fkey FOREIGN KEY (a) REFERENCES public.t (a));

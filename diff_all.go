@@ -98,9 +98,8 @@ type diffAllResult struct {
 	// RetypedColumns lists the columns the statements retype, for the same
 	// check.
 	RetypedColumns []diff.RetypedColumn
-	// DroppedConstraints and DroppedIndexes name the constraints, as
-	// <table>.<constraint>, and the indexes the statements drop, and
-	// DroppedForeignKeys the foreign keys among them, for the same check.
+	// DroppedConstraints (<table>.<constraint>), DroppedIndexes and
+	// DroppedForeignKeys name what the statements drop, for the same check.
 	DroppedConstraints []string
 	DroppedIndexes     []string
 	DroppedForeignKeys []string
@@ -513,10 +512,10 @@ func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped []
 	return blockedError("cannot change the type of", names, byName, nameSet(droppedViews))
 }
 
-// checkKeyDependents fails the plan when a constraint or an index it drops has
-// a dependent that makes PostgreSQL refuse the drop. A change to a key goes
-// out as a drop and an add, so this covers the changes too. A foreign key or a
-// view the same plan drops does not block, since those drops run first.
+// checkKeyDependents fails the plan when a key or an index it drops, including
+// one it recreates, has a dependent that makes PostgreSQL refuse the drop. A
+// foreign key or a view the same plan drops does not block, since those drops
+// run first.
 func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffAllResult) error {
 	constraints, indexes, err := cat.KeyDependents(ctx)
 	if err != nil {
@@ -596,9 +595,8 @@ func nameSet(names []string) map[string]bool {
 	return set
 }
 
-// blockedError lists, for each target, the dependents that block it, leaving
-// out a view or a foreign key in skip, which the same plan drops first. It
-// reports every blocked target at once.
+// blockedError lists the dependents that block each target, leaving out the
+// views and foreign keys in skip, and reports every blocked target at once.
 func blockedError(prefix string, targets []string, dependents map[string][]catalog.Dependent, skip map[string]bool) error {
 	var msgs []string
 	for _, k := range targets {

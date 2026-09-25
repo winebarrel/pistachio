@@ -1,5 +1,4 @@
-# A drop the drop policy skips never runs, so the foreign key on the key does
-# not fail the plan.
+# A drop the drop policy skips does not run, so nothing blocks it.
 drop_policy:
   allow_drop: []
 init: |

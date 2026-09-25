@@ -1,5 +1,4 @@
-# A key renamed and changed in the same plan is dropped under its old name,
-# which the foreign key depends on.
+# A key renamed and changed in one plan is dropped under its old name.
 init: |
   CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a));
   CREATE TABLE public.r (a integer, CONSTRAINT r_a_fkey FOREIGN KEY (a) REFERENCES public.t (a));

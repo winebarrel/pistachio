@@ -1,6 +1,4 @@
-# A foreign key depends on the index behind the key it references, and a view
-# that groups by the key depends on the constraint. Either one blocks the DROP
-# CONSTRAINT that a change to the key goes out as.
+# A foreign key and a view that groups by the key both block a key change.
 init: |
   CREATE TABLE public.t (a integer NOT NULL, b integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (a));
   CREATE TABLE public.r (a integer, CONSTRAINT r_a_fkey FOREIGN KEY (a) REFERENCES public.t (a));

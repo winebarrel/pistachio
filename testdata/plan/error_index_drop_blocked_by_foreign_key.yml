@@ -1,5 +1,4 @@
-# A foreign key can reference columns covered by a plain unique index, and
-# then it depends on that index.
+# A foreign key can reference a plain unique index and then blocks its change.
 init: |
   CREATE TABLE public.t (id integer NOT NULL, code text NOT NULL);
   CREATE UNIQUE INDEX t_code_idx ON public.t (code);

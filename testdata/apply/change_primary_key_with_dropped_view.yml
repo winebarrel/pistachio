@@ -1,5 +1,4 @@
-# A view the same plan drops does not block the key change, since view drops
-# run first.
+# A view the plan drops does not block the key change.
 drop_policy:
   allow_drop: [all]
 init: |

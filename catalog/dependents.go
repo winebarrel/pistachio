@@ -26,9 +26,7 @@ type Dependent struct {
 	// dependency a view does, so this stays empty for one: the field is what
 	// the caller matches against the views it drops.
 	Relation string
-	// Constraint is <table>.<constraint> when the dependent is a foreign key,
-	// and "" otherwise, for the caller to match against the foreign keys it
-	// drops.
+	// Constraint is <table>.<constraint> for a foreign key and "" otherwise.
 	Constraint string
 }
 
@@ -200,11 +198,10 @@ func (c *Catalog) ColumnDependents(ctx context.Context) (map[string][]Dependent,
 	return dependents, nil
 }
 
-// KeyDependents reads what blocks dropping a primary key, unique or exclusion
-// constraint, or a plain index, in the managed schemas. Constraints are keyed
-// by <table>.<constraint>, indexes by their schema-qualified name. A foreign
-// key depends on the index behind the key it references, and a view that
-// groups by a primary key depends on the constraint.
+// KeyDependents reads what blocks dropping a key or a plain index in the
+// managed schemas, keyed by <table>.<constraint> and by index name. A foreign
+// key depends on the referenced key's index, and a view that groups by a
+// primary key depends on the constraint.
 func (c *Catalog) KeyDependents(ctx context.Context) (map[string][]Dependent, map[string][]Dependent, error) {
 	q := `
 		WITH
@@ -238,9 +235,9 @@ func (c *Catalog) KeyDependents(ctx context.Context) (map[string][]Dependent, ma
 					JOIN pg_catalog.pg_namespace n ON n.oid = ci.relnamespace
 				WHERE
 					n.nspname = ANY(@schemas)
-					-- An index a key owns is reached through the key. A foreign
-					-- key's conindid names the index it references, so the
-					-- owners are told apart by their type.
+					-- A key's own index is reached through the key. A foreign
+					-- key's conindid names the index it references, so it is
+					-- not an owner.
 					AND NOT EXISTS (
 						SELECT FROM pg_catalog.pg_constraint con
 						WHERE con.conindid = i.indexrelid AND con.contype IN ('p', 'u', 'x')
