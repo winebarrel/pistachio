@@ -192,6 +192,38 @@ func TestPartitionDepth(t *testing.T) {
 	assert.Equal(t, 1, partitionDepth(tables, partitionedTable("x_1", "x", "x_1_id_idx")))
 }
 
+func TestDiffTables_retypedColumns(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	ct := newTable("public", "t")
+	ct.Columns.Set("a", &model.Column{Name: "a", TypeName: "integer"})
+	ct.Columns.Set("b", &model.Column{Name: "b", TypeName: "text"})
+	ct.Columns.Set("c", &model.Column{Name: "c", TypeName: "text"})
+	current.Set("public.t", ct)
+	dt := newTable("public", "t")
+	dt.Columns.Set("a", &model.Column{Name: "a", TypeName: "bigint"})
+	dt.Columns.Set("b", &model.Column{Name: "b", TypeName: "text", Collation: new(`"C"`)})
+	dt.Columns.Set("c", &model.Column{Name: "c", TypeName: "text"})
+	desired.Set("public.t", dt)
+
+	// A partition declares no columns, so none of its columns is named.
+	cp := newTable("public", "t_1")
+	cp.PartitionOf = new("public.t")
+	cp.PartitionBound = new("DEFAULT")
+	cp.Columns.Set("a", &model.Column{Name: "a", TypeName: "integer"})
+	current.Set("public.t_1", cp)
+	dp := newTable("public", "t_1")
+	dp.PartitionOf = new("public.t")
+	dp.PartitionBound = new("DEFAULT")
+	dp.Columns.Set("a", &model.Column{Name: "a", TypeName: "bigint"})
+	desired.Set("public.t_1", dp)
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"public.t.a", "public.t.b"}, result.RetypedColumns)
+}
+
 func TestDiffTables_dropTable(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()

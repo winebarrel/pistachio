@@ -1,0 +1,11 @@
+# PostgreSQL refuses to change the type of a column a view reads, however
+# small the change.
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, n integer);
+  CREATE VIEW public.v AS SELECT id, n FROM public.t;
+  CREATE VIEW public.w AS SELECT n FROM public.t;
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, n bigint);
+  CREATE VIEW public.v AS SELECT id, n FROM public.t;
+  CREATE VIEW public.w AS SELECT n FROM public.t;
+error: "cannot change the type of public.t.n: view public.v, view public.w depend on it"

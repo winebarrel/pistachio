@@ -95,6 +95,9 @@ type diffAllResult struct {
 	// drop, for the dependent check diffAll makes against the catalog. Diff
 	// reads no catalog and leaves it alone.
 	DroppedViews []string
+	// RetypedColumns names the columns the statements change the type of,
+	// for the same check.
+	RetypedColumns []string
 	// StateHash fingerprints the current side the statements were computed
 	// against. Empty unless the run asked for it.
 	StateHash string
@@ -167,6 +170,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	// common run makes no extra query.
 	if len(result.DroppedViews) > 0 {
 		if err := checkViewDependents(ctx, cat, result.DroppedViews); err != nil {
+			return nil, err
+		}
+	}
+	if len(result.RetypedColumns) > 0 {
+		if err := checkColumnDependents(ctx, cat, result.RetypedColumns, result.DroppedViews); err != nil {
 			return nil, err
 		}
 	}
@@ -448,6 +456,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		DesiredTables:        desiredTables,
 		DesiredDomains:       desiredDomains,
 		DroppedViews:         viewDiff.DroppedViews,
+		RetypedColumns:       tableDiff.RetypedColumns,
 		StateHash:            currentStateHash,
 	}, nil
 }
@@ -466,19 +475,39 @@ func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []st
 	if err != nil {
 		return fmt.Errorf("failed to fetch view dependents: %w", err)
 	}
+	return blockedError("cannot drop", dropped, dependents, dropped)
+}
 
-	alsoDropped := make(map[string]bool, len(dropped))
-	for _, k := range dropped {
-		alsoDropped[k] = true
+// checkColumnDependents fails the plan when it would change the type of a
+// column something still depends on. PostgreSQL refuses ALTER COLUMN ... TYPE
+// while a view, a rule, a trigger, a policy, a routine or a generated column
+// depends on the column, however small the change.
+//
+// A view the same plan drops is no obstacle: view drops run before the table
+// changes.
+func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped, droppedViews []string) error {
+	dependents, err := cat.ColumnDependents(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch column dependents: %w", err)
+	}
+	return blockedError("cannot change the type of", retyped, dependents, droppedViews)
+}
+
+// blockedError names, for each target, the dependents that block the change
+// prefix describes, leaving out a view the same plan drops. Every blocked
+// target is reported, not the first one, so one run says everything that has
+// to move.
+func blockedError(prefix string, targets []string, dependents map[string][]catalog.Dependent, droppedViews []string) error {
+	dropped := make(map[string]bool, len(droppedViews))
+	for _, k := range droppedViews {
+		dropped[k] = true
 	}
 
-	// Every blocked view is reported, not the first one, so one run says
-	// everything that has to move rather than one view per run.
 	var msgs []string
-	for _, k := range dropped {
+	for _, k := range targets {
 		var blockers []string
 		for _, dep := range dependents[k] {
-			if dep.Relation != "" && alsoDropped[dep.Relation] {
+			if dep.Relation != "" && dropped[dep.Relation] {
 				continue
 			}
 			blockers = append(blockers, dep.String())
@@ -490,7 +519,7 @@ func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []st
 		if len(blockers) > 1 {
 			verb = "depend"
 		}
-		msgs = append(msgs, fmt.Sprintf("cannot drop %s: %s %s on it", k, strings.Join(blockers, ", "), verb))
+		msgs = append(msgs, fmt.Sprintf("%s %s: %s %s on it", prefix, k, strings.Join(blockers, ", "), verb))
 	}
 
 	if len(msgs) > 0 {

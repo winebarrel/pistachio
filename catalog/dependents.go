@@ -115,3 +115,87 @@ func (c *Catalog) ViewDependents(ctx context.Context) (map[string][]Dependent, e
 	}
 	return dependents, nil
 }
+
+// ColumnDependents reads what blocks a type change of each column of a table
+// in the managed schemas, keyed by the table's schema-qualified name, a dot
+// and the column name. A column nothing blocks is absent.
+//
+// PostgreSQL rebuilds an index, a constraint or a statistics object on the
+// column as part of ALTER COLUMN ... TYPE, and refuses the change while a
+// view or a rule, a trigger, a policy, a routine or a generated column
+// depends on it. Only the second kind is read. A trigger blocks even when the
+// column appears only in its UPDATE OF list.
+func (c *Catalog) ColumnDependents(ctx context.Context) (map[string][]Dependent, error) {
+	q := `
+		SELECT DISTINCT
+			tn.nspname,
+			t.relname,
+			a.attname,
+			CASE
+				WHEN dc.relkind = 'v' THEN 'view'
+				WHEN dc.relkind = 'm' THEN 'materialized view'
+				WHEN d.classid = 'pg_catalog.pg_attrdef'::regclass THEN 'generated column'
+				ELSE (oi).type
+			END,
+			CASE WHEN dc.relkind IN ('v', 'm') THEN dn.nspname END,
+			CASE WHEN dc.relkind IN ('v', 'm') THEN dc.relname END,
+			ga.attname,
+			(oi).identity
+		FROM
+			pg_catalog.pg_depend d
+			JOIN pg_catalog.pg_class t ON t.oid = d.refobjid
+			JOIN pg_catalog.pg_namespace tn ON tn.oid = t.relnamespace
+			JOIN pg_catalog.pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
+			CROSS JOIN LATERAL pg_catalog.pg_identify_object(d.classid, d.objid, 0) oi
+			LEFT JOIN pg_catalog.pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_catalog.pg_rewrite'::regclass
+			LEFT JOIN pg_catalog.pg_class dc ON dc.oid = r.ev_class
+			LEFT JOIN pg_catalog.pg_namespace dn ON dn.oid = dc.relnamespace
+			LEFT JOIN pg_catalog.pg_attrdef ad ON ad.oid = d.objid AND d.classid = 'pg_catalog.pg_attrdef'::regclass
+			LEFT JOIN pg_catalog.pg_attribute ga ON ga.attrelid = ad.adrelid AND ga.attnum = ad.adnum
+		WHERE
+			d.refclassid = 'pg_catalog.pg_class'::regclass
+			AND d.refobjsubid > 0
+			AND d.deptype = 'n'
+			AND d.classid IN (
+				'pg_catalog.pg_rewrite'::regclass,
+				'pg_catalog.pg_trigger'::regclass,
+				'pg_catalog.pg_policy'::regclass,
+				'pg_catalog.pg_proc'::regclass,
+				'pg_catalog.pg_attrdef'::regclass
+			)
+			AND t.relkind IN ('r', 'p')
+			AND tn.nspname = ANY(@schemas)
+		ORDER BY
+			1, 2, 3, 4, 5, 6, 7, 8
+	`
+
+	rows, err := c.conn.Query(ctx, q, pgx.NamedArgs{"schemas": c.schemas})
+	if err != nil {
+		return nil, fmt.Errorf("catalog: failed to get column dependents: %w", err)
+	}
+	defer rows.Close()
+
+	dependents := map[string][]Dependent{}
+	for rows.Next() {
+		var targetSchema, targetName, column, kind, identity string
+		var depSchema, depRelation, generated *string
+		if err := rows.Scan(&targetSchema, &targetName, &column, &kind, &depSchema, &depRelation, &generated, &identity); err != nil {
+			return nil, fmt.Errorf("catalog: failed to scan column dependents: %w", err)
+		}
+		target := model.Ident(targetSchema, targetName)
+		dep := Dependent{Kind: kind, Name: identity}
+		switch {
+		case depRelation != nil:
+			dep.Name = model.Ident(*depSchema, *depRelation)
+			dep.Relation = dep.Name
+		case generated != nil:
+			dep.Name = target + "." + model.Ident(*generated)
+		}
+		key := target + "." + model.Ident(column)
+		dependents[key] = append(dependents[key], dep)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("catalog: failed to scan column dependents rows: %w", err)
+	}
+	return dependents, nil
+}

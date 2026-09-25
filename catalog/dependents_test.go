@@ -129,6 +129,59 @@ func TestViewDependents(t *testing.T) {
 	})
 }
 
+func TestColumnDependents(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	t.Run("each kind that blocks a type change", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			DROP SCHEMA IF EXISTS reporting CASCADE;
+			CREATE SCHEMA reporting;
+			CREATE FUNCTION public.trg() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$;
+			CREATE TABLE public.t (
+				id integer PRIMARY KEY, a integer, b integer, c integer, d integer, e integer, f integer,
+				g integer GENERATED ALWAYS AS (e * 2) STORED
+			);
+			CREATE TABLE public.r (tid integer REFERENCES public.t (id));
+			ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+			CREATE POLICY p ON public.t USING (a > 0);
+			CREATE TRIGGER tr BEFORE UPDATE OF b ON public.t FOR EACH ROW EXECUTE FUNCTION public.trg();
+			CREATE RULE r AS ON INSERT TO public.t WHERE (new.c < 0) DO INSTEAD NOTHING;
+			CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT sum(d) FROM public.t; END;
+			CREATE INDEX t_f_idx ON public.t ((f + 1));
+			ALTER TABLE public.t ADD CONSTRAINT t_f_check CHECK (f > 0);
+			CREATE VIEW public.v AS SELECT id, f FROM public.t;
+			CREATE MATERIALIZED VIEW reporting.mv AS SELECT id FROM public.t;
+		`)
+		t.Cleanup(func() {
+			_, err := conn.Exec(ctx, "DROP SCHEMA IF EXISTS reporting CASCADE")
+			require.NoError(t, err)
+		})
+
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		dependents, err := cat.ColumnDependents(ctx)
+		require.NoError(t, err)
+
+		// The foreign key on id is rebuilt by the type change and is not read; the
+		// views are, one of them in a schema the run does not manage.
+		assert.Equal(t, []catalog.Dependent{
+			{Kind: "materialized view", Name: "reporting.mv", Relation: "reporting.mv"},
+			{Kind: "view", Name: "public.v", Relation: "public.v"},
+		}, dependents["public.t.id"])
+		assert.Equal(t, []catalog.Dependent{{Kind: "policy", Name: "p on public.t"}}, dependents["public.t.a"])
+		assert.Equal(t, []catalog.Dependent{{Kind: "trigger", Name: "tr on public.t"}}, dependents["public.t.b"])
+		assert.Equal(t, []catalog.Dependent{{Kind: "rule", Name: "r on public.t"}}, dependents["public.t.c"])
+		assert.Equal(t, []catalog.Dependent{{Kind: "function", Name: "public.total()"}}, dependents["public.t.d"])
+		assert.Equal(t, []catalog.Dependent{{Kind: "generated column", Name: "public.t.g"}}, dependents["public.t.e"])
+		// The index and the check constraint are rebuilt too; only the view blocks.
+		assert.Equal(t, []catalog.Dependent{{Kind: "view", Name: "public.v", Relation: "public.v"}}, dependents["public.t.f"])
+		assert.NotContains(t, dependents, "public.t.g")
+		assert.NotContains(t, dependents, "public.r.tid")
+	})
+}
+
 func TestDependentString(t *testing.T) {
 	assert.Equal(t, "view public.eng_staff", catalog.Dependent{Kind: "view", Name: "public.eng_staff"}.String())
 	assert.Equal(t, "function public.total()", catalog.Dependent{Kind: "function", Name: "public.total()"}.String())
