@@ -11,15 +11,13 @@ jobs:
   # Runs on the merge of a release pull request. The merge commit message is
   # "Merge pull request #N from owner/release-from-vX.Y.Z" followed by the
   # pull request's title as it stood at the merge, "Release for vX.Y.Z".
-  tag:
-    if: >-
-      contains(github.event.head_commit.message, '/release-from-') &&
-      contains(fromJSON('["winebarrel"]'), github.actor)
+  # The title is checked in this job, before the approval, so that one left
+  # as the placeholder stops here without asking for it.
+  version:
+    if: contains(github.event.head_commit.message, '/release-from-')
     runs-on: ubuntu-latest
-    # Each signer has an environment named release-<login> that holds only
-    # their key and only they can approve. The allowlist above keeps anyone
-    # else's merge from referring to, and so creating, an environment.
-    environment: release-${{ github.actor }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - id: version
         run: |
@@ -31,6 +29,16 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
         env:
           MESSAGE: ${{ github.event.head_commit.message }}
+
+  tag:
+    needs: version
+    if: contains(fromJSON('["winebarrel"]'), github.actor)
+    runs-on: ubuntu-latest
+    # Each signer has an environment named release-<login> that holds only
+    # their key and only they can approve. The allowlist above keeps anyone
+    # else's merge from referring to, and so creating, an environment.
+    environment: release-${{ github.actor }}
+    steps:
       - id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -57,7 +65,7 @@ jobs:
             --jq .commit.sha)
           echo "target=$target" >> "$GITHUB_OUTPUT"
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.version.outputs.version }}
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
       # The App token pushes the tag, so that the push starts release.yml.
@@ -87,6 +95,6 @@ jobs:
           git tag -s "v$VERSION" -m "Release v$VERSION"
           git push origin "v$VERSION"
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.version.outputs.version }}
           RELEASE_GPG_KEY: ${{ secrets.RELEASE_GPG_KEY }}
           RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
