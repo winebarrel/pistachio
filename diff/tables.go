@@ -1440,7 +1440,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	// Determine which renamed constraints need recreation instead of just rename
 	needsRecreation := map[string]bool{}
 	for name := range renamedFrom {
-		if ch := changes[name]; ch.changed && !ch.validateOnly && !ch.deferralOnly {
+		if ch := changes[name]; ch.changed && !ch.validateOnly {
 			needsRecreation[name] = true
 		}
 	}
@@ -1464,7 +1464,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 	for name := range current.Keys() {
 		_, ok := desired.GetOk(name)
 		ch := changes[name]
-		if ok && (!ch.changed || ch.validateOnly || ch.deferralOnly) {
+		if ok && (!ch.changed || ch.validateOnly) {
 			continue
 		}
 		dropName := name
