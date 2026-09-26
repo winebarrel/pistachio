@@ -34,8 +34,12 @@ jobs:
         run: |
           tag=$(git ls-remote --tags --refs "https://github.com/$GH_REPO" 'v[0-9]*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
           branch=release-from-$tag
-          echo "name=$branch" >> "$GITHUB_OUTPUT"
           main=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
+          {
+            echo "name=$branch"
+            echo "tag=$tag"
+            echo "main=$main"
+          } >> "$GITHUB_OUTPUT"
           tree=$(gh api "repos/$GH_REPO/git/commits/$main" --jq .tree.sha)
           commit=$(gh api "repos/$GH_REPO/git/commits" -f message="Prepare for the next release" -f tree="$tree" -f "parents[]=$main" --jq .sha)
           if gh api "repos/$GH_REPO/git/ref/heads/$branch" --silent 2>/dev/null; then
@@ -47,16 +51,24 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
       # Created once and never retitled, so the version a person puts in the
-      # title stays.
-      - name: Open the release pull request
+      # title stays. The body is rewritten on every run: the link to
+      # CHANGELOG.md and the pull requests merged since the latest tag.
+      - name: Open or update the release pull request
         run: |
-          count=$(gh pr list --label release --state open --json number --jq length)
-          if [ "$count" -eq 0 ]; then
-            gh pr create --base main --head "$BRANCH" --label release \
-              --title "Release for vX.Y.Z" \
-              --body "See [CHANGELOG.md](https://github.com/$GH_REPO/blob/main/CHANGELOG.md)."
+          body="See [CHANGELOG.md](https://github.com/$GH_REPO/blob/main/CHANGELOG.md)."
+          prs=$(gh api "repos/$GH_REPO/compare/$TAG...$MAIN" --jq '.commits[].commit.message | select(test("^Merge pull request #[0-9]+ from [^ ]+/release-from-") | not) | capture("^Merge pull request (?<n>#[0-9]+) ") | "- " + .n')
+          if [ -n "$prs" ]; then
+            body+=$'\n\n## Pull requests\n\n'"$prs"
+          fi
+          number=$(gh pr list --label release --state open --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            gh pr create --base main --head "$BRANCH" --label release --title "Release for vX.Y.Z" --body "$body"
+          else
+            gh pr edit "$number" --body "$body"
           fi
         env:
           BRANCH: ${{ steps.branch.outputs.name }}
+          TAG: ${{ steps.branch.outputs.tag }}
+          MAIN: ${{ steps.branch.outputs.main }}
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
