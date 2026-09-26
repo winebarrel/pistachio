@@ -96,6 +96,7 @@ jobs:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-contents: write
+          permission-pull-requests: write
       # The App token pushes, so that the tag push starts release.yml.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -117,3 +118,15 @@ jobs:
           git push --atomic origin "${refs[@]}" "v$VERSION"
         env:
           VERSION: ${{ needs.version.outputs.version }}
+      # Point the release pull request's CHANGELOG link at the tag, which
+      # keeps showing the changelog as it was released.
+      - name: Pin the CHANGELOG link
+        run: |
+          number=$(sed -n '1s/^Merge pull request #\([0-9]\+\) .*/\1/p' <<<"$MESSAGE")
+          body=$(gh pr view "$number" --json body --jq .body)
+          gh pr edit "$number" --body "${body//\/blob\/main\/CHANGELOG.md//blob/v$VERSION/CHANGELOG.md}"
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+          VERSION: ${{ needs.version.outputs.version }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
