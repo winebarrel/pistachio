@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.67.1] - 2026-09-27
 
 * Internal refactoring in the CLI commands, the object filters and the trigger diff, with no change in behavior.
 
