@@ -371,6 +371,71 @@ CREATE TABLE public.b1 (
 `,
 		},
 		{
+			name: "start an indented statement at the first column",
+			input: `CREATE TABLE public.a (
+    id int
+);
+
+    CREATE TABLE public.b (
+        id int
+    );
+  CREATE INDEX i ON public.b (id);
+`,
+			expected: `CREATE TABLE public.a (
+    id int
+);
+
+CREATE TABLE public.b (
+    id int
+);
+CREATE INDEX i ON public.b (id);
+`,
+		},
+		{
+			name: "start an indented comment before a statement at the first column",
+			input: `  -- note
+  /* more */
+    CREATE INDEX i ON public.b (id); -- tail
+`,
+			expected: `-- note
+/* more */
+CREATE INDEX i ON public.b (id); -- tail
+`,
+		},
+		{
+			name: "start an indented comment after the last statement at the first column",
+			input: `CREATE INDEX i ON public.b (id);
+  -- end
+`,
+			expected: `CREATE INDEX i ON public.b (id);
+-- end
+`,
+		},
+		{
+			name:     "start an indented comment in a file with no statement at the first column",
+			input:    "  -- note\n    /* more */\n",
+			expected: "-- note\n/* more */\n",
+		},
+		{
+			name:     "start an indented statement with no semicolon at the first column",
+			input:    "  CREATE INDEX i ON public.b (id)\n",
+			expected: "CREATE INDEX i ON public.b (id)\n",
+		},
+		{
+			name:     "start an indented comment after a statement with no semicolon at the first column",
+			input:    "CREATE INDEX i ON public.b (id)\n  -- end\n",
+			expected: "CREATE INDEX i ON public.b (id)\n-- end\n",
+		},
+		{
+			name: "indent the clauses of an indented routine from the first column",
+			input: `  CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql
+  AS $$ SELECT 1 $$;
+`,
+			expected: `CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql
+    AS $$ SELECT 1 $$;
+`,
+		},
+		{
 			name:     "replace a tab that indents a definition",
 			input:    "CREATE TABLE public.tabs (\n\tid int,\n\t\tv text\n);\n",
 			expected: "CREATE TABLE public.tabs (\n    id int,\n    v text\n);\n",

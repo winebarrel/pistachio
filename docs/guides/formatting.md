@@ -78,7 +78,7 @@ ALTER TABLE public.items
 
 The `ADD CONSTRAINT` line is outside the parentheses, so it keeps the two spaces it was written with, and the body hangs off it.
 
-Consecutive spaces collapse to one, and the space before a comma or a semicolon, just inside a parenthesis, around an array subscript, and around a cast is closed up. Consecutive blank lines collapse to one, trailing whitespace goes, and a statement that shares a line with another moves to its own line.
+Consecutive spaces collapse to one, and the space before a comma or a semicolon, just inside a parenthesis, around an array subscript, and around a cast is closed up. Consecutive blank lines collapse to one, trailing whitespace goes, and a statement that shares a line with another moves to its own line. A statement starts at the first column, and so does a comment on a line of its own outside a statement.
 
 A quoted identifier that reads the same without its quotes loses them, so `"items"` becomes `items` while `"Value"`, `"select"` and `"left"` keep theirs.
 

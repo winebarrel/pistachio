@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `fmt` starts a statement at the first column instead of keeping its indentation.
+
 ## [1.66.0] - 2026-09-26
 
 * Creating a partitioned table, its partitions and their indexes in one run no longer fails with `relation ... already exists`. This is what `apply` of a `dump` does on an empty database. The index on the partitioned table is now created after the partitions' indexes and attaches them.

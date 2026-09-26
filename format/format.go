@@ -82,6 +82,7 @@ func Format(sql string) (string, error) {
 		depth:      depth,
 		body:       viewBodies(toks, stmts, depth),
 		stmtStart:  stmtStarts(toks, stmts),
+		stmtLead:   stmtLeads(toks, stmts),
 		routineCon: routineConts(toks, stmts),
 	})
 
@@ -536,14 +537,40 @@ func stmtStarts(toks []*token, stmts []stmt) []bool {
 	return starts
 }
 
+// stmtLeads marks the first token of every statement, the comments in front of
+// it and the comments that end the file. A line one of them opens starts at the
+// first column, as dump writes it, whatever indentation the input gave it. The
+// comments that end the file are counted from the end, since a last statement
+// with no semicolon runs to the end of the input and takes them in.
+func stmtLeads(toks []*token, stmts []stmt) []bool {
+	lead := make([]bool, len(toks))
+
+	for _, s := range stmts {
+		lo, hi := tokenRange(toks, s)
+		for i := lo; i < hi; i++ {
+			lead[i] = true
+			if !toks[i].isComment() {
+				break
+			}
+		}
+	}
+
+	for i := len(toks) - 1; i >= 0 && toks[i].isComment(); i-- {
+		lead[i] = true
+	}
+
+	return lead
+}
+
 // layout holds what the renderer needs to know about each token: the
 // definition list it belongs to, its parenthesis depth, whether it sits in a
-// view body, and whether it opens a statement.
+// view body, whether it opens a statement, and whether it leads one.
 type layout struct {
 	regions    []*region
 	depth      []int
 	body       []bool
 	stmtStart  []bool
+	stmtLead   []bool
 	routineCon []bool
 }
 
@@ -584,6 +611,9 @@ func render(toks []*token, l *layout) string {
 	}
 
 	indentFor := func(i int, t *token) string {
+		if l.stmtLead[i] {
+			return ""
+		}
 		if l.body[i] {
 			return t.indent
 		}
