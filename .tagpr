@@ -9,6 +9,9 @@
 #       Versioning file containing the semantic version needed to be updated at release.
 #       Editing the release pull request's title rewrites it; see .github/workflows/tagpr.yml.
 #
+#   tagpr.postVersionCommand
+#       Proposes the next minor version rather than tagpr's patch.
+#
 #   tagpr.vPrefix
 #       Flag whether or not v-prefix is added to semver when git tagging. (e.g. v1.2.3 if true)
 #
@@ -23,3 +26,4 @@
 	vPrefix = true
 	changelog = false
 	release = false
+	postVersionCommand = .github/scripts/tagpr-next-minor.sh
