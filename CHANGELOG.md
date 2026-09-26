@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.66.1] - 2026-09-26
 
 * `fmt` starts a statement at the first column instead of keeping its indentation.
 
