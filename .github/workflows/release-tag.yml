@@ -49,6 +49,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: release-${{ github.actor }}
     steps:
+      # Before CHANGELOG.md is touched, so that a missing key cannot leave
+      # a release commit without its tag.
+      - name: Check the signing key
+        run: |
+          if [ -z "$RELEASE_GPG_KEY" ]; then
+            echo "::error::RELEASE_GPG_KEY is not set in the release-$ACTOR environment"
+            exit 1
+          fi
+        env:
+          RELEASE_GPG_KEY: ${{ secrets.RELEASE_GPG_KEY }}
+          ACTOR: ${{ github.actor }}
       - id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
