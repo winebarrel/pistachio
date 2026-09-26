@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Internal refactoring in the CLI commands, the object filters and the trigger diff, with no change in behavior.
+
+* More test cases for the parser and the diff.
+
 ## [1.67.0] - 2026-09-27
 
 * A directive with a space after `-- pista:`, such as `-- pista: ignore`, is now an error. It used to be ignored silently.
