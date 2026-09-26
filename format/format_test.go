@@ -422,6 +422,11 @@ CREATE INDEX i ON public.b (id); -- tail
 			expected: "CREATE INDEX i ON public.b (id)\n",
 		},
 		{
+			name:     "start an indented comment after a statement with no semicolon at the first column",
+			input:    "CREATE INDEX i ON public.b (id)\n  -- end\n",
+			expected: "CREATE INDEX i ON public.b (id)\n-- end\n",
+		},
+		{
 			name: "indent the clauses of an indented routine from the first column",
 			input: `  CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql
   AS $$ SELECT 1 $$;

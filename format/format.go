@@ -538,12 +538,12 @@ func stmtStarts(toks []*token, stmts []stmt) []bool {
 }
 
 // stmtLeads marks the first token of every statement, the comments in front of
-// it and the comments after the last statement. A line one of them opens starts
-// at the first column, as dump writes it, whatever indentation the input gave
-// it.
+// it and the comments that end the file. A line one of them opens starts at the
+// first column, as dump writes it, whatever indentation the input gave it. The
+// comments that end the file are counted from the end, since a last statement
+// with no semicolon runs to the end of the input and takes them in.
 func stmtLeads(toks []*token, stmts []stmt) []bool {
 	lead := make([]bool, len(toks))
-	tail := 0
 
 	for _, s := range stmts {
 		lo, hi := tokenRange(toks, s)
@@ -553,10 +553,9 @@ func stmtLeads(toks []*token, stmts []stmt) []bool {
 				break
 			}
 		}
-		tail = hi
 	}
 
-	for i := tail; i < len(toks); i++ {
+	for i := len(toks) - 1; i >= 0 && toks[i].isComment(); i-- {
 		lead[i] = true
 	}
 
