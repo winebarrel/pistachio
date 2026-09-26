@@ -20,6 +20,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+      # GoReleaser writes the release here and the cask to the tap repository.
+      - id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.TAGPR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.TAGPR_APP_PRIVATE_KEY }}
+          repositories: pistachio,homebrew-pistachio
+          permission-contents: write
       - name: Run GoReleaser
         run: |
           docker run -q \
@@ -31,7 +39,7 @@ jobs:
             "ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION}" \
             release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GORELEASER_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   docker-build:
     strategy:

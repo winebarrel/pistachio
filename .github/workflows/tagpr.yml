@@ -1,0 +1,121 @@
+name: tagpr
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  # A push that merges the release pull request tags a release. Every other
+  # push only updates that pull request and needs no key.
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      environment: ${{ steps.check.outputs.environment }}
+    steps:
+      - id: check
+        run: |
+          # GitHub indexes the merge commit a few seconds after the push.
+          # Every push to main comes from a pull request, so an empty answer
+          # means the index is late, not that this is an ordinary push.
+          for _ in 1 2 3 4 5; do
+            prs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls")
+            [ "$(jq length <<<"$prs")" -gt 0 ] && break
+            sleep 3
+          done
+          if [ "$(jq length <<<"$prs")" -eq 0 ]; then
+            echo "::error::No pull request is associated with $GITHUB_SHA yet. Re-run this workflow."
+            exit 1
+          fi
+          number=$(jq 'first(.[] | select(.merged_at != null and .base.ref == "main" and any(.labels[]; .name == "tagpr")) | .number) // empty' <<<"$prs")
+          if [ -z "$number" ]; then
+            exit 0
+          fi
+          # The list above leaves out merged_by.
+          merger=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq .merged_by.login)
+          # Each signer has an environment named release-<login> that holds
+          # only their key and only they can approve. List them here so that
+          # no one else's merge refers to, and so creates, an environment.
+          case "$merger" in
+            winebarrel) echo "environment=release-$merger" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::$merger merged the release pull request but has no signing key"; exit 1 ;;
+          esac
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  update-pr:
+    needs: check
+    if: needs.check.outputs.environment == ''
+    runs-on: ubuntu-latest
+    steps:
+      - &app-token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.TAGPR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.TAGPR_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: read
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          fetch-depth: 0
+      # Should this job ever see a merged release pull request, tagpr fails
+      # for want of a key instead of pushing an unsigned tag.
+      - name: Refuse unsigned tags
+        run: git config --global tag.gpgSign true
+      - &tagpr
+        uses: Songmu/tagpr@2afc990a4a5a9a340665cc1a484c2102f7de332f # v1.21.0
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+  tag:
+    needs: check
+    if: needs.check.outputs.environment != ''
+    runs-on: ubuntu-latest
+    # Waits here for the environment's reviewer. Its secrets are readable
+    # only after the approval.
+    environment: ${{ needs.check.outputs.environment }}
+    steps:
+      - *app-token
+      - *checkout
+      - name: Set up the signing key
+        run: |
+          if [ -z "$RELEASE_GPG_KEY" ]; then
+            echo "::error::RELEASE_GPG_KEY is not set in this environment"
+            exit 1
+          fi
+          gpg --batch --import <<<"$RELEASE_GPG_KEY"
+          keys=$(gpg --list-secret-keys --with-colons)
+          fpr=$(awk -F: '$1 == "fpr" { print $10; exit }' <<<"$keys")
+          uid=$(awk -F: '$1 == "uid" { print $10; exit }' <<<"$keys")
+          umask 077
+          printf '%s' "$RELEASE_GPG_PASSPHRASE" > "$RUNNER_TEMP/gpg-passphrase"
+          cat > "$RUNNER_TEMP/gpg-sign" <<EOF
+          #!/bin/sh
+          exec gpg --batch --pinentry-mode loopback --passphrase-file "$RUNNER_TEMP/gpg-passphrase" "\$@"
+          EOF
+          chmod 700 "$RUNNER_TEMP/gpg-sign"
+          # GitHub shows the tag as Verified only when the tagger email is
+          # the one in the key.
+          git config --global user.name "${uid% <*}"
+          git config --global user.email "$(sed 's/.*<\(.*\)>.*/\1/' <<<"$uid")"
+          git config --global user.signingkey "$fpr"
+          git config --global gpg.program "$RUNNER_TEMP/gpg-sign"
+          git config --global tag.gpgSign true
+        env:
+          RELEASE_GPG_KEY: ${{ secrets.RELEASE_GPG_KEY }}
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+      - *tagpr
