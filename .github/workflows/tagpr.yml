@@ -25,25 +25,32 @@ jobs:
       - id: check
         run: |
           # GitHub indexes the merge commit a few seconds after the push.
-          for _ in 1 2 3; do
+          # Every push to main comes from a pull request, so an empty answer
+          # means the index is late, not that this is an ordinary push.
+          for _ in 1 2 3 4 5; do
             prs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls")
             [ "$(jq length <<<"$prs")" -gt 0 ] && break
-            sleep 2
+            sleep 3
           done
-          release=$(jq 'any(.[]; .merged_at != null and .base.ref == "main" and any(.labels[]; .name == "tagpr"))' <<<"$prs")
-          if [ "$release" != true ]; then
+          if [ "$(jq length <<<"$prs")" -eq 0 ]; then
+            echo "::error::No pull request is associated with $GITHUB_SHA yet. Re-run this workflow."
+            exit 1
+          fi
+          number=$(jq 'first(.[] | select(.merged_at != null and .base.ref == "main" and any(.labels[]; .name == "tagpr")) | .number) // empty' <<<"$prs")
+          if [ -z "$number" ]; then
             exit 0
           fi
+          # The list above leaves out merged_by.
+          merger=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq .merged_by.login)
           # Each signer has an environment named release-<login> that holds
           # only their key and only they can approve. List them here so that
           # no one else's merge refers to, and so creates, an environment.
-          case "$ACTOR" in
-            winebarrel) echo "environment=release-$ACTOR" >> "$GITHUB_OUTPUT" ;;
-            *) echo "::error::$ACTOR merged the release pull request but has no signing key"; exit 1 ;;
+          case "$merger" in
+            winebarrel) echo "environment=release-$merger" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::$merger merged the release pull request but has no signing key"; exit 1 ;;
           esac
         env:
           GH_TOKEN: ${{ github.token }}
-          ACTOR: ${{ github.actor }}
 
   update-pr:
     needs: check
@@ -64,6 +71,7 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
+          fetch-depth: 0
       # Should this job ever see a merged release pull request, tagpr fails
       # for want of a key instead of pushing an unsigned tag.
       - name: Refuse unsigned tags
