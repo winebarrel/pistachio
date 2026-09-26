@@ -24,6 +24,8 @@ New features are opt-in. Turning off a feature that is on by default is hard onc
 
 Do not chase corner cases. A rare input is not worth an implementation that is hard to follow, and the schemas people actually write come first.
 
+Judge a bug by a concrete use case. A bug reached only through an operation users rarely perform is low priority, unless it loses data.
+
 Do not coddle the user. Assume they know PostgreSQL and their own schema.
 
 ## Build & test
