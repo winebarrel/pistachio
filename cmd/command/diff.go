@@ -47,22 +47,17 @@ func (cmd *Diff) Run(w io.Writer) error {
 	// runnable script; skipped DROPs follow as informational comments. In the
 	// no-SQL case, skipped DROPs come before "-- No changes" so the summary
 	// line reads naturally at the end.
-	if !result.HasChanges {
-		if result.Ignored != "" {
-			fmt.Fprintln(w, result.Ignored) //nolint:errcheck
-		}
-		if result.DisallowedDrops != "" {
-			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
-		}
-		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
-	} else {
+	if result.HasChanges {
 		fmt.Fprintln(w, result.SQL) //nolint:errcheck
-		if result.Ignored != "" {
-			fmt.Fprintln(w, result.Ignored) //nolint:errcheck
-		}
-		if result.DisallowedDrops != "" {
-			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
-		}
+	}
+	if result.Ignored != "" {
+		fmt.Fprintln(w, result.Ignored) //nolint:errcheck
+	}
+	if result.DisallowedDrops != "" {
+		fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
+	}
+	if !result.HasChanges {
+		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
 	}
 
 	if cmd.Check && result.HasChanges {
