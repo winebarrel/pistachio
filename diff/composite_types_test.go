@@ -244,6 +244,30 @@ func TestDiffCompositeTypes_AttributeCommentRemoved(t *testing.T) {
 	assert.Equal(t, []string{"COMMENT ON COLUMN public.address.street IS NULL;"}, result.Stmts)
 }
 
+func TestDiffCompositeTypes_AttributeCommentSetAndChanged(t *testing.T) {
+	old, street, city := "old", "the street", "the city"
+	current := newCompositeTypeMap(&model.CompositeType{
+		Schema: "public", Name: "address",
+		Attributes: []*model.CompositeAttribute{
+			{Name: "street", TypeName: "text"},
+			{Name: "city", TypeName: "text", Comment: &old},
+		},
+	})
+	desired := newCompositeTypeMap(&model.CompositeType{
+		Schema: "public", Name: "address",
+		Attributes: []*model.CompositeAttribute{
+			{Name: "street", TypeName: "text", Comment: &street},
+			{Name: "city", TypeName: "text", Comment: &city},
+		},
+	})
+	result, err := DiffCompositeTypes(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"COMMENT ON COLUMN public.address.street IS 'the street';",
+		"COMMENT ON COLUMN public.address.city IS 'the city';",
+	}, result.Stmts)
+}
+
 func TestDiffCompositeTypes_CollationEquivalentForms(t *testing.T) {
 	// Catalog reports pg_catalog."C"; the parser keeps the user's "C". They name
 	// the same collation, so no ALTER ATTRIBUTE should be emitted.

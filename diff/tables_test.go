@@ -4697,3 +4697,25 @@ func TestDiffTables_dropTableWithInheritedForeignKey(t *testing.T) {
 		assert.Empty(t, result.DropStmts)
 	})
 }
+
+// An index added with the concurrently flag on an existing partition child
+// marks the result, the same as on a plain table.
+func TestDiffTables_partitionChild_addIndex_perDirective(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	parent, bound := "public.events", "FOR VALUES FROM (0) TO (10)"
+	ct := newTable("public", "events_0")
+	ct.PartitionOf, ct.PartitionBound = &parent, &bound
+	current.Set("public.events_0", ct)
+
+	dt := newTable("public", "events_0")
+	dt.PartitionOf, dt.PartitionBound = &parent, &bound
+	dt.Indexes.Set("events_0_id", &model.Index{Schema: "public", Name: "events_0_id", Table: "events_0", Definition: "CREATE INDEX events_0_id ON public.events_0 USING btree (id)", Concurrently: true})
+	desired.Set("public.events_0", dt)
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY events_0_id ON public.events_0 USING btree (id);"}, result.Stmts)
+	assert.True(t, result.HasConcurrently)
+}
