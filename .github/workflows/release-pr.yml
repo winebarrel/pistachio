@@ -18,11 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
+      pull-requests: read
     steps:
       - id: find
         run: |
-          gh label create release --force --repo "$GITHUB_REPOSITORY" --description "Release pull request"
           count=$(gh pr list --repo "$GITHUB_REPOSITORY" --label release --state open --json number --jq length)
           if [ "$count" -eq 0 ]; then
             echo "create=true" >> "$GITHUB_OUTPUT"
