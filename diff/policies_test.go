@@ -286,15 +286,6 @@ func TestNormalizeRoles(t *testing.T) {
 	assert.Equal(t, []string{"a", "b"}, normalizeRoles([]string{"b", "a"}), "sorted")
 }
 
-func TestFormatRoles(t *testing.T) {
-	assert.Equal(t, []string{"public"}, formatRoles([]string{"public"}))
-	assert.Equal(t, []string{"current_user"}, formatRoles([]string{"current_user"}))
-	assert.Equal(t, []string{"current_role"}, formatRoles([]string{"current_role"}))
-	assert.Equal(t, []string{"session_user"}, formatRoles([]string{"session_user"}))
-	assert.Equal(t, []string{"app_user"}, formatRoles([]string{"app_user"}), "named role unquoted")
-	assert.Equal(t, []string{`"User"`}, formatRoles([]string{"User"}), "quoted when needed")
-}
-
 // ALTER POLICY ... TO <roles> covers the rolesChanged branch in alterPolicySQL.
 func TestDiffPolicies_AlterRoles(t *testing.T) {
 	cur := orderedmap.New[string, *model.Policy]()

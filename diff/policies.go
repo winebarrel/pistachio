@@ -170,7 +170,7 @@ func alterPolicySQL(fqtn string, current, desired *model.Policy) string {
 			roles = []string{"public"}
 		}
 		b.WriteString(" TO ")
-		b.WriteString(strings.Join(formatRoles(roles), ", "))
+		b.WriteString(model.RolesSQL(roles))
 	}
 	if usingChanged && desired.Using != nil {
 		b.WriteString(" USING (")
@@ -200,19 +200,6 @@ func normalizeRoles(r []string) []string {
 	}
 	out := slices.Clone(r)
 	slices.Sort(out)
-	return out
-}
-
-func formatRoles(roles []string) []string {
-	out := make([]string, len(roles))
-	for i, r := range roles {
-		switch r {
-		case "public", "current_user", "current_role", "session_user":
-			out[i] = r
-		default:
-			out[i] = model.Ident(r)
-		}
-	}
 	return out
 }
 

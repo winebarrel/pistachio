@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.t (
+      id integer,
+      old_name text,
+      CONSTRAINT old_c CHECK (id > 0)
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer
+      -- pista:renamed-from old_name
+      , name text
+      -- pista:renamed-from old_c
+      , CONSTRAINT new_c CHECK (id > 0)
+  );
+plan: |
+  ALTER TABLE public.t RENAME COLUMN old_name TO name;
+  ALTER TABLE public.t RENAME CONSTRAINT old_c TO new_c;

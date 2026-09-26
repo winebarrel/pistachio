@@ -54,7 +54,7 @@ func collateClause(collation *string) string {
 func (ct CompositeType) SQL() string {
 	lines := make([]string, len(ct.Attributes))
 	for i, a := range ct.Attributes {
-		lines[i] = "    " + Ident(a.Name) + " " + a.TypeName + collateClause(a.Collation)
+		lines[i] = "    " + Ident(a.Name) + " " + a.TypeSQL()
 	}
 	return "CREATE TYPE " + Ident(ct.Schema, ct.Name) + " AS (\n" +
 		strings.Join(lines, ",\n") + "\n);"

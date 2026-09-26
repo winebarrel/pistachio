@@ -397,7 +397,9 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 
 	var pendingRename string
 	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
+		// A leading comma belongs to the previous element, so the name that
+		// follows it is the one the directive renames.
+		trimmed := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), ","))
 
 		if m := renameDirectivePattern.FindStringSubmatch(line); m != nil {
 			pendingRename = normalizeUnqualifiedDirective(m[1])

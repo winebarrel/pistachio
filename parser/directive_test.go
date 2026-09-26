@@ -177,6 +177,19 @@ func TestExtractInlineDirectives_Mixed(t *testing.T) {
 	assert.Equal(t, "old_unique", dirs.Constraints["new_unique"])
 }
 
+func TestExtractInlineDirectives_LeadingComma(t *testing.T) {
+	sql := `CREATE TABLE public.t (
+    id integer
+    -- pista:renamed-from old_name
+    , name text
+    -- pista:renamed-from old_c
+    ,CONSTRAINT new_c CHECK (id > 0)
+);`
+	dirs := extractInlineDirectives(sql)
+	assert.Equal(t, map[string]string{"name": "old_name"}, dirs.Columns)
+	assert.Equal(t, map[string]string{"new_c": "old_c"}, dirs.Constraints)
+}
+
 func TestExtractConstraintName(t *testing.T) {
 	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
 	assert.Equal(t, "My Con", extractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))

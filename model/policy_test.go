@@ -117,3 +117,13 @@ func TestPolicy_SQL_role_empty(t *testing.T) {
 	}
 	assert.Equal(t, "CREATE POLICY p ON public.t USING (true);", p.SQL())
 }
+
+func TestRolesSQL(t *testing.T) {
+	assert.Equal(t, "public", model.RolesSQL([]string{"public"}))
+	assert.Equal(t, "current_user", model.RolesSQL([]string{"current_user"}))
+	assert.Equal(t, "current_role", model.RolesSQL([]string{"current_role"}))
+	assert.Equal(t, "session_user", model.RolesSQL([]string{"session_user"}))
+	assert.Equal(t, "app_user", model.RolesSQL([]string{"app_user"}), "named role unquoted")
+	assert.Equal(t, `"User"`, model.RolesSQL([]string{"User"}), "quoted when needed")
+	assert.Equal(t, `app_user, "User"`, model.RolesSQL([]string{"app_user", "User"}))
+}
