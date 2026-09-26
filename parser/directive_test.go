@@ -182,11 +182,13 @@ func TestExtractInlineDirectives_LeadingComma(t *testing.T) {
     id integer
     -- pista:renamed-from old_name
     , name text
+    -- pista:renamed-from "Old Label"
+    , "New Label" text
     -- pista:renamed-from old_c
     ,CONSTRAINT new_c CHECK (id > 0)
 );`
 	dirs := extractInlineDirectives(sql)
-	assert.Equal(t, map[string]string{"name": "old_name"}, dirs.Columns)
+	assert.Equal(t, map[string]string{"name": "old_name", "New Label": "Old Label"}, dirs.Columns)
 	assert.Equal(t, map[string]string{"new_c": "old_c"}, dirs.Constraints)
 }
 

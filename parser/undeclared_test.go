@@ -39,6 +39,7 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 		{"policy", "CREATE POLICY p ON public.t USING (true);", "CREATE POLICY p: table public.t is not declared before it"},
 		{"policy declared later", "CREATE POLICY p ON public.t USING (true);\nCREATE TABLE public.t (id integer);", "CREATE POLICY p: table public.t is not declared before it"},
 		{"trigger", "CREATE TRIGGER trg BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION f();", "CREATE TRIGGER trg: table or view public.t is not declared before it"},
+		{"trigger on a table declared later", "CREATE TRIGGER trg BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION f();\nCREATE TABLE public.t (id integer);", "CREATE TRIGGER trg: table or view public.t is not declared before it"},
 		{"index on a plain view", "CREATE VIEW public.v AS SELECT 1 AS x;\nCREATE INDEX i ON public.v (x);", "CREATE INDEX i: public.v is a view, which cannot hold an index"},
 	} {
 		_, err := parseSQLWithPublicSchema(tc.sql)
