@@ -25,7 +25,7 @@ func (cmd *Fmt) Run(w io.Writer) error {
 	for _, path := range cmd.Files {
 		changed, err := cmd.formatFile(path, w)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "pistachio: %s: %s\n", path, err) //nolint:errcheck
+			fmt.Fprintf(os.Stderr, "pista: %s: %s\n", path, err) //nolint:errcheck
 			failed++
 			continue
 		}

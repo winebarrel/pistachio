@@ -69,7 +69,7 @@ func txHint(rawStmt *pg_query.RawStmt) string {
 // The statement's file, line and column lead the message when the parse came
 // from files:
 //
-//	pistachio: schema/items.sql:12:1: ignored unsupported statement: DROP TABLE public.items
+//	pista: schema/items.sql:12:1: ignored unsupported statement: DROP TABLE public.items
 func warnIgnoredStmt(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt) {
 	snippet := strings.Join(strings.Fields(ignoredStmtSnippet(sql, rawStmt)), " ")
 	if snippet == "" {
@@ -86,7 +86,7 @@ func warnIgnoredStmt(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt) {
 		at = pos.String() + ": "
 	}
 
-	fmt.Fprintf(warnWriter, "pistachio: %signored unsupported statement: %s%s\n", at, snippet, txHint(rawStmt)) //nolint:errcheck
+	fmt.Fprintf(warnWriter, "pista: %signored unsupported statement: %s%s\n", at, snippet, txHint(rawStmt)) //nolint:errcheck
 }
 
 // warnIgnoredCreateTableLike warns about a LIKE clause, which the parser does
