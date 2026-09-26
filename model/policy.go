@@ -87,13 +87,20 @@ func (p Policy) rolesClause() string {
 	if len(p.Roles) == 1 && p.Roles[0] == "public" {
 		return ""
 	}
-	parts := make([]string, len(p.Roles))
-	for i, r := range p.Roles {
-		if r == "public" || r == "current_user" || r == "current_role" || r == "session_user" {
+	return " TO " + RolesSQL(p.Roles)
+}
+
+// RolesSQL renders a policy's role list. PUBLIC and the CURRENT_USER family
+// are keywords, so they are written bare; any other name is an identifier.
+func RolesSQL(roles []string) string {
+	parts := make([]string, len(roles))
+	for i, r := range roles {
+		switch r {
+		case "public", "current_user", "current_role", "session_user":
 			parts[i] = r
-			continue
+		default:
+			parts[i] = Ident(r)
 		}
-		parts[i] = Ident(r)
 	}
-	return " TO " + strings.Join(parts, ", ")
+	return strings.Join(parts, ", ")
 }
