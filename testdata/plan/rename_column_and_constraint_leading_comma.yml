@@ -12,10 +12,6 @@ desired: |
       -- pista:renamed-from old_c
       , CONSTRAINT new_c CHECK (id > 0)
   );
-applied: |
-  -- public.t
-  CREATE TABLE public.t (
-      id integer,
-      name text,
-      CONSTRAINT new_c CHECK (id > 0)
-  );
+plan: |
+  ALTER TABLE public.t RENAME COLUMN old_name TO name;
+  ALTER TABLE public.t RENAME CONSTRAINT old_c TO new_c;
