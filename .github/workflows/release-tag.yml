@@ -1,0 +1,92 @@
+name: release-tag
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs on the merge of a release pull request. The merge commit message is
+  # "Merge pull request #N from owner/release-from-vX.Y.Z" followed by the
+  # pull request's title as it stood at the merge, "Release for vX.Y.Z".
+  tag:
+    if: >-
+      contains(github.event.head_commit.message, '/release-from-') &&
+      contains(fromJSON('["winebarrel"]'), github.actor)
+    runs-on: ubuntu-latest
+    # Each signer has an environment named release-<login> that holds only
+    # their key and only they can approve. The allowlist above keeps anyone
+    # else's merge from referring to, and so creating, an environment.
+    environment: release-${{ github.actor }}
+    steps:
+      - id: version
+        run: |
+          version=$(sed -n 's/^Release for v\([0-9]*\.[0-9]*\.[0-9]*\)$/\1/p' <<<"$MESSAGE")
+          if [ -z "$version" ]; then
+            echo "::error::The release pull request's title is not \"Release for vX.Y.Z\""
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+      - id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      # Rename [Unreleased] to the version and date in a commit made through
+      # the API, which GitHub signs for the App. Without that section the
+      # merge commit itself is tagged.
+      - id: changelog
+        run: |
+          file=$(gh api "repos/$GH_REPO/contents/CHANGELOG.md?ref=main")
+          content=$(jq -r .content <<<"$file" | base64 -d)
+          renamed=$(sed "s/^## \[Unreleased\]\$/## [$VERSION] - $(TZ=Asia/Tokyo date +%Y-%m-%d)/" <<<"$content")
+          if [ "$renamed" = "$content" ]; then
+            echo "target=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          target=$(gh api -X PUT "repos/$GH_REPO/contents/CHANGELOG.md" \
+            -f message="Release v$VERSION" \
+            -f content="$(base64 -w 0 <<<"$renamed")" \
+            -f sha="$(jq -r .sha <<<"$file")" \
+            -f branch=main \
+            --jq .commit.sha)
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      # The App token pushes the tag, so that the push starts release.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.changelog.outputs.target }}
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Sign and push the tag
+        run: |
+          gpg --batch --import <<<"$RELEASE_GPG_KEY"
+          keys=$(gpg --list-secret-keys --with-colons)
+          fpr=$(awk -F: '$1 == "fpr" { print $10; exit }' <<<"$keys")
+          uid=$(awk -F: '$1 == "uid" { print $10; exit }' <<<"$keys")
+          umask 077
+          printf '%s' "$RELEASE_GPG_PASSPHRASE" > "$RUNNER_TEMP/gpg-passphrase"
+          # GitHub shows the tag as Verified only when the tagger email is
+          # the one in the key.
+          git config user.name "${uid% <*}"
+          git config user.email "$(sed 's/.*<\(.*\)>.*/\1/' <<<"$uid")"
+          git config user.signingkey "$fpr"
+          git config gpg.program "$RUNNER_TEMP/gpg-sign"
+          cat > "$RUNNER_TEMP/gpg-sign" <<EOF
+          #!/bin/sh
+          exec gpg --batch --pinentry-mode loopback --passphrase-file "$RUNNER_TEMP/gpg-passphrase" "\$@"
+          EOF
+          chmod 700 "$RUNNER_TEMP/gpg-sign"
+          git tag -s "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_GPG_KEY: ${{ secrets.RELEASE_GPG_KEY }}
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
