@@ -54,7 +54,7 @@ func parseCreatePolicyStmt(
 	fqtn := model.Ident(schema, cps.Table.Relname)
 	tbl, ok := tables.GetOk(fqtn)
 	if !ok {
-		return nil, fmt.Errorf("CREATE POLICY %s: parent table %s not defined", cps.PolicyName, fqtn)
+		return nil, undeclared("CREATE POLICY "+cps.PolicyName, "table", fqtn, offset)
 	}
 
 	cmd, err := parsePolicyCommand(cps.CmdName)

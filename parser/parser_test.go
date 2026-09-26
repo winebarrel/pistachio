@@ -2432,7 +2432,7 @@ func TestParseSQL_PolicyOnUnknownTable(t *testing.T) {
 
 	_, err := parseSQLWithPublicSchema(sql)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parent table")
+	assert.Equal(t, "CREATE POLICY p: table public.missing is not declared before it", err.Error())
 }
 
 func TestParseSQL_DuplicatePolicy(t *testing.T) {
