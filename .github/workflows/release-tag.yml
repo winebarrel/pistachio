@@ -11,8 +11,8 @@ jobs:
   # Runs on the merge of a release pull request. The merge commit message is
   # "Merge pull request #N from owner/release-from-vX.Y.Z" followed by the
   # pull request's title as it stood at the merge, "Release for vX.Y.Z".
-  # The title is checked in this job, before the approval, so that one left
-  # as the placeholder stops here without asking for it.
+  # The title and the merger are checked in this job, before the approval,
+  # so that a bad one stops here without asking for it.
   version:
     if: contains(github.event.head_commit.message, '/release-from-')
     runs-on: ubuntu-latest
@@ -21,6 +21,14 @@ jobs:
     steps:
       - id: version
         run: |
+          # Each signer has an environment named release-<login> that holds
+          # only their key and only they can approve. Refusing anyone else
+          # here keeps their merge from referring to, and so creating, an
+          # environment of their own.
+          case "$ACTOR" in
+            winebarrel) ;;
+            *) echo "::error::$ACTOR merged the release pull request but has no signing key"; exit 1 ;;
+          esac
           version=$(sed -n 's/^Release for v\([0-9]*\.[0-9]*\.[0-9]*\)$/\1/p' <<<"$MESSAGE")
           if [ -z "$version" ]; then
             echo "::error::The release pull request's title is not \"Release for vX.Y.Z\""
@@ -34,14 +42,11 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
         env:
           MESSAGE: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
 
   tag:
     needs: version
-    if: contains(fromJSON('["winebarrel"]'), github.actor)
     runs-on: ubuntu-latest
-    # Each signer has an environment named release-<login> that holds only
-    # their key and only they can approve. The allowlist above keeps anyone
-    # else's merge from referring to, and so creating, an environment.
     environment: release-${{ github.actor }}
     steps:
       - id: app-token
