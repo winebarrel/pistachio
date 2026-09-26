@@ -33,6 +33,7 @@ jobs:
       pull-requests: read
     outputs:
       environment: ${{ steps.check.outputs.environment }}
+      number: ${{ steps.check.outputs.number }}
     steps:
       - id: check
         run: |
@@ -56,6 +57,7 @@ jobs:
             exit 0
           fi
           # The list above leaves out merged_by.
+          echo "number=$number" >> "$GITHUB_OUTPUT"
           merger=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq .merged_by.login)
           # Each signer has an environment named release-<login> that holds
           # only their key and only they can approve. List them here so that
@@ -167,6 +169,19 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
           fetch-depth: 0
+      # Merging within seconds of editing the title can beat the job that
+      # writes the new version to VERSION. Stop rather than release the old one.
+      - name: Check the title against VERSION
+        run: |
+          title=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" --jq .title)
+          version=$(cat VERSION)
+          if [ "$title" != "Release for v$version" ]; then
+            echo "::error::The merged title \"$title\" does not match VERSION $version. Nothing was tagged."
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NUMBER: ${{ needs.check.outputs.number }}
       - name: Set up the signing key
         run: |
           if [ -z "$RELEASE_GPG_KEY" ]; then
