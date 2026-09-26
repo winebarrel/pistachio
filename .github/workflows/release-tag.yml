@@ -26,6 +26,11 @@ jobs:
             echo "::error::The release pull request's title is not \"Release for vX.Y.Z\""
             exit 1
           fi
+          latest=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v[0-9]*' | sed 's|.*refs/tags/v||' | sort -V | tail -n 1)
+          if [ "$(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1)" != "$version" ] || [ "$version" = "$latest" ]; then
+            echo "::error::v$version is not newer than the latest tag v$latest"
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
         env:
           MESSAGE: ${{ github.event.head_commit.message }}
