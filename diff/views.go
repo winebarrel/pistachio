@@ -320,18 +320,8 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 			result.CreateStmts = append(result.CreateStmts, viewTriggerStmts(desiredView)...)
 			// Add indexes for new materialized views
-			if desiredView.Materialized && desiredView.Indexes != nil {
-				for _, idx := range desiredView.Indexes.CollectValues() {
-					stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)
-					if err != nil {
-						return nil, fmt.Errorf("create index %s on %s: %w", model.Ident(idx.Schema, idx.Name), k, err)
-					}
-					result.CreateStmts = append(result.CreateStmts, stmt)
-					if idx.Concurrently {
-						result.HasConcurrently = true
-					}
-					result.CreateStmts = append(result.CreateStmts, indexCommentStmts(nil, idx)...)
-				}
+			if err := createMatViewIndexes(result, k, desiredView); err != nil {
+				return nil, err
 			}
 		} else if !equalViewDef(currentView.Definition, desiredView.Definition) || currentView.Materialized != desiredView.Materialized {
 			// Materialized views always need DROP+CREATE; VIEW<->MATVIEW
@@ -368,18 +358,8 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					// DROP VIEW takes the view's triggers with it, so the
 					// recreate has to put them back.
 					result.CreateStmts = append(result.CreateStmts, viewTriggerStmts(desiredView)...)
-					if desiredView.Materialized && desiredView.Indexes != nil {
-						for _, idx := range desiredView.Indexes.CollectValues() {
-							stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)
-							if err != nil {
-								return nil, fmt.Errorf("create index %s on %s: %w", model.Ident(idx.Schema, idx.Name), k, err)
-							}
-							result.CreateStmts = append(result.CreateStmts, stmt)
-							if idx.Concurrently {
-								result.HasConcurrently = true
-							}
-							result.CreateStmts = append(result.CreateStmts, indexCommentStmts(nil, idx)...)
-						}
+					if err := createMatViewIndexes(result, k, desiredView); err != nil {
+						return nil, err
 					}
 					recreated[k] = true
 				} else {
@@ -402,13 +382,13 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			// replaces the options as a whole, so only these branches need an
 			// ALTER.
 			if desiredView.Materialized {
-				viewIdxStmts, viewIdxDisallowed, viewIdxHasConcurrently, err := diffViewIndexes(currentView, desiredView, dc)
+				idxResult, err := diffIndexes(viewIndexes(currentView), viewIndexes(desiredView), nil, false, dc)
 				if err != nil {
 					return nil, err
 				}
-				result.CreateStmts = append(result.CreateStmts, viewIdxStmts...)
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, viewIdxDisallowed...)
-				if viewIdxHasConcurrently {
+				result.CreateStmts = append(result.CreateStmts, idxResult.Stmts...)
+				result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult.DisallowedDropStmts...)
+				if idxResult.HasConcurrently {
 					result.HasConcurrently = true
 				}
 			} else if currentView.CheckOption != desiredView.CheckOption {
@@ -530,72 +510,30 @@ func viewTriggerStmts(v *model.View) []string {
 	return stmts
 }
 
-// diffViewIndexes generates DDL for index changes on materialized views.
-func diffViewIndexes(current, desired *model.View, dc DropChecker) (stmts []string, disallowed []string, hasConcurrently bool, err error) {
-	dc = normalizeDropChecker(dc)
-	currentIndexes := orderedmap.New[string, *model.Index]()
-	if current.Indexes != nil {
-		currentIndexes = current.Indexes
+// viewIndexes returns the indexes of a view, or an empty map when it has none.
+func viewIndexes(v *model.View) *orderedmap.Map[string, *model.Index] {
+	if v.Indexes == nil {
+		return orderedmap.New[string, *model.Index]()
 	}
-	desiredIndexes := orderedmap.New[string, *model.Index]()
-	if desired.Indexes != nil {
-		desiredIndexes = desired.Indexes
+	return v.Indexes
+}
+
+// createMatViewIndexes adds the CREATE INDEX and comment of every index on a
+// materialized view that is created or recreated.
+func createMatViewIndexes(result *ViewDiffResult, key string, view *model.View) error {
+	if !view.Materialized || view.Indexes == nil {
+		return nil
 	}
-
-	renameStmts, currentIndexes, err := detectIndexRenames(currentIndexes, desiredIndexes)
-	if err != nil {
-		return nil, nil, false, err
-	}
-	stmts = append(stmts, renameStmts...)
-
-	sameDef := equalIndexDefs(currentIndexes, desiredIndexes)
-
-	// Drop removed or changed indexes. Pure removals honor the index-drop
-	// policy; definition changes still run DROP+CREATE.
-	idxAllowed := dc.IsDropAllowed("index")
-	for name, currentIdx := range currentIndexes.All() {
-		desiredIdx, ok := desiredIndexes.GetOk(name)
-		if !ok || !sameDef[name] {
-			// Pure drops have no desired entry. Fall back to the current
-			// entry's flag, which forceConcurrentlyDirectives sets when
-			// --force-index-concurrently is in effect.
-			useConcurrently := currentIdx.Concurrently
-			if ok {
-				useConcurrently = desiredIdx.Concurrently
-			}
-			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
-			if err != nil {
-				return nil, nil, false, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
-			}
-			if !ok && !idxAllowed {
-				disallowed = append(disallowed, "-- skipped: "+stmt)
-				continue
-			}
-			stmts = append(stmts, stmt)
-			if useConcurrently {
-				hasConcurrently = true
-			}
-		}
-	}
-
-	// Add new or changed indexes
-	for name, desiredIdx := range desiredIndexes.All() {
-		currentIdx, ok := currentIndexes.GetOk(name)
-		if ok && sameDef[name] {
-			stmts = append(stmts, indexCommentStmts(currentIdx.Comment, desiredIdx)...)
-			continue
-		}
-		stmt, err := createIndexSQL(desiredIdx.Definition, desiredIdx.Concurrently)
+	for _, idx := range view.Indexes.CollectValues() {
+		stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)
 		if err != nil {
-			return nil, nil, false, fmt.Errorf("create index %s: %w", model.Ident(desiredIdx.Schema, name), err)
+			return fmt.Errorf("create index %s on %s: %w", model.Ident(idx.Schema, idx.Name), key, err)
 		}
-		stmts = append(stmts, stmt)
-		if desiredIdx.Concurrently {
-			hasConcurrently = true
+		result.CreateStmts = append(result.CreateStmts, stmt)
+		if idx.Concurrently {
+			result.HasConcurrently = true
 		}
-		// A recreated index carries no comment of its own.
-		stmts = append(stmts, indexCommentStmts(nil, desiredIdx)...)
+		result.CreateStmts = append(result.CreateStmts, indexCommentStmts(nil, idx)...)
 	}
-
-	return stmts, disallowed, hasConcurrently, nil
+	return nil
 }
