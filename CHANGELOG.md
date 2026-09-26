@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.67.0] - 2026-09-27
 
 * A directive with a space after `-- pista:`, such as `-- pista: ignore`, is now an error. It used to be ignored silently.
 
