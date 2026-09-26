@@ -49,16 +49,46 @@ jobs:
     runs-on: ubuntu-latest
     environment: release-${{ github.actor }}
     steps:
-      # Before CHANGELOG.md is touched, so that a missing key cannot leave
-      # a release commit without its tag.
-      - name: Check the signing key
+      # Before CHANGELOG.md is touched, so that a key that is missing,
+      # malformed or locked by another passphrase cannot leave a release
+      # commit without its tag. A test signature proves all three.
+      - name: Set up the signing key
         run: |
           if [ -z "$RELEASE_GPG_KEY" ]; then
             echo "::error::RELEASE_GPG_KEY is not set in the release-$ACTOR environment"
             exit 1
           fi
+          if ! gpg --batch --import <<<"$RELEASE_GPG_KEY"; then
+            echo "::error::RELEASE_GPG_KEY is not a key gpg can import"
+            exit 1
+          fi
+          keys=$(gpg --list-secret-keys --with-colons)
+          fpr=$(awk -F: '$1 == "fpr" { print $10; exit }' <<<"$keys")
+          uid=$(awk -F: '$1 == "uid" { print $10; exit }' <<<"$keys")
+          if [ -z "$fpr" ]; then
+            echo "::error::RELEASE_GPG_KEY holds no secret key"
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$RELEASE_GPG_PASSPHRASE" > "$RUNNER_TEMP/gpg-passphrase"
+          cat > "$RUNNER_TEMP/gpg-sign" <<EOF
+          #!/bin/sh
+          exec gpg --batch --pinentry-mode loopback --passphrase-file "$RUNNER_TEMP/gpg-passphrase" "\$@"
+          EOF
+          chmod 700 "$RUNNER_TEMP/gpg-sign"
+          if ! echo test | "$RUNNER_TEMP/gpg-sign" --local-user "$fpr" --detach-sign > /dev/null; then
+            echo "::error::The key in RELEASE_GPG_KEY cannot sign; check RELEASE_GPG_PASSPHRASE and its expiry"
+            exit 1
+          fi
+          # GitHub shows the tag as Verified only when the tagger email is
+          # the one in the key.
+          git config --global user.name "${uid% <*}"
+          git config --global user.email "$(sed 's/.*<\(.*\)>.*/\1/' <<<"$uid")"
+          git config --global user.signingkey "$fpr"
+          git config --global gpg.program "$RUNNER_TEMP/gpg-sign"
         env:
           RELEASE_GPG_KEY: ${{ secrets.RELEASE_GPG_KEY }}
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
           ACTOR: ${{ github.actor }}
       - id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -96,26 +126,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
       - name: Sign and push the tag
         run: |
-          gpg --batch --import <<<"$RELEASE_GPG_KEY"
-          keys=$(gpg --list-secret-keys --with-colons)
-          fpr=$(awk -F: '$1 == "fpr" { print $10; exit }' <<<"$keys")
-          uid=$(awk -F: '$1 == "uid" { print $10; exit }' <<<"$keys")
-          umask 077
-          printf '%s' "$RELEASE_GPG_PASSPHRASE" > "$RUNNER_TEMP/gpg-passphrase"
-          # GitHub shows the tag as Verified only when the tagger email is
-          # the one in the key.
-          git config user.name "${uid% <*}"
-          git config user.email "$(sed 's/.*<\(.*\)>.*/\1/' <<<"$uid")"
-          git config user.signingkey "$fpr"
-          git config gpg.program "$RUNNER_TEMP/gpg-sign"
-          cat > "$RUNNER_TEMP/gpg-sign" <<EOF
-          #!/bin/sh
-          exec gpg --batch --pinentry-mode loopback --passphrase-file "$RUNNER_TEMP/gpg-passphrase" "\$@"
-          EOF
-          chmod 700 "$RUNNER_TEMP/gpg-sign"
           git tag -s "v$VERSION" -m "Release v$VERSION"
           git push origin "v$VERSION"
         env:
           VERSION: ${{ needs.version.outputs.version }}
-          RELEASE_GPG_KEY: ${{ secrets.RELEASE_GPG_KEY }}
-          RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
