@@ -3,11 +3,6 @@ on:
   push:
     branches:
       - main
-    # The release commit renames [Unreleased] and changes nothing else.
-    # Pull requests still run everything, the ascii check on CHANGELOG.md
-    # included.
-    paths-ignore:
-      - CHANGELOG.md
   pull_request:
 
 permissions:
