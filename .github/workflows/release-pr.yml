@@ -1,0 +1,58 @@
+name: release-pr
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  # Keeps one open release pull request. The person releasing edits its
+  # title to the version; merging it releases that version.
+  release-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - id: find
+        run: |
+          gh label create release --force --repo "$GITHUB_REPOSITORY" --description "Release pull request"
+          count=$(gh pr list --repo "$GITHUB_REPOSITORY" --label release --state open --json number --jq length)
+          if [ "$count" -eq 0 ]; then
+            echo "create=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # The App token, unlike GITHUB_TOKEN, lets CI run on the pull request.
+      - id: app-token
+        if: steps.find.outputs.create
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - if: steps.find.outputs.create
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      # A pull request needs a commit of its own. It stays empty: merging
+      # the pull request brings in whatever main has by then.
+      - if: steps.find.outputs.create
+        run: |
+          git config user.name "$APP_SLUG[bot]"
+          git config user.email "$APP_SLUG[bot]@users.noreply.github.com"
+          git commit -q --allow-empty -m "Release"
+          git push -q -f origin HEAD:refs/heads/release
+          gh pr create --base main --head release --label release \
+            --title "Release for vX.Y.Z" \
+            --body "See [CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/main/CHANGELOG.md)."
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
