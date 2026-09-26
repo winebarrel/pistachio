@@ -255,14 +255,15 @@ instead. Two statements are not checked:
 - `DROP TABLE`
 - `ALTER TABLE ... DROP COLUMN`
 
-Neither fails unless the dependent stays in place. A dependent pistachio
-manages is dropped or changed in the same plan before the drop. One stays
-when:
+Neither fails unless the dependent stays in place. A dependent that
+pistachio manages is dropped or changed in the same plan before the drop. One
+stays when:
 
 - `--include` / `--exclude` or a schema outside `-n` hides a view that reads
   the table or column, or a foreign key that references the table.
-- `--allow-drop` names `table` but not `view`, which skips the view's drop and
-  keeps the table's.
+- `--allow-drop` names `table` but not `view` or `foreign_key`, which skips
+  the drop of a view that reads the table or a foreign key that references it,
+  and keeps the table's.
 - A routine pistachio does not manage takes the table's row type as an
   argument, or reads the table or column in a `BEGIN ATOMIC` body. Routines
   are unmanaged without `--manage-routine`, so this needs no filter. A body
@@ -278,7 +279,7 @@ Closing it means reporting the tables and columns a diff drops, under their
 current names when the plan also renames the table, and reading the
 dependents of each table, column (`pg_depend.refobjsubid`) and row type.
 
-Origin: review of the view dependent check, 2026-09-19. The routine and
+Origin: review of the view-dependent check, 2026-09-19. The routine and
 foreign key cases were added 2026-09-26.
 
 ## Amazon Aurora DSQL is not supported
