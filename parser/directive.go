@@ -61,6 +61,11 @@ func validateDirectives(rawSQL string) error {
 		if !knownDirectives[name] {
 			return &locatedError{msg: fmt.Sprintf("unknown directive: -- pista:%s", name), offset: m[2]}
 		}
+		// The patterns that apply a directive need the name right after the
+		// colon, so without this "-- pista: ignore" was silently ignored.
+		if c := rawSQL[m[2]-1]; c == ' ' || c == '\t' {
+			return &locatedError{msg: fmt.Sprintf("invalid directive: no space is allowed after -- pista: (write -- pista:%s)", name), offset: m[0]}
+		}
 	}
 
 	if m := renameWithoutArgPattern.FindStringIndex(rawSQL); m != nil {

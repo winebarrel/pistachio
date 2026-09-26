@@ -614,6 +614,18 @@ func TestValidateDirectives_SpaceAfterColon(t *testing.T) {
 	assert.Contains(t, err.Error(), "unknown directive: -- pista:exec")
 }
 
+func TestValidateDirectives_SpaceBeforeKnownName(t *testing.T) {
+	for _, sql := range []string{
+		"-- pista: renamed-from old_users",
+		"-- pista:\tignore",
+		"  --pista:  concurrently",
+	} {
+		err := validateDirectives(sql)
+		require.Error(t, err, sql)
+		assert.Contains(t, err.Error(), "no space is allowed after -- pista:", sql)
+	}
+}
+
 func TestValidateDirectives_MissingName(t *testing.T) {
 	err := validateDirectives("-- pista:")
 	require.Error(t, err)

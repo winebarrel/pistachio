@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A directive with a space after `-- pista:`, such as `-- pista: ignore`, is now an error. It used to be ignored silently.
+
 ## [1.66.1] - 2026-09-26
 
 * `fmt` starts a statement at the first column instead of keeping its indentation.
