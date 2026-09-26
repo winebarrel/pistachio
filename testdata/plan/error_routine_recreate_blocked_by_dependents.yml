@@ -1,0 +1,35 @@
+# A new return type recreates the routine. PostgreSQL refuses the DROP while
+# anything depends on it.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;
+  CREATE FUNCTION public.trg() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$;
+  CREATE DOMAIN public.d AS integer CONSTRAINT d_check CHECK (public.f(VALUE) > 0);
+  CREATE TABLE public.t (
+      a integer, b integer DEFAULT public.f(1), c integer,
+      e integer GENERATED ALWAYS AS (public.f(c)) STORED,
+      CONSTRAINT t_a_check CHECK (public.f(a) > 0)
+  );
+  CREATE INDEX t_c_idx ON public.t (public.f(c));
+  CREATE VIEW public.v AS SELECT public.f(a) AS fa FROM public.t;
+  CREATE MATERIALIZED VIEW public.mv AS SELECT public.f(1) AS x;
+  CREATE FUNCTION public.g() RETURNS integer LANGUAGE sql BEGIN ATOMIC SELECT public.f(1); END;
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.t USING (public.f(a) > 0);
+  CREATE TRIGGER tr BEFORE INSERT ON public.t FOR EACH ROW WHEN (public.f(new.a) > 0) EXECUTE FUNCTION public.trg();
+desired: |
+  CREATE FUNCTION public.f(a integer) RETURNS bigint LANGUAGE sql IMMUTABLE AS $$SELECT a::bigint$$;
+  CREATE FUNCTION public.trg() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$;
+  CREATE DOMAIN public.d AS integer CONSTRAINT d_check CHECK (public.f(VALUE) > 0);
+  CREATE TABLE public.t (
+      a integer, b integer DEFAULT public.f(1), c integer,
+      e integer GENERATED ALWAYS AS (public.f(c)) STORED,
+      CONSTRAINT t_a_check CHECK (public.f(a) > 0)
+  );
+  CREATE INDEX t_c_idx ON public.t (public.f(c));
+  CREATE VIEW public.v AS SELECT public.f(a) AS fa FROM public.t;
+  CREATE MATERIALIZED VIEW public.mv AS SELECT public.f(1) AS x;
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.t USING (public.f(a) > 0);
+  CREATE TRIGGER tr BEFORE INSERT ON public.t FOR EACH ROW WHEN (public.f(new.a) > 0) EXECUTE FUNCTION public.trg();
+error: "cannot drop function public.f(integer): default value for public.t.b, domain constraint d_check on public.d, function public.g(), generated column public.t.e, index public.t_c_idx, materialized view public.mv, policy p on public.t, table constraint t_a_check on public.t, trigger tr on public.t, view public.v depend on it"

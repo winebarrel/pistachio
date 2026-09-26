@@ -87,6 +87,7 @@ func TestDiffRoutines_ReplaceInPlace(t *testing.T) {
 			assert.Contains(t, result.Stmts[0], "CREATE OR REPLACE FUNCTION")
 			assert.Empty(t, result.DropStmts)
 			assert.Empty(t, result.DisallowedDropStmts)
+			assert.Empty(t, result.Recreated)
 		})
 	}
 }
@@ -125,6 +126,9 @@ func TestDiffRoutines_DropAndCreate(t *testing.T) {
 			assert.Equal(t, "DROP FUNCTION public.f(integer);", result.Stmts[0])
 			assert.Contains(t, result.Stmts[1], "CREATE OR REPLACE ")
 			assert.Empty(t, result.DisallowedDropStmts)
+			// The current routine, which the catalog knows by its OID.
+			require.Len(t, result.Recreated, 1)
+			assert.Same(t, current.Get("public.f(integer)"), result.Recreated[0])
 		})
 	}
 }
@@ -151,6 +155,7 @@ func TestDiffRoutines_DropAndCreateDisallowed(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.Stmts)
 	assert.Equal(t, []string{"-- skipped: DROP FUNCTION public.f(integer);"}, result.DisallowedDropStmts)
+	assert.Empty(t, result.Recreated)
 }
 
 func TestDiffRoutines_CommentChanges(t *testing.T) {

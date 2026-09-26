@@ -225,6 +225,42 @@ func TestKeyDependents(t *testing.T) {
 	})
 }
 
+func TestRoutineDependents(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	t.Run("objects that call a routine", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;
+			CREATE FUNCTION public.unused() RETURNS integer LANGUAGE sql AS $$SELECT public.f(1)$$;
+			CREATE TABLE public.t (
+				a integer CHECK (public.f(a) > 0),
+				c integer,
+				e integer GENERATED ALWAYS AS (public.f(c)) STORED
+			);
+			CREATE VIEW public.v AS SELECT public.f(a) AS fa FROM public.t;
+		`)
+
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		dependents, err := cat.RoutineDependents(ctx)
+		require.NoError(t, err)
+
+		var f, unused uint32
+		require.NoError(t, conn.QueryRow(ctx, "SELECT 'public.f(integer)'::regprocedure::oid").Scan(&f))
+		require.NoError(t, conn.QueryRow(ctx, "SELECT 'public.unused()'::regprocedure::oid").Scan(&unused))
+
+		// unused calls f from a string body, which records no dependency.
+		assert.Equal(t, []catalog.Dependent{
+			{Kind: "generated column", Name: "public.t.e"},
+			{Kind: "table constraint", Name: "t_a_check on public.t"},
+			{Kind: "view", Name: "public.v", Relation: "public.v"},
+		}, dependents[f])
+		assert.NotContains(t, dependents, unused)
+	})
+}
+
 func TestDependentString(t *testing.T) {
 	assert.Equal(t, "view public.eng_staff", catalog.Dependent{Kind: "view", Name: "public.eng_staff"}.String())
 	assert.Equal(t, "function public.total()", catalog.Dependent{Kind: "function", Name: "public.total()"}.String())

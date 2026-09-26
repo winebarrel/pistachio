@@ -1,0 +1,17 @@
+# A routine the plan removes is dropped last, after its dependents change.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;
+  CREATE TABLE public.t (a integer, CONSTRAINT t_check CHECK (public.f(a) > 0));
+desired: |
+  CREATE TABLE public.t (a integer, CONSTRAINT t_check CHECK (a > 0));
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer,
+      CONSTRAINT t_check CHECK (a > 0)
+  );
+applied_sql: |
+  ALTER TABLE public.t DROP CONSTRAINT t_check;
+  ALTER TABLE public.t ADD CONSTRAINT t_check CHECK (a > 0);
+  DROP FUNCTION public.f(integer);

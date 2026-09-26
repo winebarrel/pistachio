@@ -103,6 +103,9 @@ type diffAllResult struct {
 	DroppedConstraints []droppedObject
 	DroppedIndexes     []droppedObject
 	DroppedForeignKeys []string
+	// RecreatedRoutines lists the current routines the statements drop and
+	// create again.
+	RecreatedRoutines []*model.Routine
 	// StateHash fingerprints the current side the statements were computed
 	// against. Empty unless the run asked for it.
 	StateHash string
@@ -185,6 +188,11 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	}
 	if len(result.DroppedConstraints) > 0 || len(result.DroppedIndexes) > 0 {
 		if err := checkKeyDependents(ctx, cat, result); err != nil {
+			return nil, err
+		}
+	}
+	if len(result.RecreatedRoutines) > 0 {
+		if err := checkRoutineDependents(ctx, cat, result.RecreatedRoutines, result.DroppedViews); err != nil {
 			return nil, err
 		}
 	}
@@ -392,12 +400,13 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	// constraint has nothing depending on it, so its drop is left out.
 	tableRenames, indexRenames := renamedTablesAndIndexes(diffTables, desiredTables)
 	droppedConstraintNames, droppedIndexNames := droppedKeys(tableDiff.Stmts, func(table, name string) bool {
-		t, ok := diffTables.GetOk(renamedFrom(tableRenames, table))
-		if !ok {
-			return true
+		keep := true
+		if t, ok := diffTables.GetOk(renamedFrom(tableRenames, table)); ok {
+			if con, ok := t.Constraints.GetOk(name); ok {
+				keep = !con.Type.IsCheckConstraint() && !con.Type.IsNotNullConstraint()
+			}
 		}
-		con, ok := t.Constraints.GetOk(name)
-		return !ok || (!con.Type.IsCheckConstraint() && !con.Type.IsNotNullConstraint())
+		return keep
 	})
 	var droppedConstraints, droppedIndexes []droppedObject
 	for _, k := range droppedConstraintNames {
@@ -490,6 +499,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		DroppedConstraints:   droppedConstraints,
 		DroppedIndexes:       droppedIndexes,
 		DroppedForeignKeys:   droppedForeignKeys,
+		RecreatedRoutines:    routineDiff.Recreated,
 		StateHash:            currentStateHash,
 	}, nil
 }
@@ -557,6 +567,24 @@ func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffA
 		skip[k] = true
 	}
 	return blockedError("cannot drop", targets, byTarget, skip)
+}
+
+// checkRoutineDependents fails the plan when a routine it recreates has a
+// dependent, since PostgreSQL refuses the DROP. The recreate runs before the
+// table changes, so only a view the plan drops is skipped.
+func checkRoutineDependents(ctx context.Context, cat *catalog.Catalog, recreated []*model.Routine, droppedViews []string) error {
+	dependents, err := cat.RoutineDependents(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch routine dependents: %w", err)
+	}
+	targets := make([]string, 0, len(recreated))
+	byTarget := make(map[string][]catalog.Dependent, len(recreated))
+	for _, r := range recreated {
+		target := strings.ToLower(r.Kind()) + " " + r.Signature()
+		targets = append(targets, target)
+		byTarget[target] = dependents[r.OID]
+	}
+	return blockedError("cannot drop", targets, byTarget, nameSet(droppedViews))
 }
 
 // droppedObject is a constraint or an index a statement drops. Name is how the
@@ -959,8 +987,8 @@ func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string
 	stmts = append(stmts, diffs.Domains.Stmts...)
 	stmts = append(stmts, diffs.CompositeTypes.Stmts...)
 	stmts = append(stmts, diffs.Sequences.Stmts...)
-	stmts = append(stmts, diffs.Routines.Stmts...)
 	stmts = append(stmts, sortViewStmts(diffs.Views.DropStmts, current.Views, true)...)
+	stmts = append(stmts, diffs.Routines.Stmts...)
 	stmts = append(stmts, diffs.Tables.FKDropStmts...)
 	stmts = append(stmts, diffs.Tables.Stmts...)
 	stmts = append(stmts, diffs.Tables.PartitionedIndexStmts...)

@@ -1,0 +1,26 @@
+# Only recreated routines with a dependent are named. h has none, and f(text)
+# is not recreated.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;
+  CREATE FUNCTION public.f(a text) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT 1$$;
+  CREATE FUNCTION public.g(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;
+  CREATE FUNCTION public.h(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;
+  CREATE TABLE public.t (
+      a integer DEFAULT public.g(1),
+      b text,
+      CONSTRAINT t_a_check CHECK (public.f(a) > 0),
+      CONSTRAINT t_b_check CHECK (public.f(b) > 0)
+  );
+desired: |
+  CREATE FUNCTION public.f(a integer) RETURNS bigint LANGUAGE sql IMMUTABLE AS $$SELECT a::bigint$$;
+  CREATE FUNCTION public.f(a text) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT 1$$;
+  CREATE FUNCTION public.g(b integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT b$$;
+  CREATE FUNCTION public.h(a integer) RETURNS bigint LANGUAGE sql IMMUTABLE AS $$SELECT a::bigint$$;
+  CREATE TABLE public.t (
+      a integer DEFAULT public.g(1),
+      b text,
+      CONSTRAINT t_a_check CHECK (public.f(a) > 0),
+      CONSTRAINT t_b_check CHECK (public.f(b) > 0)
+  );
+error: "cannot drop function public.f(integer): table constraint t_a_check on public.t depends on it; cannot drop function public.g(integer): default value for public.t.a depends on it"

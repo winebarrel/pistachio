@@ -120,6 +120,14 @@ The body, the language, and the attributes (`IMMUTABLE` / `STABLE` / `VOLATILE`,
 - removing a parameter default
 - turning a function into a procedure, or back
 
+PostgreSQL refuses that `DROP` while anything calls the routine: a `CHECK` constraint, a column default, a generated column, an index, a view, a policy, a trigger, a domain constraint or a `BEGIN ATOMIC` routine. A body written as a string records no dependency and does not block. `plan` fails and names them:
+
+```
+pista: error: cannot drop function public.f(integer): table constraint t_check on public.t depends on it
+```
+
+The routine is recreated before the tables change, so changing the dependent in the same plan does not help. Change it in one run and the routine in the next. A view the plan drops does not block, since views are dropped first.
+
 Adding or removing a parameter is not a modification either. The argument types are the identity, so the new signature is a new routine and the old one is dropped, which needs `--allow-drop routine` as well.
 
 An attribute left at its default is not written back. PostgreSQL reports `VOLATILE`, `PARALLEL UNSAFE` and the default `COST` as absent, so a desired schema may spell them out or leave them off.

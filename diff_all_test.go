@@ -241,6 +241,24 @@ func TestOrderStatements_DropFallbackOnCurrentCycle(t *testing.T) {
 	assert.Equal(t, []string{"DROP TABLE public.text;", "DROP DOMAIN public.d1;"}, result)
 }
 
+func TestOrderStatements_FallbackDropsViewsBeforeRoutines(t *testing.T) {
+	// The plan skips a view it drops when checking a recreated routine for
+	// dependents, so the fallback has to drop the view first as well.
+	current := emptySchema()
+	current.Domains.Set("public.d1", &model.Domain{Schema: "public", Name: "d1", BaseType: "text"})
+	tbl := &model.Table{Schema: "public", Name: "text"}
+	tbl.Columns = orderedmap.New[string, *model.Column]()
+	tbl.Columns.Set("v", &model.Column{Name: "v", TypeName: "public.d1"})
+	current.Tables.Set("public.text", tbl)
+
+	diffs := emptyDiffs()
+	diffs.Routines = &diff.RoutineDiffResult{Stmts: []string{"DROP FUNCTION public.f(integer);", "CREATE OR REPLACE FUNCTION public.f(a integer) RETURNS bigint LANGUAGE sql AS $$SELECT a$$;"}}
+	diffs.Views = &diff.ViewDiffResult{DropStmts: []string{"DROP VIEW public.v;"}}
+
+	result := orderStatements(current, emptySchema(), diffs)
+	assert.Equal(t, "DROP VIEW public.v;", result[0])
+}
+
 func TestOrderStatements_UnknownPosBeforeKnown(t *testing.T) {
 	// Statements with unknown position (e.g., RENAME, INDEX ops) should
 	// be placed before topo-ordered statements, not after.

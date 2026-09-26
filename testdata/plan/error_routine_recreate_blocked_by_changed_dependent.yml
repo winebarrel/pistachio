@@ -1,0 +1,10 @@
+# The routine is recreated before the table changes, so changing the dependent
+# in the same plan does not help.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f(a integer) RETURNS integer LANGUAGE sql IMMUTABLE AS $$SELECT a$$;
+  CREATE TABLE public.t (a integer, CONSTRAINT t_check CHECK (public.f(a) > 0));
+desired: |
+  CREATE FUNCTION public.f(a integer) RETURNS bigint LANGUAGE sql IMMUTABLE AS $$SELECT a::bigint$$;
+  CREATE TABLE public.t (a integer, CONSTRAINT t_check CHECK (a > 0));
+error: "cannot drop function public.f(integer): table constraint t_check on public.t depends on it"
