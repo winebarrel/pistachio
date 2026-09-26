@@ -3,6 +3,10 @@ on:
   push:
     branches:
       - main
+  # Editing the release pull request's title sets the version to release.
+  pull_request:
+    types:
+      - edited
 
 permissions:
   contents: read
@@ -15,6 +19,13 @@ jobs:
   # A push that merges the release pull request tags a release. Every other
   # push only updates that pull request and needs no key.
   check:
+    # tagpr retitles the release pull request as a bot; only a person's
+    # edit of the title picks a version.
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.changes.title &&
+       contains(github.event.pull_request.labels.*.name, 'tagpr') &&
+       github.event.sender.type != 'Bot')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,6 +35,9 @@ jobs:
     steps:
       - id: check
         run: |
+          if [ "$GITHUB_EVENT_NAME" != push ]; then
+            exit 0
+          fi
           # GitHub indexes the merge commit a few seconds after the push.
           # Every push to main comes from a pull request, so an empty answer
           # means the index is late, not that this is an ordinary push.
@@ -66,20 +80,75 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: read
-      - &checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
           fetch-depth: 0
-      # Should this job ever see a merged release pull request, tagpr fails
-      # for want of a key instead of pushing an unsigned tag.
-      - name: Refuse unsigned tags
-        run: git config --global tag.gpgSign true
+          ref: main
+      - name: Set up git
+        run: |
+          git config --global user.name "$APP_SLUG[bot]"
+          git config --global user.email "$APP_SLUG[bot]@users.noreply.github.com"
+          git config --global url."https://x-access-token:$TOKEN@github.com/".insteadOf "https://github.com/"
+          # Should this job ever see a merged release pull request, tagpr
+          # fails for want of a key instead of pushing an unsigned tag.
+          git config --global tag.gpgSign true
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          TOKEN: ${{ steps.app-token.outputs.token }}
+      # tagpr rebuilds the release pull request from main on every run and
+      # keeps any commit a person or this step added on top, then reads
+      # VERSION back. The commit made here is what keeps the chosen version.
+      - name: Take the version from the title
+        if: github.event_name == 'pull_request'
+        run: |
+          version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<<"$TITLE" | head -n 1)
+          if [ -z "$version" ]; then
+            echo "::error::No version in the title: $TITLE"
+            exit 1
+          fi
+          latest=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n 1)
+          latest=${latest#v}
+          if [ "$version" = "$latest" ] || [ "$(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1)" != "$version" ]; then
+            echo "::error::$version in the title is not newer than the latest release $latest"
+            exit 1
+          fi
+          git checkout -q "$HEAD_REF"
+          echo "$version" > VERSION
+          if ! git diff --quiet; then
+            git commit -q -am "Release v$version"
+            git push -q origin "$HEAD_REF"
+          fi
+          git checkout -q main
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REF: ${{ github.head_ref }}
       - &tagpr
+        id: tagpr
         uses: Songmu/tagpr@2afc990a4a5a9a340665cc1a484c2102f7de332f # v1.21.0
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+      # tagpr's own changelog hook runs before it reads VERSION back, so it
+      # would see the version tagpr guessed rather than the one chosen. The
+      # commit subject is tagpr's, so the next run drops it and this step
+      # dates the section again.
+      - name: Date the changelog
+        if: steps.tagpr.outputs.pull_request != ''
+        run: |
+          branch=$(jq -r .head.ref <<<"$PULL_REQUEST")
+          git fetch -q origin "$branch"
+          git reset -q --hard
+          git checkout -q -B "$branch" "origin/$branch"
+          version=$(cat VERSION)
+          date=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          sed -i "s/^## \[Unreleased\]\$/## [$version] - $date/" CHANGELOG.md
+          if ! git diff --quiet; then
+            git commit -q -am "[tagpr] update CHANGELOG.md"
+            git push -q origin "$branch"
+          fi
+        env:
+          PULL_REQUEST: ${{ steps.tagpr.outputs.pull_request }}
 
   tag:
     needs: check
@@ -90,7 +159,13 @@ jobs:
     environment: ${{ needs.check.outputs.environment }}
     steps:
       - *app-token
-      - *checkout
+      # The merge commit itself: tagpr tags only when HEAD is the merged
+      # release pull request, and main may have moved on during the approval.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          fetch-depth: 0
       - name: Set up the signing key
         run: |
           if [ -z "$RELEASE_GPG_KEY" ]; then

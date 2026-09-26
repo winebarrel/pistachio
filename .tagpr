@@ -7,23 +7,19 @@
 #
 #   tagpr.versionFile
 #       Versioning file containing the semantic version needed to be updated at release.
-#       "-" means no version file; the version comes from the tags alone.
+#       Editing the release pull request's title rewrites it; see .github/workflows/tagpr.yml.
 #
 #   tagpr.vPrefix
 #       Flag whether or not v-prefix is added to semver when git tagging. (e.g. v1.2.3 if true)
 #
 #   tagpr.changelog
-#       CHANGELOG.md is written by hand. The command below only dates its [Unreleased] section.
+#       CHANGELOG.md is written by hand. The workflow only dates its [Unreleased] section.
 #
 #   tagpr.release
 #       GoReleaser creates the GitHub Release from the tag, so tagpr does not.
-#
-#   tagpr.command
-#       Run in the release pull request before it is committed.
 [tagpr]
 	releaseBranch = main
-	versionFile = -
+	versionFile = VERSION
 	vPrefix = true
 	changelog = false
 	release = false
-	command = .github/scripts/tagpr-changelog.sh
