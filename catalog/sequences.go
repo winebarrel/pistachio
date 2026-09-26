@@ -91,7 +91,7 @@ func (c *Catalog) ListSequences(ctx context.Context) ([]*model.Sequence, error) 
 
 	rows, err := c.conn.Query(ctx, q, args)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get sequence info: %w", err)
+		return nil, fmt.Errorf("catalog: failed to get sequence info: %w", err)
 	}
 	defer rows.Close()
 

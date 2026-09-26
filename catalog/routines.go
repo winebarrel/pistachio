@@ -84,7 +84,7 @@ func (c *Catalog) ListRoutines(ctx context.Context) ([]*model.Routine, error) {
 
 	rows, err := c.conn.Query(ctx, q, args)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get routine info: %w", err)
+		return nil, fmt.Errorf("catalog: failed to get routine info: %w", err)
 	}
 	defer rows.Close()
 
