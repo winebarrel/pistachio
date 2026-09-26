@@ -217,6 +217,23 @@ func alterTriggerStateSQL(fqtn string, trg *model.Trigger) string {
 	return model.TriggerStateSQL(fqtn, trg.Name, trg.State)
 }
 
+// parseCreateTrigStmt parses a definition that must hold a single CREATE
+// TRIGGER statement.
+func parseCreateTrigStmt(def string) (*pg_query.ParseResult, *pg_query.CreateTrigStmt, error) {
+	result, err := pg_query.Parse(def)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(result.Stmts) != 1 {
+		return nil, nil, fmt.Errorf("unexpected parse result for trigger definition: %s", def)
+	}
+	ct := result.Stmts[0].Stmt.GetCreateTrigStmt()
+	if ct == nil {
+		return nil, nil, fmt.Errorf("unexpected parse result for trigger definition: %s", def)
+	}
+	return result, ct, nil
+}
+
 // parseTriggerDef parses a CREATE TRIGGER statement and takes out the wording
 // that says nothing about the trigger's state. An implicit relation schema is
 // filled in from the owning relation, and OR REPLACE is cleared.
@@ -228,16 +245,9 @@ func alterTriggerStateSQL(fqtn string, trg *model.Trigger) string {
 //
 // It returns the whole result so the caller can deparse it back.
 func parseTriggerDef(def, schema string) (*pg_query.ParseResult, *pg_query.CreateTrigStmt, error) {
-	result, err := pg_query.Parse(def)
+	result, ct, err := parseCreateTrigStmt(def)
 	if err != nil {
 		return nil, nil, err
-	}
-	if len(result.Stmts) != 1 {
-		return nil, nil, fmt.Errorf("unexpected parse result for trigger definition: %s", def)
-	}
-	ct := result.Stmts[0].Stmt.GetCreateTrigStmt()
-	if ct == nil {
-		return nil, nil, fmt.Errorf("unexpected parse result for trigger definition: %s", def)
 	}
 	if ct.Relation != nil && ct.Relation.Schemaname == "" {
 		ct.Relation.Schemaname = schema
@@ -294,16 +304,9 @@ func isConstraintTrigger(def string) bool {
 // renameTriggerDef rewrites a CREATE TRIGGER definition to carry a new trigger
 // name, the way the catalog reports it after ALTER TRIGGER ... RENAME.
 func renameTriggerDef(def, newName string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, ct, err := parseCreateTrigStmt(def)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse the current trigger definition: %w", err)
-	}
-	if len(result.Stmts) != 1 {
-		return "", fmt.Errorf("unexpected parse result for trigger definition: %s", def)
-	}
-	ct := result.Stmts[0].Stmt.GetCreateTrigStmt()
-	if ct == nil {
-		return "", fmt.Errorf("unexpected parse result for trigger definition: %s", def)
 	}
 	ct.Trigname = newName
 	sql, err := pg_query.Deparse(result)
@@ -316,16 +319,9 @@ func renameTriggerDef(def, newName string) (string, error) {
 // replaceTriggerSQL rewrites a CREATE TRIGGER definition into the
 // CREATE OR REPLACE TRIGGER that updates the trigger in place.
 func replaceTriggerSQL(def string) (string, error) {
-	result, err := pg_query.Parse(def)
+	result, ct, err := parseCreateTrigStmt(def)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse the desired trigger definition: %w", err)
-	}
-	if len(result.Stmts) != 1 {
-		return "", fmt.Errorf("unexpected parse result for trigger definition: %s", def)
-	}
-	ct := result.Stmts[0].Stmt.GetCreateTrigStmt()
-	if ct == nil {
-		return "", fmt.Errorf("unexpected parse result for trigger definition: %s", def)
 	}
 	ct.Replace = true
 	sql, err := pg_query.Deparse(result)
