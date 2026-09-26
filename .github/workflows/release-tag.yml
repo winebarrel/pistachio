@@ -96,49 +96,24 @@ jobs:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-contents: write
-      # Rename [Unreleased] to the version and date in a commit made through
-      # the API, which GitHub signs for the App. Without that section the
-      # merge commit itself is tagged.
-      - id: changelog
-        run: |
-          file=$(gh api "repos/$GH_REPO/contents/CHANGELOG.md?ref=main")
-          content=$(jq -r .content <<<"$file" | base64 -d)
-          # A re-run after the release commit landed but the tag did not:
-          # tag that commit rather than the merge.
-          if grep -qF "## [$VERSION] - " <<<"$content"; then
-            target=$(gh api "repos/$GH_REPO/commits?path=CHANGELOG.md&sha=main&per_page=1" \
-              --jq ".[0] | select(.commit.message == \"Release v$VERSION\") | .sha")
-            if [ -z "$target" ]; then
-              echo "::error::CHANGELOG.md already has [$VERSION], but not from a Release v$VERSION commit"
-              exit 1
-            fi
-            echo "target=$target" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          renamed=$(sed "s/^## \[Unreleased\]\$/## [$VERSION] - $(TZ=Asia/Tokyo date +%Y-%m-%d)/" <<<"$content")
-          if [ "$renamed" = "$content" ]; then
-            echo "target=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          target=$(gh api -X PUT "repos/$GH_REPO/contents/CHANGELOG.md" \
-            -f message="Release v$VERSION" \
-            -f content="$(base64 -w 0 <<<"$renamed")" \
-            -f sha="$(jq -r .sha <<<"$file")" \
-            -f branch=main \
-            --jq .commit.sha)
-          echo "target=$target" >> "$GITHUB_OUTPUT"
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-      # The App token pushes the tag, so that the push starts release.yml.
+      # The App token pushes, so that the tag push starts release.yml.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ steps.changelog.outputs.target }}
+          ref: main
           token: ${{ steps.app-token.outputs.token }}
-      - name: Sign and push the tag
+      # Rename [Unreleased] to the version and date in a commit signed with
+      # the key, and tag it. Without that section main itself is tagged.
+      # One atomic push lands both or neither, so a failed run leaves main
+      # as it was and a re-run starts over.
+      - name: Commit, tag and push
         run: |
+          sed -i "s/^## \[Unreleased\]\$/## [$VERSION] - $(TZ=Asia/Tokyo date +%Y-%m-%d)/" CHANGELOG.md
+          refs=()
+          if ! git diff --quiet; then
+            git commit -q -S -am "Release v$VERSION"
+            refs+=(HEAD:main)
+          fi
           git tag -s "v$VERSION" -m "Release v$VERSION"
-          git push origin "v$VERSION"
+          git push --atomic origin "${refs[@]}" "v$VERSION"
         env:
           VERSION: ${{ needs.version.outputs.version }}
