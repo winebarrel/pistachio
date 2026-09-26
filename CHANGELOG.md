@@ -12,6 +12,8 @@
 
 * A `-- pista:renamed-from` before a column or constraint written with a leading comma, such as `, name text`, now renames it. It used to be ignored, and the plan added a new column or constraint.
 
+* Internal refactoring in the parser, catalog, diff and dump code, with no change in behavior.
+
 ## [1.66.1] - 2026-09-26
 
 * `fmt` starts a statement at the first column instead of keeping its indentation.
