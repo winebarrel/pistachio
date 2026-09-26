@@ -54,7 +54,8 @@ func validateDirectives(rawSQL string) error {
 	matches := anyDirectivePattern.FindAllStringSubmatchIndex(rawSQL, -1)
 	for _, m := range matches {
 		// m[0] is the match start, m[2]:m[3] the name group.
-		name := strings.TrimSpace(rawSQL[m[2]:m[3]])
+		raw := rawSQL[m[2]:m[3]]
+		name := strings.TrimSpace(raw)
 		if name == "" {
 			return &locatedError{msg: "invalid directive: -- pista: (missing directive name)", offset: m[0]}
 		}
@@ -63,7 +64,9 @@ func validateDirectives(rawSQL string) error {
 		}
 		// The patterns that apply a directive need the name right after the
 		// colon, so without this "-- pista: ignore" was silently ignored.
-		if c := rawSQL[m[2]-1]; c == ' ' || c == '\t' {
+		// The name group can start with a non-ASCII space such as U+00A0,
+		// which \S does not exclude and TrimSpace removes.
+		if c := rawSQL[m[2]-1]; c == ' ' || c == '\t' || !strings.HasPrefix(raw, name) {
 			return &locatedError{msg: fmt.Sprintf("invalid directive: no space is allowed after -- pista: (write -- pista:%s)", name), offset: m[0]}
 		}
 	}

@@ -619,6 +619,7 @@ func TestValidateDirectives_SpaceBeforeKnownName(t *testing.T) {
 		"-- pista: renamed-from old_users",
 		"-- pista:\tignore",
 		"  --pista:  concurrently",
+		"-- pista:\u00a0renamed-from old_users",
 	} {
 		err := validateDirectives(sql)
 		require.Error(t, err, sql)
