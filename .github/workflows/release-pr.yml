@@ -1,0 +1,78 @@
+name: release-pr
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  # Keeps one open release pull request. The person releasing edits its
+  # title to the version; merging it releases that version.
+  release-pr:
+    # Not on the merge of a release pull request: its tag is pushed later,
+    # after approval, and a branch named after the previous tag would stay
+    # behind. The next push to main opens the next release pull request.
+    if: ${{ !contains(github.event.head_commit.message, '/release-from-') }}
+    runs-on: ubuntu-latest
+    steps:
+      # The App token, unlike GITHUB_TOKEN, lets CI run on the pull request.
+      - id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      # As tagpr does, name the branch after the latest tag and rebuild it on
+      # every push: main's head plus one commit made through the API, which
+      # GitHub signs for the App. A pull request needs a commit of its own;
+      # this one changes no file.
+      - name: Rebuild the release branch
+        id: branch
+        run: |
+          tag=$(git ls-remote --tags --refs "https://github.com/$GH_REPO" 'v[0-9]*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
+          branch=release-from-$tag
+          main=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
+          {
+            echo "name=$branch"
+            echo "tag=$tag"
+            echo "main=$main"
+          } >> "$GITHUB_OUTPUT"
+          tree=$(gh api "repos/$GH_REPO/git/commits/$main" --jq .tree.sha)
+          commit=$(gh api "repos/$GH_REPO/git/commits" -f message="Prepare for the next release" -f tree="$tree" -f "parents[]=$main" --jq .sha)
+          if gh api "repos/$GH_REPO/git/ref/heads/$branch" --silent 2>/dev/null; then
+            gh api -X PATCH "repos/$GH_REPO/git/refs/heads/$branch" -f sha="$commit" -F force=true --silent
+          else
+            gh api "repos/$GH_REPO/git/refs" -f ref="refs/heads/$branch" -f sha="$commit" --silent
+          fi
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      # Created once and never retitled, so the version a person puts in the
+      # title stays. The body is rewritten on every run: the link to
+      # CHANGELOG.md and the pull requests merged since the latest tag.
+      - name: Open or update the release pull request
+        run: |
+          body="See [CHANGELOG.md](https://github.com/$GH_REPO/blob/main/CHANGELOG.md)."
+          prs=$(gh api "repos/$GH_REPO/compare/$TAG...$MAIN" --jq '.commits[].commit.message | select(test("^Merge pull request #[0-9]+ from [^ ]+/release-from-") | not) | capture("^Merge pull request (?<n>#[0-9]+) ") | "- " + .n')
+          if [ -n "$prs" ]; then
+            body+=$'\n\n## Pull requests\n\n'"$prs"
+          fi
+          number=$(gh pr list --label release --state open --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            gh pr create --base main --head "$BRANCH" --label release --title "Release for vX.Y.Z" --body "$body"
+          else
+            gh pr edit "$number" --body "$body"
+          fi
+        env:
+          BRANCH: ${{ steps.branch.outputs.name }}
+          TAG: ${{ steps.branch.outputs.tag }}
+          MAIN: ${{ steps.branch.outputs.main }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
