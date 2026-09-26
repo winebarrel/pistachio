@@ -244,32 +244,43 @@ pre-step.
 Origin: known limitation documented inline at `diff/views.go`
 (`canCreateOrReplaceView`).
 
-## A blocked drop is caught for a view, not for a table or a column
+## A table or column drop is not checked for dependents
 
-PostgreSQL refuses to drop a relation another object reads rather than
-cascading, so a plan holding such a drop fails at apply time. `diffAll` checks
-the views and materialized views it drops against `pg_depend` and fails the
-plan instead. Two statements in the same family are not checked:
+PostgreSQL refuses to drop a table or a column another object reads rather
+than cascading, so a plan holding such a drop fails at apply time. `diffAll`
+checks against `pg_depend` the views it drops, the keys and indexes it drops,
+the columns it retypes and the routines it recreates, and fails the plan
+instead. Two statements are not checked:
 
-- `DROP TABLE`, where a view reads the table.
-- `ALTER TABLE ... DROP COLUMN`, where a view reads the column.
+- `DROP TABLE`
+- `ALTER TABLE ... DROP COLUMN`
 
-Neither fails unless the view stays in place. A view pistachio manages is
-dropped in the same plan, so it never blocks anything. It stays when
-`--include` / `--exclude` or a schema outside `-n` hides it, or when
-`--allow-drop` names `table` but not `view`, which skips the view's drop and
-keeps the table's.
+Neither fails unless the dependent stays in place. A dependent that
+pistachio manages is dropped or changed in the same plan before the drop. One
+stays when:
 
-The view case is checked because it fails with no filters at all. A definition
-change becomes a drop and a create whenever `CREATE OR REPLACE VIEW` cannot
-express it, and always for a materialized view. Nothing in the plan says so.
+- `--include` / `--exclude` or a schema outside `-n` hides a view that reads
+  the table or column, or a foreign key that references the table.
+- `--allow-drop` names `table` but not `view` or `foreign_key`. The plan
+  keeps a view that reads the table or a foreign key on another table that
+  references it, but still drops the table.
+- A routine pistachio does not manage takes the table's row type as an
+  argument, or reads the table or column in a `BEGIN ATOMIC` body. Routines
+  are unmanaged without `--manage-routine`, so this needs no filter. A body
+  written as a string records no dependency.
 
-Closing the table half means reporting the tables a diff drops the way
-`ViewDiffResult.DroppedViews` reports the views. The column half also needs
-the dependents read per column (`pg_depend.refobjsubid`) and the dropped
-columns reported alongside the tables.
+The check is left out because these cases are rare and a filter is the user's
+choice, while the check would have to skip every dependent the plan drops or
+changes before the table, in the order it runs them. A skip it gets wrong
+fails a plan that applies cleanly. PostgreSQL's error names the dependent, and
+`--with-tx` rolls the apply back.
 
-Origin: review of the view dependent check, 2026-09-19.
+Closing it means reporting the tables and columns a diff drops, under their
+current names when the plan also renames the table, and reading the
+dependents of each table, column (`pg_depend.refobjsubid`) and row type.
+
+Origin: review of the view-dependent check, 2026-09-19. The routine and
+foreign key cases were added 2026-09-26.
 
 ## Amazon Aurora DSQL is not supported
 
