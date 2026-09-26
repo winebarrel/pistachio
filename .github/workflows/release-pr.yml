@@ -12,8 +12,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Keeps one open release pull request. The person releasing edits its
-  # title to the version; merging it releases that version.
+  # Keeps one open release pull request, created as a draft so that it is
+  # not merged by accident. The person releasing edits its title to the
+  # version and marks it ready for review; merging it releases that version.
   release-pr:
     # Not on the merge of a release pull request: its tag is pushed later,
     # after approval, and a branch named after the previous tag would stay
@@ -69,7 +70,7 @@ jobs:
           fi
           number=$(gh pr list --label release --state open --json number --jq '.[0].number // empty')
           if [ -z "$number" ]; then
-            gh pr create --base main --head "$BRANCH" --label release --title "Release for vX.Y.Z" --body "$body"
+            gh pr create --draft --base main --head "$BRANCH" --label release --title "Release for vX.Y.Z" --body "$body"
           else
             gh pr edit "$number" --body "$body"
           fi
