@@ -63,7 +63,7 @@ func attachTrigger(
 	if v, ok := views.GetOk(fqtn); ok {
 		return setUnique(v.Triggers, trg.Name, "trigger", trg, fqtn, offset)
 	}
-	return fmt.Errorf("CREATE TRIGGER %s: relation %s not defined", trg.Name, fqtn)
+	return undeclared("CREATE TRIGGER "+trg.Name, "table or view", fqtn, offset)
 }
 
 // applyAlterTableTriggerState picks up the ENABLE / DISABLE TRIGGER

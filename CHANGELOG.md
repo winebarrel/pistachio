@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* The error for a `CREATE POLICY` or `CREATE TRIGGER` on a table that is not declared before it now shows the file and line, as `CREATE INDEX` does.
+
 ## [1.66.1] - 2026-09-26
 
 * `fmt` starts a statement at the first column instead of keeping its indentation.

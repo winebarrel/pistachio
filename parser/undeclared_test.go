@@ -36,6 +36,9 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 		{"column compression", "CREATE TABLE public.t (id integer);\nALTER TABLE public.t ALTER COLUMN body SET COMPRESSION lz4;", "ALTER TABLE public.t: column body is not declared before it"},
 		{"index", "CREATE INDEX i ON public.t (id);", "CREATE INDEX i: table or materialized view public.t is not declared before it"},
 		{"index declared later", "CREATE INDEX i ON public.t (id);\nCREATE TABLE public.t (id integer);", "CREATE INDEX i: table or materialized view public.t is not declared before it"},
+		{"policy", "CREATE POLICY p ON public.t USING (true);", "CREATE POLICY p: table public.t is not declared before it"},
+		{"policy declared later", "CREATE POLICY p ON public.t USING (true);\nCREATE TABLE public.t (id integer);", "CREATE POLICY p: table public.t is not declared before it"},
+		{"trigger", "CREATE TRIGGER trg BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION f();", "CREATE TRIGGER trg: table or view public.t is not declared before it"},
 		{"index on a plain view", "CREATE VIEW public.v AS SELECT 1 AS x;\nCREATE INDEX i ON public.v (x);", "CREATE INDEX i: public.v is a view, which cannot hold an index"},
 	} {
 		_, err := parseSQLWithPublicSchema(tc.sql)
@@ -83,6 +86,22 @@ func TestParseSQLFiles_AlterUndeclaredTargetLocation(t *testing.T) {
   |
 3 | ALTER TABLE public.item ADD CONSTRAINT items_chk CHECK (id > 0);
   | ^`, err.Error())
+}
+
+// CREATE POLICY and CREATE TRIGGER point at the statement too.
+func TestParseSQLFiles_PolicyAndTriggerUndeclaredTargetLocation(t *testing.T) {
+	for _, tc := range []struct{ name, sql, want string }{
+		{"policy", "CREATE POLICY p ON public.item USING (true);", "CREATE POLICY p: table public.item is not declared before it"},
+		{"trigger", "CREATE TRIGGER trg BEFORE INSERT ON public.item FOR EACH ROW EXECUTE FUNCTION f();", "CREATE TRIGGER trg: table or view public.item is not declared before it"},
+	} {
+		paths := writeSQLFiles(t, map[string]string{
+			"items.sql": "CREATE TABLE public.items (id integer);\n\n" + tc.sql + "\n",
+		})
+
+		_, err := ParseSQLFilesWithSchema(paths, "public")
+		require.Error(t, err, tc.name)
+		assert.Equal(t, tc.want+"\n --> "+paths[0]+":3:1\n  |\n3 | "+tc.sql+"\n  | ^", err.Error(), tc.name)
+	}
 }
 
 // A statement under -- pista:execute is run as written and not read, so it
