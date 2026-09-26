@@ -16,42 +16,47 @@ jobs:
   # title to the version; merging it releases that version.
   release-pr:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
     steps:
-      - id: find
-        run: |
-          count=$(gh pr list --repo "$GITHUB_REPOSITORY" --label release --state open --json number --jq length)
-          if [ "$count" -eq 0 ]; then
-            echo "create=true" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
       # The App token, unlike GITHUB_TOKEN, lets CI run on the pull request.
       - id: app-token
-        if: steps.find.outputs.create
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
-      - if: steps.find.outputs.create
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-      # A pull request needs a commit of its own. It stays empty: merging
-      # the pull request brings in whatever main has by then.
-      - if: steps.find.outputs.create
+      # As tagpr does, name the branch after the latest tag and rebuild it on
+      # every push: main's head plus one commit made through the API, which
+      # GitHub signs for the App. A pull request needs a commit of its own;
+      # this one changes no file.
+      - name: Rebuild the release branch
+        id: branch
         run: |
-          git config user.name "$APP_SLUG[bot]"
-          git config user.email "$APP_SLUG[bot]@users.noreply.github.com"
-          git commit -q --allow-empty -m "Release"
-          git push -q -f origin HEAD:refs/heads/release
-          gh pr create --base main --head release --label release \
-            --title "Release for vX.Y.Z" \
-            --body "See [CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/main/CHANGELOG.md)."
+          tag=$(git ls-remote --tags --refs "https://github.com/$GH_REPO" 'v[0-9]*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
+          branch=release-from-$tag
+          echo "name=$branch" >> "$GITHUB_OUTPUT"
+          main=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
+          tree=$(gh api "repos/$GH_REPO/git/commits/$main" --jq .tree.sha)
+          commit=$(gh api "repos/$GH_REPO/git/commits" -f message="Prepare for the next release" -f tree="$tree" -f "parents[]=$main" --jq .sha)
+          if gh api "repos/$GH_REPO/git/ref/heads/$branch" --silent 2>/dev/null; then
+            gh api -X PATCH "repos/$GH_REPO/git/refs/heads/$branch" -f sha="$commit" -F force=true --silent
+          else
+            gh api "repos/$GH_REPO/git/refs" -f ref="refs/heads/$branch" -f sha="$commit" --silent
+          fi
         env:
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      # Created once and never retitled, so the version a person puts in the
+      # title stays.
+      - name: Open the release pull request
+        run: |
+          count=$(gh pr list --label release --state open --json number --jq length)
+          if [ "$count" -eq 0 ]; then
+            gh pr create --base main --head "$BRANCH" --label release \
+              --title "Release for vX.Y.Z" \
+              --body "See [CHANGELOG.md](https://github.com/$GH_REPO/blob/main/CHANGELOG.md)."
+          fi
+        env:
+          BRANCH: ${{ steps.branch.outputs.name }}
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
