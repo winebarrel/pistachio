@@ -261,9 +261,9 @@ stays when:
 
 - `--include` / `--exclude` or a schema outside `-n` hides a view that reads
   the table or column, or a foreign key that references the table.
-- `--allow-drop` names `table` but not `view` or `foreign_key`, which skips
-  the drop of a view that reads the table or a foreign key that references it,
-  and keeps the table's.
+- `--allow-drop` names `table` but not `view` or `foreign_key`. The plan
+  keeps a view that reads the table or a foreign key that references it, but
+  still drops the table.
 - A routine pistachio does not manage takes the table's row type as an
   argument, or reads the table or column in a `BEGIN ATOMIC` body. Routines
   are unmanaged without `--manage-routine`, so this needs no filter. A body
