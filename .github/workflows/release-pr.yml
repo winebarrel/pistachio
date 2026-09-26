@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - CHANGELOG.md
 
 permissions:
   contents: read
@@ -20,7 +18,10 @@ jobs:
     # Not on the merge of a release pull request: its tag is pushed later,
     # after approval, and a branch named after the previous tag would stay
     # behind. The next push to main opens the next release pull request.
-    if: ${{ !contains(github.event.head_commit.message, '/release-from-') }}
+    # Nor on the release commit, which release-tag.yml pushes as the App.
+    if: >-
+      !contains(github.event.head_commit.message, '/release-from-') &&
+      github.actor != 'pistachio-release[bot]'
     runs-on: ubuntu-latest
     steps:
       # The App token, unlike GITHUB_TOKEN, lets CI run on the pull request.
