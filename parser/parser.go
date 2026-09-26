@@ -2291,52 +2291,12 @@ func parseAlterTableConstraints(as *pg_query.AlterTableStmt, defaultSchema strin
 			schema = defaultSchema
 		}
 
-		// A foreign key added here does not pass through
-		// parseInlineForeignKey, so name it before the definition is
-		// deparsed. Without this an unnamed one reaches the diff with an
-		// empty name and plans as `ADD CONSTRAINT  FOREIGN KEY ...`.
-		if con.Contype == pg_query.ConstrType_CONSTR_FOREIGN && con.Conname == "" {
-			con.Conname = autoNameConstraint(as.Relation.Relname, fkAttrCols(con), con.Contype)
-		}
-
-		def, err := deparseConstraintDef(con)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		if con.Contype == pg_query.ConstrType_CONSTR_FOREIGN {
-			var refSchema, refTable *string
-			if con.Pktable != nil {
-				rs := con.Pktable.Schemaname
-				if rs == "" {
-					rs = defaultSchema
-				}
-				refSchema = &rs
-				rt := con.Pktable.Relname
-				refTable = &rt
+			fk, err := parseInlineForeignKey(con, schema, as.Relation.Relname, defaultSchema)
+			if err != nil {
+				return nil, nil, err
 			}
-
-			var columns []string
-			for _, attr := range con.FkAttrs {
-				if s := attr.GetString_(); s != nil {
-					columns = append(columns, s.Sval)
-				}
-			}
-
-			fks = append(fks, &model.ForeignKey{
-				Name:       con.Conname,
-				Type:       model.ConstraintType('f'),
-				Definition: def,
-				Columns:    columns,
-				Deferrable: con.Deferrable,
-				Deferred:   con.Initdeferred,
-				Validated:  !con.SkipValidation,
-				Schema:     schema,
-				Table:      as.Relation.Relname,
-				RefSchema:  refSchema,
-				RefTable:   refTable,
-			})
-
+			fks = append(fks, fk)
 			continue
 		}
 
@@ -2352,8 +2312,8 @@ func parseAlterTableConstraints(as *pg_query.AlterTableStmt, defaultSchema strin
 	return constraints, fks, nil
 }
 
-// parseInlineForeignKey builds a ForeignKey from an inline FOREIGN KEY
-// constraint inside a CREATE TABLE statement.
+// parseInlineForeignKey builds a ForeignKey from a FOREIGN KEY constraint
+// written inside CREATE TABLE or added by ALTER TABLE.
 func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchema string) (*model.ForeignKey, error) {
 	if con.Conname == "" {
 		con.Conname = autoNameConstraint(table, fkAttrCols(con), con.Contype)
@@ -2375,18 +2335,11 @@ func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchem
 		refTable = &rt
 	}
 
-	var columns []string
-	for _, attr := range con.FkAttrs {
-		if s := attr.GetString_(); s != nil {
-			columns = append(columns, s.Sval)
-		}
-	}
-
 	return &model.ForeignKey{
 		Name:       con.Conname,
 		Type:       model.ConstraintType('f'),
 		Definition: def,
-		Columns:    columns,
+		Columns:    fkAttrCols(con),
 		Deferrable: con.Deferrable,
 		Deferred:   con.Initdeferred,
 		Validated:  !con.SkipValidation,
