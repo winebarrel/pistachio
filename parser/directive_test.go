@@ -648,6 +648,13 @@ func TestValidateDirectives_MissingName(t *testing.T) {
 	assert.Contains(t, err.Error(), "missing directive name")
 }
 
+func TestFormatExecuteStmtWithNote(t *testing.T) {
+	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true"}
+	// A multi-line note is folded onto one comment line.
+	assert.Equal(t, "-- pista:execute SELECT true\n-- check failed: ERROR: relation missing\nCREATE FUNCTION f();",
+		FormatExecuteStmtWithNote(es, "check failed:  ERROR:\n  relation missing"))
+}
+
 func TestFormatExecuteStmt_WithCheck(t *testing.T) {
 	es := &ExecuteStmt{SQL: "CREATE FUNCTION f();", CheckSQL: "SELECT true"}
 	assert.Equal(t, "-- pista:execute SELECT true\nCREATE FUNCTION f();", FormatExecuteStmt(es))
