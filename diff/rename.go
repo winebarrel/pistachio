@@ -33,10 +33,8 @@ func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([
 			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
-		if oldKey != newKey {
-			if _, exists := adjusted.GetOk(newKey); exists {
-				return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
-			}
+		if _, exists := adjusted.GetOk(newKey); exists {
+			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 		}
 
 		if oldEnum.Schema != desiredEnum.Schema {
@@ -77,10 +75,8 @@ func detectSequenceRenames(current, desired *orderedmap.Map[string, *model.Seque
 			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
-		if oldKey != newKey {
-			if _, exists := adjusted.GetOk(newKey); exists {
-				return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
-			}
+		if _, exists := adjusted.GetOk(newKey); exists {
+			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 		}
 
 		if oldSeq.Schema != desiredSeq.Schema {
@@ -127,10 +123,8 @@ func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) 
 			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
-		if oldKey != newKey {
-			if _, exists := adjusted.GetOk(newKey); exists {
-				return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
-			}
+		if _, exists := adjusted.GetOk(newKey); exists {
+			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 		}
 
 		if oldTable.Schema != desiredTable.Schema {
@@ -275,10 +269,8 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 			return nil, nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
 		}
 
-		if oldKey != newKey {
-			if _, exists := adjusted.GetOk(newKey); exists {
-				return nil, nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
-			}
+		if _, exists := adjusted.GetOk(newKey); exists {
+			return nil, nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 		}
 
 		if oldView.Schema != desiredView.Schema {
@@ -348,10 +340,8 @@ func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *
 			return nil, nil, fmt.Errorf("rename source column %s not found in %s", model.Ident(oldName), fqtn)
 		}
 
-		if oldName != newName {
-			if _, exists := adjusted.GetOk(newName); exists {
-				return nil, nil, fmt.Errorf("cannot rename column %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
-			}
+		if _, exists := adjusted.GetOk(newName); exists {
+			return nil, nil, fmt.Errorf("cannot rename column %s to %s in %s: destination already exists", model.Ident(oldName), model.Ident(newName), fqtn)
 		}
 
 		stmts = append(stmts, "ALTER TABLE "+fqtn+" RENAME COLUMN "+model.Ident(oldName)+" TO "+model.Ident(newName)+";")
@@ -430,10 +420,8 @@ func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) 
 			return nil, nil, fmt.Errorf("rename source index %s not found", model.Ident(oldName))
 		}
 
-		if oldName != newName {
-			if _, exists := adjusted.GetOk(newName); exists {
-				return nil, nil, fmt.Errorf("cannot rename index %s to %s: destination already exists", model.Ident(oldName), model.Ident(newName))
-			}
+		if _, exists := adjusted.GetOk(newName); exists {
+			return nil, nil, fmt.Errorf("cannot rename index %s to %s: destination already exists", model.Ident(oldName), model.Ident(newName))
 		}
 
 		stmts = append(stmts, "ALTER INDEX "+model.Ident(oldIdx.Schema, oldName)+" RENAME TO "+model.Ident(newName)+";")
