@@ -24,6 +24,7 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       (github.event.changes.title &&
+       github.event.pull_request.state == 'open' &&
        contains(github.event.pull_request.labels.*.name, 'tagpr') &&
        github.event.sender.type != 'Bot')
     runs-on: ubuntu-latest
@@ -103,11 +104,11 @@ jobs:
       - name: Take the version from the title
         if: github.event_name == 'pull_request'
         run: |
-          version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<<"$TITLE" | head -n 1)
-          if [ -z "$version" ]; then
-            echo "::error::No version in the title: $TITLE"
+          if [[ ! "$TITLE" =~ ^Release\ for\ v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::The title must be \"Release for vX.Y.Z\": $TITLE"
             exit 1
           fi
+          version=${BASH_REMATCH[1]}
           latest=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n 1)
           latest=${latest#v}
           if [ "$version" = "$latest" ] || [ "$(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1)" != "$version" ]; then
