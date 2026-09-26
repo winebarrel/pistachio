@@ -400,100 +400,44 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	}
 	defer conn.Close(ctx) //nolint:errcheck
 
-	catalog, err := catalog.NewCatalog(conn, client.Schemas)
+	cat, err := catalog.NewCatalog(conn, client.Schemas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create catalog: %w", err)
 	}
 
-	tables, err := catalog.Tables(ctx)
+	current, err := readCurrent(ctx, cat, &client.FilterOptions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch tables: %w", err)
-	}
-
-	views, err := catalog.Views(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch views: %w", err)
-	}
-
-	enums, err := catalog.Enums(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch enums: %w", err)
-	}
-
-	domains, err := catalog.Domains(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch domains: %w", err)
-	}
-
-	compositeTypes, err := catalog.CompositeTypes(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch composite types: %w", err)
-	}
-
-	sequences, err := catalog.Sequences(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch sequences: %w", err)
-	}
-
-	// pg_proc is read only when --manage-routine asked for it.
-	routines := orderedmap.New[string, *model.Routine]()
-	if client.ManageRoutine {
-		routines, err = catalog.Routines(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch routines: %w", err)
-		}
+		return nil, err
 	}
 
 	// The estimates are keyed by the names the catalog read, so they are
 	// attached before a --schema-map remap renames the schemas.
 	if options.Explain {
-		if err := explainDump(ctx, catalog, tables, views); err != nil {
+		if err := explainDump(ctx, cat, current.Tables, current.Views); err != nil {
 			return nil, fmt.Errorf("failed to explain dump: %w", err)
 		}
 	}
 
-	filteredTables := client.filterTables(client.remapTableSchemas(tables))
-	filteredViews := client.filterViews(client.remapViewSchemas(views))
-	filteredEnums := client.filterEnums(client.remapEnumSchemas(enums))
-	filteredDomains := client.filterDomains(client.remapDomainSchemas(domains))
-	filteredCompositeTypes := client.filterCompositeTypes(client.remapCompositeTypeSchemas(compositeTypes))
-	filteredSequences := client.filterSequences(client.remapSequenceSchemas(sequences))
-	filteredRoutines := client.filterRoutines(client.remapRoutineSchemas(routines))
-
-	if !client.ManageStorageParam {
-		clearStorageParams(filteredTables)
-		clearMatViewStorageParams(filteredViews)
-	}
+	dumped := client.currentSide(&schemaObjects{
+		Tables:         client.remapTableSchemas(current.Tables),
+		Views:          client.remapViewSchemas(current.Views),
+		Enums:          client.remapEnumSchemas(current.Enums),
+		Domains:        client.remapDomainSchemas(current.Domains),
+		CompositeTypes: client.remapCompositeTypeSchemas(current.CompositeTypes),
+		Sequences:      client.remapSequenceSchemas(current.Sequences),
+		Routines:       client.remapRoutineSchemas(current.Routines),
+	})
 
 	return &DumpResult{
-		Tables:         filteredTables,
-		Views:          filteredViews,
-		Enums:          filteredEnums,
-		Domains:        filteredDomains,
-		CompositeTypes: filteredCompositeTypes,
-		Sequences:      filteredSequences,
-		Routines:       filteredRoutines,
+		Tables:         dumped.Tables,
+		Views:          dumped.Views,
+		Enums:          dumped.Enums,
+		Domains:        dumped.Domains,
+		CompositeTypes: dumped.CompositeTypes,
+		Sequences:      dumped.Sequences,
+		Routines:       dumped.Routines,
 		OmitSchema:     options.OmitSchema,
 		NoFormat:       options.NoFormat,
-		Count: ObjectCount{
-			Schemas:        client.Schemas,
-			Tables:         filteredTables.Len(),
-			Views:          filteredViews.Len(),
-			Enums:          filteredEnums.Len(),
-			Domains:        filteredDomains.Len(),
-			CompositeTypes: filteredCompositeTypes.Len(),
-			Sequences:      filteredSequences.Len(),
-			Routines:       routineCount(client.ManageRoutine, filteredRoutines),
-		},
+		Count:          dumped.count(client.Schemas, client.ManageRoutine),
 	}, nil
-}
-
-// routineCount returns the routine slot of ObjectCount: a count when routines
-// are managed, nil otherwise so the summary line leaves the slot out.
-func routineCount(manage bool, routines *orderedmap.Map[string, *model.Routine]) *int {
-	if !manage {
-		return nil
-	}
-	n := routines.Len()
-	return &n
 }
