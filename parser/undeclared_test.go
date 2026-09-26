@@ -192,8 +192,8 @@ ALTER SEQUENCE public.quiet MINVALUE 5;
 `)
 	require.NoError(t, err)
 	assert.True(t, result.Sequences.Get("public.s").Owned())
-	assert.Equal(t, "pistachio: ignored unsupported statement: ALTER SEQUENCE public.s INCREMENT 2\n"+
-		"pistachio: ignored unsupported statement: ALTER SEQUENCE public.s RESTART 10\n", buf.String())
+	assert.Equal(t, "pista: ignored unsupported statement: ALTER SEQUENCE public.s INCREMENT 2\n"+
+		"pista: ignored unsupported statement: ALTER SEQUENCE public.s RESTART 10\n", buf.String())
 }
 
 // ALTER TABLE on a declared view, materialized view or sequence is SQL
@@ -213,7 +213,7 @@ CREATE SEQUENCE public.s;
 ALTER TABLE public.s OWNER TO app;
 `)
 	require.NoError(t, err)
-	assert.Equal(t, "pistachio: ignored unsupported statement: ALTER TABLE ONLY public.v ALTER COLUMN x SET DEFAULT 2\n"+
-		"pistachio: ignored unsupported statement: ALTER TABLE public.mv SET (autovacuum_enabled=false)\n"+
-		"pistachio: ignored unsupported statement: ALTER TABLE public.s OWNER TO app\n", buf.String())
+	assert.Equal(t, "pista: ignored unsupported statement: ALTER TABLE ONLY public.v ALTER COLUMN x SET DEFAULT 2\n"+
+		"pista: ignored unsupported statement: ALTER TABLE public.mv SET (autovacuum_enabled=false)\n"+
+		"pista: ignored unsupported statement: ALTER TABLE public.s OWNER TO app\n", buf.String())
 }

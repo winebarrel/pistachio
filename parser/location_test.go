@@ -379,7 +379,7 @@ DROP TABLE public.items;
 	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.NoError(t, err)
 	assert.Equal(t,
-		"pistachio: "+paths[0]+":4:1: ignored unsupported statement: DROP TABLE public.items\n",
+		"pista: "+paths[0]+":4:1: ignored unsupported statement: DROP TABLE public.items\n",
 		buf.String())
 }
 
@@ -396,7 +396,7 @@ func TestParseSQLFiles_IgnoredStatementWarningInSecondFile(t *testing.T) {
 	_, err := ParseSQLFilesWithSchema([]string{first, second}, "public")
 	require.NoError(t, err)
 	assert.Equal(t,
-		"pistachio: "+second+":2:1: ignored unsupported statement: GRANT select ON public.users TO someone\n",
+		"pista: "+second+":2:1: ignored unsupported statement: GRANT select ON public.users TO someone\n",
 		buf.String())
 }
 
@@ -412,7 +412,7 @@ func TestParseSQLFiles_IgnoredAlterTableActionWarningLocation(t *testing.T) {
 
 	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "pistachio: "+paths[0]+":2:1: ignored unsupported statement: ALTER TABLE public.items ALTER COLUMN id SET STATISTICS 100")
+	assert.Contains(t, buf.String(), "pista: "+paths[0]+":2:1: ignored unsupported statement: ALTER TABLE public.items ALTER COLUMN id SET STATISTICS 100")
 }
 
 // The LIKE warning is built from a rebuilt statement, and carries the position
@@ -427,7 +427,7 @@ func TestParseSQLFiles_IgnoredLikeClauseWarningLocation(t *testing.T) {
 
 	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.NoError(t, err)
-	assert.Equal(t, "pistachio: "+paths[0]+":3:1: ignored unsupported statement: CREATE TABLE public.copies (LIKE public.items)\n", buf.String())
+	assert.Equal(t, "pista: "+paths[0]+":3:1: ignored unsupported statement: CREATE TABLE public.copies (LIKE public.items)\n", buf.String())
 }
 
 // Parsing a string names no file, so the warning reads as it did before
@@ -438,7 +438,7 @@ func TestParseSQL_IgnoredStatementWarningWithoutFiles(t *testing.T) {
 
 	_, err := parseSQLNoFile("CREATE TABLE public.items (id integer);\nDROP TABLE public.items;\n", "public")
 	require.NoError(t, err)
-	assert.Equal(t, "pistachio: ignored unsupported statement: DROP TABLE public.items\n", buf.String())
+	assert.Equal(t, "pista: ignored unsupported statement: DROP TABLE public.items\n", buf.String())
 }
 
 // The caret points at the statement's first token, so it has to skip the
@@ -458,8 +458,8 @@ DROP TABLE public.items;
 	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.NoError(t, err)
 	assert.Equal(t,
-		"pistachio: "+paths[0]+":1:41: ignored unsupported statement: DROP TABLE public.items\n"+
-			"pistachio: "+paths[0]+":3:1: ignored unsupported statement: DROP TABLE public.items\n"+
-			"pistachio: "+paths[0]+":4:5: ignored unsupported statement: DROP TABLE public.items\n",
+		"pista: "+paths[0]+":1:41: ignored unsupported statement: DROP TABLE public.items\n"+
+			"pista: "+paths[0]+":3:1: ignored unsupported statement: DROP TABLE public.items\n"+
+			"pista: "+paths[0]+":4:5: ignored unsupported statement: DROP TABLE public.items\n",
 		buf.String())
 }

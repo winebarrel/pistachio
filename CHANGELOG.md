@@ -6,6 +6,8 @@
 
 * The error for a `CREATE POLICY` or `CREATE TRIGGER` on a table that is not declared before it now shows the file and line, as `CREATE INDEX` does.
 
+* The ignored-statement warning and the per-file errors of `fmt` start with `pista:` instead of `pistachio:`, the same program name as the other errors.
+
 ## [1.66.1] - 2026-09-26
 
 * `fmt` starts a statement at the first column instead of keeping its indentation.
