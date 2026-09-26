@@ -29,7 +29,6 @@ func (c *Catalog) Tables(ctx context.Context) (*orderedmap.Map[string, *model.Ta
 	for _, idx := range indexes {
 		if t, ok := tableByKey.GetOk(idx.FQTN()); ok {
 			t.Indexes.Set(idx.Name, idx)
-			tableByKey.Set(t.FQTN(), t)
 		}
 	}
 
