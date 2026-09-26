@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* A directive with a space after `-- pista:`, such as `-- pista: ignore`, is now an error. It used to be ignored silently.
+
 * The error for a `CREATE POLICY` or `CREATE TRIGGER` on a table that is not declared before it now shows the file and line, as `CREATE INDEX` does.
 
 * A `-- pista:renamed-from` before a column or constraint written with a leading comma, such as `, name text`, now renames it. It used to be ignored, and the plan added a new column or constraint.
