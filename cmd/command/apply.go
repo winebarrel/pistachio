@@ -44,23 +44,16 @@ func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
 	// transaction comments) even when no schema change was applied, so the
 	// "-- No changes" and timing decisions are driven by result.Applied rather
 	// than the buffer length.
+	w.Write(buf.Bytes()) //nolint:errcheck
+	if result.Ignored != "" {
+		fmt.Fprintln(w, result.Ignored) //nolint:errcheck
+	}
+	if result.DisallowedDrops != "" {
+		fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
+	}
 	if !result.Applied {
-		w.Write(buf.Bytes()) //nolint:errcheck
-		if result.Ignored != "" {
-			fmt.Fprintln(w, result.Ignored) //nolint:errcheck
-		}
-		if result.DisallowedDrops != "" {
-			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
-		}
 		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
 	} else {
-		w.Write(buf.Bytes()) //nolint:errcheck
-		if result.Ignored != "" {
-			fmt.Fprintln(w, result.Ignored) //nolint:errcheck
-		}
-		if result.DisallowedDrops != "" {
-			fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
-		}
 		// Only report the apply phase duration when statements were applied.
 		// With no changes there is nothing to time.
 		fmt.Fprintf(w, "-- Apply finished in %s\n", result.Duration.Round(time.Millisecond)) //nolint:errcheck
