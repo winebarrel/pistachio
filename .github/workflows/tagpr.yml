@@ -33,7 +33,7 @@ jobs:
       pull-requests: read
     outputs:
       environment: ${{ steps.check.outputs.environment }}
-      number: ${{ steps.check.outputs.number }}
+      title: ${{ steps.check.outputs.title }}
     steps:
       - id: check
         run: |
@@ -56,9 +56,12 @@ jobs:
           if [ -z "$number" ]; then
             exit 0
           fi
-          # The list above leaves out merged_by.
-          echo "number=$number" >> "$GITHUB_OUTPUT"
-          merger=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq .merged_by.login)
+          # The list above leaves out merged_by. The title is read now, right
+          # after the merge, so that an edit during the approval wait does not
+          # count.
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number")
+          jq -r '"title=" + .title' <<<"$pr" >> "$GITHUB_OUTPUT"
+          merger=$(jq -r .merged_by.login <<<"$pr")
           # Each signer has an environment named release-<login> that holds
           # only their key and only they can approve. List them here so that
           # no one else's merge refers to, and so creates, an environment.
@@ -173,15 +176,13 @@ jobs:
       # writes the new version to VERSION. Stop rather than release the old one.
       - name: Check the title against VERSION
         run: |
-          title=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" --jq .title)
           version=$(cat VERSION)
-          if [ "$title" != "Release for v$version" ]; then
-            echo "::error::The merged title \"$title\" does not match VERSION $version. Nothing was tagged."
+          if [ "$TITLE" != "Release for v$version" ]; then
+            echo "::error::The merged title \"$TITLE\" does not match VERSION $version. Nothing was tagged."
             exit 1
           fi
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          NUMBER: ${{ needs.check.outputs.number }}
+          TITLE: ${{ needs.check.outputs.title }}
       - name: Set up the signing key
         run: |
           if [ -z "$RELEASE_GPG_KEY" ]; then
