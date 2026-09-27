@@ -57,7 +57,8 @@ jobs:
             git fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch"
             # The text merge, which is what merging the pull request does.
             if tree=$(git merge-tree --write-tree --name-only --no-messages "$main" "origin/$branch"); then
-              text=$(git rev-parse "$tree:CHANGELOG.md")
+              # A pull request that deletes the file has nothing to fix.
+              text=$(git rev-parse -q --verify "$tree:CHANGELOG.md") || continue
             elif [ "$(sed 1d <<<"$tree")" = CHANGELOG.md ]; then
               text=
             else

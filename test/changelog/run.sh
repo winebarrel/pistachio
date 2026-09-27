@@ -264,14 +264,15 @@ $released" \
 " \
 ''
 
-# via_git NAME BASE PR MAIN EXPECTED
+# via_git NAME BASE PR MAIN EXPECTED [same]
 #
 # Runs a case through git, the way changelog-merge.yml does: the attribute
 # alone leaves merge-tree a text merge, and git merge with the driver
 # configured gives EXPECTED. The workflow pushes only when the two differ,
-# so a case whose text merge already gives EXPECTED fails here.
+# so the text merge must not give EXPECTED, or with `same` it must, which
+# is a pull request the workflow leaves alone.
 via_git() {
-    local repo=$tmp/$1 tree text
+    local repo=$tmp/$1 tree text same=${6:-}
     repo=${repo// /-}
     git init -q -b main "$repo"
     g() { git -C "$repo" -c user.name=test -c user.email=test@example.com "$@"; }
@@ -295,8 +296,11 @@ via_git() {
         return
     fi
     g checkout -q pr
-    if [ "$text" = "${5%$'\n'}" ]; then
+    if [ -z "$same" ] && [ "$text" = "${5%$'\n'}" ]; then
         echo "FAIL $1: the text merge already gives the expected file"
+        failed=1
+    elif [ -n "$same" ] && [ "$text" != "${5%$'\n'}" ]; then
+        echo "FAIL $1: the text merge does not give the expected file"
         failed=1
     elif ! g -c merge.changelog.driver="bash $driver %O %A %B" merge -q --no-edit main > /dev/null 2>&1; then
         echo "FAIL $1: merge failed"
@@ -372,5 +376,45 @@ $released" \
 * A.
 
 $released"
+
+fixed='## [1.0.0] - 2026-01-01
+
+* Old, fixed.
+'
+
+via_git 'git: main edits a released entry' \
+"# Changelog
+
+## [Unreleased]
+
+* A.
+
+$released" \
+"# Changelog
+
+## [Unreleased]
+
+* PR.
+
+* A.
+
+$released" \
+"# Changelog
+
+## [Unreleased]
+
+* A.
+
+$fixed" \
+"# Changelog
+
+## [Unreleased]
+
+* PR.
+
+* A.
+
+$fixed" \
+same
 
 exit "$failed"
