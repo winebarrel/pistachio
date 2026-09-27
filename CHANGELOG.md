@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.69.1] - 2026-09-27
 
 * `plan` is faster. At 1,000 tables it takes about a quarter less time. The keyword lookup that decides whether an identifier needs quotes and the checks for whether a column default needs parentheses and which columns it references now run once per distinct name or expression, and a file with no `-- pista:` directive skips the directive checks.
 
