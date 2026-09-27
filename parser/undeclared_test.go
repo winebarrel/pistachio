@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio/model"
 )
 
 // ALTER TABLE and ALTER SEQUENCE ... OWNED BY need their table or sequence
@@ -217,4 +218,28 @@ ALTER TABLE public.s OWNER TO app;
 	assert.Equal(t, "pista: ignored unsupported statement: ALTER TABLE ONLY public.v ALTER COLUMN x SET DEFAULT 2\n"+
 		"pista: ignored unsupported statement: ALTER TABLE public.mv SET (autovacuum_enabled=false)\n"+
 		"pista: ignored unsupported statement: ALTER TABLE public.s OWNER TO app\n", buf.String())
+}
+
+// ALTER DOMAIN ... ADD CONSTRAINT ... CHECK is read, which is how a desired
+// schema declares a NOT VALID domain constraint. Every other ALTER DOMAIN form
+// is not read and warns.
+func TestParseSQL_AlterDomainAddCheck(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	result, err := parseSQLWithPublicSchema(`
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_max CHECK (VALUE < 100);
+ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+ALTER DOMAIN pos_int ADD CHECK (VALUE <> 50);
+ALTER DOMAIN public.pos_int SET DEFAULT 1;
+ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_nn NOT NULL;
+`)
+	require.NoError(t, err)
+	cons := result.Domains.Get("public.pos_int").Constraints
+	require.Len(t, cons, 3)
+	assert.Equal(t, &model.DomainConstraint{Name: "pos_max", Definition: "CHECK (value < 100)", Validated: true}, cons[0])
+	assert.Equal(t, &model.DomainConstraint{Name: "pos_check", Definition: "CHECK (value > 0)", Validated: false}, cons[1])
+	assert.Equal(t, &model.DomainConstraint{Name: "pos_int_check", Definition: "CHECK (value <> 50)", Validated: true}, cons[2])
+	assert.Equal(t, "pista: ignored unsupported statement: ALTER DOMAIN public.pos_int SET DEFAULT 1\n"+
+		"pista: ignored unsupported statement: ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_nn NOT NULL\n", buf.String())
 }

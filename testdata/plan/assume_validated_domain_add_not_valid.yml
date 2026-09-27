@@ -1,0 +1,14 @@
+# --assume-validated ignores NOT VALID in the desired schema, so a constraint
+# added to an existing domain or on a new one goes out without it.
+assume_validated: true
+init: |
+  CREATE DOMAIN public.pos_int AS integer;
+desired: |
+  CREATE DOMAIN public.pos_int AS integer;
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+  CREATE DOMAIN public.small_int AS integer;
+  ALTER DOMAIN public.small_int ADD CONSTRAINT small_check CHECK (VALUE < 10) NOT VALID;
+plan: |
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (value > 0);
+  CREATE DOMAIN public.small_int AS integer
+      CONSTRAINT small_check CHECK (value < 10);

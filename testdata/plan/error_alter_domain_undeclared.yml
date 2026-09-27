@@ -1,0 +1,8 @@
+# ALTER DOMAIN on a domain the desired schema does not declare before it is an
+# error. Dropped in silence, the constraint would be missing from the desired
+# side and the plan would offer to drop it.
+init: ""
+desired: |
+  CREATE DOMAIN public.pos_int AS integer;
+  ALTER DOMAIN public.pos_itn ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+error: "ALTER DOMAIN public.pos_itn: domain public.pos_itn is not declared before it"

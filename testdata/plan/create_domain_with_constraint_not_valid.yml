@@ -1,0 +1,9 @@
+init: ""
+desired: |
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_max CHECK (VALUE < 100);
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+plan: |
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_max CHECK (value < 100);
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (value > 0) NOT VALID;

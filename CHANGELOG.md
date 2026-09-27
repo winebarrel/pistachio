@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A domain constraint can stay `NOT VALID`. Write it as `ALTER DOMAIN ... ADD CONSTRAINT ... NOT VALID` after the `CREATE DOMAIN`, and `dump` writes it the same way. `dump` used to write it inside `CREATE DOMAIN`, so feeding the dump back planned `VALIDATE CONSTRAINT`, which reads every column of the domain's type. A validated constraint the desired schema writes `NOT VALID` is dropped and added back, as a table's is.
+
 ## [1.67.1] - 2026-09-27
 
 * Internal refactoring in the CLI commands, the object filters and the trigger diff, with no change in behavior.

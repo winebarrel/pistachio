@@ -41,11 +41,29 @@ func TestDomain_SQL_WithConstraint(t *testing.T) {
 		Name:     "pos_int",
 		BaseType: "integer",
 		Constraints: []*model.DomainConstraint{
-			{Name: "pos_check", Definition: "CHECK (VALUE > 0)"},
+			{Name: "pos_check", Definition: "CHECK (VALUE > 0)", Validated: true},
 		},
 	}
 	sql := d.SQL()
 	assert.Contains(t, sql, "CONSTRAINT pos_check CHECK (VALUE > 0)")
+}
+
+// A NOT VALID constraint is left out of CREATE DOMAIN and goes out as its own
+// ALTER DOMAIN after it.
+func TestDomainToSQL_NotValidConstraint(t *testing.T) {
+	d := &model.Domain{
+		Schema:   "public",
+		Name:     "pos_int",
+		BaseType: "integer",
+		Constraints: []*model.DomainConstraint{
+			{Name: "pos_max", Definition: "CHECK (VALUE < 100)", Validated: true},
+			{Name: "pos_check", Definition: "CHECK (VALUE > 0)"},
+		},
+	}
+	assert.Equal(t, "-- public.pos_int\n"+
+		"CREATE DOMAIN public.pos_int AS integer\n"+
+		"    CONSTRAINT pos_max CHECK (VALUE < 100);\n"+
+		"ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;", model.DomainToSQL(d))
 }
 
 func TestDomain_CommentSQL(t *testing.T) {

@@ -1,0 +1,9 @@
+# A NOT VALID constraint the desired schema also writes NOT VALID is left as
+# is. Validating it would scan every column of the domain's type.
+init: |
+  CREATE DOMAIN public.pos_int AS integer;
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+desired: |
+  CREATE DOMAIN public.pos_int AS integer;
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+plan: ""
