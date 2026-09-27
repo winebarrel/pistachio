@@ -1,0 +1,35 @@
+# Foreign keys without referenced columns match the catalog, which prints the
+# primary key's columns. The referenced tables come after the keys, one gets
+# its primary key from ALTER TABLE, and one key references its own table.
+init: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.pair (
+      a integer NOT NULL,
+      b integer NOT NULL,
+      CONSTRAINT pair_pkey PRIMARY KEY (a, b)
+  );
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      parent_id integer REFERENCES parent,
+      child_id integer REFERENCES child,
+      a integer,
+      b integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_pair_fkey FOREIGN KEY (a, b) REFERENCES pair ON DELETE CASCADE
+  );
+desired: |
+  CREATE TABLE child (
+      id integer PRIMARY KEY,
+      parent_id integer REFERENCES parent,
+      child_id integer REFERENCES child,
+      a integer,
+      b integer,
+      CONSTRAINT child_pair_fkey FOREIGN KEY (a, b) REFERENCES pair ON DELETE CASCADE
+  );
+  CREATE TABLE parent (id integer PRIMARY KEY);
+  CREATE TABLE pair (a integer NOT NULL, b integer NOT NULL);
+  ALTER TABLE pair ADD CONSTRAINT pair_pkey PRIMARY KEY (a, b);
+plan: ""

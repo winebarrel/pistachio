@@ -12,6 +12,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -664,6 +665,10 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			// desired schema, so warn instead of failing silently.
 			warnIgnoredStmt(sql, spans, rawStmt)
 		}
+	}
+
+	if err := fillFKRefColumns(tables); err != nil {
+		return nil, err
 	}
 
 	if err := validateColumnRefs(tables); err != nil {
@@ -2414,6 +2419,73 @@ func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchem
 		RefSchema:  refSchema,
 		RefTable:   refTable,
 	}, nil
+}
+
+// fillFKRefColumns fills in the referenced columns of a foreign key that
+// leaves them out, taking the referenced table's primary key as PostgreSQL
+// does. The catalog prints those columns, so a key without them never matches
+// it. This runs after every statement is read, since the referenced table or
+// its primary key may come later. A bare table name is looked up in the first
+// target schema and then in the key's own, the two schemas the diff matches a
+// bare name against. A key to a table the schema does not declare, or to one
+// with no primary key, is left as written.
+func fillFKRefColumns(tables *orderedmap.Map[string, *model.Table]) error {
+	for _, t := range tables.All() {
+		for _, fk := range t.ForeignKeys.All() {
+			con := pgast.ParseConstraintDef(fk.Definition)
+			if con == nil || len(con.PkAttrs) > 0 {
+				continue
+			}
+			ref, ok := tables.GetOk(model.Ident(*fk.RefSchema, *fk.RefTable))
+			if !ok && con.Pktable.Schemaname == "" {
+				ref, ok = tables.GetOk(model.Ident(t.Schema, *fk.RefTable))
+			}
+			if !ok {
+				continue
+			}
+			pkCols := primaryKeyColumns(ref)
+			if len(pkCols) == 0 {
+				continue
+			}
+			for _, col := range pkCols {
+				con.PkAttrs = append(con.PkAttrs, pg_query.MakeStrNode(col))
+			}
+			def, err := deparseConstraintDef(con)
+			if err != nil {
+				return fmt.Errorf("failed to deparse constraint %s: %w", fk.Name, err)
+			}
+			fk.Definition = def
+		}
+	}
+	return nil
+}
+
+// primaryKeyColumns returns the columns of a table's primary key, or nil when
+// it has none. A key written USING INDEX lists no columns, so they are read
+// from the index it takes over.
+func primaryKeyColumns(t *model.Table) []string {
+	for _, con := range t.Constraints.All() {
+		if !con.Type.IsPrimaryKeyConstraint() {
+			continue
+		}
+		if con.IndexName == "" {
+			return con.Columns
+		}
+		idx, ok := t.Indexes.GetOk(con.IndexName)
+		if !ok {
+			return nil
+		}
+		result, err := pg_query.Parse(idx.Definition)
+		if err != nil {
+			return nil
+		}
+		var cols []string
+		for _, param := range result.Stmts[0].Stmt.GetIndexStmt().GetIndexParams() {
+			cols = append(cols, param.GetIndexElem().GetName())
+		}
+		return cols
+	}
+	return nil
 }
 
 // Deparse helpers

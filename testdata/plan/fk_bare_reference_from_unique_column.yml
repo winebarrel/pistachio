@@ -1,0 +1,31 @@
+# A key that references a UNIQUE column and is rewritten without the columns
+# now references the primary key, so it is dropped and added back.
+init: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      alt integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id),
+      CONSTRAINT parent_alt_key UNIQUE (alt)
+  );
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES parent(alt)
+  );
+desired: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      alt integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id),
+      CONSTRAINT parent_alt_key UNIQUE (alt)
+  );
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES parent
+  );
+plan: |
+  ALTER TABLE public.child DROP CONSTRAINT child_parent_id_fkey;
+  ALTER TABLE ONLY public.child ADD CONSTRAINT child_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES parent (id);
