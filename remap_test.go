@@ -1268,8 +1268,8 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;
 	assert.Contains(t, got.SQL, "CREATE OR REPLACE VIEW myschema.active_users")
 }
 
-// A materialized view's index follows the view into the mapped schema, in
-// dump, in plan, and in a dump planned back.
+// A materialized view's index and its comment move to the mapped schema with
+// the view.
 func TestSchemaMap_MatviewIndex(t *testing.T) {
 	ctx := context.Background()
 	initSQL := `
@@ -1285,10 +1285,13 @@ CREATE MATERIALIZED VIEW myschema.post_count AS SELECT count(*) AS c FROM mysche
 	}
 
 	t.Run("dump", func(t *testing.T) {
-		connString := setupSchemaDB(t, ctx, "myschema", initSQL+`CREATE UNIQUE INDEX post_count_c ON myschema.post_count (c);`)
+		connString := setupSchemaDB(t, ctx, "myschema", initSQL+`
+CREATE UNIQUE INDEX post_count_c ON myschema.post_count (c);
+COMMENT ON INDEX myschema.post_count_c IS 'one row';`)
 		got, err := NewClient(opts(connString)).Dump(ctx, &DumpOptions{})
 		require.NoError(t, err)
 		assert.Contains(t, got.String(), "CREATE UNIQUE INDEX post_count_c ON public.post_count")
+		assert.Contains(t, got.String(), "COMMENT ON INDEX public.post_count_c IS 'one row';")
 
 		desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 		require.NoError(t, os.WriteFile(desiredFile, []byte(got.String()), 0o644))
@@ -1307,6 +1310,17 @@ CREATE UNIQUE INDEX post_count_c ON public.post_count (c);
 		plan, err := NewClient(opts(connString)).Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 		require.NoError(t, err)
 		assert.Equal(t, "CREATE UNIQUE INDEX post_count_c ON myschema.post_count USING btree (c);", plan.SQL)
+	})
+
+	t.Run("drop", func(t *testing.T) {
+		connString := setupSchemaDB(t, ctx, "myschema", initSQL+`CREATE UNIQUE INDEX post_count_c ON myschema.post_count (c);`)
+		desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+		require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.posts (id integer PRIMARY KEY);
+CREATE MATERIALIZED VIEW public.post_count AS SELECT count(*) AS c FROM public.posts;
+`), 0o644))
+		plan, err := NewClient(opts(connString)).Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
+		require.NoError(t, err)
+		assert.Equal(t, "DROP INDEX myschema.post_count_c;", plan.SQL)
 	})
 }
 

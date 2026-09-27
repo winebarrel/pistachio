@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `--schema-map` now maps the indexes of a materialized view. `dump` wrote them under the unmapped schema, so planning the dump failed, and `plan` created them in the mapped schema.
+* `--schema-map` now maps the indexes of a materialized view. `dump` wrote an index and its comment under the unmapped schema, so planning the dump failed, and `plan` created the index in the mapped schema.
 
 * `--schema-map` no longer rewrites a string literal in an index, constraint, policy, trigger or view definition. It still rewrites one that names an object, such as the argument of `nextval` or a literal cast to `regclass`, as it does in a default. A table alias named like a mapped schema, as in `SELECT staging.id FROM staging.users staging`, is no longer rewritten either.
 
