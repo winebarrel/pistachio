@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -2704,13 +2705,25 @@ func deparseExpr(node *pg_query.Node) (string, error) {
 // DEFAULT needs. A trailing COLLATE parses, but as the column's collation
 // rather than part of the default. Any other expression is left as
 // deparseExpr writes it.
+//
+// The answer is kept per expression, since most tables repeat the same few
+// defaults and each check is a parse through cgo.
 func parenthesizeDefault(def string) string {
+	if v, ok := parenthesizedDefaults.Load(def); ok {
+		return v.(string)
+	}
+
+	v := def
 	tree, err := pg_query.Parse("CREATE TABLE t (c int DEFAULT " + def + ")")
 	if err != nil || tree.Stmts[0].Stmt.GetCreateStmt().TableElts[0].GetColumnDef().CollClause != nil {
-		return "(" + def + ")"
+		v = "(" + def + ")"
 	}
-	return def
+	parenthesizedDefaults.Store(def, v)
+
+	return v
 }
+
+var parenthesizedDefaults sync.Map
 
 func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 	// Temporarily clear SkipValidation so "NOT VALID" is not included in the
