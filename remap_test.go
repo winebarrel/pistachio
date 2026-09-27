@@ -119,6 +119,31 @@ func TestBuildDefReplacer_StringLiteral(t *testing.T) {
 	}
 }
 
+// The first part of a two-part column reference is a table or an alias, never
+// a schema, so it keeps its name even when it matches a mapped schema.
+func TestBuildDefReplacer_ColumnQualifier(t *testing.T) {
+	replacer := buildDefReplacer(map[string]string{"staging": "public", "My Schema": "public"})
+
+	tests := []struct {
+		name, in, want string
+		replace        func(string) string
+	}{
+		{"alias named like the schema", "SELECT staging.id FROM staging.users staging", "SELECT staging.id FROM public.users staging", replacer.Replace},
+		{"quoted alias", `SELECT "My Schema".id FROM "My Schema".t "My Schema"`, `SELECT "My Schema".id FROM public.t "My Schema"`, replacer.Replace},
+		{"alias star", "SELECT staging.* FROM staging.users staging", "SELECT staging.* FROM public.users staging", replacer.Replace},
+		{"three-part column reference", "SELECT staging.users.id FROM staging.users", "SELECT public.users.id FROM public.users", replacer.Replace},
+		{"index", "CREATE INDEX i ON staging.t USING btree (id) WHERE (staging.f(id) > 0)", "CREATE INDEX i ON public.t USING btree (id) WHERE (public.f(id) > 0)", replacer.Replace},
+		{"constraint", "CHECK (staging.f(staging) > 0)", "CHECK (public.f(staging) > 0)", replacer.ReplaceConstraint},
+		{"foreign key", "FOREIGN KEY (a) REFERENCES staging.t(id)", "FOREIGN KEY (a) REFERENCES public.t(id)", replacer.ReplaceConstraint},
+		{"expression with a sub-query", "(owner = staging.me()) AND EXISTS (SELECT 1 FROM staging.m staging WHERE staging.id = owner)", "(owner = public.me()) AND EXISTS (SELECT 1 FROM public.m staging WHERE staging.id = owner)", replacer.ReplaceExpr},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.replace(tt.in))
+		})
+	}
+}
+
 // A string literal keeps its text in every kind of definition the replacer
 // reads, a literal cast to regclass is mapped, and the dump plans back clean.
 func TestDump_WithSchemaMap_StringLiteral(t *testing.T) {
@@ -133,6 +158,7 @@ CREATE TABLE myschema.hosts (
 );
 CREATE INDEX hosts_name_idx ON myschema.hosts (id) WHERE name = 'myschema.example.com';
 CREATE VIEW myschema.example_hosts AS SELECT id, 'myschema.hosts'::regclass AS rel FROM myschema.hosts WHERE name = 'myschema.example.com';
+CREATE VIEW myschema.aliased_hosts AS SELECT myschema.id, other.name FROM myschema.hosts myschema JOIN myschema.hosts other ON other.id = myschema.id;
 ALTER TABLE myschema.hosts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY hosts_policy ON myschema.hosts USING (name <> 'myschema.hidden');
 CREATE FUNCTION myschema.hosts_trg() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
@@ -152,6 +178,8 @@ CREATE TRIGGER hosts_trg BEFORE INSERT ON myschema.hosts FOR EACH ROW WHEN (NEW.
 	}
 	assert.Equal(t, 2, strings.Count(output, "'myschema.example.com'"))
 	assert.Contains(t, output, "'public.hosts'::regclass")
+	assert.Contains(t, output, "SELECT myschema.id")
+	assert.Contains(t, output, "public.hosts myschema")
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(output), 0o644))

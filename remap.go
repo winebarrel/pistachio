@@ -54,11 +54,53 @@ func buildDefReplacer(schemaMap map[string]string) *defReplacer {
 	return r
 }
 
-// Replace rewrites every mapped schema prefix in s outside string literals. A
-// literal is left alone unless it names an object, as the argument of nextval,
-// currval or setval or cast to an object identifier type, which
-// remapDefaultExpr treats the same way in a default.
+// Replace rewrites every mapped schema prefix in a statement: an index, a
+// trigger or a view body. ReplaceConstraint does it for a constraint
+// definition and ReplaceExpr for an expression.
+//
+// A string literal is left alone unless it names an object, as the argument
+// of nextval, currval or setval or cast to an object identifier type, which
+// remapDefaultExpr treats the same way in a default. The first part of a
+// two-part column reference is a table or an alias, never a schema, so it is
+// left alone too. The definition is parsed to find those; one that does not
+// parse is rewritten without that check.
 func (r *defReplacer) Replace(s string) string {
+	return r.replace(s, columnQualifiers("", s))
+}
+
+// ReplaceConstraint is Replace for a constraint definition, as
+// pg_get_constraintdef writes it.
+func (r *defReplacer) ReplaceConstraint(s string) string {
+	return r.replace(s, columnQualifiers("ALTER TABLE _t ADD CONSTRAINT _c ", s))
+}
+
+// ReplaceExpr is Replace for an expression, a policy's USING or WITH CHECK.
+func (r *defReplacer) ReplaceExpr(s string) string {
+	return r.replace(s, columnQualifiers("SELECT ", s))
+}
+
+// columnQualifiers returns the offsets in s where a two-part column reference
+// starts, as found by parsing prefix and s together, or nil when they do not
+// parse.
+func columnQualifiers(prefix, s string) map[int]bool {
+	result, err := pg_query.Parse(prefix + s)
+	if err != nil {
+		return nil
+	}
+	offsets := map[int]bool{}
+	for _, stmt := range result.Stmts {
+		pgast.Walk(stmt.Stmt, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+			if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 2 {
+				offsets[int(cr.Location)-len(prefix)] = true
+			}
+			return n
+		})
+	}
+	return offsets
+}
+
+// replace is Replace with the column qualifier offsets in hand.
+func (r *defReplacer) replace(s string, qualifiers map[int]bool) string {
 	var b strings.Builder
 	code := 0
 	for i := 0; i < len(s); {
@@ -66,11 +108,11 @@ func (r *defReplacer) Replace(s string) string {
 		case '"':
 			// A quoted identifier is a name, never searched for a prefix. It
 			// is mapped whole when it is a schema: a mapped name followed by a
-			// dot and not itself after one.
+			// dot, not itself after one and not a column qualifier.
 			end := skipQuoted(s, i, '"', false)
-			b.WriteString(r.replaceNames(s[code:i]))
+			b.WriteString(r.replaceNames(s, code, i, qualifiers))
 			ident := s[i:end]
-			if to, ok := r.to[ident]; ok && end < len(s) && s[end] == '.' && (i == 0 || s[i-1] != '.') {
+			if to, ok := r.to[ident]; ok && end < len(s) && s[end] == '.' && (i == 0 || s[i-1] != '.') && !qualifiers[i] {
 				ident = to
 			}
 			b.WriteString(ident)
@@ -78,10 +120,9 @@ func (r *defReplacer) Replace(s string) string {
 		case '\'':
 			escape := i > 0 && (s[i-1] == 'E' || s[i-1] == 'e') && (i == 1 || !isIdentByte(s[i-2]))
 			end := skipQuoted(s, i, '\'', escape)
-			before := s[code:i]
-			b.WriteString(r.replaceNames(before))
+			b.WriteString(r.replaceNames(s, code, i, qualifiers))
 			lit := s[i:end]
-			if !escape && namesObject(before, s[end:]) {
+			if !escape && namesObject(s[code:i], s[end:]) {
 				lit = r.remapNameLiteral(lit)
 			}
 			b.WriteString(lit)
@@ -90,17 +131,26 @@ func (r *defReplacer) Replace(s string) string {
 			i++
 		}
 	}
-	b.WriteString(r.replaceNames(s[code:]))
+	b.WriteString(r.replaceNames(s, code, len(s), qualifiers))
 	return b.String()
 }
 
-// replaceNames rewrites every mapped schema prefix in s, which holds no string
-// literal.
-func (r *defReplacer) replaceNames(s string) string {
-	return r.re.ReplaceAllStringFunc(s, func(m string) string {
-		sub := r.re.FindStringSubmatch(m)
-		return sub[1] + r.to[sub[2]] + "."
-	})
+// replaceNames rewrites every mapped schema prefix in s[from:to], which holds
+// no string literal, other than one at a column qualifier offset.
+func (r *defReplacer) replaceNames(s string, from, to int, qualifiers map[int]bool) string {
+	seg := s[from:to]
+	var b strings.Builder
+	last := 0
+	for _, m := range r.re.FindAllStringSubmatchIndex(seg, -1) {
+		if qualifiers[from+m[4]] {
+			continue
+		}
+		b.WriteString(seg[last:m[4]])
+		b.WriteString(r.to[seg[m[4]:m[5]]])
+		last = m[5]
+	}
+	b.WriteString(seg[last:])
+	return b.String()
 }
 
 // remapNameLiteral rewrites the schema of the qualified name a string literal
@@ -301,7 +351,7 @@ func remapColumns(t *model.Table, mapSchema func(string) string, replacer *defRe
 	}
 	t.PartitionOf = remapQualifiedNamePtr(t.PartitionOf, mapSchema)
 	for _, con := range t.Constraints.CollectValues() {
-		con.Definition = replacer.Replace(con.Definition)
+		con.Definition = replacer.ReplaceConstraint(con.Definition)
 	}
 }
 
@@ -312,7 +362,7 @@ func remapDomain(d *model.Domain, mapSchema func(string) string, replacer *defRe
 	d.Collation = remapQualifiedNamePtr(d.Collation, mapSchema)
 	d.Default = remapDefaultExprPtr(d.Default, mapSchema)
 	for _, con := range d.Constraints {
-		con.Definition = replacer.Replace(con.Definition)
+		con.Definition = replacer.ReplaceConstraint(con.Definition)
 	}
 }
 
@@ -351,7 +401,7 @@ func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Ta
 
 		for _, fk := range t.ForeignKeys.CollectValues() {
 			fk.Schema = client.RemapSchema(fk.Schema)
-			fk.Definition = replacer.Replace(fk.Definition)
+			fk.Definition = replacer.ReplaceConstraint(fk.Definition)
 			if fk.RefSchema != nil {
 				mapped := client.RemapSchema(*fk.RefSchema)
 				fk.RefSchema = &mapped
@@ -380,11 +430,11 @@ func remapPolicies(
 	for _, p := range policies.CollectValues() {
 		p.Schema = mapSchema(p.Schema)
 		if p.Using != nil {
-			expr := replacer.Replace(*p.Using)
+			expr := replacer.ReplaceExpr(*p.Using)
 			p.Using = &expr
 		}
 		if p.WithCheck != nil {
-			expr := replacer.Replace(*p.WithCheck)
+			expr := replacer.ReplaceExpr(*p.WithCheck)
 			p.WithCheck = &expr
 		}
 	}
@@ -442,7 +492,7 @@ func (client *Client) reverseRemapTableSchemas(tables *orderedmap.Map[string, *m
 
 		for _, fk := range t.ForeignKeys.CollectValues() {
 			fk.Schema = client.ReverseRemapSchema(fk.Schema)
-			fk.Definition = replacer.Replace(fk.Definition)
+			fk.Definition = replacer.ReplaceConstraint(fk.Definition)
 			if fk.RefSchema != nil {
 				mapped := client.ReverseRemapSchema(*fk.RefSchema)
 				fk.RefSchema = &mapped
