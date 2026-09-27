@@ -1,0 +1,11 @@
+# ALTER DOMAIN on an ignored domain is accepted, and the domain stays out of the
+# diff.
+init: |
+  CREATE DOMAIN public.pos_int AS integer;
+desired: |
+  -- pista:ignore
+  CREATE DOMAIN public.pos_int AS integer;
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+plan: ""
+ignored: |
+  -- ignored: public.pos_int

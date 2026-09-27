@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A domain constraint can be kept `NOT VALID`. Write it as `ALTER DOMAIN ... ADD CONSTRAINT ... NOT VALID` after `CREATE DOMAIN`. `dump` writes it the same way. Before, `dump` wrote it inside `CREATE DOMAIN`, and planning the dump validated the constraint.
+
 ## [1.67.1] - 2026-09-27
 
 * Internal refactoring in the CLI commands, the object filters and the trigger diff, with no change in behavior.

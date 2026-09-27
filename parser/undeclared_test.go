@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio/model"
 )
 
 // ALTER TABLE and ALTER SEQUENCE ... OWNED BY need their table or sequence
@@ -23,6 +24,8 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 		{"alter table with an unsupported action", "ALTER TABLE public.t ADD COLUMN x text;", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"quoted name", `ALTER TABLE "My Schema"."My Table" ADD CONSTRAINT c CHECK (true);`, `ALTER TABLE "My Schema"."My Table": table "My Schema"."My Table" is not declared before it`},
 		{"unqualified name", "CREATE TABLE other.t (id integer);\nALTER TABLE t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
+		{"alter domain", "ALTER DOMAIN public.d ADD CONSTRAINT c CHECK (VALUE > 0) NOT VALID;", "ALTER DOMAIN public.d: domain public.d is not declared before it"},
+		{"alter domain declared later", "ALTER DOMAIN public.d ADD CONSTRAINT c CHECK (VALUE > 0);\nCREATE DOMAIN public.d AS integer;", "ALTER DOMAIN public.d: domain public.d is not declared before it"},
 		{"alter sequence", "ALTER SEQUENCE public.s OWNED BY public.t.id;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence declared later", "ALTER SEQUENCE public.s OWNED BY public.t.id;\nCREATE SEQUENCE public.s;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence if exists", "ALTER SEQUENCE IF EXISTS public.s OWNED BY public.t.id;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
@@ -217,4 +220,37 @@ ALTER TABLE public.s OWNER TO app;
 	assert.Equal(t, "pista: ignored unsupported statement: ALTER TABLE ONLY public.v ALTER COLUMN x SET DEFAULT 2\n"+
 		"pista: ignored unsupported statement: ALTER TABLE public.mv SET (autovacuum_enabled=false)\n"+
 		"pista: ignored unsupported statement: ALTER TABLE public.s OWNER TO app\n", buf.String())
+}
+
+// ALTER DOMAIN ... ADD CONSTRAINT ... CHECK is read. Any other ALTER DOMAIN
+// warns.
+func TestParseSQL_AlterDomainAddCheck(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	result, err := parseSQLWithPublicSchema(`
+CREATE DOMAIN public.pos_int AS integer CONSTRAINT pos_max CHECK (VALUE < 100);
+ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+ALTER DOMAIN pos_int ADD CHECK (VALUE <> 50);
+ALTER DOMAIN public.pos_int SET DEFAULT 1;
+ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_nn NOT NULL;
+`)
+	require.NoError(t, err)
+	cons := result.Domains.Get("public.pos_int").Constraints
+	require.Len(t, cons, 3)
+	assert.Equal(t, &model.DomainConstraint{Name: "pos_max", Definition: "CHECK (value < 100)", Validated: true}, cons[0])
+	assert.Equal(t, &model.DomainConstraint{Name: "pos_check", Definition: "CHECK (value > 0)", Validated: false}, cons[1])
+	assert.Equal(t, &model.DomainConstraint{Name: "pos_int_check", Definition: "CHECK (value <> 50)", Validated: true}, cons[2])
+	assert.Equal(t, "pista: ignored unsupported statement: ALTER DOMAIN public.pos_int SET DEFAULT 1\n"+
+		"pista: ignored unsupported statement: ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_nn NOT NULL\n", buf.String())
+}
+
+// A constraint name ALTER DOMAIN adds must not already be on the domain.
+func TestParseSQL_AlterDomainDuplicateConstraint(t *testing.T) {
+	_, err := parseSQLWithPublicSchema(`
+CREATE DOMAIN public.d AS integer CONSTRAINT c CHECK (VALUE > 0);
+ALTER DOMAIN public.d ADD CONSTRAINT c CHECK (VALUE > 1) NOT VALID;
+`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate domain constraint: c on public.d")
 }

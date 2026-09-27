@@ -29,6 +29,7 @@ func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc Dro
 	for k, desiredDomain := range desired.All() {
 		if _, ok := current.GetOk(k); !ok {
 			result.Stmts = append(result.Stmts, desiredDomain.SQL())
+			result.Stmts = append(result.Stmts, desiredDomain.NotValidConSQL()...)
 			if commentSQL := desiredDomain.CommentSQL(); commentSQL != "" {
 				result.Stmts = append(result.Stmts, commentSQL)
 			}
@@ -127,30 +128,42 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 		desiredByName[c.Name] = c
 	}
 
-	// Drop removed or changed constraints. A constraint with the same
-	// definition is kept: a NOT VALID -> validated transition is handled by
-	// VALIDATE CONSTRAINT below, not by recreation.
+	// A validated constraint the desired schema writes NOT VALID is dropped
+	// and added back, as a table's is, since nothing clears the flag.
+	change := func(cur, des *model.DomainConstraint) definitionChange {
+		return newDefinitionChange(equalConstraintDef(cur.Definition, des.Definition), cur.Validated, des.Validated)
+	}
+
+	// Drop removed or changed constraints. One that only needs validating is
+	// kept.
 	for _, c := range current {
 		d, ok := desiredByName[c.Name]
-		if !ok || !equalConstraintDef(c.Definition, d.Definition) {
+		if !ok {
+			stmts = append(stmts, "ALTER DOMAIN "+fqdn+" DROP CONSTRAINT "+model.Ident(c.Name)+";")
+			continue
+		}
+		if ch := change(c, d); ch.changed && !ch.validateOnly {
 			stmts = append(stmts, "ALTER DOMAIN "+fqdn+" DROP CONSTRAINT "+model.Ident(c.Name)+";")
 		}
 	}
 
-	// Add new or changed constraints, or validate an existing NOT VALID one.
-	// A desired domain constraint is always validated: inline CREATE DOMAIN
-	// cannot express NOT VALID, and ALTER DOMAIN is not parsed as desired
-	// input. So the only same-definition action is to validate a current
-	// NOT VALID constraint; a changed or new one is a plain ADD.
+	// Add new or changed constraints, or validate a NOT VALID one.
 	for _, c := range desired {
-		cur, ok := currentByName[c.Name]
-		if ok && equalConstraintDef(cur.Definition, c.Definition) {
-			if !cur.Validated {
-				stmts = append(stmts, "ALTER DOMAIN "+fqdn+" VALIDATE CONSTRAINT "+model.Ident(c.Name)+";")
+		if cur, ok := currentByName[c.Name]; ok {
+			ch := change(cur, c)
+			if !ch.changed {
+				continue
 			}
-			continue
+			if ch.validateOnly {
+				stmts = append(stmts, "ALTER DOMAIN "+fqdn+" VALIDATE CONSTRAINT "+model.Ident(c.Name)+";")
+				continue
+			}
 		}
-		stmts = append(stmts, "ALTER DOMAIN "+fqdn+" ADD CONSTRAINT "+model.Ident(c.Name)+" "+c.Definition+";")
+		sql := "ALTER DOMAIN " + fqdn + " ADD CONSTRAINT " + model.Ident(c.Name) + " " + c.Definition
+		if !c.Validated {
+			sql += " NOT VALID"
+		}
+		stmts = append(stmts, sql+";")
 	}
 
 	return stmts

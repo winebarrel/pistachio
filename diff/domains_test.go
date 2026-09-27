@@ -136,6 +136,47 @@ func TestDiffDomains_ValidateConstraint(t *testing.T) {
 	assert.Equal(t, []string{"ALTER DOMAIN public.pos_int VALIDATE CONSTRAINT pos_check;"}, result.Stmts)
 }
 
+func TestDiffDomains_AddConstraintNotValid(t *testing.T) {
+	current := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", BaseType: "integer"})
+	desired := newDomainMap(&model.Domain{
+		Schema:   "public",
+		Name:     "pos_int",
+		BaseType: "integer",
+		Constraints: []*model.DomainConstraint{
+			{Name: "pos_check", Definition: "CHECK (VALUE > 0)", Validated: false},
+		},
+	})
+	result, err := DiffDomains(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;"}, result.Stmts)
+}
+
+// A validated constraint written NOT VALID is dropped and added back.
+func TestDiffDomains_ValidatedToNotValid(t *testing.T) {
+	current := newDomainMap(&model.Domain{
+		Schema:   "public",
+		Name:     "pos_int",
+		BaseType: "integer",
+		Constraints: []*model.DomainConstraint{
+			{Name: "pos_check", Definition: "CHECK (VALUE > 0)", Validated: true},
+		},
+	})
+	desired := newDomainMap(&model.Domain{
+		Schema:   "public",
+		Name:     "pos_int",
+		BaseType: "integer",
+		Constraints: []*model.DomainConstraint{
+			{Name: "pos_check", Definition: "CHECK (VALUE > 0)", Validated: false},
+		},
+	})
+	result, err := DiffDomains(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"ALTER DOMAIN public.pos_int DROP CONSTRAINT pos_check;",
+		"ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;",
+	}, result.Stmts)
+}
+
 func TestDiffDomains_DropConstraint(t *testing.T) {
 	current := newDomainMap(&model.Domain{
 		Schema:   "public",

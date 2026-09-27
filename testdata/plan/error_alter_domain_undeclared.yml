@@ -1,0 +1,6 @@
+# ALTER DOMAIN on a domain not declared before it is an error.
+init: ""
+desired: |
+  CREATE DOMAIN public.pos_int AS integer;
+  ALTER DOMAIN public.pos_itn ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+error: "ALTER DOMAIN public.pos_itn: domain public.pos_itn is not declared before it"
