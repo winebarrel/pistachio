@@ -1,0 +1,13 @@
+# A primary key written USING INDEX lists no columns, so a foreign key without
+# referenced columns takes them from the index the key takes over.
+init: |
+  CREATE TABLE public.parent (id integer NOT NULL);
+  CREATE UNIQUE INDEX parent_id_idx ON public.parent (id);
+  ALTER TABLE public.parent ADD CONSTRAINT parent_pkey PRIMARY KEY USING INDEX parent_id_idx;
+  CREATE TABLE public.child (id integer PRIMARY KEY, parent_id integer REFERENCES public.parent);
+desired: |
+  CREATE TABLE public.parent (id integer NOT NULL);
+  CREATE UNIQUE INDEX parent_id_idx ON public.parent (id);
+  ALTER TABLE public.parent ADD CONSTRAINT parent_pkey PRIMARY KEY USING INDEX parent_id_idx;
+  CREATE TABLE public.child (id integer PRIMARY KEY, parent_id integer REFERENCES parent);
+plan: ""

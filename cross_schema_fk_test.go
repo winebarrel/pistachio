@@ -94,6 +94,31 @@ func TestPlan_CrossSchemaFK_NoChange(t *testing.T) {
 	}
 }
 
+// A key written without the referenced columns takes them from the referenced
+// table's primary key. A bare name resolves to the key's own schema when the
+// first target schema has no such table.
+func TestPlan_CrossSchemaFK_NoRefColumns(t *testing.T) {
+	for _, schemas := range [][]string{{"public", "app"}, {"app", "public"}} {
+		t.Run(schemas[0]+" first", func(t *testing.T) {
+			ctx := context.Background()
+			conn := testutil.ConnectDB(t)
+			defer conn.Close(ctx) //nolint:errcheck
+
+			testutil.SetupDB(t, ctx, conn, "")
+			connString := setupSchemaDB(t, ctx, "app", `
+CREATE TABLE app.base (id integer PRIMARY KEY);
+CREATE TABLE app.item (id integer PRIMARY KEY, base_id integer REFERENCES app.base (id));`)
+			sql := planCrossSchemaFK(t, &Options{
+				ConnString: connString,
+				Schemas:    schemas,
+			}, `
+CREATE TABLE app.base (id integer PRIMARY KEY);
+CREATE TABLE app.item (id integer PRIMARY KEY, base_id integer REFERENCES base);`)
+			assert.Empty(t, sql)
+		})
+	}
+}
+
 // A real change to a key whose catalog reference is bare still plans, and
 // the ADD names public.base.
 func TestPlan_CrossSchemaFK_Changed(t *testing.T) {
