@@ -342,10 +342,14 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		// so this is a no-op for plan and apply, but Diff parses the current
 		// side from a file, where a -- pista:concurrently would otherwise
 		// reach a pure drop.
-		clearConcurrentlyDirectives(filteredTables, filteredViews)
-		clearConcurrentlyDirectives(desiredTables, desiredViews)
+		setConcurrentlyDirectives(filteredTables, filteredViews, false)
+		setConcurrentlyDirectives(desiredTables, desiredViews, false)
 	case options.ForceIndexConcurrently:
-		forceConcurrentlyDirectives(filteredTables, filteredViews, desiredTables, desiredViews)
+		// The current side is set too so that a pure DROP INDEX (index absent
+		// from desired) picks up the flag, since catalog-derived indexes don't
+		// carry the directive.
+		setConcurrentlyDirectives(filteredTables, filteredViews, true)
+		setConcurrentlyDirectives(desiredTables, desiredViews, true)
 	}
 
 	if options.AssumeValidated {
@@ -751,21 +755,22 @@ func removeIgnored[V any](desired, current *orderedmap.Map[string, V], ignored f
 	return keys
 }
 
-// clearConcurrentlyDirectives wipes the per-index Concurrently flag on every
+// setConcurrentlyDirectives sets the per-index Concurrently flag on every
 // table and materialized view index in the given maps, used to implement
-// --disable-index-concurrently.
-func clearConcurrentlyDirectives(
+// --disable-index-concurrently and --force-index-concurrently.
+func setConcurrentlyDirectives(
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
+	on bool,
 ) {
 	for _, t := range tables.CollectValues() {
 		for _, idx := range t.Indexes.CollectValues() {
-			idx.Concurrently = false
+			idx.Concurrently = on
 		}
 	}
 	for _, v := range views.CollectValues() {
 		for _, idx := range v.Indexes.CollectValues() {
-			idx.Concurrently = false
+			idx.Concurrently = on
 		}
 	}
 }
@@ -828,39 +833,6 @@ func assumeValidatedConstraints(
 			for _, c := range d.Constraints {
 				c.Validated = true
 			}
-		}
-	}
-}
-
-// forceConcurrentlyDirectives sets the per-index Concurrently flag on every
-// table and materialized view index in both the current and desired schemas,
-// used to implement --force-index-concurrently. The current side is also
-// flipped so that pure DROP INDEX paths (index absent from desired) can pick
-// up the flag, since catalog-derived indexes don't carry the directive.
-func forceConcurrentlyDirectives(
-	currentTables *orderedmap.Map[string, *model.Table],
-	currentViews *orderedmap.Map[string, *model.View],
-	desiredTables *orderedmap.Map[string, *model.Table],
-	desiredViews *orderedmap.Map[string, *model.View],
-) {
-	for _, t := range currentTables.CollectValues() {
-		for _, idx := range t.Indexes.CollectValues() {
-			idx.Concurrently = true
-		}
-	}
-	for _, v := range currentViews.CollectValues() {
-		for _, idx := range v.Indexes.CollectValues() {
-			idx.Concurrently = true
-		}
-	}
-	for _, t := range desiredTables.CollectValues() {
-		for _, idx := range t.Indexes.CollectValues() {
-			idx.Concurrently = true
-		}
-	}
-	for _, v := range desiredViews.CollectValues() {
-		for _, idx := range v.Indexes.CollectValues() {
-			idx.Concurrently = true
 		}
 	}
 }
