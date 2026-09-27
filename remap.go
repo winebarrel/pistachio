@@ -16,8 +16,7 @@ import (
 // beginning of the text or after a character that cannot continue an
 // identifier, so a schema whose name ends in the mapped one, mystaging., and a
 // table named like the schema in a three-part reference, staging.staging.col,
-// keep their second part. A string literal that starts the same way is still
-// rewritten, since the text is not parsed here.
+// keep their second part. A string literal is skipped; see Replace.
 //
 // All inputs come from canonical SQL, pg_get_*def output from the catalog or
 // pg_query deparse output from the parser, so an identifier that requires
@@ -25,12 +24,13 @@ import (
 // matched. An unquoted fallback, the raw `a.b.` for a schema literally named
 // `a.b`, would collide with a three-part reference `a.b.col`.
 type defReplacer struct {
-	re *regexp.Regexp
-	to map[string]string
+	re      *regexp.Regexp
+	to      map[string]string
+	schemas map[string]string
 }
 
 func buildDefReplacer(schemaMap map[string]string) *defReplacer {
-	r := &defReplacer{to: make(map[string]string, len(schemaMap))}
+	r := &defReplacer{to: make(map[string]string, len(schemaMap)), schemas: schemaMap}
 
 	// Longest first, so a name that starts another whole name is not matched
 	// short: the alternation takes the first branch that matches.
@@ -54,12 +54,92 @@ func buildDefReplacer(schemaMap map[string]string) *defReplacer {
 	return r
 }
 
-// Replace returns s with every mapped schema prefix rewritten.
+// Replace returns s with every mapped schema prefix rewritten outside string
+// literals. A literal holds data, not a name, and is left alone. The exception
+// is a literal that names an object: the argument of nextval, currval or
+// setval, and a literal cast to an object identifier type, which
+// remapDefaultExpr rewrites in a default the same way.
 func (r *defReplacer) Replace(s string) string {
+	var b strings.Builder
+	code := 0
+	for i := 0; i < len(s); {
+		switch s[i] {
+		case '"':
+			i = skipQuoted(s, i, '"', false)
+		case '\'':
+			escape := i > 0 && (s[i-1] == 'E' || s[i-1] == 'e') && (i == 1 || !isIdentByte(s[i-2]))
+			end := skipQuoted(s, i, '\'', escape)
+			before := s[code:i]
+			b.WriteString(r.replaceNames(before))
+			lit := s[i:end]
+			if !escape && namesObject(before, s[end:]) {
+				lit = r.remapNameLiteral(lit)
+			}
+			b.WriteString(lit)
+			code, i = end, end
+		default:
+			i++
+		}
+	}
+	b.WriteString(r.replaceNames(s[code:]))
+	return b.String()
+}
+
+// replaceNames rewrites every mapped schema prefix in s, which holds no string
+// literal.
+func (r *defReplacer) replaceNames(s string) string {
 	return r.re.ReplaceAllStringFunc(s, func(m string) string {
 		sub := r.re.FindStringSubmatch(m)
 		return sub[1] + r.to[sub[2]] + "."
 	})
+}
+
+// remapNameLiteral rewrites the schema of the qualified name a string literal
+// holds, quotes included.
+func (r *defReplacer) remapNameLiteral(lit string) string {
+	name := strings.ReplaceAll(lit[1:len(lit)-1], "''", "'")
+	mapped := remapQualifiedName(name, func(schema string) string {
+		if to, ok := r.schemas[schema]; ok {
+			return to
+		}
+		return schema
+	})
+	return "'" + strings.ReplaceAll(mapped, "'", "''") + "'"
+}
+
+var (
+	sequenceCallRE = regexp.MustCompile(`(^|[^A-Za-z0-9_."])(pg_catalog\.)?(nextval|currval|setval)\(\s*$`)
+	regCastRE      = regexp.MustCompile(`^::(pg_catalog\.)?(` + strings.Join(regTypes, "|") + `)\b`)
+)
+
+// namesObject reports whether the string literal between before and after is
+// the name of an object: the first argument of a sequence function, or the
+// operand of a cast to an object identifier type.
+func namesObject(before, after string) bool {
+	return sequenceCallRE.MatchString(before) || regCastRE.MatchString(after)
+}
+
+// skipQuoted returns the index just past the quoted token that opens at i. A
+// doubled quote stands for one, and in an escape string a backslash escapes
+// the byte after it. An unterminated token runs to the end of s.
+func skipQuoted(s string, i int, quote byte, escape bool) int {
+	for j := i + 1; j < len(s); j++ {
+		switch {
+		case escape && s[j] == '\\':
+			j++
+		case s[j] == quote:
+			if j+1 < len(s) && s[j+1] == quote {
+				j++
+				continue
+			}
+			return j + 1
+		}
+	}
+	return len(s)
+}
+
+func isIdentByte(c byte) bool {
+	return c == '_' || c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z'
 }
 
 func buildReverseDefReplacer(schemaMap map[string]string) *defReplacer {
