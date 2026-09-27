@@ -1,0 +1,10 @@
+manage_routine: true
+init: |
+  CREATE FUNCTION public.total(VARIADIC nums integer[]) RETURNS integer
+      LANGUAGE sql AS $$ SELECT sum(n)::integer FROM unnest(nums) AS n $$;
+dump: |
+  -- public.total(integer[])
+  CREATE OR REPLACE FUNCTION public.total(VARIADIC nums integer[])
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT sum(n)::integer FROM unnest(nums) AS n $$;

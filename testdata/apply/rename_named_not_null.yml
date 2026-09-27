@@ -1,0 +1,19 @@
+# PG18 keeps a NOT NULL constraint's name, so a changed name is renamed in
+# place.
+min_pg: 18
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text CONSTRAINT users_email_nn NOT NULL
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text CONSTRAINT users_email_required NOT NULL
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text CONSTRAINT users_email_required NOT NULL
+  );

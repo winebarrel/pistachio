@@ -1,0 +1,9 @@
+current: |
+  CREATE TABLE public.t (id integer, b integer);
+desired: |
+  CREATE TABLE public.t (
+      id integer,
+      -- pista:renamed-from nope
+      c integer
+  );
+error: rename source column nope not found in public.t

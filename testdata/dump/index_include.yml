@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email) INCLUDE (name)
+  );
+  CREATE INDEX users_name_idx ON public.users (name) INCLUDE (email);
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email) INCLUDE (name)
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name) INCLUDE (email);

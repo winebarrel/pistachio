@@ -1,0 +1,11 @@
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_old BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER events_new BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL);
+  CREATE TRIGGER events_old BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+  -- pista:renamed-from events_old
+  CREATE TRIGGER events_new BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();
+error: "cannot rename trigger events_old to events_new on public.events: destination already exists"

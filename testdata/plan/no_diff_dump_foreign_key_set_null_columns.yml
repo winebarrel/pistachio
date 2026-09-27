@@ -1,0 +1,44 @@
+# What dump writes for this schema plans clean against it.
+init: |
+  CREATE TABLE public.tenants (
+      id integer NOT NULL,
+      CONSTRAINT tenants_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.users (
+      tenant_id integer NOT NULL,
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (tenant_id, id)
+  );
+  CREATE TABLE public.posts (
+      tenant_id integer NOT NULL,
+      id integer NOT NULL,
+      author_id integer,
+      editor_id integer DEFAULT 0,
+      CONSTRAINT posts_author_fkey FOREIGN KEY (tenant_id, author_id) REFERENCES public.users (tenant_id, id) ON DELETE SET NULL (author_id),
+      CONSTRAINT posts_editor_fkey FOREIGN KEY (tenant_id, editor_id) REFERENCES public.users (tenant_id, id) ON DELETE SET DEFAULT (editor_id)
+  );
+desired: |
+  -- public.posts
+  CREATE TABLE public.posts (
+      tenant_id integer NOT NULL,
+      id integer NOT NULL,
+      author_id integer,
+      editor_id integer DEFAULT 0
+  );
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_author_fkey FOREIGN KEY (tenant_id, author_id) REFERENCES users(tenant_id, id) ON DELETE SET NULL (author_id);
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_editor_fkey FOREIGN KEY (tenant_id, editor_id) REFERENCES users(tenant_id, id) ON DELETE SET DEFAULT (editor_id);
+
+  -- public.tenants
+  CREATE TABLE public.tenants (
+      id integer NOT NULL,
+      CONSTRAINT tenants_pkey PRIMARY KEY (id)
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      tenant_id integer NOT NULL,
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (tenant_id, id)
+  );
+plan: ""

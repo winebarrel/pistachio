@@ -215,6 +215,17 @@ func TestFmt_Run_UnreadableFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to format 1 file(s)")
 }
 
+// A directory resolves like a file but cannot be read, so it fails as one
+// file rather than aborting the run. Unlike an unreadable file, this holds
+// under root too.
+func TestFmt_Run_Directory(t *testing.T) {
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{t.TempDir()}}
+	err := cmd.Run(&buf)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to format 1 file(s)")
+}
+
 func TestFmt_Run_MissingFile(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := &command.Fmt{Files: []string{filepath.Join(t.TempDir(), "nope.sql")}}
