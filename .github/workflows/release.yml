@@ -157,9 +157,9 @@ jobs:
     steps:
       - name: Comment on the release pull request
         run: |
-          # read fails on empty input, which the check below handles.
-          read -r number merger < <(gh pr list --label release --state merged --search "\"Release for $TAG\" in:title" --json number,title,mergedBy \
-            --jq ".[] | select(.title == \"Release for $TAG\") | \"\(.number) \(.mergedBy.login)\"" | head -n 1) || true
+          found=$(gh pr list --label release --state merged --search "\"Release for $TAG\" in:title" --json number,title,mergedBy \
+            --jq ".[] | select(.title == \"Release for $TAG\") | \"\(.number) \(.mergedBy.login)\"")
+          read -r number merger <<<"$found"
           if [ -z "$number" ]; then
             echo "::warning::No merged release pull request is titled \"Release for $TAG\""
             exit 0
