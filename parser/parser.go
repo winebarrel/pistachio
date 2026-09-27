@@ -2719,6 +2719,13 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 	con.SkipValidation = false
 	defer func() { con.SkipValidation = origSkipValidation }()
 
+	// Clear the name too, so the definition is whatever follows the fixed
+	// "ALTER TABLE _t ADD " prefix. Looking for the name in the output fails
+	// when the deparser quotes it and model.Ident does not, as with "time".
+	origConname := con.Conname
+	con.Conname = ""
+	defer func() { con.Conname = origConname }()
+
 	// Work around a libpg_query deparse bug: a single key column named "value"
 	// is dropped from the deparsed column list, even though the parse tree
 	// keeps it. Swap each key column name for a collision-free placeholder that
@@ -2782,20 +2789,11 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 		return def
 	}
 
-	if con.Conname != "" {
-		marker := "CONSTRAINT " + model.Ident(con.Conname) + " "
-		_, after, ok := strings.Cut(sql, marker)
-		if ok {
-			return restorePlaceholders(strings.TrimSpace(after)), nil
-		}
+	def, ok := strings.CutPrefix(sql, "ALTER TABLE _t ADD ")
+	if !ok {
+		return "", fmt.Errorf("could not extract constraint definition from: %s", sql)
 	}
-
-	const fallbackMarker = " ADD "
-	if _, after, ok := strings.CutLast(sql, fallbackMarker); ok {
-		return restorePlaceholders(strings.TrimSpace(after)), nil
-	}
-
-	return "", fmt.Errorf("could not extract constraint definition from: %s", sql)
+	return restorePlaceholders(strings.TrimSpace(def)), nil
 }
 
 func deparsePartitionSpec(cs *pg_query.CreateStmt) (string, error) {

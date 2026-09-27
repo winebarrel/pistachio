@@ -1,0 +1,29 @@
+# Keyword constraint names on a column REFERENCES, a REFERENCES without
+# columns and a NOT VALID CHECK whose literal holds " ADD ".
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer CONSTRAINT "between" REFERENCES public.users(id),
+      buyer_id integer CONSTRAINT "none" REFERENCES public.users,
+      note text,
+      CONSTRAINT "select" CHECK (id > 0)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT "time" CHECK (note <> ' ADD x') NOT VALID;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.orders (
+      id integer NOT NULL,
+      user_id integer CONSTRAINT between REFERENCES public.users(id),
+      buyer_id integer CONSTRAINT none REFERENCES public.users,
+      note text,
+      CONSTRAINT "select" CHECK (id > 0)
+  );
+  ALTER TABLE public.orders ADD CONSTRAINT time CHECK (note <> ' ADD x') NOT VALID;
+plan: ""
