@@ -3,6 +3,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
@@ -213,13 +214,25 @@ func collectColumnRefsInFKDef(def string) []string {
 // Only unqualified names are read, as they are for an index or a constraint.
 // A generated expression may write one qualified, which the diff cannot
 // compare at all; LIMITATIONS.md records that.
+//
+// The answer is kept per expression, since most tables repeat the same few
+// defaults and each one is a parse through cgo. Callers must not modify the
+// returned slice.
 func collectColumnRefsInColumnExpr(expr string) []string {
-	_, target, err := pgast.ParseExpr(expr)
-	if err != nil {
-		return nil
+	if v, ok := columnExprRefs.Load(expr); ok {
+		return v.([]string)
 	}
-	return walkExprColumnRefs(target.Val)
+
+	var refs []string
+	if _, target, err := pgast.ParseExpr(expr); err == nil {
+		refs = walkExprColumnRefs(target.Val)
+	}
+	columnExprRefs.Store(expr, refs)
+
+	return refs
 }
+
+var columnExprRefs sync.Map
 
 // walkExprColumnRefs returns the unqualified ColumnRef names found in an
 // expression tree.
