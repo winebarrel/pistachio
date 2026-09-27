@@ -51,6 +51,12 @@ var knownDirectives = map[string]bool{
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
 // and returns an error if any are found.
 func validateDirectives(rawSQL string) error {
+	// Every pattern below needs this text, and most files hold no directive,
+	// so this skips the regexp scans of the whole file.
+	if !strings.Contains(rawSQL, "pista:") {
+		return nil
+	}
+
 	matches := anyDirectivePattern.FindAllStringSubmatchIndex(rawSQL, -1)
 	for _, m := range matches {
 		// m[0] is the match start, m[2]:m[3] the name group.
