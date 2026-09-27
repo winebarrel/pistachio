@@ -111,6 +111,11 @@ test-scenario: clean-schema
 test-fidelity: clean-schema
 	bash test/fidelity/run.sh
 
+# The CHANGELOG.md merge driver that changelog-merge.yml runs. No database.
+.PHONY: test-changelog
+test-changelog:
+	bash test/changelog/run.sh
+
 .PHONY: demo
 demo: clean-schema
 	vhs demo.tape

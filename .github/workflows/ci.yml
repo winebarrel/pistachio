@@ -33,6 +33,12 @@ jobs:
             exit "$status"
           fi
 
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: make test-changelog
+
   keywords:
     runs-on: ubuntu-latest
     # model/testdata/keywords.txt is generated from the kwlist.h bundled with
