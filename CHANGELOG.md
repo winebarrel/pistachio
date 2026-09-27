@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.69.0] - 2026-09-27
 
 * A constraint named with a keyword such as `time` or `values` now plans correctly. `plan` wrote `ADD CONSTRAINT time CONSTRAINT "time" CHECK ...`, which PostgreSQL rejects.
 
