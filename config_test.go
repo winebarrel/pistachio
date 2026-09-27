@@ -268,6 +268,9 @@ type commandCLI struct {
 	Apply struct {
 		ApplyOptions
 	} `cmd:""`
+	ApplyFrom struct {
+		ApplyFromOptions
+	} `cmd:""`
 }
 
 func parseCommandCLI(t *testing.T, args ...string) (*commandCLI, error) {
@@ -379,4 +382,24 @@ func TestYAMLConfig_MetaFlagsAreNotConfigurable(t *testing.T) {
 			assert.Contains(t, err.Error(), key)
 		})
 	}
+}
+
+// The config file may not set force, under any command. The command line
+// still may.
+func TestYAMLConfig_CommandLineOnlyFlag(t *testing.T) {
+	path := writeConfig(t, "force: true\n")
+
+	for _, args := range [][]string{{"apply-from", "plan.json"}, {"dump"}} {
+		t.Run(args[0], func(t *testing.T) {
+			_, err := parseCommandCLI(t, append([]string{"--config", path}, args...)...)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "config key(s) only for the command line: force")
+		})
+	}
+
+	t.Run("command line", func(t *testing.T) {
+		cli, err := parseCommandCLI(t, "--config", writeConfig(t, "schemas: [public]\n"), "apply-from", "--force", "plan.json")
+		require.NoError(t, err)
+		assert.True(t, cli.ApplyFrom.Force)
+	})
 }

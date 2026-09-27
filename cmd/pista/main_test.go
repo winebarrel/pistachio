@@ -207,3 +207,12 @@ func TestRun_ParseSchemasFlag(t *testing.T) {
 	assert.Empty(t, stderr)
 	assert.Contains(t, stdout.String(), `"myschema.users"`)
 }
+
+func TestRun_ForceInConfig(t *testing.T) {
+	config := writeFile(t, "pista.yml", "force: true\n")
+
+	var out bytes.Buffer
+	code, stderr := runCLI(t, &out, "--config", config, "apply-from", "plan.json")
+	assert.Equal(t, 80, code)
+	assert.Contains(t, stderr, "error: config key(s) only for the command line: force")
+}
