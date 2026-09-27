@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `force` in a config file is now an error. It used to turn off the drift check of every `apply-from` that read the file. Pass `--force` on the command line instead.
+* `force` in a config file is now an error. It turned off the drift check of every `apply-from` that read the file. Pass `--force` on the command line.
 
 * A foreign key written without the referenced columns, such as `REFERENCES users`, no longer plans a drop and an add on every run. The columns are taken from the referenced table's primary key in the desired schema, so a key to a table the desired schema does not declare still does.
 

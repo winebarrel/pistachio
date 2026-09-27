@@ -58,8 +58,7 @@ func (y *yamlResolver) Resolve(_ *kong.Context, _ *kong.Path, flag *kong.Flag) (
 }
 
 func (y *yamlResolver) Validate(app *kong.Application) error {
-	// configurable maps each flag name the file may hold to true, and a flag
-	// that is typed only on the command line to false.
+	// configurable maps a flag name to whether the file may set it.
 	configurable := map[string]bool{}
 	collectFlagNames(app.Node, app.HelpFlag, configurable)
 
@@ -101,8 +100,8 @@ func isMetaFlag(flag *kong.Flag) bool {
 }
 
 // isCommandLineOnly reports a flag tagged noconfig, which the config file may
-// not set. Such a flag also has no env var: a value set once would apply to
-// every run, and the flag is meant to be typed for the one run that needs it.
+// not set. A value there would apply to every run, so such a flag has no env
+// var either.
 func isCommandLineOnly(flag *kong.Flag) bool {
 	return flag.Tag.Has("noconfig")
 }

@@ -27,7 +27,7 @@ export PISTA_CONFIG=pista.yml
 pista dump
 ```
 
-One file works for every command. Keys that the running command does not use are ignored. `force` is an error in the file, since a value there would turn off the drift check of every `apply-from` that reads it. Pass `--force` on the command line instead.
+One file works for every command. Keys that the running command does not use are ignored. The file cannot set `force`, since a value there would turn off the drift check of every `apply-from` that reads the file. Pass `--force` on the command line.
 
 Precedence: command-line flag > environment variable > config file > default.
 

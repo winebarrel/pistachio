@@ -384,9 +384,8 @@ func TestYAMLConfig_MetaFlagsAreNotConfigurable(t *testing.T) {
 	}
 }
 
-// --force stands down the drift check of apply-from, so it is typed where it is
-// meant. A config file serves every run, and naming the flag there is an error
-// under every command, not only the one it belongs to.
+// The config file may not set force, under any command. The command line
+// still may.
 func TestYAMLConfig_CommandLineOnlyFlag(t *testing.T) {
 	path := writeConfig(t, "force: true\n")
 

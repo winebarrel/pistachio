@@ -14,10 +14,9 @@ const driftWarning = "-- Warning: the database has drifted since the plan was wr
 type ApplyFromOptions struct {
 	ExecOptions
 	PlanFile string `arg:"" type:"path" help:"Path to the plan file written by plan --out."`
-	// No env var and no config key: --force stands down the one check the
-	// plan file is for, and a value set once in a CI environment or a shared
-	// config file would stand it down for every run there. It is typed where
-	// it is meant.
+	// No env var and no config key: --force turns off the one check the plan
+	// file is for, and a value set once in CI or a shared config file would
+	// turn it off for every run there.
 	Force bool `noconfig:"" help:"Apply the plan file even where the database has drifted since it was written. The drift is reported as a warning instead of an error."`
 }
 
