@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* `--schema-map` no longer rewrites a string literal in an index, constraint, policy, trigger or view definition. It still rewrites one that names an object, such as the argument of `nextval` or a literal cast to `regclass`, as it does in a default. A table alias named like a mapped schema, as in `SELECT staging.id FROM staging.users staging`, is no longer rewritten either.
+
 * `plan` now fails when an index on a partitioned table would be created or dropped `CONCURRENTLY`, through `--force-index-concurrently` or `-- pista:concurrently`. PostgreSQL rejects both, so `apply` used to stop at that statement.
 
 * `force` in a config file is now an error. It turned off the drift check of every `apply-from` that read the file. Pass `--force` on the command line.

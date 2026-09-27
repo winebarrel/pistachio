@@ -16,8 +16,8 @@ import (
 // beginning of the text or after a character that cannot continue an
 // identifier, so a schema whose name ends in the mapped one, mystaging., and a
 // table named like the schema in a three-part reference, staging.staging.col,
-// keep their second part. A string literal that starts the same way is still
-// rewritten, since the text is not parsed here.
+// keep their second part. String literals and quoted identifiers are handled by
+// Replace.
 //
 // All inputs come from canonical SQL, pg_get_*def output from the catalog or
 // pg_query deparse output from the parser, so an identifier that requires
@@ -25,12 +25,13 @@ import (
 // matched. An unquoted fallback, the raw `a.b.` for a schema literally named
 // `a.b`, would collide with a three-part reference `a.b.col`.
 type defReplacer struct {
-	re *regexp.Regexp
-	to map[string]string
+	re      *regexp.Regexp
+	to      map[string]string
+	schemas map[string]string
 }
 
 func buildDefReplacer(schemaMap map[string]string) *defReplacer {
-	r := &defReplacer{to: make(map[string]string, len(schemaMap))}
+	r := &defReplacer{to: make(map[string]string, len(schemaMap)), schemas: schemaMap}
 
 	// Longest first, so a name that starts another whole name is not matched
 	// short: the alternation takes the first branch that matches.
@@ -47,19 +48,157 @@ func buildDefReplacer(schemaMap map[string]string) *defReplacer {
 		froms[i] = regexp.QuoteMeta(from)
 	}
 
-	// A double quote is not a boundary either: a schema literally named
-	// staging.x is written "staging.x".t, and the unquoted branch must not
-	// find staging. inside it.
-	r.re = regexp.MustCompile(`(^|[^A-Za-z0-9_"])(` + strings.Join(froms, "|") + `)\.`)
+	// Replace hands the regexp only text outside quotes, so of the names
+	// only an unquoted one ever matches it.
+	r.re = regexp.MustCompile(`(^|[^A-Za-z0-9_$"])(` + strings.Join(froms, "|") + `)\.`)
 	return r
 }
 
-// Replace returns s with every mapped schema prefix rewritten.
+// Replace rewrites every mapped schema prefix in a statement: an index, a
+// trigger or a view body. ReplaceConstraint does it for a constraint
+// definition and ReplaceExpr for an expression.
+//
+// A string literal is left alone unless it names an object, as the argument
+// of nextval, currval or setval or cast to an object identifier type, which
+// remapDefaultExpr treats the same way in a default. The first part of a
+// two-part column reference is a table or an alias, never a schema, so it is
+// left alone too. The definition is parsed to find those; one that does not
+// parse is rewritten without that check.
 func (r *defReplacer) Replace(s string) string {
-	return r.re.ReplaceAllStringFunc(s, func(m string) string {
-		sub := r.re.FindStringSubmatch(m)
-		return sub[1] + r.to[sub[2]] + "."
+	return r.replace(s, columnQualifiers("", s))
+}
+
+// ReplaceConstraint is Replace for a constraint definition, as
+// pg_get_constraintdef writes it.
+func (r *defReplacer) ReplaceConstraint(s string) string {
+	return r.replace(s, columnQualifiers("ALTER TABLE _t ADD CONSTRAINT _c ", s))
+}
+
+// ReplaceExpr is Replace for an expression, a policy's USING or WITH CHECK.
+func (r *defReplacer) ReplaceExpr(s string) string {
+	return r.replace(s, columnQualifiers("SELECT ", s))
+}
+
+// columnQualifiers returns the offsets in s where a two-part column reference
+// starts, as found by parsing prefix and s together, or nil when they do not
+// parse.
+func columnQualifiers(prefix, s string) map[int]bool {
+	result, err := pg_query.Parse(prefix + s)
+	if err != nil {
+		return nil
+	}
+	offsets := map[int]bool{}
+	for _, stmt := range result.Stmts {
+		pgast.Walk(stmt.Stmt, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+			if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 2 {
+				offsets[int(cr.Location)-len(prefix)] = true
+			}
+			return n
+		})
+	}
+	return offsets
+}
+
+// replace is Replace with the column qualifier offsets in hand.
+func (r *defReplacer) replace(s string, qualifiers map[int]bool) string {
+	var b strings.Builder
+	code := 0
+	for i := 0; i < len(s); {
+		switch s[i] {
+		case '"':
+			// A quoted identifier is a name, never searched for a prefix. It
+			// is mapped whole when it is a schema: a mapped name followed by a
+			// dot, not itself after one and not a column qualifier.
+			end := skipQuoted(s, i, '"', false)
+			b.WriteString(r.replaceNames(s, code, i, qualifiers))
+			ident := s[i:end]
+			if to, ok := r.to[ident]; ok && end < len(s) && s[end] == '.' && (i == 0 || s[i-1] != '.') && !qualifiers[i] {
+				ident = to
+			}
+			b.WriteString(ident)
+			code, i = end, end
+		case '\'':
+			escape := i > 0 && (s[i-1] == 'E' || s[i-1] == 'e') && (i == 1 || !isIdentByte(s[i-2]))
+			end := skipQuoted(s, i, '\'', escape)
+			b.WriteString(r.replaceNames(s, code, i, qualifiers))
+			lit := s[i:end]
+			if !escape && namesObject(s[code:i], s[end:]) {
+				lit = r.remapNameLiteral(lit)
+			}
+			b.WriteString(lit)
+			code, i = end, end
+		default:
+			i++
+		}
+	}
+	b.WriteString(r.replaceNames(s, code, len(s), qualifiers))
+	return b.String()
+}
+
+// replaceNames rewrites every mapped schema prefix in s[from:to], which holds
+// no string literal, other than one at a column qualifier offset.
+func (r *defReplacer) replaceNames(s string, from, to int, qualifiers map[int]bool) string {
+	seg := s[from:to]
+	var b strings.Builder
+	last := 0
+	for _, m := range r.re.FindAllStringSubmatchIndex(seg, -1) {
+		if qualifiers[from+m[4]] {
+			continue
+		}
+		b.WriteString(seg[last:m[4]])
+		b.WriteString(r.to[seg[m[4]:m[5]]])
+		last = m[5]
+	}
+	b.WriteString(seg[last:])
+	return b.String()
+}
+
+// remapNameLiteral rewrites the schema of the qualified name a string literal
+// holds, quotes included.
+func (r *defReplacer) remapNameLiteral(lit string) string {
+	name := strings.ReplaceAll(lit[1:len(lit)-1], "''", "'")
+	mapped := remapQualifiedName(name, func(schema string) string {
+		if to, ok := r.schemas[schema]; ok {
+			return to
+		}
+		return schema
 	})
+	return "'" + strings.ReplaceAll(mapped, "'", "''") + "'"
+}
+
+var (
+	sequenceCallRE = regexp.MustCompile(`(^|[^A-Za-z0-9_$."])(pg_catalog\.)?(nextval|currval|setval)\(\s*$`)
+	regCastRE      = regexp.MustCompile(`^::(pg_catalog\.)?(` + strings.Join(regTypes, "|") + `)\b`)
+)
+
+// namesObject reports whether the string literal between before and after is
+// the name of an object: the first argument of a sequence function, or the
+// operand of a cast to an object identifier type.
+func namesObject(before, after string) bool {
+	return sequenceCallRE.MatchString(before) || regCastRE.MatchString(after)
+}
+
+// skipQuoted returns the index just past the quoted token that opens at i. A
+// doubled quote stands for one, and in an escape string a backslash escapes
+// the byte after it. An unterminated token runs to the end of s.
+func skipQuoted(s string, i int, quote byte, escape bool) int {
+	for j := i + 1; j < len(s); j++ {
+		switch {
+		case escape && s[j] == '\\':
+			j++
+		case s[j] == quote:
+			if j+1 < len(s) && s[j+1] == quote {
+				j++
+				continue
+			}
+			return j + 1
+		}
+	}
+	return len(s)
+}
+
+func isIdentByte(c byte) bool {
+	return c == '_' || c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z'
 }
 
 func buildReverseDefReplacer(schemaMap map[string]string) *defReplacer {
@@ -212,7 +351,7 @@ func remapColumns(t *model.Table, mapSchema func(string) string, replacer *defRe
 	}
 	t.PartitionOf = remapQualifiedNamePtr(t.PartitionOf, mapSchema)
 	for _, con := range t.Constraints.CollectValues() {
-		con.Definition = replacer.Replace(con.Definition)
+		con.Definition = replacer.ReplaceConstraint(con.Definition)
 	}
 }
 
@@ -223,7 +362,7 @@ func remapDomain(d *model.Domain, mapSchema func(string) string, replacer *defRe
 	d.Collation = remapQualifiedNamePtr(d.Collation, mapSchema)
 	d.Default = remapDefaultExprPtr(d.Default, mapSchema)
 	for _, con := range d.Constraints {
-		con.Definition = replacer.Replace(con.Definition)
+		con.Definition = replacer.ReplaceConstraint(con.Definition)
 	}
 }
 
@@ -262,7 +401,7 @@ func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Ta
 
 		for _, fk := range t.ForeignKeys.CollectValues() {
 			fk.Schema = client.RemapSchema(fk.Schema)
-			fk.Definition = replacer.Replace(fk.Definition)
+			fk.Definition = replacer.ReplaceConstraint(fk.Definition)
 			if fk.RefSchema != nil {
 				mapped := client.RemapSchema(*fk.RefSchema)
 				fk.RefSchema = &mapped
@@ -291,11 +430,11 @@ func remapPolicies(
 	for _, p := range policies.CollectValues() {
 		p.Schema = mapSchema(p.Schema)
 		if p.Using != nil {
-			expr := replacer.Replace(*p.Using)
+			expr := replacer.ReplaceExpr(*p.Using)
 			p.Using = &expr
 		}
 		if p.WithCheck != nil {
-			expr := replacer.Replace(*p.WithCheck)
+			expr := replacer.ReplaceExpr(*p.WithCheck)
 			p.WithCheck = &expr
 		}
 	}
@@ -353,7 +492,7 @@ func (client *Client) reverseRemapTableSchemas(tables *orderedmap.Map[string, *m
 
 		for _, fk := range t.ForeignKeys.CollectValues() {
 			fk.Schema = client.ReverseRemapSchema(fk.Schema)
-			fk.Definition = replacer.Replace(fk.Definition)
+			fk.Definition = replacer.ReplaceConstraint(fk.Definition)
 			if fk.RefSchema != nil {
 				mapped := client.ReverseRemapSchema(*fk.RefSchema)
 				fk.RefSchema = &mapped

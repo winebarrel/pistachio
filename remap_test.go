@@ -46,6 +46,9 @@ func TestBuildDefReplacer_QuotedSchema(t *testing.T) {
 
 	assert.Equal(t, "public.t", replacer.Replace(`"My Schema".t`))
 	assert.Equal(t, "people.t", replacer.Replace(`"Users".t`))
+	// Only a schema is mapped: the name alone, or after another name, stays.
+	assert.Equal(t, `SELECT "Users" FROM people.t`, replacer.Replace(`SELECT "Users" FROM "Users".t`))
+	assert.Equal(t, `x."Users".col`, replacer.Replace(`x."Users".col`))
 }
 
 // TestBuildDefReplacer_PreservesThreePartReference guards against the trap
@@ -79,6 +82,110 @@ func TestBuildDefReplacer_SchemaBoundary(t *testing.T) {
 	assert.Equal(t, "f(public.a, public.b)", replacer.Replace("f(staging.a, staging.b)"))
 	assert.Equal(t, "public.staging.col", replacer.Replace("staging.staging.col"))
 	assert.Equal(t, `"mystaging".t`, replacer.Replace(`"mystaging".t`))
+}
+
+// A string literal is left alone, however it is quoted, and a name after it
+// is still rewritten. A quote inside a quoted identifier does not start one.
+func TestBuildDefReplacer_StringLiteral(t *testing.T) {
+	replacer := buildDefReplacer(map[string]string{"myschema": "public"})
+
+	tests := []struct {
+		name, in, want string
+	}{
+		{"literal", "WHERE (host = 'myschema.example.com'::text) AND myschema.f(x)", "WHERE (host = 'myschema.example.com'::text) AND public.f(x)"},
+		{"doubled quote", "'it''s myschema.x' = myschema.f()", "'it''s myschema.x' = public.f()"},
+		{"escape string", `E'a\'myschema.x' = myschema.f()`, `E'a\'myschema.x' = public.f()`},
+		{"escape string with backslash", `E'a\\' = myschema.f()`, `E'a\\' = public.f()`},
+		{"escape string after an operator", `c = E'a\'myschema.x' OR myschema.f()`, `c = E'a\'myschema.x' OR public.f()`},
+		{"unterminated literal", "myschema.f('myschema.x", "public.f('myschema.x"},
+		{"quote in quoted identifier", `SELECT "a'b" FROM myschema.t WHERE c = 'myschema.x'`, `SELECT "a'b" FROM public.t WHERE c = 'myschema.x'`},
+		{"schema inside a quoted identifier", `SELECT "abc myschema.x" FROM myschema.t`, `SELECT "abc myschema.x" FROM public.t`},
+		{"dollar in an identifier", "x$myschema.col = myschema.f()", "x$myschema.col = public.f()"},
+		{"user function whose name ends in nextval", "foo$nextval('myschema.seq')", "foo$nextval('myschema.seq')"},
+		{"regclass literal", "nextval('myschema.seq'::regclass)", "nextval('public.seq'::regclass)"},
+		{"regclass qualified with pg_catalog", "'myschema.t'::pg_catalog.regclass", "'public.t'::pg_catalog.regclass"},
+		{"regtype literal", "'myschema.mood'::regtype", "'public.mood'::regtype"},
+		{"bare sequence literal", "nextval('myschema.seq')", "nextval('public.seq')"},
+		{"sequence function qualified with pg_catalog", "pg_catalog.setval('myschema.seq', 1)", "pg_catalog.setval('public.seq', 1)"},
+		{"user function named nextval", "myschema.nextval('myschema.label')", "public.nextval('myschema.label')"},
+		{"literal cast to text", "'myschema.seq'::text", "'myschema.seq'::text"},
+		{"unmapped schema in a regclass literal", "'other.seq'::regclass", "'other.seq'::regclass"},
+		{"doubled quote in a regclass literal", `'"it''s".seq'::regclass`, `'"it''s".seq'::regclass`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, replacer.Replace(tt.in))
+		})
+	}
+}
+
+// The first part of a two-part column reference is a table or an alias, never
+// a schema, so it keeps its name even when it matches a mapped schema.
+func TestBuildDefReplacer_ColumnQualifier(t *testing.T) {
+	replacer := buildDefReplacer(map[string]string{"staging": "public", "My Schema": "public"})
+
+	tests := []struct {
+		name, in, want string
+		replace        func(string) string
+	}{
+		{"alias named like the schema", "SELECT staging.id FROM staging.users staging", "SELECT staging.id FROM public.users staging", replacer.Replace},
+		{"quoted alias", `SELECT "My Schema".id FROM "My Schema".t "My Schema"`, `SELECT "My Schema".id FROM public.t "My Schema"`, replacer.Replace},
+		{"alias star", "SELECT staging.* FROM staging.users staging", "SELECT staging.* FROM public.users staging", replacer.Replace},
+		{"three-part column reference", "SELECT staging.users.id FROM staging.users", "SELECT public.users.id FROM public.users", replacer.Replace},
+		{"index", "CREATE INDEX i ON staging.t USING btree (id) WHERE (staging.f(id) > 0)", "CREATE INDEX i ON public.t USING btree (id) WHERE (public.f(id) > 0)", replacer.Replace},
+		{"constraint", "CHECK (staging.f(staging) > 0)", "CHECK (public.f(staging) > 0)", replacer.ReplaceConstraint},
+		{"foreign key", "FOREIGN KEY (a) REFERENCES staging.t(id)", "FOREIGN KEY (a) REFERENCES public.t(id)", replacer.ReplaceConstraint},
+		{"expression with a sub-query", "(owner = staging.me()) AND EXISTS (SELECT 1 FROM staging.m staging WHERE staging.id = owner)", "(owner = public.me()) AND EXISTS (SELECT 1 FROM public.m staging WHERE staging.id = owner)", replacer.ReplaceExpr},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.replace(tt.in))
+		})
+	}
+}
+
+// A string literal keeps its text in every kind of definition the replacer
+// reads, a literal cast to regclass is mapped, and the dump plans back clean.
+func TestDump_WithSchemaMap_StringLiteral(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE DOMAIN myschema.host_name AS text CONSTRAINT host_name_check CHECK (VALUE <> 'myschema.domain');
+CREATE TABLE myschema.hosts (
+    id integer PRIMARY KEY,
+    name text CONSTRAINT hosts_name_check CHECK (name <> 'myschema.invalid'),
+    alias myschema.host_name
+);
+CREATE INDEX hosts_name_idx ON myschema.hosts (id) WHERE name = 'myschema.example.com';
+CREATE VIEW myschema.example_hosts AS SELECT id, 'myschema.hosts'::regclass AS rel FROM myschema.hosts WHERE name = 'myschema.example.com';
+CREATE VIEW myschema.aliased_hosts AS SELECT myschema.id, other.name FROM myschema.hosts myschema JOIN myschema.hosts other ON other.id = myschema.id;
+ALTER TABLE myschema.hosts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY hosts_policy ON myschema.hosts USING (name <> 'myschema.hidden');
+CREATE FUNCTION myschema.hosts_trg() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+CREATE TRIGGER hosts_trg BEFORE INSERT ON myschema.hosts FOR EACH ROW WHEN (NEW.name <> 'myschema.trigger') EXECUTE FUNCTION myschema.hosts_trg();
+`)
+	opts := &Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	}
+
+	got, err := NewClient(opts).Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+	output := got.String()
+	for _, lit := range []string{"'myschema.domain'", "'myschema.invalid'", "'myschema.hidden'", "'myschema.trigger'"} {
+		assert.Contains(t, output, lit)
+	}
+	assert.Equal(t, 2, strings.Count(output, "'myschema.example.com'"))
+	assert.Contains(t, output, "'public.hosts'::regclass")
+	assert.Contains(t, output, "SELECT myschema.id")
+	assert.Contains(t, output, "public.hosts myschema")
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(output), 0o644))
+	plan, err := NewClient(opts).Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, plan.SQL)
 }
 
 // A foreign key to a schema whose name ends in the mapped one kept the wrong
