@@ -61,10 +61,11 @@ func DeparseConstraintDef(result *pg_query.ParseResult) (string, error) {
 		return "", fmt.Errorf("failed to deparse constraint definition: %w", err)
 	}
 	deparsed = strings.TrimSuffix(deparsed, ";")
-	if !strings.HasPrefix(deparsed, constraintWrapPrefix) {
+	def, ok := strings.CutPrefix(deparsed, constraintWrapPrefix)
+	if !ok {
 		return "", fmt.Errorf("unexpected deparsed form: %s", deparsed)
 	}
-	return strings.TrimPrefix(deparsed, constraintWrapPrefix), nil
+	return def, nil
 }
 
 // WalkExprColumnRefs walks an expression tree and invokes visit for each

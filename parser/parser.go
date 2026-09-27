@@ -2690,11 +2690,11 @@ func deparseExpr(node *pg_query.Node) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to deparse expression: %w", err)
 	}
-	const prefix = "SELECT "
-	if !strings.HasPrefix(sql, prefix) {
+	expr, ok := strings.CutPrefix(sql, "SELECT ")
+	if !ok {
 		return "", fmt.Errorf("unexpected deparse output for expression: %s", sql)
 	}
-	return strings.TrimSpace(sql[len(prefix):]), nil
+	return strings.TrimSpace(expr), nil
 }
 
 // parenthesizeDefault wraps a deparsed column or domain DEFAULT expression in
