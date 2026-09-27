@@ -1,0 +1,10 @@
+init: |
+  CREATE TABLE public.users (id integer NOT NULL, name text);
+  CREATE INDEX users_old_idx ON public.users (name);
+  CREATE INDEX users_new_idx ON public.users (id);
+desired: |
+  CREATE TABLE public.users (id integer NOT NULL, name text);
+  CREATE INDEX users_old_idx ON public.users (name);
+  -- pista:renamed-from users_old_idx
+  CREATE INDEX users_new_idx ON public.users (id);
+error: "cannot rename index users_old_idx to users_new_idx: destination already exists"

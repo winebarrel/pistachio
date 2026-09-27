@@ -1,0 +1,10 @@
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.events (id integer NOT NULL, name text);
+  CREATE VIEW public.recent_events AS SELECT id FROM public.events;
+desired: |
+  CREATE TABLE public.events (id integer NOT NULL, name text);
+  CREATE VIEW public.recent_events AS SELECT id FROM public.events;
+  -- pista:renamed-from old_trg
+  CREATE TRIGGER recent_events_insert INSTEAD OF INSERT ON public.recent_events FOR EACH ROW EXECUTE FUNCTION stamp();
+error: rename source trigger old_trg not found on public.recent_events

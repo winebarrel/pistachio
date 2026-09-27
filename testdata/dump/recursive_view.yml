@@ -1,0 +1,28 @@
+init: |
+  CREATE RECURSIVE VIEW public.nums (n) AS SELECT 1 UNION ALL SELECT n + 1 FROM nums WHERE n < 10;
+dump: |
+  -- public.nums
+  CREATE OR REPLACE VIEW public.nums AS
+  WITH RECURSIVE nums(n) AS (
+           SELECT 1 AS "?column?"
+          UNION ALL
+           SELECT nums_1.n + 1
+             FROM nums nums_1
+            WHERE nums_1.n < 10
+          )
+   SELECT nums.n
+     FROM nums;
+dump_pg16: &dump_pg16plus |
+  -- public.nums
+  CREATE OR REPLACE VIEW public.nums AS
+  WITH RECURSIVE nums(n) AS (
+           SELECT 1 AS "?column?"
+          UNION ALL
+           SELECT nums_1.n + 1
+             FROM nums nums_1
+            WHERE nums_1.n < 10
+          )
+   SELECT n
+     FROM nums;
+dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus

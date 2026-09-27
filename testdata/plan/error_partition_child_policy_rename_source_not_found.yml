@@ -1,0 +1,11 @@
+# The partition-child branch of the table diff carries the policy rename
+# error out the same way the ordinary table branch does.
+init: |
+  CREATE TABLE public.logs (id integer NOT NULL, at date NOT NULL) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+desired: |
+  CREATE TABLE public.logs (id integer NOT NULL, at date NOT NULL) PARTITION BY RANGE (at);
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  -- pista:renamed-from old_pol
+  CREATE POLICY p ON public.logs_2026 FOR SELECT USING (true);
+error: rename source policy old_pol not found on public.logs_2026

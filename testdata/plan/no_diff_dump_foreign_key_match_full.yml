@@ -1,0 +1,28 @@
+# What dump writes for this schema plans clean against it.
+init: |
+  CREATE TABLE public.parents (
+      a integer NOT NULL,
+      b integer NOT NULL,
+      CONSTRAINT parents_pkey PRIMARY KEY (a, b)
+  );
+  CREATE TABLE public.children (
+      a integer,
+      b integer,
+      CONSTRAINT children_a_b_fkey FOREIGN KEY (a, b) REFERENCES public.parents (a, b) MATCH FULL
+  );
+desired: |
+  -- public.children
+  CREATE TABLE public.children (
+      a integer,
+      b integer
+  );
+
+  ALTER TABLE ONLY public.children ADD CONSTRAINT children_a_b_fkey FOREIGN KEY (a, b) REFERENCES parents(a, b) MATCH FULL;
+
+  -- public.parents
+  CREATE TABLE public.parents (
+      a integer NOT NULL,
+      b integer NOT NULL,
+      CONSTRAINT parents_pkey PRIMARY KEY (a, b)
+  );
+plan: ""

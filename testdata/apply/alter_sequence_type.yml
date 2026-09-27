@@ -1,0 +1,13 @@
+init: |
+  CREATE SEQUENCE public.s AS smallint MAXVALUE 100;
+desired: |
+  CREATE SEQUENCE public.s AS integer MAXVALUE 100;
+applied: |
+  -- public.s
+  CREATE SEQUENCE public.s
+      AS integer
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 100
+      CACHE 1;

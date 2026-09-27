@@ -147,6 +147,17 @@ func TestDiffSequences_RenameAlreadyApplied(t *testing.T) {
 	assert.Empty(t, result.DropStmts)
 }
 
+func TestDiffSequences_RenameSameName(t *testing.T) {
+	// A directive naming the sequence itself is not a rename.
+	desired := baseSeq()
+	renameFrom := "public.s"
+	desired.RenameFrom = &renameFrom
+	result, err := DiffSequences(newSeqMap(baseSeq()), newSeqMap(desired), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.DropStmts)
+}
+
 func TestDiffSequences_RenameCrossSchemaError(t *testing.T) {
 	current := &model.Sequence{Schema: "other", Name: "old", DataType: "bigint", Max: 1, Cache: 1, Increment: 1}
 	desired := &model.Sequence{Schema: "public", Name: "new", DataType: "bigint", Max: 1, Cache: 1, Increment: 1}

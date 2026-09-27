@@ -1,0 +1,21 @@
+# What dump writes for this schema plans clean against it.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email) INCLUDE (name)
+  );
+  CREATE INDEX users_name_idx ON public.users (name) INCLUDE (email);
+desired: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email) INCLUDE (name)
+  );
+  CREATE INDEX users_name_idx ON public.users USING btree (name) INCLUDE (email);
+plan: ""

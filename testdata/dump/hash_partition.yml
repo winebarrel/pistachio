@@ -1,0 +1,16 @@
+init: |
+  CREATE TABLE public.events (id integer NOT NULL) PARTITION BY HASH (id);
+  CREATE TABLE public.events_p0 PARTITION OF public.events FOR VALUES WITH (MODULUS 2, REMAINDER 0);
+  CREATE TABLE public.events_p1 PARTITION OF public.events FOR VALUES WITH (MODULUS 2, REMAINDER 1);
+dump: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL
+  )
+  PARTITION BY HASH (id);
+
+  -- public.events_p0
+  CREATE TABLE public.events_p0 PARTITION OF public.events FOR VALUES WITH (modulus 2, remainder 0);
+
+  -- public.events_p1
+  CREATE TABLE public.events_p1 PARTITION OF public.events FOR VALUES WITH (modulus 2, remainder 1);

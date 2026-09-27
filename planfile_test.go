@@ -133,33 +133,35 @@ SELECT 3;`)
 	// Without --out an unevaluable check is noted and apply decides. With
 	// --out there is no apply to decide, so the plan fails rather than write a
 	// guess as a promise.
-	t.Run("an unevaluable check fails the plan file", func(t *testing.T) {
-		testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
-		dir := t.TempDir()
-		desiredFile := filepath.Join(dir, "desired.sql")
-		require.NoError(t, os.WriteFile(desiredFile, []byte(`
+	for _, directive := range []string{"execute", "execute-first"} {
+		t.Run("an unevaluable check fails the plan file: "+directive, func(t *testing.T) {
+			testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (id integer NOT NULL);`)
+			dir := t.TempDir()
+			desiredFile := filepath.Join(dir, "desired.sql")
+			require.NoError(t, os.WriteFile(desiredFile, []byte(`
 CREATE TABLE public.users (id integer NOT NULL);
 
--- pista:execute SELECT count(*) = 0 FROM public.no_such_table
+-- pista:`+directive+` SELECT count(*) = 0 FROM public.no_such_table
 SELECT 1;`), 0o644))
 
-		result, err := client.Plan(ctx, &PlanOptions{
-			AllowDrop: []string{"all"},
-			Files:     []string{desiredFile},
-		})
-		require.NoError(t, err)
-		assert.Contains(t, result.SQL, "check SQL could not be evaluated at plan time")
+			result, err := client.Plan(ctx, &PlanOptions{
+				AllowDrop: []string{"all"},
+				Files:     []string{desiredFile},
+			})
+			require.NoError(t, err)
+			assert.Contains(t, result.SQL, "check SQL could not be evaluated at plan time")
 
-		out := filepath.Join(dir, "plan.json")
-		_, err = client.Plan(ctx, &PlanOptions{
-			AllowDrop: []string{"all"},
-			Files:     []string{desiredFile},
-			Out:       out,
+			out := filepath.Join(dir, "plan.json")
+			_, err = client.Plan(ctx, &PlanOptions{
+				AllowDrop: []string{"all"},
+				Files:     []string{desiredFile},
+				Out:       out,
+			})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "check SQL")
+			assert.NoFileExists(t, out, "a plan file is not left behind by a failed plan")
 		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "check SQL")
-		assert.NoFileExists(t, out, "a plan file is not left behind by a failed plan")
-	})
+	}
 
 	// The CONCURRENTLY pre-SQL and the flag that gates it are the plan's, so
 	// apply-from does not have to read the statements again to decide.
