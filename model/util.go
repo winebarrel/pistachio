@@ -109,9 +109,5 @@ func StripTypeSchema(typeName, schema string) string {
 	if schema == "" {
 		return typeName
 	}
-	prefix := schema + "."
-	if strings.HasPrefix(typeName, prefix) {
-		return typeName[len(prefix):]
-	}
-	return typeName
+	return strings.TrimPrefix(typeName, schema+".")
 }
