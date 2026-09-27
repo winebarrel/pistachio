@@ -1,0 +1,6 @@
+init: ""
+desired: |
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_check CHECK (VALUE > 0);
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 1) NOT VALID;
+error: "duplicate domain constraint: pos_check on public.pos_int"

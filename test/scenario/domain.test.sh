@@ -3,7 +3,8 @@
 # The initial schema has a domain with a check constraint and a table column
 # of it. The steps walk the metadata a domain carries (default, NOT NULL,
 # constraints), the VALIDATE a constraint added NOT VALID out of band needs,
-# and the rename and drop at the end. The column of the domain stays in place
+# and the rename and drop at the end. The last steps keep a constraint NOT VALID
+# from the file, then validate it. The column of the domain stays in place
 # throughout, so every apply has to keep the dependency working.
 set -euo pipefail
 
@@ -75,5 +76,19 @@ assert_commented_drop_with_allowed "09 domain drop is suppressed by default" \
   domain column "$DATA/steps/08_drop_domain.sql" || true
 assert_no_drop_type "10 no executable domain drop without the type" \
   domain column "$DATA/steps/08_drop_domain.sql" || true
+
+# --- Step 11: the file adds a constraint NOT VALID ---
+setup_db "$DATA/init.sql"
+run_step "11 add NOT VALID constraint from the file" \
+  "ALTER DOMAIN public.email ADD CONSTRAINT email_length CHECK (length(value) <= 320) NOT VALID;" \
+  "$DATA/steps/11_add_not_valid.sql" || true
+
+# --- Step 12: the dump keeps it NOT VALID ---
+assert_dump_round_trip "12 dump output round-trips" || true
+
+# --- Step 13: the file drops NOT VALID, and the constraint is validated ---
+run_step "13 validate from the file" \
+  "ALTER DOMAIN public.email VALIDATE CONSTRAINT email_length;" \
+  "$DATA/steps/13_validate_from_file.sql" || true
 
 summary

@@ -1,10 +1,10 @@
-# A NOT VALID constraint is written as its own ALTER DOMAIN.
+# The NOT VALID constraint comes before the comment.
 init: |
   CREATE DOMAIN public.pos_int AS integer;
   ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
-  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_max CHECK (VALUE < 100);
+  COMMENT ON DOMAIN public.pos_int IS 'positive';
 dump: |
   -- public.pos_int
-  CREATE DOMAIN public.pos_int AS integer
-      CONSTRAINT pos_max CHECK ((VALUE < 100));
+  CREATE DOMAIN public.pos_int AS integer;
   ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK ((VALUE > 0)) NOT VALID;
+  COMMENT ON DOMAIN public.pos_int IS 'positive';

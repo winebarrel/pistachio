@@ -643,6 +643,15 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				return nil, err
 			}
 
+		case node.GetAlterDomainStmt() != nil:
+			ok, err := parseAlterDomainAddCheck(node.GetAlterDomainStmt(), defaultSchema, domains, stmtOffset)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				warnIgnoredStmt(sql, spans, rawStmt)
+			}
+
 		case node.GetCommentStmt() != nil:
 			cs := node.GetCommentStmt()
 			if !commentTargetSupported[cs.Objtype] {
@@ -1684,26 +1693,83 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, defaultSchema string) 
 				domain.Default = &def
 			}
 		case pg_query.ConstrType_CONSTR_CHECK:
-			if con.Conname == "" {
-				con.Conname = makeObjectName(name, "", "check")
+			dc, err := parseDomainCheck(con, name)
+			if err != nil {
+				return nil, err
 			}
-			def := ""
-			if con.RawExpr != nil {
-				expr, err := deparseExpr(con.RawExpr)
-				if err != nil {
-					return nil, fmt.Errorf("failed to deparse constraint %s for domain %s: %w", con.Conname, name, err)
-				}
-				def = "CHECK (" + expr + ")"
-			}
-			domain.Constraints = append(domain.Constraints, &model.DomainConstraint{
-				Name:       con.Conname,
-				Definition: def,
-				Validated:  !con.SkipValidation,
-			})
+			domain.Constraints = append(domain.Constraints, dc)
 		}
 	}
 
 	return domain, nil
+}
+
+// parseDomainCheck converts a domain CHECK constraint. An unnamed one gets the
+// name PostgreSQL would give it.
+func parseDomainCheck(con *pg_query.Constraint, domainName string) (*model.DomainConstraint, error) {
+	if con.Conname == "" {
+		con.Conname = makeObjectName(domainName, "", "check")
+	}
+	def := ""
+	if con.RawExpr != nil {
+		expr, err := deparseExpr(con.RawExpr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deparse constraint %s for domain %s: %w", con.Conname, domainName, err)
+		}
+		def = "CHECK (" + expr + ")"
+	}
+	return &model.DomainConstraint{
+		Name:       con.Conname,
+		Definition: def,
+		Validated:  !con.SkipValidation,
+	}, nil
+}
+
+// parseAlterDomainAddCheck reads ALTER DOMAIN ... ADD CONSTRAINT ... CHECK,
+// which is how a NOT VALID domain constraint is written. It returns false for
+// any other ALTER DOMAIN, which the caller warns about.
+func parseAlterDomainAddCheck(
+	ads *pg_query.AlterDomainStmt,
+	defaultSchema string,
+	domains *orderedmap.Map[string, *model.Domain],
+	offset int32,
+) (bool, error) {
+	con := ads.GetDef().GetConstraint()
+	if ads.Subtype != "C" || con == nil || con.Contype != pg_query.ConstrType_CONSTR_CHECK {
+		return false, nil
+	}
+
+	schema := defaultSchema
+	name := ""
+	for i, n := range ads.TypeName {
+		if s := n.GetString_(); s != nil {
+			if i == len(ads.TypeName)-1 {
+				name = s.Sval
+			} else {
+				schema = s.Sval
+			}
+		}
+	}
+	fqdn := model.Ident(schema, name)
+	d, ok := domains.GetOk(fqdn)
+	if !ok {
+		return false, undeclared("ALTER DOMAIN "+fqdn, "domain", fqdn, offset)
+	}
+
+	dc, err := parseDomainCheck(con, name)
+	if err != nil {
+		return false, err
+	}
+	for _, c := range d.Constraints {
+		if c.Name == dc.Name {
+			return false, &locatedError{
+				msg:    fmt.Sprintf("duplicate domain constraint: %s on %s", dc.Name, fqdn),
+				offset: int(offset),
+			}
+		}
+	}
+	d.Constraints = append(d.Constraints, dc)
+	return true, nil
 }
 
 func parseCompositeTypeStmt(cts *pg_query.CompositeTypeStmt, defaultSchema string) (*model.CompositeType, error) {

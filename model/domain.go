@@ -51,11 +51,28 @@ func (d Domain) SQL() string {
 		sql.WriteString(" NOT NULL")
 	}
 
+	// CREATE DOMAIN cannot write NOT VALID, so NotValidConSQL writes those
+	// constraints instead.
 	for _, c := range d.Constraints {
+		if !c.Validated {
+			continue
+		}
 		sql.WriteString("\n    CONSTRAINT " + Ident(c.Name) + " " + c.Definition)
 	}
 
 	return sql.String() + ";"
+}
+
+// NotValidConSQL writes each NOT VALID constraint as an ALTER DOMAIN.
+func (d Domain) NotValidConSQL() []string {
+	var stmts []string
+	for _, c := range d.Constraints {
+		if c.Validated {
+			continue
+		}
+		stmts = append(stmts, "ALTER DOMAIN "+Ident(d.Schema, d.Name)+" ADD CONSTRAINT "+Ident(c.Name)+" "+c.Definition+" NOT VALID;")
+	}
+	return stmts
 }
 
 func (d Domain) CommentSQL() string {
@@ -67,6 +84,7 @@ func (d Domain) CommentSQL() string {
 
 func DomainToSQL(d *Domain) string {
 	parts := []string{"-- " + d.FQDN(), d.SQL()}
+	parts = append(parts, d.NotValidConSQL()...)
 	if s := d.CommentSQL(); s != "" {
 		parts = append(parts, s)
 	}

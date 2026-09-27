@@ -1,0 +1,10 @@
+# The NOT VALID constraint moves with the rename, so only the rename is planned.
+init: |
+  CREATE DOMAIN public.pos_int AS integer;
+  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+desired: |
+  -- pista:renamed-from public.pos_int
+  CREATE DOMAIN public.positive_int AS integer;
+  ALTER DOMAIN public.positive_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
+plan: |
+  ALTER DOMAIN public.pos_int RENAME TO positive_int;
