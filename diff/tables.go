@@ -239,6 +239,9 @@ func newTableExtras(t *model.Table) (stmts, idxStmts, fkStmts []string, hasConcu
 	stmts = append(stmts, t.FoldedKeySQL()...)
 	stmts = append(stmts, t.StorageSQL()...)
 	for _, idx := range t.Indexes.CollectValues() {
+		if err := checkPartitionedConcurrently(idx, t.Partitioned); err != nil {
+			return nil, nil, nil, false, err
+		}
 		stmt, err := createIndexSQL(idx.Definition, idx.Concurrently)
 		if err != nil {
 			return nil, nil, nil, false, err
@@ -1513,6 +1516,21 @@ func equalIndexDefs(current, desired *orderedmap.Map[string, *model.Index]) map[
 	return same
 }
 
+// checkPartitionedConcurrently refuses CONCURRENTLY on an index of a
+// partitioned table, which PostgreSQL cannot create or drop that way. Leaving
+// the keyword out would take a lock the user asked to avoid, so the plan stops
+// instead.
+func checkPartitionedConcurrently(idx *model.Index, partitioned bool) error {
+	if idx.Concurrently && partitioned {
+		return partitionedConcurrentlyError(idx.Schema, idx.Name, idx.Table)
+	}
+	return nil
+}
+
+func partitionedConcurrentlyError(schema, name, table string) error {
+	return fmt.Errorf("index %s: CONCURRENTLY is not supported on partitioned table %s", model.Ident(schema, name), model.Ident(schema, table))
+}
+
 type diffIndexesResult struct {
 	Stmts []string
 	// PartitionedStmts holds the CREATE INDEX and comment of each new or
@@ -1576,6 +1594,9 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consume
 			if ok {
 				useConcurrently = desiredIdx.Concurrently
 			}
+			if useConcurrently && partitioned {
+				return nil, partitionedConcurrentlyError(currentIdx.Schema, name, currentIdx.Table)
+			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
 				return nil, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
@@ -1604,6 +1625,9 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consume
 			// The index stays, so only a comment that differs is emitted.
 			result.Stmts = append(result.Stmts, indexCommentStmts(currentIdx.Comment, desiredIdx)...)
 			continue
+		}
+		if err := checkPartitionedConcurrently(desiredIdx, partitioned); err != nil {
+			return nil, err
 		}
 		stmt, err := createIndexSQL(desiredIdx.Definition, desiredIdx.Concurrently)
 		if err != nil {
