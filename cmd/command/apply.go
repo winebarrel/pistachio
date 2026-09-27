@@ -32,6 +32,13 @@ func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
 		return err
 	}
 
+	writeApplyResult(w, client, result, buf.Bytes())
+	return nil
+}
+
+// writeApplyResult prints the connection line, the header, the output apply
+// buffered and the closing line.
+func writeApplyResult(w io.Writer, client *pistachio.Client, result *pistachio.ApplyResult, out []byte) {
 	if connInfo, err := client.ConnInfoComment(); err == nil {
 		fmt.Fprintln(w, connInfo) //nolint:errcheck
 	}
@@ -44,7 +51,7 @@ func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
 	// transaction comments) even when no schema change was applied, so the
 	// "-- No changes" and timing decisions are driven by result.Applied rather
 	// than the buffer length.
-	w.Write(buf.Bytes()) //nolint:errcheck
+	w.Write(out) //nolint:errcheck
 	if result.Ignored != "" {
 		fmt.Fprintln(w, result.Ignored) //nolint:errcheck
 	}
@@ -58,6 +65,4 @@ func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
 		// With no changes there is nothing to time.
 		fmt.Fprintf(w, "-- Apply finished in %s\n", result.Duration.Round(time.Millisecond)) //nolint:errcheck
 	}
-
-	return nil
 }
