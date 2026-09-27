@@ -1,6 +1,5 @@
-# What dump writes for this schema plans clean against it. PG15 qualifies
-# the outer column; see no_diff_dump_recursive_view_pg15.
-min_pg: 16
+# What dump writes for this schema on PG15 plans clean against it.
+max_pg: 15
 init: |
   CREATE RECURSIVE VIEW public.nums (n) AS SELECT 1 UNION ALL SELECT n + 1 FROM nums WHERE n < 10;
 desired: |
@@ -13,6 +12,6 @@ desired: |
              FROM nums nums_1
             WHERE nums_1.n < 10
           )
-   SELECT n
+   SELECT nums.n
      FROM nums;
 plan: ""
