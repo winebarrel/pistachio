@@ -1,0 +1,20 @@
+# A drop the policy skips runs nothing, so it is reported rather than refused.
+force_index_concurrently: true
+drop_policy:
+  allow_drop: []
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  CREATE INDEX events_id_idx ON public.events (id);
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+plan: ""
+disallowed_drops: |
+  -- skipped: DROP INDEX CONCURRENTLY public.events_id_idx;

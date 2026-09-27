@@ -1,0 +1,16 @@
+# The directive on an index of a partitioned table is refused as well.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      created_at timestamp with time zone NOT NULL
+  ) PARTITION BY RANGE (created_at);
+  CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  -- pista:concurrently
+  CREATE INDEX events_id_idx ON public.events (id);
+error: "index public.events_id_idx: CONCURRENTLY is not supported on partitioned table public.events"

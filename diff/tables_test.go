@@ -178,6 +178,49 @@ func TestDiffTables_modifyPartitionedTable_addIndex(t *testing.T) {
 	assert.Equal(t, []string{"CREATE INDEX logs_id_idx ON public.logs USING btree (id);"}, result.PartitionedIndexStmts)
 }
 
+// CONCURRENTLY on an index of a partitioned table stops the diff wherever the
+// index would be created or dropped. A drop the policy skips runs nothing and
+// is only reported.
+func TestPartitionedIndexConcurrently(t *testing.T) {
+	const wantErr = "index public.logs_id_idx: CONCURRENTLY is not supported on partitioned table public.logs"
+	concurrentIndexes := func() *orderedmap.Map[string, *model.Index] {
+		idx := partitionedTable("logs", "", "logs_id_idx").Indexes
+		idx.Get("logs_id_idx").Concurrently = true
+		return idx
+	}
+	empty := orderedmap.New[string, *model.Index]()
+
+	t.Run("create", func(t *testing.T) {
+		_, err := diffIndexes(empty, concurrentIndexes(), nil, true, allowAllDrops{})
+		require.EqualError(t, err, wantErr)
+	})
+
+	t.Run("drop", func(t *testing.T) {
+		_, err := diffIndexes(concurrentIndexes(), empty, nil, true, allowAllDrops{})
+		require.EqualError(t, err, wantErr)
+	})
+
+	t.Run("skipped drop", func(t *testing.T) {
+		result, err := diffIndexes(concurrentIndexes(), empty, nil, true, denyAllDrops{})
+		require.NoError(t, err)
+		assert.Empty(t, result.Stmts)
+		assert.Equal(t, []string{"-- skipped: DROP INDEX CONCURRENTLY public.logs_id_idx;"}, result.DisallowedDropStmts)
+	})
+
+	t.Run("new table", func(t *testing.T) {
+		tbl := partitionedTable("logs", "", "logs_id_idx")
+		tbl.Indexes = concurrentIndexes()
+		_, _, _, _, err := newTableExtras(tbl)
+		require.EqualError(t, err, wantErr)
+	})
+
+	t.Run("plain table", func(t *testing.T) {
+		result, err := diffIndexes(empty, concurrentIndexes(), nil, false, allowAllDrops{})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY logs_id_idx ON public.logs USING btree (id);"}, result.Stmts)
+	})
+}
+
 func TestPartitionDepth(t *testing.T) {
 	tables := orderedmap.New[string, *model.Table]()
 	top := partitionedTable("m", "", "m_id_idx")
