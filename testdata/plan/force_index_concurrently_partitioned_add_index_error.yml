@@ -1,5 +1,5 @@
-# PostgreSQL cannot create an index on a partitioned table concurrently. The
-# plan refuses rather than drop CONCURRENTLY on its own.
+# PostgreSQL cannot create an index on a partitioned table concurrently, and
+# the plan does not leave the keyword out on its own.
 force_index_concurrently: true
 init: |
   CREATE TABLE public.events (

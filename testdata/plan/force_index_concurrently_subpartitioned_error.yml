@@ -1,0 +1,18 @@
+# A partition that is partitioned itself is refused as well.
+force_index_concurrently: true
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      region text NOT NULL
+  ) PARTITION BY LIST (region);
+  CREATE TABLE public.events_eu PARTITION OF public.events FOR VALUES IN ('eu') PARTITION BY RANGE (id);
+  CREATE TABLE public.events_eu_1 PARTITION OF public.events_eu FOR VALUES FROM (0) TO (1000);
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      region text NOT NULL
+  ) PARTITION BY LIST (region);
+  CREATE TABLE public.events_eu PARTITION OF public.events FOR VALUES IN ('eu') PARTITION BY RANGE (id);
+  CREATE TABLE public.events_eu_1 PARTITION OF public.events_eu FOR VALUES FROM (0) TO (1000);
+  CREATE INDEX events_eu_id_idx ON public.events_eu (id);
+error: "index public.events_eu_id_idx: CONCURRENTLY is not supported on partitioned table public.events_eu"

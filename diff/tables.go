@@ -1518,8 +1518,7 @@ func equalIndexDefs(current, desired *orderedmap.Map[string, *model.Index]) map[
 
 // checkPartitionedConcurrently refuses CONCURRENTLY on an index of a
 // partitioned table, which PostgreSQL cannot create or drop that way. Leaving
-// the keyword out would take a lock the user asked to avoid, so the plan stops
-// instead.
+// the keyword out would take the lock the user asked to avoid.
 func checkPartitionedConcurrently(idx *model.Index, partitioned bool) error {
 	if idx.Concurrently && partitioned {
 		return partitionedConcurrentlyError(idx.Schema, idx.Name, idx.Table)
