@@ -16,10 +16,14 @@ concurrency:
 jobs:
   # Two pull requests that each add an entry under [Unreleased] conflict
   # once one of them is merged, and the web UI does not run merge drivers.
-  # For every open pull request whose only conflict with main is in
+  # A release renames [Unreleased] without a conflict, and merging a pull
+  # request written before it puts the pull request's entry under the
+  # released version. For every open pull request into main that changes
   # CHANGELOG.md, this merges main into its branch with
-  # scripts/merge-changelog.sh and pushes the merge commit. A pull request
-  # that conflicts anywhere else, or comes from a fork, is left alone.
+  # scripts/merge-changelog.sh, and pushes the merge commit when the file
+  # differs from what a text merge gives, a conflict included. A pull
+  # request that conflicts anywhere else, or comes from a fork, is left
+  # alone.
   merge:
     runs-on: ubuntu-latest
     steps:
@@ -51,10 +55,13 @@ jobs:
             --jq '.[] | select((.isCrossRepository | not) and any(.files[]; .path == "CHANGELOG.md")) | .headRefName')
           for branch in $branches; do
             git fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch"
-            if conflicts=$(git merge-tree --write-tree --name-only --no-messages "$main" "origin/$branch"); then
-              continue
-            fi
-            if [ "$(sed 1d <<<"$conflicts")" != CHANGELOG.md ]; then
+            # The text merge, which is what merging the pull request does.
+            if tree=$(git merge-tree --write-tree --name-only --no-messages "$main" "origin/$branch"); then
+              # A pull request that deletes the file has nothing to fix.
+              text=$(git rev-parse -q --verify "$tree:CHANGELOG.md") || continue
+            elif [ "$(sed 1d <<<"$tree")" = CHANGELOG.md ]; then
+              text=
+            else
               echo "::notice::$branch conflicts with main outside CHANGELOG.md; skipped"
               continue
             fi
@@ -63,6 +70,9 @@ jobs:
                 merge -q --no-edit -m "Merge branch 'main' into $branch" "$main"; then
               git merge --abort
               echo "::warning::$branch: CHANGELOG.md conflicts outside [Unreleased]; skipped"
+              continue
+            fi
+            if [ "$(git rev-parse HEAD:CHANGELOG.md)" = "$text" ]; then
               continue
             fi
             # Not forced: a branch that moved since the fetch is left for

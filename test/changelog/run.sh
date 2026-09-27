@@ -264,35 +264,157 @@ $released" \
 " \
 ''
 
-# Through git, the way changelog-merge.yml runs it: the attribute alone
-# leaves merge-tree a text merge, so it reports the conflict, and git merge
-# with the driver configured resolves it.
-repo=$tmp/repo
-git init -q -b main "$repo"
-g() { git -C "$repo" -c user.name=test -c user.email=test@example.com "$@"; }
-printf '# Changelog\n\n%s' "$released" > "$repo/CHANGELOG.md"
-g add CHANGELOG.md
-g commit -q -m init
-g checkout -q -b pr
-printf '# Changelog\n\n## [Unreleased]\n\n* PR.\n\n%s' "$released" > "$repo/CHANGELOG.md"
-g commit -q -am pr
-g checkout -q main
-printf '# Changelog\n\n## [Unreleased]\n\n* Main.\n\n%s' "$released" > "$repo/CHANGELOG.md"
-g commit -q -am main
-echo 'CHANGELOG.md merge=changelog' >> "$repo/.git/info/attributes"
-conflicts=$(g merge-tree --write-tree --name-only --no-messages main pr | sed 1d)
-g checkout -q pr
-if [ "$conflicts" != CHANGELOG.md ]; then
-    echo "FAIL git: merge-tree reports '$conflicts', want CHANGELOG.md"
-    failed=1
-elif ! g -c merge.changelog.driver="bash $driver %O %A %B" merge -q --no-edit main > /dev/null 2>&1; then
-    echo "FAIL git: merge failed"
-    failed=1
-elif ! diff -u <(printf '# Changelog\n\n## [Unreleased]\n\n* PR.\n\n* Main.\n\n%s' "$released") "$repo/CHANGELOG.md"; then
-    echo "FAIL git"
-    failed=1
-else
-    echo "ok   git"
-fi
+# via_git NAME BASE PR MAIN EXPECTED [same]
+#
+# Runs a case through git, the way changelog-merge.yml does: the attribute
+# alone leaves merge-tree a text merge, and git merge with the driver
+# configured gives EXPECTED. The workflow pushes only when the two differ,
+# so the text merge must not give EXPECTED, or with `same` it must, which
+# is a pull request the workflow leaves alone.
+via_git() {
+    local repo=$tmp/$1 tree text same=${6:-}
+    repo=${repo// /-}
+    git init -q -b main "$repo"
+    g() { git -C "$repo" -c user.name=test -c user.email=test@example.com "$@"; }
+    printf '%s' "$2" > "$repo/CHANGELOG.md"
+    g add CHANGELOG.md
+    g commit -q -m base
+    g checkout -q -b pr
+    printf '%s' "$3" > "$repo/CHANGELOG.md"
+    g commit -q -am pr
+    g checkout -q main
+    printf '%s' "$4" > "$repo/CHANGELOG.md"
+    g commit -q -am main
+    echo 'CHANGELOG.md merge=changelog' >> "$repo/.git/info/attributes"
+    if tree=$(g merge-tree --write-tree --name-only --no-messages main pr); then
+        text=$(g cat-file -p "$tree:CHANGELOG.md")
+    elif [ "$(sed 1d <<<"$tree")" = CHANGELOG.md ]; then
+        text=
+    else
+        echo "FAIL $1: merge-tree reports '$(sed 1d <<<"$tree")'"
+        failed=1
+        return
+    fi
+    g checkout -q pr
+    if [ -z "$same" ] && [ "$text" = "${5%$'\n'}" ]; then
+        echo "FAIL $1: the text merge already gives the expected file"
+        failed=1
+    elif [ -n "$same" ] && [ "$text" != "${5%$'\n'}" ]; then
+        echo "FAIL $1: the text merge does not give the expected file"
+        failed=1
+    elif ! g -c merge.changelog.driver="bash $driver %O %A %B" merge -q --no-edit main > /dev/null 2>&1; then
+        echo "FAIL $1: merge failed"
+        failed=1
+    elif ! diff -u <(printf '%s' "$5") "$repo/CHANGELOG.md"; then
+        echo "FAIL $1"
+        failed=1
+    else
+        echo "ok   $1"
+    fi
+}
+
+via_git 'git: both sides add an entry' \
+"# Changelog
+
+$released" \
+"# Changelog
+
+## [Unreleased]
+
+* PR.
+
+$released" \
+"# Changelog
+
+## [Unreleased]
+
+* Main.
+
+$released" \
+"# Changelog
+
+## [Unreleased]
+
+* PR.
+
+* Main.
+
+$released"
+
+via_git 'git: a release after the branch' \
+"# Changelog
+
+## [Unreleased]
+
+* A.
+
+$released" \
+"# Changelog
+
+## [Unreleased]
+
+* PR.
+
+* A.
+
+$released" \
+"# Changelog
+
+## [1.1.0] - 2026-02-01
+
+* A.
+
+$released" \
+"# Changelog
+
+## [Unreleased]
+
+* PR.
+
+## [1.1.0] - 2026-02-01
+
+* A.
+
+$released"
+
+fixed='## [1.0.0] - 2026-01-01
+
+* Old, fixed.
+'
+
+via_git 'git: main edits a released entry' \
+"# Changelog
+
+## [Unreleased]
+
+* A.
+
+$released" \
+"# Changelog
+
+## [Unreleased]
+
+* PR.
+
+* A.
+
+$released" \
+"# Changelog
+
+## [Unreleased]
+
+* A.
+
+$fixed" \
+"# Changelog
+
+## [Unreleased]
+
+* PR.
+
+* A.
+
+$fixed" \
+same
 
 exit "$failed"
