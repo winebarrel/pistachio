@@ -47,7 +47,7 @@ jobs:
           cp scripts/merge-changelog.sh "$RUNNER_TEMP/"
           echo 'CHANGELOG.md merge=changelog' >> .git/info/attributes
           main=$(git rev-parse HEAD)
-          branches=$(gh pr list --state open --limit 200 --json headRefName,isCrossRepository,files \
+          branches=$(gh pr list --state open --base main --limit 200 --json headRefName,isCrossRepository,files \
             --jq '.[] | select((.isCrossRepository | not) and any(.files[]; .path == "CHANGELOG.md")) | .headRefName')
           for branch in $branches; do
             git fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch"

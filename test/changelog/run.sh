@@ -264,4 +264,35 @@ $released" \
 " \
 ''
 
+# Through git, the way changelog-merge.yml runs it: the attribute alone
+# leaves merge-tree a text merge, so it reports the conflict, and git merge
+# with the driver configured resolves it.
+repo=$tmp/repo
+git init -q -b main "$repo"
+g() { git -C "$repo" -c user.name=test -c user.email=test@example.com "$@"; }
+printf '# Changelog\n\n%s' "$released" > "$repo/CHANGELOG.md"
+g add CHANGELOG.md
+g commit -q -m init
+g checkout -q -b pr
+printf '# Changelog\n\n## [Unreleased]\n\n* PR.\n\n%s' "$released" > "$repo/CHANGELOG.md"
+g commit -q -am pr
+g checkout -q main
+printf '# Changelog\n\n## [Unreleased]\n\n* Main.\n\n%s' "$released" > "$repo/CHANGELOG.md"
+g commit -q -am main
+echo 'CHANGELOG.md merge=changelog' >> "$repo/.git/info/attributes"
+conflicts=$(g merge-tree --write-tree --name-only --no-messages main pr | sed 1d)
+g checkout -q pr
+if [ "$conflicts" != CHANGELOG.md ]; then
+    echo "FAIL git: merge-tree reports '$conflicts', want CHANGELOG.md"
+    failed=1
+elif ! g -c merge.changelog.driver="bash $driver %O %A %B" merge -q --no-edit main > /dev/null 2>&1; then
+    echo "FAIL git: merge failed"
+    failed=1
+elif ! diff -u <(printf '# Changelog\n\n## [Unreleased]\n\n* PR.\n\n* Main.\n\n%s' "$released") "$repo/CHANGELOG.md"; then
+    echo "FAIL git"
+    failed=1
+else
+    echo "ok   git"
+fi
+
 exit "$failed"
