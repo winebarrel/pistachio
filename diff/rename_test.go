@@ -634,3 +634,12 @@ func TestDiffViews_RenameCarriesTriggers(t *testing.T) {
 	assert.Equal(t, []string{"ALTER VIEW public.v1 RENAME TO v2;"}, got.CreateStmts)
 	assert.Empty(t, got.DropStmts)
 }
+
+func TestRewriteColumnsInConstraintDef_ExclusionWhere(t *testing.T) {
+	got, err := rewriteColumnsInConstraintDef(
+		"EXCLUDE USING gist (room WITH =) WHERE ((NOT canceled))",
+		one("canceled", "is_canceled"),
+	)
+	require.NoError(t, err)
+	assert.Contains(t, got, "NOT is_canceled")
+}
