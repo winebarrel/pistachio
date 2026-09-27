@@ -945,9 +945,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	// Assemble:
 	// FK drops -> view drops -> creates/alters -> table/domain/enum drops -> FK adds -> view creates -> policy creates
 	var stmts []string
-	for _, ts := range tagStatements(diffs.Tables.FKDropStmts, dropPosMap) {
-		stmts = append(stmts, ts.sql)
-	}
+	stmts = append(stmts, diffs.Tables.FKDropStmts...)
 	for _, ts := range preDropStmts {
 		stmts = append(stmts, ts.sql)
 	}
@@ -963,9 +961,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	for _, ts := range postDropStmts {
 		stmts = append(stmts, ts.sql)
 	}
-	for _, ts := range tagStatements(diffs.Tables.FKAddStmts, createPosMap) {
-		stmts = append(stmts, ts.sql)
-	}
+	stmts = append(stmts, diffs.Tables.FKAddStmts...)
 	for _, ts := range viewCreateStmts {
 		stmts = append(stmts, ts.sql)
 	}
