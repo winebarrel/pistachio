@@ -534,7 +534,8 @@ func scanEnumLiteral(s string) (string, bool) {
 }
 
 // scanQuotedIdent scans a quoted identifier from the start of s, handling ""
-// escape sequences. Returns the unquoted name and true if successful.
+// escape sequences. Returns the unquoted name and true if successful, and an
+// empty name and false otherwise.
 func scanQuotedIdent(s string) (string, bool) {
 	if len(s) == 0 || s[0] != '"' {
 		return "", false
@@ -567,11 +568,8 @@ func extractConstraintName(line string) string {
 	}
 	rest := strings.TrimSpace(line[len("CONSTRAINT "):])
 	if strings.HasPrefix(rest, `"`) {
-		name, ok := scanQuotedIdent(rest)
-		if ok {
-			return name
-		}
-		return ""
+		name, _ := scanQuotedIdent(rest)
+		return name
 	}
 	fields := strings.Fields(rest)
 	if len(fields) == 0 {
@@ -592,11 +590,8 @@ func extractColumnName(line string) string {
 	}
 
 	if strings.HasPrefix(line, `"`) {
-		name, ok := scanQuotedIdent(line)
-		if ok {
-			return name
-		}
-		return ""
+		name, _ := scanQuotedIdent(line)
+		return name
 	}
 
 	// Unquoted identifier: first word, folded to lowercase per PostgreSQL behavior
