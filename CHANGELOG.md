@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `plan` is faster. At 1,000 tables it takes about a fifth less time, and `dump` about a tenth. The keyword lookup that decides whether an identifier needs quotes and the checks for whether a column default needs parentheses and which columns it references now run once per distinct name or expression, and a file with no `-- pista:` directive skips the directive checks.
+* `plan` is faster. At 1,000 tables it takes about a quarter less time. The keyword lookup that decides whether an identifier needs quotes and the checks for whether a column default needs parentheses and which columns it references now run once per distinct name or expression, and a file with no `-- pista:` directive skips the directive checks.
 
 ## [1.69.0] - 2026-09-27
 
