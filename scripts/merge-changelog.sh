@@ -9,7 +9,8 @@
 # so an entry a release moved under its version is not added back.
 #
 # A conflict outside the section falls back to git's own merge, conflict
-# markers included. `make git-setup` registers the driver.
+# markers included, and the driver fails. changelog-merge.yml runs it on
+# the pull requests that conflict with main in CHANGELOG.md alone.
 
 set -euo pipefail
 
