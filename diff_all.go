@@ -569,7 +569,7 @@ func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffA
 		byTarget[target] = indexes[obj.Current]
 	}
 	skip := nameSet(result.DroppedViews)
-	for k := range nameSet(result.DroppedForeignKeys) {
+	for _, k := range result.DroppedForeignKeys {
 		skip[k] = true
 	}
 	return blockedError("cannot drop", targets, byTarget, skip)
