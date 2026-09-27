@@ -63,10 +63,7 @@ func (c ObjectCount) Summary() string {
 }
 
 func pluralize(n int, singular string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, singular)
-	}
-	return fmt.Sprintf("%d %ss", n, singular)
+	return plural(n, singular, singular+"s")
 }
 
 // PlanResult holds the result of a Plan operation.
