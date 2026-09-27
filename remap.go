@@ -394,10 +394,7 @@ func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Ta
 		t.Schema = client.RemapSchema(t.Schema)
 		remapColumns(t, client.RemapSchema, replacer)
 
-		for _, idx := range t.Indexes.CollectValues() {
-			idx.Schema = client.RemapSchema(idx.Schema)
-			idx.Definition = replacer.Replace(idx.Definition)
-		}
+		remapIndexes(t.Indexes, client.RemapSchema, replacer)
 
 		for _, fk := range t.ForeignKeys.CollectValues() {
 			fk.Schema = client.RemapSchema(fk.Schema)
@@ -440,6 +437,20 @@ func remapPolicies(
 	}
 }
 
+// remapIndexes rewrites the Schema field on each index of a table or
+// materialized view and applies the schema replacer to the definition, which
+// names the relation the index is on.
+func remapIndexes(
+	indexes *orderedmap.Map[string, *model.Index],
+	mapSchema func(string) string,
+	replacer *defReplacer,
+) {
+	for _, idx := range indexes.CollectValues() {
+		idx.Schema = mapSchema(idx.Schema)
+		idx.Definition = replacer.Replace(idx.Definition)
+	}
+}
+
 // remapTriggers rewrites the Schema field on each trigger and applies the
 // schema replacer to the definition, which names the relation the trigger is
 // on and may name a function in another schema. `triggers` is always non-nil
@@ -466,6 +477,7 @@ func (client *Client) remapViewSchemas(views *orderedmap.Map[string, *model.View
 	for _, v := range views.CollectValues() {
 		v.Schema = client.RemapSchema(v.Schema)
 		v.Definition = replacer.Replace(v.Definition)
+		remapIndexes(v.Indexes, client.RemapSchema, replacer)
 		remapTriggers(v.Triggers, client.RemapSchema, replacer)
 		remapped.Set(v.FQVN(), v)
 	}
@@ -485,10 +497,7 @@ func (client *Client) reverseRemapTableSchemas(tables *orderedmap.Map[string, *m
 		t.Schema = client.ReverseRemapSchema(t.Schema)
 		remapColumns(t, client.ReverseRemapSchema, replacer)
 
-		for _, idx := range t.Indexes.CollectValues() {
-			idx.Schema = client.ReverseRemapSchema(idx.Schema)
-			idx.Definition = replacer.Replace(idx.Definition)
-		}
+		remapIndexes(t.Indexes, client.ReverseRemapSchema, replacer)
 
 		for _, fk := range t.ForeignKeys.CollectValues() {
 			fk.Schema = client.ReverseRemapSchema(fk.Schema)
@@ -519,6 +528,7 @@ func (client *Client) reverseRemapViewSchemas(views *orderedmap.Map[string, *mod
 	for _, v := range views.CollectValues() {
 		v.Schema = client.ReverseRemapSchema(v.Schema)
 		v.Definition = replacer.Replace(v.Definition)
+		remapIndexes(v.Indexes, client.ReverseRemapSchema, replacer)
 		remapTriggers(v.Triggers, client.ReverseRemapSchema, replacer)
 		remapped.Set(v.FQVN(), v)
 	}
