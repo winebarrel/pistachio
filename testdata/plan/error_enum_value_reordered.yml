@@ -1,0 +1,5 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('draft', 'published');
+desired: |
+  CREATE TYPE public.status AS ENUM ('published', 'draft');
+error: "cannot reorder enum values in public.status"

@@ -1,0 +1,14 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      display_name text
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      name text,
+      -- pista:renamed-from name
+      display_name text
+  );
+error: "cannot rename column name to display_name in public.users: destination already exists"

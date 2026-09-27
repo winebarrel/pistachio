@@ -641,6 +641,7 @@ func rewriteColumnsInConstraintDef(def string, renames map[string]string) (strin
 	rewriteStringList(con.Including)
 	rewriteStringList(con.FkAttrs)
 	rewriteColumnRefsInExpr(con.RawExpr, renames)
+	rewriteColumnRefsInExpr(con.WhereClause, renames)
 	// EXCLUDE constraints encode each (column, operator) pair as a List node
 	// with an IndexElem followed by an operator. Walk the IndexElem side.
 	for _, ex := range con.Exclusions {

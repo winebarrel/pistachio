@@ -1,0 +1,17 @@
+# CREATE OR REPLACE cannot remove a parameter default, so the function is
+# dropped and created again.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.fd(a text DEFAULT 'x') RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+desired: |
+  CREATE FUNCTION public.fd(a text) RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;
+applied: |
+  -- public.fd(text)
+  CREATE OR REPLACE FUNCTION public.fd(a text)
+      RETURNS text
+      LANGUAGE sql
+      AS $$ SELECT a $$;

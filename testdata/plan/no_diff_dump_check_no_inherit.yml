@@ -1,0 +1,13 @@
+# What dump writes for this schema plans clean against it.
+init: |
+  CREATE TABLE public.items (
+      qty integer,
+      CONSTRAINT items_qty_check CHECK (qty > 0) NO INHERIT
+  );
+desired: |
+  -- public.items
+  CREATE TABLE public.items (
+      qty integer,
+      CONSTRAINT items_qty_check CHECK (qty > 0) NO INHERIT
+  );
+plan: ""

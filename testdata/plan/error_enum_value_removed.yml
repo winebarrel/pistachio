@@ -1,0 +1,5 @@
+init: |
+  CREATE TYPE public.status AS ENUM ('draft', 'published', 'archived');
+desired: |
+  CREATE TYPE public.status AS ENUM ('draft', 'published');
+error: "cannot remove enum value 'archived' from public.status"

@@ -1,0 +1,20 @@
+# A changed predicate is a DROP and ADD of the exclusion constraint.
+init: |
+  CREATE TABLE public.slots (
+      r int4range NOT NULL,
+      a integer NOT NULL,
+      CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (a > 0)
+  );
+desired: |
+  CREATE TABLE public.slots (
+      r int4range NOT NULL,
+      a integer NOT NULL,
+      CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (a > 10)
+  );
+applied: |
+  -- public.slots
+  CREATE TABLE public.slots (
+      r int4range NOT NULL,
+      a integer NOT NULL,
+      CONSTRAINT slots_excl EXCLUDE USING gist (r WITH &&) WHERE (a > 10)
+  );

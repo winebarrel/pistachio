@@ -1,0 +1,5 @@
+init: |
+  CREATE DOMAIN public.code AS varchar(10);
+desired: |
+  CREATE DOMAIN public.code AS text;
+error: "cannot change base type of domain public.code"

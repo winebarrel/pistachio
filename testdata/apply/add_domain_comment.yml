@@ -1,0 +1,10 @@
+init: |
+  CREATE DOMAIN public.pos_int AS integer CHECK (VALUE > 0);
+desired: |
+  CREATE DOMAIN public.pos_int AS integer CHECK (VALUE > 0);
+  COMMENT ON DOMAIN public.pos_int IS 'positive integer';
+applied: |
+  -- public.pos_int
+  CREATE DOMAIN public.pos_int AS integer
+      CONSTRAINT pos_int_check CHECK ((VALUE > 0));
+  COMMENT ON DOMAIN public.pos_int IS 'positive integer';

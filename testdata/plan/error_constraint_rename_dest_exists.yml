@@ -1,0 +1,14 @@
+init: |
+  CREATE TABLE public.items (
+      qty integer,
+      CONSTRAINT items_old_check CHECK (qty > 0),
+      CONSTRAINT items_new_check CHECK (qty < 100)
+  );
+desired: |
+  CREATE TABLE public.items (
+      qty integer,
+      CONSTRAINT items_old_check CHECK (qty > 0),
+      -- pista:renamed-from items_old_check
+      CONSTRAINT items_new_check CHECK (qty < 100)
+  );
+error: "cannot rename constraint items_old_check to items_new_check in public.items: destination already exists"

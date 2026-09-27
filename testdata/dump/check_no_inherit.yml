@@ -1,0 +1,11 @@
+init: |
+  CREATE TABLE public.items (
+      qty integer,
+      CONSTRAINT items_qty_check CHECK (qty > 0) NO INHERIT
+  );
+dump: |
+  -- public.items
+  CREATE TABLE public.items (
+      qty integer,
+      CONSTRAINT items_qty_check CHECK (qty > 0) NO INHERIT
+  );
