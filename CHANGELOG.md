@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* A constraint named with a keyword such as `time`, `position` or `values` no longer breaks the plan. Its definition kept the name, so `plan` wrote `ADD CONSTRAINT time CONSTRAINT "time" CHECK ...`, which is a syntax error, and a dump with such a constraint did not plan clean.
+* A constraint named with a keyword such as `time` or `values` now plans correctly. `plan` wrote `ADD CONSTRAINT time CONSTRAINT "time" CHECK ...`, which PostgreSQL rejects.
 
 * The sizes `--explain` prints now match `pg_size_pretty`. A size just under a half unit could come out one unit too high, such as `11 MB` for 11009536 bytes, which `pg_size_pretty` shows as `10 MB`.
 
