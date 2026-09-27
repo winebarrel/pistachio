@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `plan` is faster. At 1,000 tables it takes about a fifth less time. The keyword lookup that decides whether an identifier needs quotes and the check for whether a column default needs parentheses now run once per distinct name or expression, and a file with no `-- pista:` directive skips the directive checks.
+
 ## [1.69.0] - 2026-09-27
 
 * A constraint named with a keyword such as `time` or `values` now plans correctly. `plan` wrote `ADD CONSTRAINT time CONSTRAINT "time" CHECK ...`, which PostgreSQL rejects.
