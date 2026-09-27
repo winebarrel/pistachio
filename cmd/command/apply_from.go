@@ -3,9 +3,7 @@ package command
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
-	"time"
 
 	"github.com/winebarrel/pistachio"
 )
@@ -36,26 +34,9 @@ func (cmd *ApplyFrom) Run(ctx context.Context, w io.Writer) error {
 		return err
 	}
 
-	if connInfo, err := client.ConnInfoComment(); err == nil {
-		fmt.Fprintln(w, connInfo) //nolint:errcheck
-	}
-
-	fmt.Fprintf(w, "-- Apply to %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
-
 	// Same ordering as apply: executed SQL first, then skipped DROPs as
 	// comments. Both were decided when the plan file was written.
-	w.Write(buf.Bytes()) //nolint:errcheck
-	if result.Ignored != "" {
-		fmt.Fprintln(w, result.Ignored) //nolint:errcheck
-	}
-	if result.DisallowedDrops != "" {
-		fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
-	}
-	if !result.Applied {
-		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
-	} else {
-		fmt.Fprintf(w, "-- Apply finished in %s\n", result.Duration.Round(time.Millisecond)) //nolint:errcheck
-	}
+	writeApplyResult(w, client, result, buf.Bytes())
 
 	return nil
 }
