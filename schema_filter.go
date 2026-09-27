@@ -16,10 +16,7 @@ import (
 // -- pista:execute statement is raw SQL the file asked to run, which carries no
 // schema to filter on.
 func filterDesiredBySchemas(result *parser.ParseResult, schemas []string, schemaMap map[string]string) {
-	schemaSet := make(map[string]bool, len(schemas))
-	for _, s := range schemas {
-		schemaSet[s] = true
-	}
+	schemaSet := nameSet(schemas)
 	// Also include schema-map destinations (desired SQL may use mapped names)
 	for _, v := range schemaMap {
 		schemaSet[v] = true

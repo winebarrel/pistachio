@@ -485,7 +485,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			if concurrentlyDirectives[rawStmt.StmtLocation] {
 				idx.Concurrently = true
 			}
-			fqtn := model.Ident(idx.Schema, idx.Table)
+			fqtn := idx.FQTN()
 			if t, ok := tables.GetOk(fqtn); ok {
 				if err := setUnique(t.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
@@ -930,9 +930,6 @@ func normalizeStorageKeyword(name string) string {
 	return strings.ToLower(name)
 }
 
-// applyAlterTableColumnStorage reads the storage and compression actions onto
-// the columns they name. pg_dump writes both as separate statements, so a file
-// adopted from one carries them here rather than in the column definition.
 // checkAlterTableTargets refuses a trigger state naming a trigger, or a
 // storage setting naming a column, that the table does not declare before
 // the statement. It runs before anything in the statement is applied or
@@ -960,6 +957,9 @@ func checkAlterTableTargets(as *pg_query.AlterTableStmt, t *model.Table, fqtn st
 	return nil
 }
 
+// applyAlterTableColumnStorage reads the storage and compression actions onto
+// the columns they name. pg_dump writes both as separate statements, so a file
+// adopted from one carries them here rather than in the column definition.
 func applyAlterTableColumnStorage(as *pg_query.AlterTableStmt, t *model.Table) {
 	for _, cmdNode := range as.Cmds {
 		cmd := cmdNode.GetAlterTableCmd()
@@ -2690,11 +2690,11 @@ func deparseExpr(node *pg_query.Node) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to deparse expression: %w", err)
 	}
-	const prefix = "SELECT "
-	if !strings.HasPrefix(sql, prefix) {
+	expr, ok := strings.CutPrefix(sql, "SELECT ")
+	if !ok {
 		return "", fmt.Errorf("unexpected deparse output for expression: %s", sql)
 	}
-	return strings.TrimSpace(sql[len(prefix):]), nil
+	return strings.TrimSpace(expr), nil
 }
 
 // parenthesizeDefault wraps a deparsed column or domain DEFAULT expression in

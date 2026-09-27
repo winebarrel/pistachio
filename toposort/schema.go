@@ -2,7 +2,8 @@ package toposort
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -296,12 +297,7 @@ func extractViewDeps(definition, defaultSchema string, defined map[string]bool) 
 		})
 	}
 
-	deps := make([]string, 0, len(seen))
-	for dep := range seen {
-		deps = append(deps, dep)
-	}
-	sort.Strings(deps)
-	return deps
+	return slices.Sorted(maps.Keys(seen))
 }
 
 // qualifyRangeVar returns the schema-qualified FQDN of a RangeVar that exists
@@ -347,12 +343,7 @@ func extractViewDepsFallback(definition, defaultSchema string, defined map[strin
 			}
 		}
 	}
-	deps := make([]string, 0, len(seen))
-	for dep := range seen {
-		deps = append(deps, dep)
-	}
-	sort.Strings(deps)
-	return deps
+	return slices.Sorted(maps.Keys(seen))
 }
 
 // RoutineNode returns the graph node name for a routine, given its

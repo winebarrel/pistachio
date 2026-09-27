@@ -303,14 +303,15 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	// Objects marked -- pista:ignore are unmanaged: drop them from both the
 	// desired and current sides so no create, alter, or drop is generated.
 	// Their FQNs are surfaced as -- ignored: comments.
-	var ignored []string
-	ignored = append(ignored, removeIgnored(desiredTables, filteredTables, func(t *model.Table) bool { return t.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredViews, filteredViews, func(v *model.View) bool { return v.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredEnums, filteredEnums, func(e *model.Enum) bool { return e.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredDomains, filteredDomains, func(d *model.Domain) bool { return d.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredCompositeTypes, filteredCompositeTypes, func(ct *model.CompositeType) bool { return ct.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredRoutines, filteredRoutines, func(r *model.Routine) bool { return r.Ignore })...)
+	ignored := slices.Concat(
+		removeIgnored(desiredTables, filteredTables, func(t *model.Table) bool { return t.Ignore }),
+		removeIgnored(desiredViews, filteredViews, func(v *model.View) bool { return v.Ignore }),
+		removeIgnored(desiredEnums, filteredEnums, func(e *model.Enum) bool { return e.Ignore }),
+		removeIgnored(desiredDomains, filteredDomains, func(d *model.Domain) bool { return d.Ignore }),
+		removeIgnored(desiredCompositeTypes, filteredCompositeTypes, func(ct *model.CompositeType) bool { return ct.Ignore }),
+		removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore }),
+		removeIgnored(desiredRoutines, filteredRoutines, func(r *model.Routine) bool { return r.Ignore }),
+	)
 	sort.Strings(ignored)
 
 	// Hashed here: after removeIgnored, so an object the desired schema
@@ -341,10 +342,14 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		// so this is a no-op for plan and apply, but Diff parses the current
 		// side from a file, where a -- pista:concurrently would otherwise
 		// reach a pure drop.
-		clearConcurrentlyDirectives(filteredTables, filteredViews)
-		clearConcurrentlyDirectives(desiredTables, desiredViews)
+		setConcurrentlyDirectives(filteredTables, filteredViews, false)
+		setConcurrentlyDirectives(desiredTables, desiredViews, false)
 	case options.ForceIndexConcurrently:
-		forceConcurrentlyDirectives(filteredTables, filteredViews, desiredTables, desiredViews)
+		// The current side is set too so that a pure DROP INDEX (index absent
+		// from desired) picks up the flag, since catalog-derived indexes don't
+		// carry the directive.
+		setConcurrentlyDirectives(filteredTables, filteredViews, true)
+		setConcurrentlyDirectives(desiredTables, desiredViews, true)
 	}
 
 	if options.AssumeValidated {
@@ -472,14 +477,15 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		},
 	)
 
-	var disallowed []string
-	disallowed = append(disallowed, viewDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, tableDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, domainDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, compositeTypeDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, enumDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, sequenceDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, routineDiff.DisallowedDropStmts...)
+	disallowed := slices.Concat(
+		viewDiff.DisallowedDropStmts,
+		tableDiff.DisallowedDropStmts,
+		domainDiff.DisallowedDropStmts,
+		compositeTypeDiff.DisallowedDropStmts,
+		enumDiff.DisallowedDropStmts,
+		sequenceDiff.DisallowedDropStmts,
+		routineDiff.DisallowedDropStmts,
+	)
 
 	return &diffAllResult{
 		Stmts:                stmts,
@@ -563,7 +569,7 @@ func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffA
 		byTarget[target] = indexes[obj.Current]
 	}
 	skip := nameSet(result.DroppedViews)
-	for k := range nameSet(result.DroppedForeignKeys) {
+	for _, k := range result.DroppedForeignKeys {
 		skip[k] = true
 	}
 	return blockedError("cannot drop", targets, byTarget, skip)
@@ -749,21 +755,22 @@ func removeIgnored[V any](desired, current *orderedmap.Map[string, V], ignored f
 	return keys
 }
 
-// clearConcurrentlyDirectives wipes the per-index Concurrently flag on every
+// setConcurrentlyDirectives sets the per-index Concurrently flag on every
 // table and materialized view index in the given maps, used to implement
-// --disable-index-concurrently.
-func clearConcurrentlyDirectives(
+// --disable-index-concurrently and --force-index-concurrently.
+func setConcurrentlyDirectives(
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
+	on bool,
 ) {
 	for _, t := range tables.CollectValues() {
 		for _, idx := range t.Indexes.CollectValues() {
-			idx.Concurrently = false
+			idx.Concurrently = on
 		}
 	}
 	for _, v := range views.CollectValues() {
 		for _, idx := range v.Indexes.CollectValues() {
-			idx.Concurrently = false
+			idx.Concurrently = on
 		}
 	}
 }
@@ -826,39 +833,6 @@ func assumeValidatedConstraints(
 			for _, c := range d.Constraints {
 				c.Validated = true
 			}
-		}
-	}
-}
-
-// forceConcurrentlyDirectives sets the per-index Concurrently flag on every
-// table and materialized view index in both the current and desired schemas,
-// used to implement --force-index-concurrently. The current side is also
-// flipped so that pure DROP INDEX paths (index absent from desired) can pick
-// up the flag, since catalog-derived indexes don't carry the directive.
-func forceConcurrentlyDirectives(
-	currentTables *orderedmap.Map[string, *model.Table],
-	currentViews *orderedmap.Map[string, *model.View],
-	desiredTables *orderedmap.Map[string, *model.Table],
-	desiredViews *orderedmap.Map[string, *model.View],
-) {
-	for _, t := range currentTables.CollectValues() {
-		for _, idx := range t.Indexes.CollectValues() {
-			idx.Concurrently = true
-		}
-	}
-	for _, v := range currentViews.CollectValues() {
-		for _, idx := range v.Indexes.CollectValues() {
-			idx.Concurrently = true
-		}
-	}
-	for _, t := range desiredTables.CollectValues() {
-		for _, idx := range t.Indexes.CollectValues() {
-			idx.Concurrently = true
-		}
-	}
-	for _, v := range desiredViews.CollectValues() {
-		for _, idx := range v.Indexes.CollectValues() {
-			idx.Concurrently = true
 		}
 	}
 }
@@ -945,9 +919,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	// Assemble:
 	// FK drops -> view drops -> creates/alters -> table/domain/enum drops -> FK adds -> view creates -> policy creates
 	var stmts []string
-	for _, ts := range tagStatements(diffs.Tables.FKDropStmts, dropPosMap) {
-		stmts = append(stmts, ts.sql)
-	}
+	stmts = append(stmts, diffs.Tables.FKDropStmts...)
 	for _, ts := range preDropStmts {
 		stmts = append(stmts, ts.sql)
 	}
@@ -963,9 +935,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	for _, ts := range postDropStmts {
 		stmts = append(stmts, ts.sql)
 	}
-	for _, ts := range tagStatements(diffs.Tables.FKAddStmts, createPosMap) {
-		stmts = append(stmts, ts.sql)
-	}
+	stmts = append(stmts, diffs.Tables.FKAddStmts...)
 	for _, ts := range viewCreateStmts {
 		stmts = append(stmts, ts.sql)
 	}

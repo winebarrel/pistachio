@@ -3,6 +3,7 @@ package pistachio
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/winebarrel/pistachio/catalog"
@@ -63,10 +64,7 @@ func (c ObjectCount) Summary() string {
 }
 
 func pluralize(n int, singular string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, singular)
-	}
-	return fmt.Sprintf("%d %ss", n, singular)
+	return plural(n, singular, singular+"s")
 }
 
 // PlanResult holds the result of a Plan operation.
@@ -261,10 +259,5 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 // hasCheckSQL reports whether any execute statement carries a condition to
 // evaluate, so plan sets the search_path only when one is going to run.
 func hasCheckSQL(stmts []*parser.ExecuteStmt) bool {
-	for _, es := range stmts {
-		if es.CheckSQL != "" {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(stmts, func(es *parser.ExecuteStmt) bool { return es.CheckSQL != "" })
 }

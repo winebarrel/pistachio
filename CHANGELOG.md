@@ -6,6 +6,8 @@
 
 * Renaming a column used in the `WHERE` clause of an exclusion constraint no longer drops and re-adds the constraint. The rename is carried into the clause, as it already is for a partial index.
 
+* The sizes `--explain` prints now match `pg_size_pretty`. A size just under a half unit could come out one unit too high, such as `11 MB` for 11009536 bytes, which `pg_size_pretty` shows as `10 MB`.
+
 ## [1.68.0] - 2026-09-27
 
 * `--schema-map` now maps the indexes of a materialized view. `dump` wrote an index and its comment under the unmapped schema, so planning the dump failed, and `plan` created the index in the mapped schema.

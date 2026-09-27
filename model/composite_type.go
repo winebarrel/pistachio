@@ -56,13 +56,13 @@ func (ct CompositeType) SQL() string {
 	for i, a := range ct.Attributes {
 		lines[i] = "    " + Ident(a.Name) + " " + a.TypeSQL()
 	}
-	return "CREATE TYPE " + Ident(ct.Schema, ct.Name) + " AS (\n" +
+	return "CREATE TYPE " + ct.FQCN() + " AS (\n" +
 		strings.Join(lines, ",\n") + "\n);"
 }
 
 func (ct CompositeType) CommentSQL() string {
 	if ct.Comment != nil {
-		return "COMMENT ON TYPE " + Ident(ct.Schema, ct.Name) + " IS " + QuoteLiteral(*ct.Comment) + ";"
+		return "COMMENT ON TYPE " + ct.FQCN() + " IS " + QuoteLiteral(*ct.Comment) + ";"
 	}
 	return ""
 }

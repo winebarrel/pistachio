@@ -1407,7 +1407,7 @@ func TestDiffViews_matviewIndexAdd_perIndexDirective(t *testing.T) {
 }
 
 func TestDiffViews_matviewIndexPureDrop_currentConcurrentlyForced(t *testing.T) {
-	// When forceConcurrentlyDirectives sets Concurrently on the current
+	// When setConcurrentlyDirectives sets Concurrently on the current
 	// matview index, the pure-drop branch falls back to that flag and
 	// emits DROP INDEX CONCURRENTLY.
 	current := orderedmap.New[string, *model.View]()

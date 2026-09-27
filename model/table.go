@@ -69,7 +69,7 @@ func (t Table) SQL() string {
 	if t.Unlogged {
 		sql += "UNLOGGED "
 	}
-	sql += "TABLE " + Ident(t.Schema, t.Name)
+	sql += "TABLE " + t.FQTN()
 
 	if t.IsPartitionChild() {
 		sql += " PARTITION OF " + *t.PartitionOf + " " + *t.PartitionBound
@@ -385,11 +385,11 @@ func (t Table) CommentSQL() []string {
 func (t Table) RelationCommentSQL() []string {
 	var stmts []string
 	if t.Comment != nil {
-		stmts = append(stmts, "COMMENT ON TABLE "+Ident(t.Schema, t.Name)+" IS "+QuoteLiteral(*t.Comment)+";")
+		stmts = append(stmts, "COMMENT ON TABLE "+t.FQTN()+" IS "+QuoteLiteral(*t.Comment)+";")
 	}
 	for _, col := range t.Columns.CollectValues() {
 		if col.Comment != nil {
-			stmts = append(stmts, "COMMENT ON COLUMN "+Ident(t.Schema, t.Name)+"."+Ident(col.Name)+" IS "+QuoteLiteral(*col.Comment)+";")
+			stmts = append(stmts, "COMMENT ON COLUMN "+t.FQTN()+"."+Ident(col.Name)+" IS "+QuoteLiteral(*col.Comment)+";")
 		}
 	}
 	return stmts

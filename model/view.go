@@ -55,9 +55,9 @@ func (v View) SQL() string {
 	def := strings.TrimSpace(v.Definition)
 	def = strings.TrimSuffix(def, ";")
 	if v.Materialized {
-		return "CREATE MATERIALIZED VIEW " + Ident(v.Schema, v.Name) + v.storageParamsClause() + " AS\n" + def + ";"
+		return "CREATE MATERIALIZED VIEW " + v.FQVN() + v.storageParamsClause() + " AS\n" + def + ";"
 	}
-	return "CREATE OR REPLACE VIEW " + Ident(v.Schema, v.Name) + v.storageParamsClause() + " AS\n" + def + v.checkOptionClause() + ";"
+	return "CREATE OR REPLACE VIEW " + v.FQVN() + v.storageParamsClause() + " AS\n" + def + v.checkOptionClause() + ";"
 }
 
 // storageParamsClause renders the WITH clause that precedes AS, or nothing for
@@ -125,7 +125,7 @@ func (v View) TrigSQL() string {
 func (v View) CommentSQL() string {
 	var stmts []string
 	if v.Comment != nil {
-		stmts = append(stmts, "COMMENT ON "+v.ObjType()+" "+Ident(v.Schema, v.Name)+" IS "+QuoteLiteral(*v.Comment)+";")
+		stmts = append(stmts, "COMMENT ON "+v.ObjType()+" "+v.FQVN()+" IS "+QuoteLiteral(*v.Comment)+";")
 	}
 	if v.ColumnComments != nil {
 		for col, comment := range v.ColumnComments.All() {
