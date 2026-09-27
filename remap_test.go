@@ -1268,6 +1268,48 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;
 	assert.Contains(t, got.SQL, "CREATE OR REPLACE VIEW myschema.active_users")
 }
 
+// A materialized view's index follows the view into the mapped schema, in
+// dump, in plan, and in a dump planned back.
+func TestSchemaMap_MatviewIndex(t *testing.T) {
+	ctx := context.Background()
+	initSQL := `
+CREATE TABLE myschema.posts (id integer PRIMARY KEY);
+CREATE MATERIALIZED VIEW myschema.post_count AS SELECT count(*) AS c FROM myschema.posts;
+`
+	opts := func(connString string) *Options {
+		return &Options{
+			ConnString: connString,
+			Schemas:    []string{"myschema"},
+			SchemaMap:  map[string]string{"myschema": "public"},
+		}
+	}
+
+	t.Run("dump", func(t *testing.T) {
+		connString := setupSchemaDB(t, ctx, "myschema", initSQL+`CREATE UNIQUE INDEX post_count_c ON myschema.post_count (c);`)
+		got, err := NewClient(opts(connString)).Dump(ctx, &DumpOptions{})
+		require.NoError(t, err)
+		assert.Contains(t, got.String(), "CREATE UNIQUE INDEX post_count_c ON public.post_count")
+
+		desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+		require.NoError(t, os.WriteFile(desiredFile, []byte(got.String()), 0o644))
+		plan, err := NewClient(opts(connString)).Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+		require.NoError(t, err)
+		assert.Empty(t, plan.SQL)
+	})
+
+	t.Run("plan", func(t *testing.T) {
+		connString := setupSchemaDB(t, ctx, "myschema", initSQL)
+		desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+		require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.posts (id integer PRIMARY KEY);
+CREATE MATERIALIZED VIEW public.post_count AS SELECT count(*) AS c FROM public.posts;
+CREATE UNIQUE INDEX post_count_c ON public.post_count (c);
+`), 0o644))
+		plan, err := NewClient(opts(connString)).Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+		require.NoError(t, err)
+		assert.Equal(t, "CREATE UNIQUE INDEX post_count_c ON myschema.post_count USING btree (c);", plan.SQL)
+	})
+}
+
 func TestApply_WithSchemaMap(t *testing.T) {
 	ctx := context.Background()
 
