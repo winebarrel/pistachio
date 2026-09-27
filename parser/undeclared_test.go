@@ -24,6 +24,8 @@ func TestParseSQL_AlterUndeclaredTargetErrors(t *testing.T) {
 		{"alter table with an unsupported action", "ALTER TABLE public.t ADD COLUMN x text;", "ALTER TABLE public.t: table public.t is not declared before it"},
 		{"quoted name", `ALTER TABLE "My Schema"."My Table" ADD CONSTRAINT c CHECK (true);`, `ALTER TABLE "My Schema"."My Table": table "My Schema"."My Table" is not declared before it`},
 		{"unqualified name", "CREATE TABLE other.t (id integer);\nALTER TABLE t ADD CONSTRAINT c CHECK (true);", "ALTER TABLE public.t: table public.t is not declared before it"},
+		{"alter domain", "ALTER DOMAIN public.d ADD CONSTRAINT c CHECK (VALUE > 0) NOT VALID;", "ALTER DOMAIN public.d: domain public.d is not declared before it"},
+		{"alter domain declared later", "ALTER DOMAIN public.d ADD CONSTRAINT c CHECK (VALUE > 0);\nCREATE DOMAIN public.d AS integer;", "ALTER DOMAIN public.d: domain public.d is not declared before it"},
 		{"alter sequence", "ALTER SEQUENCE public.s OWNED BY public.t.id;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence declared later", "ALTER SEQUENCE public.s OWNED BY public.t.id;\nCREATE SEQUENCE public.s;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
 		{"alter sequence if exists", "ALTER SEQUENCE IF EXISTS public.s OWNED BY public.t.id;", "ALTER SEQUENCE public.s: sequence public.s is not declared before it"},
@@ -241,4 +243,14 @@ ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_nn NOT NULL;
 	assert.Equal(t, &model.DomainConstraint{Name: "pos_int_check", Definition: "CHECK (value <> 50)", Validated: true}, cons[2])
 	assert.Equal(t, "pista: ignored unsupported statement: ALTER DOMAIN public.pos_int SET DEFAULT 1\n"+
 		"pista: ignored unsupported statement: ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_nn NOT NULL\n", buf.String())
+}
+
+// A constraint name ALTER DOMAIN adds must not already be on the domain.
+func TestParseSQL_AlterDomainDuplicateConstraint(t *testing.T) {
+	_, err := parseSQLWithPublicSchema(`
+CREATE DOMAIN public.d AS integer CONSTRAINT c CHECK (VALUE > 0);
+ALTER DOMAIN public.d ADD CONSTRAINT c CHECK (VALUE > 1) NOT VALID;
+`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate domain constraint: c on public.d")
 }
