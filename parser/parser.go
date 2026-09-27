@@ -485,7 +485,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			if concurrentlyDirectives[rawStmt.StmtLocation] {
 				idx.Concurrently = true
 			}
-			fqtn := model.Ident(idx.Schema, idx.Table)
+			fqtn := idx.FQTN()
 			if t, ok := tables.GetOk(fqtn); ok {
 				if err := setUnique(t.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
