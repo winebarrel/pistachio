@@ -1593,9 +1593,6 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consume
 			if ok {
 				useConcurrently = desiredIdx.Concurrently
 			}
-			if useConcurrently && partitioned {
-				return nil, partitionedConcurrentlyError(currentIdx.Schema, name, currentIdx.Table)
-			}
 			stmt, err := dropIndexSQL(currentIdx.Schema, name, useConcurrently)
 			if err != nil {
 				return nil, fmt.Errorf("drop index %s: %w", model.Ident(currentIdx.Schema, name), err)
@@ -1603,6 +1600,10 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consume
 			if !ok && !idxAllowed {
 				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: "+stmt)
 				continue
+			}
+			// Only a drop the plan runs is refused; a skipped one runs nothing.
+			if useConcurrently && partitioned {
+				return nil, partitionedConcurrentlyError(currentIdx.Schema, name, currentIdx.Table)
 			}
 			result.Stmts = append(result.Stmts, stmt)
 			if useConcurrently {
