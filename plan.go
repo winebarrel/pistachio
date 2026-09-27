@@ -3,6 +3,7 @@ package pistachio
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/winebarrel/pistachio/catalog"
@@ -258,10 +259,5 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 // hasCheckSQL reports whether any execute statement carries a condition to
 // evaluate, so plan sets the search_path only when one is going to run.
 func hasCheckSQL(stmts []*parser.ExecuteStmt) bool {
-	for _, es := range stmts {
-		if es.CheckSQL != "" {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(stmts, func(es *parser.ExecuteStmt) bool { return es.CheckSQL != "" })
 }
