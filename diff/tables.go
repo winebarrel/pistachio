@@ -1043,15 +1043,8 @@ func isNullConst(node *pg_query.Node) bool {
 // the cost is that p IS NULL and p IS NOT DISTINCT FROM NULL compare equal on
 // such a column, and a change between the two is dropped from the plan.
 func isRowOperand(node *pg_query.Node) bool {
-	if node.GetRowExpr() != nil {
-		return true
-	}
-	for _, f := range node.GetColumnRef().GetFields() {
-		if f.GetAStar() != nil {
-			return true
-		}
-	}
-	return false
+	return node.GetRowExpr() != nil ||
+		slices.ContainsFunc(node.GetColumnRef().GetFields(), func(f *pg_query.Node) bool { return f.GetAStar() != nil })
 }
 
 // isTextLikeTypeName returns true if the TypeName refers to a text-like type
