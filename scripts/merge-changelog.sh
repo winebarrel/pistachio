@@ -10,7 +10,7 @@
 #
 # A conflict outside the section falls back to git's own merge, conflict
 # markers included, and the driver fails. changelog-merge.yml runs it on
-# the pull requests that conflict with main in CHANGELOG.md alone.
+# the pull requests into main that change CHANGELOG.md.
 
 set -euo pipefail
 
