@@ -1,0 +1,41 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  );
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      starts_at integer NOT NULL
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT values PRIMARY KEY (id)
+  );
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      starts_at integer NOT NULL,
+      CONSTRAINT none CHECK (starts_at >= 0),
+      CONSTRAINT time CHECK (id > 0),
+      CONSTRAINT position UNIQUE (starts_at)
+  );
+  ALTER TABLE ONLY public.events ADD CONSTRAINT between FOREIGN KEY (user_id) REFERENCES public.users(id);
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      starts_at integer NOT NULL,
+      CONSTRAINT position UNIQUE (starts_at),
+      CONSTRAINT none CHECK (starts_at >= 0),
+      CONSTRAINT time CHECK (id > 0)
+  );
+
+  ALTER TABLE ONLY public.events ADD CONSTRAINT between FOREIGN KEY (user_id) REFERENCES users(id);
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT values PRIMARY KEY (id)
+  );

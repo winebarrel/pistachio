@@ -1,0 +1,30 @@
+# A constraint named with a col_name keyword, written the way dump writes it.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT "values" PRIMARY KEY (id)
+  );
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      starts_at integer NOT NULL,
+      CONSTRAINT "none" CHECK (starts_at >= 0),
+      CONSTRAINT "time" CHECK (id > 0),
+      CONSTRAINT "position" UNIQUE (starts_at),
+      CONSTRAINT "between" FOREIGN KEY (user_id) REFERENCES public.users(id)
+  );
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT values PRIMARY KEY (id)
+  );
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      starts_at integer NOT NULL,
+      CONSTRAINT none CHECK (starts_at >= 0),
+      CONSTRAINT time CHECK (id > 0),
+      CONSTRAINT position UNIQUE (starts_at)
+  );
+  ALTER TABLE ONLY public.events ADD CONSTRAINT between FOREIGN KEY (user_id) REFERENCES public.users(id);
+plan: ""
