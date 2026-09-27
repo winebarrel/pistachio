@@ -46,6 +46,9 @@ func TestBuildDefReplacer_QuotedSchema(t *testing.T) {
 
 	assert.Equal(t, "public.t", replacer.Replace(`"My Schema".t`))
 	assert.Equal(t, "people.t", replacer.Replace(`"Users".t`))
+	// Only a schema is mapped: the name alone, or after another name, stays.
+	assert.Equal(t, `SELECT "Users" FROM people.t`, replacer.Replace(`SELECT "Users" FROM "Users".t`))
+	assert.Equal(t, `x."Users".col`, replacer.Replace(`x."Users".col`))
 }
 
 // TestBuildDefReplacer_PreservesThreePartReference guards against the trap
@@ -96,6 +99,9 @@ func TestBuildDefReplacer_StringLiteral(t *testing.T) {
 		{"escape string after an operator", `c = E'a\'myschema.x' OR myschema.f()`, `c = E'a\'myschema.x' OR public.f()`},
 		{"unterminated literal", "myschema.f('myschema.x", "public.f('myschema.x"},
 		{"quote in quoted identifier", `SELECT "a'b" FROM myschema.t WHERE c = 'myschema.x'`, `SELECT "a'b" FROM public.t WHERE c = 'myschema.x'`},
+		{"schema inside a quoted identifier", `SELECT "abc myschema.x" FROM myschema.t`, `SELECT "abc myschema.x" FROM public.t`},
+		{"dollar in an identifier", "x$myschema.col = myschema.f()", "x$myschema.col = public.f()"},
+		{"user function whose name ends in nextval", "foo$nextval('myschema.seq')", "foo$nextval('myschema.seq')"},
 		{"regclass literal", "nextval('myschema.seq'::regclass)", "nextval('public.seq'::regclass)"},
 		{"regclass qualified with pg_catalog", "'myschema.t'::pg_catalog.regclass", "'public.t'::pg_catalog.regclass"},
 		{"regtype literal", "'myschema.mood'::regtype", "'public.mood'::regtype"},

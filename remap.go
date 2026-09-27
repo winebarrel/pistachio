@@ -16,7 +16,8 @@ import (
 // beginning of the text or after a character that cannot continue an
 // identifier, so a schema whose name ends in the mapped one, mystaging., and a
 // table named like the schema in a three-part reference, staging.staging.col,
-// keep their second part. A string literal is skipped; see Replace.
+// keep their second part. String literals and quoted identifiers are handled by
+// Replace.
 //
 // All inputs come from canonical SQL, pg_get_*def output from the catalog or
 // pg_query deparse output from the parser, so an identifier that requires
@@ -47,10 +48,9 @@ func buildDefReplacer(schemaMap map[string]string) *defReplacer {
 		froms[i] = regexp.QuoteMeta(from)
 	}
 
-	// A double quote is not a boundary either: a schema literally named
-	// staging.x is written "staging.x".t, and the unquoted branch must not
-	// find staging. inside it.
-	r.re = regexp.MustCompile(`(^|[^A-Za-z0-9_"])(` + strings.Join(froms, "|") + `)\.`)
+	// Replace hands the regexp only text outside quotes, so of the names
+	// only an unquoted one ever matches it.
+	r.re = regexp.MustCompile(`(^|[^A-Za-z0-9_$"])(` + strings.Join(froms, "|") + `)\.`)
 	return r
 }
 
@@ -64,7 +64,17 @@ func (r *defReplacer) Replace(s string) string {
 	for i := 0; i < len(s); {
 		switch s[i] {
 		case '"':
-			i = skipQuoted(s, i, '"', false)
+			// A quoted identifier is a name, never searched for a prefix. It
+			// is mapped whole when it is a schema: a mapped name followed by a
+			// dot and not itself after one.
+			end := skipQuoted(s, i, '"', false)
+			b.WriteString(r.replaceNames(s[code:i]))
+			ident := s[i:end]
+			if to, ok := r.to[ident]; ok && end < len(s) && s[end] == '.' && (i == 0 || s[i-1] != '.') {
+				ident = to
+			}
+			b.WriteString(ident)
+			code, i = end, end
 		case '\'':
 			escape := i > 0 && (s[i-1] == 'E' || s[i-1] == 'e') && (i == 1 || !isIdentByte(s[i-2]))
 			end := skipQuoted(s, i, '\'', escape)
@@ -107,7 +117,7 @@ func (r *defReplacer) remapNameLiteral(lit string) string {
 }
 
 var (
-	sequenceCallRE = regexp.MustCompile(`(^|[^A-Za-z0-9_."])(pg_catalog\.)?(nextval|currval|setval)\(\s*$`)
+	sequenceCallRE = regexp.MustCompile(`(^|[^A-Za-z0-9_$."])(pg_catalog\.)?(nextval|currval|setval)\(\s*$`)
 	regCastRE      = regexp.MustCompile(`^::(pg_catalog\.)?(` + strings.Join(regTypes, "|") + `)\b`)
 )
 
