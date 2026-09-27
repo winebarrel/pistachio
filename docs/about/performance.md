@@ -32,7 +32,7 @@ Five cases are measured:
 
 - Linux x86_64, Intel Xeon @ 2.80GHz (4 vCPUs), 15 GB RAM
 - PostgreSQL 16.13 (connected over `localhost`)
-- pistachio built from `89664aa` (v1.69.0 and the changes after it)
+- pistachio v1.69.0 with the changes from #804
 
 The database runs on the same host, so client/server latency is negligible.
 Times over a network connection will be higher because reading the catalog adds
@@ -92,7 +92,8 @@ and modify plans at 1,000 tables. The build measured here quotes each distinct
 identifier and checks each distinct column default once rather than on every
 use, since both go through the parser in C, and skips the directive checks for
 a file with no `-- pista:` directive. That takes about a fifth off each plan.
-`dump` and `fmt` barely change.
+`dump` also quotes identifiers and gets about a tenth faster; `fmt` does not
+change.
 
 `fmt` is the cheapest of the five, since it neither connects to the database nor
 builds a model: it parses the file, lays the tokens out again, and checks the
