@@ -29,20 +29,20 @@ func (e Enum) FQEN() string {
 
 func (e Enum) SQL() string {
 	if len(e.Values) == 0 {
-		return "CREATE TYPE " + Ident(e.Schema, e.Name) + " AS ENUM (\n);"
+		return "CREATE TYPE " + e.FQEN() + " AS ENUM (\n);"
 	}
 
 	quoted := make([]string, len(e.Values))
 	for i, v := range e.Values {
 		quoted[i] = QuoteLiteral(v)
 	}
-	return "CREATE TYPE " + Ident(e.Schema, e.Name) + " AS ENUM (\n    " +
+	return "CREATE TYPE " + e.FQEN() + " AS ENUM (\n    " +
 		strings.Join(quoted, ",\n    ") + "\n);"
 }
 
 func (e Enum) CommentSQL() string {
 	if e.Comment != nil {
-		return "COMMENT ON TYPE " + Ident(e.Schema, e.Name) + " IS " + QuoteLiteral(*e.Comment) + ";"
+		return "COMMENT ON TYPE " + e.FQEN() + " IS " + QuoteLiteral(*e.Comment) + ";"
 	}
 	return ""
 }
