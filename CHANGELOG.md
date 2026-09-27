@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* `force` in a config file is now an error. It used to turn off the drift check of every `apply-from` that read the file. Pass `--force` on the command line instead.
+
 * A foreign key written without the referenced columns, such as `REFERENCES users`, no longer plans a drop and an add on every run. The columns are taken from the referenced table's primary key in the desired schema, so a key to a table the desired schema does not declare still does.
 
 * A domain constraint can be kept `NOT VALID`. Write it as `ALTER DOMAIN ... ADD CONSTRAINT ... NOT VALID` after `CREATE DOMAIN`. `dump` writes it the same way. Before, `dump` wrote it inside `CREATE DOMAIN`, and planning the dump validated the constraint.

@@ -268,6 +268,9 @@ type commandCLI struct {
 	Apply struct {
 		ApplyOptions
 	} `cmd:""`
+	ApplyFrom struct {
+		ApplyFromOptions
+	} `cmd:""`
 }
 
 func parseCommandCLI(t *testing.T, args ...string) (*commandCLI, error) {
@@ -379,4 +382,25 @@ func TestYAMLConfig_MetaFlagsAreNotConfigurable(t *testing.T) {
 			assert.Contains(t, err.Error(), key)
 		})
 	}
+}
+
+// --force stands down the drift check of apply-from, so it is typed where it is
+// meant. A config file serves every run, and naming the flag there is an error
+// under every command, not only the one it belongs to.
+func TestYAMLConfig_CommandLineOnlyFlag(t *testing.T) {
+	path := writeConfig(t, "force: true\n")
+
+	for _, args := range [][]string{{"apply-from", "plan.json"}, {"dump"}} {
+		t.Run(args[0], func(t *testing.T) {
+			_, err := parseCommandCLI(t, append([]string{"--config", path}, args...)...)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "config key(s) only for the command line: force")
+		})
+	}
+
+	t.Run("command line", func(t *testing.T) {
+		cli, err := parseCommandCLI(t, "--config", writeConfig(t, "schemas: [public]\n"), "apply-from", "--force", "plan.json")
+		require.NoError(t, err)
+		assert.True(t, cli.ApplyFrom.Force)
+	})
 }

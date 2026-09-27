@@ -58,18 +58,28 @@ func (y *yamlResolver) Resolve(_ *kong.Context, _ *kong.Path, flag *kong.Flag) (
 }
 
 func (y *yamlResolver) Validate(app *kong.Application) error {
-	known := map[string]bool{}
-	collectFlagNames(app.Node, app.HelpFlag, known)
+	// configurable maps each flag name the file may hold to true, and a flag
+	// that is typed only on the command line to false.
+	configurable := map[string]bool{}
+	collectFlagNames(app.Node, app.HelpFlag, configurable)
 
-	var unknown []string
+	var unknown, commandLineOnly []string
 	for key := range y.values {
-		if !known[key] {
+		ok, found := configurable[key]
+		switch {
+		case !found:
 			unknown = append(unknown, key)
+		case !ok:
+			commandLineOnly = append(commandLineOnly, key)
 		}
 	}
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
 		return fmt.Errorf("unknown config key(s): %s", strings.Join(unknown, ", "))
+	}
+	if len(commandLineOnly) > 0 {
+		sort.Strings(commandLineOnly)
+		return fmt.Errorf("config key(s) only for the command line: %s", strings.Join(commandLineOnly, ", "))
 	}
 	return nil
 }
@@ -79,7 +89,7 @@ func collectFlagNames(node *kong.Node, help *kong.Flag, out map[string]bool) {
 		if flag == help || isMetaFlag(flag) {
 			continue
 		}
-		out[flag.Name] = true
+		out[flag.Name] = !isCommandLineOnly(flag)
 	}
 	for _, child := range node.Children {
 		collectFlagNames(child, help, out)
@@ -88,4 +98,11 @@ func collectFlagNames(node *kong.Node, help *kong.Flag, out map[string]bool) {
 
 func isMetaFlag(flag *kong.Flag) bool {
 	return metaFlagTypes[flag.Target.Type()]
+}
+
+// isCommandLineOnly reports a flag tagged noconfig, which the config file may
+// not set. Such a flag also has no env var: a value set once would apply to
+// every run, and the flag is meant to be typed for the one run that needs it.
+func isCommandLineOnly(flag *kong.Flag) bool {
+	return flag.Tag.Has("noconfig")
 }
