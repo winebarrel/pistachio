@@ -756,6 +756,18 @@ Workaround: write the constant the way `pista dump` emits it.
 
 Origin: [#710](https://github.com/winebarrel/pistachio/pull/710).
 
+## A view change to a qualifier alone is not seen
+
+`pg_get_viewdef` and a written view body qualify references differently, so
+the view comparison drops the schema from every table reference and the table
+from every `table.column` on both sides. A change to a qualifier alone, such as
+`o.created_at` to `u.created_at` in a join, plans no change. Closing it means
+dropping a qualifier only where one side leaves it out.
+
+Workaround: run the `CREATE OR REPLACE VIEW` by hand.
+
+Origin: bug survey, 2026-09-27.
+
 ## Routine renaming is not supported
 
 `-- pista:renamed-from` works on tables, views, enums, enum values, domains,
