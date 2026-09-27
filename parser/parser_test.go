@@ -3042,54 +3042,6 @@ func TestParenthesizeDefault(t *testing.T) {
 	}
 }
 
-func TestDeparseTypeName_cached(t *testing.T) {
-	// Each type appears twice at different locations, so the second of each
-	// pair comes from the cache and must match the first.
-	sql := `CREATE TABLE t (
-  a numeric(12,2), a2 numeric(12,2),
-  b numeric(12,3), b2 numeric(12,3),
-  c int[], c2 int[],
-  d int[3], d2 int[3],
-  e varchar, e2 varchar,
-  f setof_type, f2 setof_type,
-  g public.my_type, g2 public.my_type,
-  h interval day, h2 interval day
-)`
-	want := []string{
-		"numeric(12,2)", "numeric(12,3)", "integer[]", "integer[3]",
-		"character varying", "setof_type", "public.my_type", "interval day",
-	}
-
-	tree, err := pg_query.Parse(sql)
-	require.NoError(t, err)
-
-	keys := map[string]bool{}
-	elts := tree.Stmts[0].Stmt.GetCreateStmt().TableElts
-	for i, elt := range elts {
-		tn := elt.GetColumnDef().TypeName
-		got, err := deparseTypeName(tn)
-		require.NoError(t, err)
-		assert.Equal(t, want[i/2], got, elt.GetColumnDef().Colname)
-
-		key, ok := typeNameKey(tn)
-		if ok {
-			keys[key] = true
-		}
-	}
-	// interval day carries a typmod that is not written as an integer
-	// literal in the source, but the parser stores it as one, so every
-	// type gets a key and each pair shares it.
-	assert.Len(t, keys, len(want))
-}
-
-func TestTypeNameKey_uncacheable(t *testing.T) {
-	tree, err := pg_query.Parse(`CREATE TABLE t (a my_type('x'))`)
-	require.NoError(t, err)
-	tn := tree.Stmts[0].Stmt.GetCreateStmt().TableElts[0].GetColumnDef().TypeName
-	_, ok := typeNameKey(tn)
-	assert.False(t, ok)
-}
-
 func TestParseSQL_DomainWithComment(t *testing.T) {
 	sql := `CREATE DOMAIN public.pos_int AS integer;
 COMMENT ON DOMAIN public.pos_int IS 'Positive integer';`

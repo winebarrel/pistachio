@@ -2499,14 +2499,6 @@ func deparseTypeName(tn *pg_query.TypeName) (string, error) {
 	if s, ok := formatTimeTypeName(tn); ok {
 		return s, nil
 	}
-	// A schema repeats the same few types, and each deparse goes through cgo,
-	// so the answer is kept per type.
-	key, cacheable := typeNameKey(tn)
-	if cacheable {
-		if v, ok := deparsedTypeNames.Load(key); ok {
-			return v.(string), nil
-		}
-	}
 	result := &pg_query.ParseResult{
 		Stmts: []*pg_query.RawStmt{{
 			Stmt: &pg_query.Node{
@@ -2539,49 +2531,7 @@ func deparseTypeName(tn *pg_query.TypeName) (string, error) {
 	// pg_query may qualify built-in types with "pg_catalog." (e.g. json -> pg_catalog.json).
 	// Strip the prefix so the result matches format_type() output.
 	typeName = strings.TrimPrefix(typeName, "pg_catalog.")
-	typeName = normalizeTypeName(typeName)
-	if cacheable {
-		deparsedTypeNames.Store(key, typeName)
-	}
-	return typeName, nil
-}
-
-var deparsedTypeNames sync.Map
-
-// typeNameKey returns a key that tells apart the type names deparseTypeName
-// renders differently. Locations are left out. A type name holding anything
-// other than plain names, integer typmods and integer array bounds gets no
-// key and is deparsed every time.
-func typeNameKey(tn *pg_query.TypeName) (string, bool) {
-	var b strings.Builder
-	for _, n := range tn.Names {
-		s := n.GetString_()
-		if s == nil {
-			return "", false
-		}
-		b.WriteString(s.Sval)
-		b.WriteByte(0)
-	}
-	b.WriteByte('(')
-	for _, n := range tn.Typmods {
-		c := n.GetAConst()
-		if c == nil || c.Isnull || c.GetIval() == nil {
-			return "", false
-		}
-		b.WriteString(strconv.Itoa(int(c.GetIval().Ival)))
-		b.WriteByte(',')
-	}
-	b.WriteByte('[')
-	for _, n := range tn.ArrayBounds {
-		i := n.GetInteger()
-		if i == nil {
-			return "", false
-		}
-		b.WriteString(strconv.Itoa(int(i.Ival)))
-		b.WriteByte(',')
-	}
-	fmt.Fprintf(&b, "]%d/%t/%t/%d", tn.TypeOid, tn.Setof, tn.PctType, tn.Typemod)
-	return b.String(), true
+	return normalizeTypeName(typeName), nil
 }
 
 func formatTimeTypeName(tn *pg_query.TypeName) (string, bool) {
