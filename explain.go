@@ -951,18 +951,20 @@ func groupDigits(n int64) string {
 }
 
 // sizePretty writes a byte count the way pg_size_pretty does: in bytes up to
-// 10 kB, then in the largest unit that keeps the number under 10240.
+// 10 kB, then in the largest unit that keeps the number under 10240. Like
+// pg_size_pretty, it counts in half units and rounds once, at the end, so a
+// size is not rounded up twice on its way to a larger unit.
 func sizePretty(bytes int64) string {
 	const limit = 10 * 1024
 	if bytes < limit {
 		return strconv.FormatInt(bytes, 10) + " bytes"
 	}
-	n := bytes
+	n := bytes >> 9
 	for _, unit := range []string{"kB", "MB", "GB", "TB"} {
-		n = (n + 512) / 1024
-		if n < limit {
-			return strconv.FormatInt(n, 10) + " " + unit
+		if n < 2*limit-1 {
+			return strconv.FormatInt((n+1)/2, 10) + " " + unit
 		}
+		n >>= 10
 	}
-	return strconv.FormatInt((n+512)/1024, 10) + " PB"
+	return strconv.FormatInt((n+1)/2, 10) + " PB"
 }
