@@ -1,6 +1,4 @@
-# A foreign key written without the referenced columns is added, and the
-# re-plan after the apply finds no drift even though the catalog spells the
-# primary key's columns out.
+# A foreign key without referenced columns is added and leaves no drift.
 init: |
   CREATE TABLE public.parent (
       id integer NOT NULL,

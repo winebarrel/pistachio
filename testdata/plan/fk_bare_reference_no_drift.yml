@@ -1,8 +1,6 @@
-# A foreign key that leaves out the referenced columns points at the
-# referenced table's primary key. The catalog spells those columns out, so the
-# desired side fills them in from the table it names and the key plans clean.
-# The referenced tables come after the keys, and one takes its key from ALTER
-# TABLE, so the lookup waits until the whole schema is read.
+# Foreign keys without referenced columns match the catalog, which prints the
+# primary key's columns. The referenced tables come after the keys, one gets
+# its primary key from ALTER TABLE, and one key references its own table.
 init: |
   CREATE TABLE public.parent (
       id integer NOT NULL,
@@ -16,6 +14,7 @@ init: |
   CREATE TABLE public.child (
       id integer NOT NULL,
       parent_id integer REFERENCES parent,
+      child_id integer REFERENCES child,
       a integer,
       b integer,
       CONSTRAINT child_pkey PRIMARY KEY (id),
@@ -25,6 +24,7 @@ desired: |
   CREATE TABLE child (
       id integer PRIMARY KEY,
       parent_id integer REFERENCES parent,
+      child_id integer REFERENCES child,
       a integer,
       b integer,
       CONSTRAINT child_pair_fkey FOREIGN KEY (a, b) REFERENCES pair ON DELETE CASCADE

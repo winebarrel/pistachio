@@ -2355,19 +2355,15 @@ func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchem
 	}, nil
 }
 
-// fillFKRefColumns writes out the referenced columns of a foreign key that
-// leaves them out. PostgreSQL takes the referenced table's primary key, and
-// the catalog prints its columns, so the key as written would differ from the
-// catalog on every plan. The primary key is looked up once the whole schema
-// is read, since the referenced table may come later or take its key from
-// ALTER TABLE. A key whose table the desired schema does not declare, or
-// declares without a primary key, is left as written.
+// fillFKRefColumns fills in the referenced columns of a foreign key that
+// leaves them out, taking the referenced table's primary key as PostgreSQL
+// does. The catalog prints those columns, so a key without them never matches
+// it. This runs after every statement is read, since the referenced table or
+// its primary key may come later. A key to a table the schema does not
+// declare, or to one with no primary key, is left as written.
 func fillFKRefColumns(tables *orderedmap.Map[string, *model.Table]) error {
 	for _, t := range tables.All() {
 		for _, fk := range t.ForeignKeys.All() {
-			if fk.RefSchema == nil || fk.RefTable == nil {
-				continue
-			}
 			ref, ok := tables.GetOk(model.Ident(*fk.RefSchema, *fk.RefTable))
 			if !ok {
 				continue

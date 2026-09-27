@@ -1,5 +1,5 @@
-# A key that references a UNIQUE column and is rewritten without the column
-# list moves to the primary key, so it is dropped and added back.
+# A key that references a UNIQUE column and is rewritten without the columns
+# now references the primary key, so it is dropped and added back.
 init: |
   CREATE TABLE public.parent (
       id integer NOT NULL,

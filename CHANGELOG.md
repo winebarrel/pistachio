@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* A foreign key written without the referenced columns, such as `REFERENCES users`, no longer drops and adds itself back on every plan. The key now takes the referenced table's primary key columns from the desired schema, which is what PostgreSQL stores. A key to a table the desired schema does not declare is still compared as written.
+* A foreign key written without the referenced columns, such as `REFERENCES users`, no longer plans a drop and an add on every run. The columns are taken from the referenced table's primary key in the desired schema, so a key to a table the desired schema does not declare still does.
 
 ## [1.67.1] - 2026-09-27
 
