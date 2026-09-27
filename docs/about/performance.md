@@ -65,10 +65,12 @@ grows the same way, from 160 to 16,000 lines.
 
 ## Analysis
 
-Runtime scales close to linearly with the table count. A fixed overhead of about
-50 ms (process startup and connecting to PostgreSQL) sets the floor, which is
-why the smallest schemas do not get proportionally faster. Going from 100 to
-1,000 tables costs about 7 times the time in every case.
+Runtime scales close to linearly with the table count. For the commands that
+read the database, a fixed overhead of about 50 ms (process startup and
+connecting to PostgreSQL) sets the floor, which is why the smallest schemas do
+not get proportionally faster. `fmt` connects to nothing, and its floor is
+about 10 ms of process startup. Going from 100 to 1,000 tables costs about 7
+times the time in every case.
 
 No single stage dominates. The create plan parses the SQL file and diffs it
 without reading the catalog; dump reads the catalog and serializes it without
