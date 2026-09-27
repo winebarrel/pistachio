@@ -1,0 +1,40 @@
+# A foreign key written without the referenced columns is added, and the
+# re-plan after the apply finds no drift even though the catalog spells the
+# primary key's columns out.
+init: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      parent_id integer REFERENCES parent,
+      CONSTRAINT child_pkey PRIMARY KEY (id)
+  );
+applied_sql: |
+  ALTER TABLE ONLY public.child ADD CONSTRAINT child_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES parent (id);
+applied: |
+  -- public.child
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      parent_id integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.child ADD CONSTRAINT child_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES parent(id);
+
+  -- public.parent
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );

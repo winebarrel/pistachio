@@ -12,6 +12,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -655,6 +656,10 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			// desired schema, so warn instead of failing silently.
 			warnIgnoredStmt(sql, spans, rawStmt)
 		}
+	}
+
+	if err := fillFKRefColumns(tables); err != nil {
+		return nil, err
 	}
 
 	if err := validateColumnRefs(tables); err != nil {
@@ -2348,6 +2353,49 @@ func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchem
 		RefSchema:  refSchema,
 		RefTable:   refTable,
 	}, nil
+}
+
+// fillFKRefColumns writes out the referenced columns of a foreign key that
+// leaves them out. PostgreSQL takes the referenced table's primary key, and
+// the catalog prints its columns, so the key as written would differ from the
+// catalog on every plan. The primary key is looked up once the whole schema
+// is read, since the referenced table may come later or take its key from
+// ALTER TABLE. A key whose table the desired schema does not declare, or
+// declares without a primary key, is left as written.
+func fillFKRefColumns(tables *orderedmap.Map[string, *model.Table]) error {
+	for _, t := range tables.All() {
+		for _, fk := range t.ForeignKeys.All() {
+			if fk.RefSchema == nil || fk.RefTable == nil {
+				continue
+			}
+			ref, ok := tables.GetOk(model.Ident(*fk.RefSchema, *fk.RefTable))
+			if !ok {
+				continue
+			}
+			var pkCols []string
+			for _, con := range ref.Constraints.All() {
+				if con.Type.IsPrimaryKeyConstraint() {
+					pkCols = con.Columns
+				}
+			}
+			if len(pkCols) == 0 {
+				continue
+			}
+			con := pgast.ParseConstraintDef(fk.Definition)
+			if con == nil || len(con.PkAttrs) > 0 {
+				continue
+			}
+			for _, col := range pkCols {
+				con.PkAttrs = append(con.PkAttrs, pg_query.MakeStrNode(col))
+			}
+			def, err := deparseConstraintDef(con)
+			if err != nil {
+				return fmt.Errorf("failed to deparse constraint %s: %w", fk.Name, err)
+			}
+			fk.Definition = def
+		}
+	}
+	return nil
 }
 
 // Deparse helpers

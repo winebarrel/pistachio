@@ -1,0 +1,31 @@
+# A foreign key without referenced columns takes the referenced table's
+# primary key, even one declared later by ALTER TABLE. A key to a table the
+# schema does not declare is left as written.
+input: |
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer REFERENCES users,
+      tag_id integer REFERENCES tags,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.users (
+      id integer NOT NULL
+  );
+  ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+expected: |
+  -- public.posts
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer,
+      tag_id integer,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id);
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES tags;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

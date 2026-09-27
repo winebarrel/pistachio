@@ -1,0 +1,35 @@
+# A foreign key that leaves out the referenced columns points at the
+# referenced table's primary key. The catalog spells those columns out, so the
+# desired side fills them in from the table it names and the key plans clean.
+# The referenced tables come after the keys, and one takes its key from ALTER
+# TABLE, so the lookup waits until the whole schema is read.
+init: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL,
+      CONSTRAINT parent_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.pair (
+      a integer NOT NULL,
+      b integer NOT NULL,
+      CONSTRAINT pair_pkey PRIMARY KEY (a, b)
+  );
+  CREATE TABLE public.child (
+      id integer NOT NULL,
+      parent_id integer REFERENCES parent,
+      a integer,
+      b integer,
+      CONSTRAINT child_pkey PRIMARY KEY (id),
+      CONSTRAINT child_pair_fkey FOREIGN KEY (a, b) REFERENCES pair ON DELETE CASCADE
+  );
+desired: |
+  CREATE TABLE child (
+      id integer PRIMARY KEY,
+      parent_id integer REFERENCES parent,
+      a integer,
+      b integer,
+      CONSTRAINT child_pair_fkey FOREIGN KEY (a, b) REFERENCES pair ON DELETE CASCADE
+  );
+  CREATE TABLE parent (id integer PRIMARY KEY);
+  CREATE TABLE pair (a integer NOT NULL, b integer NOT NULL);
+  ALTER TABLE pair ADD CONSTRAINT pair_pkey PRIMARY KEY (a, b);
+plan: ""
