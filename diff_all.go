@@ -303,14 +303,15 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	// Objects marked -- pista:ignore are unmanaged: drop them from both the
 	// desired and current sides so no create, alter, or drop is generated.
 	// Their FQNs are surfaced as -- ignored: comments.
-	var ignored []string
-	ignored = append(ignored, removeIgnored(desiredTables, filteredTables, func(t *model.Table) bool { return t.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredViews, filteredViews, func(v *model.View) bool { return v.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredEnums, filteredEnums, func(e *model.Enum) bool { return e.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredDomains, filteredDomains, func(d *model.Domain) bool { return d.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredCompositeTypes, filteredCompositeTypes, func(ct *model.CompositeType) bool { return ct.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore })...)
-	ignored = append(ignored, removeIgnored(desiredRoutines, filteredRoutines, func(r *model.Routine) bool { return r.Ignore })...)
+	ignored := slices.Concat(
+		removeIgnored(desiredTables, filteredTables, func(t *model.Table) bool { return t.Ignore }),
+		removeIgnored(desiredViews, filteredViews, func(v *model.View) bool { return v.Ignore }),
+		removeIgnored(desiredEnums, filteredEnums, func(e *model.Enum) bool { return e.Ignore }),
+		removeIgnored(desiredDomains, filteredDomains, func(d *model.Domain) bool { return d.Ignore }),
+		removeIgnored(desiredCompositeTypes, filteredCompositeTypes, func(ct *model.CompositeType) bool { return ct.Ignore }),
+		removeIgnored(desiredSequences, filteredSequences, func(s *model.Sequence) bool { return s.Ignore }),
+		removeIgnored(desiredRoutines, filteredRoutines, func(r *model.Routine) bool { return r.Ignore }),
+	)
 	sort.Strings(ignored)
 
 	// Hashed here: after removeIgnored, so an object the desired schema
@@ -472,14 +473,15 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		},
 	)
 
-	var disallowed []string
-	disallowed = append(disallowed, viewDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, tableDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, domainDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, compositeTypeDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, enumDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, sequenceDiff.DisallowedDropStmts...)
-	disallowed = append(disallowed, routineDiff.DisallowedDropStmts...)
+	disallowed := slices.Concat(
+		viewDiff.DisallowedDropStmts,
+		tableDiff.DisallowedDropStmts,
+		domainDiff.DisallowedDropStmts,
+		compositeTypeDiff.DisallowedDropStmts,
+		enumDiff.DisallowedDropStmts,
+		sequenceDiff.DisallowedDropStmts,
+		routineDiff.DisallowedDropStmts,
+	)
 
 	return &diffAllResult{
 		Stmts:                stmts,
