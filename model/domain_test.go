@@ -48,8 +48,7 @@ func TestDomain_SQL_WithConstraint(t *testing.T) {
 	assert.Contains(t, sql, "CONSTRAINT pos_check CHECK (VALUE > 0)")
 }
 
-// A NOT VALID constraint is left out of CREATE DOMAIN and goes out as its own
-// ALTER DOMAIN after it.
+// A NOT VALID constraint is written as an ALTER DOMAIN after CREATE DOMAIN.
 func TestDomainToSQL_NotValidConstraint(t *testing.T) {
 	d := &model.Domain{
 		Schema:   "public",

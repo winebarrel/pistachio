@@ -1,8 +1,7 @@
-# NOT VALID on both sides plans nothing.
 init: |
   CREATE DOMAIN public.pos_int AS integer;
   ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
 desired: |
   CREATE DOMAIN public.pos_int AS integer;
-  ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;
-plan: ""
+plan: |
+  ALTER DOMAIN public.pos_int DROP CONSTRAINT pos_check;

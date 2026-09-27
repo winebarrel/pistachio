@@ -1699,8 +1699,8 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, defaultSchema string) 
 	return domain, nil
 }
 
-// parseDomainCheck converts a domain CHECK constraint into its model form. An
-// unnamed one takes the name PostgreSQL gives it.
+// parseDomainCheck converts a domain CHECK constraint. An unnamed one gets the
+// name PostgreSQL would give it.
 func parseDomainCheck(con *pg_query.Constraint, domainName string) (*model.DomainConstraint, error) {
 	if con.Conname == "" {
 		con.Conname = makeObjectName(domainName, "", "check")
@@ -1721,9 +1721,8 @@ func parseDomainCheck(con *pg_query.Constraint, domainName string) (*model.Domai
 }
 
 // parseAlterDomainAddCheck reads ALTER DOMAIN ... ADD CONSTRAINT ... CHECK,
-// the only way a desired schema can declare a NOT VALID domain constraint, and
-// what dump writes for one. It reports false for every other ALTER DOMAIN
-// form, which the caller warns about and drops.
+// which is how a NOT VALID domain constraint is written. It returns false for
+// any other ALTER DOMAIN, which the caller warns about.
 func parseAlterDomainAddCheck(
 	ads *pg_query.AlterDomainStmt,
 	defaultSchema string,

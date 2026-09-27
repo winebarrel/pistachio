@@ -1,4 +1,4 @@
-# Both sides NOT VALID: --assume-validated plans nothing, as without it.
+# NOT VALID on both sides plans nothing with --assume-validated either.
 assume_validated: true
 init: |
   CREATE DOMAIN public.pos_int AS integer;

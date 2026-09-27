@@ -1,5 +1,5 @@
 # ALTER DOMAIN ... ADD CONSTRAINT without NOT VALID declares a validated
-# constraint, the same as writing it inside CREATE DOMAIN.
+# constraint.
 init: |
   CREATE DOMAIN public.pos_int AS integer;
   ALTER DOMAIN public.pos_int ADD CONSTRAINT pos_check CHECK (VALUE > 0) NOT VALID;

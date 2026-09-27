@@ -1,5 +1,4 @@
-# --assume-validated ignores NOT VALID in the desired schema, so a constraint
-# added to an existing domain or on a new one goes out without it.
+# --assume-validated drops NOT VALID from a new constraint.
 assume_validated: true
 init: |
   CREATE DOMAIN public.pos_int AS integer;

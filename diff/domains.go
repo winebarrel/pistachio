@@ -128,36 +128,33 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 		desiredByName[c.Name] = c
 	}
 
-	// Drop removed or changed constraints. A constraint with the same
-	// definition that only needs validating is kept and validated below.
-	// Nothing takes the validated flag away, so a validated constraint the
-	// desired schema writes NOT VALID is dropped and added back, as a table's
-	// is.
-	changed := func(cur, des *model.DomainConstraint) (bool, bool) {
-		sameDef := equalConstraintDef(cur.Definition, des.Definition)
-		validateOnly := sameDef && !cur.Validated && des.Validated
-		return !sameDef || cur.Validated != des.Validated, validateOnly
+	// A validated constraint the desired schema writes NOT VALID is dropped
+	// and added back, as a table's is, since nothing clears the flag.
+	change := func(cur, des *model.DomainConstraint) definitionChange {
+		return newDefinitionChange(equalConstraintDef(cur.Definition, des.Definition), cur.Validated, des.Validated)
 	}
+
+	// Drop removed or changed constraints. One that only needs validating is
+	// kept.
 	for _, c := range current {
 		d, ok := desiredByName[c.Name]
 		if !ok {
 			stmts = append(stmts, "ALTER DOMAIN "+fqdn+" DROP CONSTRAINT "+model.Ident(c.Name)+";")
 			continue
 		}
-		if ch, validateOnly := changed(c, d); ch && !validateOnly {
+		if ch := change(c, d); ch.changed && !ch.validateOnly {
 			stmts = append(stmts, "ALTER DOMAIN "+fqdn+" DROP CONSTRAINT "+model.Ident(c.Name)+";")
 		}
 	}
 
-	// Add new or changed constraints, or validate an existing NOT VALID one
-	// the desired schema declares validated.
+	// Add new or changed constraints, or validate a NOT VALID one.
 	for _, c := range desired {
 		if cur, ok := currentByName[c.Name]; ok {
-			ch, validateOnly := changed(cur, c)
-			if !ch {
+			ch := change(cur, c)
+			if !ch.changed {
 				continue
 			}
-			if validateOnly {
+			if ch.validateOnly {
 				stmts = append(stmts, "ALTER DOMAIN "+fqdn+" VALIDATE CONSTRAINT "+model.Ident(c.Name)+";")
 				continue
 			}

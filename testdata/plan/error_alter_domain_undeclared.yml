@@ -1,6 +1,4 @@
-# ALTER DOMAIN on a domain the desired schema does not declare before it is an
-# error. Dropped in silence, the constraint would be missing from the desired
-# side and the plan would offer to drop it.
+# ALTER DOMAIN on a domain not declared before it is an error.
 init: ""
 desired: |
   CREATE DOMAIN public.pos_int AS integer;

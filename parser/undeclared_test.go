@@ -220,9 +220,8 @@ ALTER TABLE public.s OWNER TO app;
 		"pista: ignored unsupported statement: ALTER TABLE public.s OWNER TO app\n", buf.String())
 }
 
-// ALTER DOMAIN ... ADD CONSTRAINT ... CHECK is read, which is how a desired
-// schema declares a NOT VALID domain constraint. Every other ALTER DOMAIN form
-// is not read and warns.
+// ALTER DOMAIN ... ADD CONSTRAINT ... CHECK is read. Any other ALTER DOMAIN
+// warns.
 func TestParseSQL_AlterDomainAddCheck(t *testing.T) {
 	var buf bytes.Buffer
 	defer setWarnWriter(&buf)()

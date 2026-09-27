@@ -1,5 +1,5 @@
-# Nothing takes the validated flag away, so a validated constraint the desired
-# schema writes NOT VALID is dropped and added back, as a table's is.
+# A validated constraint written NOT VALID is dropped and added back, as for a
+# table.
 init: |
   CREATE DOMAIN public.pos_int AS integer
       CONSTRAINT pos_check CHECK (VALUE > 0);

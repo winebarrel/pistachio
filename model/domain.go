@@ -51,9 +51,8 @@ func (d Domain) SQL() string {
 		sql.WriteString(" NOT NULL")
 	}
 
-	// A NOT VALID constraint is left out, since CREATE DOMAIN cannot spell the
-	// clause and writing it inline would create it validated; NotValidConSQL
-	// adds it back.
+	// CREATE DOMAIN cannot write NOT VALID, so NotValidConSQL writes those
+	// constraints instead.
 	for _, c := range d.Constraints {
 		if !c.Validated {
 			continue
@@ -64,8 +63,7 @@ func (d Domain) SQL() string {
 	return sql.String() + ";"
 }
 
-// NotValidConSQL renders the domain's NOT VALID constraints, each as its own
-// ALTER DOMAIN after the CREATE DOMAIN.
+// NotValidConSQL writes each NOT VALID constraint as an ALTER DOMAIN.
 func (d Domain) NotValidConSQL() []string {
 	var stmts []string
 	for _, c := range d.Constraints {
