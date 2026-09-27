@@ -930,9 +930,6 @@ func normalizeStorageKeyword(name string) string {
 	return strings.ToLower(name)
 }
 
-// applyAlterTableColumnStorage reads the storage and compression actions onto
-// the columns they name. pg_dump writes both as separate statements, so a file
-// adopted from one carries them here rather than in the column definition.
 // checkAlterTableTargets refuses a trigger state naming a trigger, or a
 // storage setting naming a column, that the table does not declare before
 // the statement. It runs before anything in the statement is applied or
@@ -960,6 +957,9 @@ func checkAlterTableTargets(as *pg_query.AlterTableStmt, t *model.Table, fqtn st
 	return nil
 }
 
+// applyAlterTableColumnStorage reads the storage and compression actions onto
+// the columns they name. pg_dump writes both as separate statements, so a file
+// adopted from one carries them here rather than in the column definition.
 func applyAlterTableColumnStorage(as *pg_query.AlterTableStmt, t *model.Table) {
 	for _, cmdNode := range as.Cmds {
 		cmd := cmdNode.GetAlterTableCmd()
