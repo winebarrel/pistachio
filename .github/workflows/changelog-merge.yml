@@ -22,8 +22,8 @@ jobs:
   # CHANGELOG.md, this merges main into its branch with
   # scripts/merge-changelog.sh, and pushes the merge commit when the file
   # differs from what a text merge gives, a conflict included. A pull
-  # request that conflicts anywhere else, or comes from a fork, is left
-  # alone.
+  # request that conflicts anywhere else, comes from a fork, or is a draft
+  # is left alone.
   merge:
     runs-on: ubuntu-latest
     steps:
@@ -51,8 +51,8 @@ jobs:
           cp scripts/merge-changelog.sh "$RUNNER_TEMP/"
           echo 'CHANGELOG.md merge=changelog' >> .git/info/attributes
           main=$(git rev-parse HEAD)
-          branches=$(gh pr list --state open --base main --limit 200 --json headRefName,isCrossRepository,files \
-            --jq '.[] | select((.isCrossRepository | not) and any(.files[]; .path == "CHANGELOG.md")) | .headRefName')
+          branches=$(gh pr list --state open --base main --limit 200 --json headRefName,isCrossRepository,isDraft,files \
+            --jq '.[] | select((.isCrossRepository or .isDraft | not) and any(.files[]; .path == "CHANGELOG.md")) | .headRefName')
           for branch in $branches; do
             git fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch"
             # The text merge, which is what merging the pull request does.
