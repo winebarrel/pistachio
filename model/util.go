@@ -3,6 +3,7 @@ package model
 import (
 	"regexp"
 	"strings"
+	"sync"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
@@ -27,6 +28,21 @@ func quoteIdent(name string) string {
 		return `""`
 	}
 
+	// A plan quotes the same names many times, and the keyword check is a
+	// scan through cgo, so the answer is kept per name.
+	if v, ok := quotedIdents.Load(name); ok {
+		return v.(string)
+	}
+
+	v := quoteIdentUncached(name)
+	quotedIdents.Store(name, v)
+
+	return v
+}
+
+var quotedIdents sync.Map
+
+func quoteIdentUncached(name string) string {
 	if !safeIdentifierPattern.MatchString(name) {
 		return quote(name)
 	}
