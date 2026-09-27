@@ -37,7 +37,7 @@ func (d Domain) FQDN() string {
 
 func (d Domain) SQL() string {
 	var sql strings.Builder
-	sql.WriteString("CREATE DOMAIN " + Ident(d.Schema, d.Name) + " AS " + d.BaseType)
+	sql.WriteString("CREATE DOMAIN " + d.FQDN() + " AS " + d.BaseType)
 
 	if d.Collation != nil {
 		sql.WriteString(" COLLATE " + *d.Collation)
@@ -70,14 +70,14 @@ func (d Domain) NotValidConSQL() []string {
 		if c.Validated {
 			continue
 		}
-		stmts = append(stmts, "ALTER DOMAIN "+Ident(d.Schema, d.Name)+" ADD CONSTRAINT "+Ident(c.Name)+" "+c.Definition+" NOT VALID;")
+		stmts = append(stmts, "ALTER DOMAIN "+d.FQDN()+" ADD CONSTRAINT "+Ident(c.Name)+" "+c.Definition+" NOT VALID;")
 	}
 	return stmts
 }
 
 func (d Domain) CommentSQL() string {
 	if d.Comment != nil {
-		return "COMMENT ON DOMAIN " + Ident(d.Schema, d.Name) + " IS " + QuoteLiteral(*d.Comment) + ";"
+		return "COMMENT ON DOMAIN " + d.FQDN() + " IS " + QuoteLiteral(*d.Comment) + ";"
 	}
 	return ""
 }
