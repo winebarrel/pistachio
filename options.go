@@ -234,9 +234,6 @@ func (o *ScopeOptions) searchPath() string {
 }
 
 func (o *ScopeOptions) RemapSchema(schema string) string {
-	if o.SchemaMap == nil {
-		return schema
-	}
 	if mapped, ok := o.SchemaMap[schema]; ok {
 		return mapped
 	}
@@ -244,9 +241,6 @@ func (o *ScopeOptions) RemapSchema(schema string) string {
 }
 
 func (o *ScopeOptions) ReverseRemapSchema(schema string) string {
-	if o.SchemaMap == nil {
-		return schema
-	}
 	for k, v := range o.SchemaMap {
 		if v == schema {
 			return k
