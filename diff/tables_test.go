@@ -1343,7 +1343,7 @@ func TestDiffIndexes_drop_pureDrop_neverConcurrently(t *testing.T) {
 }
 
 func TestDiffIndexes_drop_pureDrop_currentConcurrentlyForced(t *testing.T) {
-	// When forceConcurrentlyDirectives sets Concurrently on the current
+	// When setConcurrentlyDirectives sets Concurrently on the current
 	// index, the pure-drop branch falls back to that flag and emits
 	// DROP INDEX CONCURRENTLY.
 	current := orderedmap.New[string, *model.Index]()

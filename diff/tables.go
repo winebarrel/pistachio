@@ -1588,7 +1588,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consume
 			// being changed) has the per-index directive. For pure drops the
 			// desired entry is absent, so fall back to the current entry; that
 			// field is normally false because the catalog doesn't carry it,
-			// but --force-index-concurrently sets it via forceConcurrentlyDirectives.
+			// but --force-index-concurrently sets it via setConcurrentlyDirectives.
 			useConcurrently := currentIdx.Concurrently
 			if ok {
 				useConcurrently = desiredIdx.Concurrently
