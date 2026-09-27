@@ -28,7 +28,7 @@ func (c *Catalog) Views(ctx context.Context) (*orderedmap.Map[string, *model.Vie
 	}
 
 	for _, idx := range indexes {
-		fqvn := model.Ident(idx.Schema, idx.Table)
+		fqvn := idx.FQTN()
 		if v, ok := viewByKey.GetOk(fqvn); ok && v.Materialized {
 			v.Indexes.Set(idx.Name, idx)
 		}
