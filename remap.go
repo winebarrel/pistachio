@@ -54,11 +54,10 @@ func buildDefReplacer(schemaMap map[string]string) *defReplacer {
 	return r
 }
 
-// Replace returns s with every mapped schema prefix rewritten outside string
-// literals. A literal holds data, not a name, and is left alone. The exception
-// is a literal that names an object: the argument of nextval, currval or
-// setval, and a literal cast to an object identifier type, which
-// remapDefaultExpr rewrites in a default the same way.
+// Replace rewrites every mapped schema prefix in s outside string literals. A
+// literal is left alone unless it names an object, as the argument of nextval,
+// currval or setval or cast to an object identifier type, which
+// remapDefaultExpr treats the same way in a default.
 func (r *defReplacer) Replace(s string) string {
 	var b strings.Builder
 	code := 0

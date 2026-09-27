@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `--schema-map` no longer rewrites a string literal in an index, constraint, policy, trigger or view definition, so `WHERE host = 'old.example.com'` keeps its text. A literal that names an object, the argument of `nextval` or a literal cast to `regclass` or another object identifier type, is still rewritten, as in a default.
+* `--schema-map` no longer rewrites a string literal in an index, constraint, policy, trigger or view definition. It still rewrites one that names an object, such as the argument of `nextval` or a literal cast to `regclass`, as it does in a default.
 
 * `plan` now fails when an index on a partitioned table would be created or dropped `CONCURRENTLY`, through `--force-index-concurrently` or `-- pista:concurrently`. PostgreSQL rejects both, so `apply` used to stop at that statement.
 

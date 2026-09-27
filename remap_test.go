@@ -113,18 +113,24 @@ func TestBuildDefReplacer_StringLiteral(t *testing.T) {
 	}
 }
 
-// A string literal in an index predicate, a CHECK constraint and a view body
-// keeps its text in dump, and the dump plans back clean.
+// A string literal keeps its text in every kind of definition the replacer
+// reads, a literal cast to regclass is mapped, and the dump plans back clean.
 func TestDump_WithSchemaMap_StringLiteral(t *testing.T) {
 	ctx := context.Background()
 
 	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE DOMAIN myschema.host_name AS text CONSTRAINT host_name_check CHECK (VALUE <> 'myschema.domain');
 CREATE TABLE myschema.hosts (
     id integer PRIMARY KEY,
-    name text CONSTRAINT hosts_name_check CHECK (name <> 'myschema.invalid')
+    name text CONSTRAINT hosts_name_check CHECK (name <> 'myschema.invalid'),
+    alias myschema.host_name
 );
 CREATE INDEX hosts_name_idx ON myschema.hosts (id) WHERE name = 'myschema.example.com';
-CREATE VIEW myschema.example_hosts AS SELECT id FROM myschema.hosts WHERE name = 'myschema.example.com';
+CREATE VIEW myschema.example_hosts AS SELECT id, 'myschema.hosts'::regclass AS rel FROM myschema.hosts WHERE name = 'myschema.example.com';
+ALTER TABLE myschema.hosts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY hosts_policy ON myschema.hosts USING (name <> 'myschema.hidden');
+CREATE FUNCTION myschema.hosts_trg() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+CREATE TRIGGER hosts_trg BEFORE INSERT ON myschema.hosts FOR EACH ROW WHEN (NEW.name <> 'myschema.trigger') EXECUTE FUNCTION myschema.hosts_trg();
 `)
 	opts := &Options{
 		ConnString: connString,
@@ -135,9 +141,11 @@ CREATE VIEW myschema.example_hosts AS SELECT id FROM myschema.hosts WHERE name =
 	got, err := NewClient(opts).Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
 	output := got.String()
-	assert.Contains(t, output, "'myschema.invalid'")
+	for _, lit := range []string{"'myschema.domain'", "'myschema.invalid'", "'myschema.hidden'", "'myschema.trigger'"} {
+		assert.Contains(t, output, lit)
+	}
 	assert.Equal(t, 2, strings.Count(output, "'myschema.example.com'"))
-	assert.NotContains(t, output, "'public.")
+	assert.Contains(t, output, "'public.hosts'::regclass")
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(output), 0o644))
