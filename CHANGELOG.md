@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.68.0] - 2026-09-27
 
 * `--schema-map` now maps the indexes of a materialized view. `dump` wrote an index and its comment under the unmapped schema, so planning the dump failed, and `plan` created the index in the mapped schema.
 
