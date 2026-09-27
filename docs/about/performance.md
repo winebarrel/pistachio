@@ -73,8 +73,8 @@ why the smallest schemas do not get proportionally faster. Going from 100 to
 No single stage dominates. The create plan parses the SQL file and diffs it
 without reading the catalog; dump reads the catalog and serializes it without
 parsing. At 1,000 tables the two cost about the same, 1.03s and 0.96s. The noop
-plan, which does both, costs 1.37s, less than their sum because it writes no
-output: the create plan spends part of its time generating 16,000 lines of DDL,
+plan, which does both, costs 1.37s, less than their sum because it emits no
+DDL: the create plan spends part of its time generating 16,000 lines of DDL,
 and dump spends part of its time formatting. The catalog read used to
 cost a round trip per object and outweighed the rest; 1.39.0, which this build
 includes, made it a fixed number of queries.
