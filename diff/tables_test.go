@@ -2422,7 +2422,7 @@ func TestDiffTable_partitionChild(t *testing.T) {
 	desired.PartitionBound = &bound
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", Definition: "CREATE INDEX idx_new ON public.events_2024 (id)"})
 
-	tableResult, err := diffTable(current, desired, allowAllDrops{})
+	tableResult, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, tableResult.Stmts, 1)
 	assert.Contains(t, tableResult.Stmts[0], "CREATE INDEX idx_new")
@@ -2488,7 +2488,7 @@ func TestDiffTable_partitionChild_comments(t *testing.T) {
 	desired.PartitionOf = &parent
 	desired.PartitionBound = &bound
 
-	tableResult, err := diffTable(current, desired, allowAllDrops{})
+	tableResult, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, tableResult.Stmts, 2)
 	assert.Equal(t, "COMMENT ON TABLE public.events_2024 IS NULL;", tableResult.Stmts[0])
@@ -2509,7 +2509,7 @@ func TestDiffTable_partitionChild_indexRenameError(t *testing.T) {
 	oldName := "nonexistent"
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", RenameFrom: &oldName, Definition: "CREATE INDEX idx_new ON public.events_2024 (id)"})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source index")
 }
@@ -2532,7 +2532,7 @@ func TestDiffTable_partitionChild_fkRenameError(t *testing.T) {
 		Table:  "events_2024",
 	})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -2546,7 +2546,7 @@ func TestDiffTable_constraintRenameError(t *testing.T) {
 	oldName := "nonexistent"
 	desired.Constraints.Set("new_con", &model.Constraint{Name: "new_con", RenameFrom: &oldName, Definition: "UNIQUE (id)"})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source constraint")
 }
@@ -2560,7 +2560,7 @@ func TestDiffTable_indexRenameError(t *testing.T) {
 	oldName := "nonexistent"
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", RenameFrom: &oldName, Definition: "CREATE INDEX idx_new ON public.users (id)"})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source index")
 }
@@ -2578,7 +2578,7 @@ func TestDiffTable_fkRenameError(t *testing.T) {
 		Table:  "users",
 	})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -2611,7 +2611,7 @@ func TestDiffTable_columnRenameRewritesDependents(t *testing.T) {
 		Definition: "CREATE INDEX idx_users_name ON public.users USING btree (display_name)",
 	})
 
-	tableResult, err := diffTable(current, desired, allowAllDrops{})
+	tableResult, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.NoError(t, err)
 
 	// Only the RENAME COLUMN should be emitted; no redundant DROP/CREATE

@@ -1,0 +1,16 @@
+# A collation named "default" in another schema is not the built-in one, so
+# it is not folded and moving to it rebuilds the index.
+init: |
+  CREATE COLLATION public."default" (provider = libc, locale = 'C');
+  CREATE TABLE public.users (
+      email text
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email);
+desired: |
+  CREATE TABLE public.users (
+      email text
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE public."default");
+plan: |
+  DROP INDEX public.users_email_idx;
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE public."default");

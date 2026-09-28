@@ -106,6 +106,21 @@ type partitionedIndexStmts struct {
 
 // partitionDepth counts the partitioned tables above t. A parent outside
 // tables, as a filter leaves it, counts as one level and ends the count.
+// indexColumns returns the columns a table's indexes are compared against. A
+// partition child declares none, so they come from the nearest desired
+// ancestor that does. It returns nil when that ancestor is not in the desired
+// schema, and nil columns fold nothing.
+func indexColumns(tables *orderedmap.Map[string, *model.Table], t *model.Table) *orderedmap.Map[string, *model.Column] {
+	for t.IsPartitionChild() {
+		parent, ok := tables.GetOk(*t.PartitionOf)
+		if !ok {
+			return nil
+		}
+		t = parent
+	}
+	return t.Columns
+}
+
 func partitionDepth(tables *orderedmap.Map[string, *model.Table], t *model.Table) int {
 	depth := 0
 	for t.PartitionOf != nil {
@@ -182,7 +197,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 				}
 			}
 			result.RetypedColumns = append(result.RetypedColumns, retypedColumns(k, currentKey, currentTable, desiredTable, original)...)
-			tableResult, err := diffTable(currentTable, desiredTable, dc)
+			tableResult, err := diffTable(currentTable, desiredTable, indexColumns(desired, desiredTable), dc)
 			if err != nil {
 				return nil, err
 			}
@@ -278,7 +293,9 @@ type tableDiffResult struct {
 	HasConcurrently       bool
 }
 
-func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult, error) {
+// diffTable diffs one table. columns are the ones its indexes are compared
+// against; see indexColumns.
+func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *model.Column], dc DropChecker) (*tableDiffResult, error) {
 	dc = normalizeDropChecker(dc)
 	result := &tableDiffResult{}
 	fqtn := desired.FQTN()
@@ -287,10 +304,9 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// so skip diffing them to avoid false DROP statements. RLS flags,
 	// policies and comments are owned per-relation (children do not
 	// auto-inherit them), so they're still diffed here, mirroring how
-	// indexes and FKs work. The desired child declares no columns, so its
-	// indexes use the columns the catalog reads onto it.
+	// indexes and FKs work.
 	if desired.IsPartitionChild() {
-		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, current.Columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
+		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
 		if err != nil {
 			return nil, err
 		}
@@ -365,7 +381,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// TABLE run that --bulk-alter merges in one piece.
 	result.Stmts = append(result.Stmts, notNullDrops...)
 
-	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, desired.Columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
+	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
 	if err != nil {
 		return nil, err
 	}
@@ -2054,13 +2070,23 @@ func dropDefaultCollation(is *pg_query.IndexStmt, columns *orderedmap.Map[string
 		if ie == nil || ie.Name == "" || len(ie.Collation) == 0 {
 			continue
 		}
-		if ie.Collation[len(ie.Collation)-1].GetString_().GetSval() != "default" {
+		if !isDefaultCollation(ie.Collation) {
 			continue
 		}
 		if col, ok := columns.GetOk(ie.Name); ok && col.Collation == nil {
 			ie.Collation = nil
 		}
 	}
+}
+
+// isDefaultCollation reports whether a COLLATE name is the built-in default:
+// "default" alone or qualified with pg_catalog. A "default" in another schema
+// is a collation of its own.
+func isDefaultCollation(name []*pg_query.Node) bool {
+	if name[len(name)-1].GetString_().GetSval() != "default" {
+		return false
+	}
+	return len(name) == 1 || len(name) == 2 && name[0].GetString_().GetSval() == "pg_catalog"
 }
 
 // alignIndexCasts asymmetrically strips current-side TypeCast wrappers at
