@@ -1,0 +1,18 @@
+# The column moves to "C" and the index keeps the default collation, which the
+# catalog now writes.
+init: |
+  CREATE TABLE public.users (
+      email text
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email);
+desired: |
+  CREATE TABLE public.users (
+      email text COLLATE "C"
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "default");
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      email text COLLATE pg_catalog."C"
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "default");

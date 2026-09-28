@@ -382,7 +382,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			// replaces the options as a whole, so only these branches need an
 			// ALTER.
 			if desiredView.Materialized {
-				idxResult, err := diffIndexes(viewIndexes(currentView), viewIndexes(desiredView), nil, false, dc)
+				idxResult, err := diffIndexes(viewIndexes(currentView), viewIndexes(desiredView), nil, nil, false, dc)
 				if err != nil {
 					return nil, err
 				}

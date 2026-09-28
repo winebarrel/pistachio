@@ -1,0 +1,23 @@
+# On a column of another collation the catalog writes COLLATE "default", so
+# adding it rebuilds the index.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text COLLATE "C" NOT NULL,
+      name text COLLATE "C" NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email);
+  CREATE INDEX users_name_idx ON public.users USING btree (name COLLATE "default");
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text COLLATE "C" NOT NULL,
+      name text COLLATE "C" NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "default");
+  CREATE INDEX users_name_idx ON public.users USING btree (name COLLATE "default");
+plan: |
+  DROP INDEX public.users_email_idx;
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "default");

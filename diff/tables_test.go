@@ -191,17 +191,17 @@ func TestPartitionedIndexConcurrently(t *testing.T) {
 	empty := orderedmap.New[string, *model.Index]()
 
 	t.Run("create", func(t *testing.T) {
-		_, err := diffIndexes(empty, concurrentIndexes(), nil, true, allowAllDrops{})
+		_, err := diffIndexes(empty, concurrentIndexes(), nil, nil, true, allowAllDrops{})
 		require.EqualError(t, err, wantErr)
 	})
 
 	t.Run("drop", func(t *testing.T) {
-		_, err := diffIndexes(concurrentIndexes(), empty, nil, true, allowAllDrops{})
+		_, err := diffIndexes(concurrentIndexes(), empty, nil, nil, true, allowAllDrops{})
 		require.EqualError(t, err, wantErr)
 	})
 
 	t.Run("skipped drop", func(t *testing.T) {
-		result, err := diffIndexes(concurrentIndexes(), empty, nil, true, denyAllDrops{})
+		result, err := diffIndexes(concurrentIndexes(), empty, nil, nil, true, denyAllDrops{})
 		require.NoError(t, err)
 		assert.Empty(t, result.Stmts)
 		assert.Equal(t, []string{"-- skipped: DROP INDEX CONCURRENTLY public.logs_id_idx;"}, result.DisallowedDropStmts)
@@ -215,7 +215,7 @@ func TestPartitionedIndexConcurrently(t *testing.T) {
 	})
 
 	t.Run("plain table", func(t *testing.T) {
-		result, err := diffIndexes(empty, concurrentIndexes(), nil, false, allowAllDrops{})
+		result, err := diffIndexes(empty, concurrentIndexes(), nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY logs_id_idx ON public.logs USING btree (id);"}, result.Stmts)
 	})
@@ -233,6 +233,24 @@ func TestPartitionDepth(t *testing.T) {
 	// A parent outside the map, as a filter leaves it, counts as one level
 	// and ends the count, so the partition still comes before a top level.
 	assert.Equal(t, 1, partitionDepth(tables, partitionedTable("x_1", "x", "x_1_id_idx")))
+}
+
+func TestIndexColumns(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	top := partitionedTable("m", "", "m_id_idx")
+	top.Columns.Set("id", &model.Column{Name: "id", TypeName: "text"})
+	mid := partitionedTable("m_1", "m", "m_1_id_idx")
+	tables.Set("public.m", top)
+	tables.Set("public.m_1", mid)
+	leaf := partitionedTable("m_1_a", "m_1", "m_1_a_id_idx")
+	current := newTable("public", "m_1_a")
+	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "text", Collation: new(`"C"`)})
+
+	assert.Same(t, top.Columns, indexColumns(tables, top, top))
+	assert.Same(t, top.Columns, indexColumns(tables, leaf, current))
+	// A filter that leaves the parent out leaves the child's own columns.
+	orphan := partitionedTable("x_1", "x", "x_1_id_idx")
+	assert.Same(t, current.Columns, indexColumns(tables, orphan, current))
 }
 
 func TestDiffTables_retypedColumns(t *testing.T) {
@@ -1159,7 +1177,7 @@ func TestDiffIndexes_dropConsumedByUsingIndex(t *testing.T) {
 	current.Set("users_email_key", &model.Index{Schema: "public", Name: "users_email_key", Definition: "CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, map[string]bool{"users_email_key": true}, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, map[string]bool{"users_email_key": true}, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 	assert.Empty(t, idxResult.DisallowedDropStmts)
@@ -1173,7 +1191,7 @@ func TestDiffIndexes_addConsumedByUsingIndex(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("users_email_idx", &model.Index{Schema: "public", Name: "users_email_idx", Definition: "CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email)"})
 
-	idxResult, err := diffIndexes(current, desired, map[string]bool{"users_email_idx": true}, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, map[string]bool{"users_email_idx": true}, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 }
@@ -1183,7 +1201,7 @@ func TestDiffIndexes_add(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE INDEX idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
@@ -1193,7 +1211,7 @@ func TestDiffIndexes_drop(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
 }
@@ -1207,7 +1225,7 @@ func TestDiffIndexes_dropAttached(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("logs_2025_id_idx", &model.Index{Schema: "public", Name: "logs_2025_id_idx", Definition: "CREATE INDEX logs_2025_id_idx ON public.logs_2025 USING btree (id, at)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, denyAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, denyAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE INDEX logs_2025_id_idx ON public.logs_2025 USING btree (id, at);"}, idxResult.Stmts)
 	assert.Empty(t, idxResult.DisallowedDropStmts)
@@ -1218,7 +1236,7 @@ func TestDiffIndexes_drop_denied(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, nil, false, denyAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, denyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 	assert.Equal(t, []string{"-- skipped: DROP INDEX public.idx_name;"}, idxResult.DisallowedDropStmts)
@@ -1232,7 +1250,7 @@ func TestDiffIndexes_change_denied_alwaysExecutes(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, denyAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, denyAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.DisallowedDropStmts)
 	assert.Len(t, idxResult.Stmts, 2)
@@ -1245,7 +1263,7 @@ func TestDiffIndexes_change(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 2)
 	assert.Equal(t, "DROP INDEX public.idx_name;", idxResult.Stmts[0])
@@ -1261,7 +1279,7 @@ func TestDiffIndexes_comment(t *testing.T) {
 		desired := orderedmap.New[string, *model.Index]()
 		desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def, Comment: new("Lookup by name")})
 
-		idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+		idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"COMMENT ON INDEX public.idx_name IS 'Lookup by name';"}, idxResult.Stmts)
 	})
@@ -1272,7 +1290,7 @@ func TestDiffIndexes_comment(t *testing.T) {
 		desired := orderedmap.New[string, *model.Index]()
 		desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def})
 
-		idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+		idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"COMMENT ON INDEX public.idx_name IS NULL;"}, idxResult.Stmts)
 	})
@@ -1283,7 +1301,7 @@ func TestDiffIndexes_comment(t *testing.T) {
 		desired := orderedmap.New[string, *model.Index]()
 		desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: def, Comment: new("Lookup by name")})
 
-		idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+		idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Empty(t, idxResult.Stmts)
 	})
@@ -1300,7 +1318,7 @@ func TestDiffIndexes_comment(t *testing.T) {
 			Comment:    new("Lookup by name"),
 		})
 
-		idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+		idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"DROP INDEX public.idx_name;",
@@ -1315,7 +1333,7 @@ func TestDiffIndexes_add_uniqueConcurrently_perDirective(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE UNIQUE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE UNIQUE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
@@ -1325,7 +1343,7 @@ func TestDiffIndexes_add_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);"}, idxResult.Stmts)
 }
@@ -1337,7 +1355,7 @@ func TestDiffIndexes_drop_pureDrop_neverConcurrently(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)"})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP INDEX public.idx_name;"}, idxResult.Stmts)
 }
@@ -1350,7 +1368,7 @@ func TestDiffIndexes_drop_pureDrop_currentConcurrentlyForced(t *testing.T) {
 	current.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 	desired := orderedmap.New[string, *model.Index]()
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP INDEX CONCURRENTLY public.idx_name;"}, idxResult.Stmts)
 	assert.True(t, idxResult.HasConcurrently)
@@ -1362,7 +1380,7 @@ func TestDiffIndexes_change_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING hash (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 2)
 	assert.Equal(t, "DROP INDEX CONCURRENTLY public.idx_name;", idxResult.Stmts[0])
@@ -1375,7 +1393,7 @@ func TestDiffIndexes_mixedConcurrently(t *testing.T) {
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 	desired.Set("idx_email", &model.Index{Schema: "public", Name: "idx_email", Definition: "CREATE INDEX idx_email ON public.users USING btree (email)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 2)
 	assert.Equal(t, "CREATE INDEX CONCURRENTLY idx_name ON public.users USING btree (name);", idxResult.Stmts[0])
@@ -1390,7 +1408,7 @@ func TestDiffIndexes_rename_perIndexConcurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	// Rename should NOT use CONCURRENTLY even with per-index directive
 	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, idxResult.Stmts)
@@ -1402,7 +1420,7 @@ func TestDiffIndexes_partialIndex_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_active", &model.Index{Schema: "public", Name: "idx_active", Definition: "CREATE INDEX idx_active ON public.users USING btree (name) WHERE (active = true)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 1)
 	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
@@ -1415,7 +1433,7 @@ func TestDiffIndexes_expressionIndex_concurrently(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_lower", &model.Index{Schema: "public", Name: "idx_lower", Definition: "CREATE INDEX idx_lower ON public.users USING btree (lower(name))", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, idxResult.Stmts, 1)
 	assert.Contains(t, idxResult.Stmts[0], "CREATE INDEX CONCURRENTLY")
@@ -1428,7 +1446,7 @@ func TestDiffIndexes_hasConcurrently_directive(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx_name", &model.Index{Schema: "public", Name: "idx_name", Definition: "CREATE INDEX idx_name ON public.users USING btree (name)", Concurrently: true})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.True(t, idxResult.HasConcurrently)
 }
@@ -2422,7 +2440,7 @@ func TestDiffTable_partitionChild(t *testing.T) {
 	desired.PartitionBound = &bound
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", Definition: "CREATE INDEX idx_new ON public.events_2024 (id)"})
 
-	tableResult, err := diffTable(current, desired, allowAllDrops{})
+	tableResult, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Len(t, tableResult.Stmts, 1)
 	assert.Contains(t, tableResult.Stmts[0], "CREATE INDEX idx_new")
@@ -2488,7 +2506,7 @@ func TestDiffTable_partitionChild_comments(t *testing.T) {
 	desired.PartitionOf = &parent
 	desired.PartitionBound = &bound
 
-	tableResult, err := diffTable(current, desired, allowAllDrops{})
+	tableResult, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.NoError(t, err)
 	require.Len(t, tableResult.Stmts, 2)
 	assert.Equal(t, "COMMENT ON TABLE public.events_2024 IS NULL;", tableResult.Stmts[0])
@@ -2509,7 +2527,7 @@ func TestDiffTable_partitionChild_indexRenameError(t *testing.T) {
 	oldName := "nonexistent"
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", RenameFrom: &oldName, Definition: "CREATE INDEX idx_new ON public.events_2024 (id)"})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source index")
 }
@@ -2532,7 +2550,7 @@ func TestDiffTable_partitionChild_fkRenameError(t *testing.T) {
 		Table:  "events_2024",
 	})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -2546,7 +2564,7 @@ func TestDiffTable_constraintRenameError(t *testing.T) {
 	oldName := "nonexistent"
 	desired.Constraints.Set("new_con", &model.Constraint{Name: "new_con", RenameFrom: &oldName, Definition: "UNIQUE (id)"})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source constraint")
 }
@@ -2560,7 +2578,7 @@ func TestDiffTable_indexRenameError(t *testing.T) {
 	oldName := "nonexistent"
 	desired.Indexes.Set("idx_new", &model.Index{Schema: "public", Name: "idx_new", RenameFrom: &oldName, Definition: "CREATE INDEX idx_new ON public.users (id)"})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source index")
 }
@@ -2578,7 +2596,7 @@ func TestDiffTable_fkRenameError(t *testing.T) {
 		Table:  "users",
 	})
 
-	_, err := diffTable(current, desired, allowAllDrops{})
+	_, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source foreign key")
 }
@@ -2611,7 +2629,7 @@ func TestDiffTable_columnRenameRewritesDependents(t *testing.T) {
 		Definition: "CREATE INDEX idx_users_name ON public.users USING btree (display_name)",
 	})
 
-	tableResult, err := diffTable(current, desired, allowAllDrops{})
+	tableResult, err := diffTable(current, desired, nil, allowAllDrops{})
 	require.NoError(t, err)
 
 	// Only the RENAME COLUMN should be emitted; no redundant DROP/CREATE
@@ -3125,6 +3143,7 @@ func TestEqualIndexDef_sameSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id)",
+		nil,
 	))
 }
 
@@ -3132,6 +3151,7 @@ func TestEqualIndexDef_schemaVsNoSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON users USING btree (id)",
+		nil,
 	))
 }
 
@@ -3139,6 +3159,7 @@ func TestEqualIndexDef_only(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON ONLY public.logs USING btree (at)",
 		"CREATE INDEX idx ON logs USING btree (at)",
+		nil,
 	))
 }
 
@@ -3146,6 +3167,7 @@ func TestEqualIndexDef_customSchemaVsNoSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.users USING btree (id)",
 		"CREATE INDEX idx ON users USING btree (id)",
+		nil,
 	))
 }
 
@@ -3154,6 +3176,7 @@ func TestEqualIndexDef_differentSchemas(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id)",
+		nil,
 	))
 }
 
@@ -3161,6 +3184,7 @@ func TestEqualIndexDef_whereClauseSchemaVsNoSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE UNIQUE INDEX idx ON myschema.products USING btree (sku) WHERE removed_at IS NULL AND sku IS NOT NULL",
 		"CREATE UNIQUE INDEX idx ON products USING btree (sku) WHERE removed_at IS NULL AND sku IS NOT NULL",
+		nil,
 	))
 }
 
@@ -3169,6 +3193,7 @@ func TestEqualIndexDef_whereClauseFormattingDiff(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.products USING btree (group_id) WHERE ((group_id IS NOT NULL))",
 		"CREATE INDEX idx ON products USING btree (group_id) WHERE group_id IS NOT NULL",
+		nil,
 	))
 }
 
@@ -3176,6 +3201,7 @@ func TestEqualIndexDef_whereClauseWithCast(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.events USING btree (created_at) WHERE ((kind)::text = 'done'::text)",
 		"CREATE INDEX idx ON events USING btree (created_at) WHERE kind::text = 'done'::text",
+		nil,
 	))
 }
 
@@ -3183,6 +3209,7 @@ func TestEqualIndexDef_whereClauseBooleanCondition(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.tasks USING btree (priority) WHERE ((visible = true))",
 		"CREATE INDEX idx ON tasks USING btree (priority) WHERE visible = true",
+		nil,
 	))
 }
 
@@ -3190,6 +3217,7 @@ func TestEqualIndexDef_whereClauseMultipleConditions(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE UNIQUE INDEX idx ON myschema.tasks USING btree (kind, seq) WHERE ((visible = true) AND (seq > 0))",
 		"CREATE UNIQUE INDEX idx ON tasks USING btree (kind, seq) WHERE visible = true AND seq > 0",
+		nil,
 	))
 }
 
@@ -3199,6 +3227,7 @@ func TestEqualIndexDef_whereCurrentDateCastStripped(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON events USING btree (id) WHERE (created_at >= '2020-01-01'::date)",
 		"CREATE INDEX idx ON events USING btree (id) WHERE created_at >= '2020-01-01'",
+		nil,
 	))
 }
 
@@ -3206,6 +3235,7 @@ func TestEqualIndexDef_whereCurrentTimeCastStripped(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON shifts USING btree (id) WHERE (starts_at >= '00:00:00'::time without time zone)",
 		"CREATE INDEX idx ON shifts USING btree (id) WHERE starts_at >= '00:00:00'",
+		nil,
 	))
 }
 
@@ -3216,6 +3246,7 @@ func TestEqualIndexDef_whereCurrentNegativeIntCastStripped(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON balances USING btree (id) WHERE (amount >= '-40'::integer)",
 		"CREATE INDEX idx ON balances USING btree (id) WHERE amount >= -40",
+		nil,
 	))
 }
 
@@ -3224,6 +3255,7 @@ func TestEqualIndexDef_whereCurrentCastInsideBoolExpr(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE ((visible = true) AND (starts_at >= '00:00:00'::time without time zone))",
 		"CREATE INDEX idx ON t USING btree (id) WHERE visible = true AND starts_at >= '00:00:00'",
+		nil,
 	))
 }
 
@@ -3235,6 +3267,7 @@ func TestEqualIndexDef_whereCustomNumericNamedTypeNotCoerced(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::myapp.int4)",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > 0",
+		nil,
 	))
 }
 
@@ -3244,6 +3277,7 @@ func TestEqualIndexDef_expressionCurrentCastStripped(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON people USING btree (lower((name)::text))",
 		"CREATE INDEX idx ON people USING btree (lower(name))",
+		nil,
 	))
 }
 
@@ -3253,6 +3287,7 @@ func TestEqualIndexDef_whereBothExplicitCastsMatch(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON events USING btree (id) WHERE (occurred_at >= '2020-01-01'::date)",
 		"CREATE INDEX idx ON events USING btree (id) WHERE occurred_at >= '2020-01-01'::date",
+		nil,
 	))
 }
 
@@ -3261,6 +3296,7 @@ func TestEqualIndexDef_whereCastsDifferTypes(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::bigint)",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > '0'::integer",
+		nil,
 	))
 }
 
@@ -3271,6 +3307,7 @@ func TestEqualIndexDef_whereDesiredCastCurrentBare(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > 0",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > '0'::integer",
+		nil,
 	))
 }
 
@@ -3308,6 +3345,7 @@ func TestEqualIndexDef_explicitAscVsDefault(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 DESC, col2)",
 		"CREATE INDEX idx ON t USING btree (col1 DESC, col2 ASC)",
+		nil,
 	))
 }
 
@@ -3315,6 +3353,7 @@ func TestEqualIndexDef_allDefault(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 ASC)",
+		nil,
 	))
 }
 
@@ -3323,6 +3362,7 @@ func TestEqualIndexDef_descNullsFirst(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 DESC)",
 		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS FIRST)",
+		nil,
 	))
 }
 
@@ -3331,6 +3371,7 @@ func TestEqualIndexDef_ascNullsLast(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS LAST)",
+		nil,
 	))
 }
 
@@ -3339,6 +3380,7 @@ func TestEqualIndexDef_descNullsLast_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 DESC)",
 		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS LAST)",
+		nil,
 	))
 }
 
@@ -3347,6 +3389,7 @@ func TestEqualIndexDef_ascNullsFirst_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS FIRST)",
+		nil,
 	))
 }
 
@@ -3356,6 +3399,7 @@ func TestEqualIndexDef_opclassQualified(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (col1 public.text_pattern_ops)",
+		nil,
 	))
 }
 
@@ -3363,6 +3407,7 @@ func TestEqualIndexDef_opclassDiffers_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (col1 varchar_pattern_ops)",
+		nil,
 	))
 }
 
@@ -3372,6 +3417,7 @@ func TestEqualIndexDef_opclassOptionQuoting(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='32'))",
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen=32))",
+		nil,
 	))
 }
 
@@ -3380,6 +3426,7 @@ func TestEqualIndexDef_opclassOptionOrder(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (numranges='4', siglen='32'))",
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (siglen=32, numranges=4))",
+		nil,
 	))
 }
 
@@ -3387,6 +3434,7 @@ func TestEqualIndexDef_opclassOptionDiffers_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='32'))",
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='64'))",
+		nil,
 	))
 }
 
@@ -3396,6 +3444,7 @@ func TestEqualIndexDef_opclassOptionFractional(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate='0.05'))",
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate=0.05))",
+		nil,
 	))
 }
 
@@ -3403,6 +3452,7 @@ func TestEqualIndexDef_opclassOptionFractionalDiffers_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate='0.05'))",
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate=0.02))",
+		nil,
 	))
 }
 
@@ -3412,6 +3462,7 @@ func TestEqualIndexDef_opclassOptionBareWord(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (mode=fast))",
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (mode='fast'))",
+		nil,
 	))
 }
 
@@ -3422,6 +3473,7 @@ func TestEqualIndexDef_opclassOnlyOnOneSide_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 text_ops)",
+		nil,
 	))
 }
 
@@ -3429,6 +3481,7 @@ func TestEqualIndexDef_opclassOptionOnlyOnOneSide_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops)",
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen=32))",
+		nil,
 	))
 }
 
@@ -3437,6 +3490,7 @@ func TestEqualIndexDef_opclassOnExpression(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (lower(col1) text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (pg_catalog.lower(col1) public.text_pattern_ops)",
+		nil,
 	))
 }
 
@@ -3445,6 +3499,7 @@ func TestEqualIndexDef_opclassOnSecondColumn(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1, col2 text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (col1, col2 public.text_pattern_ops)",
+		nil,
 	))
 }
 
@@ -3453,6 +3508,7 @@ func TestEqualIndexDef_collationQualified(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE pg_catalog."C")`,
+		nil,
 	))
 }
 
@@ -3460,6 +3516,7 @@ func TestEqualIndexDef_collationDiffers_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "POSIX")`,
+		nil,
 	))
 }
 
@@ -3469,6 +3526,7 @@ func TestEqualIndexDef_collationOnlyOnOneSide_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
+		nil,
 	))
 }
 
@@ -3476,18 +3534,19 @@ func TestEqualIndexDef_different(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (name)",
+		nil,
 	))
 }
 
 func TestEqualIndexDef_parseError(t *testing.T) {
-	assert.False(t, equalIndexDef("NOT VALID SQL", "CREATE INDEX idx ON users (id)"))
-	assert.True(t, equalIndexDef("NOT VALID SQL", "NOT VALID SQL"))
+	assert.False(t, equalIndexDef("NOT VALID SQL", "CREATE INDEX idx ON users (id)", nil))
+	assert.True(t, equalIndexDef("NOT VALID SQL", "NOT VALID SQL", nil))
 }
 
 func TestEqualIndexDef_notIndexStmt(t *testing.T) {
 	// Valid SQL but not an INDEX statement; falls back to string comparison
-	assert.False(t, equalIndexDef("SELECT 1", "CREATE INDEX idx ON users (id)"))
-	assert.True(t, equalIndexDef("SELECT 1", "SELECT 1"))
+	assert.False(t, equalIndexDef("SELECT 1", "CREATE INDEX idx ON users (id)", nil))
+	assert.True(t, equalIndexDef("SELECT 1", "SELECT 1", nil))
 }
 
 func TestDiffTables_indexSchemaInsensitive(t *testing.T) {
@@ -3581,7 +3640,7 @@ func TestDiffIndexes_rename_selfRename_skipped(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("idx", &model.Index{Schema: "public", Name: "idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX idx ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 }
@@ -3785,7 +3844,7 @@ func TestDiffIndexes_rename(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER INDEX public.old_idx RENAME TO new_idx;"}, idxResult.Stmts)
 }
@@ -3823,7 +3882,7 @@ func TestDiffIndexes_rename_alreadyApplied(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	idxResult, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	idxResult, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Empty(t, idxResult.Stmts)
 }
@@ -3835,7 +3894,7 @@ func TestDiffIndexes_rename_sourceNotFound(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	_, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	_, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rename source index")
 }
@@ -3921,7 +3980,7 @@ func TestDiffIndexes_rename_destinationExists_error(t *testing.T) {
 	desired := orderedmap.New[string, *model.Index]()
 	desired.Set("new_idx", &model.Index{Schema: "public", Name: "new_idx", RenameFrom: &oldName, Table: "users", Definition: "CREATE INDEX new_idx ON public.users USING btree (name)"})
 
-	_, err := diffIndexes(current, desired, nil, false, allowAllDrops{})
+	_, err := diffIndexes(current, desired, nil, nil, false, allowAllDrops{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
@@ -4406,13 +4465,13 @@ func TestStripFuncSchema(t *testing.T) {
 	t.Run("index expression", func(t *testing.T) {
 		assert.True(t, equalIndexDef(
 			"CREATE INDEX i ON public.t USING btree (lower_v(v))",
-			"CREATE INDEX i ON public.t USING btree (public.lower_v(v))"))
+			"CREATE INDEX i ON public.t USING btree (public.lower_v(v))", nil))
 	})
 
 	t.Run("index predicate", func(t *testing.T) {
 		assert.True(t, equalIndexDef(
 			"CREATE INDEX i ON public.t USING btree (v) WHERE (lower_v(v) <> 'y'::text)",
-			"CREATE INDEX i ON public.t USING btree (v) WHERE public.lower_v(v) <> 'y'"))
+			"CREATE INDEX i ON public.t USING btree (v) WHERE public.lower_v(v) <> 'y'", nil))
 	})
 
 	t.Run("select expression", func(t *testing.T) {
@@ -4447,6 +4506,7 @@ func TestEqualIndexDef_storageParamQuoting(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80')",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=80)",
+		nil,
 	))
 }
 
@@ -4455,6 +4515,7 @@ func TestEqualIndexDef_storageParamOrder(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80', deduplicate_items=off)",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (deduplicate_items=off, fillfactor=80)",
+		nil,
 	))
 }
 
@@ -4462,13 +4523,53 @@ func TestEqualIndexDef_storageParamValueChange(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80')",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=90)",
+		nil,
 	))
+}
+
+func TestEqualIndexDef_defaultCollation(t *testing.T) {
+	columns := orderedmap.New[string, *model.Column]()
+	columns.Set("t", &model.Column{Name: "t", TypeName: "text"})
+	columns.Set("v", &model.Column{Name: "v", TypeName: "character varying(10)[]"})
+	columns.Set("c", &model.Column{Name: "c", TypeName: "text", Collation: new(`"C"`)})
+	columns.Set("n", &model.Column{Name: "n", TypeName: "name"})
+
+	tests := []struct {
+		name    string
+		current string
+		desired string
+		cols    *orderedmap.Map[string, *model.Column]
+		same    bool
+	}{
+		{"text column", "(t)", `(t COLLATE "default" ASC)`, columns, true},
+		{"varchar array column", "(v)", `(v COLLATE "default" ASC)`, columns, true},
+		{"qualified with pg_catalog", "(t)", `(t COLLATE pg_catalog."default" ASC)`, columns, true},
+		{"another schema's default", "(t)", `(t COLLATE public."default" ASC)`, columns, false},
+		{"another collation", "(t)", `(t COLLATE "C" ASC)`, columns, false},
+		{"column with a collation", "(c)", `(c COLLATE "default" ASC)`, columns, false},
+		{"name column", `(n COLLATE "default")`, `(n COLLATE "default" ASC)`, columns, true},
+		{"name column without the clause", "(n)", `(n COLLATE "default" ASC)`, columns, false},
+		{"expression element", "(lower(t))", `(lower(t) COLLATE "default" ASC)`, columns, false},
+		{"unknown column", "(x)", `(x COLLATE "default" ASC)`, columns, false},
+		{"no columns", "(t)", `(t COLLATE "default" ASC)`, nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.same, equalIndexDef(
+				"CREATE INDEX idx ON public.users USING btree "+tt.current,
+				"CREATE INDEX idx ON public.users USING btree "+tt.desired,
+				tt.cols,
+			))
+		})
+	}
 }
 
 func TestEqualIndexDef_storageParamAdded(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=80)",
+		nil,
 	))
 }
 

@@ -1,0 +1,30 @@
+# The parent's column moves to "C" and the child's index keeps the default
+# collation. The child declares no columns, so the fold looks at the parent's
+# desired ones.
+init: |
+  CREATE TABLE public.events (
+      name text,
+      k integer
+  )
+  PARTITION BY RANGE (k);
+  CREATE TABLE public.events_0 PARTITION OF public.events FOR VALUES FROM (0) TO (10);
+  CREATE INDEX events_0_name_idx ON public.events_0 USING btree (name);
+desired: |
+  CREATE TABLE public.events (
+      name text COLLATE "C",
+      k integer
+  )
+  PARTITION BY RANGE (k);
+  CREATE TABLE public.events_0 PARTITION OF public.events FOR VALUES FROM (0) TO (10);
+  CREATE INDEX events_0_name_idx ON public.events_0 USING btree (name COLLATE "default");
+applied: |
+  -- public.events
+  CREATE TABLE public.events (
+      name text COLLATE pg_catalog."C",
+      k integer
+  )
+  PARTITION BY RANGE (k);
+
+  -- public.events_0
+  CREATE TABLE public.events_0 PARTITION OF public.events FOR VALUES FROM (0) TO (10);
+  CREATE INDEX events_0_name_idx ON public.events_0 USING btree (name COLLATE "default");
