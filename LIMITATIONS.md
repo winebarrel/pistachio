@@ -1146,7 +1146,10 @@ which the diff does not thread, and an expression element has no column type
 to look it up by. Matching the name against the classes that are a default for
 some type answers a different question: `bpchar_ops` on a `text` column is
 legal and is not that column's default, and would fold away. The collation
-needs the column's own, which the diff does not carry either.
+needs the column's own. The diff carries the desired table's columns only far
+enough to fold `COLLATE "default"` on a column of the default collation; a
+collation written out on any other column, on an expression element, or on a
+materialized view's index still drifts.
 
 An element that carries operator class options is not affected. ruleutils
 (`src/backend/utils/adt/ruleutils.c`) passes `InvalidOid` for the column type

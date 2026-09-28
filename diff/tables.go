@@ -289,7 +289,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// auto-inherit them), so they're still diffed here, mirroring how
 	// indexes and FKs work.
 	if desired.IsPartitionChild() {
-		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
+		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, desired.Columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
 		if err != nil {
 			return nil, err
 		}
@@ -364,7 +364,7 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// TABLE run that --bulk-alter merges in one piece.
 	result.Stmts = append(result.Stmts, notNullDrops...)
 
-	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
+	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, desired.Columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
 	if err != nil {
 		return nil, err
 	}
@@ -1499,11 +1499,11 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 // equalIndexDefs compares every index present on both sides once. Like a
 // constraint definition, an index definition is compared by parsing both
 // sides, and the drop and add loops each ask the same question.
-func equalIndexDefs(current, desired *orderedmap.Map[string, *model.Index]) map[string]bool {
+func equalIndexDefs(current, desired *orderedmap.Map[string, *model.Index], columns *orderedmap.Map[string, *model.Column]) map[string]bool {
 	same := make(map[string]bool, desired.Len())
 	for name, desiredIdx := range desired.All() {
 		if currentIdx, ok := current.GetOk(name); ok {
-			same[name] = equalIndexDef(currentIdx.Definition, desiredIdx.Definition)
+			same[name] = equalIndexDefOn(currentIdx.Definition, desiredIdx.Definition, columns)
 		}
 	}
 	return same
@@ -1547,7 +1547,7 @@ func usingIndexNames(cons *orderedmap.Map[string, *model.Constraint]) map[string
 	return names
 }
 
-func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consumed map[string]bool, partitioned bool, dc DropChecker) (*diffIndexesResult, error) {
+func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], columns *orderedmap.Map[string, *model.Column], consumed map[string]bool, partitioned bool, dc DropChecker) (*diffIndexesResult, error) {
 	dc = normalizeDropChecker(dc)
 	result := &diffIndexesResult{}
 
@@ -1558,7 +1558,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], consume
 	}
 	result.Stmts = append(result.Stmts, renameStmts...)
 
-	sameDef := equalIndexDefs(current, desired)
+	sameDef := equalIndexDefs(current, desired, columns)
 
 	// Drop removed or changed indexes. Pure removals (index absent from
 	// desired) honor the index-drop policy; definition changes still run
@@ -2039,6 +2039,30 @@ func normalizeStorageParams(options []*pg_query.Node) {
 	})
 }
 
+// dropDefaultCollation clears COLLATE "default" from each desired element that
+// names a column of the default collation. pg_get_indexdef writes an element's
+// collation only when it is not the column's own, so that index reads back
+// with none, and without this it was dropped and created on every plan. On a
+// column of another collation "default" is a real choice the catalog writes,
+// so it stays. An expression element has no column to ask and is left alone.
+func dropDefaultCollation(is *pg_query.IndexStmt, columns *orderedmap.Map[string, *model.Column]) {
+	if columns == nil {
+		return
+	}
+	for _, p := range is.IndexParams {
+		ie := p.GetIndexElem()
+		if ie == nil || ie.Name == "" || len(ie.Collation) == 0 {
+			continue
+		}
+		if ie.Collation[len(ie.Collation)-1].GetString_().GetSval() != "default" {
+			continue
+		}
+		if col, ok := columns.GetOk(ie.Name); ok && col.Collation == nil {
+			ie.Collation = nil
+		}
+	}
+}
+
 // alignIndexCasts asymmetrically strips current-side TypeCast wrappers at
 // positions desired doesn't have a cast, inside the partial-index
 // WhereClause and each expression-index IndexElem.Expr. Mirrors the
@@ -2071,6 +2095,13 @@ func alignIndexCasts(desired, current *pg_query.IndexStmt) {
 // the desired side is a bare numeric A_Const); same pipeline as
 // equalConstraintDef.
 func equalIndexDef(current, desired string) bool {
+	return equalIndexDefOn(current, desired, nil)
+}
+
+// equalIndexDefOn is equalIndexDef given the desired table's columns, which
+// let a COLLATE "default" on a column of the default collation fold away; see
+// dropDefaultCollation. nil columns, as for a materialized view, fold nothing.
+func equalIndexDefOn(current, desired string, columns *orderedmap.Map[string, *model.Column]) bool {
 	if current == desired {
 		return true
 	}
@@ -2079,6 +2110,7 @@ func equalIndexDef(current, desired string) bool {
 	if parseErrCur != nil || parseErrDes != nil {
 		return current == desired
 	}
+	dropDefaultCollation(desIS, columns)
 	normalizeIndexStmt(curIS)
 	normalizeIndexStmt(desIS)
 	alignIndexCasts(desIS, curIS)

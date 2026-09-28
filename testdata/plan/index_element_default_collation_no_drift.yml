@@ -1,0 +1,22 @@
+# pg_get_indexdef leaves an element's collation out when it is the column's
+# own, so an index on a column of the default collation never reads back with
+# COLLATE "default". Writing it is not a change.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "default");
+  CREATE INDEX users_name_email_idx ON public.users USING btree (name COLLATE pg_catalog."default" DESC, email);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      name text NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "default");
+  CREATE INDEX users_name_email_idx ON public.users USING btree (name COLLATE pg_catalog."default" DESC, email);
+plan: ""

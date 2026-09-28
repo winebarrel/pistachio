@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* An index element written with `COLLATE "default"` on a column of the default collation no longer plans a drop and a create on every run. The catalog leaves that collation out, so the two sides never compared equal.
+
 ## [1.70.0] - 2026-09-28
 
 * `--manage-routine` now manages routines with a `BEGIN ATOMIC` or `RETURN` body. They are created after the tables and views they read, so a `CHECK`, default or index that calls one cannot be created in the same run. An existing one that the desired schema does not define now shows up as a drop.
