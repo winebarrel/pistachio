@@ -287,9 +287,10 @@ func diffTable(current, desired *model.Table, dc DropChecker) (*tableDiffResult,
 	// so skip diffing them to avoid false DROP statements. RLS flags,
 	// policies and comments are owned per-relation (children do not
 	// auto-inherit them), so they're still diffed here, mirroring how
-	// indexes and FKs work.
+	// indexes and FKs work. The desired child declares no columns, so its
+	// indexes use the columns the catalog reads onto it.
 	if desired.IsPartitionChild() {
-		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, desired.Columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
+		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, current.Columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
 		if err != nil {
 			return nil, err
 		}
@@ -2039,12 +2040,11 @@ func normalizeStorageParams(options []*pg_query.Node) {
 	})
 }
 
-// dropDefaultCollation clears COLLATE "default" from each desired element that
-// names a column of the default collation. pg_get_indexdef writes an element's
-// collation only when it is not the column's own, so that index reads back
-// with none, and without this it was dropped and created on every plan. On a
-// column of another collation "default" is a real choice the catalog writes,
-// so it stays. An expression element has no column to ask and is left alone.
+// dropDefaultCollation removes COLLATE "default" from each desired element on
+// a column of the default collation. pg_get_indexdef omits an element's
+// collation when it matches the column's, so such an index reads back without
+// it. On a column of another collation the clause is a real choice and stays.
+// An expression element has no column and is left alone.
 func dropDefaultCollation(is *pg_query.IndexStmt, columns *orderedmap.Map[string, *model.Column]) {
 	if columns == nil {
 		return
@@ -2098,9 +2098,8 @@ func equalIndexDef(current, desired string) bool {
 	return equalIndexDefOn(current, desired, nil)
 }
 
-// equalIndexDefOn is equalIndexDef given the desired table's columns, which
-// let a COLLATE "default" on a column of the default collation fold away; see
-// dropDefaultCollation. nil columns, as for a materialized view, fold nothing.
+// equalIndexDefOn is equalIndexDef with the table's columns, which
+// dropDefaultCollation needs. nil columns fold nothing.
 func equalIndexDefOn(current, desired string, columns *orderedmap.Map[string, *model.Column]) bool {
 	if current == desired {
 		return true

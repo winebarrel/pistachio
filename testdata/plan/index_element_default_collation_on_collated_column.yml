@@ -1,5 +1,5 @@
-# On a column of another collation, COLLATE "default" is not the column's
-# own, so the catalog writes it and moving to or from it rebuilds the index.
+# On a column of another collation the catalog writes COLLATE "default", so
+# adding it rebuilds the index.
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,

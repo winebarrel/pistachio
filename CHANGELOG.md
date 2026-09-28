@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* An index element written with `COLLATE "default"` on a column of the default collation no longer plans a drop and a create on every run. The catalog leaves that collation out, so the two sides never compared equal.
+* An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.
 
 ## [1.70.0] - 2026-09-28
 
