@@ -60,10 +60,14 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
       # Created once and never retitled, so the version a person puts in the
       # title stays. The body is rewritten on every run: the link to
-      # CHANGELOG.md and the pull requests merged since the latest tag.
+      # CHANGELOG.md, the changes since the latest tag and the pull requests
+      # merged since then. The pull request's own diff is empty, so the
+      # comparison is what shows the code being released. It names the
+      # branch, not a commit, so it follows each rebuild.
       - name: Open or update the release pull request
         run: |
           body="See [CHANGELOG.md](https://github.com/$GH_REPO/blob/main/CHANGELOG.md)."
+          body+=$'\n\n'"Changes: [$TAG...$BRANCH](https://github.com/$GH_REPO/compare/$TAG...$BRANCH)"
           prs=$(gh api "repos/$GH_REPO/compare/$TAG...$MAIN" --jq '.commits[].commit.message | select(test("^Merge pull request #[0-9]+ from [^ ]+/release-from-") | not) | capture("^Merge pull request (?<n>#[0-9]+) ") | "- " + .n')
           if [ -n "$prs" ]; then
             body+=$'\n\n## Pull requests\n\n'"$prs"
