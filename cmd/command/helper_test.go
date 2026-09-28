@@ -4,19 +4,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 )
 
-// assertConnectedCommentFirst verifies plan/apply/dump prepend a
-// "-- Connected to ..." comment as the first output line, and that the
-// password from the test connection (if any) does not appear in the output.
-func assertConnectedCommentFirst(t *testing.T, out string, cfg *pgx.ConnConfig) {
+// assertConnectedCommentFirst verifies plan/apply/dump write the connection
+// comment for connString as the first output line. What the comment holds,
+// and that it carries no password, is ConnInfoComment's to test.
+func assertConnectedCommentFirst(t *testing.T, out string, connString string) {
 	t.Helper()
-	assert.True(t, strings.HasPrefix(out, "-- Connected to "), "first line must be '-- Connected to ...', got: %q", firstLine(out))
-	if cfg.Password != "" {
-		assert.NotContains(t, out, cfg.Password, "password must not appear in output")
-	}
+	want, err := pistachio.NewClient(&pistachio.Options{ConnString: connString}).ConnInfoComment()
+	require.NoError(t, err)
+	assert.Equal(t, want, firstLine(out))
 }
 
 func firstLine(s string) string {

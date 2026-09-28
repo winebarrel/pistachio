@@ -236,6 +236,16 @@ func TestConnInfoComment_UnixSocketHost(t *testing.T) {
 	assert.Equal(t, "-- Connected to host=/var/run/postgresql dbname=mydb user=myuser", comment)
 }
 
+func TestConnInfoComment_UnixSocketHostPasswordNotIncluded(t *testing.T) {
+	client := NewClient(&Options{
+		ConnString: "postgres://myuser:secret@/mydb?host=/var/run/postgresql",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.Equal(t, "-- Connected to host=/var/run/postgresql dbname=mydb user=myuser", comment)
+}
+
 func TestConnInfoComment_URLEscapesSpecialChars(t *testing.T) {
 	// User / dbname with characters that have URI meaning must be escaped so
 	// the comment stays a parseable libpq URI. Round-tripping through url.URL

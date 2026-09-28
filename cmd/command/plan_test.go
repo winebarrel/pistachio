@@ -38,7 +38,7 @@ func TestPlan_Run(t *testing.T) {
 	err := cmd.Run(ctx, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
-	assertConnectedCommentFirst(t, buf.String(), conn.Config())
+	assertConnectedCommentFirst(t, buf.String(), conn.Config().ConnString())
 }
 
 func TestPlan_Run_Error(t *testing.T) {
