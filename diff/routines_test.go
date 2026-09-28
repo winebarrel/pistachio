@@ -333,22 +333,28 @@ func TestDiffRoutines_Atomic(t *testing.T) {
 	assert.Equal(t, []string{"DROP FUNCTION public.dropped_plain(integer);"}, result.DropStmts)
 }
 
-// A recreated routine whose current body is SQL-standard is dropped with the
-// views, and created again by the list its desired form goes to.
+// A recreated routine is dropped by the list its current form goes to and
+// created again by the list its desired form goes to. The DROP of a current
+// SQL-standard body runs with the views.
 func TestDiffRoutines_AtomicRecreated(t *testing.T) {
 	atomic := func(r *model.Routine) { r.Body = ""; r.SQLBody = "RETURN a" }
 	bigint := func(r *model.Routine) { r.ReturnType = "bigint" }
+	named := func(name string) func(*model.Routine) {
+		return func(r *model.Routine) { r.Name = name }
+	}
 
-	current := newRoutineMap(newRoutine(atomic), newRoutine(func(r *model.Routine) { r.Name = "g" }, atomic))
-	desired := newRoutineMap(newRoutine(atomic, bigint), newRoutine(func(r *model.Routine) { r.Name = "g" }, bigint))
+	current := newRoutineMap(newRoutine(atomic), newRoutine(named("g"), atomic), newRoutine(named("h")))
+	desired := newRoutineMap(newRoutine(atomic, bigint), newRoutine(named("g"), bigint), newRoutine(named("h"), atomic, bigint))
 
 	result, err := DiffRoutines(current, desired, allowAllDrops{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"DROP FUNCTION public.f(integer);", "DROP FUNCTION public.g(integer);"}, result.AtomicDropStmts)
 	assert.Equal(t, []string{"function public.f(integer)", "function public.g(integer)"}, result.DroppedAtomic)
-	require.Len(t, result.AtomicStmts, 1)
+	require.Len(t, result.AtomicStmts, 2)
 	assert.Contains(t, result.AtomicStmts[0], "public.f(a integer)")
-	require.Len(t, result.Stmts, 1)
+	assert.Contains(t, result.AtomicStmts[1], "public.h(a integer)")
+	require.Len(t, result.Stmts, 2)
 	assert.Contains(t, result.Stmts[0], "public.g(a integer)")
-	assert.Len(t, result.Recreated, 2)
+	assert.Equal(t, "DROP FUNCTION public.h(integer);", result.Stmts[1])
+	assert.Len(t, result.Recreated, 3)
 }

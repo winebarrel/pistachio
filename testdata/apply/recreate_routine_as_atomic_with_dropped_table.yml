@@ -1,0 +1,21 @@
+# A routine recreated from a string body to a SQL-standard one is dropped
+# before the table its old signature returns, and created again with the views.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE FUNCTION public.f() RETURNS SETOF public.t LANGUAGE sql AS $$ SELECT * FROM public.t $$;
+desired: |
+  CREATE FUNCTION public.f() RETURNS bigint LANGUAGE sql RETURN 1;
+applied: |
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      RETURN 1;
+applied_sql: |
+  DROP FUNCTION public.f();
+  DROP TABLE public.t;
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      RETURN 1;

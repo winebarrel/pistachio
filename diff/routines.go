@@ -22,7 +22,8 @@ type RoutineDiffResult struct {
 	// PostgreSQL names a dependent, such as "function public.f(integer)".
 	// They are dropped with the views, before anything they could block. A
 	// recreated routine whose current body is SQL-standard is dropped there
-	// too, and created again with AtomicStmts or Stmts.
+	// too. A recreated routine is created again by the list its desired form
+	// goes to, whichever list its DROP went to.
 	DroppedAtomic []string
 	// Recreated lists the current routines that Stmts drops and creates again.
 	Recreated []*model.Routine
@@ -56,11 +57,19 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 			continue
 		}
 		stmts, disallowed, recreated := diffRoutine(currentRoutine, desiredRoutine, dropAllowed)
-		if recreated && currentRoutine.Atomic() {
-			// The old body still reads what the table changes may drop or
-			// retype, so its DROP goes with the views, ahead of them.
-			result.AtomicDropStmts = append(result.AtomicDropStmts, stmts[0])
-			result.DroppedAtomic = append(result.DroppedAtomic, atomicDependentName(currentRoutine))
+		if recreated {
+			// The DROP goes where the current form puts it and the rest where
+			// the desired form does. An old SQL-standard body still reads what
+			// the table changes may drop or retype, so its DROP goes with the
+			// views, ahead of them. An old plain routine can name a table in
+			// its signature, so its DROP goes with the other routines, ahead
+			// of the table drops.
+			if currentRoutine.Atomic() {
+				result.AtomicDropStmts = append(result.AtomicDropStmts, stmts[0])
+				result.DroppedAtomic = append(result.DroppedAtomic, atomicDependentName(currentRoutine))
+			} else {
+				result.Stmts = append(result.Stmts, stmts[0])
+			}
 			stmts = stmts[1:]
 		}
 		out := result.stmtsFor(desiredRoutine)
