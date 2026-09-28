@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `--manage-routine` now manages routines with a `BEGIN ATOMIC` or `RETURN` body. They are created after the tables and views they read. One kept under `-- pista:execute` now shows up as a drop.
+* `--manage-routine` now manages routines with a `BEGIN ATOMIC` or `RETURN` body. They are created after the tables and views they read, so a `CHECK`, default or index that calls one cannot be created in the same run. An existing one that the desired schema does not define now shows up as a drop.
 
 * The plan file version is now 4. Run `plan --out` again for a plan file an older pista wrote.
 
