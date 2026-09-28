@@ -1,0 +1,20 @@
+# A SQL-standard routine recreated with a string body is dropped with the views,
+# which run before the routine creates, so the new definition does not meet the
+# old one.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql RETURN 1;
+desired: |
+  CREATE FUNCTION public.f() RETURNS bigint LANGUAGE sql AS $$ SELECT 1::bigint $$;
+applied: |
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      AS $$ SELECT 1::bigint $$;
+applied_sql: |
+  DROP FUNCTION public.f();
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      AS $$ SELECT 1::bigint $$;
