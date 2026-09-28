@@ -1,5 +1,3 @@
--- No BEGIN ATOMIC body: such a routine is skipped on both sides.
--- LIMITATIONS.md records it.
 CREATE FUNCTION public.safe_div(a numeric, b numeric) RETURNS numeric
     LANGUAGE sql IMMUTABLE STRICT LEAKPROOF PARALLEL SAFE COST 5
     AS $$SELECT a / b$$;

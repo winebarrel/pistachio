@@ -90,18 +90,30 @@ func TestRoutines(t *testing.T) {
 		assert.Equal(t, []string{"public.f(integer)", "public.f(text)"}, routines.CollectKeys())
 	})
 
-	// Aggregates and window functions are not managed, and neither is a
-	// routine with a SQL-standard body. The parser leaves out the same ones,
-	// so neither side of the diff sees them.
+	// Aggregates and window functions are not managed. The parser leaves out
+	// the same ones, so neither side of the diff sees them.
 	t.Run("unmanaged routines are left out", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE FUNCTION public.kept() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
 			CREATE AGGREGATE public.agg(integer) (SFUNC = int4pl, STYPE = integer);
-			CREATE FUNCTION public.atomic() RETURNS integer LANGUAGE sql BEGIN ATOMIC SELECT 1; END;
 		`)
 		routines, err := newCatalog(t).Routines(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"public.kept()"}, routines.CollectKeys())
+	})
+
+	// A SQL-standard body is read in the layout the parser renders.
+	t.Run("sql standard body", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.t (a integer);
+			CREATE FUNCTION public.atomic() RETURNS integer LANGUAGE sql BEGIN ATOMIC SELECT a FROM public.t; SELECT 1; END;
+			CREATE FUNCTION public.ret(x integer) RETURNS integer LANGUAGE sql RETURN x + 1;
+		`)
+		routines, err := newCatalog(t).Routines(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"public.atomic()", "public.ret(integer)"}, routines.CollectKeys())
+		assert.Equal(t, "BEGIN ATOMIC\n    SELECT t.a FROM t;\n    SELECT 1;\nEND", routines.Get("public.atomic()").SQLBody)
+		assert.Equal(t, "RETURN x + 1", routines.Get("public.ret(integer)").SQLBody)
 	})
 
 	// A routine carrying an option pistachio does not handle is skipped rather

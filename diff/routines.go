@@ -11,6 +11,17 @@ type RoutineDiffResult struct {
 	Stmts               []string
 	DropStmts           []string
 	DisallowedDropStmts []string
+	// AtomicStmts and AtomicDropStmts hold the statements for a routine with a
+	// SQL-standard body, which PostgreSQL parses at creation time. They run
+	// with the views: the creates once the tables exist, the drops before the
+	// tables change. A modified routine goes by its desired form, a dropped
+	// one by its current form.
+	AtomicStmts     []string
+	AtomicDropStmts []string
+	// DroppedAtomic names the routines AtomicDropStmts drops the way
+	// PostgreSQL names a dependent, such as "function public.f(integer)".
+	// They are dropped with the views, before anything they could block.
+	DroppedAtomic []string
 	// Recreated lists the current routines that Stmts drops and creates again.
 	Recreated []*model.Routine
 }
@@ -29,9 +40,10 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 		if _, ok := current.GetOk(k); ok {
 			continue
 		}
-		result.Stmts = append(result.Stmts, desiredRoutine.SQL())
+		stmts := result.stmtsFor(desiredRoutine)
+		*stmts = append(*stmts, desiredRoutine.SQL())
 		if commentSQL := desiredRoutine.CommentSQL(); commentSQL != "" {
-			result.Stmts = append(result.Stmts, commentSQL)
+			*stmts = append(*stmts, commentSQL)
 		}
 	}
 
@@ -42,7 +54,8 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 			continue
 		}
 		stmts, disallowed, recreated := diffRoutine(currentRoutine, desiredRoutine, dropAllowed)
-		result.Stmts = append(result.Stmts, stmts...)
+		out := result.stmtsFor(desiredRoutine)
+		*out = append(*out, stmts...)
 		if recreated {
 			result.Recreated = append(result.Recreated, currentRoutine)
 		}
@@ -55,13 +68,26 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 			continue
 		}
 		if dropAllowed {
-			result.DropStmts = append(result.DropStmts, currentRoutine.DropSQL())
+			if currentRoutine.Atomic() {
+				result.AtomicDropStmts = append(result.AtomicDropStmts, currentRoutine.DropSQL())
+				result.DroppedAtomic = append(result.DroppedAtomic, strings.ToLower(currentRoutine.Kind())+" "+currentRoutine.Signature())
+			} else {
+				result.DropStmts = append(result.DropStmts, currentRoutine.DropSQL())
+			}
 		} else {
 			result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: "+currentRoutine.DropSQL())
 		}
 	}
 
 	return result, nil
+}
+
+// stmtsFor returns the list the create and modify statements of r go to.
+func (result *RoutineDiffResult) stmtsFor(r *model.Routine) *[]string {
+	if r.Atomic() {
+		return &result.AtomicStmts
+	}
+	return &result.Stmts
 }
 
 // normalizeTypes returns a copy whose signature types have the routine's own

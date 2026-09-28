@@ -256,8 +256,12 @@ instead. Two statements are not checked:
 - `ALTER TABLE ... DROP COLUMN`
 
 Neither fails unless the dependent stays in place. A dependent that
-pistachio manages is dropped or changed in the same plan before the drop. One
-stays when:
+pistachio manages and the plan drops goes before the drop. One stays when:
+
+- The plan replaces a view or a `BEGIN ATOMIC` routine that reads the table or
+  column with a definition that no longer reads it. `CREATE OR REPLACE` runs
+  after the table changes, so the old definition still holds the dependency
+  when the drop runs. Change the dependent in one run and drop in the next.
 
 - `--include` / `--exclude` or a schema outside `-n` hides a view that reads
   the table or column, or a foreign key that references the table.
@@ -280,7 +284,8 @@ current names when the plan also renames the table, and reading the
 dependents of each table, column (`pg_depend.refobjsubid`) and row type.
 
 Origin: review of the view-dependent check, 2026-09-19. The routine and
-foreign key cases were added 2026-09-26.
+foreign key cases were added 2026-09-26, and the replaced dependent
+2026-09-28.
 
 ## Amazon Aurora DSQL is not supported
 
@@ -883,25 +888,35 @@ Priority: low.
 
 Origin: routine support.
 
-## SQL-standard routine bodies (BEGIN ATOMIC) are not managed
+## A SQL-standard routine body is created after every table
 
-A routine written as `LANGUAGE sql BEGIN ATOMIC ... END` is skipped on both
-sides of the diff: the catalog query filters on `prosqlbody IS NULL` and the
-parser warns and drops it. So neither `dump` writes one nor `plan` proposes
-dropping one.
+A routine written as `BEGIN ATOMIC ... END` or `RETURN <expr>` is created with
+the views, after every table. A `CHECK` constraint, column default, generated
+column, index expression or trigger `WHEN` condition that calls it fails to
+apply when both are created in the same run. Policies are created last, so
+they are not affected.
 
-pg_query parses and deparses the form. The obstacle is that PostgreSQL resolves
-such a body at creation time and records real `pg_depend` entries on whatever it
-reads, so the routine cannot be created ahead of the tables the way every other
-routine is, and a referenced table cannot be dropped while it exists. Supporting
-it needs the body-dependency work in "Routine create order ignores what the
-body reads".
+Fixing this needs the body-dependency work in "Routine create order ignores
+what the body reads".
 
-`pg_get_functiondef` also re-deparses the stored parse tree, so the body comes
-back with names resolved (`SELECT a FROM t` reads back as `SELECT t.a FROM t`),
-the same drift views handle with `stripQualifications`.
+An overload set that mixes a string body and a SQL-standard body shares one
+node in the dependency sort and is ordered as a string body.
 
-Origin: routine support.
+Priority: low.
+
+Origin: BEGIN ATOMIC support.
+
+## A SQL-standard routine body is compared as text
+
+PostgreSQL stores the body as a parse tree, and `pg_get_functiondef` deparses
+it with names qualified, so `SELECT a FROM t` comes back as
+`SELECT t.a FROM t`. The body is compared without normalization, so a body
+written differently from `dump` is replaced on every plan. Views avoid the same
+drift with `stripQualifications`.
+
+Priority: low. Writing the body as `dump` writes it avoids it.
+
+Origin: BEGIN ATOMIC support.
 
 ## Aggregates and window functions are not managed
 

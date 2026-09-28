@@ -262,10 +262,9 @@ What each column holds:
 - **Triggers** excludes the internal triggers a foreign key installs and the
   clones PostgreSQL puts on each partition of a partitioned table's trigger, the
   same as what pistachio reads and dump writes.
-- **Routines** counts what `--manage-routine` reads, so the aggregates, window
-  functions, and `BEGIN ATOMIC` bodies pistachio leaves to `-- pista:execute`
-  are out of it. lemmy is the sample that brings the last of those: 6 of its 80
-  functions carry a SQL-standard body, so its column says 74.
+- **Routines** counts what `--manage-routine` reads, so the aggregates and
+  window functions pistachio leaves to `-- pista:execute` are out of it. lemmy
+  is the only sample with a SQL-standard body, in 6 of its 80 functions.
 - **Policies** are not a column. windmill declares 366 of them and logto 153,
   and no other sample turns row-level security on at all.
 
@@ -341,7 +340,7 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | calcom | 102 | 1,092 | 394 | 179 | 104 | 2 | 46 | 0 | 7 | 9 |
 | triggerdev | 85 | 1,123 | 289 | 135 | 81 | 0 | 48 | 0 | 0 | 0 |
 | mattermost | 86 | 740 | 279 | 3 | 104 | 6 | 7 | 0 | 0 | 0 |
-| lemmy | 58 | 573 | 290 | 113 | 101 | 0 | 16 | 1 | 66 | 74 |
+| lemmy | 58 | 573 | 290 | 113 | 101 | 0 | 16 | 1 | 66 | 80 |
 | windmill | 173 | 1,511 | 392 | 105 | 210 | 3 | 33 | 4 | 26 | 24 |
 | plausible | 42 | 294 | 81 | 40 | 47 | 0 | 3 | 0 | 1 | 1 |
 | feedbin | 44 | 395 | 161 | 8 | 43 | 0 | 0 | 0 | 0 | 0 |
@@ -384,7 +383,7 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 | ghostfolio | 21 | 150 | 74 | 23 | 21 | 0 | 10 | 0 | 0 | 0 |
 | typebot | 31 | 245 | 53 | 31 | 23 | 0 | 5 | 0 | 0 | 0 |
 | cratesio | 35 | 207 | 85 | 35 | 47 | 1 | 0 | 0 | 25 | 31 |
-| **Total** | **10,164** | **87,412** | **30,868** | **13,579** | **16,865** | **2,311** | **715** | **873** | **2,023** | **1,817** |
+| **Total** | **10,164** | **87,412** | **30,868** | **13,579** | **16,865** | **2,311** | **715** | **873** | **2,023** | **1,823** |
 
 ### Size
 
@@ -812,13 +811,13 @@ always reach.
 
 Routines are concentrated the same way. Fifty-two of the 109 samples declare
 one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
-musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,817. Two in three of
+musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,823. Two in three of
 them, 1,216, return `trigger`, though not every one of those has a trigger to
 call it: musicbrainz's 89 do not, since its loader concatenates a file list
 that leaves triggers out.
 
-1,695 are written in plpgsql and 122 in sql. omero's 57, the next largest after
-lemmy's 74, are 56 of the plpgsql and one of the sql, and 49 of them return
+1,695 are written in plpgsql and 128 in sql. omero's 57, the next largest after
+lemmy's 80, are 56 of the plpgsql and one of the sql, and 49 of them return
 `trigger`; concourse and affine declare 7 each, 6 of concourse's and all of
 affine's returning `trigger`, and teable 2. formbricks declares 2, a plpgsql
 trigger function and an sql one taking two `jsonb` arguments, and hoppscotch

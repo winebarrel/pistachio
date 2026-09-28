@@ -1,0 +1,18 @@
+# diff orders a SQL-standard body after the table it reads, as plan does.
+manage_routine: true
+current: ""
+desired: |
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM public.t; END;
+  CREATE TABLE public.t (a integer);
+diff: |
+  CREATE TABLE public.t (
+      a integer
+  );
+  CREATE OR REPLACE FUNCTION public.total()
+      RETURNS bigint
+      LANGUAGE sql
+      BEGIN ATOMIC
+          SELECT count(*) FROM public.t;
+      END;
+count:
+  routines: 0

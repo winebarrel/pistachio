@@ -1,0 +1,52 @@
+# The routines are created after the table and view they read. The dump reads
+# the bodies back the way pg_get_functiondef writes them, and the drift check
+# replans against the desired schema as written.
+manage_routine: true
+init: ""
+desired: |
+  CREATE TABLE public.t (a integer, b text);
+  CREATE VIEW public.v AS SELECT 1 AS a;
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql STABLE
+  BEGIN ATOMIC
+      SELECT count(*) AS count FROM v;
+  END;
+  CREATE FUNCTION public.inc(x integer) RETURNS integer LANGUAGE sql IMMUTABLE RETURN x + 1;
+  CREATE PROCEDURE public.ins(x integer) LANGUAGE sql
+  BEGIN ATOMIC
+      INSERT INTO t (a, b) VALUES (ins.x, 'y'::text);
+  END;
+  COMMENT ON FUNCTION public.total() IS 'rows';
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer,
+      b text
+  );
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT 1 AS a;
+
+  -- public.inc(integer)
+  CREATE OR REPLACE FUNCTION public.inc(x integer)
+      RETURNS integer
+      LANGUAGE sql
+      IMMUTABLE
+      RETURN x + 1;
+
+  -- public.ins(integer)
+  CREATE OR REPLACE PROCEDURE public.ins(x integer)
+      LANGUAGE sql
+      BEGIN ATOMIC
+          INSERT INTO t (a, b) VALUES (ins.x, 'y'::text);
+      END;
+
+  -- public.total()
+  CREATE OR REPLACE FUNCTION public.total()
+      RETURNS bigint
+      LANGUAGE sql
+      STABLE
+      BEGIN ATOMIC
+          SELECT count(*) AS count FROM v;
+      END;
+  COMMENT ON FUNCTION public.total() IS 'rows';

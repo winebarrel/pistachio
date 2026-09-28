@@ -381,6 +381,14 @@ func RoutineNode(qualifiedName string) string {
 // The reverse direction is otherwise absent. A LANGUAGE sql body that reads a
 // table would want the table first, which cannot hold at the same time as the
 // rule above, so that case is a documented limitation rather than an edge.
+//
+// A routine with a SQL-standard body is the exception. PostgreSQL parses such
+// a body at creation time, so the routine follows every table, view and
+// routine its body names, the way a view does, and gets no wholesale edge. A
+// view that calls it follows it in turn. Its statements run with the views,
+// after every table, so a CHECK or an index that calls it cannot be created
+// in the same run. An overload set that mixes the two forms shares one node
+// and is treated as the plain form.
 func addRoutineDeps(
 	g *graph,
 	routines *orderedmap.Map[string, *model.Routine],
@@ -393,14 +401,17 @@ func addRoutineDeps(
 	}
 
 	nodes := make([]string, 0, routines.Len())
-	seen := make(map[string]bool, routines.Len())
+	// atomic maps every routine node to whether each routine under it has a
+	// SQL-standard body.
+	atomic := make(map[string]bool, routines.Len())
 
 	for _, r := range routines.All() {
 		node := RoutineNode(model.Ident(r.Schema, r.Name))
-		if !seen[node] {
-			seen[node] = true
+		if _, ok := atomic[node]; !ok {
+			atomic[node] = true
 			nodes = append(nodes, node)
 		}
+		atomic[node] = atomic[node] && r.Atomic()
 		g.AddNode(node)
 
 		// No self-edge is possible: resolveTypeDep returns a key from defined,
@@ -415,10 +426,37 @@ func addRoutineDeps(
 		}
 	}
 
+	for _, r := range routines.All() {
+		if !r.Atomic() {
+			continue
+		}
+		node := RoutineNode(model.Ident(r.Schema, r.Name))
+		for _, dep := range extractBodyDeps(r.SQLBody, r.Schema, defined, atomic) {
+			if dep != node {
+				g.AddEdge(node, dep)
+			}
+		}
+	}
+
+	atomicOnly := make(map[string]bool, len(atomic))
+	for node, ok := range atomic {
+		if ok {
+			atomicOnly[node] = true
+		}
+	}
+	for k, v := range views.All() {
+		for _, dep := range extractCallDeps(v.Definition, v.Schema, atomicOnly) {
+			g.AddEdge(k, dep)
+		}
+	}
+
 	// An edge into a routine does not change what the routine reaches, so one
 	// walk per routine covers every table and view.
 	addDependents := func(keys func(func(string) bool)) {
 		for _, node := range nodes {
+			if atomic[node] {
+				continue
+			}
 			reach := g.reachable(node)
 			for k := range keys {
 				if reach[k] {
@@ -430,4 +468,83 @@ func addRoutineDeps(
 	}
 	addDependents(tables.Keys())
 	addDependents(views.Keys())
+}
+
+// extractBodyDeps returns what a SQL-standard routine body names: the tables
+// and views in defined it reads, and the routines in routines it calls.
+func extractBodyDeps(body, defaultSchema string, defined, routines map[string]bool) []string {
+	result, err := pg_query.Parse("CREATE FUNCTION _f() " + body)
+	if err != nil {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	for _, stmt := range result.Stmts {
+		pgast.Walk(stmt.Stmt, pgast.WalkOptions{}, func(_ pgast.Ctx, node *pg_query.Node) *pg_query.Node {
+			if rv := node.GetRangeVar(); rv != nil {
+				if name := qualifyRangeVar(rv, defaultSchema, defined); name != "" {
+					seen[name] = true
+				}
+			}
+			if fc := node.GetFuncCall(); fc != nil {
+				if name := resolveRoutineCall(fc.Funcname, defaultSchema, routines); name != "" {
+					seen[name] = true
+				}
+			}
+			return node
+		})
+	}
+
+	return slices.Sorted(maps.Keys(seen))
+}
+
+// extractCallDeps returns the routines in routines a view definition calls.
+func extractCallDeps(definition, defaultSchema string, routines map[string]bool) []string {
+	if len(routines) == 0 {
+		return nil
+	}
+
+	def := strings.TrimSuffix(strings.TrimSpace(definition), ";")
+	result, err := pg_query.Parse(def)
+	if err != nil {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	for _, stmt := range result.Stmts {
+		pgast.Walk(stmt.Stmt, pgast.WalkOptions{}, func(_ pgast.Ctx, node *pg_query.Node) *pg_query.Node {
+			if fc := node.GetFuncCall(); fc != nil {
+				if name := resolveRoutineCall(fc.Funcname, defaultSchema, routines); name != "" {
+					seen[name] = true
+				}
+			}
+			return node
+		})
+	}
+
+	return slices.Sorted(maps.Keys(seen))
+}
+
+// resolveRoutineCall returns the routine node a function call names, trying
+// defaultSchema and then public for an unqualified name, or "" when the call
+// names none of routines.
+func resolveRoutineCall(funcname []*pg_query.Node, defaultSchema string, routines map[string]bool) string {
+	parts := make([]string, 0, len(funcname))
+	for _, n := range funcname {
+		parts = append(parts, n.GetString_().GetSval())
+	}
+
+	var candidates []string
+	switch len(parts) {
+	case 1:
+		candidates = []string{model.Ident(defaultSchema, parts[0]), model.Ident("public", parts[0])}
+	case 2:
+		candidates = []string{model.Ident(parts[0], parts[1])}
+	}
+	for _, c := range candidates {
+		if node := RoutineNode(c); routines[node] {
+			return node
+		}
+	}
+	return ""
 }

@@ -1,0 +1,14 @@
+# Drops run in reverse dependency order: the view that calls the routine, the
+# routine, the view its body reads, then the table.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE VIEW public.v AS SELECT a FROM public.t;
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM public.v; END;
+  CREATE VIEW public.w AS SELECT public.total() AS n;
+desired: ""
+plan: |
+  DROP VIEW public.w;
+  DROP FUNCTION public.total();
+  DROP VIEW public.v;
+  DROP TABLE public.t;

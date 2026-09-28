@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `--manage-routine` now manages routines with a `BEGIN ATOMIC` or `RETURN` body. They are created after the tables and views they read. One kept under `-- pista:execute` now shows up as a drop.
+
+* The plan file version is now 4. Run `plan --out` again for a plan file an older pista wrote.
+
+* The JSON Schema is now `schema-1.1.json`. It adds `sql_body` to a routine.
+
 ## [1.69.1] - 2026-09-27
 
 * `plan` is faster. At 1,000 tables it takes about a quarter less time. The keyword lookup that decides whether an identifier needs quotes and the checks for whether a column default needs parentheses and which columns it references now run once per distinct name or expression, and a file with no `-- pista:` directive skips the directive checks.

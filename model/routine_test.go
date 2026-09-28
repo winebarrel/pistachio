@@ -110,6 +110,24 @@ func TestRoutine_SQLReturnsTable(t *testing.T) {
 	assert.Contains(t, r.SQL(), "CREATE OR REPLACE FUNCTION public.f()\n    RETURNS TABLE(id integer, name text)")
 }
 
+// A SQL-standard body takes the place of the AS clause, indented with the
+// other clauses.
+func TestRoutine_SQLStandardBody(t *testing.T) {
+	r := model.Routine{
+		Schema: "public", Name: "f", ReturnType: "integer", Language: "sql",
+		SQLBody: "BEGIN ATOMIC\n    SELECT 1;\nEND",
+	}
+	assert.True(t, r.Atomic())
+	assert.Equal(t, strings.Join([]string{
+		"CREATE OR REPLACE FUNCTION public.f()",
+		"    RETURNS integer",
+		"    LANGUAGE sql",
+		"    BEGIN ATOMIC",
+		"        SELECT 1;",
+		"    END;",
+	}, "\n"), r.SQL())
+}
+
 // LANGUAGE c names an object file and a link symbol rather than a body.
 func TestRoutine_SQLLanguageC(t *testing.T) {
 	r := model.Routine{

@@ -1,0 +1,50 @@
+# A routine with a SQL-standard body is dumped after the views, since its body
+# reads them.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer, b text);
+  CREATE VIEW public.v AS SELECT 1 AS a;
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql STABLE BEGIN ATOMIC SELECT count(*) FROM public.v; END;
+  CREATE FUNCTION public.inc(x integer) RETURNS integer LANGUAGE sql IMMUTABLE RETURN x + 1;
+  CREATE PROCEDURE public.ins(x integer) LANGUAGE sql BEGIN ATOMIC INSERT INTO public.t VALUES (x, 'y'); SELECT 1; END;
+  CREATE FUNCTION public.plain() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+dump: |
+  -- public.plain()
+  CREATE OR REPLACE FUNCTION public.plain()
+      RETURNS integer
+      LANGUAGE sql
+      AS $$ SELECT 1 $$;
+
+  -- public.t
+  CREATE TABLE public.t (
+      a integer,
+      b text
+  );
+
+  -- public.v
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT 1 AS a;
+
+  -- public.inc(integer)
+  CREATE OR REPLACE FUNCTION public.inc(x integer)
+      RETURNS integer
+      LANGUAGE sql
+      IMMUTABLE
+      RETURN x + 1;
+
+  -- public.ins(integer)
+  CREATE OR REPLACE PROCEDURE public.ins(x integer)
+      LANGUAGE sql
+      BEGIN ATOMIC
+          INSERT INTO t (a, b) VALUES (ins.x, 'y'::text);
+          SELECT 1;
+      END;
+
+  -- public.total()
+  CREATE OR REPLACE FUNCTION public.total()
+      RETURNS bigint
+      LANGUAGE sql
+      STABLE
+      BEGIN ATOMIC
+          SELECT count(*) AS count FROM v;
+      END;

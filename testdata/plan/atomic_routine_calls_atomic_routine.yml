@@ -1,0 +1,16 @@
+# A SQL-standard body that calls another routine follows it.
+manage_routine: true
+desired: |
+  CREATE FUNCTION public.a() RETURNS integer LANGUAGE sql BEGIN ATOMIC SELECT public.b() + 1; END;
+  CREATE FUNCTION public.b() RETURNS integer LANGUAGE sql RETURN 1;
+plan: |
+  CREATE OR REPLACE FUNCTION public.b()
+      RETURNS integer
+      LANGUAGE sql
+      RETURN 1;
+  CREATE OR REPLACE FUNCTION public.a()
+      RETURNS integer
+      LANGUAGE sql
+      BEGIN ATOMIC
+          SELECT public.b() + 1;
+      END;

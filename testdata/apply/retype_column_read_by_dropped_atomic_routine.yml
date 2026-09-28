@@ -1,0 +1,16 @@
+# A routine with a SQL-standard body that the plan drops does not block the
+# type change of a column it reads, since it is dropped first.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT sum(a) FROM public.t; END;
+desired: |
+  CREATE TABLE public.t (a bigint);
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a bigint
+  );
+applied_sql: |
+  DROP FUNCTION public.total();
+  ALTER TABLE public.t ALTER COLUMN a SET DATA TYPE bigint;

@@ -29,6 +29,7 @@ desired: |
   CREATE INDEX t_c_idx ON public.t (public.f(c));
   CREATE VIEW public.v AS SELECT public.f(a) AS fa FROM public.t;
   CREATE MATERIALIZED VIEW public.mv AS SELECT public.f(1) AS x;
+  CREATE FUNCTION public.g() RETURNS integer LANGUAGE sql BEGIN ATOMIC SELECT public.f(1); END;
   ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
   CREATE POLICY p ON public.t USING (public.f(a) > 0);
   CREATE TRIGGER tr BEFORE INSERT ON public.t FOR EACH ROW WHEN (public.f(new.a) > 0) EXECUTE FUNCTION public.trg();

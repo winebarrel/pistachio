@@ -472,6 +472,7 @@ func TestRoutine_MarshalJSON(t *testing.T) {
 		"language": "sql",
 		"body": "SELECT a + b",
 		"obj_file": "",
+		"sql_body": "",
 		"volatility": "IMMUTABLE",
 		"strict": false,
 		"security_definer": false,

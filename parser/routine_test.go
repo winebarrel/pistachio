@@ -217,7 +217,6 @@ func TestParseSQL_UnmanagedRoutinesWarn(t *testing.T) {
 		name string
 		sql  string
 	}{
-		{"sql standard body", `CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql BEGIN ATOMIC SELECT 1; END;`},
 		{"window function", `CREATE FUNCTION public.w(x integer) RETURNS integer WINDOW LANGUAGE c AS 'obj', 'sym';`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -231,6 +230,23 @@ func TestParseSQL_UnmanagedRoutinesWarn(t *testing.T) {
 			assert.Contains(t, buf.String(), "ignored unsupported statement:")
 		})
 	}
+}
+
+func TestParseSQL_SQLStandardBody(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE FUNCTION public.a() RETURNS integer BEGIN ATOMIC SELECT a FROM t; SELECT 1; END;
+		CREATE FUNCTION public.e() RETURNS integer LANGUAGE sql BEGIN ATOMIC END;
+		CREATE FUNCTION public.r(x integer) RETURNS integer LANGUAGE sql RETURN x + 1;
+		CREATE FUNCTION public.s() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$;
+	`)
+	require.NoError(t, err)
+
+	a := result.Routines.Get("public.a()")
+	assert.Equal(t, "BEGIN ATOMIC\n    SELECT a FROM t;\n    SELECT 1;\nEND", a.SQLBody)
+	assert.Equal(t, "sql", a.Language, "a SQL-standard body implies LANGUAGE sql")
+	assert.Equal(t, "BEGIN ATOMIC\nEND", result.Routines.Get("public.e()").SQLBody)
+	assert.Equal(t, "RETURN x + 1", result.Routines.Get("public.r(integer)").SQLBody)
+	assert.False(t, result.Routines.Get("public.s()").Atomic())
 }
 
 func TestParseSQL_CommentOnRoutine(t *testing.T) {

@@ -35,11 +35,8 @@ func (c *Catalog) Routines(ctx context.Context) (*orderedmap.Map[string, *model.
 // is what keeps a dump fed back as the desired schema planning clean, without
 // the definition-text normalization views and triggers need.
 //
-// Aggregates (prokind 'a') and window functions (prokind 'w') are left out, as
-// is a routine with a SQL-standard body (BEGIN ATOMIC): such a body records
-// pg_depend entries on whatever it reads, which contradicts the order
-// pistachio creates routines in. The parser skips the same ones, so neither
-// side of the diff sees them.
+// Aggregates (prokind 'a') and window functions (prokind 'w') are left out.
+// The parser skips the same ones, so neither side of the diff sees them.
 //
 // A routine an extension owns (deptype 'e') is left out as well, and so is one
 // that is part of another object (deptype 'i'), such as the constructors of a
@@ -69,7 +66,6 @@ func (c *Catalog) ListRoutines(ctx context.Context) ([]*model.Routine, error) {
 			LEFT JOIN dependency_owned de ON de.objid = p.oid
 		WHERE
 			p.prokind IN ('f', 'p')
-			AND p.prosqlbody IS NULL
 			AND n.nspname = ANY(@schemas)
 			AND de.objid IS NULL
 		ORDER BY
