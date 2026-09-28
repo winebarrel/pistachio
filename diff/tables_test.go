@@ -235,6 +235,24 @@ func TestPartitionDepth(t *testing.T) {
 	assert.Equal(t, 1, partitionDepth(tables, partitionedTable("x_1", "x", "x_1_id_idx")))
 }
 
+func TestIndexColumns(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	top := partitionedTable("m", "", "m_id_idx")
+	top.Columns.Set("id", &model.Column{Name: "id", TypeName: "text"})
+	mid := partitionedTable("m_1", "m", "m_1_id_idx")
+	tables.Set("public.m", top)
+	tables.Set("public.m_1", mid)
+	leaf := partitionedTable("m_1_a", "m_1", "m_1_a_id_idx")
+	current := newTable("public", "m_1_a")
+	current.Columns.Set("id", &model.Column{Name: "id", TypeName: "text", Collation: new(`"C"`)})
+
+	assert.Same(t, top.Columns, indexColumns(tables, top, top))
+	assert.Same(t, top.Columns, indexColumns(tables, leaf, current))
+	// A filter that leaves the parent out leaves the child's own columns.
+	orphan := partitionedTable("x_1", "x", "x_1_id_idx")
+	assert.Same(t, current.Columns, indexColumns(tables, orphan, current))
+}
+
 func TestDiffTables_retypedColumns(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()
@@ -4507,6 +4525,44 @@ func TestEqualIndexDef_storageParamValueChange(t *testing.T) {
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=90)",
 		nil,
 	))
+}
+
+func TestEqualIndexDef_defaultCollation(t *testing.T) {
+	columns := orderedmap.New[string, *model.Column]()
+	columns.Set("t", &model.Column{Name: "t", TypeName: "text"})
+	columns.Set("v", &model.Column{Name: "v", TypeName: "character varying(10)[]"})
+	columns.Set("c", &model.Column{Name: "c", TypeName: "text", Collation: new(`"C"`)})
+	columns.Set("n", &model.Column{Name: "n", TypeName: "name"})
+
+	tests := []struct {
+		name    string
+		current string
+		desired string
+		cols    *orderedmap.Map[string, *model.Column]
+		same    bool
+	}{
+		{"text column", "(t)", `(t COLLATE "default" ASC)`, columns, true},
+		{"varchar array column", "(v)", `(v COLLATE "default" ASC)`, columns, true},
+		{"qualified with pg_catalog", "(t)", `(t COLLATE pg_catalog."default" ASC)`, columns, true},
+		{"another schema's default", "(t)", `(t COLLATE public."default" ASC)`, columns, false},
+		{"another collation", "(t)", `(t COLLATE "C" ASC)`, columns, false},
+		{"column with a collation", "(c)", `(c COLLATE "default" ASC)`, columns, false},
+		{"name column", `(n COLLATE "default")`, `(n COLLATE "default" ASC)`, columns, true},
+		{"name column without the clause", "(n)", `(n COLLATE "default" ASC)`, columns, false},
+		{"expression element", "(lower(t))", `(lower(t) COLLATE "default" ASC)`, columns, false},
+		{"unknown column", "(x)", `(x COLLATE "default" ASC)`, columns, false},
+		{"no columns", "(t)", `(t COLLATE "default" ASC)`, nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.same, equalIndexDef(
+				"CREATE INDEX idx ON public.users USING btree "+tt.current,
+				"CREATE INDEX idx ON public.users USING btree "+tt.desired,
+				tt.cols,
+			))
+		})
+	}
 }
 
 func TestEqualIndexDef_storageParamAdded(t *testing.T) {

@@ -1,0 +1,21 @@
+# A name column, or one of a domain with its own collation, takes that
+# collation without a COLLATE clause, so the catalog writes COLLATE "default"
+# on its index. The clause is kept, and an ASC that stops the definitions
+# matching as text still plans nothing.
+init: |
+  CREATE DOMAIN public.c_text AS text COLLATE "C";
+  CREATE TABLE public.t (
+      n name,
+      d public.c_text
+  );
+  CREATE INDEX t_n_idx ON public.t USING btree (n COLLATE "default");
+  CREATE INDEX t_d_idx ON public.t USING btree (d COLLATE "default");
+desired: |
+  CREATE DOMAIN public.c_text AS text COLLATE "C";
+  CREATE TABLE public.t (
+      n name,
+      d public.c_text
+  );
+  CREATE INDEX t_n_idx ON public.t USING btree (n COLLATE "default" ASC);
+  CREATE INDEX t_d_idx ON public.t USING btree (d COLLATE "default" ASC);
+plan: ""

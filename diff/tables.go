@@ -104,23 +104,25 @@ type partitionedIndexStmts struct {
 	stmts []string
 }
 
-// partitionDepth counts the partitioned tables above t. A parent outside
-// tables, as a filter leaves it, counts as one level and ends the count.
 // indexColumns returns the columns a table's indexes are compared against. A
 // partition child declares none, so they come from the nearest desired
-// ancestor that does. It returns nil when that ancestor is not in the desired
-// schema, and nil columns fold nothing.
-func indexColumns(tables *orderedmap.Map[string, *model.Table], t *model.Table) *orderedmap.Map[string, *model.Column] {
+// ancestor that does. When a filter leaves that ancestor out, its columns do
+// not change in this plan, and the ones the catalog reads onto the child
+// serve.
+func indexColumns(tables *orderedmap.Map[string, *model.Table], desired, current *model.Table) *orderedmap.Map[string, *model.Column] {
+	t := desired
 	for t.IsPartitionChild() {
 		parent, ok := tables.GetOk(*t.PartitionOf)
 		if !ok {
-			return nil
+			return current.Columns
 		}
 		t = parent
 	}
 	return t.Columns
 }
 
+// partitionDepth counts the partitioned tables above t. A parent outside
+// tables, as a filter leaves it, counts as one level and ends the count.
 func partitionDepth(tables *orderedmap.Map[string, *model.Table], t *model.Table) int {
 	depth := 0
 	for t.PartitionOf != nil {
@@ -197,7 +199,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 				}
 			}
 			result.RetypedColumns = append(result.RetypedColumns, retypedColumns(k, currentKey, currentTable, desiredTable, original)...)
-			tableResult, err := diffTable(currentTable, desiredTable, indexColumns(desired, desiredTable), dc)
+			tableResult, err := diffTable(currentTable, desiredTable, indexColumns(desired, desiredTable, currentTable), dc)
 			if err != nil {
 				return nil, err
 			}
@@ -2073,10 +2075,33 @@ func dropDefaultCollation(is *pg_query.IndexStmt, columns *orderedmap.Map[string
 		if !isDefaultCollation(ie.Collation) {
 			continue
 		}
-		if col, ok := columns.GetOk(ie.Name); ok && col.Collation == nil {
+		if col, ok := columns.GetOk(ie.Name); ok && hasDefaultCollation(col) {
 			ie.Collation = nil
 		}
 	}
+}
+
+// defaultCollatedTypes are the built-in types whose own collation is the
+// database default.
+var defaultCollatedTypes = map[string]bool{
+	"text":              true,
+	"character varying": true,
+	"character":         true,
+	"bpchar":            true,
+}
+
+// hasDefaultCollation reports whether a column takes the default collation. A
+// column without a COLLATE clause takes its type's collation, which is not
+// always the default: name takes "C", and so does a domain declared with
+// COLLATE "C". Only the types in defaultCollatedTypes and their arrays are
+// known to take the default.
+func hasDefaultCollation(col *model.Column) bool {
+	if col.Collation != nil {
+		return false
+	}
+	base, _, _ := strings.Cut(col.TypeName, "(")
+	base, _, _ = strings.Cut(base, "[")
+	return defaultCollatedTypes[base]
 }
 
 // isDefaultCollation reports whether a COLLATE name is the built-in default:
