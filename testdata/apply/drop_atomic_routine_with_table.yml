@@ -1,0 +1,16 @@
+# The routine goes before the table its body reads.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE TABLE public.u (a integer);
+  CREATE FUNCTION public.f() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM public.t; END;
+desired: |
+  CREATE TABLE public.u (a integer);
+applied: |
+  -- public.u
+  CREATE TABLE public.u (
+      a integer
+  );
+applied_sql: |
+  DROP FUNCTION public.f();
+  DROP TABLE public.t;

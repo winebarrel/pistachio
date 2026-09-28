@@ -248,22 +248,45 @@ func viewBodies(toks []*token, stmts []stmt, depth []int) []bool {
 	return body
 }
 
-// routineConts marks the tokens of a CREATE FUNCTION or CREATE PROCEDURE that
-// are not the first of the statement. A line one of them opens is a
-// continuation of the statement, which dump indents by one level.
-func routineConts(toks []*token, stmts []stmt) []bool {
-	cont := make([]bool, len(toks))
+// routineConts returns the indentation of each token of a CREATE FUNCTION or
+// CREATE PROCEDURE that is not the first of the statement, and "" for any
+// other token. A line one of them opens is a continuation of the statement,
+// which dump indents by one level. The statements of a BEGIN ATOMIC block sit
+// one level further in, between the BEGIN ATOMIC and the END that close it.
+func routineConts(toks []*token, stmts []stmt) []string {
+	cont := make([]string, len(toks))
 
 	for _, s := range stmts {
-		if s.node.GetCreateFunctionStmt() == nil {
+		cfs := s.node.GetCreateFunctionStmt()
+		if cfs == nil {
 			continue
 		}
 
 		lo, hi := tokenRange(toks, s)
-		if first := nextCode(toks, lo, hi); first < hi {
-			for i := first + 1; i < hi; i++ {
-				cont[i] = true
+		first := nextCode(toks, lo, hi)
+		for i := first + 1; i < hi; i++ {
+			cont[i] = indentUnit
+		}
+
+		if cfs.SqlBody.GetList() == nil {
+			continue
+		}
+		atomic, end := -1, -1
+		for i := first + 1; i < hi; i++ {
+			if toks[i].isComment() {
+				continue
 			}
+			if atomic < 0 && upper(toks[i]) == "BEGIN" {
+				if next := nextCode(toks, i+1, hi); next < hi && upper(toks[next]) == "ATOMIC" {
+					atomic = next
+				}
+			}
+			if upper(toks[i]) == "END" {
+				end = i
+			}
+		}
+		for i := atomic + 1; atomic >= 0 && i < end; i++ {
+			cont[i] = indentUnit + indentUnit
 		}
 	}
 
@@ -571,7 +594,7 @@ type layout struct {
 	body       []bool
 	stmtStart  []bool
 	stmtLead   []bool
-	routineCon []bool
+	routineCon []string
 }
 
 // parenFrame remembers where an open parenthesis sits, so the lines inside it
@@ -620,8 +643,8 @@ func render(toks []*token, l *layout) string {
 		if len(stack) == 0 {
 			// A routine's clauses hang off its CREATE line, the way dump
 			// writes them. Everything else keeps the indentation it had.
-			if l.routineCon[i] && t.orig != ")" {
-				return indentUnit
+			if l.routineCon[i] != "" && t.orig != ")" {
+				return l.routineCon[i]
 			}
 
 			return t.indent

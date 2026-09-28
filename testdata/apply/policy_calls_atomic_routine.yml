@@ -1,0 +1,39 @@
+# Policies are created after the routines with a SQL-standard body, so one can
+# call such a routine created in the same run.
+manage_routine: true
+init: ""
+desired: |
+  CREATE TABLE public.t (a integer);
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.t USING (a <= public.cap());
+  CREATE FUNCTION public.cap() RETURNS integer LANGUAGE sql STABLE BEGIN ATOMIC SELECT count(*)::integer AS count FROM t; END;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer
+  );
+
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.t USING ((a <= cap()));
+
+  -- public.cap()
+  CREATE OR REPLACE FUNCTION public.cap()
+      RETURNS integer
+      LANGUAGE sql
+      STABLE
+      BEGIN ATOMIC
+          SELECT count(*)::int AS count FROM t;
+      END;
+applied_sql: |
+  CREATE TABLE public.t (
+      a integer
+  );
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE OR REPLACE FUNCTION public.cap()
+      RETURNS integer
+      LANGUAGE sql
+      STABLE
+      BEGIN ATOMIC
+          SELECT count(*)::int AS count FROM t;
+      END;
+  CREATE POLICY p ON public.t USING (a <= public.cap());

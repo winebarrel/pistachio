@@ -61,13 +61,6 @@ func ParseRoutineDef(sql, defaultSchema string) (*model.Routine, error) {
 }
 
 func parseCreateFunctionStmt(cfs *pg_query.CreateFunctionStmt, defaultSchema string) (*model.Routine, error) {
-	// A SQL-standard body (BEGIN ATOMIC) records real pg_depend entries on
-	// whatever it reads, so it cannot be created ahead of the tables the way
-	// pistachio orders routines. The catalog skips these too.
-	if cfs.SqlBody != nil {
-		return nil, ErrUnsupportedRoutine
-	}
-
 	schema, name, err := splitFuncName(cfs.Funcname, defaultSchema)
 	if err != nil {
 		return nil, err
@@ -87,6 +80,13 @@ func parseCreateFunctionStmt(cfs *pg_query.CreateFunctionStmt, defaultSchema str
 	}
 	if err := parseRoutineOptions(cfs.Options, routine); err != nil {
 		return nil, err
+	}
+	if cfs.SqlBody != nil {
+		body, err := deparseSQLBody(cfs.SqlBody)
+		if err != nil {
+			return nil, err
+		}
+		routine.SQLBody = body
 	}
 
 	normalizeRoutineDefaults(routine)
@@ -288,6 +288,41 @@ func parseRoutineBody(arg *pg_query.Node, routine *model.Routine) error {
 	return nil
 }
 
+// deparseSQLBody renders a SQL-standard body, BEGIN ATOMIC or RETURN. Each
+// statement of a BEGIN ATOMIC block goes on a line of its own, so a dump
+// reads the way pg_get_functiondef lays the body out.
+func deparseSQLBody(body *pg_query.Node) (string, error) {
+	if body.GetReturnStmt() != nil {
+		// A RETURN statement cannot be deparsed on its own, so it is taken out
+		// of a CREATE FUNCTION that carries nothing else.
+		const prefix = "CREATE FUNCTION _f() "
+		out, err := pg_query.Deparse(&pg_query.ParseResult{Stmts: []*pg_query.RawStmt{{
+			Stmt: &pg_query.Node{Node: &pg_query.Node_CreateFunctionStmt{CreateFunctionStmt: &pg_query.CreateFunctionStmt{
+				Funcname: []*pg_query.Node{pg_query.MakeStrNode("_f")},
+				SqlBody:  body,
+			}}},
+		}}})
+		if err != nil {
+			return "", fmt.Errorf("failed to deparse routine body: %w", err)
+		}
+		return strings.TrimPrefix(out, prefix), nil
+	}
+
+	// BEGIN ATOMIC arrives as a list holding the list of statements.
+	lines := []string{"BEGIN ATOMIC"}
+	for _, item := range body.GetList().GetItems() {
+		for _, stmt := range item.GetList().GetItems() {
+			out, err := pg_query.Deparse(&pg_query.ParseResult{Stmts: []*pg_query.RawStmt{{Stmt: stmt}}})
+			if err != nil {
+				return "", fmt.Errorf("failed to deparse routine body: %w", err)
+			}
+			lines = append(lines, "    "+out+";")
+		}
+	}
+	lines = append(lines, "END")
+	return strings.Join(lines, "\n"), nil
+}
+
 func parseRoutineConfig(arg *pg_query.Node) (*model.RoutineConfig, error) {
 	vss := arg.GetVariableSetStmt()
 	if vss == nil {
@@ -344,6 +379,11 @@ func defElemFloat(arg *pg_query.Node) (float64, error) {
 // normalizeRoutineDefaults drops the attribute values pg_get_functiondef
 // leaves out, so a desired schema that spells them out matches the catalog.
 func normalizeRoutineDefaults(routine *model.Routine) {
+	// A SQL-standard body implies LANGUAGE sql, which pg_get_functiondef
+	// writes out.
+	if routine.Atomic() && routine.Language == "" {
+		routine.Language = "sql"
+	}
 	if routine.Volatility == "" {
 		routine.Volatility = model.VolatilityVolatile
 	}

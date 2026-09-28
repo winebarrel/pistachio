@@ -70,7 +70,7 @@ A type or collation change goes out as `ALTER TABLE ... ALTER COLUMN ... SET DAT
 pista: error: cannot change the type of public.t.n: view public.v depends on it
 ```
 
-A trigger blocks even when the column is only in its `UPDATE OF` list. The change reaches the table's partitions and `INHERITS` children, so a dependent on their copy of the column blocks too. A view the same plan drops does not block. A trigger, a policy or a generated column the plan drops still does, since those drops run after the type change. Indexes and constraints do not block, since PostgreSQL rebuilds them.
+A trigger blocks even when the column is only in its `UPDATE OF` list. The change reaches the table's partitions and `INHERITS` children, so a dependent on their copy of the column blocks too. A view or a `BEGIN ATOMIC` routine the same plan drops does not block. A trigger, a policy or a generated column the plan drops still does, since those drops run after the type change. Indexes and constraints do not block, since PostgreSQL rebuilds them.
 
 ## Table inheritance
 
@@ -126,7 +126,7 @@ PostgreSQL refuses that `DROP` while anything calls the routine: a `CHECK` const
 pista: error: cannot drop function public.f(integer): table constraint t_check on public.t depends on it
 ```
 
-The routine is recreated before the tables change, so changing the dependent in the same plan does not help. Change it in one run and the routine in the next. A view the plan drops does not block, since views are dropped first.
+The routine is recreated before the tables change, so changing the dependent in the same plan does not help. Change it in one run and the routine in the next. A view or a `BEGIN ATOMIC` routine the plan drops does not block, since both are dropped first.
 
 Adding or removing a parameter is not a modification either. The argument types are the identity, so the new signature is a new routine and the old one is dropped, which needs `--allow-drop routine` as well.
 
@@ -135,7 +135,7 @@ An attribute left at its default is not written back. PostgreSQL reports `VOLATI
 A routine is created after the types its signature names and before every table, because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call one. A signature can name a table instead of a type, as `RETURNS SETOF <table>` does; such a routine comes after that table, and before every other table where that does not form a cycle. Dropping runs the other way: views, then tables, then routines, then types.
 
 !!! info
-    That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later, and for a `plpgsql` routine whose `DECLARE` uses a table's row type or `%TYPE`. Applying with `--pre-sql 'SET check_function_bodies = off'` skips that check. Marking the routine `-- pista:ignore` and creating it with `-- pista:execute` also works.
+    That order means a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply, because PostgreSQL parses a SQL body at creation time. The same holds for one that calls a routine defined later, and for a `plpgsql` routine whose `DECLARE` uses a table's row type or `%TYPE`. Applying with `--pre-sql 'SET check_function_bodies = off'` skips that check. Marking the routine `-- pista:ignore` and creating it with `-- pista:execute` also works, and so does writing the body as `BEGIN ATOMIC`.
 
 Argument and return types are reported without their schema when `search_path` reaches them, the same as any other name pistachio reads back. A desired schema may write a type in the routine's own schema either way; the two spellings are one routine. A comment goes on the full signature:
 
@@ -143,10 +143,25 @@ Argument and return types are reported without their schema when `search_path` r
 COMMENT ON FUNCTION public.normalize(text) IS 'v1';
 ```
 
+A body written as `BEGIN ATOMIC ... END` or `RETURN <expr>` is managed too. PostgreSQL parses such a body when it creates the routine, so the routine is ordered like a view: it is created after the tables, views and routines its body names, and dropped before them. `dump` writes it after the views, with the body as PostgreSQL returns it:
+
+```sql
+CREATE OR REPLACE FUNCTION public.total()
+    RETURNS bigint
+    LANGUAGE sql
+    STABLE
+    BEGIN ATOMIC
+        SELECT count(*) AS count FROM v;
+    END;
+```
+
+PostgreSQL qualifies the names in the body, so `SELECT a FROM t` comes back as `SELECT t.a FROM t`. A body written differently from the dump is replaced on every plan.
+
+A `CHECK` constraint, column default, generated column, index expression or trigger `WHEN` condition that calls such a routine cannot be created in the same run as the routine. A policy can.
+
 The following are not managed. Both sides of the diff leave them out, so `dump` does not write them and `plan` does not propose dropping them:
 
 - aggregates and window functions
-- a routine whose body is written in the SQL-standard `BEGIN ATOMIC` form. Such a body records real dependencies on the tables it reads, so it cannot be created ahead of them
 - a routine an extension owns, and the constructors of a range type
 - a routine carrying an option pistachio does not read, `SUPPORT` and `TRANSFORM FOR TYPE` among them
 - renaming, via `-- pista:renamed-from`

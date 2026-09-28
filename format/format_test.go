@@ -270,6 +270,29 @@ $$;
 `,
 		},
 		{
+			name: "indent the statements of a BEGIN ATOMIC block one level further",
+			input: `CREATE FUNCTION public.f(atomic integer) RETURNS integer LANGUAGE sql
+BEGIN ATOMIC
+SELECT CASE WHEN atomic > 0 THEN 1
+ELSE 0 END;
+-- the end
+  SELECT 1;
+END;
+CREATE FUNCTION public.g() RETURNS integer LANGUAGE sql
+RETURN 1;
+`,
+			expected: `CREATE FUNCTION public.f(atomic integer) RETURNS integer LANGUAGE sql
+    BEGIN ATOMIC
+        SELECT CASE WHEN atomic > 0 THEN 1
+        ELSE 0 END;
+        -- the end
+        SELECT 1;
+    END;
+CREATE FUNCTION public.g() RETURNS integer LANGUAGE sql
+    RETURN 1;
+`,
+		},
+		{
 			name:     "keep a statement that carries no definition list",
 			input:    `CREATE TABLE public.items_2026 PARTITION OF public.items FOR VALUES FROM (1) TO (2);`,
 			expected: "CREATE TABLE public.items_2026 PARTITION OF public.items FOR VALUES FROM (1) TO (2);\n",

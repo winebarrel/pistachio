@@ -258,9 +258,11 @@ func (r *DumpResult) String() string {
 
 // formatSchemaSQL formats enums, domains, composite types, sequences, tables,
 // and views into canonical SQL output for dump.
-// Order: enums -> domains -> composite types -> sequences -> tables -> views
-// (enums/domains/composite types first since later objects may depend on them;
-// sequences before tables since column defaults may reference them).
+// Order: enums -> domains -> composite types -> sequences -> routines ->
+// tables -> views -> routines with a SQL-standard body (enums/domains/composite
+// types first since later objects may depend on them; sequences before tables
+// since column defaults may reference them; a SQL-standard body last since
+// PostgreSQL parses it at creation time and it may read the tables and views).
 func (r *DumpResult) formatSchemaSQL(
 	enums *orderedmap.Map[string, *model.Enum],
 	domains *orderedmap.Map[string, *model.Domain],
@@ -283,8 +285,9 @@ func (r *DumpResult) formatSchemaSQL(
 	if sequences != nil && sequences.Len() > 0 {
 		parts = append(parts, model.SequencesToSQL(sequences))
 	}
-	if routines != nil && routines.Len() > 0 {
-		parts = append(parts, model.RoutinesToSQL(routines))
+	plain, atomic := splitAtomicRoutines(routines)
+	if plain.Len() > 0 {
+		parts = append(parts, model.RoutinesToSQL(plain))
 	}
 	if tables != nil && tables.Len() > 0 {
 		parts = append(parts, model.TablesToSQL(tables))
@@ -292,7 +295,28 @@ func (r *DumpResult) formatSchemaSQL(
 	if views != nil && views.Len() > 0 {
 		parts = append(parts, model.ViewsToSQL(views))
 	}
+	if atomic.Len() > 0 {
+		parts = append(parts, model.RoutinesToSQL(atomic))
+	}
 	return strings.TrimSuffix(r.formatSQL(strings.Join(parts, "\n\n")), "\n")
+}
+
+// splitAtomicRoutines separates the routines with a SQL-standard body from
+// the rest, keeping the order of each.
+func splitAtomicRoutines(routines *orderedmap.Map[string, *model.Routine]) (plain, atomic *orderedmap.Map[string, *model.Routine]) {
+	plain = orderedmap.New[string, *model.Routine]()
+	atomic = orderedmap.New[string, *model.Routine]()
+	if routines == nil {
+		return plain, atomic
+	}
+	for k, r := range routines.All() {
+		if r.Atomic() {
+			atomic.Set(k, r)
+		} else {
+			plain.Set(k, r)
+		}
+	}
+	return plain, atomic
 }
 
 // formatSQL lays the dump out with the formatter pista fmt uses, so the two

@@ -1,0 +1,19 @@
+# A new return type recreates the routine. The DROP runs with the views, before
+# the table changes, and the CREATE after the column its body now reads is
+# added.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql BEGIN ATOMIC SELECT max(t.a) AS max FROM t; END;
+desired: |
+  CREATE TABLE public.t (a integer, b bigint);
+  CREATE FUNCTION public.f() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT max(t.b) AS max FROM t; END;
+plan: |
+  DROP FUNCTION public.f();
+  ALTER TABLE public.t ADD COLUMN b bigint;
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      BEGIN ATOMIC
+          SELECT max(t.b) AS max FROM t;
+      END;

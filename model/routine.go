@@ -9,10 +9,7 @@ import (
 )
 
 // Routine holds metadata for a PostgreSQL function or procedure (pg_proc rows
-// with prokind 'f' or 'p'). Aggregates and window functions are not managed,
-// and neither is a function whose body is written in the SQL-standard
-// BEGIN ATOMIC form: such a body records real pg_depend entries on the tables
-// it reads, which contradicts the create order pistachio uses for routines.
+// with prokind 'f' or 'p'). Aggregates and window functions are not managed.
 type Routine struct {
 	OID       uint32        `json:"oid"`
 	Schema    string        `json:"schema"`
@@ -27,8 +24,14 @@ type Routine struct {
 	// Body is the string in the AS clause. For LANGUAGE c the AS clause names
 	// two strings, and Body holds the link symbol while ObjFile holds the
 	// object file.
-	Body            string `json:"body"`
-	ObjFile         string `json:"obj_file"`
+	Body    string `json:"body"`
+	ObjFile string `json:"obj_file"`
+	// SQLBody is a body written in the SQL-standard form, BEGIN ATOMIC or
+	// RETURN, as it renders in the CREATE statement. It is empty for a body
+	// in an AS clause. PostgreSQL parses such a body at creation time and
+	// records what it reads in pg_depend, so the routine is created after the
+	// tables and views rather than before them; see Atomic.
+	SQLBody         string `json:"sql_body"`
 	Volatility      string `json:"volatility"` // IMMUTABLE, STABLE or VOLATILE
 	Strict          bool   `json:"strict"`
 	SecurityDefiner bool   `json:"security_definer"`
@@ -123,6 +126,11 @@ func (r Routine) argTypes(stripSchema bool) []string {
 	return types
 }
 
+// Atomic reports whether the body is written in the SQL-standard form.
+func (r Routine) Atomic() bool {
+	return r.SQLBody != ""
+}
+
 // Kind returns the keyword the DDL for this routine uses.
 func (r Routine) Kind() string {
 	if r.Procedure {
@@ -185,7 +193,11 @@ func (r Routine) SQL() string {
 	for _, c := range r.Config {
 		lines = append(lines, "    "+c.SQL())
 	}
-	lines = append(lines, "    AS "+r.asClause())
+	if r.Atomic() {
+		lines = append(lines, indentLines(r.SQLBody, "    "))
+	} else {
+		lines = append(lines, "    AS "+r.asClause())
+	}
 
 	return strings.Join(lines, "\n") + ";"
 }
@@ -265,6 +277,14 @@ func configValue(v string) string {
 		return v
 	}
 	return QuoteLiteral(v)
+}
+
+func indentLines(s, indent string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = indent + l
+	}
+	return strings.Join(lines, "\n")
 }
 
 func formatFloat(f float64) string {

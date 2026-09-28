@@ -1,0 +1,24 @@
+# A body moved from a string to the SQL-standard form is replaced in place.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE FUNCTION public.f() RETURNS bigint LANGUAGE sql AS $$ SELECT count(*) FROM public.t $$;
+desired: |
+  CREATE TABLE public.t (a integer);
+  CREATE FUNCTION public.f() RETURNS bigint LANGUAGE sql RETURN (SELECT count(*) AS count FROM t);
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer
+  );
+
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      RETURN (SELECT count(*) AS count FROM t);
+applied_sql: |
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      RETURN (SELECT count(*) AS count FROM t);

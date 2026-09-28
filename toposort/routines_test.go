@@ -203,3 +203,46 @@ func TestOrderFromSchema_Procedure(t *testing.T) {
 	order := orderWithRoutines(t, enums, orderedmap.New[string, *model.Table](), orderedmap.New[string, *model.View](), routines)
 	assert.Less(t, indexOf(t, order, "public.zzz_status"), indexOf(t, order, "routine:public.aaa_p"))
 }
+
+// A SQL-standard body is parsed at creation time, so the routine follows the
+// table and view it reads and the routine it calls, unqualified or not, and a
+// view that calls it follows it. A plain routine still precedes every view.
+func TestOrderFromSchema_SQLStandardBody(t *testing.T) {
+	tables := orderedmap.New[string, *model.Table]()
+	tables.Set("public.zzz_t", &model.Table{Schema: "public", Name: "zzz_t", Columns: orderedmap.New[string, *model.Column]()})
+
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.yyy_v", &model.View{Schema: "public", Name: "yyy_v", Definition: "SELECT a FROM zzz_t"})
+	views.Set("public.aaa_w", &model.View{Schema: "public", Name: "aaa_w", Definition: "SELECT public.mmm_total() AS n"})
+
+	routines := routineMap(
+		&model.Routine{
+			Schema: "public", Name: "mmm_total", ReturnType: "bigint", Language: "sql",
+			SQLBody: "BEGIN ATOMIC\n    SELECT count(*) FROM yyy_v WHERE xxx_plain() > 0 AND public.nnn_one() > 0;\nEND",
+		},
+		&model.Routine{Schema: "public", Name: "nnn_one", ReturnType: "integer", Language: "sql", SQLBody: "RETURN 1"},
+		&model.Routine{Schema: "public", Name: "xxx_plain", ReturnType: "integer", Language: "sql", Body: "SELECT 1"},
+	)
+
+	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), tables, views, routines)
+
+	assert.Less(t, indexOf(t, order, "public.zzz_t"), indexOf(t, order, "public.yyy_v"))
+	assert.Less(t, indexOf(t, order, "public.yyy_v"), indexOf(t, order, "routine:public.mmm_total"))
+	assert.Less(t, indexOf(t, order, "routine:public.nnn_one"), indexOf(t, order, "routine:public.mmm_total"))
+	assert.Less(t, indexOf(t, order, "routine:public.xxx_plain"), indexOf(t, order, "routine:public.mmm_total"))
+	assert.Less(t, indexOf(t, order, "routine:public.mmm_total"), indexOf(t, order, "public.aaa_w"))
+	assert.Less(t, indexOf(t, order, "routine:public.xxx_plain"), indexOf(t, order, "public.zzz_t"))
+}
+
+// A body or a view definition that does not parse names nothing, so neither
+// the routine nor the view gets an edge from it.
+func TestOrderFromSchema_SQLStandardBodyUnparsable(t *testing.T) {
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.v", &model.View{Schema: "public", Name: "v", Definition: "SELECT f( FROM"})
+
+	routines := routineMap(&model.Routine{Schema: "public", Name: "f", ReturnType: "integer", Language: "sql", SQLBody: "BEGIN ATOMIC SELECT ( END"})
+
+	order := orderWithRoutines(t, orderedmap.New[string, *model.Enum](), orderedmap.New[string, *model.Table](), views, routines)
+
+	assert.ElementsMatch(t, []string{"public.v", "routine:public.f"}, order)
+}

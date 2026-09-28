@@ -1,0 +1,31 @@
+# A changed body replaces the routine in place, after the column it now reads
+# is added.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE FUNCTION public.f() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT sum(t.a) AS sum FROM t; END;
+desired: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE FUNCTION public.f() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT sum(t.b) AS sum FROM t; END;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer,
+      b integer
+  );
+
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      BEGIN ATOMIC
+          SELECT sum(t.b) AS sum FROM t;
+      END;
+applied_sql: |
+  ALTER TABLE public.t ADD COLUMN b integer;
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      BEGIN ATOMIC
+          SELECT sum(t.b) AS sum FROM t;
+      END;

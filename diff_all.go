@@ -106,6 +106,10 @@ type diffAllResult struct {
 	// RecreatedRoutines lists the current routines the statements drop and
 	// create again.
 	RecreatedRoutines []*model.Routine
+	// DroppedAtomicRoutines names the routines with a SQL-standard body the
+	// statements drop, in the form a dependent is named. They are dropped
+	// with the views, so they block none of the checks either.
+	DroppedAtomicRoutines []string
 	// StateHash fingerprints the current side the statements were computed
 	// against. Empty unless the run asked for it.
 	StateHash string
@@ -177,12 +181,12 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	// Only a plan that drops a view pays for the dependent read, so the
 	// common run makes no extra query.
 	if len(result.DroppedViews) > 0 {
-		if err := checkViewDependents(ctx, cat, result.DroppedViews); err != nil {
+		if err := checkViewDependents(ctx, cat, result.DroppedViews, result.earlyDrops()); err != nil {
 			return nil, err
 		}
 	}
 	if len(result.RetypedColumns) > 0 {
-		if err := checkColumnDependents(ctx, cat, result.RetypedColumns, result.DroppedViews); err != nil {
+		if err := checkColumnDependents(ctx, cat, result.RetypedColumns, result.earlyDrops()); err != nil {
 			return nil, err
 		}
 	}
@@ -192,7 +196,7 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 		}
 	}
 	if len(result.RecreatedRoutines) > 0 {
-		if err := checkRoutineDependents(ctx, cat, result.RecreatedRoutines, result.DroppedViews); err != nil {
+		if err := checkRoutineDependents(ctx, cat, result.RecreatedRoutines, result.earlyDrops()); err != nil {
 			return nil, err
 		}
 	}
@@ -488,25 +492,26 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	)
 
 	return &diffAllResult{
-		Stmts:                stmts,
-		DisallowedDrops:      disallowed,
-		Ignored:              ignoredObjectComments(ignored),
-		IgnoredObjects:       ignored,
-		PreSQL:               options.Desired.preSQL,
-		ConcurrentlyPreSQL:   options.Desired.concurrentlyPreSQL,
-		Count:                count,
-		ExecuteStmts:         desired.ExecuteStmts,
-		HasConcurrentlyIndex: tableDiff.HasConcurrently || viewDiff.HasConcurrently,
-		CurrentTables:        currentTables,
-		DesiredTables:        desiredTables,
-		DesiredDomains:       desiredDomains,
-		DroppedViews:         viewDiff.DroppedViews,
-		RetypedColumns:       tableDiff.RetypedColumns,
-		DroppedConstraints:   droppedConstraints,
-		DroppedIndexes:       droppedIndexes,
-		DroppedForeignKeys:   droppedForeignKeys,
-		RecreatedRoutines:    routineDiff.Recreated,
-		StateHash:            currentStateHash,
+		Stmts:                 stmts,
+		DisallowedDrops:       disallowed,
+		Ignored:               ignoredObjectComments(ignored),
+		IgnoredObjects:        ignored,
+		PreSQL:                options.Desired.preSQL,
+		ConcurrentlyPreSQL:    options.Desired.concurrentlyPreSQL,
+		Count:                 count,
+		ExecuteStmts:          desired.ExecuteStmts,
+		HasConcurrentlyIndex:  tableDiff.HasConcurrently || viewDiff.HasConcurrently,
+		CurrentTables:         currentTables,
+		DesiredTables:         desiredTables,
+		DesiredDomains:        desiredDomains,
+		DroppedViews:          viewDiff.DroppedViews,
+		RetypedColumns:        tableDiff.RetypedColumns,
+		DroppedConstraints:    droppedConstraints,
+		DroppedIndexes:        droppedIndexes,
+		DroppedForeignKeys:    droppedForeignKeys,
+		RecreatedRoutines:     routineDiff.Recreated,
+		DroppedAtomicRoutines: routineDiff.DroppedAtomic,
+		StateHash:             currentStateHash,
 	}, nil
 }
 
@@ -519,18 +524,29 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 // see a view a filter or an unmanaged schema hides.
 //
 // A dependent the same plan drops is no obstacle: drops run deepest first.
-func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []string) error {
+func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []string, skip map[string]bool) error {
 	dependents, err := cat.ViewDependents(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch view dependents: %w", err)
 	}
-	return blockedError("cannot drop", dropped, dependents, nameSet(dropped))
+	return blockedError("cannot drop", dropped, dependents, skip)
+}
+
+// earlyDrops names what the plan drops before anything else changes: the
+// views, and the routines with a SQL-standard body, which go with them. A
+// dependent among them blocks none of the checks.
+func (r *diffAllResult) earlyDrops() map[string]bool {
+	skip := nameSet(r.DroppedViews)
+	for _, name := range r.DroppedAtomicRoutines {
+		skip[name] = true
+	}
+	return skip
 }
 
 // checkColumnDependents fails the plan when a column it retypes has a
 // dependent that makes PostgreSQL refuse the change. A view the same plan
 // drops does not block, since view drops run first.
-func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped []diff.RetypedColumn, droppedViews []string) error {
+func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped []diff.RetypedColumn, skip map[string]bool) error {
 	dependents, err := cat.ColumnDependents(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch column dependents: %w", err)
@@ -542,7 +558,7 @@ func checkColumnDependents(ctx context.Context, cat *catalog.Catalog, retyped []
 		names = append(names, col.Name)
 		byName[col.Name] = dependents[col.Current]
 	}
-	return blockedError("cannot change the type of", names, byName, nameSet(droppedViews))
+	return blockedError("cannot change the type of", names, byName, skip)
 }
 
 // checkKeyDependents fails the plan when a key or an index it drops, including
@@ -577,8 +593,8 @@ func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffA
 
 // checkRoutineDependents fails the plan when a routine it recreates has a
 // dependent, since PostgreSQL refuses the DROP. The recreate runs before the
-// table changes, so only a view the plan drops is skipped.
-func checkRoutineDependents(ctx context.Context, cat *catalog.Catalog, recreated []*model.Routine, droppedViews []string) error {
+// table changes, so only what earlyDrops names is skipped.
+func checkRoutineDependents(ctx context.Context, cat *catalog.Catalog, recreated []*model.Routine, skip map[string]bool) error {
 	dependents, err := cat.RoutineDependents(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch routine dependents: %w", err)
@@ -590,7 +606,7 @@ func checkRoutineDependents(ctx context.Context, cat *catalog.Catalog, recreated
 		targets = append(targets, target)
 		byTarget[target] = dependents[r.OID]
 	}
-	return blockedError("cannot drop", targets, byTarget, nameSet(droppedViews))
+	return blockedError("cannot drop", targets, byTarget, skip)
 }
 
 // droppedObject is a constraint or an index a statement drops. Name is how the
@@ -695,13 +711,14 @@ func nameSet(names []string) map[string]bool {
 }
 
 // blockedError lists the dependents that block each target, leaving out the
-// views and foreign keys in skip, and reports every blocked target at once.
+// views, foreign keys and routines in skip, and reports every blocked target
+// at once. A routine is matched by its full dependent name.
 func blockedError(prefix string, targets []string, dependents map[string][]catalog.Dependent, skip map[string]bool) error {
 	var msgs []string
 	for _, k := range targets {
 		var blockers []string
 		for _, dep := range dependents[k] {
-			if (dep.Relation != "" && skip[dep.Relation]) || (dep.Constraint != "" && skip[dep.Constraint]) {
+			if (dep.Relation != "" && skip[dep.Relation]) || (dep.Constraint != "" && skip[dep.Constraint]) || skip[dep.String()] {
 				continue
 			}
 			blockers = append(blockers, dep.String())
@@ -890,6 +907,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	// columns being dropped).
 	var preDropStmts []taggedStmt
 	preDropStmts = append(preDropStmts, tagStatements(diffs.Views.DropStmts, dropPosMap)...)
+	preDropStmts = append(preDropStmts, tagStatements(diffs.Routines.AtomicDropStmts, dropPosMap)...)
 	sort.SliceStable(preDropStmts, func(i, j int) bool {
 		return compareTaggedPos(preDropStmts[i].pos, preDropStmts[j].pos, true)
 	})
@@ -909,9 +927,12 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 		return compareTaggedPos(postDropStmts[i].pos, postDropStmts[j].pos, true)
 	})
 
-	// Phase 4: View creates in topological order
+	// Phase 4: View creates in topological order. A routine with a
+	// SQL-standard body goes with them, since PostgreSQL parses the body at
+	// creation time; its drop goes with the view drops in phase 2.
 	var viewCreateStmts []taggedStmt
 	viewCreateStmts = append(viewCreateStmts, tagStatements(diffs.Views.CreateStmts, createPosMap)...)
+	viewCreateStmts = append(viewCreateStmts, tagStatements(diffs.Routines.AtomicStmts, createPosMap)...)
 	sort.SliceStable(viewCreateStmts, func(i, j int) bool {
 		return compareTaggedPos(viewCreateStmts[i].pos, viewCreateStmts[j].pos, false)
 	})
@@ -957,6 +978,7 @@ func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string
 	stmts = append(stmts, diffs.Domains.Stmts...)
 	stmts = append(stmts, diffs.CompositeTypes.Stmts...)
 	stmts = append(stmts, diffs.Sequences.Stmts...)
+	stmts = append(stmts, diffs.Routines.AtomicDropStmts...)
 	stmts = append(stmts, sortViewStmts(diffs.Views.DropStmts, current.Views, true)...)
 	stmts = append(stmts, diffs.Routines.Stmts...)
 	stmts = append(stmts, diffs.Tables.FKDropStmts...)
@@ -971,6 +993,7 @@ func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string
 	stmts = append(stmts, diffs.Enums.DropStmts...)
 	stmts = append(stmts, diffs.Tables.FKAddStmts...)
 	stmts = append(stmts, sortViewStmts(diffs.Views.CreateStmts, desired.Views, false)...)
+	stmts = append(stmts, diffs.Routines.AtomicStmts...)
 	stmts = append(stmts, diffs.Tables.PolicyStmts...)
 	return stmts
 }

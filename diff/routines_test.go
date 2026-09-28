@@ -296,3 +296,65 @@ func TestDiffRoutines_ArgDefaultCastWithBodyChange(t *testing.T) {
 	assert.Contains(t, result.Stmts[0], "SELECT a + 1")
 	assert.Empty(t, result.DropStmts)
 }
+
+// A routine with a SQL-standard body goes to the atomic lists, which run with
+// the views. A modified routine goes by its desired form and a dropped one by
+// its current form.
+func TestDiffRoutines_Atomic(t *testing.T) {
+	atomic := func(body string) func(*model.Routine) {
+		return func(r *model.Routine) { r.Body = ""; r.SQLBody = body }
+	}
+	named := func(name string) func(*model.Routine) {
+		return func(r *model.Routine) { r.Name = name }
+	}
+
+	current := newRoutineMap(
+		newRoutine(named("changed"), atomic("RETURN a")),
+		newRoutine(named("to_atomic")),
+		newRoutine(named("dropped_atomic"), atomic("RETURN a")),
+		newRoutine(named("dropped_plain")),
+	)
+	desired := newRoutineMap(
+		newRoutine(named("changed"), atomic("RETURN a + 1")),
+		newRoutine(named("to_atomic"), atomic("RETURN a")),
+		newRoutine(named("created"), atomic("RETURN a"), func(r *model.Routine) { r.Comment = new("hi") }),
+	)
+
+	result, err := DiffRoutines(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	require.Len(t, result.AtomicStmts, 4)
+	assert.Contains(t, result.AtomicStmts[0], "public.created(a integer)")
+	assert.Equal(t, "COMMENT ON FUNCTION public.created(integer) IS 'hi';", result.AtomicStmts[1])
+	assert.Contains(t, result.AtomicStmts[2], "RETURN a + 1")
+	assert.Contains(t, result.AtomicStmts[3], "public.to_atomic(a integer)")
+	assert.Equal(t, []string{"DROP FUNCTION public.dropped_atomic(integer);"}, result.AtomicDropStmts)
+	assert.Equal(t, []string{"function public.dropped_atomic(integer)"}, result.DroppedAtomic)
+	assert.Equal(t, []string{"DROP FUNCTION public.dropped_plain(integer);"}, result.DropStmts)
+}
+
+// A recreated routine is dropped by the list its current form goes to and
+// created again by the list its desired form goes to. The DROP of a current
+// SQL-standard body runs with the views.
+func TestDiffRoutines_AtomicRecreated(t *testing.T) {
+	atomic := func(r *model.Routine) { r.Body = ""; r.SQLBody = "RETURN a" }
+	bigint := func(r *model.Routine) { r.ReturnType = "bigint" }
+	named := func(name string) func(*model.Routine) {
+		return func(r *model.Routine) { r.Name = name }
+	}
+
+	current := newRoutineMap(newRoutine(atomic), newRoutine(named("g"), atomic), newRoutine(named("h")))
+	desired := newRoutineMap(newRoutine(atomic, bigint), newRoutine(named("g"), bigint), newRoutine(named("h"), atomic, bigint))
+
+	result, err := DiffRoutines(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"DROP FUNCTION public.f(integer);", "DROP FUNCTION public.g(integer);"}, result.AtomicDropStmts)
+	assert.Equal(t, []string{"function public.f(integer)", "function public.g(integer)"}, result.DroppedAtomic)
+	require.Len(t, result.AtomicStmts, 2)
+	assert.Contains(t, result.AtomicStmts[0], "public.f(a integer)")
+	assert.Contains(t, result.AtomicStmts[1], "public.h(a integer)")
+	require.Len(t, result.Stmts, 2)
+	assert.Contains(t, result.Stmts[0], "public.g(a integer)")
+	assert.Equal(t, "DROP FUNCTION public.h(integer);", result.Stmts[1])
+	assert.Len(t, result.Recreated, 3)
+}

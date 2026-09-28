@@ -1,0 +1,24 @@
+# PostgreSQL parses a SQL-standard body at creation time, so the routine is
+# created after the table and view it reads, and a view that calls it after
+# the routine.
+manage_routine: true
+desired: |
+  CREATE VIEW public.w AS SELECT public.total() AS n;
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql STABLE BEGIN ATOMIC SELECT count(*) FROM public.v; END;
+  CREATE VIEW public.v AS SELECT a FROM public.t;
+  CREATE TABLE public.t (a integer);
+plan: |
+  CREATE TABLE public.t (
+      a integer
+  );
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT a FROM public.t;
+  CREATE OR REPLACE FUNCTION public.total()
+      RETURNS bigint
+      LANGUAGE sql
+      STABLE
+      BEGIN ATOMIC
+          SELECT count(*) FROM public.v;
+      END;
+  CREATE OR REPLACE VIEW public.w AS
+  SELECT public.total() AS n;

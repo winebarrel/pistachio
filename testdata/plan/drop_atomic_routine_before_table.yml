@@ -1,0 +1,10 @@
+# A SQL-standard body depends on what it reads, so the routine is dropped
+# before the table.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE FUNCTION public.total() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT count(*) FROM public.t; END;
+desired: ""
+plan: |
+  DROP FUNCTION public.total();
+  DROP TABLE public.t;
