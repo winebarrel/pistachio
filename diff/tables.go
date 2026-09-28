@@ -1504,7 +1504,7 @@ func equalIndexDefs(current, desired *orderedmap.Map[string, *model.Index], colu
 	same := make(map[string]bool, desired.Len())
 	for name, desiredIdx := range desired.All() {
 		if currentIdx, ok := current.GetOk(name); ok {
-			same[name] = equalIndexDefOn(currentIdx.Definition, desiredIdx.Definition, columns)
+			same[name] = equalIndexDef(currentIdx.Definition, desiredIdx.Definition, columns)
 		}
 	}
 	return same
@@ -2094,13 +2094,10 @@ func alignIndexCasts(desired, current *pg_query.IndexStmt) {
 // and expression-index IndexElem.Expr (with Sval->numeric coercion when
 // the desired side is a bare numeric A_Const); same pipeline as
 // equalConstraintDef.
-func equalIndexDef(current, desired string) bool {
-	return equalIndexDefOn(current, desired, nil)
-}
-
-// equalIndexDefOn is equalIndexDef with the table's columns, which
-// dropDefaultCollation needs. nil columns fold nothing.
-func equalIndexDefOn(current, desired string, columns *orderedmap.Map[string, *model.Column]) bool {
+//
+// columns are the table's, which dropDefaultCollation needs. nil columns fold
+// nothing.
+func equalIndexDef(current, desired string, columns *orderedmap.Map[string, *model.Column]) bool {
 	if current == desired {
 		return true
 	}

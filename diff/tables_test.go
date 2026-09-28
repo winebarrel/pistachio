@@ -3125,6 +3125,7 @@ func TestEqualIndexDef_sameSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id)",
+		nil,
 	))
 }
 
@@ -3132,6 +3133,7 @@ func TestEqualIndexDef_schemaVsNoSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON users USING btree (id)",
+		nil,
 	))
 }
 
@@ -3139,6 +3141,7 @@ func TestEqualIndexDef_only(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON ONLY public.logs USING btree (at)",
 		"CREATE INDEX idx ON logs USING btree (at)",
+		nil,
 	))
 }
 
@@ -3146,6 +3149,7 @@ func TestEqualIndexDef_customSchemaVsNoSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.users USING btree (id)",
 		"CREATE INDEX idx ON users USING btree (id)",
+		nil,
 	))
 }
 
@@ -3154,6 +3158,7 @@ func TestEqualIndexDef_differentSchemas(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id)",
+		nil,
 	))
 }
 
@@ -3161,6 +3166,7 @@ func TestEqualIndexDef_whereClauseSchemaVsNoSchema(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE UNIQUE INDEX idx ON myschema.products USING btree (sku) WHERE removed_at IS NULL AND sku IS NOT NULL",
 		"CREATE UNIQUE INDEX idx ON products USING btree (sku) WHERE removed_at IS NULL AND sku IS NOT NULL",
+		nil,
 	))
 }
 
@@ -3169,6 +3175,7 @@ func TestEqualIndexDef_whereClauseFormattingDiff(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.products USING btree (group_id) WHERE ((group_id IS NOT NULL))",
 		"CREATE INDEX idx ON products USING btree (group_id) WHERE group_id IS NOT NULL",
+		nil,
 	))
 }
 
@@ -3176,6 +3183,7 @@ func TestEqualIndexDef_whereClauseWithCast(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.events USING btree (created_at) WHERE ((kind)::text = 'done'::text)",
 		"CREATE INDEX idx ON events USING btree (created_at) WHERE kind::text = 'done'::text",
+		nil,
 	))
 }
 
@@ -3183,6 +3191,7 @@ func TestEqualIndexDef_whereClauseBooleanCondition(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON myschema.tasks USING btree (priority) WHERE ((visible = true))",
 		"CREATE INDEX idx ON tasks USING btree (priority) WHERE visible = true",
+		nil,
 	))
 }
 
@@ -3190,6 +3199,7 @@ func TestEqualIndexDef_whereClauseMultipleConditions(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE UNIQUE INDEX idx ON myschema.tasks USING btree (kind, seq) WHERE ((visible = true) AND (seq > 0))",
 		"CREATE UNIQUE INDEX idx ON tasks USING btree (kind, seq) WHERE visible = true AND seq > 0",
+		nil,
 	))
 }
 
@@ -3199,6 +3209,7 @@ func TestEqualIndexDef_whereCurrentDateCastStripped(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON events USING btree (id) WHERE (created_at >= '2020-01-01'::date)",
 		"CREATE INDEX idx ON events USING btree (id) WHERE created_at >= '2020-01-01'",
+		nil,
 	))
 }
 
@@ -3206,6 +3217,7 @@ func TestEqualIndexDef_whereCurrentTimeCastStripped(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON shifts USING btree (id) WHERE (starts_at >= '00:00:00'::time without time zone)",
 		"CREATE INDEX idx ON shifts USING btree (id) WHERE starts_at >= '00:00:00'",
+		nil,
 	))
 }
 
@@ -3216,6 +3228,7 @@ func TestEqualIndexDef_whereCurrentNegativeIntCastStripped(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON balances USING btree (id) WHERE (amount >= '-40'::integer)",
 		"CREATE INDEX idx ON balances USING btree (id) WHERE amount >= -40",
+		nil,
 	))
 }
 
@@ -3224,6 +3237,7 @@ func TestEqualIndexDef_whereCurrentCastInsideBoolExpr(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE ((visible = true) AND (starts_at >= '00:00:00'::time without time zone))",
 		"CREATE INDEX idx ON t USING btree (id) WHERE visible = true AND starts_at >= '00:00:00'",
+		nil,
 	))
 }
 
@@ -3235,6 +3249,7 @@ func TestEqualIndexDef_whereCustomNumericNamedTypeNotCoerced(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::myapp.int4)",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > 0",
+		nil,
 	))
 }
 
@@ -3244,6 +3259,7 @@ func TestEqualIndexDef_expressionCurrentCastStripped(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON people USING btree (lower((name)::text))",
 		"CREATE INDEX idx ON people USING btree (lower(name))",
+		nil,
 	))
 }
 
@@ -3253,6 +3269,7 @@ func TestEqualIndexDef_whereBothExplicitCastsMatch(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON events USING btree (id) WHERE (occurred_at >= '2020-01-01'::date)",
 		"CREATE INDEX idx ON events USING btree (id) WHERE occurred_at >= '2020-01-01'::date",
+		nil,
 	))
 }
 
@@ -3261,6 +3278,7 @@ func TestEqualIndexDef_whereCastsDifferTypes(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE (val > '0'::bigint)",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > '0'::integer",
+		nil,
 	))
 }
 
@@ -3271,6 +3289,7 @@ func TestEqualIndexDef_whereDesiredCastCurrentBare(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > 0",
 		"CREATE INDEX idx ON t USING btree (id) WHERE val > '0'::integer",
+		nil,
 	))
 }
 
@@ -3308,6 +3327,7 @@ func TestEqualIndexDef_explicitAscVsDefault(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 DESC, col2)",
 		"CREATE INDEX idx ON t USING btree (col1 DESC, col2 ASC)",
+		nil,
 	))
 }
 
@@ -3315,6 +3335,7 @@ func TestEqualIndexDef_allDefault(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 ASC)",
+		nil,
 	))
 }
 
@@ -3323,6 +3344,7 @@ func TestEqualIndexDef_descNullsFirst(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 DESC)",
 		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS FIRST)",
+		nil,
 	))
 }
 
@@ -3331,6 +3353,7 @@ func TestEqualIndexDef_ascNullsLast(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS LAST)",
+		nil,
 	))
 }
 
@@ -3339,6 +3362,7 @@ func TestEqualIndexDef_descNullsLast_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 DESC)",
 		"CREATE INDEX idx ON t USING btree (col1 DESC NULLS LAST)",
+		nil,
 	))
 }
 
@@ -3347,6 +3371,7 @@ func TestEqualIndexDef_ascNullsFirst_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 ASC NULLS FIRST)",
+		nil,
 	))
 }
 
@@ -3356,6 +3381,7 @@ func TestEqualIndexDef_opclassQualified(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (col1 public.text_pattern_ops)",
+		nil,
 	))
 }
 
@@ -3363,6 +3389,7 @@ func TestEqualIndexDef_opclassDiffers_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1 text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (col1 varchar_pattern_ops)",
+		nil,
 	))
 }
 
@@ -3372,6 +3399,7 @@ func TestEqualIndexDef_opclassOptionQuoting(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='32'))",
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen=32))",
+		nil,
 	))
 }
 
@@ -3380,6 +3408,7 @@ func TestEqualIndexDef_opclassOptionOrder(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (numranges='4', siglen='32'))",
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (siglen=32, numranges=4))",
+		nil,
 	))
 }
 
@@ -3387,6 +3416,7 @@ func TestEqualIndexDef_opclassOptionDiffers_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='32'))",
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen='64'))",
+		nil,
 	))
 }
 
@@ -3396,6 +3426,7 @@ func TestEqualIndexDef_opclassOptionFractional(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate='0.05'))",
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate=0.05))",
+		nil,
 	))
 }
 
@@ -3403,6 +3434,7 @@ func TestEqualIndexDef_opclassOptionFractionalDiffers_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate='0.05'))",
 		"CREATE INDEX idx ON t USING brin (col1 int8_bloom_ops (false_positive_rate=0.02))",
+		nil,
 	))
 }
 
@@ -3412,6 +3444,7 @@ func TestEqualIndexDef_opclassOptionBareWord(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (mode=fast))",
 		"CREATE INDEX idx ON t USING gist (col1 some_ops (mode='fast'))",
+		nil,
 	))
 }
 
@@ -3422,6 +3455,7 @@ func TestEqualIndexDef_opclassOnlyOnOneSide_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		"CREATE INDEX idx ON t USING btree (col1 text_ops)",
+		nil,
 	))
 }
 
@@ -3429,6 +3463,7 @@ func TestEqualIndexDef_opclassOptionOnlyOnOneSide_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops)",
 		"CREATE INDEX idx ON t USING gist (col1 tsvector_ops (siglen=32))",
+		nil,
 	))
 }
 
@@ -3437,6 +3472,7 @@ func TestEqualIndexDef_opclassOnExpression(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (lower(col1) text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (pg_catalog.lower(col1) public.text_pattern_ops)",
+		nil,
 	))
 }
 
@@ -3445,6 +3481,7 @@ func TestEqualIndexDef_opclassOnSecondColumn(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1, col2 text_pattern_ops)",
 		"CREATE INDEX idx ON t USING btree (col1, col2 public.text_pattern_ops)",
+		nil,
 	))
 }
 
@@ -3453,6 +3490,7 @@ func TestEqualIndexDef_collationQualified(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE pg_catalog."C")`,
+		nil,
 	))
 }
 
@@ -3460,6 +3498,7 @@ func TestEqualIndexDef_collationDiffers_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "POSIX")`,
+		nil,
 	))
 }
 
@@ -3469,6 +3508,7 @@ func TestEqualIndexDef_collationOnlyOnOneSide_notEqual(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON t USING btree (col1)",
 		`CREATE INDEX idx ON t USING btree (col1 COLLATE "C")`,
+		nil,
 	))
 }
 
@@ -3476,18 +3516,19 @@ func TestEqualIndexDef_different(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (name)",
+		nil,
 	))
 }
 
 func TestEqualIndexDef_parseError(t *testing.T) {
-	assert.False(t, equalIndexDef("NOT VALID SQL", "CREATE INDEX idx ON users (id)"))
-	assert.True(t, equalIndexDef("NOT VALID SQL", "NOT VALID SQL"))
+	assert.False(t, equalIndexDef("NOT VALID SQL", "CREATE INDEX idx ON users (id)", nil))
+	assert.True(t, equalIndexDef("NOT VALID SQL", "NOT VALID SQL", nil))
 }
 
 func TestEqualIndexDef_notIndexStmt(t *testing.T) {
 	// Valid SQL but not an INDEX statement; falls back to string comparison
-	assert.False(t, equalIndexDef("SELECT 1", "CREATE INDEX idx ON users (id)"))
-	assert.True(t, equalIndexDef("SELECT 1", "SELECT 1"))
+	assert.False(t, equalIndexDef("SELECT 1", "CREATE INDEX idx ON users (id)", nil))
+	assert.True(t, equalIndexDef("SELECT 1", "SELECT 1", nil))
 }
 
 func TestDiffTables_indexSchemaInsensitive(t *testing.T) {
@@ -4406,13 +4447,13 @@ func TestStripFuncSchema(t *testing.T) {
 	t.Run("index expression", func(t *testing.T) {
 		assert.True(t, equalIndexDef(
 			"CREATE INDEX i ON public.t USING btree (lower_v(v))",
-			"CREATE INDEX i ON public.t USING btree (public.lower_v(v))"))
+			"CREATE INDEX i ON public.t USING btree (public.lower_v(v))", nil))
 	})
 
 	t.Run("index predicate", func(t *testing.T) {
 		assert.True(t, equalIndexDef(
 			"CREATE INDEX i ON public.t USING btree (v) WHERE (lower_v(v) <> 'y'::text)",
-			"CREATE INDEX i ON public.t USING btree (v) WHERE public.lower_v(v) <> 'y'"))
+			"CREATE INDEX i ON public.t USING btree (v) WHERE public.lower_v(v) <> 'y'", nil))
 	})
 
 	t.Run("select expression", func(t *testing.T) {
@@ -4447,6 +4488,7 @@ func TestEqualIndexDef_storageParamQuoting(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80')",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=80)",
+		nil,
 	))
 }
 
@@ -4455,6 +4497,7 @@ func TestEqualIndexDef_storageParamOrder(t *testing.T) {
 	assert.True(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80', deduplicate_items=off)",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (deduplicate_items=off, fillfactor=80)",
+		nil,
 	))
 }
 
@@ -4462,6 +4505,7 @@ func TestEqualIndexDef_storageParamValueChange(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor='80')",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=90)",
+		nil,
 	))
 }
 
@@ -4469,6 +4513,7 @@ func TestEqualIndexDef_storageParamAdded(t *testing.T) {
 	assert.False(t, equalIndexDef(
 		"CREATE INDEX idx ON public.users USING btree (id)",
 		"CREATE INDEX idx ON public.users USING btree (id) WITH (fillfactor=80)",
+		nil,
 	))
 }
 
