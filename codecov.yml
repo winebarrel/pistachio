@@ -22,3 +22,4 @@ coverage:
 
 ignore:
   - "internal/testutil"
+  - "cmd/gen-json-schema"
