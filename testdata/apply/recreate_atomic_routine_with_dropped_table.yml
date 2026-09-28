@@ -1,0 +1,32 @@
+# A recreated routine with a SQL-standard body is dropped with the views, so
+# the table its old body reads can be dropped in the same run.
+manage_routine: true
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE TABLE public.u (a bigint);
+  CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql BEGIN ATOMIC SELECT max(t.a) AS max FROM t; END;
+desired: |
+  CREATE TABLE public.u (a bigint);
+  CREATE FUNCTION public.f() RETURNS bigint LANGUAGE sql BEGIN ATOMIC SELECT max(u.a) AS max FROM u; END;
+applied: |
+  -- public.u
+  CREATE TABLE public.u (
+      a bigint
+  );
+
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      BEGIN ATOMIC
+          SELECT max(u.a) AS max FROM u;
+      END;
+applied_sql: |
+  DROP FUNCTION public.f();
+  DROP TABLE public.t;
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS bigint
+      LANGUAGE sql
+      BEGIN ATOMIC
+          SELECT max(u.a) AS max FROM u;
+      END;

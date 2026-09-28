@@ -20,7 +20,9 @@ type RoutineDiffResult struct {
 	AtomicDropStmts []string
 	// DroppedAtomic names the routines AtomicDropStmts drops the way
 	// PostgreSQL names a dependent, such as "function public.f(integer)".
-	// They are dropped with the views, before anything they could block.
+	// They are dropped with the views, before anything they could block. A
+	// recreated routine whose current body is SQL-standard is dropped there
+	// too, and created again with AtomicStmts or Stmts.
 	DroppedAtomic []string
 	// Recreated lists the current routines that Stmts drops and creates again.
 	Recreated []*model.Routine
@@ -54,6 +56,13 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 			continue
 		}
 		stmts, disallowed, recreated := diffRoutine(currentRoutine, desiredRoutine, dropAllowed)
+		if recreated && currentRoutine.Atomic() {
+			// The old body still reads what the table changes may drop or
+			// retype, so its DROP goes with the views, ahead of them.
+			result.AtomicDropStmts = append(result.AtomicDropStmts, stmts[0])
+			result.DroppedAtomic = append(result.DroppedAtomic, atomicDependentName(currentRoutine))
+			stmts = stmts[1:]
+		}
 		out := result.stmtsFor(desiredRoutine)
 		*out = append(*out, stmts...)
 		if recreated {
@@ -70,7 +79,7 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 		if dropAllowed {
 			if currentRoutine.Atomic() {
 				result.AtomicDropStmts = append(result.AtomicDropStmts, currentRoutine.DropSQL())
-				result.DroppedAtomic = append(result.DroppedAtomic, strings.ToLower(currentRoutine.Kind())+" "+currentRoutine.Signature())
+				result.DroppedAtomic = append(result.DroppedAtomic, atomicDependentName(currentRoutine))
 			} else {
 				result.DropStmts = append(result.DropStmts, currentRoutine.DropSQL())
 			}
@@ -80,6 +89,11 @@ func DiffRoutines(current, desired *orderedmap.Map[string, *model.Routine], dc D
 	}
 
 	return result, nil
+}
+
+// atomicDependentName names r the way PostgreSQL names a dependent.
+func atomicDependentName(r *model.Routine) string {
+	return strings.ToLower(r.Kind()) + " " + r.Signature()
 }
 
 // stmtsFor returns the list the create and modify statements of r go to.
