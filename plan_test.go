@@ -3,6 +3,7 @@ package pistachio
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,15 +139,35 @@ func TestPlan_WithPassword(t *testing.T) {
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );`), 0o644))
 
+	// The connection string carries a wrong password and Password the one the
+	// test connection uses, so on a server that checks passwords the plan
+	// connects only if Password wins. A server that trusts the connection
+	// takes any password, so an empty one falls back to a dummy.
+	password := conn.Config().Password
+	if password == "" {
+		password = "dummy"
+	}
 	client := NewClient(&Options{
-		ConnString: conn.Config().ConnString(),
-		Password:   "dummy",
+		ConnString: withPassword(conn.Config().ConnString(), "wrong"),
+		Password:   password,
 		Schemas:    []string{"public"},
 	})
 
 	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Contains(t, got.SQL, "CREATE TABLE public.users")
+}
+
+// withPassword sets the password of a connection string in either of the two
+// forms libpq accepts. A URI's query parameter overrides its user info.
+func withPassword(connString, password string) string {
+	if u, err := url.Parse(connString); err == nil && (u.Scheme == "postgres" || u.Scheme == "postgresql") {
+		q := u.Query()
+		q.Set("password", password)
+		u.RawQuery = q.Encode()
+		return u.String()
+	}
+	return connString + " password=" + password
 }
 
 func TestPlan_NoReadOnly(t *testing.T) {
