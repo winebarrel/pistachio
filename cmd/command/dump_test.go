@@ -38,7 +38,7 @@ func TestDump_Run(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "-- Dump of schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)")
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
-	assertConnectedCommentFirst(t, buf.String(), conn.Config())
+	assertConnectedCommentFirst(t, buf.String(), conn.Config().ConnString())
 }
 
 func TestDump_Run_Split(t *testing.T) {

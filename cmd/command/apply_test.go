@@ -41,7 +41,7 @@ func TestApply_Run(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
 	assert.Contains(t, buf.String(), "-- Apply finished in ")
-	assertConnectedCommentFirst(t, buf.String(), conn.Config())
+	assertConnectedCommentFirst(t, buf.String(), conn.Config().ConnString())
 }
 
 func TestApply_Run_IgnoredComment(t *testing.T) {

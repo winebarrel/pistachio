@@ -54,7 +54,7 @@ func TestApplyFrom_Run(t *testing.T) {
 	assert.Contains(t, buf.String(), "-- Apply to schema public")
 	assert.Contains(t, buf.String(), "CREATE TABLE public.users")
 	assert.Contains(t, buf.String(), "-- Apply finished in ")
-	assertConnectedCommentFirst(t, buf.String(), conn.Config())
+	assertConnectedCommentFirst(t, buf.String(), conn.Config().ConnString())
 }
 
 func TestApplyFrom_Run_NoChanges(t *testing.T) {
