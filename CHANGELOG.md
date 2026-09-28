@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.
 
