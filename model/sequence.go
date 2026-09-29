@@ -88,10 +88,5 @@ func SequenceToSQL(seq *Sequence) string {
 }
 
 func SequencesToSQL(sequences *orderedmap.Map[string, *Sequence]) string {
-	return strings.Join(
-		sequences.TransformSlice(func(_ string, seq *Sequence) string {
-			return SequenceToSQL(seq)
-		}),
-		"\n\n",
-	)
+	return joinSQL(sequences, SequenceToSQL)
 }
