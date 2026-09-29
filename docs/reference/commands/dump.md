@@ -100,7 +100,7 @@ The [general options](index.md#general-options) apply as well.
 ### Output
 
 `--split=`*dir*
-:   Write one file per table, view, enum, domain, composite type, sequence and routine into *dir*, named `<schema>.<name>.sql`, or `<name>.sql` with `--omit-schema`. Standard output gets the header and `-- Wrote <n> file(s) to <dir>`. Conflicts with `--json`.
+:   Write one file per table, view, enum, domain, composite type, sequence and routine into *dir*, named `<schema>.<name>.sql`, or `<name>.sql` with `--omit-schema`; two objects that give one file name, overloaded routines for one, get a `_2` suffix from the second on. Standard output gets the header and `-- Wrote <n> file(s) to <dir>`. Conflicts with `--json`.
 
 `--omit-schema`
 :   Write every name without its schema, for a dump that is loaded into a schema of another name.

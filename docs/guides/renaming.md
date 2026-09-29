@@ -50,4 +50,4 @@ Three references are not rewritten and plan a redundant drop and create on the f
 
 ## Renaming a table
 
-A table rename goes out first in the plan, so the table's other changes run under the new name. The table's own indexes, foreign keys and triggers follow the rename. A view that reads the table and a foreign key that references it from another table are replanned once, as above.
+A table rename goes out before the table's other statements, so they run under the new name. The table's own indexes, foreign keys and triggers follow the rename. A view that reads the table and a foreign key that references it from another table are replanned once, as above.

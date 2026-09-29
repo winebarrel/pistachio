@@ -49,6 +49,7 @@ pista plan schema.sql
 ```
 
 ```sql
+-- Connected to postgres://postgres@localhost:5432/postgres
 -- Plan for schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
 ALTER TABLE public.users ADD COLUMN email text;
 ```
@@ -64,6 +65,7 @@ pista apply schema.sql
 ```
 
 ```sql
+-- Connected to postgres://postgres@localhost:5432/postgres
 -- Apply to schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
 ALTER TABLE public.users ADD COLUMN email text;
 -- Apply finished in 12ms
