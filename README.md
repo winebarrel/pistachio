@@ -5,148 +5,67 @@
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/winebarrel/pistachio)](https://www.coderabbit.ai)
 [![Greptile: The War on Bugs](https://www.greptile.com/badge.svg)](https://www.greptile.com/?utm_source=oss_badge&utm_medium=readme&utm_campaign=greptile_for_open_source)
 
-Declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL; pistachio generates the DDL diff.
+Declarative schema management for PostgreSQL. Write the schema you want as SQL; `pista plan` prints the DDL that takes the database there, and `pista apply` runs it. No migration files, no DSL.
 
 > [!TIP]
-> **[Try pistachio in your browser](https://pistachio-demo.winebarrel.workers.dev)**: edit two schemas and see the DDL `pista diff` generates. Nothing to install.
+> **[Try it in your browser](https://pistachio-demo.winebarrel.workers.dev)**: edit two schemas and see the DDL `pista diff` generates. Nothing to install.
 
-**[Documentation](https://winebarrel.github.io/pistachio/)** | [Getting Started](https://winebarrel.github.io/pistachio/getting-started/) | [Commands](https://winebarrel.github.io/pistachio/reference/commands/) | [Supported objects](https://winebarrel.github.io/pistachio/reference/objects/) | [Design and scope](https://winebarrel.github.io/pistachio/about/design/)
+**[Documentation](https://winebarrel.github.io/pistachio/)** | [Getting started](https://winebarrel.github.io/pistachio/getting-started/) | [Guides](https://winebarrel.github.io/pistachio/guides/) | [Commands](https://winebarrel.github.io/pistachio/reference/commands/) | [Supported objects](https://winebarrel.github.io/pistachio/reference/objects/)
 
-## Workflow
+## How it works
 
 ![pistachio workflow](docs/workflow.svg)
 
 ![](https://github.com/user-attachments/assets/8ceaef33-7d4e-4bd8-bf94-1a79342cf1e1)
 
-## Installation
-
-### Homebrew
+## Install
 
 ```bash
-brew install winebarrel/pistachio/pistachio
+brew install winebarrel/pistachio/pistachio     # Homebrew
+mise use github:winebarrel/pistachio            # mise
 ```
 
-### mise
+Or download a binary from [Releases](https://github.com/winebarrel/pistachio/releases): macOS and Linux on amd64 and arm64, Windows on amd64. `mise use github:winebarrel/pistachio@<version>` pins a version.
 
-```bash
-mise use github:winebarrel/pistachio            # latest
-mise use github:winebarrel/pistachio@<version>  # a specific version
-```
-
-### Download binary
-
-Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
-
-| OS      | Arch         |
-|---------|--------------|
-| macOS   | amd64, arm64 |
-| Linux   | amd64, arm64 |
-| Windows | amd64        |
-
-## Demo
-
-### In the browser
-
-The [pistachio playground](https://pistachio-demo.winebarrel.workers.dev) runs `pista diff` on two schemas you edit in the page. No database is involved, so it shows the DDL without applying it.
-
-### With Docker
-
-A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
+The demo image bundles PostgreSQL and a sample schema:
 
 ```bash
 docker run --rm -it ghcr.io/winebarrel/pistachio-demo
 ```
 
-See [Try it with Docker](https://winebarrel.github.io/pistachio/#try-it-with-docker).
+## Quick start
 
-## Example
+```bash
+export PISTA_CONN_STR='postgres://user@host:5432/mydb'
 
-Create a schema file:
+pista dump > schema.sql            # the current schema as SQL
+$EDITOR schema.sql                 # add a column, an index, a table
+pista plan schema.sql              # the DDL that gets there; nothing runs
+pista apply schema.sql             # run it
+```
 
 ```sql
-CREATE TYPE public.status AS ENUM ('active', 'inactive');
-
-CREATE TABLE public.users (
-    id integer NOT NULL,
-    name text NOT NULL,
-    status status NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.posts (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    title text NOT NULL,
-    CONSTRAINT posts_pkey PRIMARY KEY (id)
-);
-
-CREATE INDEX idx_posts_user_id ON public.posts USING btree (user_id);
-
-ALTER TABLE ONLY public.posts
-    ADD CONSTRAINT posts_user_id_fkey
-    FOREIGN KEY (user_id) REFERENCES users(id);
+$ pista plan schema.sql
+-- Connected to postgres://user@host:5432/mydb
+-- Plan for schema public (2 tables, 0 views, 1 enum, 0 domains, 0 composite types, 0 sequences)
+ALTER TABLE public.users ADD COLUMN email text;
+CREATE INDEX users_email_idx ON public.users USING btree (email);
 ```
 
-Preview and apply:
+See [Getting started](https://winebarrel.github.io/pistachio/getting-started/).
 
-```bash
-pista plan schema.sql                  # review the diff (drops suppressed by default)
-pista plan --allow-drop all schema.sql # review the diff (with drops)
-pista apply schema.sql                 # apply it
-```
+## What it does
 
-See what each statement costs before it runs:
+- **No drop unless you allow it.** An object removed from the file is not dropped until `--allow-drop` names its type; the plan shows the drop as a `-- skipped:` comment. [Controlling drops](https://winebarrel.github.io/pistachio/guides/drops/)
+- **Renames.** `-- pista:renamed-from old_name` above an object turns a drop and a create into `RENAME`. [Renaming objects](https://winebarrel.github.io/pistachio/guides/renaming/)
+- **Transactions and `CONCURRENTLY`.** `apply --with-tx` runs the plan in one transaction. `-- pista:concurrently` opts an index into `CONCURRENTLY`, which cannot run in one; `--try-tx` handles both. [Transactions and locks](https://winebarrel.github.io/pistachio/guides/transactions/)
+- **Cost before it runs.** `plan --explain` says which statements scan or rewrite a table, what they block, and how big the table is. [Explaining a plan](https://winebarrel.github.io/pistachio/guides/explaining-plans/)
+- **Plan files.** `plan --out` writes a plan that `apply-from` runs later, and refuses if the database changed in between. [Plan files](https://winebarrel.github.io/pistachio/guides/plan-files/)
+- **Diff without a database.** `pista diff --git origin/main...HEAD schema.sql` prints the DDL a branch would apply. [Diffing schema files](https://winebarrel.github.io/pistachio/guides/diffing/)
+- **Many files.** `dump --split` writes one file per object; `pista fmt` lays them out. [Formatting schema files](https://winebarrel.github.io/pistachio/guides/formatting/)
+- **Tables, columns, constraints, indexes, views, enums, domains, composite types, sequences, triggers, policies, comments**, and routines with `--manage-routine`. [Supported objects](https://winebarrel.github.io/pistachio/reference/objects/)
 
-```sql
-$ pista plan --explain schema.sql
--- rewrite, blocks reads and writes: public.orders (~2,000,000 rows, 210 MB, as of 2026-09-09, 3 indexes rebuilt)
-ALTER TABLE public.orders ALTER COLUMN amount SET DATA TYPE numeric(12,2);
--- scan, blocks writes: public.orders (~2,000,000 rows, 210 MB, as of 2026-09-09), public.customers (~50,000 rows, 6280 kB, as of 2026-07-21)
-ALTER TABLE ONLY public.orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers (id);
--- scan, blocks nothing: public.orders (~2,000,000 rows, 210 MB, as of 2026-09-09)
-CREATE INDEX CONCURRENTLY orders_created_at_idx ON public.orders USING btree (created_at);
-```
-
-The rows and bytes are the estimates the last VACUUM or ANALYZE wrote, with the date it wrote them, so the comment costs no read of the table. See [Explaining a plan](https://winebarrel.github.io/pistachio/guides/explaining-plans/).
-
-Or split the schema across multiple files:
-
-```bash
-pista dump --split ./schema/       # dump per table/view/enum/domain/composite type/sequence
-pista plan ./schema/*.sql          # review the diff
-pista apply ./schema/*.sql         # apply it
-```
-
-Lay the files out:
-
-```bash
-pista fmt ./schema/*.sql           # rewrite them in place
-pista fmt --check ./schema/*.sql   # exit 2 when a file is not formatted
-```
-
-Or diff two schema files without a database:
-
-```bash
-pista diff old.sql new.sql         # print the DDL that takes old.sql to new.sql
-pista diff --check old.sql new.sql # exit 2 when the two differ
-```
-
-Or two revisions of one schema file, read out of git:
-
-```bash
-pista diff --git HEAD^..HEAD schema.sql          # what the last commit changed
-pista diff --git origin/main...HEAD schema.sql   # what this branch changes
-```
-
-The output carries the same schema DDL as `plan`, so diffing two revisions of a schema file previews a migration in CI. See [Diffing schema files](https://winebarrel.github.io/pistachio/guides/diffing/).
-
-Or read the schema as JSON:
-
-```bash
-pista parse ./schema/*.sql         # print the objects the files declare as JSON
-```
-
-It uses the same parser `plan` and `apply` use and reads no database, so another tool can consume the schema. `pista dump --json` writes the same shape, read from the database. See [Parsing schema files](https://winebarrel.github.io/pistachio/guides/parsing/).
+`CREATE EXTENSION`, `CREATE ROLE` and `GRANT` are out of scope. See [Design and scope](https://winebarrel.github.io/pistachio/about/design/) and [Known limitations](https://winebarrel.github.io/pistachio/about/limitations/).
 
 ## Development
 
@@ -159,6 +78,5 @@ See [Contributing](https://winebarrel.github.io/pistachio/contributing/) for the
 
 ## Related projects
 
-- [ridgepole](https://github.com/ridgepole/ridgepole): DB schema
-  management using a Rails DSL.
+- [ridgepole](https://github.com/ridgepole/ridgepole): DB schema management using a Rails DSL.
 - [qrev](https://github.com/winebarrel/qrev): SQL execution history management tool.
