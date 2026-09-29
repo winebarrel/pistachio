@@ -36,13 +36,13 @@ These options come before or after the command name and apply to every command.
 
 ## Exit status
 
-Every command exits with 0 on success and 1 on error. A usage error, such as an unknown flag or a missing argument, exits with 80. `plan --check`, `diff --check` and `fmt --check` exit with 2 to report a difference; each page says what counts as one.
+Every command exits with 0 on success and 1 on error. A usage error, such as an unknown flag or a missing argument, exits with 80. `plan --check`, `diff --check` and `fmt --check` exit with 2 to report a difference; each page says what counts as one. See [Exit status](../exit-status.md).
 
 ## Environment
 
 Every option that has an environment variable names it in its entry. The variable holds the same value the flag takes. A flag overrides its variable and the two are not merged: `PISTA_EXCLUDE='tmp_*' pista plan -E 'foo_*' schema.sql` excludes `foo_*` alone.
 
-Precedence: command-line flag, then environment variable, then config file, then default.
+Precedence: command-line flag, then environment variable, then config file, then default. [Environment variables](../environment.md) lists them all.
 
 `PISTA_CONFIG`
 :   The config file `--config` would name.
