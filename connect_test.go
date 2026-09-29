@@ -228,22 +228,34 @@ func TestConnInfoComment_UnixSocketHost(t *testing.T) {
 	// We surface them as keyword/value form because percent-encoding the
 	// socket path into the URI host component is unreadable in a comment.
 	client := NewClient(&Options{
-		ConnString: "postgres://myuser@/mydb?host=/var/run/postgresql",
+		ConnString: "postgres://myuser@/mydb?host=/var/run/postgresql&port=5432",
 	})
 
 	comment, err := client.ConnInfoComment()
 	require.NoError(t, err)
-	assert.Equal(t, "-- Connected to host=/var/run/postgresql dbname=mydb user=myuser", comment)
+	assert.Equal(t, "-- Connected to host=/var/run/postgresql port=5432 dbname=mydb user=myuser", comment)
+}
+
+func TestConnInfoComment_UnixSocketPort(t *testing.T) {
+	// On a socket the port picks the socket file (.s.PGSQL.<port>), so two
+	// clusters sharing a directory differ only in it.
+	client := NewClient(&Options{
+		ConnString: "postgres://myuser@/mydb?host=/tmp&port=5499",
+	})
+
+	comment, err := client.ConnInfoComment()
+	require.NoError(t, err)
+	assert.Equal(t, "-- Connected to host=/tmp port=5499 dbname=mydb user=myuser", comment)
 }
 
 func TestConnInfoComment_UnixSocketHostPasswordNotIncluded(t *testing.T) {
 	client := NewClient(&Options{
-		ConnString: "postgres://myuser:secret@/mydb?host=/var/run/postgresql",
+		ConnString: "postgres://myuser:secret@/mydb?host=/var/run/postgresql&port=5432",
 	})
 
 	comment, err := client.ConnInfoComment()
 	require.NoError(t, err)
-	assert.Equal(t, "-- Connected to host=/var/run/postgresql dbname=mydb user=myuser", comment)
+	assert.Equal(t, "-- Connected to host=/var/run/postgresql port=5432 dbname=mydb user=myuser", comment)
 }
 
 func TestConnInfoComment_URLEscapesSpecialChars(t *testing.T) {
