@@ -1,8 +1,10 @@
 package pistachio
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,7 +44,9 @@ func TestResolvePreSQL_Empty(t *testing.T) {
 func TestResolvePreSQL_FileNotFound(t *testing.T) {
 	_, err := resolvePreSQL("", "/nonexistent/pre.sql")
 	require.Error(t, err)
-	assert.Equal(t, "failed to read pre-SQL file: open /nonexistent/pre.sql: no such file or directory", err.Error())
+	assert.True(t, strings.HasPrefix(err.Error(), "failed to read pre-SQL file: open "), err.Error())
+	assert.Equal(t, 1, strings.Count(err.Error(), "/nonexistent/pre.sql"), err.Error())
+	assert.ErrorIs(t, err, fs.ErrNotExist)
 }
 
 func TestResolveConcurrentlyPreSQL_DirectString(t *testing.T) {
