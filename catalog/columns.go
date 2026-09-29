@@ -108,7 +108,7 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
 			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = a.attrelid
-			AND d.classoid = 'pg_class'::regclass
+			AND d.classoid = 'pg_catalog.pg_class'::regclass
 			AND d.objsubid = a.attnum
 			LEFT JOIN pg_catalog.pg_constraint nn ON nn.conrelid = a.attrelid
 			AND nn.contype = 'n'
