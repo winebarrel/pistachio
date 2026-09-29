@@ -455,6 +455,17 @@ func TestTable_StorageSQL_PartitionChild(t *testing.T) {
 	assert.Empty(t, tbl.StorageSQL())
 }
 
+// An INHERITS child declares columns of its own, so their statements are its.
+func TestTable_StorageSQL_InheritsChild(t *testing.T) {
+	tbl := newTable("public", "child")
+	parent := "public.parent"
+	tbl.PartitionOf = &parent
+	tbl.Columns.Set("body", &model.Column{Name: "body", TypeName: "text", StorageType: "external", TypeStorage: "extended"})
+	assert.Equal(t, []string{
+		"ALTER TABLE public.child ALTER COLUMN body SET STORAGE EXTERNAL;",
+	}, tbl.StorageSQL())
+}
+
 func TestSetCompressionSQL_Default(t *testing.T) {
 	// An empty method hands the column back to default_toast_compression.
 	assert.Equal(t,

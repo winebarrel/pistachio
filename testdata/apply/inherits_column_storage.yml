@@ -1,0 +1,37 @@
+# A new INHERITS child takes the settings on its own columns after the CREATE,
+# and the re-plan comes out clean.
+init: ""
+desired: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL
+  );
+  CREATE TABLE public.child (
+      body text STORAGE external,
+      note text COMPRESSION pglz
+  )
+  INHERITS (public.parent);
+applied: |
+  -- public.child
+  CREATE TABLE public.child (
+      body text,
+      note text
+  )
+  INHERITS (public.parent);
+  ALTER TABLE public.child ALTER COLUMN body SET STORAGE EXTERNAL;
+  ALTER TABLE public.child ALTER COLUMN note SET COMPRESSION pglz;
+
+  -- public.parent
+  CREATE TABLE public.parent (
+      id integer NOT NULL
+  );
+applied_sql: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL
+  );
+  CREATE TABLE public.child (
+      body text,
+      note text
+  )
+  INHERITS (public.parent);
+  ALTER TABLE public.child ALTER COLUMN body SET STORAGE EXTERNAL;
+  ALTER TABLE public.child ALTER COLUMN note SET COMPRESSION pglz;
