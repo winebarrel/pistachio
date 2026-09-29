@@ -86,6 +86,7 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			LEFT JOIN pg_catalog.pg_class tc ON tc.oid = c.reltoastrelid
 			LEFT JOIN dependency_extension de ON de.objid = c.oid
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = c.oid
+			AND d.classoid = 'pg_class'::regclass
 			AND d.objsubid = 0
 			CROSS JOIN LATERAL (
 				SELECT

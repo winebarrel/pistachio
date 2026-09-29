@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* The comment on a table, view or column is now read only from comments on relations. After OID wraparound, a comment on another kind of object that shared the OID could be read as the table's.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.

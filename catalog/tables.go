@@ -97,6 +97,7 @@ func (c *Catalog) ListTables(ctx context.Context) ([]*model.Table, error) {
 			LEFT JOIN dependency_extension de ON de.objid = c.oid
 			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
 			LEFT JOIN pg_catalog.pg_description d ON d.objoid = c.oid
+			AND d.classoid = 'pg_class'::regclass
 			AND d.objsubid = 0
 		WHERE
 			c.relkind IN ('r', 'p')
