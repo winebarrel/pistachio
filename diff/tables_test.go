@@ -309,6 +309,13 @@ func TestParentIndexCopies(t *testing.T) {
 	}
 }
 
+func TestIsPartitionIndexCopy(t *testing.T) {
+	parentIdx := logsIndex("logs", "logs_at_idx", "at")
+	assert.True(t, IsPartitionIndexCopy(logsIndex("logs_1", "logs_1_at_idx", "at"), parentIdx))
+	assert.False(t, IsPartitionIndexCopy(logsIndex("logs_1", "logs_1_by_at", "at"), parentIdx))
+	assert.False(t, IsPartitionIndexCopy(logsIndex("logs_1", "logs_1_at_idx", "at DESC"), parentIdx))
+}
+
 // A new partition's copy of its parent's index is created with the partition,
 // so only its comment is written.
 func TestDiffTables_newPartition_parentIndexCopy(t *testing.T) {
