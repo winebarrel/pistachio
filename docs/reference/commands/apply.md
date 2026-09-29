@@ -130,26 +130,7 @@ Every option names its variable above. `PISTA_CONFIG` and `PISTA_PAGER` are desc
 
 ### Transactions
 
-Without `--with-tx` or `--try-tx` each statement commits on its own. A failure leaves the statements that already ran in place, and running `pista apply` again applies the rest.
-
-`--with-tx` wraps the pre-SQL and every statement in one transaction, and the output marks its bounds:
-
-```sql
--- Transaction started
-ALTER TABLE public.users ADD COLUMN email text;
--- Transaction committed
-```
-
-`CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY` cannot run in a transaction, so `--with-tx` is refused when the plan holds one. To run such a plan in a transaction anyway, add `--disable-index-concurrently`. To keep the opt-in and run without a transaction, use `--try-tx`, which records the choice:
-
-```sql
--- Transaction skipped: plan contains CONCURRENTLY index DDL
-CREATE INDEX CONCURRENTLY idx_users_name ON public.users USING btree (name);
-```
-
-A failed `CREATE INDEX CONCURRENTLY` leaves an invalid index that has to be dropped by hand.
-
-An index opts into `CONCURRENTLY` with the `-- pista:concurrently` directive or by being written `CREATE INDEX CONCURRENTLY`; the two are the same. See [Directives](../directives.md#-pistaconcurrently).
+Without `--with-tx` or `--try-tx` each statement commits on its own. `--with-tx` wraps the pre-SQL and every statement in one transaction, marked `-- Transaction started` and `-- Transaction committed` in the output. It is refused when the plan holds a `CONCURRENTLY` index statement; `--try-tx` then runs without a transaction and writes `-- Transaction skipped: plan contains CONCURRENTLY index DDL`. See [Transactions and locks](../../guides/transactions.md).
 
 ### Timing
 
