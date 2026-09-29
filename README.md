@@ -5,7 +5,7 @@
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/winebarrel/pistachio)](https://www.coderabbit.ai)
 [![Greptile: The War on Bugs](https://www.greptile.com/badge.svg)](https://www.greptile.com/?utm_source=oss_badge&utm_medium=readme&utm_campaign=greptile_for_open_source)
 
-pistachio manages a PostgreSQL schema from SQL files. The files hold the whole schema as `CREATE` statements. `pista plan` reads the database's catalog, compares it with the files, and prints the DDL that makes the two agree; `pista apply` runs that DDL. `pista dump` writes the files from a database you already have.
+pistachio manages a PostgreSQL schema from SQL files. The files hold the whole schema as DDL, the way `pista dump` writes it. `pista plan` reads the database's catalog, compares it with the files, and prints the DDL that makes the two agree; `pista apply` runs that DDL. `pista dump` writes the files from a database you already have.
 
 > [!TIP]
 > The [playground](https://pistachio-demo.winebarrel.workers.dev) runs `pista diff` on two schemas you edit in the page, with nothing to install.
@@ -58,7 +58,7 @@ A second `plan` prints `-- No changes`. From then on, edit the file, plan, apply
 
 ## Features
 
-- A drop runs only when `--allow-drop` names its type; until then the plan shows it as a `-- skipped:` comment. [Controlling drops](https://winebarrel.github.io/pistachio/guides/drops/)
+- An object removed from the file is dropped only when `--allow-drop` names its type; until then the plan shows the drop as a `-- skipped:` comment. [Controlling drops](https://winebarrel.github.io/pistachio/guides/drops/)
 - `-- pista:renamed-from old_name` above an object turns a drop and a create into `RENAME`. [Renaming objects](https://winebarrel.github.io/pistachio/guides/renaming/)
 - `apply --with-tx` runs the plan in one transaction. `-- pista:concurrently` opts an index into `CONCURRENTLY`, which cannot run in one; `--try-tx` handles both. [Transactions and locks](https://winebarrel.github.io/pistachio/guides/transactions/)
 - `plan --explain` says which statements scan or rewrite a table, what they block, and how big the table is. [Explaining a plan](https://winebarrel.github.io/pistachio/guides/explaining-plans/)
