@@ -16,8 +16,8 @@ theme:
   logo: assets/logo-mark.svg
   features:
     - navigation.sections
-    # A section with an index.md opens that page when clicked. The Commands
-    # section under Reference is one.
+    # A section with an index.md opens that page when clicked. Guides and the
+    # Commands section under Reference are two.
     - navigation.indexes
     - navigation.top
     - content.code.copy
@@ -64,18 +64,22 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Guides:
-      - guides/renaming.md
-      - guides/multiple-schemas.md
-      - guides/filtering.md
-      - guides/drops.md
-      - guides/explaining-plans.md
-      - guides/transactions.md
-      - guides/exclusive-apply.md
-      - guides/executing-sql.md
-      - guides/plan-files.md
-      - guides/diffing.md
-      - guides/formatting.md
-      - guides/parsing.md
+      - guides/index.md
+      - Writing the schema:
+          - guides/multiple-schemas.md
+          - guides/renaming.md
+          - guides/executing-sql.md
+      - Running plan and apply:
+          - guides/drops.md
+          - guides/filtering.md
+          - guides/transactions.md
+          - guides/explaining-plans.md
+          - guides/plan-files.md
+          - guides/exclusive-apply.md
+      - Without a database:
+          - guides/diffing.md
+          - guides/formatting.md
+          - guides/parsing.md
   - Reference:
       - Commands:
           - reference/commands/index.md
