@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `fmt` no longer refuses a file with trailing whitespace after a `--` comment. The whitespace is removed.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.
