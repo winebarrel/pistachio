@@ -88,9 +88,7 @@ func (t Table) SQL() string {
 	defs := slices.Concat(
 		t.Columns.TransformSlice(func(_ string, col *Column) string {
 			q := "    " + Ident(col.Name) + " " + col.TypeName
-			if col.Collation != nil {
-				q += " COLLATE " + *col.Collation
-			}
+			q += collateClause(col.Collation)
 			if col.Identity.IsGeneratedAlways() {
 				q += " GENERATED ALWAYS AS IDENTITY" + col.IdentitySeq.OptionsSQL(col.TypeName)
 			} else if col.Identity.IsGeneratedByDefault() {
@@ -315,11 +313,17 @@ func SortedStorageParams(params map[string]string) *orderedmap.Map[string, strin
 // PostgreSQL accepts that for any parameter, so the renderer does not have to
 // decide which spellings pass as a bare identifier.
 func (t Table) StorageParamsSQL() string {
-	if t.StorageParams == nil || t.StorageParams.Len() == 0 {
+	return storageParamsWith(t.StorageParams)
+}
+
+// storageParamsWith renders storage parameters as a WITH clause, or "" when
+// there are none. Tables and views share it.
+func storageParamsWith(params *orderedmap.Map[string, string]) string {
+	if params == nil || params.Len() == 0 {
 		return ""
 	}
 	return "WITH (" + strings.Join(
-		t.StorageParams.TransformSlice(func(name, value string) string {
+		params.TransformSlice(func(name, value string) string {
 			return name + "=" + QuoteLiteral(value)
 		}),
 		", ",
@@ -329,7 +333,7 @@ func (t Table) StorageParamsSQL() string {
 // SetStorageParamsSQL returns the statement that sets the named storage
 // parameters. It does not rewrite the table.
 func SetStorageParamsSQL(fqtn string, params []string) string {
-	return "ALTER TABLE " + fqtn + " SET (" + strings.Join(params, ", ") + ");"
+	return SetViewStorageParamsSQL(fqtn, "TABLE", params)
 }
 
 // ResetStorageParamsSQL returns the statement that hands the named storage
@@ -337,7 +341,7 @@ func SetStorageParamsSQL(fqtn string, params []string) string {
 // catalog holds no entry for a parameter that was never set, so a SET has no
 // default value to name.
 func ResetStorageParamsSQL(fqtn string, names []string) string {
-	return "ALTER TABLE " + fqtn + " RESET (" + strings.Join(names, ", ") + ");"
+	return ResetViewStorageParamsSQL(fqtn, "TABLE", names)
 }
 
 // SetStorageSQL returns the statement that puts a column's TOAST strategy at
@@ -437,10 +441,5 @@ func TableToSQL(t *Table) string {
 }
 
 func TablesToSQL(tables *orderedmap.Map[string, *Table]) string {
-	return strings.Join(
-		tables.TransformSlice(func(_ string, t *Table) string {
-			return TableToSQL(t)
-		}),
-		"\n\n",
-	)
+	return joinSQL(tables, TableToSQL)
 }

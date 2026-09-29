@@ -151,7 +151,7 @@ func detectTriggerRenames(
 	fqtn string,
 	current, desired *orderedmap.Map[string, *model.Trigger],
 ) (*orderedmap.Map[string, *model.Trigger], map[string]string, error) {
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 	renamedFrom := map[string]string{}
 
 	for newName, des := range desired.All() {

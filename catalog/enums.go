@@ -2,9 +2,7 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -65,34 +63,14 @@ func (c *Catalog) ListEnums(ctx context.Context) ([]*model.Enum, error) {
 			t.typname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get enum info: %w", err)
-	}
-	defer rows.Close()
-
 	var enums []*model.Enum
-	for rows.Next() {
-		var e model.Enum
-		err := rows.Scan(
-			&e.OID,
-			&e.Schema,
-			&e.Name,
-			&e.Values,
-			&e.Comment,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan enum info: %w", err)
-		}
-		enums = append(enums, &e)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan enum info rows: %w", err)
+	var e model.Enum
+	err := c.eachRow(ctx, "enum info", q, []any{&e.OID, &e.Schema, &e.Name, &e.Values, &e.Comment}, func() {
+		enum := e
+		enums = append(enums, &enum)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return enums, nil
