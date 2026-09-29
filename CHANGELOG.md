@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A `USING INDEX` constraint that keeps the index's own name, or names none, no longer fails with `duplicate relation name`.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.

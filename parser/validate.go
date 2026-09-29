@@ -344,6 +344,11 @@ func validateNamespaces(r *ParseResult) error {
 			if !con.Type.IsPrimaryKeyConstraint() && !con.Type.IsUniqueConstraint() && !con.Type.IsExclusionConstraint() {
 				continue
 			}
+			// A USING INDEX constraint that keeps the index's name is that
+			// index, already added above.
+			if _, ok := t.Indexes.GetOk(con.IndexName); ok && con.IndexName == con.Name {
+				continue
+			}
 			add(model.Ident(t.Schema, con.Name), constraintKindLabel(con.Type), relations)
 		}
 		for _, fk := range t.ForeignKeys.CollectValues() {
