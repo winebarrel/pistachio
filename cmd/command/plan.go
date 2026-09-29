@@ -28,16 +28,32 @@ func (cmd *Plan) Run(ctx context.Context, w io.Writer) error {
 		return err
 	}
 
+	writeHeader(w, client, "Plan for", result.Count)
+	writePlanResult(w, result)
+
+	if cmd.Check && result.HasChanges {
+		return ErrPlanDiff
+	}
+
+	return nil
+}
+
+// writeHeader prints the connection line and the "-- <title> <schemas>
+// (<counts>)" line that open the output of plan, apply and dump.
+func writeHeader(w io.Writer, client *pistachio.Client, title string, count pistachio.ObjectCount) {
 	if connInfo, err := client.ConnInfoComment(); err == nil {
 		fmt.Fprintln(w, connInfo) //nolint:errcheck
 	}
 
-	fmt.Fprintf(w, "-- Plan for %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
+	fmt.Fprintf(w, "-- %s %s (%s)\n", title, count.SchemaLabel(), count.Summary()) //nolint:errcheck
+}
 
-	// Order: executable SQL (incl. pre-SQL) first so it can be piped/copied
-	// as a runnable script; skipped DROPs follow as informational comments.
-	// In the no-SQL case, skipped DROPs come before "-- No changes" so the
-	// summary line reads naturally at the end.
+// writePlanResult prints the body of a plan or a diff. Executable SQL (incl.
+// pre-SQL) comes first so it can be piped/copied as a runnable script;
+// skipped DROPs follow as informational comments. In the no-SQL case, skipped
+// DROPs come before "-- No changes" so the summary line reads naturally at
+// the end.
+func writePlanResult(w io.Writer, result *pistachio.PlanResult) {
 	if result.HasChanges {
 		fmt.Fprintln(w, result.SQL) //nolint:errcheck
 	}
@@ -50,10 +66,4 @@ func (cmd *Plan) Run(ctx context.Context, w io.Writer) error {
 	if !result.HasChanges {
 		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
 	}
-
-	if cmd.Check && result.HasChanges {
-		return ErrPlanDiff
-	}
-
-	return nil
 }

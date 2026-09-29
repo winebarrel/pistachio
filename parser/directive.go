@@ -508,57 +508,39 @@ func atLineStart(s string, pos int) bool {
 // unescapes doubled quotes (two quotes become one). Bare values are returned
 // as-is; enum values are literals, so no case folding is applied.
 func unquoteEnumLiteral(s string) string {
-	if val, ok := scanEnumLiteral(s); ok {
+	if val, ok := scanQuoted(s, '\''); ok {
 		return val
 	}
 	return s
-}
-
-// scanEnumLiteral scans a single-quoted literal from the start of s, handling
-// doubled-quote escape sequences. Returns the unquoted value and true if
-// successful.
-func scanEnumLiteral(s string) (string, bool) {
-	if len(s) == 0 || s[0] != '\'' {
-		return "", false
-	}
-	var val strings.Builder
-	for i := 1; i < len(s); i++ {
-		if s[i] == '\'' {
-			if i+1 < len(s) && s[i+1] == '\'' {
-				// Escaped single quote
-				val.WriteByte('\'')
-				i++
-			} else {
-				// End of literal
-				return val.String(), true
-			}
-		} else {
-			val.WriteByte(s[i])
-		}
-	}
-	return "", false
 }
 
 // scanQuotedIdent scans a quoted identifier from the start of s, handling ""
 // escape sequences. Returns the unquoted name and true if successful, and an
 // empty name and false otherwise.
 func scanQuotedIdent(s string) (string, bool) {
-	if len(s) == 0 || s[0] != '"' {
+	return scanQuoted(s, '"')
+}
+
+// scanQuoted scans a string quoted with q from the start of s, handling
+// doubled-quote escape sequences. Returns the unquoted value and true if
+// successful, and an empty value and false otherwise.
+func scanQuoted(s string, q byte) (string, bool) {
+	if len(s) == 0 || s[0] != q {
 		return "", false
 	}
-	var name strings.Builder
+	var val strings.Builder
 	for i := 1; i < len(s); i++ {
-		if s[i] == '"' {
-			if i+1 < len(s) && s[i+1] == '"' {
-				// Escaped double quote
-				name.WriteByte('"')
+		if s[i] == q {
+			if i+1 < len(s) && s[i+1] == q {
+				// Escaped quote
+				val.WriteByte(q)
 				i++
 			} else {
-				// End of quoted identifier
-				return name.String(), true
+				// End of quoted string
+				return val.String(), true
 			}
 		} else {
-			name.WriteByte(s[i])
+			val.WriteByte(s[i])
 		}
 	}
 	return "", false

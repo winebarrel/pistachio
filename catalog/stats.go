@@ -61,21 +61,12 @@ func (c *Catalog) TableStats(ctx context.Context) (map[string]TableStat, error) 
 			AND n.nspname = ANY(@schemas)
 	`
 
-	rows, err := c.conn.Query(ctx, q, pgx.NamedArgs{"schemas": c.schemas})
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get table stats: %w", err)
-	}
-	defer rows.Close()
-
 	stats := map[string]TableStat{}
-	for rows.Next() {
-		var schema, name string
-		var tuples float64
-		var pages, blockSize int64
-		var statsAt *time.Time
-		if err := rows.Scan(&schema, &name, &tuples, &pages, &blockSize, &statsAt); err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan table stats: %w", err)
-		}
+	var schema, name string
+	var tuples float64
+	var pages, blockSize int64
+	var statsAt *time.Time
+	err := c.eachRow(ctx, "table stats", q, []any{&schema, &name, &tuples, &pages, &blockSize, &statsAt}, func() {
 		st := TableStat{Rows: -1, Bytes: pages * blockSize}
 		if tuples >= 0 {
 			st.Rows = int64(math.Round(tuples))
@@ -84,9 +75,9 @@ func (c *Catalog) TableStats(ctx context.Context) (map[string]TableStat, error) 
 			st.StatsAt = *statsAt
 		}
 		stats[model.Ident(schema, name)] = st
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan table stats rows: %w", err)
+	})
+	if err != nil {
+		return nil, err
 	}
 	return stats, nil
 }

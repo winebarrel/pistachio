@@ -2,9 +2,7 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -56,34 +54,14 @@ func (c *Catalog) ListTriggers(ctx context.Context) ([]*model.Trigger, error) {
 			t.tgname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get trigger info: %w", err)
-	}
-	defer rows.Close()
-
 	var triggers []*model.Trigger
-	for rows.Next() {
-		var trg model.Trigger
-		err := rows.Scan(
-			&trg.Schema,
-			&trg.Table,
-			&trg.Name,
-			&trg.Definition,
-			&trg.State,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan trigger info: %w", err)
-		}
-		triggers = append(triggers, &trg)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan trigger info rows: %w", err)
+	var trg model.Trigger
+	err := c.eachRow(ctx, "trigger info", q, []any{&trg.Schema, &trg.Table, &trg.Name, &trg.Definition, &trg.State}, func() {
+		t := trg
+		triggers = append(triggers, &t)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return triggers, nil
