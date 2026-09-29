@@ -8,6 +8,8 @@
 
 * A `-- pista:` directive with no statement after it in the same file is now an error. It used to apply to the first statement of the next schema file.
 
+* `dump` now writes `SET STORAGE` and `SET COMPRESSION` for the columns an `INHERITS` child declares, and a new `INHERITS` child gets them when it is created. Before, the next plan showed them as drift.
+
 * `COMMENT ON TYPE` on a domain is now read. Before, it was ignored and every plan dropped the comment with `COMMENT ON DOMAIN ... IS NULL`.
 
 ## [1.70.1] - 2026-09-28
