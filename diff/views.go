@@ -44,7 +44,7 @@ func equalViewDef(current, desired string) bool {
 	curResult, errCur := pg_query.Parse("CREATE VIEW _v AS " + current)
 	desResult, errDes := pg_query.Parse("CREATE VIEW _v AS " + desired)
 	if errCur != nil || errDes != nil {
-		return current == desired
+		return false
 	}
 	for _, stmt := range curResult.Stmts {
 		stripQualifications(stmt.Stmt)
@@ -61,10 +61,7 @@ func equalViewDef(current, desired string) bool {
 	}
 	curStr, errCur := pg_query.Deparse(curResult)
 	desStr, errDes := pg_query.Deparse(desResult)
-	if errCur != nil || errDes != nil {
-		return current == desired
-	}
-	return curStr == desStr
+	return errCur == nil && errDes == nil && curStr == desStr
 }
 
 // canCreateOrReplaceView reports whether a view definition change can be

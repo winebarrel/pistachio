@@ -1246,7 +1246,7 @@ func equalConstraintDef(current, desired string) bool {
 	curResult, curCon, parseErrCur := pgast.ParseConstraintDefStrict(current)
 	desResult, desCon, parseErrDes := pgast.ParseConstraintDefStrict(desired)
 	if parseErrCur != nil || parseErrDes != nil {
-		return current == desired
+		return false
 	}
 	curCon.RawExpr = normalizeCheckExpr(curCon.RawExpr)
 	desCon.RawExpr = normalizeCheckExpr(desCon.RawExpr)
@@ -1260,10 +1260,7 @@ func equalConstraintDef(current, desired string) bool {
 	normalizeStorageParams(desCon.Options)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return current == desired
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }
 
 // normalizeExclusion runs the symmetric normalizations over an exclusion
@@ -2155,7 +2152,7 @@ func equalIndexDef(current, desired string, columns *orderedmap.Map[string, *mod
 	curResult, curIS, parseErrCur := parseIndexDef(current)
 	desResult, desIS, parseErrDes := parseIndexDef(desired)
 	if parseErrCur != nil || parseErrDes != nil {
-		return current == desired
+		return false
 	}
 	dropDefaultCollation(desIS, columns)
 	normalizeIndexStmt(curIS)
@@ -2163,10 +2160,7 @@ func equalIndexDef(current, desired string, columns *orderedmap.Map[string, *mod
 	alignIndexCasts(desIS, curIS)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return current == desired
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }
 
 // parseFKDef parses a FK constraint definition string into a pg_query Constraint node.
@@ -2341,7 +2335,7 @@ func equalDefault(current, desired *string) bool {
 	curResult, curTarget, parseErrCur := pgast.ParseExpr(*current)
 	desResult, desTarget, parseErrDes := pgast.ParseExpr(*desired)
 	if parseErrCur != nil || parseErrDes != nil {
-		return *current == *desired
+		return false
 	}
 	// The catalog writes a literal with its type, so a cast on a literal is
 	// stripped. It keeps a cast on an expression only when the cast was
@@ -2367,10 +2361,7 @@ func equalDefault(current, desired *string) bool {
 	curTarget.Val = alignCurrentCasts(desTarget.Val, curTarget.Val)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return *current == *desired
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }
 
 // expressionCast returns node's TypeCast when it casts something other than a
