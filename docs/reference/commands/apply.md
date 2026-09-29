@@ -21,7 +21,7 @@ ALTER TABLE public.users ADD COLUMN email text;
 -- Apply finished in 12ms
 ```
 
-Each statement is written out as it runs. A failure stops the run, and the statements that already ran stay applied unless they ran in a transaction. The connection sets `search_path` to the target schemas plus `public`, so an unqualified reference in the DDL resolves.
+The output is written when the run ends, with the statements in the order they ran. A failure stops the run; the output then ends at the statement that failed, and the statements that already ran stay applied unless they ran in a transaction. The connection sets `search_path` to the target schemas plus `public`, so an unqualified reference in the DDL resolves.
 
 A drop the desired schema implies is not run unless `--allow-drop` names its type. Each such drop is written as a `-- skipped:` comment instead.
 
