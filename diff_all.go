@@ -452,15 +452,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	}
 
 	stmts := orderStatements(
-		&schemaObjects{
-			Tables:         filteredTables,
-			Views:          filteredViews,
-			Enums:          filteredEnums,
-			Domains:        filteredDomains,
-			CompositeTypes: filteredCompositeTypes,
-			Sequences:      filteredSequences,
-			Routines:       filteredRoutines,
-		},
+		narrowed,
 		&schemaObjects{
 			Tables:         desiredTables,
 			Views:          desiredViews,
@@ -662,11 +654,10 @@ func droppedKeys(stmts []string, keep func(table, name string) bool) (constraint
 		if !strings.Contains(stmt, " DROP CONSTRAINT ") && !strings.HasPrefix(stmt, "DROP INDEX ") {
 			continue
 		}
-		tree, err := pg_query.Parse(stmt)
-		if err != nil || len(tree.GetStmts()) != 1 {
+		node := parseOneStmt(stmt)
+		if node == nil {
 			continue
 		}
-		node := tree.GetStmts()[0].GetStmt()
 		if as := node.GetAlterTableStmt(); as != nil {
 			table := rangeVarIdent(as.GetRelation())
 			for _, cmd := range as.GetCmds() {
