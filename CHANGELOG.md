@@ -6,6 +6,8 @@
 
 * A `USING INDEX` constraint that keeps the index's own name, or names none, no longer fails with `duplicate relation name`.
 
+* A materialized view written with `WITH NO DATA` is now created with it. `apply` dropped the clause and ran the view's query over its source tables. Whether a view is populated is not compared, and `dump` does not write the clause.
+
 * `fmt` no longer refuses a file with trailing whitespace after a `--` comment. The whitespace is removed.
 
 * A policy whose role list names `PUBLIC` alongside other roles no longer plans an `ALTER POLICY` on every run. PostgreSQL keeps only `PUBLIC`, and the desired side now does too.
