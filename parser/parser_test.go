@@ -2691,20 +2691,16 @@ line'
 	assert.Equal(t, map[string]string{"multi\nline": "old"}, e.ValueRenameFrom)
 }
 
-func TestParseSQL_RenameDirective_EnumValue_TrailingCommentIgnored(t *testing.T) {
-	// A directive must be on its own line; a trailing comment after a value
-	// is not a directive for the next value.
+func TestParseSQL_RenameDirective_EnumValue_TrailingCommentRejected(t *testing.T) {
+	// A directive must be on its own line; one after a value is an error
+	// rather than a guess at which value it meant.
 	sql := `CREATE TYPE public.status AS ENUM (
     'active', -- pista:renamed-from 'x'
     'disabled'
 );`
 
-	result, err := parseSQLWithPublicSchema(sql)
-	require.NoError(t, err)
-
-	e, ok := result.Enums.GetOk("public.status")
-	require.True(t, ok)
-	assert.Empty(t, e.ValueRenameFrom)
+	_, err := parseSQLWithPublicSchema(sql)
+	require.EqualError(t, err, "directive must be on its own line")
 }
 
 func TestParseSQL_RenameDirective_EnumValue_DanglingIgnored(t *testing.T) {
