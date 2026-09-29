@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* The error for a `--pre-sql-file` or `--concurrently-pre-sql-file` that cannot be read no longer names the file twice.
+* The error for a `--pre-sql-file` or `--concurrently-pre-sql-file` that cannot be read, and for a `dump --split` file that cannot be written, no longer names the file twice.
 
 * The `-- Connected to` line for a Unix-socket connection now includes the port, which picks the socket file.
 

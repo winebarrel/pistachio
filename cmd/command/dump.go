@@ -72,7 +72,7 @@ func writeDumpFiles(dir string, files map[string]string) (int, error) {
 		}
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			return count, fmt.Errorf("failed to write %s: %w", path, err)
+			return count, fmt.Errorf("failed to write dump file: %w", err)
 		}
 		count++
 	}
