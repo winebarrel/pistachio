@@ -122,9 +122,7 @@ pista apply ./schema/*.sql         # apply it
 ## Where to go next
 
 - [Getting started](getting-started.md) walks through dump, edit, plan, apply.
-- Guides cover one task each: [renaming](guides/renaming.md),
-  [filtering](guides/filtering.md), [drops](guides/drops.md),
-  [transactions](guides/transactions.md), [multiple schemas](guides/multiple-schemas.md).
+- [Guides](guides/index.md) cover one task each: renaming, drops, transactions, multiple schemas.
 - [Commands](reference/commands/index.md) has a page per command with every option.
 - [Design and scope](about/design.md) says what pistachio does not manage, and
   why.
