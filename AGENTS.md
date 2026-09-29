@@ -88,7 +88,7 @@ Give each pull request one label for the kind of change it is. The release pull 
 - `test` - tests, fixtures or the test harness only.
 - `documentation` - documentation only.
 
-Use `feat`, not `enhancement`. Leave a change to CI, the build or other repository tooling without a label. Do not add `release` or `dependencies`: the release workflow adds the first, and Renovate and Dependabot the second.
+Leave a change to CI, the build or other repository tooling without a label. Do not add `release` or `dependencies`: the release workflow adds the first, and Renovate and Dependabot the second.
 
 ## Code conventions
 
