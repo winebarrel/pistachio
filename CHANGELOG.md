@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.71.0] - 2026-09-29
 
 * Comments on constraints, foreign keys, triggers, policies and domain constraints are now managed. Before, `COMMENT ON CONSTRAINT`, `COMMENT ON TRIGGER` and `COMMENT ON POLICY` in a schema file were ignored with a warning, and `dump` did not write them.
 
