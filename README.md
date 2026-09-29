@@ -25,7 +25,7 @@ brew install winebarrel/pistachio/pistachio     # Homebrew
 mise use github:winebarrel/pistachio            # mise
 ```
 
-Or download a binary for macOS, Linux or Windows from [Releases](https://github.com/winebarrel/pistachio/releases).
+Or download a binary from [Releases](https://github.com/winebarrel/pistachio/releases): macOS and Linux on amd64 and arm64, Windows on amd64. `mise use github:winebarrel/pistachio@<version>` pins a version.
 
 The demo image bundles PostgreSQL and a sample schema:
 
@@ -56,9 +56,9 @@ See [Getting started](https://winebarrel.github.io/pistachio/getting-started/).
 
 ## What it does
 
-- **No drop unless you allow it.** A drop is a `-- skipped:` comment until `--allow-drop` names its type. [Controlling drops](https://winebarrel.github.io/pistachio/guides/drops/)
+- **No drop unless you allow it.** An object removed from the file is not dropped until `--allow-drop` names its type; the plan shows the drop as a `-- skipped:` comment. [Controlling drops](https://winebarrel.github.io/pistachio/guides/drops/)
 - **Renames.** `-- pista:renamed-from old_name` above an object turns a drop and a create into `RENAME`. [Renaming objects](https://winebarrel.github.io/pistachio/guides/renaming/)
-- **Transactions and `CONCURRENTLY`.** `--with-tx` runs the plan in one transaction; a directive opts an index into `CONCURRENTLY`. [Transactions and locks](https://winebarrel.github.io/pistachio/guides/transactions/)
+- **Transactions and `CONCURRENTLY`.** `apply --with-tx` runs the plan in one transaction. `-- pista:concurrently` opts an index into `CONCURRENTLY`, which cannot run in one; `--try-tx` handles both. [Transactions and locks](https://winebarrel.github.io/pistachio/guides/transactions/)
 - **Cost before it runs.** `plan --explain` says which statements scan or rewrite a table, what they block, and how big the table is. [Explaining a plan](https://winebarrel.github.io/pistachio/guides/explaining-plans/)
 - **Plan files.** `plan --out` writes a plan that `apply-from` runs later, and refuses if the database changed in between. [Plan files](https://winebarrel.github.io/pistachio/guides/plan-files/)
 - **Diff without a database.** `pista diff --git origin/main...HEAD schema.sql` prints the DDL a branch would apply. [Diffing schema files](https://winebarrel.github.io/pistachio/guides/diffing/)
