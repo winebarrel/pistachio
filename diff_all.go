@@ -729,7 +729,7 @@ func blockedError(prefix string, targets []string, dependents map[string][]catal
 // is treated as unmanaged, keeping the desired side symmetric with the catalog
 // side (which already excludes serial/identity-owned sequences).
 func standaloneSequences(sequences *orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence] {
-	return filterMap(sequences, func(s *model.Sequence) bool { return !s.Owned() })
+	return sequences.Filter(func(_ string, s *model.Sequence) bool { return !s.Owned() })
 }
 
 // removeIgnored deletes every entry the ignored predicate matches from the

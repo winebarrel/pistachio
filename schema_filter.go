@@ -32,5 +32,5 @@ func filterDesiredBySchemas(result *parser.ParseResult, schemas []string, schema
 }
 
 func filterMapBySchema[V any](m *orderedmap.Map[string, V], schemas map[string]bool, getSchema func(V) string) *orderedmap.Map[string, V] {
-	return filterMap(m, func(v V) bool { return schemas[getSchema(v)] })
+	return m.Filter(func(_ string, v V) bool { return schemas[getSchema(v)] })
 }

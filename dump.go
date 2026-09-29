@@ -304,18 +304,11 @@ func (r *DumpResult) formatSchemaSQL(
 // splitAtomicRoutines separates the routines with a SQL-standard body from
 // the rest, keeping the order of each.
 func splitAtomicRoutines(routines *orderedmap.Map[string, *model.Routine]) (plain, atomic *orderedmap.Map[string, *model.Routine]) {
-	plain = orderedmap.New[string, *model.Routine]()
-	atomic = orderedmap.New[string, *model.Routine]()
 	if routines == nil {
-		return plain, atomic
+		return orderedmap.New[string, *model.Routine](), orderedmap.New[string, *model.Routine]()
 	}
-	for k, r := range routines.All() {
-		if r.Atomic() {
-			atomic.Set(k, r)
-		} else {
-			plain.Set(k, r)
-		}
-	}
+	plain = routines.Filter(func(_ string, r *model.Routine) bool { return !r.Atomic() })
+	atomic = routines.Filter(func(_ string, r *model.Routine) bool { return r.Atomic() })
 	return plain, atomic
 }
 
