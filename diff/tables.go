@@ -1260,10 +1260,7 @@ func equalConstraintDef(current, desired string) bool {
 	normalizeStorageParams(desCon.Options)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return false
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }
 
 // normalizeExclusion runs the symmetric normalizations over an exclusion
@@ -2163,10 +2160,7 @@ func equalIndexDef(current, desired string, columns *orderedmap.Map[string, *mod
 	alignIndexCasts(desIS, curIS)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return false
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }
 
 // parseFKDef parses a FK constraint definition string into a pg_query Constraint node.
@@ -2373,10 +2367,7 @@ func equalDefault(current, desired *string) bool {
 	curTarget.Val = alignCurrentCasts(desTarget.Val, curTarget.Val)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return false
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }
 
 // expressionCast returns node's TypeCast when it casts something other than a

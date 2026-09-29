@@ -253,8 +253,5 @@ func equalSelectExpr(current, desired string) bool {
 	curTarget.Val = alignCurrentCasts(desTarget.Val, curTarget.Val)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return false
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }

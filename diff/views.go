@@ -60,10 +60,7 @@ func equalViewDef(current, desired string) bool {
 	}
 	curStr, errCur := pg_query.Deparse(curResult)
 	desStr, errDes := pg_query.Deparse(desResult)
-	if errCur != nil || errDes != nil {
-		return false
-	}
-	return curStr == desStr
+	return errCur == nil && errDes == nil && curStr == desStr
 }
 
 // canCreateOrReplaceView reports whether a view definition change can be
