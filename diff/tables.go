@@ -1888,8 +1888,7 @@ func diffForeignKeys(fqtn, schema string, partitioned bool, current, desired *or
 		addStmts = append(addStmts, desiredFk.SQL(partitioned))
 	}
 
-	// A key added above has no comment yet. The comments follow every ADD,
-	// since they are part of addStmts, which runs last.
+	// A key added above has no comment yet.
 	for name, desiredFk := range desired.All() {
 		var currentComment *string
 		if currentFk, ok := current.GetOk(name); ok {

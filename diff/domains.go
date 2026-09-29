@@ -138,8 +138,7 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 	}
 
 	// Add new or changed constraints, or validate a NOT VALID one. A
-	// constraint added here has no comment yet, so its current comment is
-	// nil for the comparison below.
+	// constraint added here has no comment yet.
 	currentComments := map[string]*string{}
 	for _, c := range desired {
 		if cur, ok := currentByName[c.Name]; ok {

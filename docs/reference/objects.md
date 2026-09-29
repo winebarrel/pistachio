@@ -250,18 +250,18 @@ COMMENT ON INDEX public.users_email_idx IS 'Lookup by email';
 
 Recreating an index drops its comment, so a definition change writes the comment again after the `CREATE INDEX`.
 
-A comment on a constraint, a trigger or a policy names the relation it is on. A foreign key takes the same form as any other table constraint, and a domain constraint names its domain:
+A comment on a constraint, a foreign key, a trigger or a policy names the table it is on. A comment on a domain constraint names the domain:
 
 ```sql
-COMMENT ON CONSTRAINT users_email_key ON public.users IS 'one account per address';
-COMMENT ON TRIGGER users_touch ON public.users IS 'sets updated_at';
-COMMENT ON POLICY users_own ON public.users IS 'a user sees only their own row';
-COMMENT ON CONSTRAINT email_check ON DOMAIN public.email IS 'has an at sign';
+COMMENT ON CONSTRAINT users_email_key ON public.users IS 'One account per address';
+COMMENT ON TRIGGER users_touch ON public.users IS 'Sets updated_at';
+COMMENT ON POLICY users_own ON public.users IS 'Own rows only';
+COMMENT ON CONSTRAINT email_check ON DOMAIN public.email IS 'Has an at sign';
 ```
 
-These go the same way as an index's. A constraint or a policy that is dropped and added back gets its comment again, and so does a constraint trigger, which is recreated. `CREATE OR REPLACE TRIGGER`, `ALTER POLICY`, `VALIDATE CONSTRAINT`, `ALTER CONSTRAINT` and a rename keep the comment, so they write nothing for it.
+When one of these is dropped and created again, the plan writes its comment again. A rename, `CREATE OR REPLACE TRIGGER`, `ALTER POLICY`, `ALTER CONSTRAINT` and `VALIDATE CONSTRAINT` keep the comment.
 
-The index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE` constraint owns belongs to the constraint, so its comment is written `COMMENT ON CONSTRAINT`. A `COMMENT ON INDEX` naming such an index, or an index no schema file declares, is dropped without a warning.
+The index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE` constraint owns belongs to the constraint, so write its comment with `COMMENT ON CONSTRAINT`. A `COMMENT ON INDEX` on such an index, or on an index no schema file declares, is ignored without a warning.
 
 ## Indexes on a partitioned table
 

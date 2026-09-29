@@ -468,8 +468,8 @@ func viewColumnCommentStmts(fqvn string, current, desired *orderedmap.Map[string
 }
 
 // viewTriggerStmts renders the CREATE TRIGGER statements for a view that is
-// about to be created, each followed by its comment. A materialized view cannot carry a trigger, so the map
-// is empty there.
+// about to be created, each followed by its comment. A materialized view
+// cannot carry a trigger, so the map is empty there.
 func viewTriggerStmts(v *model.View) []string {
 	if v.Triggers == nil {
 		return nil

@@ -1830,9 +1830,6 @@ func parseCommentOnDomain(cs *pg_query.CommentStmt, defaultSchema string, domain
 // whose object is the domain as a type name followed by the constraint's name.
 func parseCommentOnDomainConstraint(cs *pg_query.CommentStmt, defaultSchema string, domains *orderedmap.Map[string, *model.Domain]) {
 	items := cs.Object.GetList().GetItems()
-	if len(items) != 2 {
-		return
-	}
 	d := findDomain(items[0].GetTypeName(), defaultSchema, domains)
 	if d == nil {
 		return
@@ -2305,9 +2302,6 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 // on from the name parts COMMENT ON gives it: the relation, one- or
 // two-part, followed by the object's own name.
 func relationIdent(names []string, defaultSchema string) string {
-	if len(names) < 2 {
-		return ""
-	}
 	schema, name := schemaName(names[:len(names)-1], defaultSchema)
 	return model.Ident(schema, name)
 }

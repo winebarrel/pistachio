@@ -526,6 +526,7 @@ func TestParseSQL_CommentOnConstraintTriggerPolicy(t *testing.T) {
 		COMMENT ON TRIGGER vtrg ON public.v IS 'view trigger';
 		COMMENT ON CONSTRAINT d_check ON DOMAIN d IS 'domain check';
 		COMMENT ON CONSTRAINT nope ON public.t IS 'no such constraint';
+		COMMENT ON CONSTRAINT t_id_check ON public.nope IS 'no such table';
 		COMMENT ON TRIGGER trg ON public.nope IS 'no such relation';
 		COMMENT ON POLICY nope ON public.t IS 'no such policy';
 		COMMENT ON CONSTRAINT nope ON DOMAIN public.d IS 'no such constraint';

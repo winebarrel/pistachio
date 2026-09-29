@@ -363,11 +363,55 @@ func TestTable_CommentSQL(t *testing.T) {
 		Definition: "CREATE INDEX idx_users_id ON public.users USING btree (id)",
 	})
 
+	conComment := "it's the key"
+	tbl.Constraints.Set("Users PK", &model.Constraint{Name: "Users PK", Type: 'p', Definition: "PRIMARY KEY (id)", Comment: &conComment})
+	tbl.Constraints.Set("users_check", &model.Constraint{Name: "users_check", Type: 'c', Definition: "CHECK (id > 0)"})
+	fkComment := "Owner"
+	fk := &model.ForeignKey{Schema: "public", Table: "users"}
+	fk.Name = "users_org_fkey"
+	fk.Comment = &fkComment
+	tbl.ForeignKeys.Set(fk.Name, fk)
+	polComment := "Own rows"
+	tbl.Policies.Set("own", &model.Policy{Schema: "public", Table: "users", Name: "own", Comment: &polComment})
+	trgComment := "Stamps"
+	tbl.Triggers = orderedmap.New[string, *model.Trigger]()
+	tbl.Triggers.Set("stamp", &model.Trigger{Schema: "public", Table: "users", Name: "stamp", Comment: &trgComment})
+
 	assert.Equal(t, []string{
 		"COMMENT ON TABLE public.users IS 'Main users table';",
 		"COMMENT ON COLUMN public.users.name IS 'User name';",
+		`COMMENT ON CONSTRAINT "Users PK" ON public.users IS 'it''s the key';`,
 		"COMMENT ON INDEX public.idx_users_name IS 'Lookup by name';",
+		"COMMENT ON CONSTRAINT users_org_fkey ON public.users IS 'Owner';",
+		"COMMENT ON POLICY own ON public.users IS 'Own rows';",
+		"COMMENT ON TRIGGER stamp ON public.users IS 'Stamps';",
 	}, tbl.CommentSQL())
+}
+
+// A partition child writes no constraint of its own, so it writes no comment on
+// one either, and a copy of the parent's key is written with the parent.
+func TestTable_CommentSQL_partitionChild(t *testing.T) {
+	parent := "public.events"
+	bound := "FOR VALUES FROM (0) TO (10)"
+	child := newTable("public", "events_0")
+	child.PartitionOf = &parent
+	child.PartitionBound = &bound
+	comment := "own check"
+	child.Constraints.Set("events_0_check", &model.Constraint{Name: "events_0_check", Type: 'c', Definition: "CHECK (id < 10)", Comment: &comment})
+	fk := &model.ForeignKey{Schema: "public", Table: "events_0"}
+	fk.Name = "events_org_fkey"
+	fk.Inherited = true
+	fk.Comment = &comment
+	child.ForeignKeys.Set(fk.Name, fk)
+	assert.Empty(t, child.CommentSQL())
+}
+
+// A constraint an INHERITS child only inherits is written with the parent.
+func TestTable_CommentSQL_inheritedConstraint(t *testing.T) {
+	tbl := newTable("public", "users")
+	comment := "inherited"
+	tbl.Constraints.Set("users_check", &model.Constraint{Name: "users_check", Type: 'c', Definition: "CHECK (id > 0)", Inherited: true, Comment: &comment})
+	assert.Empty(t, tbl.CommentSQL())
 }
 
 func TestTable_CommentSQL_noComments(t *testing.T) {

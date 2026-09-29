@@ -1188,11 +1188,7 @@ func commentObjectName(cs *pg_query.CommentStmt) string {
 		return ownerIdent(cs.GetObject())
 	case pg_query.ObjectType_OBJECT_DOMCONSTRAINT:
 		// The domain arrives as a type name ahead of the constraint's name.
-		items := cs.GetObject().GetList().GetItems()
-		if len(items) == 0 {
-			return ""
-		}
-		return objectIdent(items[0])
+		return objectIdent(cs.GetObject().GetList().GetItems()[0])
 	case pg_query.ObjectType_OBJECT_FUNCTION, pg_query.ObjectType_OBJECT_PROCEDURE:
 		return toposort.RoutineNode(objectIdent(cs.GetObject()))
 	default:
