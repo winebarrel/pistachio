@@ -59,6 +59,12 @@ func TestView_SQL_materialized(t *testing.T) {
 	assert.Equal(t, expected, v.SQL())
 }
 
+func TestView_SQL_materializedWithNoData(t *testing.T) {
+	v := model.View{Schema: "public", Name: "mv", Materialized: true, WithNoData: true, Definition: "SELECT count(*) AS cnt FROM users;"}
+	expected := "CREATE MATERIALIZED VIEW public.mv AS\nSELECT count(*) AS cnt FROM users\n  WITH NO DATA;"
+	assert.Equal(t, expected, v.SQL())
+}
+
 func TestView_CommentSQL_materialized(t *testing.T) {
 	comment := "stats"
 	v := model.View{Schema: "public", Name: "mv", Materialized: true, Comment: &comment}
