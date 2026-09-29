@@ -6,6 +6,8 @@
 
 * A materialized view written with `WITH NO DATA` is now created with it. `apply` dropped the clause and ran the view's query over its source tables. Whether a view is populated is not compared, and `dump` does not write the clause.
 
+* `COMMENT ON TYPE` on a domain is now read. Before, it was ignored and every plan dropped the comment with `COMMENT ON DOMAIN ... IS NULL`.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.

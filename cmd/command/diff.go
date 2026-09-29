@@ -2,9 +2,7 @@ package command
 
 import (
 	"errors"
-	"fmt"
 	"io"
-	"strings"
 
 	"github.com/winebarrel/pistachio"
 )
@@ -26,9 +24,7 @@ type Diff struct {
 
 // AfterApply trims each schema name the way the global option does.
 func (cmd *Diff) AfterApply() error {
-	for i, s := range cmd.Schemas {
-		cmd.Schemas[i] = strings.TrimSpace(s)
-	}
+	trimSchemas(cmd.Schemas)
 	return nil
 }
 
@@ -42,23 +38,8 @@ func (cmd *Diff) Run(w io.Writer) error {
 
 	// No header comment: unlike plan there is no connection to name, and the
 	// object counts of a file say little, so the output is the DDL alone.
-	//
-	// Order matches plan: executable SQL first so it can be piped/copied as a
-	// runnable script; skipped DROPs follow as informational comments. In the
-	// no-SQL case, skipped DROPs come before "-- No changes" so the summary
-	// line reads naturally at the end.
-	if result.HasChanges {
-		fmt.Fprintln(w, result.SQL) //nolint:errcheck
-	}
-	if result.Ignored != "" {
-		fmt.Fprintln(w, result.Ignored) //nolint:errcheck
-	}
-	if result.DisallowedDrops != "" {
-		fmt.Fprintln(w, result.DisallowedDrops) //nolint:errcheck
-	}
-	if !result.HasChanges {
-		fmt.Fprintln(w, "-- No changes") //nolint:errcheck
-	}
+	// The body is written the same way as plan.
+	writePlanResult(w, result)
 
 	if cmd.Check && result.HasChanges {
 		return ErrDiffChanges

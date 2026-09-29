@@ -1246,7 +1246,7 @@ func equalConstraintDef(current, desired string) bool {
 	curResult, curCon, parseErrCur := pgast.ParseConstraintDefStrict(current)
 	desResult, desCon, parseErrDes := pgast.ParseConstraintDefStrict(desired)
 	if parseErrCur != nil || parseErrDes != nil {
-		return current == desired
+		return false
 	}
 	curCon.RawExpr = normalizeCheckExpr(curCon.RawExpr)
 	desCon.RawExpr = normalizeCheckExpr(desCon.RawExpr)
@@ -1260,10 +1260,7 @@ func equalConstraintDef(current, desired string) bool {
 	normalizeStorageParams(desCon.Options)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return current == desired
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }
 
 // normalizeExclusion runs the symmetric normalizations over an exclusion
@@ -1284,8 +1281,8 @@ func normalizeExclusion(con *pg_query.Constraint) {
 			// The operator name list. The catalog prints a visible operator
 			// bare, so the qualification is dropped from both sides, the way
 			// stripFuncSchema treats a function name.
-			if ops := item.GetList(); ops != nil && len(ops.Items) > 1 {
-				ops.Items = ops.Items[len(ops.Items)-1:]
+			if ops := item.GetList(); ops != nil {
+				ops.Items = lastNamePart(ops.Items)
 			}
 		}
 	}
@@ -1897,11 +1894,7 @@ func diffComments(current, desired *model.Table) []string {
 
 	// Table comment
 	if !equalPtr(current.Comment, desired.Comment) {
-		if desired.Comment != nil {
-			stmts = append(stmts, "COMMENT ON TABLE "+fqtn+" IS "+model.QuoteLiteral(*desired.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON TABLE "+fqtn+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("TABLE "+fqtn, desired.Comment))
 	}
 
 	// Column comments
@@ -1912,15 +1905,20 @@ func diffComments(current, desired *model.Table) []string {
 		}
 		if !equalPtr(currentComment, desiredCol.Comment) {
 			colIdent := fqtn + "." + model.Ident(name)
-			if desiredCol.Comment != nil {
-				stmts = append(stmts, "COMMENT ON COLUMN "+colIdent+" IS "+model.QuoteLiteral(*desiredCol.Comment)+";")
-			} else {
-				stmts = append(stmts, "COMMENT ON COLUMN "+colIdent+" IS NULL;")
-			}
+			stmts = append(stmts, commentOnSQL("COLUMN "+colIdent, desiredCol.Comment))
 		}
 	}
 
 	return stmts
+}
+
+// commentOnSQL returns COMMENT ON target setting comment, or clearing it when
+// comment is nil.
+func commentOnSQL(target string, comment *string) string {
+	if comment == nil {
+		return "COMMENT ON " + target + " IS NULL;"
+	}
+	return "COMMENT ON " + target + " IS " + model.QuoteLiteral(*comment) + ";"
 }
 
 func equalPtr[T comparable](a, b *T) bool {
@@ -2155,7 +2153,7 @@ func equalIndexDef(current, desired string, columns *orderedmap.Map[string, *mod
 	curResult, curIS, parseErrCur := parseIndexDef(current)
 	desResult, desIS, parseErrDes := parseIndexDef(desired)
 	if parseErrCur != nil || parseErrDes != nil {
-		return current == desired
+		return false
 	}
 	dropDefaultCollation(desIS, columns)
 	normalizeIndexStmt(curIS)
@@ -2163,10 +2161,7 @@ func equalIndexDef(current, desired string, columns *orderedmap.Map[string, *mod
 	alignIndexCasts(desIS, curIS)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return current == desired
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }
 
 // parseFKDef parses a FK constraint definition string into a pg_query Constraint node.
@@ -2273,13 +2268,7 @@ func equalTypeName(a, b, schema string) bool {
 	if a == b {
 		return true
 	}
-	normalize := func(t string) string {
-		if base, ok := serialBaseTypes[t]; ok {
-			return base
-		}
-		return t
-	}
-	return normalize(a) == normalize(b)
+	return alterTypeName(a) == alterTypeName(b)
 }
 
 // foldTypeMod lowercases a type name's modifier, leaving the type name itself
@@ -2347,7 +2336,7 @@ func equalDefault(current, desired *string) bool {
 	curResult, curTarget, parseErrCur := pgast.ParseExpr(*current)
 	desResult, desTarget, parseErrDes := pgast.ParseExpr(*desired)
 	if parseErrCur != nil || parseErrDes != nil {
-		return *current == *desired
+		return false
 	}
 	// The catalog writes a literal with its type, so a cast on a literal is
 	// stripped. It keeps a cast on an expression only when the cast was
@@ -2373,10 +2362,7 @@ func equalDefault(current, desired *string) bool {
 	curTarget.Val = alignCurrentCasts(desTarget.Val, curTarget.Val)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return *current == *desired
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }
 
 // expressionCast returns node's TypeCast when it casts something other than a
