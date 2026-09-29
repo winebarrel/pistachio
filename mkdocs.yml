@@ -16,6 +16,9 @@ theme:
   logo: assets/logo-mark.svg
   features:
     - navigation.sections
+    # A section with an index.md opens that page when clicked. The Commands
+    # section under Reference is one.
+    - navigation.indexes
     - navigation.top
     - content.code.copy
     - content.action.edit
@@ -50,6 +53,8 @@ extra_css:
 
 markdown_extensions:
   - admonition
+  # The option lists on the command pages are definition lists.
+  - def_list
   - pymdownx.details
   - pymdownx.superfences
   - toc:
@@ -73,7 +78,15 @@ nav:
       - guides/formatting.md
       - guides/parsing.md
   - Reference:
-      - reference/commands.md
+      - Commands:
+          - reference/commands/index.md
+          - reference/commands/plan.md
+          - reference/commands/apply.md
+          - reference/commands/apply-from.md
+          - reference/commands/dump.md
+          - reference/commands/diff.md
+          - reference/commands/fmt.md
+          - reference/commands/parse.md
       - reference/directives.md
       - reference/objects.md
       - reference/configuration.md
