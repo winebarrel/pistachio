@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -93,15 +94,7 @@ func canCreateOrReplaceView(current, desired string) bool {
 	if !curOK || !desOK {
 		return false
 	}
-	if len(desCols) < len(curCols) {
-		return false
-	}
-	for i, name := range curCols {
-		if desCols[i] != name {
-			return false
-		}
-	}
-	return true
+	return len(desCols) >= len(curCols) && slices.Equal(desCols[:len(curCols)], curCols)
 }
 
 // viewOutputColumns parses a view definition's SELECT body and returns the
