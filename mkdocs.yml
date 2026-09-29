@@ -90,6 +90,10 @@ nav:
       - reference/directives.md
       - reference/objects.md
       - reference/configuration.md
+      - reference/environment.md
+      - reference/exit-status.md
+      - reference/output.md
+      - reference/glossary.md
   - About:
       - about/design.md
       - Known limitations: about/limitations.md
