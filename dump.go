@@ -25,7 +25,7 @@ type DumpOptions struct {
 	// Explain writes the size estimate of each table, materialized view and
 	// index into the comment above it. The JSON carries no comment to hold it.
 	Explain                 bool `xor:"json-explain" env:"PISTA_DUMP_EXPLAIN" help:"Comment each table, materialized view and index with its size estimate from pg_class."`
-	OmitPartitionChildIndex bool `xor:"partition-child" help:"Omit a partition's copy of its parent's index. PostgreSQL creates it again when the dump is loaded."`
+	OmitPartitionChildIndex bool `xor:"partition-child" env:"PISTA_DUMP_OMIT_PARTITION_CHILD_INDEX" help:"Omit a partition's copy of its parent's index. PostgreSQL creates it again when the dump is loaded."`
 }
 
 type DumpResult struct {
