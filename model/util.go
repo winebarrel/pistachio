@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
+	"github.com/winebarrel/orderedmap/v2"
 )
 
 var safeIdentifierPattern = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
@@ -126,4 +127,15 @@ func StripTypeSchema(typeName, schema string) string {
 		return typeName
 	}
 	return strings.TrimPrefix(typeName, schema+".")
+}
+
+// joinSQL renders each value of m with f and joins the results with a blank
+// line.
+func joinSQL[V any](m *orderedmap.Map[string, V], f func(V) string) string {
+	return strings.Join(
+		m.TransformSlice(func(_ string, v V) string {
+			return f(v)
+		}),
+		"\n\n",
+	)
 }

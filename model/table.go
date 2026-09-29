@@ -437,10 +437,5 @@ func TableToSQL(t *Table) string {
 }
 
 func TablesToSQL(tables *orderedmap.Map[string, *Table]) string {
-	return strings.Join(
-		tables.TransformSlice(func(_ string, t *Table) string {
-			return TableToSQL(t)
-		}),
-		"\n\n",
-	)
+	return joinSQL(tables, TableToSQL)
 }
