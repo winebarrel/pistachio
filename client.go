@@ -73,9 +73,10 @@ func (client *Client) buildConnConfig() (*pgx.ConnConfig, error) {
 // (including '/' in the dbname) round-trip safely; Path holds the decoded
 // form and RawPath the encoded form, so url.URL.String() uses RawPath when
 // the default encoding would differ. libpq unix-socket connections (host
-// starts with "/") render as a keyword/value string ("host=/path dbname=db
-// user=u") instead; percent-encoding the socket path into the URI host
-// component would be unreadable in a comment.
+// starts with "/") render as a keyword/value string ("host=/path port=5432
+// dbname=db user=u") instead; percent-encoding the socket path into the URI
+// host component would be unreadable in a comment. The port stays, since it
+// picks the socket file.
 func (client *Client) ConnInfoComment() (string, error) {
 	cfg, err := client.buildConnConfig()
 	if err != nil {
@@ -83,7 +84,7 @@ func (client *Client) ConnInfoComment() (string, error) {
 	}
 
 	if strings.HasPrefix(cfg.Host, "/") {
-		return fmt.Sprintf("-- Connected to host=%s dbname=%s user=%s", cfg.Host, cfg.Database, cfg.User), nil
+		return fmt.Sprintf("-- Connected to host=%s port=%d dbname=%s user=%s", cfg.Host, cfg.Port, cfg.Database, cfg.User), nil
 	}
 
 	u := url.URL{

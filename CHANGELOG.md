@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* The `-- Connected to` line for a Unix-socket connection now includes the port, which picks the socket file.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.
