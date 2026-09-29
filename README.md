@@ -8,7 +8,7 @@
 pistachio manages a PostgreSQL schema from SQL files. The files hold the whole schema as `CREATE` statements. `pista plan` reads the database's catalog, compares it with the files, and prints the DDL that makes the two agree; `pista apply` runs that DDL. `pista dump` writes the files from a database you already have.
 
 > [!TIP]
-> **[Try it in your browser](https://pistachio-demo.winebarrel.workers.dev)**: edit two schemas and see the DDL `pista diff` generates. Nothing to install.
+> The [playground](https://pistachio-demo.winebarrel.workers.dev) runs `pista diff` on two schemas you edit in the page, with nothing to install.
 
 **[Documentation](https://winebarrel.github.io/pistachio/)** | [Getting started](https://winebarrel.github.io/pistachio/getting-started/) | [Guides](https://winebarrel.github.io/pistachio/guides/) | [Commands](https://winebarrel.github.io/pistachio/reference/commands/) | [Supported objects](https://winebarrel.github.io/pistachio/reference/objects/)
 
@@ -54,7 +54,7 @@ ALTER TABLE public.users ADD COLUMN email text;
 CREATE INDEX users_email_idx ON public.users USING btree (email);
 ```
 
-See [Getting started](https://winebarrel.github.io/pistachio/getting-started/).
+A second `plan` prints `-- No changes`. From then on, edit the file, plan, apply. [Getting started](https://winebarrel.github.io/pistachio/getting-started/) walks through this with a real database; [Commands](https://winebarrel.github.io/pistachio/reference/commands/) lists every option.
 
 ## Features
 
