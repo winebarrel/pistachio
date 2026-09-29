@@ -39,9 +39,7 @@ func (d Domain) SQL() string {
 	var sql strings.Builder
 	sql.WriteString("CREATE DOMAIN " + d.FQDN() + " AS " + d.BaseType)
 
-	if d.Collation != nil {
-		sql.WriteString(" COLLATE " + *d.Collation)
-	}
+	sql.WriteString(collateClause(d.Collation))
 
 	if d.Default != nil {
 		sql.WriteString(" DEFAULT " + *d.Default)
