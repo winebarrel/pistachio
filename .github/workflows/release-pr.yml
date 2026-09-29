@@ -48,8 +48,10 @@ jobs:
           branch=release-from-$tag
           main=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
           # The job's condition cannot see this on a run by hand, which has
-          # no head commit.
-          if gh api "repos/$GH_REPO/git/commits/$main" --jq .message | grep -q '^Merge pull request #[0-9]\+ from [^ ]\+/release-from-'; then
+          # no head commit. A release with no [Unreleased] section tags the
+          # merge itself, and then there is nothing to wait for.
+          if gh api "repos/$GH_REPO/git/commits/$main" --jq .message | grep -q '/release-from-' &&
+            ! git ls-remote --tags "https://github.com/$GH_REPO" 'v[0-9]*' | awk -v sha="$main" '$1 == sha { found = 1 } END { exit !found }'; then
             echo "::error::main's head is the merge of a release pull request; run again after its tag is pushed"
             exit 1
           fi
