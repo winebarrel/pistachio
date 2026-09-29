@@ -452,11 +452,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			if desiredView.Materialized {
 				objType = "MATERIALIZED VIEW"
 			}
-			if desiredView.Comment != nil {
-				result.CreateStmts = append(result.CreateStmts, "COMMENT ON "+objType+" "+k+" IS "+model.QuoteLiteral(*desiredView.Comment)+";")
-			} else {
-				result.CreateStmts = append(result.CreateStmts, "COMMENT ON "+objType+" "+k+" IS NULL;")
-			}
+			result.CreateStmts = append(result.CreateStmts, commentOnSQL(objType+" "+k, desiredView.Comment))
 		}
 
 		var currentColumnComments *orderedmap.Map[string, string]
@@ -480,7 +476,7 @@ func viewColumnCommentStmts(fqvn string, current, desired *orderedmap.Map[string
 					continue
 				}
 			}
-			stmts = append(stmts, "COMMENT ON COLUMN "+fqvn+"."+model.Ident(col)+" IS "+model.QuoteLiteral(comment)+";")
+			stmts = append(stmts, commentOnSQL("COLUMN "+fqvn+"."+model.Ident(col), &comment))
 		}
 	}
 	if current != nil {
@@ -490,7 +486,7 @@ func viewColumnCommentStmts(fqvn string, current, desired *orderedmap.Map[string
 					continue
 				}
 			}
-			stmts = append(stmts, "COMMENT ON COLUMN "+fqvn+"."+model.Ident(col)+" IS NULL;")
+			stmts = append(stmts, commentOnSQL("COLUMN "+fqvn+"."+model.Ident(col), nil))
 		}
 	}
 	return stmts

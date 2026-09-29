@@ -156,11 +156,7 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 
 	// Type comment change.
 	if !equalPtr(current.Comment, desired.Comment) {
-		if desired.Comment != nil {
-			stmts = append(stmts, "COMMENT ON TYPE "+fqcn+" IS "+model.QuoteLiteral(*desired.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON TYPE "+fqcn+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("TYPE "+fqcn, desired.Comment))
 	}
 
 	// Attribute comment changes. The current comment is read from the working
@@ -175,11 +171,7 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 			continue
 		}
 		col := model.Ident(desired.Schema, desired.Name, da.Name)
-		if da.Comment != nil {
-			stmts = append(stmts, "COMMENT ON COLUMN "+col+" IS "+model.QuoteLiteral(*da.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON COLUMN "+col+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("COLUMN "+col, da.Comment))
 	}
 
 	return stmts, disallowed, nil

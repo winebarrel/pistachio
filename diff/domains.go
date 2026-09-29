@@ -105,11 +105,7 @@ func diffDomain(fqdn string, current, desired *model.Domain) ([]string, error) {
 
 	// Comment change
 	if !equalPtr(current.Comment, desired.Comment) {
-		if desired.Comment != nil {
-			stmts = append(stmts, "COMMENT ON DOMAIN "+fqdn+" IS "+model.QuoteLiteral(*desired.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON DOMAIN "+fqdn+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("DOMAIN "+fqdn, desired.Comment))
 	}
 
 	return stmts, nil

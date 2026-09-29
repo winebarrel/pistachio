@@ -1897,11 +1897,7 @@ func diffComments(current, desired *model.Table) []string {
 
 	// Table comment
 	if !equalPtr(current.Comment, desired.Comment) {
-		if desired.Comment != nil {
-			stmts = append(stmts, "COMMENT ON TABLE "+fqtn+" IS "+model.QuoteLiteral(*desired.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON TABLE "+fqtn+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("TABLE "+fqtn, desired.Comment))
 	}
 
 	// Column comments
@@ -1912,15 +1908,20 @@ func diffComments(current, desired *model.Table) []string {
 		}
 		if !equalPtr(currentComment, desiredCol.Comment) {
 			colIdent := fqtn + "." + model.Ident(name)
-			if desiredCol.Comment != nil {
-				stmts = append(stmts, "COMMENT ON COLUMN "+colIdent+" IS "+model.QuoteLiteral(*desiredCol.Comment)+";")
-			} else {
-				stmts = append(stmts, "COMMENT ON COLUMN "+colIdent+" IS NULL;")
-			}
+			stmts = append(stmts, commentOnSQL("COLUMN "+colIdent, desiredCol.Comment))
 		}
 	}
 
 	return stmts
+}
+
+// commentOnSQL returns COMMENT ON target setting comment, or clearing it when
+// comment is nil.
+func commentOnSQL(target string, comment *string) string {
+	if comment == nil {
+		return "COMMENT ON " + target + " IS NULL;"
+	}
+	return "COMMENT ON " + target + " IS " + model.QuoteLiteral(*comment) + ";"
 }
 
 func equalPtr[T comparable](a, b *T) bool {
