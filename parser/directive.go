@@ -96,6 +96,64 @@ func validateDirectives(rawSQL string) error {
 	return nil
 }
 
+// directiveCommentPattern matches a line comment that holds a directive.
+var directiveCommentPattern = regexp.MustCompile(`^--[ \t]*pista:`)
+
+// validateDirectivePlacement rejects a directive that would bind to a
+// statement the user did not put it before. Every directive scan reads the
+// text before a statement, which starts right after the previous semicolon,
+// so a directive after code on the same line went to the next statement.
+// The files are joined into one input, so a directive at the end of a file
+// went to the first statement of the next file. spans says where each file
+// starts; with none, sql is one file.
+func validateDirectivePlacement(sql string, spans []fileSpan) error {
+	if !strings.Contains(sql, "pista:") {
+		return nil
+	}
+
+	// The caller has parsed sql already, so the lexer accepts it.
+	scan, err := pg_query.Scan(sql)
+	if err != nil {
+		return fmt.Errorf("failed to scan SQL: %w", err)
+	}
+
+	// fileEnd returns the offset where the file holding pos ends.
+	fileEnd := func(pos int) int {
+		for _, s := range spans {
+			if s.start > pos {
+				return s.start
+			}
+		}
+		return len(sql)
+	}
+
+	for i, tok := range scan.Tokens {
+		if tok.Token != pg_query.Token_SQL_COMMENT {
+			continue
+		}
+		start := int(tok.Start)
+		if !directiveCommentPattern.MatchString(sql[start:tok.End]) {
+			continue
+		}
+		if !atLineStart(sql, start) {
+			return &locatedError{msg: "directive must be on its own line", offset: start}
+		}
+
+		followed := false
+		for _, next := range scan.Tokens[i+1:] {
+			if next.Token != pg_query.Token_SQL_COMMENT && next.Token != pg_query.Token_C_COMMENT {
+				followed = int(next.Start) < fileEnd(start)
+				break
+			}
+		}
+		if !followed {
+			return &locatedError{msg: "directive must be followed by a statement in the same file", offset: start}
+		}
+	}
+
+	return nil
+}
+
 // ExecuteStmt represents an arbitrary SQL statement marked with
 // -- pista:execute or -- pista:execute-first.
 type ExecuteStmt struct {

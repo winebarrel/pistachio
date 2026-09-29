@@ -463,3 +463,165 @@ DROP TABLE public.items;
 			"pista: "+paths[0]+":4:5: ignored unsupported statement: DROP TABLE public.items\n",
 		buf.String())
 }
+
+// A directive after code on the same line used to bind to the next statement,
+// since that statement's text starts right after the previous semicolon.
+func TestParseSQLSources_TrailingDirective(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want string
+	}{
+		{
+			name: "after a statement",
+			sql:  "CREATE TABLE public.a (id integer); -- pista:ignore\nCREATE TABLE public.b (id integer);\n",
+			want: `directive must be on its own line
+ --> a.sql:1:37
+  |
+1 | CREATE TABLE public.a (id integer); -- pista:ignore
+  |                                     ^`,
+		},
+		{
+			name: "unknown name after a statement",
+			sql:  "CREATE TABLE public.a (id integer); -- pista:bogus\n",
+			want: `directive must be on its own line
+ --> a.sql:1:37
+  |
+1 | CREATE TABLE public.a (id integer); -- pista:bogus
+  |                                     ^`,
+		},
+		{
+			name: "after a column",
+			sql:  "CREATE TABLE public.a (\n    id integer, -- pista:renamed-from old_id\n    name text\n);\n",
+			want: `directive must be on its own line
+ --> a.sql:2:17
+  |
+2 |     id integer, -- pista:renamed-from old_id
+  |                 ^`,
+		},
+		{
+			name: "after a block comment",
+			sql:  "/* note */ -- pista:ignore\nCREATE TABLE public.a (id integer);\n",
+			want: `directive must be on its own line
+ --> a.sql:1:12
+  |
+1 | /* note */ -- pista:ignore
+  |            ^`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseSQLSourcesWithSchema([]Source{{Name: "a.sql", SQL: tt.sql}}, "public")
+			require.Error(t, err)
+			assert.Equal(t, tt.want, err.Error())
+		})
+	}
+}
+
+// A directive at the end of a file used to bind to the first statement of the
+// next file, since the files are joined into one input.
+func TestParseSQLSources_DirectiveWithoutStatement(t *testing.T) {
+	t.Run("at the end of a file followed by another", func(t *testing.T) {
+		_, err := ParseSQLSourcesWithSchema([]Source{
+			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer);\n\n-- pista:ignore\n"},
+			{Name: "b.sql", SQL: "CREATE TABLE public.b (id integer);\n"},
+		}, "public")
+		require.Error(t, err)
+		assert.Equal(t, `directive must be followed by a statement in the same file
+ --> a.sql:3:1
+  |
+3 | -- pista:ignore
+  | ^`, err.Error())
+	})
+
+	t.Run("at the end of the last file", func(t *testing.T) {
+		_, err := ParseSQLSourcesWithSchema([]Source{
+			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer);\n"},
+			{Name: "b.sql", SQL: "CREATE TABLE public.b (id integer);\n-- pista:renamed-from old_c\n-- trailing note\n/* more */\n"},
+		}, "public")
+		require.Error(t, err)
+		assert.Equal(t, `directive must be followed by a statement in the same file
+ --> b.sql:2:1
+  |
+2 | -- pista:renamed-from old_c
+  | ^`, err.Error())
+	})
+
+	t.Run("in a file with no statement", func(t *testing.T) {
+		_, err := ParseSQLSourcesWithSchema([]Source{
+			{Name: "a.sql", SQL: "-- pista:execute\n"},
+			{Name: "b.sql", SQL: "SELECT 1;\n"},
+		}, "public")
+		require.Error(t, err)
+		assert.Equal(t, `directive must be followed by a statement in the same file
+ --> a.sql:1:1
+  |
+1 | -- pista:execute
+  | ^`, err.Error())
+	})
+
+	t.Run("without a trailing newline", func(t *testing.T) {
+		_, err := ParseSQLSourcesWithSchema([]Source{
+			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer);\n-- pista:ignore"},
+			{Name: "b.sql", SQL: "CREATE TABLE public.b (id integer);\n"},
+		}, "public")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "directive must be followed by a statement in the same file\n --> a.sql:2:1\n")
+	})
+}
+
+func TestParseSQLSources_DirectivePlacementAccepted(t *testing.T) {
+	var buf bytes.Buffer
+	defer setWarnWriter(&buf)()
+
+	sources := []Source{
+		{Name: "a.sql", SQL: `-- pista:renamed-from public.old_a
+CREATE TABLE public.a (
+    id integer NOT NULL,
+    -- pista:renamed-from old_name
+    name text,
+    -- pista:renamed-from old_pkey
+    CONSTRAINT a_pkey PRIMARY KEY (id)
+); -- a plain trailing comment
+
+-- pista:ignore
+
+/* a note between the directive and the statement */
+-- another note
+CREATE TABLE public.ignored (id integer);
+
+CREATE TYPE public.status AS ENUM (
+    'active',
+    -- pista:renamed-from 'inactive'
+    'disabled'
+);
+
+COMMENT ON TABLE public.a IS 'x; -- pista:ignore'; /* -- pista:ignore */
+
+-- pista:execute SELECT to_regprocedure('public.f()') IS NULL
+CREATE FUNCTION public.f() RETURNS integer LANGUAGE sql AS $$ SELECT 1; -- pista:ignore
+$$;
+`},
+		{Name: "b.sql", SQL: `-- pista:concurrently
+-- pista:renamed-from old_idx
+CREATE INDEX a_name_idx ON public.a (name);
+`},
+	}
+
+	r, err := ParseSQLSourcesWithSchema(sources, "public")
+	require.NoError(t, err)
+
+	a := r.Tables.Get("public.a")
+	require.NotNil(t, a)
+	assert.False(t, a.Ignore)
+	require.NotNil(t, a.RenameFrom)
+	assert.Equal(t, "public.old_a", *a.RenameFrom)
+	assert.True(t, a.Indexes.Get("a_name_idx").Concurrently)
+
+	assert.True(t, r.Tables.Get("public.ignored").Ignore)
+	assert.Equal(t, map[string]string{"disabled": "inactive"}, r.Enums.Get("public.status").ValueRenameFrom)
+
+	require.Len(t, r.ExecuteStmts, 1)
+	assert.Equal(t, "SELECT to_regprocedure('public.f()') IS NULL", r.ExecuteStmts[0].CheckSQL)
+}

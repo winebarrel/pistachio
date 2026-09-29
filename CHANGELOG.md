@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A `-- pista:` directive written after code on the same line, as in `CREATE TABLE a (...); -- pista:ignore`, is now an error. It used to apply to the next statement instead of the one before it, and one after a column or an enum value was silently dropped. Move the directive to its own line above its statement.
+
+* A `-- pista:` directive with no statement after it in the same file is now an error. It used to apply to the first statement of the next schema file.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.
