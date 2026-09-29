@@ -1,0 +1,9 @@
+# COMMENT ON TYPE also names a domain, and PostgreSQL stores the comment where
+# COMMENT ON DOMAIN puts it.
+init: |
+  CREATE DOMAIN public.positive_int AS integer;
+  COMMENT ON DOMAIN public.positive_int IS 'A positive integer';
+desired: |
+  CREATE DOMAIN public.positive_int AS integer;
+  COMMENT ON TYPE public.positive_int IS 'A positive integer';
+plan: ""

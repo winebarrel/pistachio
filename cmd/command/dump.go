@@ -31,11 +31,8 @@ func (cmd *Dump) Run(ctx context.Context, w io.Writer) error {
 	}
 
 	if cmd.Split == "" {
-		if connInfo, err := client.ConnInfoComment(); err == nil {
-			fmt.Fprintln(w, connInfo) //nolint:errcheck
-		}
-		fmt.Fprintf(w, "-- Dump of %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
-		fmt.Fprintln(w, result)                                                                    //nolint:errcheck
+		writeHeader(w, client, "Dump of", result.Count)
+		fmt.Fprintln(w, result) //nolint:errcheck
 		return nil
 	}
 
@@ -43,10 +40,7 @@ func (cmd *Dump) Run(ctx context.Context, w io.Writer) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if connInfo, err := client.ConnInfoComment(); err == nil {
-		fmt.Fprintln(w, connInfo) //nolint:errcheck
-	}
-	fmt.Fprintf(w, "-- Dump of %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
+	writeHeader(w, client, "Dump of", result.Count)
 
 	count, err := writeDumpFiles(cmd.Split, result.Files())
 	if err != nil {

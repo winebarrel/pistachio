@@ -246,15 +246,12 @@ func equalSelectExpr(current, desired string) bool {
 	curResult, curTarget, parseErrCur := pgast.ParseExpr(current)
 	desResult, desTarget, parseErrDes := pgast.ParseExpr(desired)
 	if parseErrCur != nil || parseErrDes != nil {
-		return current == desired
+		return false
 	}
 	curTarget.Val = normalizeCheckExpr(curTarget.Val)
 	desTarget.Val = normalizeCheckExpr(desTarget.Val)
 	curTarget.Val = alignCurrentCasts(desTarget.Val, curTarget.Val)
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
-	if deparseErrCur != nil || deparseErrDes != nil {
-		return current == desired
-	}
-	return curStr == desStr
+	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
 }

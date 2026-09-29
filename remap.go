@@ -366,47 +366,59 @@ func remapDomain(d *model.Domain, mapSchema func(string) string, replacer *defRe
 	}
 }
 
-func remapQualifiedNamePtr(name *string, mapSchema func(string) string) *string {
-	if name == nil {
+// mapPtr applies f to the string p points to and returns a pointer to the
+// result, or nil when p is nil.
+func mapPtr(p *string, f func(string) string) *string {
+	if p == nil {
 		return nil
 	}
-	mapped := remapQualifiedName(*name, mapSchema)
+	mapped := f(*p)
 	return &mapped
 }
 
+func remapQualifiedNamePtr(name *string, mapSchema func(string) string) *string {
+	return mapPtr(name, func(s string) string { return remapQualifiedName(s, mapSchema) })
+}
+
 func remapDefaultExprPtr(expr *string, mapSchema func(string) string) *string {
-	if expr == nil {
-		return nil
-	}
-	mapped := remapDefaultExpr(*expr, mapSchema)
-	return &mapped
+	return mapPtr(expr, func(s string) string { return remapDefaultExpr(s, mapSchema) })
 }
 
 func (client *Client) remapTableSchemas(tables *orderedmap.Map[string, *model.Table]) *orderedmap.Map[string, *model.Table] {
 	if len(client.SchemaMap) == 0 {
 		return tables
 	}
+	return remapTables(tables, client.RemapSchema, buildDefReplacer(client.SchemaMap))
+}
 
-	replacer := buildDefReplacer(client.SchemaMap)
+func (client *Client) reverseRemapTableSchemas(tables *orderedmap.Map[string, *model.Table]) *orderedmap.Map[string, *model.Table] {
+	if len(client.SchemaMap) == 0 {
+		return tables
+	}
+	return remapTables(tables, client.ReverseRemapSchema, buildReverseDefReplacer(client.SchemaMap))
+}
+
+func remapTables(
+	tables *orderedmap.Map[string, *model.Table],
+	mapSchema func(string) string,
+	replacer *defReplacer,
+) *orderedmap.Map[string, *model.Table] {
 	remapped := orderedmap.New[string, *model.Table]()
 
 	for _, t := range tables.CollectValues() {
-		t.Schema = client.RemapSchema(t.Schema)
-		remapColumns(t, client.RemapSchema, replacer)
+		t.Schema = mapSchema(t.Schema)
+		remapColumns(t, mapSchema, replacer)
 
-		remapIndexes(t.Indexes, client.RemapSchema, replacer)
+		remapIndexes(t.Indexes, mapSchema, replacer)
 
 		for _, fk := range t.ForeignKeys.CollectValues() {
-			fk.Schema = client.RemapSchema(fk.Schema)
+			fk.Schema = mapSchema(fk.Schema)
 			fk.Definition = replacer.ReplaceConstraint(fk.Definition)
-			if fk.RefSchema != nil {
-				mapped := client.RemapSchema(*fk.RefSchema)
-				fk.RefSchema = &mapped
-			}
+			fk.RefSchema = mapPtr(fk.RefSchema, mapSchema)
 		}
 
-		remapPolicies(t.Policies, client.RemapSchema, replacer)
-		remapTriggers(t.Triggers, client.RemapSchema, replacer)
+		remapPolicies(t.Policies, mapSchema, replacer)
+		remapTriggers(t.Triggers, mapSchema, replacer)
 
 		remapped.Set(t.FQTN(), t)
 	}
@@ -426,14 +438,8 @@ func remapPolicies(
 ) {
 	for _, p := range policies.CollectValues() {
 		p.Schema = mapSchema(p.Schema)
-		if p.Using != nil {
-			expr := replacer.ReplaceExpr(*p.Using)
-			p.Using = &expr
-		}
-		if p.WithCheck != nil {
-			expr := replacer.ReplaceExpr(*p.WithCheck)
-			p.WithCheck = &expr
-		}
+		p.Using = mapPtr(p.Using, replacer.ReplaceExpr)
+		p.WithCheck = mapPtr(p.WithCheck, replacer.ReplaceExpr)
 	}
 }
 
@@ -470,66 +476,28 @@ func (client *Client) remapViewSchemas(views *orderedmap.Map[string, *model.View
 	if len(client.SchemaMap) == 0 {
 		return views
 	}
-
-	replacer := buildDefReplacer(client.SchemaMap)
-	remapped := orderedmap.New[string, *model.View]()
-
-	for _, v := range views.CollectValues() {
-		v.Schema = client.RemapSchema(v.Schema)
-		v.Definition = replacer.Replace(v.Definition)
-		remapIndexes(v.Indexes, client.RemapSchema, replacer)
-		remapTriggers(v.Triggers, client.RemapSchema, replacer)
-		remapped.Set(v.FQVN(), v)
-	}
-
-	return remapped
-}
-
-func (client *Client) reverseRemapTableSchemas(tables *orderedmap.Map[string, *model.Table]) *orderedmap.Map[string, *model.Table] {
-	if len(client.SchemaMap) == 0 {
-		return tables
-	}
-
-	replacer := buildReverseDefReplacer(client.SchemaMap)
-	remapped := orderedmap.New[string, *model.Table]()
-
-	for _, t := range tables.CollectValues() {
-		t.Schema = client.ReverseRemapSchema(t.Schema)
-		remapColumns(t, client.ReverseRemapSchema, replacer)
-
-		remapIndexes(t.Indexes, client.ReverseRemapSchema, replacer)
-
-		for _, fk := range t.ForeignKeys.CollectValues() {
-			fk.Schema = client.ReverseRemapSchema(fk.Schema)
-			fk.Definition = replacer.ReplaceConstraint(fk.Definition)
-			if fk.RefSchema != nil {
-				mapped := client.ReverseRemapSchema(*fk.RefSchema)
-				fk.RefSchema = &mapped
-			}
-		}
-
-		remapPolicies(t.Policies, client.ReverseRemapSchema, replacer)
-		remapTriggers(t.Triggers, client.ReverseRemapSchema, replacer)
-
-		remapped.Set(t.FQTN(), t)
-	}
-
-	return remapped
+	return remapViews(views, client.RemapSchema, buildDefReplacer(client.SchemaMap))
 }
 
 func (client *Client) reverseRemapViewSchemas(views *orderedmap.Map[string, *model.View]) *orderedmap.Map[string, *model.View] {
 	if len(client.SchemaMap) == 0 {
 		return views
 	}
+	return remapViews(views, client.ReverseRemapSchema, buildReverseDefReplacer(client.SchemaMap))
+}
 
-	replacer := buildReverseDefReplacer(client.SchemaMap)
+func remapViews(
+	views *orderedmap.Map[string, *model.View],
+	mapSchema func(string) string,
+	replacer *defReplacer,
+) *orderedmap.Map[string, *model.View] {
 	remapped := orderedmap.New[string, *model.View]()
 
 	for _, v := range views.CollectValues() {
-		v.Schema = client.ReverseRemapSchema(v.Schema)
+		v.Schema = mapSchema(v.Schema)
 		v.Definition = replacer.Replace(v.Definition)
-		remapIndexes(v.Indexes, client.ReverseRemapSchema, replacer)
-		remapTriggers(v.Triggers, client.ReverseRemapSchema, replacer)
+		remapIndexes(v.Indexes, mapSchema, replacer)
+		remapTriggers(v.Triggers, mapSchema, replacer)
 		remapped.Set(v.FQVN(), v)
 	}
 
@@ -540,26 +508,24 @@ func (client *Client) remapEnumSchemas(enums *orderedmap.Map[string, *model.Enum
 	if len(client.SchemaMap) == 0 {
 		return enums
 	}
-
-	remapped := orderedmap.New[string, *model.Enum]()
-
-	for _, e := range enums.CollectValues() {
-		e.Schema = client.RemapSchema(e.Schema)
-		remapped.Set(e.FQEN(), e)
-	}
-
-	return remapped
+	return remapEnums(enums, client.RemapSchema)
 }
 
 func (client *Client) reverseRemapEnumSchemas(enums *orderedmap.Map[string, *model.Enum]) *orderedmap.Map[string, *model.Enum] {
 	if len(client.SchemaMap) == 0 {
 		return enums
 	}
+	return remapEnums(enums, client.ReverseRemapSchema)
+}
 
+func remapEnums(
+	enums *orderedmap.Map[string, *model.Enum],
+	mapSchema func(string) string,
+) *orderedmap.Map[string, *model.Enum] {
 	remapped := orderedmap.New[string, *model.Enum]()
 
 	for _, e := range enums.CollectValues() {
-		e.Schema = client.ReverseRemapSchema(e.Schema)
+		e.Schema = mapSchema(e.Schema)
 		remapped.Set(e.FQEN(), e)
 	}
 
@@ -570,26 +536,24 @@ func (client *Client) remapSequenceSchemas(sequences *orderedmap.Map[string, *mo
 	if len(client.SchemaMap) == 0 {
 		return sequences
 	}
-
-	remapped := orderedmap.New[string, *model.Sequence]()
-
-	for _, s := range sequences.CollectValues() {
-		s.Schema = client.RemapSchema(s.Schema)
-		remapped.Set(s.FQN(), s)
-	}
-
-	return remapped
+	return remapSequences(sequences, client.RemapSchema)
 }
 
 func (client *Client) reverseRemapSequenceSchemas(sequences *orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence] {
 	if len(client.SchemaMap) == 0 {
 		return sequences
 	}
+	return remapSequences(sequences, client.ReverseRemapSchema)
+}
 
+func remapSequences(
+	sequences *orderedmap.Map[string, *model.Sequence],
+	mapSchema func(string) string,
+) *orderedmap.Map[string, *model.Sequence] {
 	remapped := orderedmap.New[string, *model.Sequence]()
 
 	for _, s := range sequences.CollectValues() {
-		s.Schema = client.ReverseRemapSchema(s.Schema)
+		s.Schema = mapSchema(s.Schema)
 		remapped.Set(s.FQN(), s)
 	}
 
@@ -600,30 +564,26 @@ func (client *Client) remapDomainSchemas(domains *orderedmap.Map[string, *model.
 	if len(client.SchemaMap) == 0 {
 		return domains
 	}
-
-	replacer := buildDefReplacer(client.SchemaMap)
-	remapped := orderedmap.New[string, *model.Domain]()
-
-	for _, d := range domains.CollectValues() {
-		d.Schema = client.RemapSchema(d.Schema)
-		remapDomain(d, client.RemapSchema, replacer)
-		remapped.Set(d.FQDN(), d)
-	}
-
-	return remapped
+	return remapDomains(domains, client.RemapSchema, buildDefReplacer(client.SchemaMap))
 }
 
 func (client *Client) reverseRemapDomainSchemas(domains *orderedmap.Map[string, *model.Domain]) *orderedmap.Map[string, *model.Domain] {
 	if len(client.SchemaMap) == 0 {
 		return domains
 	}
+	return remapDomains(domains, client.ReverseRemapSchema, buildReverseDefReplacer(client.SchemaMap))
+}
 
-	replacer := buildReverseDefReplacer(client.SchemaMap)
+func remapDomains(
+	domains *orderedmap.Map[string, *model.Domain],
+	mapSchema func(string) string,
+	replacer *defReplacer,
+) *orderedmap.Map[string, *model.Domain] {
 	remapped := orderedmap.New[string, *model.Domain]()
 
 	for _, d := range domains.CollectValues() {
-		d.Schema = client.ReverseRemapSchema(d.Schema)
-		remapDomain(d, client.ReverseRemapSchema, replacer)
+		d.Schema = mapSchema(d.Schema)
+		remapDomain(d, mapSchema, replacer)
 		remapped.Set(d.FQDN(), d)
 	}
 
@@ -634,33 +594,27 @@ func (client *Client) remapCompositeTypeSchemas(compositeTypes *orderedmap.Map[s
 	if len(client.SchemaMap) == 0 {
 		return compositeTypes
 	}
-
-	remapped := orderedmap.New[string, *model.CompositeType]()
-
-	for _, ct := range compositeTypes.CollectValues() {
-		ct.Schema = client.RemapSchema(ct.Schema)
-		for _, a := range ct.Attributes {
-			a.TypeName = remapQualifiedName(a.TypeName, client.RemapSchema)
-			a.Collation = remapQualifiedNamePtr(a.Collation, client.RemapSchema)
-		}
-		remapped.Set(ct.FQCN(), ct)
-	}
-
-	return remapped
+	return remapCompositeTypes(compositeTypes, client.RemapSchema)
 }
 
 func (client *Client) reverseRemapCompositeTypeSchemas(compositeTypes *orderedmap.Map[string, *model.CompositeType]) *orderedmap.Map[string, *model.CompositeType] {
 	if len(client.SchemaMap) == 0 {
 		return compositeTypes
 	}
+	return remapCompositeTypes(compositeTypes, client.ReverseRemapSchema)
+}
 
+func remapCompositeTypes(
+	compositeTypes *orderedmap.Map[string, *model.CompositeType],
+	mapSchema func(string) string,
+) *orderedmap.Map[string, *model.CompositeType] {
 	remapped := orderedmap.New[string, *model.CompositeType]()
 
 	for _, ct := range compositeTypes.CollectValues() {
-		ct.Schema = client.ReverseRemapSchema(ct.Schema)
+		ct.Schema = mapSchema(ct.Schema)
 		for _, a := range ct.Attributes {
-			a.TypeName = remapQualifiedName(a.TypeName, client.ReverseRemapSchema)
-			a.Collation = remapQualifiedNamePtr(a.Collation, client.ReverseRemapSchema)
+			a.TypeName = remapQualifiedName(a.TypeName, mapSchema)
+			a.Collation = remapQualifiedNamePtr(a.Collation, mapSchema)
 		}
 		remapped.Set(ct.FQCN(), ct)
 	}

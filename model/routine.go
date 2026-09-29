@@ -327,10 +327,5 @@ func RoutineToSQL(r *Routine) string {
 }
 
 func RoutinesToSQL(routines *orderedmap.Map[string, *Routine]) string {
-	return strings.Join(
-		routines.TransformSlice(func(_ string, r *Routine) string {
-			return RoutineToSQL(r)
-		}),
-		"\n\n",
-	)
+	return joinSQL(routines, RoutineToSQL)
 }
