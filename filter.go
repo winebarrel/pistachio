@@ -5,6 +5,18 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
+// filterMap returns a new map holding the entries of m that keep accepts, in
+// their original order.
+func filterMap[V any](m *orderedmap.Map[string, V], keep func(V) bool) *orderedmap.Map[string, V] {
+	filtered := orderedmap.New[string, V]()
+	for k, v := range m.All() {
+		if keep(v) {
+			filtered.Set(k, v)
+		}
+	}
+	return filtered
+}
+
 // filterByName keeps the objects of one type that --include, --exclude,
 // --enable and --disable select.
 func filterByName[V any](f *FilterOptions, objType string, m *orderedmap.Map[string, V], getName func(V) string) *orderedmap.Map[string, V] {
@@ -15,13 +27,7 @@ func filterByName[V any](f *FilterOptions, objType string, m *orderedmap.Map[str
 		return m
 	}
 
-	filtered := orderedmap.New[string, V]()
-	for k, v := range m.All() {
-		if f.MatchName(getName(v)) {
-			filtered.Set(k, v)
-		}
-	}
-	return filtered
+	return filterMap(m, func(v V) bool { return f.MatchName(getName(v)) })
 }
 
 func (f *FilterOptions) filterTables(tables *orderedmap.Map[string, *model.Table]) *orderedmap.Map[string, *model.Table] {
@@ -30,13 +36,7 @@ func (f *FilterOptions) filterTables(tables *orderedmap.Map[string, *model.Table
 		return tables
 	}
 
-	filtered := orderedmap.New[string, *model.Table]()
-	for k, t := range tables.All() {
-		if !t.IsPartitionChild() {
-			filtered.Set(k, t)
-		}
-	}
-	return filtered
+	return filterMap(tables, func(t *model.Table) bool { return !t.IsPartitionChild() })
 }
 
 func (f *FilterOptions) filterViews(views *orderedmap.Map[string, *model.View]) *orderedmap.Map[string, *model.View] {
