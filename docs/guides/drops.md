@@ -27,7 +27,7 @@ The types are `all`, `table`, `view`, `enum`, `domain`, `composite_type`, `seque
 
 ## What is gated
 
-Only a pure removal is gated. The drop half of a definition change is not: a constraint or an index whose definition changes is dropped and added back whatever the flag says, because PostgreSQL has no `ALTER` for either, and so is a policy whose command or permissiveness changes or that loses a `USING` or `WITH CHECK` clause. Data is not at stake in those.
+Only a pure removal is gated. The drop half of a definition change is not: a constraint or an index whose definition changes is dropped and added back whatever the flag says, because PostgreSQL has no `ALTER` for either, and so is a policy whose command or permissiveness changes or that loses a `USING` or `WITH CHECK` clause. No stored row is lost in those.
 
 A view, a routine or a trigger that has to be recreated is the exception. Their recreate needs `view`, `routine` or `trigger`, and without it the plan writes the `DROP` as `-- skipped:` and the object keeps its current definition. See [Supported objects](../reference/objects.md) for when each is recreated.
 
