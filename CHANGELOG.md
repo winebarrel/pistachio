@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A policy whose role list names `PUBLIC` alongside other roles no longer plans an `ALTER POLICY` on every run. PostgreSQL keeps only `PUBLIC`, and the desired side now does too.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.

@@ -131,7 +131,8 @@ func parsePolicyRoles(nodes []*pg_query.Node) ([]string, error) {
 		}
 		switch rs.Roletype {
 		case pg_query.RoleSpecType_ROLESPEC_PUBLIC:
-			roles = append(roles, "public")
+			// PostgreSQL ignores the other roles in a list that names PUBLIC.
+			return []string{"public"}, nil
 		case pg_query.RoleSpecType_ROLESPEC_CURRENT_USER:
 			roles = append(roles, "current_user")
 		case pg_query.RoleSpecType_ROLESPEC_CURRENT_ROLE:
