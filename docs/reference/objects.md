@@ -263,6 +263,8 @@ COMMENT ON CONSTRAINT email_check ON DOMAIN public.email IS 'Has an at sign';
 
 When one of these is dropped and created again, the plan writes its comment again. A rename, `CREATE OR REPLACE TRIGGER`, `ALTER POLICY`, `ALTER CONSTRAINT` and `VALIDATE CONSTRAINT` keep the comment.
 
+A `COMMENT ON CONSTRAINT`, `TRIGGER` or `POLICY` naming an object no schema file declares is ignored without a warning. That includes a comment on a `NOT NULL` constraint, which PostgreSQL 18 `pg_dump` writes and pistachio does not read as a constraint.
+
 The index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE` constraint owns belongs to the constraint, so write its comment with `COMMENT ON CONSTRAINT`. A `COMMENT ON INDEX` on such an index, or on an index no schema file declares, is ignored without a warning.
 
 ## Indexes on a partitioned table

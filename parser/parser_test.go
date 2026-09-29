@@ -505,8 +505,6 @@ func TestParseSQL_CommentOnIndex(t *testing.T) {
 	assert.Equal(t, "on a materialized view", *mvIdx.Comment)
 }
 
-// An index name written without a schema takes the default schema, which is
-// the one the run works in rather than public.
 // COMMENT ON CONSTRAINT, TRIGGER and POLICY name the relation the object is
 // on. A table constraint and a foreign key share the one form.
 func TestParseSQL_CommentOnConstraintTriggerPolicy(t *testing.T) {
@@ -573,6 +571,8 @@ func TestParseSQL_CommentOnConstraintTriggerPolicyEmpty(t *testing.T) {
 	assert.Nil(t, tbl.Triggers.Get("trg").Comment)
 }
 
+// An index name written without a schema takes the default schema, which is
+// the one the run works in rather than public.
 func TestParseSQL_CommentOnIndexUnqualified(t *testing.T) {
 	result, err := parseSQLNoFile(`
 		CREATE TABLE myschema.t (id integer, n text);
