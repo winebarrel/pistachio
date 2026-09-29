@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -43,7 +44,7 @@ func equalViewDef(current, desired string) bool {
 	curResult, errCur := pg_query.Parse("CREATE VIEW _v AS " + current)
 	desResult, errDes := pg_query.Parse("CREATE VIEW _v AS " + desired)
 	if errCur != nil || errDes != nil {
-		return current == desired
+		return false
 	}
 	for _, stmt := range curResult.Stmts {
 		stripQualifications(stmt.Stmt)
@@ -60,10 +61,7 @@ func equalViewDef(current, desired string) bool {
 	}
 	curStr, errCur := pg_query.Deparse(curResult)
 	desStr, errDes := pg_query.Deparse(desResult)
-	if errCur != nil || errDes != nil {
-		return current == desired
-	}
-	return curStr == desStr
+	return errCur == nil && errDes == nil && curStr == desStr
 }
 
 // canCreateOrReplaceView reports whether a view definition change can be
@@ -93,15 +91,7 @@ func canCreateOrReplaceView(current, desired string) bool {
 	if !curOK || !desOK {
 		return false
 	}
-	if len(desCols) < len(curCols) {
-		return false
-	}
-	for i, name := range curCols {
-		if desCols[i] != name {
-			return false
-		}
-	}
-	return true
+	return len(desCols) >= len(curCols) && slices.Equal(desCols[:len(curCols)], curCols)
 }
 
 // viewOutputColumns parses a view definition's SELECT body and returns the
@@ -348,11 +338,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				// otherwise emit a commented DROP for visibility (no CREATE,
 				// since recreation requires the drop).
 				if dc.IsDropAllowed("view") {
-					if currentView.Materialized {
-						result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+dropName+";")
-					} else {
-						result.DropStmts = append(result.DropStmts, "DROP VIEW "+dropName+";")
-					}
+					result.DropStmts = append(result.DropStmts, "DROP "+currentView.ObjType()+" "+dropName+";")
 					result.DroppedViews = append(result.DroppedViews, dropName)
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 					// DROP VIEW takes the view's triggers with it, so the
@@ -363,11 +349,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					}
 					recreated[k] = true
 				} else {
-					if currentView.Materialized {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP MATERIALIZED VIEW "+dropName+";")
-					} else {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP VIEW "+dropName+";")
-					}
+					result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP "+currentView.ObjType()+" "+dropName+";")
 					recreateDenied[k] = true
 				}
 			} else {
@@ -415,10 +397,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	viewAllowed := dc.IsDropAllowed("view")
 	for k, v := range current.All() {
 		if _, ok := desired.GetOk(k); !ok {
-			drop := "DROP VIEW " + k + ";"
-			if v.Materialized {
-				drop = "DROP MATERIALIZED VIEW " + k + ";"
-			}
+			drop := "DROP " + v.ObjType() + " " + k + ";"
 			if viewAllowed {
 				result.DropStmts = append(result.DropStmts, drop)
 				result.DroppedViews = append(result.DroppedViews, k)
@@ -448,15 +427,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			currentComment = currentView.Comment
 		}
 		if !equalPtr(currentComment, desiredView.Comment) {
-			objType := "VIEW"
-			if desiredView.Materialized {
-				objType = "MATERIALIZED VIEW"
-			}
-			if desiredView.Comment != nil {
-				result.CreateStmts = append(result.CreateStmts, "COMMENT ON "+objType+" "+k+" IS "+model.QuoteLiteral(*desiredView.Comment)+";")
-			} else {
-				result.CreateStmts = append(result.CreateStmts, "COMMENT ON "+objType+" "+k+" IS NULL;")
-			}
+			result.CreateStmts = append(result.CreateStmts, commentOnSQL(desiredView.ObjType()+" "+k, desiredView.Comment))
 		}
 
 		var currentColumnComments *orderedmap.Map[string, string]
@@ -480,7 +451,7 @@ func viewColumnCommentStmts(fqvn string, current, desired *orderedmap.Map[string
 					continue
 				}
 			}
-			stmts = append(stmts, "COMMENT ON COLUMN "+fqvn+"."+model.Ident(col)+" IS "+model.QuoteLiteral(comment)+";")
+			stmts = append(stmts, commentOnSQL("COLUMN "+fqvn+"."+model.Ident(col), &comment))
 		}
 	}
 	if current != nil {
@@ -490,7 +461,7 @@ func viewColumnCommentStmts(fqvn string, current, desired *orderedmap.Map[string
 					continue
 				}
 			}
-			stmts = append(stmts, "COMMENT ON COLUMN "+fqvn+"."+model.Ident(col)+" IS NULL;")
+			stmts = append(stmts, commentOnSQL("COLUMN "+fqvn+"."+model.Ident(col), nil))
 		}
 	}
 	return stmts

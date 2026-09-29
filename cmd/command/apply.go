@@ -39,11 +39,7 @@ func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
 // writeApplyResult prints the connection line, the header, the output apply
 // buffered and the closing line.
 func writeApplyResult(w io.Writer, client *pistachio.Client, result *pistachio.ApplyResult, out []byte) {
-	if connInfo, err := client.ConnInfoComment(); err == nil {
-		fmt.Fprintln(w, connInfo) //nolint:errcheck
-	}
-
-	fmt.Fprintf(w, "-- Apply to %s (%s)\n", result.Count.SchemaLabel(), result.Count.Summary()) //nolint:errcheck
+	writeHeader(w, client, "Apply to", result.Count)
 
 	// Same ordering as Plan: executed SQL (incl. pre-SQL) first, then skipped
 	// DROPs as comments. When nothing was applied, skipped DROPs precede

@@ -45,16 +45,9 @@ func DiffSequences(current, desired *orderedmap.Map[string, *model.Sequence], dc
 	}
 
 	// Dropped sequences. When the sequence-drop policy disallows it, emit a commented DROP.
-	seqAllowed := dc.IsDropAllowed("sequence")
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			if seqAllowed {
-				result.DropStmts = append(result.DropStmts, "DROP SEQUENCE "+k+";")
-			} else {
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP SEQUENCE "+k+";")
-			}
-		}
-	}
+	drops, skipped := dropMissing(current, desired, "SEQUENCE", dc.IsDropAllowed("sequence"))
+	result.DropStmts = append(result.DropStmts, drops...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, skipped...)
 
 	return result, nil
 }
@@ -107,11 +100,7 @@ func diffSequence(fqn string, current, desired *model.Sequence) []string {
 	}
 
 	if !equalPtr(current.Comment, desired.Comment) {
-		if desired.Comment != nil {
-			stmts = append(stmts, "COMMENT ON SEQUENCE "+fqn+" IS "+model.QuoteLiteral(*desired.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON SEQUENCE "+fqn+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("SEQUENCE "+fqn, desired.Comment))
 	}
 
 	return stmts
