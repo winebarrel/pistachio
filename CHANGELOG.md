@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.72.0] - 2026-09-30
 
 * Add `dump --omit-partition-child-index`. It leaves out a partition's copy of its parent's index, which PostgreSQL creates again when the dump is loaded. A partition is then added to such a file with `CREATE TABLE ... PARTITION OF` alone.
 
