@@ -54,7 +54,7 @@ ALTER TABLE public.users ADD COLUMN email text;
 CREATE INDEX users_email_idx ON public.users USING btree (email);
 ```
 
-A second `plan` prints `-- No changes`. From then on, edit the file, plan, apply. [Getting started](https://winebarrel.github.io/pistachio/getting-started/) walks through this with a real database; [Commands](https://winebarrel.github.io/pistachio/reference/commands/) lists every option.
+A second `plan` prints `-- No changes`. From then on, edit the file, plan, apply. Every command targets the `public` schema unless `-n` names another. [Getting started](https://winebarrel.github.io/pistachio/getting-started/) walks through this with a real database; [Commands](https://winebarrel.github.io/pistachio/reference/commands/) lists every option.
 
 ## Features
 
