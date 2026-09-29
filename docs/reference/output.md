@@ -16,7 +16,7 @@ The second line reads `Apply to` under `apply` and `Dump of` under `dump`. `diff
 ## Body
 
 `-- No changes`
-:   The plan holds no executable DDL. Closes the output of `plan` and `apply`.
+:   The plan holds no executable DDL. Closes the output of `plan`, `apply` and `diff`.
 
 `-- skipped: <statement>`
 :   A drop that `--allow-drop` does not allow. The statement is shown and not run. See [Controlling drops](../guides/drops.md).
@@ -25,7 +25,7 @@ The second line reads `Apply to` under `apply` and `Dump of` under `dump`. `diff
 :   An object a `-- pista:ignore` directive leaves out. See [Directives](directives.md#-pistaignore).
 
 `-- check SQL could not be evaluated at plan time: <error>; apply will decide`
-:   Written under a `-- pista:execute` statement whose check `plan` cannot run. See [Directives](directives.md#-pistaexecute).
+:   Written between a `-- pista:execute` directive and its statement when `plan` cannot run the check. See [Directives](directives.md#-pistaexecute).
 
 `-- <verb>, <lock>: <table> (<size>)`
 :   The `--explain` comment before a statement that scans or rewrites a table. See [Explaining a plan](../guides/explaining-plans.md).
@@ -63,7 +63,7 @@ The second line reads `Apply to` under `apply` and `Dump of` under `dump`. `diff
 Warnings and errors go to standard error, prefixed with `pista:`. A statement pistachio does not read is warned about once, with its position:
 
 ```
-pista: schema.sql:12:1: ignored unsupported statement: GRANT SELECT ON public.users TO app
+pista: schema.sql:12:1: ignored unsupported statement: GRANT select ON public.users TO app
 ```
 
 An error stops the command:
