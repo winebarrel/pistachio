@@ -231,7 +231,7 @@ Two definitions are compared the way `pg_get_indexdef` writes them: `ASC` and th
 | Change | DDL |
 |---|---|
 | Added | `CREATE INDEX`, or `CREATE INDEX CONCURRENTLY` when opted in |
-| Removed | `DROP INDEX`, gated by `index`; `DROP INDEX CONCURRENTLY` under `--force-index-concurrently` |
+| Removed | `DROP INDEX`, gated by `index`; `DROP INDEX CONCURRENTLY` under `--force-index-concurrently`, or under `diff` when the current file opts the index in |
 | Definition | `DROP INDEX` and `CREATE INDEX` |
 | Renamed | `ALTER INDEX ... RENAME TO` |
 

@@ -16,7 +16,7 @@ Plan file
 :   A plan written by `plan --out` for `apply-from` to run later. See [Plan files](../guides/plan-files.md).
 
 Executable DDL
-:   A statement the plan would run: the DDL and the `-- pista:execute` statements whose check passes. A skipped drop and a comment are not.
+:   A statement the plan would run: the DDL and the `-- pista:execute-first` and `-- pista:execute` statements it selects. A skipped drop and a comment are not.
 
 Check SQL
 :   The expression after `-- pista:execute` or `-- pista:execute-first`. The statement runs when it returns true.

@@ -14,7 +14,7 @@ pista plan [option...] file...
 
 The files are one schema. A statement that names another object, an `ALTER TABLE` or a `CREATE INDEX` for example, has to come after the `CREATE` of that object, in the same file or an earlier one. See [Supported objects](../objects.md).
 
-The output is SQL. It opens with the connection and a count of the objects, then holds the pre-SQL, the concurrently-pre-SQL, the DDL, the `-- pista:execute` statements whose check passes, one `-- ignored:` comment per object a `-- pista:ignore` directive leaves out, and one `-- skipped:` comment per drop that `--allow-drop` does not allow. `-- No changes` closes an output with no executable DDL.
+The output is SQL. It opens with the connection and a count of the objects, then holds the pre-SQL, the concurrently-pre-SQL, the `-- pista:execute-first` statements, the DDL, the `-- pista:execute` statements, one `-- ignored:` comment per object a `-- pista:ignore` directive leaves out, and one `-- skipped:` comment per drop that `--allow-drop` does not allow. `-- No changes` closes an output with no executable DDL.
 
 ```sql
 -- Connected to postgres://postgres@localhost:5432/postgres

@@ -9,7 +9,7 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 | `execute-first` | check SQL (optional) | any statement | Run non-managed SQL before the managed DDL |
 | `concurrently` | none | `CREATE INDEX` | Create and drop the index with `CONCURRENTLY` |
 | `bulk-alter` | none | `CREATE TABLE` | Merge the table's `ALTER TABLE` actions into one statement |
-| `ignore` | none | tables, views, enums, domains, composite types, routines | Leave the object unmanaged |
+| `ignore` | none | tables, views, enums, domains, composite types, sequences, routines | Leave the object unmanaged |
 
 ## -- pista:renamed-from
 
@@ -136,7 +136,7 @@ Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, RLS toggles, storage parameter `S
 
 ## -- pista:ignore
 
-Marks a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE TYPE ... AS (...)` / `CREATE DOMAIN` / `CREATE VIEW` (including materialized views) / `CREATE FUNCTION` / `CREATE PROCEDURE` as unmanaged. pistachio does not create, alter, or drop the object: it is dropped from both the desired and current state before diffing. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
+Marks a `CREATE TABLE` / `CREATE TYPE ... AS ENUM` / `CREATE TYPE ... AS (...)` / `CREATE DOMAIN` / `CREATE VIEW` (including materialized views) / `CREATE SEQUENCE` / `CREATE FUNCTION` / `CREATE PROCEDURE` as unmanaged. pistachio does not create, alter, or drop the object: it is dropped from both the desired and current state before diffing. This is the in-file equivalent of `--exclude` for a single object, useful for a table managed by another tool or one whose definition intentionally drifts.
 
 ```sql
 -- pista:ignore
