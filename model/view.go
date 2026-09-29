@@ -16,6 +16,11 @@ type View struct {
 	// CheckOption is the view's WITH CHECK OPTION, "local" or "cascaded", and
 	// empty when the view has none. A materialized view never has one.
 	CheckOption string `json:"check_option"`
+	// WithNoData is a materialized view's WITH NO DATA, which creates it
+	// without running its query. Only the desired side sets it, and it only
+	// shapes the CREATE statement: whether a view is populated is data state
+	// that REFRESH changes, so it is not compared and dump does not write it.
+	WithNoData bool `json:"-"`
 	// StorageParams holds the view's storage parameters, pg_class.reloptions,
 	// keyed by parameter name and ordered by it. check_option sits in the same
 	// column but is read as the view's WITH CHECK OPTION, so it is not here. A
@@ -55,7 +60,11 @@ func (v View) SQL() string {
 	def := strings.TrimSpace(v.Definition)
 	def = strings.TrimSuffix(def, ";")
 	if v.Materialized {
-		return "CREATE MATERIALIZED VIEW " + v.FQVN() + v.storageParamsClause() + " AS\n" + def + ";"
+		var noData string
+		if v.WithNoData {
+			noData = "\n  WITH NO DATA"
+		}
+		return "CREATE MATERIALIZED VIEW " + v.FQVN() + v.storageParamsClause() + " AS\n" + def + noData + ";"
 	}
 	return "CREATE OR REPLACE VIEW " + v.FQVN() + v.storageParamsClause() + " AS\n" + def + v.checkOptionClause() + ";"
 }

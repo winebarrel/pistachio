@@ -1,0 +1,43 @@
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt FROM public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE MATERIALIZED VIEW public.user_stats AS SELECT count(*) AS cnt, max(id) AS max_id FROM public.users WITH NO DATA;
+applied_sql: |
+  DROP MATERIALIZED VIEW public.user_stats;
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt, max(id) AS max_id FROM public.users
+    WITH NO DATA;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_stats
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt,
+      max(users.id) AS max_id
+     FROM users;
+applied_pg16: &applied_pg16plus |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- public.user_stats
+  CREATE MATERIALIZED VIEW public.user_stats AS
+  SELECT count(*) AS cnt,
+      max(id) AS max_id
+     FROM users;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus
