@@ -880,6 +880,23 @@ CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor = 70, toast.autovac
 	assert.Equal(t, "CREATE MATERIALIZED VIEW public.item_bodies WITH (fillfactor='70', toast.autovacuum_enabled='off') AS\nSELECT id, body FROM public.items;", bodies.SQL())
 }
 
+func TestParseSQL_MatViewWithNoData(t *testing.T) {
+	sql := `CREATE TABLE public.items (id integer NOT NULL);
+CREATE MATERIALIZED VIEW public.empty_items AS SELECT id FROM public.items WITH NO DATA;
+CREATE MATERIALIZED VIEW public.full_items AS SELECT id FROM public.items WITH DATA;`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	empty := result.Views.Get("public.empty_items")
+	assert.True(t, empty.WithNoData)
+	assert.Equal(t, "CREATE MATERIALIZED VIEW public.empty_items AS\nSELECT id FROM public.items\n  WITH NO DATA;", empty.SQL())
+
+	full := result.Views.Get("public.full_items")
+	assert.False(t, full.WithNoData)
+	assert.Equal(t, "CREATE MATERIALIZED VIEW public.full_items AS\nSELECT id FROM public.items;", full.SQL())
+}
+
 func TestParseSQL_ViewCommentOnColumn(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,
@@ -2743,20 +2760,16 @@ line'
 	assert.Equal(t, map[string]string{"multi\nline": "old"}, e.ValueRenameFrom)
 }
 
-func TestParseSQL_RenameDirective_EnumValue_TrailingCommentIgnored(t *testing.T) {
-	// A directive must be on its own line; a trailing comment after a value
-	// is not a directive for the next value.
+func TestParseSQL_RenameDirective_EnumValue_TrailingCommentRejected(t *testing.T) {
+	// A directive must be on its own line; one after a value is an error
+	// rather than a guess at which value it meant.
 	sql := `CREATE TYPE public.status AS ENUM (
     'active', -- pista:renamed-from 'x'
     'disabled'
 );`
 
-	result, err := parseSQLWithPublicSchema(sql)
-	require.NoError(t, err)
-
-	e, ok := result.Enums.GetOk("public.status")
-	require.True(t, ok)
-	assert.Empty(t, e.ValueRenameFrom)
+	_, err := parseSQLWithPublicSchema(sql)
+	require.EqualError(t, err, "directive must be on its own line")
 }
 
 func TestParseSQL_RenameDirective_EnumValue_DanglingIgnored(t *testing.T) {

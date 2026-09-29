@@ -1,0 +1,17 @@
+# PostgreSQL keeps only PUBLIC when the role list names it alongside other
+# roles, so the desired side does the same.
+init: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.documents TO postgres, public USING (true);
+desired: |
+  CREATE TABLE public.documents (
+      id bigint NOT NULL,
+      CONSTRAINT documents_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY p ON public.documents TO postgres, public USING (true);
+plan: ""

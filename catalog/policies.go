@@ -13,10 +13,10 @@ import (
 // serves every table.
 func (c *Catalog) ListPoliciesByTables(ctx context.Context, tables []*model.Table) (map[uint32][]*model.Policy, error) {
 	// pg_policy.polroles uses OID 0 to represent PUBLIC. pg_roles does not
-	// contain a row for OID 0, so a join would silently drop PUBLIC when it
-	// appears alongside named roles (e.g. TO PUBLIC, app_user). UNION the
+	// contain a row for OID 0, so a join would silently drop PUBLIC. UNION the
 	// synthetic "public" entry with the named-role rows so all elements are
-	// preserved and sorted together.
+	// preserved and sorted together. PostgreSQL stores PUBLIC alone even when
+	// the statement names other roles beside it.
 	q := `
 		SELECT
 			pol.polrelid,

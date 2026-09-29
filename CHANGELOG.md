@@ -4,15 +4,27 @@
 
 ## [Unreleased]
 
-* `dump` now writes `SET STORAGE` and `SET COMPRESSION` for the columns an `INHERITS` child declares, and a new `INHERITS` child gets them when it is created. Before, the next plan showed them as drift.
-
-* `COMMENT ON TYPE` on a domain is now read. Before, it was ignored and every plan dropped the comment with `COMMENT ON DOMAIN ... IS NULL`.
-
 * Comments on constraints, foreign keys, triggers, policies and domain constraints are now managed. Before, `COMMENT ON CONSTRAINT`, `COMMENT ON TRIGGER` and `COMMENT ON POLICY` in a schema file were ignored with a warning, and `dump` did not write them.
 
 * The plan file version is now 5. Run `plan --out` again for a plan file an older pista wrote.
 
 * The JSON Schema is now `schema-1.2.json`. It adds `comment` to a constraint, a foreign key, a trigger, a policy and a domain constraint.
+
+* The `-- Connected to` line for a Unix-socket connection now includes the port, which picks the socket file.
+
+* A materialized view written with `WITH NO DATA` is now created with it. `apply` dropped the clause and ran the view's query over its source tables. Whether a view is populated is not compared, and `dump` does not write the clause.
+
+* `fmt` no longer refuses a file with trailing whitespace after a `--` comment. The whitespace is removed.
+
+* A policy whose role list names `PUBLIC` alongside other roles no longer plans an `ALTER POLICY` on every run. PostgreSQL keeps only `PUBLIC`, and the desired side now does too.
+
+* A `-- pista:` directive written after code on the same line, as in `CREATE TABLE a (...); -- pista:ignore`, is now an error. It used to apply to the next statement instead of the one before it, and one after a column or an enum value was silently dropped. Move the directive to its own line above its statement.
+
+* A `-- pista:` directive with no statement after it in the same file is now an error. It used to apply to the first statement of the next schema file.
+
+* `dump` now writes `SET STORAGE` and `SET COMPRESSION` for the columns an `INHERITS` child declares, and a new `INHERITS` child gets them when it is created. Before, the next plan showed them as drift.
+
+* `COMMENT ON TYPE` on a domain is now read. Before, it was ignored and every plan dropped the comment with `COMMENT ON DOMAIN ... IS NULL`.
 
 ## [1.70.1] - 2026-09-28
 

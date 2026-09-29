@@ -52,6 +52,8 @@ A change to a view whose definition stays goes out as `ALTER VIEW ... SET (...)`
 
 A definition change goes out as `CREATE OR REPLACE VIEW` where PostgreSQL accepts one. It accepts one when the new query produces the same output columns in the same order, with new ones only at the end. A change that removes, renames or reorders a column is a `DROP` and a `CREATE` instead. So is every definition change of a materialized view.
 
+A materialized view written with `WITH NO DATA` is created with it, so its query does not run until a `REFRESH MATERIALIZED VIEW`. Whether a view is populated is data state, not schema: it is not compared, adding or removing `WITH NO DATA` plans nothing on its own, and `dump` does not write it.
+
 PostgreSQL refuses to drop a relation another object reads, instead of cascading, so that plan would fail partway through `apply`. `plan` fails first and names what reads it:
 
 ```

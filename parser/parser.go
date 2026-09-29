@@ -302,6 +302,10 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		return nil, fmt.Errorf("failed to parse SQL: %w", err)
 	}
 
+	if err := validateDirectivePlacement(sql, spans); err != nil {
+		return nil, err
+	}
+
 	tables := orderedmap.New[string, *model.Table]()
 	views := orderedmap.New[string, *model.View]()
 	enums := orderedmap.New[string, *model.Enum]()
@@ -1638,6 +1642,7 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 		Name:           into.Rel.Relname,
 		Definition:     def,
 		Materialized:   true,
+		WithNoData:     into.SkipData,
 		StorageParams:  parseViewStorageParams(into.Options),
 		Indexes:        orderedmap.New[string, *model.Index](),
 		Triggers:       orderedmap.New[string, *model.Trigger](),
