@@ -6,6 +6,8 @@
 
 * The error for a `--pre-sql-file` or `--concurrently-pre-sql-file` that cannot be read no longer names the file twice.
 
+* `fmt` no longer refuses a file with trailing whitespace after a `--` comment. The whitespace is removed.
+
 * A policy whose role list names `PUBLIC` alongside other roles no longer plans an `ALTER POLICY` on every run. PostgreSQL keeps only `PUBLIC`, and the desired side now does too.
 
 * A `-- pista:` directive written after code on the same line, as in `CREATE TABLE a (...); -- pista:ignore`, is now an error. It used to apply to the next statement instead of the one before it, and one after a column or an enum value was silently dropped. Move the directive to its own line above its statement.
