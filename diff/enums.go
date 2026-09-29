@@ -59,16 +59,9 @@ func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChe
 	}
 
 	// Dropped enums. When the enum-drop policy disallows it, emit a commented DROP.
-	enumAllowed := dc.IsDropAllowed("enum")
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			if enumAllowed {
-				result.DropStmts = append(result.DropStmts, "DROP TYPE "+k+";")
-			} else {
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP TYPE "+k+";")
-			}
-		}
-	}
+	drops, skipped := dropMissing(current, desired, "TYPE", dc.IsDropAllowed("enum"))
+	result.DropStmts = append(result.DropStmts, drops...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, skipped...)
 
 	return result, nil
 }
