@@ -90,7 +90,7 @@ type FilterOptions struct {
 	// unmanaged. Where another tool creates them, their names follow no
 	// pattern --exclude can state, and a schema file that declares the parent
 	// alone would plan a DROP for each one.
-	SkipPartitionChild bool `env:"PISTA_SKIP_PARTITION_CHILD" json:"skip_partition_child" help:"Manage a partitioned table without its partitions. For a schema whose partitions another tool creates. An INHERITS child is unaffected."`
+	SkipPartitionChild bool `xor:"partition-child" env:"PISTA_SKIP_PARTITION_CHILD" json:"skip_partition_child" help:"Manage a partitioned table without its partitions. For a schema whose partitions another tool creates. An INHERITS child is unaffected."`
 }
 
 // IsTypeEnabled returns true if the given object type should be included.

@@ -1,0 +1,39 @@
+# A dump written with --omit-partition-child-index loads into an empty
+# database with the partitions' indexes PostgreSQL creates, under the names
+# the full dump writes.
+init: ""
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')
+  PARTITION BY LIST (id);
+
+  CREATE TABLE public.logs_2026_1 PARTITION OF public.logs_2026 FOR VALUES IN (1);
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  -- public.logs_2025
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at);
+
+  -- public.logs_2026
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')
+  PARTITION BY LIST (id);
+  CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at);
+
+  -- public.logs_2026_1
+  CREATE TABLE public.logs_2026_1 PARTITION OF public.logs_2026 FOR VALUES IN (1);
+  CREATE INDEX logs_2026_1_at_idx ON public.logs_2026_1 USING btree (at);

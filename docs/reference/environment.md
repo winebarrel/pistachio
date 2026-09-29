@@ -42,6 +42,7 @@ Every variable stands for one option and takes the value the option takes. The o
 | `PISTA_NO_FORMAT` | `--no-format` | dump |
 | `PISTA_DUMP_JSON` | `--json` | dump |
 | `PISTA_DUMP_EXPLAIN` | `--explain` | dump |
+| `PISTA_DUMP_OMIT_PARTITION_CHILD_INDEX` | `--omit-partition-child-index` | dump |
 | `PISTA_FMT_CHECK` | `--check` | fmt |
 
 Each option is described on its command's page under [Commands](commands/index.md).

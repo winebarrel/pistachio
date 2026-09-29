@@ -95,7 +95,7 @@ The [general options](index.md#general-options) apply as well.
 :   Write the storage parameters of tables and materialized views, the `WITH (...)` clause. Off by default. Environment: `PISTA_MANAGE_STORAGE_PARAM`. See [Storage parameters](../objects.md#storage-parameters).
 
 `--skip-partition-child`
-:   Write a partitioned table without its partitions. Environment: `PISTA_SKIP_PARTITION_CHILD`.
+:   Write a partitioned table without its partitions. Conflicts with `--omit-partition-child-index`. Environment: `PISTA_SKIP_PARTITION_CHILD`.
 
 ### Output
 
@@ -104,6 +104,9 @@ The [general options](index.md#general-options) apply as well.
 
 `--omit-schema`
 :   Write every name without its schema, for a dump that is loaded into a schema of another name.
+
+`--omit-partition-child-index`
+:   Leave out a partition's copy of its parent's index, which PostgreSQL creates again when the dump is loaded. An index is taken as the copy when it is attached to the parent's index, has the name PostgreSQL gives the copy and the parent index's definition and storage parameters, and has no comment. Any other partition index is written. Conflicts with `--skip-partition-child`. Environment: `PISTA_DUMP_OMIT_PARTITION_CHILD_INDEX`.
 
 `--no-format`
 :   Write the layout the model renders on its own, without the formatter. Conflicts with `--json`. Environment: `PISTA_NO_FORMAT`.

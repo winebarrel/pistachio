@@ -1,0 +1,80 @@
+# --omit-partition-child-index leaves out a partition's copy of its parent's
+# index, which PostgreSQL creates again when the parent's index is created.
+# A partition index under another name, with other storage parameters or with
+# a comment is written, since the copy PostgreSQL makes would not carry it, and
+# so is an INHERITS child's index, which is no copy.
+omit_partition_child_index: true
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  CREATE TABLE public.logs_2024 PARTITION OF public.logs FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  CREATE INDEX logs_2024_id_idx ON public.logs_2024 USING btree (id);
+
+  CREATE TABLE public.logs_2025 (id integer NOT NULL, at date NOT NULL);
+  CREATE INDEX logs_2025_custom ON public.logs_2025 USING btree (at);
+  ALTER TABLE public.logs ATTACH PARTITION public.logs_2025 FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+
+  CREATE TABLE public.logs_2026 (id integer NOT NULL, at date NOT NULL);
+  CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at) WITH (fillfactor = 70);
+  ALTER TABLE public.logs ATTACH PARTITION public.logs_2026 FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+
+  CREATE TABLE public.logs_2027 PARTITION OF public.logs FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');
+  COMMENT ON INDEX public.logs_2027_at_idx IS 'child comment';
+
+  CREATE TABLE public.logs_2028 PARTITION OF public.logs FOR VALUES FROM ('2028-01-01') TO ('2029-01-01')
+      PARTITION BY LIST (id);
+  CREATE TABLE public.logs_2028_1 PARTITION OF public.logs_2028 FOR VALUES IN (1);
+
+  CREATE TABLE public.events (id integer NOT NULL, at date NOT NULL);
+  CREATE INDEX events_at_idx ON public.events USING btree (at);
+  CREATE TABLE public.events_old () INHERITS (public.events);
+  CREATE INDEX events_old_at_idx ON public.events_old USING btree (at);
+dump: |
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      at date NOT NULL
+  );
+  CREATE INDEX events_at_idx ON public.events USING btree (at);
+
+  -- public.events_old
+  CREATE TABLE public.events_old (
+  )
+  INHERITS (public.events);
+  CREATE INDEX events_old_at_idx ON public.events_old USING btree (at);
+
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  -- public.logs_2024
+  CREATE TABLE public.logs_2024 PARTITION OF public.logs FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+  CREATE INDEX logs_2024_id_idx ON public.logs_2024 USING btree (id);
+
+  -- public.logs_2025
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_2025_custom ON public.logs_2025 USING btree (at);
+
+  -- public.logs_2026
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at) WITH (fillfactor='70');
+
+  -- public.logs_2027
+  CREATE TABLE public.logs_2027 PARTITION OF public.logs FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');
+  CREATE INDEX logs_2027_at_idx ON public.logs_2027 USING btree (at);
+  COMMENT ON INDEX public.logs_2027_at_idx IS 'child comment';
+
+  -- public.logs_2028
+  CREATE TABLE public.logs_2028 PARTITION OF public.logs FOR VALUES FROM ('2028-01-01') TO ('2029-01-01')
+  PARTITION BY LIST (id);
+
+  -- public.logs_2028_1
+  CREATE TABLE public.logs_2028_1 PARTITION OF public.logs_2028 FOR VALUES IN (1);
