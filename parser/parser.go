@@ -2136,9 +2136,11 @@ func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
 }
 
 func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum], domains *orderedmap.Map[string, *model.Domain], compositeTypes *orderedmap.Map[string, *model.CompositeType], sequences *orderedmap.Map[string, *model.Sequence], routines *orderedmap.Map[string, *model.Routine]) {
-	// COMMENT ON TYPE/DOMAIN uses TypeName, not a list
+	// COMMENT ON TYPE/DOMAIN uses TypeName, not a list. COMMENT ON TYPE also
+	// names a domain.
 	if cs.Objtype == pg_query.ObjectType_OBJECT_TYPE {
 		parseCommentOnType(cs, defaultSchema, enums, compositeTypes)
+		parseCommentOnDomain(cs, defaultSchema, domains)
 		return
 	}
 	if cs.Objtype == pg_query.ObjectType_OBJECT_DOMAIN {
