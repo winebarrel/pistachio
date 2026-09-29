@@ -1284,8 +1284,8 @@ func normalizeExclusion(con *pg_query.Constraint) {
 			// The operator name list. The catalog prints a visible operator
 			// bare, so the qualification is dropped from both sides, the way
 			// stripFuncSchema treats a function name.
-			if ops := item.GetList(); ops != nil && len(ops.Items) > 1 {
-				ops.Items = ops.Items[len(ops.Items)-1:]
+			if ops := item.GetList(); ops != nil {
+				ops.Items = lastNamePart(ops.Items)
 			}
 		}
 	}
@@ -2274,13 +2274,7 @@ func equalTypeName(a, b, schema string) bool {
 	if a == b {
 		return true
 	}
-	normalize := func(t string) string {
-		if base, ok := serialBaseTypes[t]; ok {
-			return base
-		}
-		return t
-	}
-	return normalize(a) == normalize(b)
+	return alterTypeName(a) == alterTypeName(b)
 }
 
 // foldTypeMod lowercases a type name's modifier, leaving the type name itself

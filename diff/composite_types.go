@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
@@ -78,12 +79,7 @@ func cloneCompositeAttributes(attrs []*model.CompositeAttribute) []*model.Compos
 }
 
 func indexCompositeAttribute(attrs []*model.CompositeAttribute, name string) int {
-	for i, a := range attrs {
-		if a.Name == name {
-			return i
-		}
-	}
-	return -1
+	return slices.IndexFunc(attrs, func(a *model.CompositeAttribute) bool { return a.Name == name })
 }
 
 // diffCompositeType returns the ALTER statements to converge a composite type,
@@ -181,7 +177,7 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 // match a current composite type.
 func detectCompositeTypeRenames(current, desired *orderedmap.Map[string, *model.CompositeType]) ([]string, *orderedmap.Map[string, *model.CompositeType], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newKey, desiredCT := range desired.All() {
 		if desiredCT.RenameFrom == nil {

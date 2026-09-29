@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -110,14 +111,10 @@ func (client *Client) ConnInfoComment() (string, error) {
 // always schema-qualifies its object names.
 func (client *Client) searchPathSQL() string {
 	quoted := make([]string, 0, len(client.Schemas)+1)
-	hasPublic := false
 	for _, s := range client.Schemas {
 		quoted = append(quoted, model.Ident(s))
-		if s == "public" {
-			hasPublic = true
-		}
 	}
-	if !hasPublic {
+	if !slices.Contains(client.Schemas, "public") {
 		quoted = append(quoted, "public")
 	}
 	return "SET search_path TO " + strings.Join(quoted, ", ")
