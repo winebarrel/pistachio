@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* The `-- Connected to` line for a Unix-socket connection now includes the port, which picks the socket file.
+
 * A materialized view written with `WITH NO DATA` is now created with it. `apply` dropped the clause and ran the view's query over its source tables. Whether a view is populated is not compared, and `dump` does not write the clause.
 
 * `fmt` no longer refuses a file with trailing whitespace after a `--` comment. The whitespace is removed.
