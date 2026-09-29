@@ -65,15 +65,10 @@ func (v View) SQL() string {
 // A replaced view carries the clause too: CREATE OR REPLACE VIEW replaces the
 // options as a whole, so a parameter left off it is reset.
 func (v View) storageParamsClause() string {
-	if v.StorageParams == nil || v.StorageParams.Len() == 0 {
-		return ""
+	if w := storageParamsWith(v.StorageParams); w != "" {
+		return " " + w
 	}
-	return " WITH (" + strings.Join(
-		v.StorageParams.TransformSlice(func(name, value string) string {
-			return name + "=" + QuoteLiteral(value)
-		}),
-		", ",
-	) + ")"
+	return ""
 }
 
 // SetViewStorageParamsSQL returns the statement that sets the named storage
