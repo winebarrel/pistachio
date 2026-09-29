@@ -528,11 +528,7 @@ func checkViewDependents(ctx context.Context, cat *catalog.Catalog, dropped []st
 // views, and the routines with a SQL-standard body, which go with them. A
 // dependent among them blocks none of the checks.
 func (r *diffAllResult) earlyDrops() map[string]bool {
-	skip := nameSet(r.DroppedViews)
-	for _, name := range r.DroppedAtomicRoutines {
-		skip[name] = true
-	}
-	return skip
+	return nameSet(slices.Concat(r.DroppedViews, r.DroppedAtomicRoutines))
 }
 
 // checkColumnDependents fails the plan when a column it retypes has a
@@ -576,10 +572,7 @@ func checkKeyDependents(ctx context.Context, cat *catalog.Catalog, result *diffA
 		targets = append(targets, target)
 		byTarget[target] = indexes[obj.Current]
 	}
-	skip := nameSet(result.DroppedViews)
-	for _, k := range result.DroppedForeignKeys {
-		skip[k] = true
-	}
+	skip := nameSet(slices.Concat(result.DroppedViews, result.DroppedForeignKeys))
 	return blockedError("cannot drop", targets, byTarget, skip)
 }
 
