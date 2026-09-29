@@ -22,7 +22,7 @@ The second line reads `Apply to` under `apply` and `Dump of` under `dump`. `diff
 :   A drop that `--allow-drop` does not allow. The statement is shown and not run. See [Controlling drops](../guides/drops.md).
 
 `-- ignored: <name>`
-:   An object a `-- pista:ignore` directive leaves out. See [Directives](directives.md#-pistaignore).
+:   An object a `-- pista:ignore` directive leaves out, or a routine with `SET ... FROM CURRENT`. See [Directives](directives.md#-pistaignore).
 
 `-- check SQL could not be evaluated at plan time: <error>; apply will decide`
 :   Written between a `-- pista:execute` directive and its statement when `plan` cannot run the check. See [Directives](directives.md#-pistaexecute).
@@ -48,7 +48,7 @@ The second line reads `Apply to` under `apply` and `Dump of` under `dump`. `diff
 :   `apply-from --force` ran a plan in spite of drift.
 
 `-- Apply finished in <duration>`
-:   Closes an apply that ran at least one statement.
+:   Closes an apply that ran at least one statement. The time covers the statements and the writing of the output.
 
 ## Dump
 

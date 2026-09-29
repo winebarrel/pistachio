@@ -9,7 +9,7 @@ pistachio reads directives from SQL comments in schema files. A directive is a l
 | `execute-first` | check SQL (optional) | any statement | Run non-managed SQL before the managed DDL |
 | `concurrently` | none | `CREATE INDEX` | Create and drop the index with `CONCURRENTLY` |
 | `bulk-alter` | none | `CREATE TABLE` | Merge the table's `ALTER TABLE` actions into one statement |
-| `ignore` | none | tables, views, enums, domains, composite types | Leave the object unmanaged |
+| `ignore` | none | tables, views, enums, domains, composite types, routines | Leave the object unmanaged |
 
 ## -- pista:renamed-from
 
@@ -60,7 +60,7 @@ See [Renaming objects](../guides/renaming.md) for column rename caveats.
 
 ## -- pista:execute
 
-Includes non-managed SQL (functions, triggers, grants) in schema files. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression: when it returns `true` the statement is executed, otherwise skipped. Without a check, the statement always runs.
+Includes SQL pistachio does not manage in schema files: a grant, an extension, a function without `--manage-routine`. The marked statement is excluded from schema diffing. The optional argument is a check SQL expression: when it returns `true` the statement is executed, otherwise skipped. Without a check, the statement always runs.
 
 `plan` evaluates the check too, and leaves out the statements `apply` would skip, so the plan shows what will run. Both commands run it under the target schemas plus `public`, so an unqualified name in the check resolves to the same object either way.
 
@@ -112,11 +112,11 @@ Opts an index into `CONCURRENTLY` for `CREATE INDEX` and `DROP INDEX`. Writing `
 CREATE INDEX idx_users_name ON public.users USING btree (name);
 ```
 
-`--disable-index-concurrently` ignores all opt-ins; `--force-index-concurrently` applies `CONCURRENTLY` to every index change. `CONCURRENTLY` operations cannot run inside a transaction, so a plan containing them conflicts with `apply --with-tx`. `apply --try-tx` runs such a plan without a transaction instead of failing.
+`--disable-index-concurrently` ignores all opt-ins; `--force-index-concurrently` applies `CONCURRENTLY` to every index change. `CONCURRENTLY` operations cannot run inside a transaction, so `apply --with-tx` refuses a plan containing them. `apply --try-tx` runs such a plan without a transaction instead of failing.
 
 ## -- pista:bulk-alter
 
-Combines the table's consecutive `ALTER TABLE` actions into a single statement with comma-separated actions. Tables without the directive keep one statement per action.
+Combines the table's consecutive `ALTER TABLE` actions into a single statement with comma-separated actions, which takes the table's lock once and lets PostgreSQL plan the actions together. Tables without the directive keep one statement per action.
 
 ```sql
 -- pista:bulk-alter

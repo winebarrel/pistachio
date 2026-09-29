@@ -14,7 +14,7 @@ pista plan [option...] file...
 
 The files are one schema. A statement that names another object, an `ALTER TABLE` or a `CREATE INDEX` for example, has to come after the `CREATE` of that object, in the same file or an earlier one. See [Supported objects](../objects.md).
 
-The output is SQL. It opens with the connection and a count of the objects, then holds the pre-SQL, the concurrently-pre-SQL, the DDL, one `-- ignored:` comment per object a `-- pista:ignore` directive leaves out, and one `-- skipped:` comment per drop that `--allow-drop` does not allow. `-- No changes` closes an output with no executable DDL.
+The output is SQL. It opens with the connection and a count of the objects, then holds the pre-SQL, the concurrently-pre-SQL, the DDL, the `-- pista:execute` statements whose check passes, one `-- ignored:` comment per object a `-- pista:ignore` directive leaves out, and one `-- skipped:` comment per drop that `--allow-drop` does not allow. `-- No changes` closes an output with no executable DDL.
 
 ```sql
 -- Connected to postgres://postgres@localhost:5432/postgres
@@ -82,7 +82,7 @@ These options decide what is read on both sides. `plan --out` records them in th
 These options shape the DDL. `plan --out` writes the result into the plan file.
 
 `--allow-drop=`*type*
-:   Allow dropping these object types: `all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`. Repeatable. Without it no drop is planned; each is written as a `-- skipped:` comment. `constraint` covers CHECK, UNIQUE, PRIMARY KEY and EXCLUSION; `foreign_key` covers foreign keys. `composite_type` also gates `DROP ATTRIBUTE`. `routine` also gates the drop half of a recreate. Environment: `PISTA_ALLOW_DROP`. See [Controlling drops](../../guides/drops.md).
+:   Allow dropping these object types: `all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`. Repeatable. Without it no drop is planned; each is written as a `-- skipped:` comment. `constraint` covers CHECK, UNIQUE, PRIMARY KEY and EXCLUSION; `foreign_key` covers foreign keys. `composite_type` also gates `DROP ATTRIBUTE`. A view, routine or trigger recreate is gated by its type too. Environment: `PISTA_ALLOW_DROP`. See [Controlling drops](../../guides/drops.md).
 
 `--pre-sql=`*sql*
 :   SQL to write before the DDL. Conflicts with `--pre-sql-file`. Environment: `PISTA_PRE_SQL`.
@@ -103,7 +103,7 @@ These options shape the DDL. `plan --out` writes the result into the plan file.
 :   Write `CONCURRENTLY` on every `CREATE INDEX` and `DROP INDEX`, including the drop of an index the desired schema no longer holds, which no directive can reach. Environment: `PISTA_FORCE_INDEX_CONCURRENTLY`.
 
 `--bulk-alter`
-:   Merge consecutive `ALTER TABLE` actions on one table into one statement. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, row-level security toggles and skipped drops stay separate. The `-- pista:bulk-alter` directive does the same for one table. Environment: `PISTA_BULK_ALTER`.
+:   Merge consecutive `ALTER TABLE` actions on one table into one statement. Only column and constraint actions merge; foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, row-level security toggles, storage parameters and skipped drops stay separate. The `-- pista:bulk-alter` directive does the same for one table. Environment: `PISTA_BULK_ALTER`.
 
 `--assume-validated`
 :   Treat every table constraint, domain constraint and foreign key as validated. `NOT VALID` in the desired schema is ignored, and neither `NOT VALID` nor `VALIDATE CONSTRAINT` is written. For a schema where `NOT VALID` was a migration step and not a desired state. Environment: `PISTA_ASSUME_VALIDATED`.
@@ -133,7 +133,7 @@ Every connection sets `search_path` to `public`, so a server-side `ALTER ROLE ..
 
 The catalog reports an object reachable through `search_path` without its schema. `dump` writes the object as the catalog reports it, and `plan` compares that form against the desired schema, so a desired schema that qualifies an object the catalog reports bare differs on every run. Under `--search-path=` every object keeps its schema. Under `--search-path=myschema` the objects in `myschema` lose theirs, and under the default so do those in `public`.
 
-`apply` sets `search_path` to the target schemas plus `public` so an unqualified reference resolves. The plan output holds no such `SET`, so piping `pista plan -n myschema` into `psql` can fail on an unqualified reference. Qualify the reference or run `pista apply`.
+`apply` sets `search_path` to the target schemas plus `public` so an unqualified reference resolves, and `plan` does the same before it evaluates a `-- pista:execute` check. The plan output holds no such `SET`, so piping `pista plan -n myschema` into `psql` can fail on an unqualified reference. Qualify the reference or run `pista apply`.
 
 ## Examples
 

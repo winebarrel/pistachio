@@ -3,6 +3,7 @@
 An object the desired schema no longer holds is not dropped unless `--allow-drop` names its type. The plan writes the drop as a comment instead:
 
 ```sql
+-- Connected to postgres://postgres@localhost:5432/postgres
 -- Plan for schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
 -- skipped: DROP TABLE public.legacy_users;
 -- No changes
@@ -28,6 +29,8 @@ The types are `all`, `table`, `view`, `enum`, `domain`, `composite_type`, `seque
 ## What is gated
 
 Only a pure removal is gated. The drop half of a definition change is not: a constraint or an index whose definition changes is dropped and added back whatever the flag says, because PostgreSQL has no `ALTER` for either, and so is a policy whose command or permissiveness changes or that loses a `USING` or `WITH CHECK` clause. No stored row is lost in those.
+
+A domain constraint has no type of its own and is dropped either way.
 
 A view, a routine or a trigger that has to be recreated is the exception. Their recreate needs `view`, `routine` or `trigger`, and without it the plan writes the `DROP` as `-- skipped:` and the object keeps its current definition. See [Supported objects](../reference/objects.md) for when each is recreated.
 

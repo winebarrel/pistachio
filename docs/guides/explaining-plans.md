@@ -15,7 +15,7 @@ CREATE INDEX events_at_idx ON public.events USING btree (at);
 ALTER TABLE public.orders ALTER COLUMN note SET DEFAULT '';
 ```
 
-Also available as `$PISTA_EXPLAIN`. The comments are SQL comments, so the output still pipes into `psql`.
+Also available as `$PISTA_EXPLAIN`, and as `$PISTA_DUMP_EXPLAIN` for `dump`. The comments are SQL comments, so the output still pipes into `psql`.
 
 
 ## What the comment says

@@ -51,7 +51,7 @@ A check that cannot be evaluated fails `plan --out`:
 pista: error: failed to evaluate check SQL for --out: SELECT ...: ERROR: ...
 ```
 
-Without `--out` the check is noted in the plan and `apply` evaluates it again later. A plan file records a decision instead, so it fails here. See [Executing SQL](executing-sql.md).
+Without `--out` the check is noted in the plan and `apply` evaluates it again later. A plan file records a decision instead, so it fails here. See [Running arbitrary SQL](executing-sql.md).
 
 A check that reads data can go stale. The hash does not cover data, and the statement runs as the plan decided.
 

@@ -46,7 +46,7 @@ CREATE INDEX idx_users_email ON public.users USING btree (email);
 
 Both files go through the parser `plan` and `apply` use, and the diff is the one `plan` computes: the same schema DDL, in the same order, under the same drop policy. Diffing a file against `pista dump` output previews a plan for that database without a connection.
 
-Drops are suppressed by default and printed as comments; `--allow-drop` opts in. See [Controlling drops](drops.md).
+A drop is skipped by default and printed as a comment; `--allow-drop` opts in. See [Controlling drops](drops.md).
 
 The filter options, `--bulk-alter`, `--assume-validated` and the index CONCURRENTLY flags work as they do for `plan`. Directives too: a `-- pista:renamed-from` on the desired side resolves against the current side's names.
 
@@ -129,7 +129,7 @@ A file only one side holds has to be named.
 
 ## Checking a branch in CI
 
-`--check` exits with code 2 when the diff contains executable changes, 0 when not, and 1 on error. Suppressed drops alone exit 0, as with `plan --check`.
+`--check` exits with code 2 when the diff contains executable changes, 0 when not, and 1 on error. A skipped drop alone exits 0, as with `plan --check`.
 
 ```bash
 pista diff --check --git origin/main...HEAD schema.sql
@@ -138,7 +138,7 @@ pista diff --check --git origin/main...HEAD schema.sql
 
 ## What the current side means
 
-The current side plays the catalog's role. Only objects in the target schemas (`-n` / `--schemas`) are compared; an object outside them is out of scope on both sides, not a drop. Functions and procedures are read only under `--manage-routine`, and a sequence a column owns is unmanaged, as in the catalog.
+The current side plays the catalog's role. Only objects in the target schemas (`-n` / `--schemas`) are compared; an object outside them is out of scope on both sides, not a drop. Functions and procedures are read only under `--manage-routine`, and a sequence a column owns is left out, as in the catalog. See [Sequences](../reference/objects.md#sequences).
 
 Directives on the current side count as its state. A `-- pista:concurrently` there makes a dropped index `DROP INDEX CONCURRENTLY`, which a plan against a database cannot know; `--disable-index-concurrently` clears it on both sides.
 

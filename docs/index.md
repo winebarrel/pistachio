@@ -37,7 +37,7 @@ The container starts a shell in `/demo` with `pista` and `psql` preconfigured. E
 ```bash
 pista plan  desired.sql     # show the DDL diff
 pista apply desired.sql     # apply the changes
-pista plan  desired.sql     # ...should now print "No changes"
+pista plan  desired.sql     # ...should now print -- No changes
 pista dump                  # dump the current schema
 ```
 
@@ -105,7 +105,7 @@ ALTER TABLE ONLY public.posts
 Preview and apply:
 
 ```bash
-pista plan schema.sql                  # review the diff (drops suppressed by default)
+pista plan schema.sql                  # review the diff (drops skipped by default)
 pista plan --allow-drop all schema.sql # review the diff (with drops)
 pista apply schema.sql                 # apply it
 ```

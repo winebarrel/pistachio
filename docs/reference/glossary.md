@@ -15,11 +15,17 @@ Plan
 Plan file
 :   A plan written by `plan --out` for `apply-from` to run later. See [Plan files](../guides/plan-files.md).
 
+Executable DDL
+:   A statement the plan would run: the DDL and the `-- pista:execute` statements whose check passes. A skipped drop and a comment are not.
+
+Check SQL
+:   The expression after `-- pista:execute` or `-- pista:execute-first`. The statement runs when it returns true.
+
 Drift
 :   A difference between the current schema and the desired schema, or between a database and the schema a plan file was computed against.
 
 Plan clean
-:   A plan with no changes. `pista dump` output fed back as the desired schema plans clean; a break in that round trip is a bug.
+:   A plan with no changes. `pista dump` output fed back as the desired schema plans clean; a break in that round trip is a bug. See [The contract](../about/design.md#the-contract).
 
 Managed
 :   An object kind pistachio reads, compares and writes DDL for. Routines and storage parameters are managed only when opted in.
@@ -34,16 +40,16 @@ Skipped
 :   A drop the plan does not run because `--allow-drop` does not name its type. Written as a `-- skipped:` comment.
 
 Ignored
-:   An object a `-- pista:ignore` directive takes out of both sides. Written as an `-- ignored:` comment.
+:   An object a `-- pista:ignore` directive takes out of both sides, or a routine with `SET ... FROM CURRENT`. Written as an `-- ignored:` comment.
 
 Pure removal
-:   An object the desired schema no longer holds. The only kind of drop `--allow-drop` gates; the drop half of a definition change is not one.
+:   An object the desired schema no longer holds. The kind of drop `--allow-drop` gates. The drop half of a definition change is not one, except that a view, routine or trigger recreate needs its type too. See [Controlling drops](../guides/drops.md).
 
 Recreate
 :   A change that PostgreSQL has no `ALTER` for, run as a drop and a create.
 
 Dependent
-:   An object PostgreSQL will not let another be dropped or changed under: a view that reads a table, a foreign key that references a key. `plan` fails and names them before `apply` would.
+:   An object PostgreSQL will not let another be dropped or changed under: a view that reads a table, a foreign key that references a key. Where pistachio checks, `plan` fails and names them before `apply` would. A table or column drop is not checked.
 
 Default schema
 :   The first schema in `--schemas`. A name written without a schema belongs to it.

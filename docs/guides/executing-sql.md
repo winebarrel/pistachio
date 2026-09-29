@@ -24,7 +24,7 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-Execute statements appear in `plan` output. During `apply`, the check SQL is evaluated and the statement is skipped if it returns `false`.
+`plan` evaluates the check and shows the statements it selects. `apply` evaluates it again and runs the statements it selects then.
 
 ## Check patterns
 

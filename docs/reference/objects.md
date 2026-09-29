@@ -19,7 +19,7 @@ pistachio manages the objects below. Each section says what the parser reads fro
 | [Policies](#policies-and-row-level-security) | `CREATE POLICY`, `ALTER TABLE ... ROW LEVEL SECURITY` | | `policy` |
 | [Comments](#comments) | `COMMENT ON` | | |
 
-`--allow-drop` gates a pure removal: an object the desired schema no longer holds. Without the type, the drop is written as a `-- skipped:` comment and nothing runs. The drop half of a definition change, a constraint or an index dropped to be added back, is not gated. See [Controlling drops](../guides/drops.md).
+`--allow-drop` gates a pure removal: an object the desired schema no longer holds. Without the type, the drop is written as a `-- skipped:` comment and nothing runs. The drop half of a definition change, a constraint or an index dropped to be added back, is not gated; a view, routine or trigger recreate is. See [Controlling drops](../guides/drops.md).
 
 Renaming any of these objects, and enum values and composite attributes, goes through the [`-- pista:renamed-from`](directives.md#-pistarenamed-from) directive. Routines cannot be renamed.
 
@@ -93,7 +93,7 @@ A partition is declared as `CREATE TABLE ... PARTITION OF parent FOR VALUES ...`
 
 A trigger on a partitioned table is cloned onto every partition. Only the parent's trigger is read and written, and PostgreSQL keeps the clones in step. A foreign key on the parent is copied the same way; see [Foreign keys](#foreign-keys). An index on the parent is created after every table statement; see [Indexes](#indexes).
 
-`--skip-partition-child` leaves every partition out of the desired side, for a schema whose partitions another tool creates. See [Skipping partition children](../guides/filtering.md#skipping-partition-children).
+`--skip-partition-child` leaves every partition out of both sides, for a schema whose partitions another tool creates. See [Skipping partition children](../guides/filtering.md#skipping-partition-children).
 
 ### Inheritance
 
@@ -120,7 +120,7 @@ Only the first parent is read, so `INHERITS (a, b)` is dumped as `INHERITS (a)`.
 
 The column definitions of `CREATE TABLE`: the type, `COLLATE`, `DEFAULT`, `NOT NULL` with an optional constraint name, `GENERATED ... AS IDENTITY` with its sequence options, `GENERATED ALWAYS AS (...) STORED`, `STORAGE` and `COMPRESSION`. `ALTER TABLE ... ALTER COLUMN ... SET STORAGE` / `SET COMPRESSION` after the table are read too, which is how `pg_dump` writes them.
 
-A type is read in the form the catalog reports, so an alias in the file compares equal to the name the database holds: `int` and `int4` are `integer`, `varchar` is `character varying`, `timestamptz` is `timestamp with time zone`. `serial`, `bigserial` and `smallserial` are `integer`, `bigint` and `smallint` with a `nextval` default, and a column written either way compares equal. A primary key column is `NOT NULL` whether or not the file says so. `COLLATE "default"` is what a column has implicitly and is read as no collation.
+A type is read in the form the catalog reports, so an alias in the file compares equal to the name the database holds: `int` and `int4` are `integer`, `varchar` is `character varying`, `timestamptz` is `timestamp with time zone`. `serial`, `bigserial` and `smallserial` are `integer`, `bigint` and `smallint` with a `nextval` default, and a column written either way compares equal. A primary key column is `NOT NULL` whether or not the file says so. `COLLATE "default"` is what a column has implicitly and is read as no collation. Any built-in type is accepted, arrays included, and an identifier may be quoted.
 
 ### Changes
 
@@ -231,7 +231,7 @@ Two definitions are compared the way `pg_get_indexdef` writes them: `ASC` and th
 | Change | DDL |
 |---|---|
 | Added | `CREATE INDEX`, or `CREATE INDEX CONCURRENTLY` when opted in |
-| Removed | `DROP INDEX`, gated by `index`; `CONCURRENTLY` when opted in |
+| Removed | `DROP INDEX`, gated by `index`; `DROP INDEX CONCURRENTLY` under `--force-index-concurrently` |
 | Definition | `DROP INDEX` and `CREATE INDEX` |
 | Renamed | `ALTER INDEX ... RENAME TO` |
 
@@ -281,9 +281,9 @@ A query is compared as PostgreSQL stores it: a schema on a table, a table prefix
 
 `CREATE OR REPLACE VIEW` is used where PostgreSQL accepts it: when the new query keeps the output column names in order, with new ones only at the end. A change that removes, renames or reorders a column is a drop and a create instead, and so is a query whose column names cannot be told from the text, a `SELECT *` for one, which also re-plans on every run; see [Known limitations](../about/limitations.md). Only the names are compared, so a query that changes a column's type and keeps its name goes out as `CREATE OR REPLACE VIEW` and fails at apply with `cannot change data type of view column`.
 
-A recreate needs `--allow-drop view`. Without it the plan writes the `DROP` as `-- skipped:` and no `CREATE`. A recreated view gets its comments and triggers again.
+A recreate needs `--allow-drop view`. Without it the plan writes the `DROP` as `-- skipped:` and no `CREATE`. A definition change carries the `WITH (...)` clause and the check option on its `CREATE`, which replace the view's options as a whole. A recreated view gets its comments and triggers again.
 
-PostgreSQL refuses to drop a relation another object reads, instead of cascading, so that plan would fail partway through `apply`. `plan` fails first and names what reads it:
+PostgreSQL refuses to drop a view another object reads, instead of cascading, so that plan would fail partway through `apply`. `plan` fails first and names what reads it:
 
 ```
 pista: error: cannot drop public.staff: materialized view public.staff_count, view public.eng_staff depend on it
@@ -561,7 +561,7 @@ COMMENT ON FUNCTION public.normalize(text) IS 'v1';
 
 A `COMMENT ON FUNCTION` written without an argument list matches when one routine has the name. When an object is dropped and created again, the plan writes its comment again. A rename, `CREATE OR REPLACE VIEW`, `CREATE OR REPLACE TRIGGER`, `ALTER POLICY`, `ALTER CONSTRAINT` and `VALIDATE CONSTRAINT` keep the comment.
 
-A comment on an object the schema file does not declare before it is ignored without a warning. That includes a comment written above its `CREATE`, a comment on an inherited column of an `INHERITS` child, a comment on the index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE` constraint owns, which belongs to the constraint, and a comment on a `NOT NULL` constraint, which PostgreSQL 18 `pg_dump` writes and pistachio does not read as a constraint.
+A comment on an object the schema file does not declare before it is ignored without a warning. That includes a comment written above its `CREATE`, a comment on an inherited column of an `INHERITS` child, a comment on the index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE` constraint owns, which is written with `COMMENT ON CONSTRAINT` instead, and a comment on a `NOT NULL` constraint, which PostgreSQL 18 `pg_dump` writes and pistachio does not read as a constraint.
 
 ## Names
 
