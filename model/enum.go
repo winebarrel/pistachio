@@ -56,10 +56,5 @@ func EnumToSQL(e *Enum) string {
 }
 
 func EnumsToSQL(enums *orderedmap.Map[string, *Enum]) string {
-	return strings.Join(
-		enums.TransformSlice(func(_ string, e *Enum) string {
-			return EnumToSQL(e)
-		}),
-		"\n\n",
-	)
+	return joinSQL(enums, EnumToSQL)
 }

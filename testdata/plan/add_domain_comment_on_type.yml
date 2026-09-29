@@ -1,0 +1,7 @@
+init: |
+  CREATE DOMAIN public.positive_int AS integer;
+desired: |
+  CREATE DOMAIN public.positive_int AS integer;
+  COMMENT ON TYPE public.positive_int IS 'A positive integer';
+plan: |
+  COMMENT ON DOMAIN public.positive_int IS 'A positive integer';

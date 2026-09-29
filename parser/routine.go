@@ -429,12 +429,7 @@ func parseCommentOnRoutine(cs *pg_query.CommentStmt, defaultSchema string, routi
 		return
 	}
 
-	if cs.Comment != "" {
-		c := cs.Comment
-		routine.Comment = &c
-	} else {
-		routine.Comment = nil
-	}
+	routine.Comment = commentPtr(cs.Comment)
 }
 
 func lookupRoutine(routines *orderedmap.Map[string, *model.Routine], schema, name string, owa *pg_query.ObjectWithArgs) *model.Routine {
