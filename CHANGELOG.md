@@ -6,6 +6,8 @@
 
 * The comment on a table, view or column is now read only from comments on relations. After OID wraparound, a comment on another kind of object that shared the OID could be read as the table's.
 
+* A policy whose role list names `PUBLIC` alongside other roles no longer plans an `ALTER POLICY` on every run. PostgreSQL keeps only `PUBLIC`, and the desired side now does too.
+
 * A `-- pista:` directive written after code on the same line, as in `CREATE TABLE a (...); -- pista:ignore`, is now an error. It used to apply to the next statement instead of the one before it, and one after a column or an enum value was silently dropped. Move the directive to its own line above its statement.
 
 * A `-- pista:` directive with no statement after it in the same file is now an error. It used to apply to the first statement of the next schema file.
