@@ -699,6 +699,26 @@ func TestDumpResult_Files_DuplicateFileNameCaseInsensitive(t *testing.T) {
 	assert.Len(t, files, 2)
 }
 
+// --omit-partition-child-index compares a partition's indexes with its
+// parent's. A parent in a schema the dump does not read has none to compare,
+// so the partition's index is written.
+func TestDump_OmitPartitionChildIndex_ParentInOtherSchema(t *testing.T) {
+	ctx := context.Background()
+	setupSchemaDB(t, ctx, "pista_parent", `
+CREATE TABLE pista_parent.logs (id integer NOT NULL, at date NOT NULL) PARTITION BY RANGE (at);
+CREATE INDEX logs_at_idx ON pista_parent.logs USING btree (at);`)
+	connStr := setupSchemaDB(t, ctx, "pista_child", `
+CREATE TABLE pista_child.logs_2025 PARTITION OF pista_parent.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');`)
+
+	client := NewClient(&Options{
+		ConnString: connStr,
+		Schemas:    []string{"pista_child"},
+	})
+	got, err := client.Dump(ctx, &DumpOptions{OmitPartitionChildIndex: true})
+	require.NoError(t, err)
+	assert.Contains(t, got.String(), "CREATE INDEX logs_2025_at_idx ON pista_child.logs_2025 USING btree (at);")
+}
+
 func TestDump(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

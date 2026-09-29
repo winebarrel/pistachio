@@ -25,7 +25,7 @@ type DumpOptions struct {
 	// Explain writes the size estimate of each table, materialized view and
 	// index into the comment above it. The JSON carries no comment to hold it.
 	Explain                 bool `xor:"json-explain" env:"PISTA_DUMP_EXPLAIN" help:"Comment each table, materialized view and index with its size estimate from pg_class."`
-	OmitPartitionChildIndex bool `xor:"partition-child" help:"Omit a partition's copy of its parent's index, which PostgreSQL creates with the parent's index."`
+	OmitPartitionChildIndex bool `xor:"partition-child" help:"Omit a partition's copy of its parent's index. PostgreSQL creates it again when the dump is loaded."`
 }
 
 type DumpResult struct {
@@ -396,21 +396,22 @@ func toFileName(schema, name string) string {
 	return fileNameReplacer.Replace(base) + ".sql"
 }
 
-// omitPartitionChildIndexes leaves out each index of a partition that is the
-// copy PostgreSQL makes of an index of its parent, for
-// --omit-partition-child-index. Loading the dump creates the copy again: a
-// partition created after the parent's index gets it with the table, and one
-// created before gets it when the parent's index is created. An index with a
-// comment is kept, since the comment would have nothing to go on.
+// omitPartitionChildIndexes leaves out each index of a partition that is a copy
+// of its parent's index, for --omit-partition-child-index. Loading the dump
+// creates the copy again, with the partition or with the parent's index,
+// whichever comes later. An index with a comment is kept, since the comment
+// needs it.
 //
-// Every partition is checked against its parent's indexes before any is left
-// out, so a partition of a partition still finds the index it copies.
+// Every partition is checked before any index is left out, so a partition of a
+// partition still finds the index it copies.
 func omitPartitionChildIndexes(tables *orderedmap.Map[string, *model.Table]) {
 	kept := map[*model.Table]*orderedmap.Map[string, *model.Index]{}
 	for _, t := range tables.All() {
-		if t.PartitionOf == nil {
+		if !t.IsPartitionChild() {
 			continue
 		}
+		// A parent in a schema the dump does not read is not seen, so the
+		// partition's indexes are written.
 		parent, ok := tables.GetOk(*t.PartitionOf)
 		if !ok {
 			continue
