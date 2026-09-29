@@ -1,0 +1,22 @@
+# An INHERITS child declares columns of its own, so their storage and
+# compression come back the way a plain table's do.
+init: |
+  CREATE TABLE public.parent (
+      id integer NOT NULL
+  );
+  CREATE TABLE public.child (body text, note text COMPRESSION pglz) INHERITS (public.parent);
+  ALTER TABLE public.child ALTER COLUMN body SET STORAGE EXTERNAL;
+dump: |
+  -- public.child
+  CREATE TABLE public.child (
+      body text,
+      note text
+  )
+  INHERITS (public.parent);
+  ALTER TABLE public.child ALTER COLUMN body SET STORAGE EXTERNAL;
+  ALTER TABLE public.child ALTER COLUMN note SET COMPRESSION pglz;
+
+  -- public.parent
+  CREATE TABLE public.parent (
+      id integer NOT NULL
+  );
