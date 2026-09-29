@@ -1,76 +1,43 @@
 # Working with multiple schemas
 
-By default, pistachio targets the `public` schema. Use `-n` or `$PISTA_SCHEMAS` to specify a different schema:
+By default every command targets the `public` schema. `-n` / `--schemas` names another, or several:
 
 ```bash
-# Dump the "myschema" schema
 pista dump -n myschema
-
-# Or use environment variable
-export PISTA_SCHEMAS=myschema
-pista dump
-
-# Plan/apply against "myschema"
-pista plan -n myschema schema.sql
-pista apply -n myschema schema.sql
+pista plan -n public,myschema schema.sql
+PISTA_SCHEMAS=myschema pista apply schema.sql
 ```
 
-You can also manage multiple schemas at once:
+Objects outside the named schemas are out of scope on both sides: they are not dumped, and not dropped.
+
+## Files without schema names
+
+A name written without a schema belongs to the first schema in `-n`. `CREATE TABLE users` under `-n myschema` is `myschema.users`, so one set of files can be applied to a schema of any name:
 
 ```bash
-pista dump -n public,myschema
+pista plan -n staging schema.sql
+pista apply -n staging schema.sql
 ```
 
-
-## Schema name mapping
-
-Use `-m` / `--schema-map` when SQL files use a different schema name than the database. This is common when SQL is written against `public` but deployed to a staging-specific schema:
+`dump --omit-schema` writes such files:
 
 ```bash
-# Dump "staging" schema but output as "public"
+pista dump -n staging --omit-schema > schema.sql
+# CREATE TABLE users (...) instead of CREATE TABLE staging.users (...)
+```
+
+## Mapping schema names
+
+`-m` / `--schema-map` reads one schema from the database under another name, for files that qualify their objects with a schema the database does not use. With `-m staging=public`, the files say `public` and the database holds `staging`:
+
+```bash
 pista dump -n staging -m staging=public
-
-# Plan/apply: SQL files use "public", but changes target "staging"
 pista plan -n staging -m staging=public schema.sql
 pista apply -n staging -m staging=public schema.sql
 ```
 
-## Schema-less SQL files
+The map reaches every place a schema name appears: a column's type and default, a partition's parent, a constraint, a domain's base type.
 
-If your SQL files omit schema names (e.g. `CREATE TABLE users` instead of `CREATE TABLE public.users`), pistachio uses the first schema from `-n` as the default:
+## Names the catalog leaves bare
 
-```bash
-# Schema-less SQL is treated as "myschema"
-pista plan -n myschema schema.sql
-pista apply -n myschema schema.sql
-```
-
-Use `--omit-schema` with dump to produce schema-less output:
-
-```bash
-pista dump --omit-schema > schema.sql
-# => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
-```
-
-
-## Omit schema
-
-Use `--omit-schema` to omit schema names from the dump output.
-
-```bash
-pista dump --omit-schema
-# => CREATE TABLE users (...) instead of CREATE TABLE public.users (...)
-
-pista dump --omit-schema --split ./schema/
-# -- Dump of schema public (2 tables, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
-# -- Wrote 2 file(s) to ./schema/
-# (writes ./schema/users.sql, ./schema/orders.sql, ...)
-```
-
-When the schema is omitted in SQL files, `plan` and `apply` use the schema specified by `-n`:
-
-```bash
-pista plan -n staging schema.sql   # schema-less SQL is treated as "staging"
-pista apply -n staging schema.sql
-```
-
+The catalog reports an object reachable through `search_path` without its schema, so under the default `--search-path=public` a `dump` writes `status` for `public.status` and `plan` compares that form. `--search-path=` qualifies everything. See the [notes on `plan`](../reference/commands/plan.md#notes).

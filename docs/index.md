@@ -24,13 +24,6 @@ schema in SQL; pistachio generates the DDL diff.
        width="800" style="max-width: 100%"
        controls autoplay muted loop playsinline></video>
 
-## Try it in your browser
-
-The [pistachio playground](https://pistachio-demo.winebarrel.workers.dev)
-runs `pista diff` on two schemas you edit in the page. No database is involved,
-so it shows the DDL without applying it. To run `plan` and `apply` against a
-real database, use the Docker image below.
-
 ## Try it with Docker
 
 A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
@@ -128,9 +121,10 @@ pista apply ./schema/*.sql         # apply it
 
 ## Where to go next
 
-- [Getting Started](getting-started.md) walks through dump, edit, plan, apply.
-- [Guides](guides/renaming.md) cover one task each: renaming, filtering,
-  drops, transactions, multiple schemas.
+- [Getting started](getting-started.md) walks through dump, edit, plan, apply.
+- Guides cover one task each: [renaming](guides/renaming.md),
+  [filtering](guides/filtering.md), [drops](guides/drops.md),
+  [transactions](guides/transactions.md), [multiple schemas](guides/multiple-schemas.md).
 - [Commands](reference/commands/index.md) has a page per command with every option.
 - [Design and scope](about/design.md) says what pistachio does not manage, and
   why.

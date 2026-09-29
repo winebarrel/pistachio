@@ -1,120 +1,80 @@
-# Getting Started with pistachio
+# Getting started
 
-This guide covers setup and basic schema management with pistachio.
+This page takes a database from its first dump to a first applied change. It needs a PostgreSQL server and pistachio; see [Installation](index.md#installation).
 
-## Prerequisites
+## Connect
 
-- PostgreSQL database (local or remote)
-- pistachio installed (see [Installation](index.md#installation) for the options)
-
-## Step 1: Connect to your database
-
-pistachio connects to PostgreSQL using a connection string. The default is `postgres://postgres@localhost/postgres`.
+Every command that reads a database takes a connection string. The default is `postgres://postgres@localhost/postgres`.
 
 ```bash
-# Use the default connection
 pista dump
-
-# Or specify a connection string
 pista dump -c 'postgres://user:pass@host:5432/mydb'
 
-# Or use an environment variable
-export PISTA_CONN_STR='postgres://user:pass@host:5432/mydb'
-pista dump
-```
-
-To keep credentials out of the connection string, pass the password separately via `--password` or `$PISTA_PASSWORD`:
-
-```bash
 export PISTA_CONN_STR='postgres://user@host:5432/mydb'
 export PISTA_PASSWORD='s3cret'
 pista dump
 ```
 
-You can also put options in a YAML file and load it with `--config`. See [Configuration](reference/configuration.md).
+Options can also come from a YAML file. See [Configuration](reference/configuration.md).
 
-```bash
-pista --config pista.yml dump
-```
+## Dump the schema
 
-## Step 2: Dump the current schema
-
-Export your existing database schema to a SQL file:
+`dump` writes the current schema as SQL. That file is the starting point: fed back to `plan`, it plans no changes.
 
 ```bash
 pista dump > schema.sql
 ```
 
-This produces a SQL file containing tables, views, enums, indexes, constraints, and comments.
+`--split` writes one file per object into a directory instead. See [`pista dump`](reference/commands/dump.md).
 
-You can also split into one file per object:
+## Edit
 
-```bash
-pista dump --split ./schema/
-```
-
-## Step 3: Make changes
-
-Edit your schema file to add, modify, or remove objects. For example, add a new column:
+Change the file the way the schema should look. A new column:
 
 ```sql
 CREATE TABLE public.users (
     id integer NOT NULL,
     name text NOT NULL,
-    email text,               -- new column
+    email text,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 ```
 
-## Step 4: Preview the diff
+## Plan
 
-Use `plan` to see the SQL pistachio would execute without applying it:
+`plan` prints the DDL that brings the database in line with the file, and runs nothing:
 
 ```bash
 pista plan schema.sql
 ```
 
-Output:
-
 ```sql
+-- Connected to postgres://postgres@localhost:5432/postgres
 -- Plan for schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
 ALTER TABLE public.users ADD COLUMN email text;
 ```
 
-## Step 5: Apply the changes
+A drop is not planned unless `--allow-drop` names its type; it is written as a `-- skipped:` comment. See [Controlling drops](guides/drops.md).
 
-Apply the changes:
+## Apply
+
+`apply` computes the same plan and runs it:
 
 ```bash
 pista apply schema.sql
 ```
 
-Output:
-
 ```sql
+-- Connected to postgres://postgres@localhost:5432/postgres
 -- Apply to schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
 ALTER TABLE public.users ADD COLUMN email text;
 -- Apply finished in 12ms
 ```
 
-The `-- Apply finished in ...` comment shows the apply phase duration (SQL
-execution plus output writing). It is printed only when changes are applied,
-not when there are no changes.
+A second `plan` now prints `-- No changes`. From here on, edit the file, plan, apply. Keep the file in version control next to the application.
 
-Verify by running plan again:
+## Next
 
-```bash
-pista plan schema.sql
-# => -- Plan for schema public (1 table, 0 views, 0 enums, 0 domains, 0 composite types, 0 sequences)
-# => -- No changes
-```
-
-## Step 6: Iterate
-
-Repeat steps 3-5 as the schema changes. The schema file holds the authoritative definition.
-
-## Tips
-
-- Unnamed constraints are auto-named following PostgreSQL's convention, but pistachio does not emulate PostgreSQL's identifier truncation (63 bytes) or collision suffixing, so generated names may differ. Use explicit `CONSTRAINT <name>` clauses to avoid ambiguity.
-- Run `pista plan` before `pista apply` to review changes.
-- Keep schema files in version control alongside application code.
+- [`pista plan`](reference/commands/plan.md) and [`pista apply`](reference/commands/apply.md) list every option.
+- [Transactions and locks](guides/transactions.md) covers `--with-tx` and index builds that do not block writes.
+- [Supported objects](reference/objects.md) says what pistachio reads and what each change becomes.
