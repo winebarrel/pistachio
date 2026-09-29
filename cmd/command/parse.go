@@ -17,10 +17,15 @@ type Parse struct {
 
 // AfterApply trims each schema name the way the global option does.
 func (cmd *Parse) AfterApply() error {
-	for i, s := range cmd.Schemas {
-		cmd.Schemas[i] = strings.TrimSpace(s)
-	}
+	trimSchemas(cmd.Schemas)
 	return nil
+}
+
+// trimSchemas trims each schema name in place.
+func trimSchemas(schemas []string) {
+	for i, s := range schemas {
+		schemas[i] = strings.TrimSpace(s)
+	}
 }
 
 func (cmd *Parse) Run(w io.Writer) error {

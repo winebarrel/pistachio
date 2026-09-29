@@ -130,24 +130,14 @@ func matchPattern(pattern, name string) (bool, error) {
 }
 
 func (f *FilterOptions) MatchName(name string) bool {
-	if len(f.Include) > 0 {
-		matched := false
-		for _, pattern := range f.Include {
-			if ok, _ := matchPattern(pattern, name); ok {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
+	match := func(pattern string) bool {
+		ok, _ := matchPattern(pattern, name)
+		return ok
 	}
-	for _, pattern := range f.Exclude {
-		if ok, _ := matchPattern(pattern, name); ok {
-			return false
-		}
+	if len(f.Include) > 0 && !slices.ContainsFunc(f.Include, match) {
+		return false
 	}
-	return true
+	return !slices.ContainsFunc(f.Exclude, match)
 }
 
 func (f *FilterOptions) AfterApply() error {

@@ -273,26 +273,26 @@ func (r *DumpResult) formatSchemaSQL(
 	views *orderedmap.Map[string, *model.View],
 ) string {
 	var parts []string
-	if enums != nil && enums.Len() > 0 {
+	if enums.Len() > 0 {
 		parts = append(parts, model.EnumsToSQL(enums))
 	}
-	if domains != nil && domains.Len() > 0 {
+	if domains.Len() > 0 {
 		parts = append(parts, model.DomainsToSQL(domains))
 	}
-	if compositeTypes != nil && compositeTypes.Len() > 0 {
+	if compositeTypes.Len() > 0 {
 		parts = append(parts, model.CompositeTypesToSQL(compositeTypes))
 	}
-	if sequences != nil && sequences.Len() > 0 {
+	if sequences.Len() > 0 {
 		parts = append(parts, model.SequencesToSQL(sequences))
 	}
 	plain, atomic := splitAtomicRoutines(routines)
 	if plain.Len() > 0 {
 		parts = append(parts, model.RoutinesToSQL(plain))
 	}
-	if tables != nil && tables.Len() > 0 {
+	if tables.Len() > 0 {
 		parts = append(parts, model.TablesToSQL(tables))
 	}
-	if views != nil && views.Len() > 0 {
+	if views.Len() > 0 {
 		parts = append(parts, model.ViewsToSQL(views))
 	}
 	if atomic.Len() > 0 {
@@ -343,42 +343,33 @@ func (r *DumpResult) formatSQL(sql string) string {
 func (r *DumpResult) Files() map[string]string {
 	files := make(map[string]string)
 	seen := make(map[string]bool)
-	for _, e := range r.enums().CollectValues() {
-		name := uniqueFileName(seen, toFileName(e.Schema, e.Name))
-		files[name] = r.formatSQL(model.EnumToSQL(e) + "\n")
+	add := func(schema, objName, sql string) {
+		name := uniqueFileName(seen, toFileName(schema, objName))
+		files[name] = r.formatSQL(sql + "\n")
 		seen[strings.ToLower(name)] = true
+	}
+	for _, e := range r.enums().CollectValues() {
+		add(e.Schema, e.Name, model.EnumToSQL(e))
 	}
 	for _, d := range r.domains().CollectValues() {
-		name := uniqueFileName(seen, toFileName(d.Schema, d.Name))
-		files[name] = r.formatSQL(model.DomainToSQL(d) + "\n")
-		seen[strings.ToLower(name)] = true
+		add(d.Schema, d.Name, model.DomainToSQL(d))
 	}
 	for _, ct := range r.compositeTypes().CollectValues() {
-		name := uniqueFileName(seen, toFileName(ct.Schema, ct.Name))
-		files[name] = r.formatSQL(model.CompositeTypeToSQL(ct) + "\n")
-		seen[strings.ToLower(name)] = true
+		add(ct.Schema, ct.Name, model.CompositeTypeToSQL(ct))
 	}
 	for _, s := range r.sequences().CollectValues() {
-		name := uniqueFileName(seen, toFileName(s.Schema, s.Name))
-		files[name] = r.formatSQL(model.SequenceToSQL(s) + "\n")
-		seen[strings.ToLower(name)] = true
+		add(s.Schema, s.Name, model.SequenceToSQL(s))
 	}
 	for _, rt := range r.routines().CollectValues() {
 		// Overloads share a schema-qualified name, so uniqueFileName gives
 		// the second one a _2 suffix, the same as any other collision.
-		name := uniqueFileName(seen, toFileName(rt.Schema, rt.Name))
-		files[name] = r.formatSQL(model.RoutineToSQL(rt) + "\n")
-		seen[strings.ToLower(name)] = true
+		add(rt.Schema, rt.Name, model.RoutineToSQL(rt))
 	}
 	for _, t := range r.tables().CollectValues() {
-		name := uniqueFileName(seen, toFileName(t.Schema, t.Name))
-		files[name] = r.formatSQL(model.TableToSQL(t) + "\n")
-		seen[strings.ToLower(name)] = true
+		add(t.Schema, t.Name, model.TableToSQL(t))
 	}
 	for _, v := range r.views().CollectValues() {
-		name := uniqueFileName(seen, toFileName(v.Schema, v.Name))
-		files[name] = r.formatSQL(model.ViewToSQL(v) + "\n")
-		seen[strings.ToLower(name)] = true
+		add(v.Schema, v.Name, model.ViewToSQL(v))
 	}
 	return files
 }

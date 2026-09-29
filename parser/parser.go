@@ -1830,20 +1830,10 @@ func parseCommentOnDomain(cs *pg_query.CommentStmt, defaultSchema string, domain
 	if len(names) == 0 {
 		return
 	}
-	schema := defaultSchema
-	domainName := names[0]
-	if len(names) >= 2 {
-		schema = names[0]
-		domainName = names[1]
-	}
+	schema, domainName := schemaName(names, defaultSchema)
 	fqdn := model.Ident(schema, domainName)
 	if d, ok := domains.GetOk(fqdn); ok {
-		if cs.Comment != "" {
-			c := cs.Comment
-			d.Comment = &c
-		} else {
-			d.Comment = nil
-		}
+		d.Comment = commentPtr(cs.Comment)
 	}
 }
 
@@ -2136,9 +2126,11 @@ func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
 }
 
 func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View], enums *orderedmap.Map[string, *model.Enum], domains *orderedmap.Map[string, *model.Domain], compositeTypes *orderedmap.Map[string, *model.CompositeType], sequences *orderedmap.Map[string, *model.Sequence], routines *orderedmap.Map[string, *model.Routine]) {
-	// COMMENT ON TYPE/DOMAIN uses TypeName, not a list
+	// COMMENT ON TYPE/DOMAIN uses TypeName, not a list. COMMENT ON TYPE also
+	// names a domain.
 	if cs.Objtype == pg_query.ObjectType_OBJECT_TYPE {
 		parseCommentOnType(cs, defaultSchema, enums, compositeTypes)
+		parseCommentOnDomain(cs, defaultSchema, domains)
 		return
 	}
 	if cs.Objtype == pg_query.ObjectType_OBJECT_DOMAIN {
@@ -2165,36 +2157,16 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 
 	switch cs.Objtype {
 	case pg_query.ObjectType_OBJECT_TABLE:
-		schema := defaultSchema
-		tableName := names[0]
-		if len(names) >= 2 {
-			schema = names[0]
-			tableName = names[1]
-		}
+		schema, tableName := schemaName(names, defaultSchema)
 		fqtn := model.Ident(schema, tableName)
 		if t, ok := tables.GetOk(fqtn); ok {
-			if cs.Comment != "" {
-				c := cs.Comment
-				t.Comment = &c
-			} else {
-				t.Comment = nil
-			}
+			t.Comment = commentPtr(cs.Comment)
 		}
 	case pg_query.ObjectType_OBJECT_VIEW, pg_query.ObjectType_OBJECT_MATVIEW:
-		schema := defaultSchema
-		viewName := names[0]
-		if len(names) >= 2 {
-			schema = names[0]
-			viewName = names[1]
-		}
+		schema, viewName := schemaName(names, defaultSchema)
 		fqvn := model.Ident(schema, viewName)
 		if v, ok := views.GetOk(fqvn); ok {
-			if cs.Comment != "" {
-				c := cs.Comment
-				v.Comment = &c
-			} else {
-				v.Comment = nil
-			}
+			v.Comment = commentPtr(cs.Comment)
 		}
 	case pg_query.ObjectType_OBJECT_COLUMN:
 		if len(names) < 2 {
@@ -2209,11 +2181,7 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 			colName = names[2]
 		}
 		fqtn := model.Ident(schema, tableName)
-		var comment *string
-		if cs.Comment != "" {
-			c := cs.Comment
-			comment = &c
-		}
+		comment := commentPtr(cs.Comment)
 		if t, ok := tables.GetOk(fqtn); ok {
 			if col, ok := t.Columns.GetOk(colName); ok {
 				col.Comment = comment
@@ -2252,40 +2220,41 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 			}
 		}
 	case pg_query.ObjectType_OBJECT_INDEX:
-		schema := defaultSchema
-		idxName := names[0]
-		if len(names) >= 2 {
-			schema = names[0]
-			idxName = names[1]
-		}
+		schema, idxName := schemaName(names, defaultSchema)
 		// COMMENT ON INDEX names the index alone, so the relation it sits on
 		// is found by scanning. An index name is unique within its schema, and
 		// the index a constraint owns is not in the model on either side.
 		if idx := findIndex(tables, views, schema, idxName); idx != nil {
-			if cs.Comment != "" {
-				c := cs.Comment
-				idx.Comment = &c
-			} else {
-				idx.Comment = nil
-			}
+			idx.Comment = commentPtr(cs.Comment)
 		}
 	case pg_query.ObjectType_OBJECT_SEQUENCE:
-		schema := defaultSchema
-		seqName := names[0]
-		if len(names) >= 2 {
-			schema = names[0]
-			seqName = names[1]
-		}
+		schema, seqName := schemaName(names, defaultSchema)
 		fqn := model.Ident(schema, seqName)
 		if seq, ok := sequences.GetOk(fqn); ok {
-			if cs.Comment != "" {
-				c := cs.Comment
-				seq.Comment = &c
-			} else {
-				seq.Comment = nil
-			}
+			seq.Comment = commentPtr(cs.Comment)
 		}
 	}
+}
+
+// commentPtr returns a pointer to a copy of the COMMENT ON text, or nil for an
+// empty string, which removes the comment.
+func commentPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// schemaName splits a one- or two-part object name into its schema and name,
+// taking def as the schema when the name is unqualified.
+func schemaName(names []string, def string) (schema, name string) {
+	schema = def
+	name = names[0]
+	if len(names) >= 2 {
+		schema = names[0]
+		name = names[1]
+	}
+	return schema, name
 }
 
 // findIndex returns the index of the given schema and name from the tables and
@@ -2319,20 +2288,11 @@ func parseCommentOnType(cs *pg_query.CommentStmt, defaultSchema string, enums *o
 	if len(names) == 0 {
 		return
 	}
-	schema := defaultSchema
-	typeName := names[0]
-	if len(names) >= 2 {
-		schema = names[0]
-		typeName = names[1]
-	}
+	schema, typeName := schemaName(names, defaultSchema)
 	// COMMENT ON TYPE names both enums and composite types; set on whichever
 	// this file defines.
 	fqn := model.Ident(schema, typeName)
-	var comment *string
-	if cs.Comment != "" {
-		c := cs.Comment
-		comment = &c
-	}
+	comment := commentPtr(cs.Comment)
 	if e, ok := enums.GetOk(fqn); ok {
 		e.Comment = comment
 	}

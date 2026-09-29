@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
@@ -52,16 +53,9 @@ func DiffCompositeTypes(current, desired *orderedmap.Map[string, *model.Composit
 
 	// Dropped composite types. When the composite-type-drop policy disallows it,
 	// emit a commented DROP.
-	ctAllowed := dc.IsDropAllowed("composite_type")
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			if ctAllowed {
-				result.DropStmts = append(result.DropStmts, "DROP TYPE "+k+";")
-			} else {
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP TYPE "+k+";")
-			}
-		}
-	}
+	drops, skipped := dropMissing(current, desired, "TYPE", dc.IsDropAllowed("composite_type"))
+	result.DropStmts = append(result.DropStmts, drops...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, skipped...)
 
 	return result, nil
 }
@@ -78,12 +72,7 @@ func cloneCompositeAttributes(attrs []*model.CompositeAttribute) []*model.Compos
 }
 
 func indexCompositeAttribute(attrs []*model.CompositeAttribute, name string) int {
-	for i, a := range attrs {
-		if a.Name == name {
-			return i
-		}
-	}
-	return -1
+	return slices.IndexFunc(attrs, func(a *model.CompositeAttribute) bool { return a.Name == name })
 }
 
 // diffCompositeType returns the ALTER statements to converge a composite type,
@@ -156,11 +145,7 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 
 	// Type comment change.
 	if !equalPtr(current.Comment, desired.Comment) {
-		if desired.Comment != nil {
-			stmts = append(stmts, "COMMENT ON TYPE "+fqcn+" IS "+model.QuoteLiteral(*desired.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON TYPE "+fqcn+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("TYPE "+fqcn, desired.Comment))
 	}
 
 	// Attribute comment changes. The current comment is read from the working
@@ -175,11 +160,7 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 			continue
 		}
 		col := model.Ident(desired.Schema, desired.Name, da.Name)
-		if da.Comment != nil {
-			stmts = append(stmts, "COMMENT ON COLUMN "+col+" IS "+model.QuoteLiteral(*da.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON COLUMN "+col+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("COLUMN "+col, da.Comment))
 	}
 
 	return stmts, disallowed, nil
@@ -189,7 +170,7 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 // match a current composite type.
 func detectCompositeTypeRenames(current, desired *orderedmap.Map[string, *model.CompositeType]) ([]string, *orderedmap.Map[string, *model.CompositeType], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newKey, desiredCT := range desired.All() {
 		if desiredCT.RenameFrom == nil {
