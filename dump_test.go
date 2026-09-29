@@ -748,6 +748,7 @@ func TestDump(t *testing.T) {
 			plan, err := client.Plan(ctx, &PlanOptions{Files: []string{desired}})
 			require.NoError(t, err)
 			assert.Empty(t, plan.SQL, "the dump does not plan clean")
+			assert.Empty(t, plan.DisallowedDrops, "the dump does not plan clean")
 		})
 	}
 }
