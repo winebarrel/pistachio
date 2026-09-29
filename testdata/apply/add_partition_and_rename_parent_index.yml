@@ -1,0 +1,34 @@
+# Renaming the parent's index keeps it, so a new partition still gets the copy
+# and its CREATE INDEX is left out.
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX logs_old_idx ON public.logs USING btree (at);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  -- pista:renamed-from logs_old_idx
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at);
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  -- public.logs_2026
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at);
+applied_sql: |
+  ALTER INDEX public.logs_old_idx RENAME TO logs_at_idx;
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');

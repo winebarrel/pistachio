@@ -1,0 +1,37 @@
+# An INHERITS child gets no copy of its parent's index, so its index is
+# created even under the name a partition's copy would take.
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  );
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  );
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  CREATE TABLE public.logs_old (
+  )
+  INHERITS (public.logs);
+  CREATE INDEX logs_old_at_idx ON public.logs_old USING btree (at);
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  );
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  -- public.logs_old
+  CREATE TABLE public.logs_old (
+  )
+  INHERITS (public.logs);
+  CREATE INDEX logs_old_at_idx ON public.logs_old USING btree (at);
+applied_sql: |
+  CREATE TABLE public.logs_old (
+  )
+  INHERITS (public.logs);
+  CREATE INDEX logs_old_at_idx ON public.logs_old USING btree (at);

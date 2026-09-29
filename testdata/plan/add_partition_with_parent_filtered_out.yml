@@ -1,0 +1,20 @@
+# The filter leaves out the parent, so nothing says it has an index for a new
+# partition to copy, and the partition's index is created as written.
+include: [events_1]
+init: |
+  CREATE TABLE public.events (
+      name text,
+      k integer
+  )
+  PARTITION BY RANGE (k);
+desired: |
+  CREATE TABLE public.events (
+      name text,
+      k integer
+  )
+  PARTITION BY RANGE (k);
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (10) TO (20);
+  CREATE INDEX events_1_name_idx ON public.events_1 USING btree (name);
+plan: |
+  CREATE TABLE public.events_1 PARTITION OF public.events FOR VALUES FROM (10) TO (20);
+  CREATE INDEX events_1_name_idx ON public.events_1 USING btree (name);

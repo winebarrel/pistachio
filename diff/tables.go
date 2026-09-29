@@ -252,18 +252,20 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 }
 
 // parentIndexCopies returns the indexes of the new table t that PostgreSQL
-// creates itself when t is created as a partition. CREATE TABLE ... PARTITION
-// OF copies every index the parent has at that point, so a CREATE INDEX for
-// the copy fails with "already exists". An index of t is such a copy when it
-// carries the name PostgreSQL gives the copy and its parent has the same index
-// before the plan runs: a parent that exists with the index unchanged, or a
-// new parent that gets the index as a copy of its own.
+// creates with t. CREATE TABLE ... PARTITION OF copies every index the parent
+// has, so a CREATE INDEX for the copy fails with "already exists". An index of
+// t is a copy when it has the name PostgreSQL gives the copy and the parent
+// has the same index before the plan runs: the parent exists and the index is
+// unchanged or only renamed, or the parent is new and gets the index as a copy
+// itself.
 //
 // An index the parent gains in this plan is not copied. The partition's index
 // is created first and the parent's index attaches it; see
-// PartitionedIndexStmts.
+// PartitionedIndexStmts. A parent a filter leaves out is not seen, so the
+// partition's indexes are created as written.
 func parentIndexCopies(current, desired *orderedmap.Map[string, *model.Table], t *model.Table) map[string]bool {
-	if t.PartitionOf == nil {
+	// An INHERITS child gets no copy.
+	if !t.IsPartitionChild() {
 		return nil
 	}
 	parent, ok := desired.GetOk(*t.PartitionOf)
@@ -271,8 +273,16 @@ func parentIndexCopies(current, desired *orderedmap.Map[string, *model.Table], t
 		return nil
 	}
 	currentParent, parentExists := current.GetOk(*t.PartitionOf)
+	var currentIndexes *orderedmap.Map[string, *model.Index]
 	var parentCopies map[string]bool
-	if !parentExists {
+	if parentExists {
+		// A renamed index is still there when the partition is created. A
+		// rename that cannot be planned fails the parent's own diff.
+		var err error
+		if _, currentIndexes, err = detectIndexRenames(currentParent.Indexes, parent.Indexes); err != nil {
+			return nil
+		}
+	} else {
 		parentCopies = parentIndexCopies(current, desired, parent)
 	}
 	columns := indexColumns(desired, t, t)
@@ -281,7 +291,7 @@ func parentIndexCopies(current, desired *orderedmap.Map[string, *model.Table], t
 	for _, idx := range t.Indexes.All() {
 		for parentName, parentIdx := range parent.Indexes.All() {
 			if parentExists {
-				currentIdx, ok := currentParent.Indexes.GetOk(parentName)
+				currentIdx, ok := currentIndexes.GetOk(parentName)
 				if !ok || !equalIndexDef(currentIdx.Definition, parentIdx.Definition, columns) {
 					continue
 				}
@@ -300,35 +310,22 @@ func parentIndexCopies(current, desired *orderedmap.Map[string, *model.Table], t
 // isPartitionIndexCopy reports whether idx, an index of a partition, is the
 // copy PostgreSQL makes of parentIdx, an index of its parent: it carries the
 // name PostgreSQL gives the copy, and it indexes what parentIdx does, the
-// storage parameters included. columns are the ones the definition of idx is
-// compared against; see equalIndexDef.
+// storage parameters included. The two are compared with the index name and
+// the table of idx replaced by those of parentIdx. columns are the ones the
+// definition of idx is compared against; see equalIndexDef.
 func isPartitionIndexCopy(idx, parentIdx *model.Index, columns *orderedmap.Map[string, *model.Column]) bool {
-	_, is, err := parseIndexDef(idx.Definition)
+	result, is, err := parseIndexDef(idx.Definition)
 	if err != nil || idx.Name != parser.AutoNameIndex(is) {
 		return false
 	}
-	return equalIndexDef(parentIdx.Definition, onTable(idx.Definition, parentIdx.Definition), columns)
-}
-
-// onTable returns the index definition def with the index name and the table
-// taken from other, so two indexes on different tables compare by what they
-// index alone. A definition that does not parse is returned as it is.
-func onTable(def, other string) string {
-	result, is, err := parseIndexDef(def)
+	_, parentIS, err := parseIndexDef(parentIdx.Definition)
 	if err != nil {
-		return def
+		return false
 	}
-	_, otherIS, err := parseIndexDef(other)
-	if err != nil {
-		return def
-	}
-	is.Idxname = otherIS.Idxname
-	is.Relation = otherIS.Relation
-	out, err := pg_query.Deparse(result)
-	if err != nil {
-		return def
-	}
-	return out
+	is.Idxname = parentIS.Idxname
+	is.Relation = parentIS.Relation
+	def, err := pg_query.Deparse(result)
+	return err == nil && equalIndexDef(parentIdx.Definition, def, columns)
 }
 
 // newTableExtras returns non-FK extras and FK statements separately. For a
