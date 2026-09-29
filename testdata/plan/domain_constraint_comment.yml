@@ -1,0 +1,20 @@
+init: |
+  CREATE DOMAIN public.email AS text
+      CONSTRAINT email_at CHECK (VALUE ~ '@')
+      CONSTRAINT email_len CHECK (length(VALUE) < 100);
+  COMMENT ON CONSTRAINT email_len ON DOMAIN public.email IS 'short';
+desired: |
+  CREATE DOMAIN public.email AS text
+      CONSTRAINT email_at CHECK (VALUE ~ '@')
+      CONSTRAINT email_len CHECK (length(VALUE) < 200)
+      CONSTRAINT email_dot CHECK (VALUE ~ '\.');
+  COMMENT ON CONSTRAINT email_at ON DOMAIN email IS 'has an at sign';
+  COMMENT ON CONSTRAINT email_len ON DOMAIN public.email IS 'short';
+  COMMENT ON CONSTRAINT email_dot ON DOMAIN public.email IS 'has a dot';
+plan: |
+  ALTER DOMAIN public.email DROP CONSTRAINT email_len;
+  ALTER DOMAIN public.email ADD CONSTRAINT email_len CHECK (length(value) < 200);
+  ALTER DOMAIN public.email ADD CONSTRAINT email_dot CHECK (value ~ E'\\.');
+  COMMENT ON CONSTRAINT email_at ON DOMAIN public.email IS 'has an at sign';
+  COMMENT ON CONSTRAINT email_len ON DOMAIN public.email IS 'short';
+  COMMENT ON CONSTRAINT email_dot ON DOMAIN public.email IS 'has a dot';

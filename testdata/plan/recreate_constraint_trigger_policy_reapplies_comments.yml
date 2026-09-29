@@ -1,0 +1,60 @@
+# DROP and ADD lose the comment, so a constraint, a foreign key, a constraint
+# trigger or a policy that is recreated takes its comment again even when the
+# comment itself did not change.
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id),
+      CONSTRAINT posts_id_check CHECK (id > 0)
+  );
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+  CREATE POLICY posts_select ON public.posts FOR SELECT USING (true);
+  CREATE TRIGGER posts_stamp BEFORE INSERT ON public.posts FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER posts_touch BEFORE UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  COMMENT ON CONSTRAINT posts_id_check ON public.posts IS 'positive';
+  COMMENT ON CONSTRAINT posts_user_id_fkey ON public.posts IS 'author';
+  COMMENT ON POLICY posts_select ON public.posts IS 'everyone reads';
+  COMMENT ON TRIGGER posts_stamp ON public.posts IS 'stamps';
+  COMMENT ON TRIGGER posts_touch ON public.posts IS 'touches';
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id),
+      CONSTRAINT posts_id_check CHECK (id > 1)
+  );
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  CREATE POLICY posts_select ON public.posts FOR UPDATE USING (true);
+  CREATE TRIGGER posts_stamp BEFORE UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  CREATE CONSTRAINT TRIGGER posts_touch AFTER UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  COMMENT ON CONSTRAINT posts_id_check ON public.posts IS 'positive';
+  COMMENT ON CONSTRAINT posts_user_id_fkey ON public.posts IS 'author';
+  COMMENT ON POLICY posts_select ON public.posts IS 'everyone reads';
+  COMMENT ON TRIGGER posts_stamp ON public.posts IS 'stamps';
+  COMMENT ON TRIGGER posts_touch ON public.posts IS 'touches';
+drop_policy:
+  allow_drop: [trigger]
+plan: |
+  ALTER TABLE public.posts DROP CONSTRAINT posts_user_id_fkey;
+  ALTER TABLE public.posts DROP CONSTRAINT posts_id_check;
+  ALTER TABLE public.posts ADD CONSTRAINT posts_id_check CHECK (id > 1);
+  DROP POLICY posts_select ON public.posts;
+  CREATE POLICY posts_select ON public.posts FOR UPDATE USING (true);
+  COMMENT ON POLICY posts_select ON public.posts IS 'everyone reads';
+  DROP TRIGGER posts_touch ON public.posts;
+  CREATE OR REPLACE TRIGGER posts_stamp BEFORE UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  CREATE CONSTRAINT TRIGGER posts_touch AFTER UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  COMMENT ON TRIGGER posts_touch ON public.posts IS 'touches';
+  COMMENT ON CONSTRAINT posts_id_check ON public.posts IS 'positive';
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (id) ON DELETE CASCADE;
+  COMMENT ON CONSTRAINT posts_user_id_fkey ON public.posts IS 'author';

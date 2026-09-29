@@ -33,6 +33,7 @@ func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc Dro
 			if commentSQL := desiredDomain.CommentSQL(); commentSQL != "" {
 				result.Stmts = append(result.Stmts, commentSQL)
 			}
+			result.Stmts = append(result.Stmts, desiredDomain.ConstraintCommentSQL()...)
 		}
 	}
 
@@ -136,10 +137,16 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 		}
 	}
 
-	// Add new or changed constraints, or validate a NOT VALID one.
+	// Add new or changed constraints, or validate a NOT VALID one. A
+	// constraint added here has no comment yet, so its current comment is
+	// nil for the comparison below.
+	currentComments := map[string]*string{}
 	for _, c := range desired {
 		if cur, ok := currentByName[c.Name]; ok {
 			ch := change(cur, c)
+			if !ch.changed || ch.validateOnly {
+				currentComments[c.Name] = cur.Comment
+			}
 			if !ch.changed {
 				continue
 			}
@@ -153,6 +160,12 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 			sql += " NOT VALID"
 		}
 		stmts = append(stmts, sql+";")
+	}
+
+	for _, c := range desired {
+		if !equalPtr(currentComments[c.Name], c.Comment) {
+			stmts = append(stmts, commentOnSQL("CONSTRAINT "+model.Ident(c.Name)+" ON DOMAIN "+fqdn, c.Comment))
+		}
 	}
 
 	return stmts

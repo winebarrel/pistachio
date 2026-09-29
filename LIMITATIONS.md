@@ -938,28 +938,6 @@ Workaround: write the rule as `CREATE OR REPLACE RULE` under
 
 Origin: pg_dump fidelity comparison of the sample databases, 2026-09-23.
 
-## A comment on a constraint, a trigger or a policy is not managed
-
-Priority: low.
-
-Comments are managed for tables, columns, views, materialized views, indexes,
-sequences, enums, composite types, domains and routines. `model.Constraint`,
-`model.Trigger` and `model.Policy` have no `Comment` field and no case in
-`parseCommentStmt`, so a `COMMENT ON CONSTRAINT`, `COMMENT ON TRIGGER` or
-`COMMENT ON POLICY` in the desired schema warns and is dropped. `pista dump`
-writes none either, so a dump feeds back clean. `pg_dump` does write them, and
-those lines are lost.
-
-The work is the same shape the index comment took: a `Comment` field on the
-model, a `pg_description` join in the catalog read, a case in the parser, and
-emission from the diff and the create path, since an object that is dropped
-and recreated loses its comment. Each of the three names its relation, so the
-parser finds the owner without scanning. The index a `PRIMARY KEY`, `UNIQUE` or
-`EXCLUDE` constraint owns carries its comment as the constraint's, which is why
-a `COMMENT ON INDEX` naming one is dropped today.
-
-Origin: discussion, 2026-08-25. Narrowed once index comments shipped.
-
 ## An identity column's sequence name is not managed
 
 Priority: low.

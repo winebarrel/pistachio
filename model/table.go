@@ -381,8 +381,17 @@ func (t Table) StorageSQL() []string {
 	return stmts
 }
 
+// CommentSQL renders every comment the table and the objects on it carry, in
+// the order dump writes the objects.
 func (t Table) CommentSQL() []string {
-	return append(t.RelationCommentSQL(), t.IndexCommentSQL()...)
+	return slices.Concat(
+		t.RelationCommentSQL(),
+		t.ConstraintCommentSQL(),
+		t.IndexCommentSQL(),
+		t.FkCommentSQL(),
+		t.PolicyCommentSQL(),
+		t.TrigCommentSQL(),
+	)
 }
 
 // RelationCommentSQL renders the comments on the table and its columns.
@@ -405,6 +414,66 @@ func (t Table) IndexCommentSQL() []string {
 	for _, idx := range t.Indexes.CollectValues() {
 		if s := idx.CommentSQL(); s != "" {
 			stmts = append(stmts, s)
+		}
+	}
+	return stmts
+}
+
+// ConstraintCommentSQL renders the comments on the table's constraints other
+// than its foreign keys. A partition child renders nothing, the way
+// NotValidConSQL does: its constraints are the clones the parent creates.
+func (t Table) ConstraintCommentSQL() []string {
+	if t.IsPartitionChild() {
+		return nil
+	}
+	var stmts []string
+	for _, con := range t.Constraints.CollectValues() {
+		if con.Inherited {
+			continue
+		}
+		if s := con.CommentSQL(t.FQTN()); s != "" {
+			stmts = append(stmts, s)
+		}
+	}
+	return stmts
+}
+
+// FkCommentSQL renders the comments on the table's foreign keys, leaving out a
+// partition's copy of its parent's key the way FkSQL does.
+func (t Table) FkCommentSQL() []string {
+	var stmts []string
+	for _, fk := range t.ForeignKeys.CollectValues() {
+		if fk.Inherited {
+			continue
+		}
+		if s := fk.CommentSQL(t.FQTN()); s != "" {
+			stmts = append(stmts, s)
+		}
+	}
+	return stmts
+}
+
+// PolicyCommentSQL renders the comments on the table's policies.
+func (t Table) PolicyCommentSQL() []string {
+	var stmts []string
+	if t.Policies != nil {
+		for _, p := range t.Policies.CollectValues() {
+			if s := p.CommentSQL(); s != "" {
+				stmts = append(stmts, s)
+			}
+		}
+	}
+	return stmts
+}
+
+// TrigCommentSQL renders the comments on the table's triggers.
+func (t Table) TrigCommentSQL() []string {
+	var stmts []string
+	if t.Triggers != nil {
+		for _, trg := range t.Triggers.CollectValues() {
+			if s := trg.CommentSQL(); s != "" {
+				stmts = append(stmts, s)
+			}
 		}
 	}
 	return stmts

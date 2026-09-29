@@ -123,6 +123,18 @@ func diffPolicies(
 		}
 	}
 
+	// ALTER POLICY keeps the comment. A policy created or recreated above has
+	// none.
+	for name, des := range desired.All() {
+		var currentComment *string
+		if cur, ok := current.GetOk(name); ok && !needsRecreate(cur, des) {
+			currentComment = cur.Comment
+		}
+		if !equalPtr(currentComment, des.Comment) {
+			stmts = append(stmts, commentOnSQL("POLICY "+model.Ident(name)+" ON "+fqtn, des.Comment))
+		}
+	}
+
 	return stmts, disallowed, nil
 }
 

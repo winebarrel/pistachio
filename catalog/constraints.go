@@ -60,7 +60,8 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 			-- parameters are not part of the key, so the CASE keeps both out.
 			CASE WHEN con.contype = ANY ('{p,u}'::"char"[]) THEN ci.reloptions END AS index_options,
 			rn.nspname AS ref_schema,
-			rc.relname AS ref_table
+			rc.relname AS ref_table,
+			descr.description AS comment
 		FROM
 			-- https://www.postgresql.org/docs/current/catalog-pg-constraint.html
 			pg_catalog.pg_constraint con
@@ -68,6 +69,10 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 			LEFT JOIN pg_catalog.pg_namespace rn ON rn.oid = rc.relnamespace
 			LEFT JOIN pg_catalog.pg_class ci ON ci.oid = con.conindid
 			LEFT JOIN column_t col ON col.con_oid = con.oid
+			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
+			LEFT JOIN pg_catalog.pg_description descr ON descr.objoid = con.oid
+			AND descr.classoid = 'pg_constraint'::regclass
+			AND descr.objsubid = 0
 		WHERE
 			con.conrelid = ANY(@table_oids::oid[])
 			-- The table-level constraint types, listed the way the ORDER BY
@@ -130,6 +135,7 @@ func (c *Catalog) ListConstraintsByTables(ctx context.Context, tables []*model.T
 			&indexOptions,
 			&refSchema,
 			&refTable,
+			&con.Comment,
 		)
 		if err != nil {
 			return nil, nil, fmt.Errorf("catalog: failed to scan constraint info: %w", err)

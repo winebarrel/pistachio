@@ -8,6 +8,12 @@
 
 * `COMMENT ON TYPE` on a domain is now read. Before, it was ignored and every plan dropped the comment with `COMMENT ON DOMAIN ... IS NULL`.
 
+* Comments on constraints, foreign keys, triggers, policies and domain constraints are now managed. `COMMENT ON CONSTRAINT`, `COMMENT ON TRIGGER` and `COMMENT ON POLICY` in a schema file were ignored with a warning, and `dump` did not write them. A change goes out as `COMMENT ON ... IS ...` or `IS NULL`, and an object that is dropped and added back gets its comment again.
+
+* The plan file version is now 5. Run `plan --out` again for a plan file an older pista wrote.
+
+* The JSON Schema is now `schema-1.2.json`. It adds `comment` to a constraint, a foreign key, a trigger, a policy and a domain constraint.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.

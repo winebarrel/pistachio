@@ -87,6 +87,12 @@ func TestExtractObjectName(t *testing.T) {
 		{"CREATE POLICY p ON public.users FOR SELECT USING (true);", "public.users"},
 		{"ALTER POLICY p ON public.users USING (false);", "public.users"},
 		{"DROP POLICY p ON public.users;", "public.users"},
+		// So does the comment on one, or on a table constraint, and the
+		// comment on a domain constraint belongs to the domain.
+		{"COMMENT ON TRIGGER trg ON public.users IS 'x';", "public.users"},
+		{"COMMENT ON POLICY p ON public.users IS 'x';", "public.users"},
+		{"COMMENT ON CONSTRAINT c ON public.users IS 'x';", "public.users"},
+		{"COMMENT ON CONSTRAINT c ON DOMAIN public.pos_int IS 'x';", "public.pos_int"},
 		// A routine is keyed by its name alone, without the argument list.
 		{"CREATE OR REPLACE FUNCTION public.f(a integer) RETURNS integer AS $$ SELECT 1 $$ LANGUAGE sql;", "routine:public.f"},
 		{"DROP FUNCTION public.f(integer);", "routine:public.f"},

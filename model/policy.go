@@ -45,6 +45,7 @@ type Policy struct {
 	Roles      []string      `json:"roles"`
 	Using      *string       `json:"using"`
 	WithCheck  *string       `json:"with_check"`
+	Comment    *string       `json:"comment"`
 }
 
 func (p *Policy) String() string {
@@ -78,6 +79,15 @@ func (p Policy) SQL() string {
 	}
 	b.WriteString(";")
 	return b.String()
+}
+
+// CommentSQL renders the policy's COMMENT ON, or an empty string when it
+// carries none.
+func (p Policy) CommentSQL() string {
+	if p.Comment == nil {
+		return ""
+	}
+	return "COMMENT ON POLICY " + Ident(p.Name) + " ON " + Ident(p.Schema, p.Table) + " IS " + QuoteLiteral(*p.Comment) + ";"
 }
 
 func (p Policy) rolesClause() string {

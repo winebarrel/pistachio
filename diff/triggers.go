@@ -141,6 +141,21 @@ func diffTriggers(
 		}
 	}
 
+	// CREATE OR REPLACE TRIGGER keeps the comment. A trigger created or
+	// recreated above has none.
+	for name, des := range desired.All() {
+		if recreateDenied[name] {
+			continue
+		}
+		var currentComment *string
+		if cur, ok := current.GetOk(name); ok && !recreated[name] {
+			currentComment = cur.Comment
+		}
+		if !equalPtr(currentComment, des.Comment) {
+			stmts = append(stmts, commentOnSQL("TRIGGER "+model.Ident(name)+" ON "+fqtn, des.Comment))
+		}
+	}
+
 	return stmts, disallowed, nil
 }
 

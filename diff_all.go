@@ -1175,16 +1175,24 @@ func dropObjectName(ds *pg_query.DropStmt) string {
 	}
 }
 
-// commentObjectName names the object a COMMENT belongs to. A comment on a
-// constraint is not one of them, and nothing emits one: the form on a table
-// would want ownerIdent, and the form on a domain carries the domain as a
-// type name rather than as name parts.
+// commentObjectName names the object a COMMENT belongs to.
 func commentObjectName(cs *pg_query.CommentStmt) string {
 	switch cs.GetObjtype() {
-	case pg_query.ObjectType_OBJECT_COLUMN:
+	case pg_query.ObjectType_OBJECT_COLUMN,
+		pg_query.ObjectType_OBJECT_TABCONSTRAINT,
+		pg_query.ObjectType_OBJECT_TRIGGER,
+		pg_query.ObjectType_OBJECT_POLICY:
 		// COMMENT ON COLUMN names the column after the table or the
-		// composite type that holds it.
+		// composite type that holds it, and the comment on a constraint, a
+		// trigger or a policy names the object after its relation.
 		return ownerIdent(cs.GetObject())
+	case pg_query.ObjectType_OBJECT_DOMCONSTRAINT:
+		// The domain arrives as a type name ahead of the constraint's name.
+		items := cs.GetObject().GetList().GetItems()
+		if len(items) == 0 {
+			return ""
+		}
+		return objectIdent(items[0])
 	case pg_query.ObjectType_OBJECT_FUNCTION, pg_query.ObjectType_OBJECT_PROCEDURE:
 		return toposort.RoutineNode(objectIdent(cs.GetObject()))
 	default:

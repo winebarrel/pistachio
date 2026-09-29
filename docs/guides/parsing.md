@@ -98,10 +98,10 @@ Directives show up as fields. `-- pista:renamed-from` becomes `rename_from`, `--
 
 ## The JSON Schema
 
-The document has a JSON Schema. It sits at `docs/json/schema-1.1.json`, and the
+The document has a JSON Schema. It sits at `docs/json/schema-1.2.json`, and the
 documentation site carries it at
-[https://winebarrel.github.io/pistachio/json/schema-1.1.json](https://winebarrel.github.io/pistachio/json/schema-1.1.json).
-The earlier `schema-1.0.json` is still published.
+[https://winebarrel.github.io/pistachio/json/schema-1.2.json](https://winebarrel.github.io/pistachio/json/schema-1.2.json).
+The earlier `schema-1.0.json` and `schema-1.1.json` are still published.
 
 It is reflected off the structs the parser fills, so it says what the command writes rather than what a description beside it claims. `make json-schema` regenerates it, and a test fails when the committed file is not what the generator produces.
 

@@ -427,9 +427,8 @@ func TestParseSQL_NoWarnForAlterTableOnIgnoredTable(t *testing.T) {
 // dropped, so it warns like any other unsupported statement.
 func TestParseSQL_WarnsUnsupportedCommentTarget(t *testing.T) {
 	for _, stmt := range []string{
-		`COMMENT ON CONSTRAINT t_id_check ON public.t IS 'c';`,
 		`COMMENT ON SCHEMA public IS 's';`,
-		`COMMENT ON TRIGGER trg ON public.t IS 'g';`,
+		`COMMENT ON EXTENSION plpgsql IS 'x';`,
 	} {
 		t.Run(stmt, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -469,6 +468,10 @@ func TestParseSQL_NoWarnForSupportedCommentTargets(t *testing.T) {
 		COMMENT ON FUNCTION public.f() IS 'f';
 		COMMENT ON PROCEDURE public.p() IS 'p';
 		COMMENT ON INDEX public.t_id_idx IS 'i';
+		COMMENT ON CONSTRAINT t_id_check ON public.t IS 'c';
+		COMMENT ON CONSTRAINT d_check ON DOMAIN public.d IS 'dc';
+		COMMENT ON TRIGGER trg ON public.t IS 'g';
+		COMMENT ON POLICY pol ON public.t IS 'p';
 	`)
 	require.NoError(t, err)
 	assert.Empty(t, buf.String())
@@ -504,6 +507,71 @@ func TestParseSQL_CommentOnIndex(t *testing.T) {
 
 // An index name written without a schema takes the default schema, which is
 // the one the run works in rather than public.
+// COMMENT ON CONSTRAINT, TRIGGER and POLICY name the relation the object is
+// on. A table constraint and a foreign key share the one form.
+func TestParseSQL_CommentOnConstraintTriggerPolicy(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.u (id integer PRIMARY KEY);
+		CREATE TABLE public.t (id integer CONSTRAINT t_id_check CHECK (id > 0), u_id integer);
+		ALTER TABLE public.t ADD CONSTRAINT t_u_id_fkey FOREIGN KEY (u_id) REFERENCES public.u (id);
+		CREATE POLICY pol ON public.t USING (true);
+		CREATE TRIGGER trg BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION public.f();
+		CREATE VIEW public.v AS SELECT id FROM public.t;
+		CREATE TRIGGER vtrg INSTEAD OF INSERT ON public.v FOR EACH ROW EXECUTE FUNCTION public.f();
+		CREATE DOMAIN public.d AS integer CONSTRAINT d_check CHECK (VALUE > 0);
+		COMMENT ON CONSTRAINT t_id_check ON t IS 'check';
+		COMMENT ON CONSTRAINT t_u_id_fkey ON public.t IS 'fk';
+		COMMENT ON POLICY pol ON public.t IS 'policy';
+		COMMENT ON TRIGGER trg ON public.t IS 'trigger';
+		COMMENT ON TRIGGER vtrg ON public.v IS 'view trigger';
+		COMMENT ON CONSTRAINT d_check ON DOMAIN d IS 'domain check';
+		COMMENT ON CONSTRAINT nope ON public.t IS 'no such constraint';
+		COMMENT ON TRIGGER trg ON public.nope IS 'no such relation';
+		COMMENT ON POLICY nope ON public.t IS 'no such policy';
+		COMMENT ON CONSTRAINT nope ON DOMAIN public.d IS 'no such constraint';
+		COMMENT ON CONSTRAINT d_check ON DOMAIN public.nope IS 'no such domain';
+	`)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.t")
+	require.NotNil(t, tbl)
+	assert.Equal(t, "check", *tbl.Constraints.Get("t_id_check").Comment)
+	assert.Equal(t, "fk", *tbl.ForeignKeys.Get("t_u_id_fkey").Comment)
+	assert.Equal(t, "policy", *tbl.Policies.Get("pol").Comment)
+	assert.Equal(t, "trigger", *tbl.Triggers.Get("trg").Comment)
+
+	v := result.Views.Get("public.v")
+	require.NotNil(t, v)
+	assert.Equal(t, "view trigger", *v.Triggers.Get("vtrg").Comment)
+
+	d := result.Domains.Get("public.d")
+	require.NotNil(t, d)
+	require.Len(t, d.Constraints, 1)
+	assert.Equal(t, "domain check", *d.Constraints[0].Comment)
+}
+
+// An empty comment removes the one set before it, as on any other object.
+func TestParseSQL_CommentOnConstraintTriggerPolicyEmpty(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (id integer CONSTRAINT t_id_check CHECK (id > 0));
+		CREATE POLICY pol ON public.t USING (true);
+		CREATE TRIGGER trg BEFORE INSERT ON public.t FOR EACH ROW EXECUTE FUNCTION public.f();
+		COMMENT ON CONSTRAINT t_id_check ON public.t IS 'check';
+		COMMENT ON POLICY pol ON public.t IS 'policy';
+		COMMENT ON TRIGGER trg ON public.t IS 'trigger';
+		COMMENT ON CONSTRAINT t_id_check ON public.t IS '';
+		COMMENT ON POLICY pol ON public.t IS NULL;
+		COMMENT ON TRIGGER trg ON public.t IS '';
+	`)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.t")
+	require.NotNil(t, tbl)
+	assert.Nil(t, tbl.Constraints.Get("t_id_check").Comment)
+	assert.Nil(t, tbl.Policies.Get("pol").Comment)
+	assert.Nil(t, tbl.Triggers.Get("trg").Comment)
+}
+
 func TestParseSQL_CommentOnIndexUnqualified(t *testing.T) {
 	result, err := parseSQLNoFile(`
 		CREATE TABLE myschema.t (id integer, n text);

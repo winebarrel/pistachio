@@ -146,16 +146,20 @@ var alterTableSupportedCmds = map[pg_query.AlterTableType]bool{
 // commentTargetSupported lists the COMMENT ON targets parseCommentStmt reads
 // into the model. A comment on any other object is dropped, and warns.
 var commentTargetSupported = map[pg_query.ObjectType]bool{
-	pg_query.ObjectType_OBJECT_TABLE:     true,
-	pg_query.ObjectType_OBJECT_VIEW:      true,
-	pg_query.ObjectType_OBJECT_MATVIEW:   true,
-	pg_query.ObjectType_OBJECT_COLUMN:    true,
-	pg_query.ObjectType_OBJECT_INDEX:     true,
-	pg_query.ObjectType_OBJECT_SEQUENCE:  true,
-	pg_query.ObjectType_OBJECT_TYPE:      true,
-	pg_query.ObjectType_OBJECT_DOMAIN:    true,
-	pg_query.ObjectType_OBJECT_FUNCTION:  true,
-	pg_query.ObjectType_OBJECT_PROCEDURE: true,
+	pg_query.ObjectType_OBJECT_TABLE:         true,
+	pg_query.ObjectType_OBJECT_VIEW:          true,
+	pg_query.ObjectType_OBJECT_MATVIEW:       true,
+	pg_query.ObjectType_OBJECT_COLUMN:        true,
+	pg_query.ObjectType_OBJECT_INDEX:         true,
+	pg_query.ObjectType_OBJECT_SEQUENCE:      true,
+	pg_query.ObjectType_OBJECT_TYPE:          true,
+	pg_query.ObjectType_OBJECT_DOMAIN:        true,
+	pg_query.ObjectType_OBJECT_FUNCTION:      true,
+	pg_query.ObjectType_OBJECT_PROCEDURE:     true,
+	pg_query.ObjectType_OBJECT_TABCONSTRAINT: true,
+	pg_query.ObjectType_OBJECT_DOMCONSTRAINT: true,
+	pg_query.ObjectType_OBJECT_TRIGGER:       true,
+	pg_query.ObjectType_OBJECT_POLICY:        true,
 }
 
 // warnIgnoredAlterTableCmds warns about the ALTER TABLE actions no handler
@@ -1817,9 +1821,36 @@ func parseCompositeTypeStmt(cts *pg_query.CompositeTypeStmt, defaultSchema strin
 }
 
 func parseCommentOnDomain(cs *pg_query.CommentStmt, defaultSchema string, domains *orderedmap.Map[string, *model.Domain]) {
-	tn := cs.Object.GetTypeName()
-	if tn == nil {
+	if d := findDomain(cs.Object.GetTypeName(), defaultSchema, domains); d != nil {
+		d.Comment = commentPtr(cs.Comment)
+	}
+}
+
+// parseCommentOnDomainConstraint reads COMMENT ON CONSTRAINT ... ON DOMAIN,
+// whose object is the domain as a type name followed by the constraint's name.
+func parseCommentOnDomainConstraint(cs *pg_query.CommentStmt, defaultSchema string, domains *orderedmap.Map[string, *model.Domain]) {
+	items := cs.Object.GetList().GetItems()
+	if len(items) != 2 {
 		return
+	}
+	d := findDomain(items[0].GetTypeName(), defaultSchema, domains)
+	if d == nil {
+		return
+	}
+	name := items[1].GetString_().GetSval()
+	for _, c := range d.Constraints {
+		if c.Name == name {
+			c.Comment = commentPtr(cs.Comment)
+			return
+		}
+	}
+}
+
+// findDomain returns the domain a type name names, or nil when the file does
+// not define it.
+func findDomain(tn *pg_query.TypeName, defaultSchema string, domains *orderedmap.Map[string, *model.Domain]) *model.Domain {
+	if tn == nil {
+		return nil
 	}
 	var names []string
 	for _, n := range tn.Names {
@@ -1828,13 +1859,10 @@ func parseCommentOnDomain(cs *pg_query.CommentStmt, defaultSchema string, domain
 		}
 	}
 	if len(names) == 0 {
-		return
+		return nil
 	}
 	schema, domainName := schemaName(names, defaultSchema)
-	fqdn := model.Ident(schema, domainName)
-	if d, ok := domains.GetOk(fqdn); ok {
-		d.Comment = commentPtr(cs.Comment)
-	}
+	return domains.Get(model.Ident(schema, domainName))
 }
 
 func parseCreateEnumStmt(es *pg_query.CreateEnumStmt, defaultSchema string) (*model.Enum, error) {
@@ -2137,6 +2165,10 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 		parseCommentOnDomain(cs, defaultSchema, domains)
 		return
 	}
+	if cs.Objtype == pg_query.ObjectType_OBJECT_DOMCONSTRAINT {
+		parseCommentOnDomainConstraint(cs, defaultSchema, domains)
+		return
+	}
 	// COMMENT ON FUNCTION/PROCEDURE carries an ObjectWithArgs, not a list.
 	if cs.Objtype == pg_query.ObjectType_OBJECT_FUNCTION || cs.Objtype == pg_query.ObjectType_OBJECT_PROCEDURE {
 		parseCommentOnRoutine(cs, defaultSchema, routines)
@@ -2233,7 +2265,51 @@ func parseCommentStmt(cs *pg_query.CommentStmt, defaultSchema string, tables *or
 		if seq, ok := sequences.GetOk(fqn); ok {
 			seq.Comment = commentPtr(cs.Comment)
 		}
+	case pg_query.ObjectType_OBJECT_TABCONSTRAINT:
+		// A foreign key is a constraint too, and the two maps share the
+		// namespace PostgreSQL gives constraint names on a table.
+		t := tables.Get(relationIdent(names, defaultSchema))
+		if t == nil {
+			return
+		}
+		name := names[len(names)-1]
+		if con, ok := t.Constraints.GetOk(name); ok {
+			con.Comment = commentPtr(cs.Comment)
+		} else if fk, ok := t.ForeignKeys.GetOk(name); ok {
+			fk.Comment = commentPtr(cs.Comment)
+		}
+	case pg_query.ObjectType_OBJECT_TRIGGER:
+		// A view carries INSTEAD OF triggers. Every table and view the parser
+		// builds holds a trigger map, so neither is checked for nil.
+		fqn := relationIdent(names, defaultSchema)
+		name := names[len(names)-1]
+		var trg *model.Trigger
+		if t, ok := tables.GetOk(fqn); ok {
+			trg = t.Triggers.Get(name)
+		} else if v, ok := views.GetOk(fqn); ok {
+			trg = v.Triggers.Get(name)
+		}
+		if trg != nil {
+			trg.Comment = commentPtr(cs.Comment)
+		}
+	case pg_query.ObjectType_OBJECT_POLICY:
+		if t, ok := tables.GetOk(relationIdent(names, defaultSchema)); ok {
+			if p := t.Policies.Get(names[len(names)-1]); p != nil {
+				p.Comment = commentPtr(cs.Comment)
+			}
+		}
 	}
+}
+
+// relationIdent names the relation a constraint, a trigger or a policy sits
+// on from the name parts COMMENT ON gives it: the relation, one- or
+// two-part, followed by the object's own name.
+func relationIdent(names []string, defaultSchema string) string {
+	if len(names) < 2 {
+		return ""
+	}
+	schema, name := schemaName(names[:len(names)-1], defaultSchema)
+	return model.Ident(schema, name)
 }
 
 // commentPtr returns a pointer to a copy of the COMMENT ON text, or nil for an

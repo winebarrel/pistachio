@@ -1,0 +1,64 @@
+omit_schema: true
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE DOMAIN public.email AS text CONSTRAINT email_at CHECK (VALUE ~ '@');
+  COMMENT ON CONSTRAINT email_at ON DOMAIN public.email IS 'has an at sign';
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_id_check CHECK (id > 0) NOT VALID;
+  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+  CREATE POLICY posts_select ON public.posts FOR SELECT USING (true);
+  CREATE TRIGGER posts_stamp BEFORE INSERT ON public.posts FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  CREATE VIEW public.posts_v AS SELECT id FROM public.posts;
+  CREATE TRIGGER posts_v_insert INSTEAD OF INSERT ON public.posts_v FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  COMMENT ON CONSTRAINT posts_pkey ON public.posts IS 'pk';
+  COMMENT ON CONSTRAINT posts_id_check ON public.posts IS 'positive';
+  COMMENT ON CONSTRAINT posts_user_id_fkey ON public.posts IS 'author';
+  COMMENT ON POLICY posts_select ON public.posts IS 'everyone reads';
+  COMMENT ON TRIGGER posts_stamp ON public.posts IS 'stamps';
+  COMMENT ON TRIGGER posts_v_insert ON public.posts_v IS 'redirects';
+dump: |
+  -- email
+  CREATE DOMAIN email AS text
+      CONSTRAINT email_at CHECK ((VALUE ~ '@'::text));
+  COMMENT ON CONSTRAINT email_at ON DOMAIN email IS 'has an at sign';
+
+  -- posts
+  CREATE TABLE posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY posts ADD CONSTRAINT posts_id_check CHECK (id > 0) NOT VALID;
+
+  ALTER TABLE ONLY posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+  CREATE POLICY posts_select ON posts FOR SELECT USING (true);
+
+  CREATE TRIGGER posts_stamp BEFORE INSERT ON posts FOR EACH ROW EXECUTE FUNCTION stamp();
+  COMMENT ON CONSTRAINT posts_pkey ON posts IS 'pk';
+  COMMENT ON CONSTRAINT posts_id_check ON posts IS 'positive';
+  COMMENT ON CONSTRAINT posts_user_id_fkey ON posts IS 'author';
+  COMMENT ON POLICY posts_select ON posts IS 'everyone reads';
+  COMMENT ON TRIGGER posts_stamp ON posts IS 'stamps';
+
+  -- users
+  CREATE TABLE users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- posts_v
+  CREATE OR REPLACE VIEW posts_v AS
+  SELECT id
+     FROM posts;
+
+  CREATE TRIGGER posts_v_insert INSTEAD OF INSERT ON posts_v FOR EACH ROW EXECUTE FUNCTION stamp();
+  COMMENT ON TRIGGER posts_v_insert ON posts_v IS 'redirects';

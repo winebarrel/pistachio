@@ -7,9 +7,19 @@ import (
 )
 
 type DomainConstraint struct {
-	Name       string `json:"name"`
-	Definition string `json:"definition"`
-	Validated  bool   `json:"validated"`
+	Name       string  `json:"name"`
+	Definition string  `json:"definition"`
+	Validated  bool    `json:"validated"`
+	Comment    *string `json:"comment"`
+}
+
+// CommentSQL renders the constraint's COMMENT ON, or an empty string when it
+// carries none. fqdn is the domain the constraint is on.
+func (c DomainConstraint) CommentSQL(fqdn string) string {
+	if c.Comment == nil {
+		return ""
+	}
+	return "COMMENT ON CONSTRAINT " + Ident(c.Name) + " ON DOMAIN " + fqdn + " IS " + QuoteLiteral(*c.Comment) + ";"
 }
 
 type Domain struct {
@@ -80,12 +90,24 @@ func (d Domain) CommentSQL() string {
 	return ""
 }
 
+// ConstraintCommentSQL renders the comments on the domain's constraints.
+func (d Domain) ConstraintCommentSQL() []string {
+	var stmts []string
+	for _, c := range d.Constraints {
+		if s := c.CommentSQL(d.FQDN()); s != "" {
+			stmts = append(stmts, s)
+		}
+	}
+	return stmts
+}
+
 func DomainToSQL(d *Domain) string {
 	parts := []string{"-- " + d.FQDN(), d.SQL()}
 	parts = append(parts, d.NotValidConSQL()...)
 	if s := d.CommentSQL(); s != "" {
 		parts = append(parts, s)
 	}
+	parts = append(parts, d.ConstraintCommentSQL()...)
 	return strings.Join(parts, "\n")
 }
 

@@ -177,6 +177,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 			}
 			result.FKAddStmts = append(result.FKAddStmts, fkStmts...)
 			result.PolicyStmts = append(result.PolicyStmts, v.PolicySQL()...)
+			result.PolicyStmts = append(result.PolicyStmts, v.PolicyCommentSQL()...)
 			if extraHasConcurrently {
 				result.HasConcurrently = true
 			}
@@ -275,13 +276,16 @@ func newTableExtras(t *model.Table) (stmts, idxStmts, fkStmts []string, hasConcu
 	for _, fk := range t.ForeignKeys.CollectValues() {
 		fkStmts = append(fkStmts, fk.SQL(t.Partitioned))
 	}
+	fkStmts = append(fkStmts, t.FkCommentSQL()...)
 	stmts = append(stmts, t.RLSSQL()...)
 	stmts = append(stmts, t.TrigSQL()...)
+	stmts = append(stmts, t.RelationCommentSQL()...)
+	stmts = append(stmts, t.ConstraintCommentSQL()...)
+	stmts = append(stmts, t.TrigCommentSQL()...)
 	if t.Partitioned {
-		stmts = append(stmts, t.RelationCommentSQL()...)
 		idxStmts = append(idxStmts, t.IndexCommentSQL()...)
 	} else {
-		stmts = append(stmts, t.CommentSQL()...)
+		stmts = append(stmts, t.IndexCommentSQL()...)
 	}
 	return
 }
@@ -370,7 +374,7 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 		current = &clone
 	}
 
-	conStmts, conDisallowed, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
+	conStmts, conCommentStmts, conDisallowed, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
 	if err != nil {
 		return nil, err
 	}
@@ -422,6 +426,7 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, trgDisallowed...)
 
 	result.Stmts = append(result.Stmts, diffComments(current, desired)...)
+	result.Stmts = append(result.Stmts, conCommentStmts...)
 
 	// Column drops go last so dependent objects (UNIQUE/CHECK constraints,
 	// indexes, policies) are dropped first. PostgreSQL silently cascades
@@ -1438,13 +1443,17 @@ func sameConstraintDef(current, desired *model.Constraint) bool {
 	return equalConstraintDef(current.Definition, desired.Definition)
 }
 
-func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, disallowed []string, err error) {
+// diffConstraints returns the constraint statements and, apart from them, the
+// COMMENT ON statements the constraints need, so the caller can put the
+// comments with the table's other comments instead of between the ALTER
+// TABLE statements --bulk-alter merges.
+func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, commentStmts []string, disallowed []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames
 	current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	changes := constraintChanges(current, desired)
@@ -1509,7 +1518,26 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		stmts = append(stmts, sql+";")
 	}
 
-	return stmts, disallowed, nil
+	// A constraint added above has no comment yet.
+	for name, desiredCon := range desired.All() {
+		var currentComment *string
+		if currentCon, ok := current.GetOk(name); ok {
+			if ch := changes[name]; !ch.changed || ch.validateOnly {
+				currentComment = currentCon.Comment
+			}
+		}
+		if !equalPtr(currentComment, desiredCon.Comment) {
+			commentStmts = append(commentStmts, constraintCommentSQL(fqtn, name, desiredCon.Comment))
+		}
+	}
+
+	return stmts, commentStmts, disallowed, nil
+}
+
+// constraintCommentSQL renders the COMMENT ON a table constraint and a foreign
+// key share.
+func constraintCommentSQL(fqtn, name string, comment *string) string {
+	return commentOnSQL("CONSTRAINT "+model.Ident(name)+" ON "+fqtn, comment)
 }
 
 // equalIndexDefs compares every index present on both sides once. Like a
@@ -1858,6 +1886,20 @@ func diffForeignKeys(fqtn, schema string, partitioned bool, current, desired *or
 			continue
 		}
 		addStmts = append(addStmts, desiredFk.SQL(partitioned))
+	}
+
+	// A key added above has no comment yet. The comments follow every ADD,
+	// since they are part of addStmts, which runs last.
+	for name, desiredFk := range desired.All() {
+		var currentComment *string
+		if currentFk, ok := current.GetOk(name); ok {
+			if ch := changes[name]; !ch.changed || ch.validateOnly || ch.deferralOnly {
+				currentComment = currentFk.Comment
+			}
+		}
+		if !equalPtr(currentComment, desiredFk.Comment) {
+			addStmts = append(addStmts, constraintCommentSQL(fqtn, name, desiredFk.Comment))
+		}
 	}
 
 	return dropStmts, addStmts, disallowed, nil
