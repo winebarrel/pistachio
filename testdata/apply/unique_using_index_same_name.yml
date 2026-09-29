@@ -1,0 +1,24 @@
+# The constraint takes over the index under the index's own name, and the
+# re-plan comes out clean.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL
+  );
+  CREATE UNIQUE INDEX users_email_idx ON public.users USING btree (email);
+  ALTER TABLE ONLY public.users ADD CONSTRAINT users_email_idx UNIQUE USING INDEX users_email_idx;
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text NOT NULL,
+      CONSTRAINT users_email_idx UNIQUE (email)
+  );
+applied_sql: |
+  ALTER TABLE public.users ADD CONSTRAINT users_email_idx UNIQUE USING INDEX users_email_idx;
