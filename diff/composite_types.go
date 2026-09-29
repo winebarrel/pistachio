@@ -189,7 +189,7 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 // match a current composite type.
 func detectCompositeTypeRenames(current, desired *orderedmap.Map[string, *model.CompositeType]) ([]string, *orderedmap.Map[string, *model.CompositeType], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newKey, desiredCT := range desired.All() {
 		if desiredCT.RenameFrom == nil {
