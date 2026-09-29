@@ -1634,6 +1634,7 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 		Name:           into.Rel.Relname,
 		Definition:     def,
 		Materialized:   true,
+		WithNoData:     into.SkipData,
 		StorageParams:  parseViewStorageParams(into.Options),
 		Indexes:        orderedmap.New[string, *model.Index](),
 		Triggers:       orderedmap.New[string, *model.Trigger](),

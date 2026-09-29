@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A materialized view written with `WITH NO DATA` is now created with it. `apply` dropped the clause and ran the view's query over its source tables. Whether a view is populated is not compared, and `dump` does not write the clause.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.
