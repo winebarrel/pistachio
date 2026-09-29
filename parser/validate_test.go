@@ -700,6 +700,20 @@ CREATE TYPE ct2 AS (n integer);`,
 			sql: `CREATE TYPE et1 AS ENUM ('a');
 CREATE TYPE et2 AS ENUM ('a');`,
 		},
+		{
+			// The constraint keeps the index's name, so it is that index.
+			name: "USING INDEX constraint named after its index",
+			sql: `CREATE TABLE t (id integer NOT NULL);
+CREATE UNIQUE INDEX x ON t (id);
+ALTER TABLE t ADD CONSTRAINT x UNIQUE USING INDEX x;`,
+		},
+		{
+			// An unnamed constraint takes the index's name.
+			name: "unnamed USING INDEX constraint",
+			sql: `CREATE TABLE t (id integer NOT NULL);
+CREATE UNIQUE INDEX x ON t (id);
+ALTER TABLE t ADD PRIMARY KEY USING INDEX x;`,
+		},
 	}
 
 	for _, tt := range tests {
