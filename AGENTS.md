@@ -116,4 +116,4 @@ Leave a change to CI, the build or other repository tooling without a label. Do 
 - Write simply and concisely.
 - Write in prose.
 - Model the documentation under `docs/` on the PostgreSQL reference manual: its tone, its structure and the way it states behavior.
-- `README.md` and everything under `docs/` are technical documents, not marketing. State what the tool does and how; do not sell it. No slogans, no benefit-first headings, no praise of the tool. A reader who does not know pistachio should be able to tell from the README what it does and where the page for their question is.
+- Every document in the repository, `README.md` included, is a technical document, not marketing. State what the tool does and how; do not sell it. No slogans, no benefit-first headings, no praise of the tool. A reader who does not know pistachio should be able to tell from the README what it does and where the page for their question is.
