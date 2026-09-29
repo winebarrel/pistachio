@@ -279,10 +279,6 @@ func parentIndexCopies(current, desired *orderedmap.Map[string, *model.Table], t
 
 	copies := map[string]bool{}
 	for _, idx := range t.Indexes.All() {
-		_, is, err := parseIndexDef(idx.Definition)
-		if err != nil || idx.Name != parser.AutoNameIndex(is) {
-			continue
-		}
 		for parentName, parentIdx := range parent.Indexes.All() {
 			if parentExists {
 				currentIdx, ok := currentParent.Indexes.GetOk(parentName)
@@ -292,13 +288,31 @@ func parentIndexCopies(current, desired *orderedmap.Map[string, *model.Table], t
 			} else if !parentCopies[parentName] {
 				continue
 			}
-			if equalIndexDef(parentIdx.Definition, onTable(idx.Definition, parentIdx.Definition), columns) {
+			if isPartitionIndexCopy(idx, parentIdx, columns) {
 				copies[idx.Name] = true
 				break
 			}
 		}
 	}
 	return copies
+}
+
+// IsPartitionIndexCopy reports whether idx, an index of a partition, is the
+// copy PostgreSQL makes of parentIdx, an index of its parent: it carries the
+// name PostgreSQL gives the copy, and it indexes what parentIdx does, the
+// storage parameters included.
+func IsPartitionIndexCopy(idx, parentIdx *model.Index) bool {
+	return isPartitionIndexCopy(idx, parentIdx, nil)
+}
+
+// isPartitionIndexCopy is IsPartitionIndexCopy with the columns the desired
+// definition is compared against; see equalIndexDef.
+func isPartitionIndexCopy(idx, parentIdx *model.Index, columns *orderedmap.Map[string, *model.Column]) bool {
+	_, is, err := parseIndexDef(idx.Definition)
+	if err != nil || idx.Name != parser.AutoNameIndex(is) {
+		return false
+	}
+	return equalIndexDef(parentIdx.Definition, onTable(idx.Definition, parentIdx.Definition), columns)
 }
 
 // onTable returns the index definition def with the index name and the table
