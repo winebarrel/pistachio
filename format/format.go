@@ -22,7 +22,8 @@ const indentUnit = "    "
 type token struct {
 	kind pg_query.Token
 	// orig is the token as it was written, out the token as it is emitted.
-	// The two differ only for an identifier that lost its quotes.
+	// The two differ for an identifier that lost its quotes and for a "--"
+	// comment that lost its trailing whitespace.
 	orig  string
 	out   string
 	start int
@@ -116,6 +117,11 @@ func scan(sql string) ([]*token, error) {
 			start: start,
 			end:   end,
 			nl:    strings.Count(gap, "\n"),
+		}
+		// A "--" comment runs to the end of its line, trailing whitespace
+		// included, and a line of the output carries none.
+		if tok.isLineComment() {
+			tok.out = strings.TrimRight(tok.out, " \t")
 		}
 
 		switch {
