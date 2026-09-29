@@ -16,8 +16,8 @@ theme:
   logo: assets/logo-mark.svg
   features:
     - navigation.sections
-    # A section with an index.md opens that page when clicked. The Commands
-    # section under Reference is one.
+    # A section with an index.md opens that page when clicked. Guides and the
+    # Commands section under Reference are two.
     - navigation.indexes
     - navigation.top
     - content.code.copy
