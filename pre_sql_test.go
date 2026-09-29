@@ -42,7 +42,7 @@ func TestResolvePreSQL_Empty(t *testing.T) {
 func TestResolvePreSQL_FileNotFound(t *testing.T) {
 	_, err := resolvePreSQL("", "/nonexistent/pre.sql")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to read pre-SQL file")
+	assert.Equal(t, "failed to read pre-SQL file: open /nonexistent/pre.sql: no such file or directory", err.Error())
 }
 
 func TestResolveConcurrentlyPreSQL_DirectString(t *testing.T) {

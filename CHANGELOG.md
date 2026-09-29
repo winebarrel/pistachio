@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* The error for a `--pre-sql-file` or `--concurrently-pre-sql-file` that cannot be read no longer names the file twice.
+
 ## [1.70.1] - 2026-09-28
 
 * An index written with `COLLATE "default"` on a column of the default collation is no longer dropped and created on every plan.

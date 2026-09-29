@@ -25,7 +25,7 @@ func resolveSQLOpt(sql, file, label string) (string, error) {
 	if file != "" {
 		data, err := os.ReadFile(file)
 		if err != nil {
-			return "", fmt.Errorf("failed to read %s file: %s: %w", label, file, err)
+			return "", fmt.Errorf("failed to read %s file: %w", label, err)
 		}
 		return string(data), nil
 	}
