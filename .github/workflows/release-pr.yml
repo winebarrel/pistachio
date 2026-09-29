@@ -47,6 +47,12 @@ jobs:
           tag=$(git ls-remote --tags --refs "https://github.com/$GH_REPO" 'v[0-9]*' | sed 's|.*refs/tags/||' | sort -V | tail -n 1)
           branch=release-from-$tag
           main=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
+          # The job's condition cannot see this on a run by hand, which has
+          # no head commit.
+          if gh api "repos/$GH_REPO/git/commits/$main" --jq .message | grep -q '^Merge pull request #[0-9]\+ from [^ ]\+/release-from-'; then
+            echo "::error::main's head is the merge of a release pull request; run again after its tag is pushed"
+            exit 1
+          fi
           {
             echo "name=$branch"
             echo "tag=$tag"
