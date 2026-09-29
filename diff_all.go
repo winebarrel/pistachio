@@ -866,10 +866,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 		return fallbackOrder(current, desired, diffs)
 	}
 
-	createPosMap := make(map[string]int, len(createOrder))
-	for i, name := range createOrder {
-		createPosMap[name] = i
-	}
+	createPosMap := positions(createOrder)
 	addIndexPositions(createPosMap, desired.Tables, desired.Views)
 
 	// Build topological order from current schema for drops.
@@ -882,10 +879,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 		return fallbackOrder(current, desired, diffs)
 	}
 
-	dropPosMap := make(map[string]int, len(dropOrder))
-	for i, name := range dropOrder {
-		dropPosMap[name] = i
-	}
+	dropPosMap := positions(dropOrder)
 	addIndexPositions(dropPosMap, current.Tables, current.Views)
 
 	// Phase 1: Creates/modifications in topological order.
@@ -898,9 +892,6 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	createStmts = append(createStmts, tagStatements(diffs.Sequences.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(diffs.Routines.Stmts, createPosMap)...)
 	createStmts = append(createStmts, tagStatements(diffs.Tables.Stmts, createPosMap)...)
-	sort.SliceStable(createStmts, func(i, j int) bool {
-		return compareTaggedPos(createStmts[i].pos, createStmts[j].pos, false)
-	})
 
 	// Phase 2: Pre-create drops in reverse topological order.
 	// View drops must happen before table/column changes (views may depend on
@@ -908,9 +899,6 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	var preDropStmts []taggedStmt
 	preDropStmts = append(preDropStmts, tagStatements(diffs.Views.DropStmts, dropPosMap)...)
 	preDropStmts = append(preDropStmts, tagStatements(diffs.Routines.AtomicDropStmts, dropPosMap)...)
-	sort.SliceStable(preDropStmts, func(i, j int) bool {
-		return compareTaggedPos(preDropStmts[i].pos, preDropStmts[j].pos, true)
-	})
 
 	// Phase 3: Post-create drops in reverse dependency order.
 	// Table drops must come after table creates/alters (column type changes may
@@ -923,9 +911,6 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	postDropStmts = append(postDropStmts, tagStatements(diffs.CompositeTypes.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(diffs.Domains.DropStmts, dropPosMap)...)
 	postDropStmts = append(postDropStmts, tagStatements(diffs.Enums.DropStmts, dropPosMap)...)
-	sort.SliceStable(postDropStmts, func(i, j int) bool {
-		return compareTaggedPos(postDropStmts[i].pos, postDropStmts[j].pos, true)
-	})
 
 	// Phase 4: View creates in topological order. A routine with a
 	// SQL-standard body goes with them, since PostgreSQL parses the body at
@@ -933,33 +918,22 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	var viewCreateStmts []taggedStmt
 	viewCreateStmts = append(viewCreateStmts, tagStatements(diffs.Views.CreateStmts, createPosMap)...)
 	viewCreateStmts = append(viewCreateStmts, tagStatements(diffs.Routines.AtomicStmts, createPosMap)...)
-	sort.SliceStable(viewCreateStmts, func(i, j int) bool {
-		return compareTaggedPos(viewCreateStmts[i].pos, viewCreateStmts[j].pos, false)
-	})
 
 	// Assemble:
 	// FK drops -> view drops -> creates/alters -> table/domain/enum drops -> FK adds -> view creates -> policy creates
 	var stmts []string
 	stmts = append(stmts, diffs.Tables.FKDropStmts...)
-	for _, ts := range preDropStmts {
-		stmts = append(stmts, ts.sql)
-	}
-	for _, ts := range createStmts {
-		stmts = append(stmts, ts.sql)
-	}
+	stmts = append(stmts, sortedSQL(preDropStmts, true)...)
+	stmts = append(stmts, sortedSQL(createStmts, false)...)
 	stmts = append(stmts, diffs.Tables.PartitionedIndexStmts...)
 	// The logged <-> unlogged transitions carry their own order, so they are
 	// appended rather than tagged and sorted. They sit after the creates, which
 	// puts them after any rename, and before the FK adds, which together with
 	// the FK drops above leaves exactly the keys that stay in place.
 	stmts = append(stmts, diffs.Tables.PersistenceStmts...)
-	for _, ts := range postDropStmts {
-		stmts = append(stmts, ts.sql)
-	}
+	stmts = append(stmts, sortedSQL(postDropStmts, true)...)
 	stmts = append(stmts, diffs.Tables.FKAddStmts...)
-	for _, ts := range viewCreateStmts {
-		stmts = append(stmts, ts.sql)
-	}
+	stmts = append(stmts, sortedSQL(viewCreateStmts, false)...)
 	// A policy can read any table or view, so it is created once all exist.
 	stmts = append(stmts, diffs.Tables.PolicyStmts...)
 
@@ -1014,22 +988,19 @@ func sortViewStmts(stmts []string, views *orderedmap.Map[string, *model.View], r
 		return stmts
 	}
 
+	posMap := positions(order)
+	addIndexPositions(posMap, orderedmap.New[string, *model.Table](), views)
+
+	return sortedSQL(tagStatements(stmts, posMap), reverse)
+}
+
+// positions maps each name in a topological order to its index.
+func positions(order []string) map[string]int {
 	posMap := make(map[string]int, len(order))
 	for i, name := range order {
 		posMap[name] = i
 	}
-	addIndexPositions(posMap, orderedmap.New[string, *model.Table](), views)
-
-	tagged := tagStatements(stmts, posMap)
-	sort.SliceStable(tagged, func(i, j int) bool {
-		return compareTaggedPos(tagged[i].pos, tagged[j].pos, reverse)
-	})
-
-	sorted := make([]string, len(tagged))
-	for i, ts := range tagged {
-		sorted[i] = ts.sql
-	}
-	return sorted
+	return posMap
 }
 
 // addIndexPositions gives every index the position of the relation it sits on.
@@ -1086,6 +1057,19 @@ func compareTaggedPos(posI, posJ int, reverse bool) bool {
 		}
 		return posI < posJ
 	}
+}
+
+// sortedSQL stable-sorts tagged statements by position, reversed for drops,
+// and returns their SQL.
+func sortedSQL(tagged []taggedStmt, reverse bool) []string {
+	sort.SliceStable(tagged, func(i, j int) bool {
+		return compareTaggedPos(tagged[i].pos, tagged[j].pos, reverse)
+	})
+	sorted := make([]string, len(tagged))
+	for i, ts := range tagged {
+		sorted[i] = ts.sql
+	}
+	return sorted
 }
 
 // tagStatements extracts object names from SQL statements and assigns
