@@ -25,6 +25,8 @@ Options can also come from a YAML file. See [Configuration](reference/configurat
 pista dump > schema.sql
 ```
 
+Every command targets the `public` schema unless `-n` names another. See [Working with multiple schemas](guides/multiple-schemas.md).
+
 `--split` writes one file per object into a directory instead. See [`pista dump`](reference/commands/dump.md).
 
 ## Edit
