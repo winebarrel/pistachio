@@ -10,6 +10,8 @@
 
 * The JSON Schema is now `schema-1.2.json`. It adds `comment` to a constraint, a foreign key, a trigger, a policy and a domain constraint.
 
+* The comment on a table, view or column is now read only from comments on relations. After OID wraparound, a comment on another kind of object that shared the OID could be read as the table's.
+
 * The error for a `--pre-sql-file` or `--concurrently-pre-sql-file` that cannot be read, and for a `dump --split` file that cannot be written, no longer names the file twice.
 
 * The `-- Connected to` line for a Unix-socket connection now includes the port, which picks the socket file.
