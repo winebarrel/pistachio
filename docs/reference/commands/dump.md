@@ -12,7 +12,7 @@ pista dump [option...]
 
 `pista dump` reads the schema from the database and writes it as SQL. The output is a schema file: fed back to [`pista plan`](plan.md), it plans no changes.
 
-The output opens with the connection and a count of what it found, then writes each object under a comment naming it. An index, a comment, a policy and a trigger are written with the table they belong to. Objects are ordered by type and then by name.
+The SQL output opens with the connection and a count of what it found, then writes each object under a comment naming it. An index, a comment, a policy and a trigger are written with the table they belong to. Objects are ordered by type and then by name.
 
 ```sql
 -- Connected to postgres://postgres@localhost:5432/postgres
@@ -45,7 +45,7 @@ SELECT users.id,
 
 The output goes through the formatter [`pista fmt`](fmt.md) runs. `GRANT`, `CREATE EXTENSION` and roles are out of scope and are not written, so a dump loaded into an empty database restores the schema and not the privileges on it.
 
-The connection is read-only.
+The connection is read-only by default. `--no-read-only` opens it read-write.
 
 ## Options
 
