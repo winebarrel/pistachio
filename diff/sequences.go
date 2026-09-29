@@ -100,11 +100,7 @@ func diffSequence(fqn string, current, desired *model.Sequence) []string {
 	}
 
 	if !equalPtr(current.Comment, desired.Comment) {
-		if desired.Comment != nil {
-			stmts = append(stmts, "COMMENT ON SEQUENCE "+fqn+" IS "+model.QuoteLiteral(*desired.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON SEQUENCE "+fqn+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("SEQUENCE "+fqn, desired.Comment))
 	}
 
 	return stmts

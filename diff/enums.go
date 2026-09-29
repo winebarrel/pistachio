@@ -50,11 +50,7 @@ func DiffEnums(current, desired *orderedmap.Map[string, *model.Enum], dc DropChe
 
 		// Comment changes
 		if !equalPtr(currentEnum.Comment, desiredEnum.Comment) {
-			if desiredEnum.Comment != nil {
-				result.Stmts = append(result.Stmts, "COMMENT ON TYPE "+k+" IS "+model.QuoteLiteral(*desiredEnum.Comment)+";")
-			} else {
-				result.Stmts = append(result.Stmts, "COMMENT ON TYPE "+k+" IS NULL;")
-			}
+			result.Stmts = append(result.Stmts, commentOnSQL("TYPE "+k, desiredEnum.Comment))
 		}
 	}
 
