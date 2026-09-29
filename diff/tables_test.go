@@ -210,7 +210,7 @@ func TestPartitionedIndexConcurrently(t *testing.T) {
 	t.Run("new table", func(t *testing.T) {
 		tbl := partitionedTable("logs", "", "logs_id_idx")
 		tbl.Indexes = concurrentIndexes()
-		_, _, _, _, err := newTableExtras(tbl)
+		_, _, _, _, err := newTableExtras(tbl, nil)
 		require.EqualError(t, err, wantErr)
 	})
 

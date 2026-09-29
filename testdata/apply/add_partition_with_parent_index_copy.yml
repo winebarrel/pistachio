@@ -1,0 +1,44 @@
+# A new partition of a table that already has an index gets PostgreSQL's copy
+# of that index when it is created. The file writes the copy the way dump does,
+# under the name PostgreSQL gives it, so the CREATE INDEX is left out.
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at);
+
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at);
+  COMMENT ON INDEX public.logs_2026_at_idx IS 'copy';
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+
+  -- public.logs_2025
+  CREATE TABLE public.logs_2025 PARTITION OF public.logs FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+  CREATE INDEX logs_2025_at_idx ON public.logs_2025 USING btree (at);
+
+  -- public.logs_2026
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at);
+  COMMENT ON INDEX public.logs_2026_at_idx IS 'copy';
+applied_sql: |
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  COMMENT ON INDEX public.logs_2026_at_idx IS 'copy';

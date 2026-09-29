@@ -1,0 +1,43 @@
+# A new partitioned partition and its own partition both get the copy of the
+# existing top-level index, so neither CREATE INDEX runs.
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at) WHERE (id > 0);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at) WHERE (id > 0);
+
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')
+  PARTITION BY LIST (id);
+  CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at) WHERE (id > 0);
+
+  CREATE TABLE public.logs_2026_1 PARTITION OF public.logs_2026 FOR VALUES IN (1);
+  CREATE INDEX logs_2026_1_at_idx ON public.logs_2026_1 USING btree (at) WHERE (id > 0);
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_at_idx ON public.logs USING btree (at) WHERE (id > 0);
+
+  -- public.logs_2026
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')
+  PARTITION BY LIST (id);
+  CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at) WHERE (id > 0);
+
+  -- public.logs_2026_1
+  CREATE TABLE public.logs_2026_1 PARTITION OF public.logs_2026 FOR VALUES IN (1);
+  CREATE INDEX logs_2026_1_at_idx ON public.logs_2026_1 USING btree (at) WHERE (id > 0);
+applied_sql: |
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')
+  PARTITION BY LIST (id);
+  CREATE TABLE public.logs_2026_1 PARTITION OF public.logs_2026 FOR VALUES IN (1);

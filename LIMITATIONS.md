@@ -472,31 +472,6 @@ parent, so the field would carry a list for the INHERITS case alone.
 
 Origin: INHERITS local column support.
 
-## A new partition written with its copy of the parent's index
-
-Adding a partition to a partitioned table that already has an index fails when
-the file also declares the partition's copy of the index, as `dump` writes it:
-
-```sql
-CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
-CREATE INDEX logs_2026_at_idx ON public.logs_2026 USING btree (at);
-```
-
-`CREATE TABLE ... PARTITION OF` creates the copy under the same name, so the
-`CREATE INDEX` fails with `relation "logs_2026_at_idx" already exists`. Under
-another name, the partition ends up with two identical indexes. Creating the
-parent and its partitions in the same run works, since the parent's index is
-created last.
-
-Workaround: leave the partition's copy out of the file. PostgreSQL creates it,
-and the plan does not report it.
-
-Closing it means skipping a `CREATE INDEX` on a new partition that matches an
-index of its parent, and renaming PostgreSQL's copy when the names differ.
-
-Origin: [#459](https://github.com/winebarrel/pistachio/pull/459),
-[#596](https://github.com/winebarrel/pistachio/pull/596).
-
 ## Perpetual drift on a typed literal the catalog re-prints
 
 Priority: low.

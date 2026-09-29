@@ -13,6 +13,7 @@ import (
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -167,7 +168,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	for k, v := range desired.All() {
 		if _, ok := current.GetOk(k); !ok {
 			result.Stmts = append(result.Stmts, v.SQL())
-			stmts, idxStmts, fkStmts, extraHasConcurrently, err := newTableExtras(v)
+			stmts, idxStmts, fkStmts, extraHasConcurrently, err := newTableExtras(v, parentIndexCopies(current, desired, v))
 			if err != nil {
 				return nil, err
 			}
@@ -250,13 +251,89 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	return result, nil
 }
 
+// parentIndexCopies returns the indexes of the new table t that PostgreSQL
+// creates itself when t is created as a partition. CREATE TABLE ... PARTITION
+// OF copies every index the parent has at that point, so a CREATE INDEX for
+// the copy fails with "already exists". An index of t is such a copy when it
+// carries the name PostgreSQL gives the copy and its parent has the same index
+// before the plan runs: a parent that exists with the index unchanged, or a
+// new parent that gets the index as a copy of its own.
+//
+// An index the parent gains in this plan is not copied. The partition's index
+// is created first and the parent's index attaches it; see
+// PartitionedIndexStmts.
+func parentIndexCopies(current, desired *orderedmap.Map[string, *model.Table], t *model.Table) map[string]bool {
+	if t.PartitionOf == nil {
+		return nil
+	}
+	parent, ok := desired.GetOk(*t.PartitionOf)
+	if !ok {
+		return nil
+	}
+	currentParent, parentExists := current.GetOk(*t.PartitionOf)
+	var parentCopies map[string]bool
+	if !parentExists {
+		parentCopies = parentIndexCopies(current, desired, parent)
+	}
+	columns := indexColumns(desired, t, t)
+
+	copies := map[string]bool{}
+	for _, idx := range t.Indexes.All() {
+		_, is, err := parseIndexDef(idx.Definition)
+		if err != nil || idx.Name != parser.AutoNameIndex(is) {
+			continue
+		}
+		for parentName, parentIdx := range parent.Indexes.All() {
+			if parentExists {
+				currentIdx, ok := currentParent.Indexes.GetOk(parentName)
+				if !ok || !equalIndexDef(currentIdx.Definition, parentIdx.Definition, columns) {
+					continue
+				}
+			} else if !parentCopies[parentName] {
+				continue
+			}
+			if equalIndexDef(parentIdx.Definition, onTable(idx.Definition, parentIdx.Definition), columns) {
+				copies[idx.Name] = true
+				break
+			}
+		}
+	}
+	return copies
+}
+
+// onTable returns the index definition def with the index name and the table
+// taken from other, so two indexes on different tables compare by what they
+// index alone. A definition that does not parse is returned as it is.
+func onTable(def, other string) string {
+	result, is, err := parseIndexDef(def)
+	if err != nil {
+		return def
+	}
+	_, otherIS, err := parseIndexDef(other)
+	if err != nil {
+		return def
+	}
+	is.Idxname = otherIS.Idxname
+	is.Relation = otherIS.Relation
+	out, err := pg_query.Deparse(result)
+	if err != nil {
+		return def
+	}
+	return out
+}
+
 // newTableExtras returns non-FK extras and FK statements separately. For a
 // partitioned table, the indexes and their comments go in idxStmts instead.
-func newTableExtras(t *model.Table) (stmts, idxStmts, fkStmts []string, hasConcurrently bool, err error) {
+// The indexes in copies are left out, since PostgreSQL creates them with the
+// table; their comments are not.
+func newTableExtras(t *model.Table, copies map[string]bool) (stmts, idxStmts, fkStmts []string, hasConcurrently bool, err error) {
 	stmts = append(stmts, t.NotValidConSQL()...)
 	stmts = append(stmts, t.FoldedKeySQL()...)
 	stmts = append(stmts, t.StorageSQL()...)
 	for _, idx := range t.Indexes.CollectValues() {
+		if copies[idx.Name] {
+			continue
+		}
 		if err := checkPartitionedConcurrently(idx, t.Partitioned); err != nil {
 			return nil, nil, nil, false, err
 		}
