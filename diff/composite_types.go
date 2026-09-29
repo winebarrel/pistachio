@@ -52,16 +52,9 @@ func DiffCompositeTypes(current, desired *orderedmap.Map[string, *model.Composit
 
 	// Dropped composite types. When the composite-type-drop policy disallows it,
 	// emit a commented DROP.
-	ctAllowed := dc.IsDropAllowed("composite_type")
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			if ctAllowed {
-				result.DropStmts = append(result.DropStmts, "DROP TYPE "+k+";")
-			} else {
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP TYPE "+k+";")
-			}
-		}
-	}
+	drops, skipped := dropMissing(current, desired, "TYPE", dc.IsDropAllowed("composite_type"))
+	result.DropStmts = append(result.DropStmts, drops...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, skipped...)
 
 	return result, nil
 }

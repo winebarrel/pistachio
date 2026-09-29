@@ -51,16 +51,9 @@ func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc Dro
 	}
 
 	// Dropped domains. When the domain-drop policy disallows it, emit a commented DROP.
-	domainAllowed := dc.IsDropAllowed("domain")
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			if domainAllowed {
-				result.DropStmts = append(result.DropStmts, "DROP DOMAIN "+k+";")
-			} else {
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP DOMAIN "+k+";")
-			}
-		}
-	}
+	drops, skipped := dropMissing(current, desired, "DOMAIN", dc.IsDropAllowed("domain"))
+	result.DropStmts = append(result.DropStmts, drops...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, skipped...)
 
 	return result, nil
 }
