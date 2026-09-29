@@ -57,8 +57,48 @@ dump: |
 
   -- posts_v
   CREATE OR REPLACE VIEW posts_v AS
+  SELECT posts.id
+     FROM posts;
+
+  CREATE TRIGGER posts_v_insert INSTEAD OF INSERT ON posts_v FOR EACH ROW EXECUTE FUNCTION stamp();
+  COMMENT ON TRIGGER posts_v_insert ON posts_v IS 'redirects';
+dump_pg16: &dump_pg16plus |
+  -- email
+  CREATE DOMAIN email AS text
+      CONSTRAINT email_at CHECK ((VALUE ~ '@'::text));
+  COMMENT ON CONSTRAINT email_at ON DOMAIN email IS 'has an at sign';
+
+  -- posts
+  CREATE TABLE posts (
+      id integer NOT NULL,
+      user_id integer NOT NULL,
+      CONSTRAINT posts_pkey PRIMARY KEY (id)
+  );
+  ALTER TABLE ONLY posts ADD CONSTRAINT posts_id_check CHECK (id > 0) NOT VALID;
+
+  ALTER TABLE ONLY posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+  CREATE POLICY posts_select ON posts FOR SELECT USING (true);
+
+  CREATE TRIGGER posts_stamp BEFORE INSERT ON posts FOR EACH ROW EXECUTE FUNCTION stamp();
+  COMMENT ON CONSTRAINT posts_pkey ON posts IS 'pk';
+  COMMENT ON CONSTRAINT posts_id_check ON posts IS 'positive';
+  COMMENT ON CONSTRAINT posts_user_id_fkey ON posts IS 'author';
+  COMMENT ON POLICY posts_select ON posts IS 'everyone reads';
+  COMMENT ON TRIGGER posts_stamp ON posts IS 'stamps';
+
+  -- users
+  CREATE TABLE users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+
+  -- posts_v
+  CREATE OR REPLACE VIEW posts_v AS
   SELECT id
      FROM posts;
 
   CREATE TRIGGER posts_v_insert INSTEAD OF INSERT ON posts_v FOR EACH ROW EXECUTE FUNCTION stamp();
   COMMENT ON TRIGGER posts_v_insert ON posts_v IS 'redirects';
+dump_pg17: *dump_pg16plus
+dump_pg18: *dump_pg16plus
