@@ -472,6 +472,27 @@ parent, so the field would carry a list for the INHERITS case alone.
 
 Origin: INHERITS local column support.
 
+## A new partition's numbered copy of its parent's index
+
+`CREATE TABLE ... PARTITION OF` copies the parent's indexes, and the plan
+leaves out a `CREATE INDEX` for a copy the file writes. It recognizes the copy
+by the name PostgreSQL gives it. When two of the parent's indexes give the same
+name, PostgreSQL numbers the second copy:
+
+```sql
+CREATE INDEX logs_at_idx ON public.logs USING btree (at);
+CREATE INDEX logs_at_pos_idx ON public.logs USING btree (at) WHERE (id > 0);
+```
+
+A partition gets `logs_2026_at_idx` and `logs_2026_at_idx1`. The number is
+not predicted, so a new partition written with `logs_2026_at_idx1`, as `dump`
+writes it, still gets that `CREATE INDEX`, which fails with
+`relation "logs_2026_at_idx1" already exists`.
+
+Workaround: leave the copy out of the file.
+
+Origin: review of [#866](https://github.com/winebarrel/pistachio/pull/866).
+
 ## Perpetual drift on a typed literal the catalog re-prints
 
 Priority: low.
