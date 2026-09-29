@@ -181,3 +181,12 @@ func TestSetCheckOptionSQL(t *testing.T) {
 	assert.Equal(t, "ALTER VIEW public.v1 SET (check_option='local');", model.SetCheckOptionSQL("public.v1", "local"))
 	assert.Equal(t, "ALTER VIEW public.v1 RESET (check_option);", model.SetCheckOptionSQL("public.v1", ""))
 }
+
+func TestView_CommentSQL_triggerComment(t *testing.T) {
+	c := "redirects"
+	trgs := orderedmap.New[string, *model.Trigger]()
+	trgs.Set("v_insert", &model.Trigger{Schema: "public", Table: "v", Name: "v_insert", Comment: &c})
+	trgs.Set("v_update", &model.Trigger{Schema: "public", Table: "v", Name: "v_update"})
+	v := model.View{Schema: "public", Name: "v", Triggers: trgs}
+	assert.Equal(t, "COMMENT ON TRIGGER v_insert ON public.v IS 'redirects';", v.CommentSQL())
+}

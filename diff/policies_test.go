@@ -419,3 +419,31 @@ func TestDiffPolicies_RenameDestinationExists(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot rename policy old to new on public.documents: destination already exists")
 }
+
+// ALTER POLICY keeps the comment. A policy that is dropped and created again
+// has none, so its comment is set again.
+func TestDiffPolicies_comment(t *testing.T) {
+	c := "reads"
+	withComment := func(p *model.Policy) { p.Comment = &c }
+	policies := func(p *model.Policy) *orderedmap.Map[string, *model.Policy] {
+		m := orderedmap.New[string, *model.Policy]()
+		m.Set(p.Name, p)
+		return m
+	}
+
+	stmts, _, err := diffPolicies("public.documents", policies(newPolicy("p", 'r', withUsing("true"))), policies(newPolicy("p", 'r', withUsing("true"), withComment)), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"COMMENT ON POLICY p ON public.documents IS 'reads';"}, stmts)
+
+	stmts, _, err = diffPolicies("public.documents", policies(newPolicy("p", 'r', withUsing("true"), withComment)), policies(newPolicy("p", 'r', withUsing("false"), withComment)), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER POLICY p ON public.documents USING (false);"}, stmts)
+
+	stmts, _, err = diffPolicies("public.documents", policies(newPolicy("p", 'r', withUsing("true"), withComment)), policies(newPolicy("p", 'w', withUsing("true"), withComment)), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"DROP POLICY p ON public.documents;",
+		"CREATE POLICY p ON public.documents FOR UPDATE USING (true);",
+		"COMMENT ON POLICY p ON public.documents IS 'reads';",
+	}, stmts)
+}

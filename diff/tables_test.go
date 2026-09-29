@@ -4863,3 +4863,58 @@ func TestDiffTables_partitionChild_addIndex_perDirective(t *testing.T) {
 	assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY events_0_id ON public.events_0 USING btree (id);"}, result.Stmts)
 	assert.True(t, result.HasConcurrently)
 }
+
+// A constraint that stays keeps its comment, so only a changed one is set. One
+// that is dropped and added back has none, so its comment is set again.
+func TestDiffConstraints_comment(t *testing.T) {
+	pk, check, recreated := "pk", "positive", "recreated"
+	current := orderedmap.New[string, *model.Constraint]()
+	current.Set("t_pkey", &model.Constraint{Name: "t_pkey", Type: 'p', Definition: "PRIMARY KEY (id)", Validated: true})
+	current.Set("t_check", &model.Constraint{Name: "t_check", Type: 'c', Definition: "CHECK (id > 0)", Validated: true, Comment: &check})
+	current.Set("t_n_check", &model.Constraint{Name: "t_n_check", Type: 'c', Definition: "CHECK (n > 0)", Validated: true, Comment: &recreated})
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("t_pkey", &model.Constraint{Name: "t_pkey", Type: 'p', Definition: "PRIMARY KEY (id)", Validated: true, Comment: &pk})
+	desired.Set("t_check", &model.Constraint{Name: "t_check", Type: 'c', Definition: "CHECK (id > 0)", Validated: true, Comment: &check})
+	desired.Set("t_n_check", &model.Constraint{Name: "t_n_check", Type: 'c', Definition: "CHECK (n > 1)", Validated: true, Comment: &recreated})
+
+	stmts, comments, _, err := diffConstraints("public.t", current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"ALTER TABLE public.t DROP CONSTRAINT t_n_check;",
+		"ALTER TABLE public.t ADD CONSTRAINT t_n_check CHECK (n > 1);",
+	}, stmts)
+	assert.Equal(t, []string{
+		"COMMENT ON CONSTRAINT t_pkey ON public.t IS 'pk';",
+		"COMMENT ON CONSTRAINT t_n_check ON public.t IS 'recreated';",
+	}, comments)
+}
+
+func TestDiffForeignKeys_comment(t *testing.T) {
+	author := "author"
+	newFK := func(def string, comment *string) *orderedmap.Map[string, *model.ForeignKey] {
+		fk := &model.ForeignKey{Schema: "public", Table: "orders"}
+		fk.Name = "fk_user"
+		fk.Definition = def
+		fk.Validated = true
+		fk.Comment = comment
+		m := orderedmap.New[string, *model.ForeignKey]()
+		m.Set(fk.Name, fk)
+		return m
+	}
+	const def = "FOREIGN KEY (user_id) REFERENCES users(id)"
+
+	_, addStmts, _, err := diffForeignKeys("public.orders", "public", false, newFK(def, nil), newFK(def, &author), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"COMMENT ON CONSTRAINT fk_user ON public.orders IS 'author';"}, addStmts)
+
+	_, addStmts, _, err = diffForeignKeys("public.orders", "public", false, newFK(def, &author), newFK(def, nil), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"COMMENT ON CONSTRAINT fk_user ON public.orders IS NULL;"}, addStmts)
+
+	_, addStmts, _, err = diffForeignKeys("public.orders", "public", false, newFK(def, &author), newFK(def+" ON DELETE CASCADE", &author), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"ALTER TABLE ONLY public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;",
+		"COMMENT ON CONSTRAINT fk_user ON public.orders IS 'author';",
+	}, addStmts)
+}

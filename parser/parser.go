@@ -1851,17 +1851,11 @@ func parseCommentOnDomainConstraint(cs *pg_query.CommentStmt, defaultSchema stri
 // findDomain returns the domain a type name names, or nil when the file does
 // not define it.
 func findDomain(tn *pg_query.TypeName, defaultSchema string, domains *orderedmap.Map[string, *model.Domain]) *model.Domain {
-	if tn == nil {
-		return nil
-	}
 	var names []string
 	for _, n := range tn.Names {
 		if s := n.GetString_(); s != nil {
 			names = append(names, s.Sval)
 		}
-	}
-	if len(names) == 0 {
-		return nil
 	}
 	schema, domainName := schemaName(names, defaultSchema)
 	return domains.Get(model.Ident(schema, domainName))
