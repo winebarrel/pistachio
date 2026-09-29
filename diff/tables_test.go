@@ -163,6 +163,171 @@ func TestDiffTables_newPartitionedTable_indexesAfterPartitions(t *testing.T) {
 	}, result.PartitionedIndexStmts)
 }
 
+// logsIndex returns a btree index named name on public.table over cols.
+func logsIndex(table, name, cols string) *model.Index {
+	return &model.Index{Schema: "public", Name: name, Table: table, Definition: "CREATE INDEX " + name + " ON public." + table + " USING btree (" + cols + ")"}
+}
+
+// logsTable returns public.name with the given indexes, a partition of
+// public.parent when parent is not empty.
+func logsTable(name, parent string, indexes ...*model.Index) *model.Table {
+	tbl := newTable("public", name)
+	if parent != "" {
+		tbl.PartitionOf = new("public." + parent)
+		tbl.PartitionBound = new("FOR VALUES IN (1)")
+	}
+	for _, idx := range indexes {
+		tbl.Indexes.Set(idx.Name, idx)
+	}
+	return tbl
+}
+
+func TestParentIndexCopies(t *testing.T) {
+	renamed := logsIndex("logs", "logs_at_idx", "at")
+	renamed.RenameFrom = new("logs_old_idx")
+	badRename := logsIndex("logs", "logs_at_idx", "at")
+	badRename.RenameFrom = new("logs_missing_idx")
+	inherits := logsTable("logs_old", "", logsIndex("logs_old", "logs_old_at_idx", "at"))
+	inherits.PartitionOf = new("public.logs")
+
+	tests := []struct {
+		name    string
+		current []*model.Table
+		desired []*model.Table
+		want    map[string]bool
+	}{
+		{
+			name:    "existing parent with the index",
+			current: []*model.Table{logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at"))},
+			desired: []*model.Table{
+				logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at")),
+				logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_at_idx", "at")),
+			},
+			want: map[string]bool{"logs_1_at_idx": true},
+		},
+		{
+			name:    "another name",
+			current: []*model.Table{logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at"))},
+			desired: []*model.Table{
+				logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at")),
+				logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_by_at", "at")),
+			},
+			want: map[string]bool{},
+		},
+		{
+			name:    "another definition",
+			current: []*model.Table{logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at"))},
+			desired: []*model.Table{
+				logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at")),
+				logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_at_idx", "at DESC")),
+			},
+			want: map[string]bool{},
+		},
+		{
+			name:    "parent index added in the plan",
+			current: []*model.Table{logsTable("logs", "")},
+			desired: []*model.Table{
+				logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at")),
+				logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_at_idx", "at")),
+			},
+			want: map[string]bool{},
+		},
+		{
+			name:    "parent index changed in the plan",
+			current: []*model.Table{logsTable("logs", "", logsIndex("logs", "logs_at_idx", "id"))},
+			desired: []*model.Table{
+				logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at")),
+				logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_at_idx", "at")),
+			},
+			want: map[string]bool{},
+		},
+		{
+			name:    "parent index renamed in the plan",
+			current: []*model.Table{logsTable("logs", "", logsIndex("logs", "logs_old_idx", "at"))},
+			desired: []*model.Table{
+				logsTable("logs", "", renamed),
+				logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_at_idx", "at")),
+			},
+			want: map[string]bool{"logs_1_at_idx": true},
+		},
+		{
+			name:    "parent index rename with no source",
+			current: []*model.Table{logsTable("logs", "", logsIndex("logs", "logs_old_idx", "at"))},
+			desired: []*model.Table{
+				logsTable("logs", "", badRename),
+				logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_at_idx", "at")),
+			},
+			want: nil,
+		},
+		{
+			name:    "new parent that gets the copy",
+			current: []*model.Table{logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at"))},
+			desired: []*model.Table{
+				logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at")),
+				logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_at_idx", "at")),
+				logsTable("logs_1_a", "logs_1", logsIndex("logs_1_a", "logs_1_a_at_idx", "at")),
+			},
+			want: map[string]bool{"logs_1_a_at_idx": true},
+		},
+		{
+			name:    "new parent that does not get the copy",
+			current: []*model.Table{logsTable("logs", "")},
+			desired: []*model.Table{
+				logsTable("logs", ""),
+				logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_at_idx", "at")),
+				logsTable("logs_1_a", "logs_1", logsIndex("logs_1_a", "logs_1_a_at_idx", "at")),
+			},
+			want: map[string]bool{},
+		},
+		{
+			name:    "parent left out",
+			current: nil,
+			desired: []*model.Table{logsTable("logs_1", "logs", logsIndex("logs_1", "logs_1_at_idx", "at"))},
+			want:    nil,
+		},
+		{
+			name:    "INHERITS child",
+			current: []*model.Table{logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at"))},
+			desired: []*model.Table{logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at")), inherits},
+			want:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := orderedmap.New[string, *model.Table]()
+			for _, tbl := range tt.current {
+				current.Set(tbl.FQTN(), tbl)
+			}
+			desired := orderedmap.New[string, *model.Table]()
+			for _, tbl := range tt.desired {
+				desired.Set(tbl.FQTN(), tbl)
+			}
+			child := tt.desired[len(tt.desired)-1]
+			assert.Equal(t, tt.want, parentIndexCopies(current, desired, child))
+		})
+	}
+}
+
+// A new partition's copy of its parent's index is created with the partition,
+// so only its comment is written.
+func TestDiffTables_newPartition_parentIndexCopy(t *testing.T) {
+	current := orderedmap.New[string, *model.Table]()
+	desired := orderedmap.New[string, *model.Table]()
+
+	current.Set("public.logs", logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at")))
+	desired.Set("public.logs", logsTable("logs", "", logsIndex("logs", "logs_at_idx", "at")))
+	copied := logsIndex("logs_1", "logs_1_at_idx", "at")
+	copied.Comment = new("copy")
+	desired.Set("public.logs_1", logsTable("logs_1", "logs", copied))
+
+	result, err := DiffTables(current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.Stmts, 2)
+	assert.Contains(t, result.Stmts[0], "CREATE TABLE public.logs_1 PARTITION OF public.logs")
+	assert.Equal(t, "COMMENT ON INDEX public.logs_1_at_idx IS 'copy';", result.Stmts[1])
+}
+
 func TestDiffTables_modifyPartitionedTable_addIndex(t *testing.T) {
 	current := orderedmap.New[string, *model.Table]()
 	desired := orderedmap.New[string, *model.Table]()
@@ -210,7 +375,7 @@ func TestPartitionedIndexConcurrently(t *testing.T) {
 	t.Run("new table", func(t *testing.T) {
 		tbl := partitionedTable("logs", "", "logs_id_idx")
 		tbl.Indexes = concurrentIndexes()
-		_, _, _, _, err := newTableExtras(tbl)
+		_, _, _, _, err := newTableExtras(tbl, nil)
 		require.EqualError(t, err, wantErr)
 	})
 

@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Adding a partition to a table that has an index no longer fails with `relation ... already exists` when the file also writes the partition's copy of the index, as `dump` does. `CREATE TABLE ... PARTITION OF` creates the copy, so the plan leaves out a `CREATE INDEX` that has the name PostgreSQL gives the copy and the definition of the parent's index.
+
 ## [1.71.0] - 2026-09-29
 
 * Comments on constraints, foreign keys, triggers, policies and domain constraints are now managed. Before, `COMMENT ON CONSTRAINT`, `COMMENT ON TRIGGER` and `COMMENT ON POLICY` in a schema file were ignored with a warning, and `dump` did not write them.

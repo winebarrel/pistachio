@@ -1204,7 +1204,7 @@ func chooseIndexElemNames(lists ...[]*pg_query.Node) []string {
 	return names
 }
 
-// autoNameIndex generates a PostgreSQL-style name for an index written without
+// AutoNameIndex generates a PostgreSQL-style name for an index written without
 // one, following ChooseRelationName (src/backend/commands/indexcmds.c):
 //
 //	{table}_{col}..._idx
@@ -1217,7 +1217,10 @@ func chooseIndexElemNames(lists ...[]*pg_query.Node) []string {
 // appends a number when the name is already taken in the schema, which cannot
 // be predicted from the desired schema alone, so a file that generates one
 // name twice is rejected as a duplicate index name.
-func autoNameIndex(is *pg_query.IndexStmt) string {
+//
+// The diff uses it too: the copy of a parent's index that PostgreSQL creates
+// on a new partition takes this name.
+func AutoNameIndex(is *pg_query.IndexStmt) string {
 	return makeObjectName(is.Relation.Relname, strings.Join(chooseIndexColumnNames(is), "_"), "idx")
 }
 
@@ -1517,7 +1520,7 @@ func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt, defaultSc
 	// Name the index before deparsing so the stored Definition carries the
 	// name PostgreSQL would have picked.
 	if is.Idxname == "" {
-		is.Idxname = autoNameIndex(is)
+		is.Idxname = AutoNameIndex(is)
 	}
 
 	result := &pg_query.ParseResult{

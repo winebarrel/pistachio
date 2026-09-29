@@ -1,0 +1,37 @@
+# The parent's index changes in this plan, so it is dropped before the new
+# partition is created and the partition gets no copy. The partition's index
+# for the new definition is created, and the recreated parent index attaches
+# it.
+init: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  ) PARTITION BY RANGE (at);
+  CREATE INDEX logs_key_idx ON public.logs USING btree (at);
+desired: |
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_key_idx ON public.logs USING btree (id);
+
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE INDEX logs_2026_id_idx ON public.logs_2026 USING btree (id);
+applied: |
+  -- public.logs
+  CREATE TABLE public.logs (
+      id integer NOT NULL,
+      at date NOT NULL
+  )
+  PARTITION BY RANGE (at);
+  CREATE INDEX logs_key_idx ON public.logs USING btree (id);
+
+  -- public.logs_2026
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE INDEX logs_2026_id_idx ON public.logs_2026 USING btree (id);
+applied_sql: |
+  DROP INDEX public.logs_key_idx;
+  CREATE TABLE public.logs_2026 PARTITION OF public.logs FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+  CREATE INDEX logs_2026_id_idx ON public.logs_2026 USING btree (id);
+  CREATE INDEX logs_key_idx ON public.logs USING btree (id);

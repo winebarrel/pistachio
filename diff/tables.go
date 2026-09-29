@@ -13,6 +13,7 @@ import (
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -167,7 +168,7 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	for k, v := range desired.All() {
 		if _, ok := current.GetOk(k); !ok {
 			result.Stmts = append(result.Stmts, v.SQL())
-			stmts, idxStmts, fkStmts, extraHasConcurrently, err := newTableExtras(v)
+			stmts, idxStmts, fkStmts, extraHasConcurrently, err := newTableExtras(v, parentIndexCopies(current, desired, v))
 			if err != nil {
 				return nil, err
 			}
@@ -250,13 +251,95 @@ func DiffTables(current, desired *orderedmap.Map[string, *model.Table], dc DropC
 	return result, nil
 }
 
+// parentIndexCopies returns the indexes of the new table t that PostgreSQL
+// creates with t. CREATE TABLE ... PARTITION OF copies every index the parent
+// has, so a CREATE INDEX for the copy fails with "already exists". An index of
+// t is a copy when it has the name PostgreSQL gives the copy and the parent
+// has the same index before the plan runs: the parent exists and the index is
+// unchanged or only renamed, or the parent is new and gets the index as a copy
+// itself.
+//
+// An index the parent gains in this plan is not copied. The partition's index
+// is created first and the parent's index attaches it; see
+// PartitionedIndexStmts. A parent a filter leaves out is not seen, so the
+// partition's indexes are created as written.
+func parentIndexCopies(current, desired *orderedmap.Map[string, *model.Table], t *model.Table) map[string]bool {
+	// An INHERITS child gets no copy.
+	if !t.IsPartitionChild() {
+		return nil
+	}
+	parent, ok := desired.GetOk(*t.PartitionOf)
+	if !ok {
+		return nil
+	}
+	currentParent, parentExists := current.GetOk(*t.PartitionOf)
+	var currentIndexes *orderedmap.Map[string, *model.Index]
+	var parentCopies map[string]bool
+	if parentExists {
+		// A renamed index is still there when the partition is created. A
+		// rename that cannot be planned fails the parent's own diff.
+		var err error
+		if _, currentIndexes, err = detectIndexRenames(currentParent.Indexes, parent.Indexes); err != nil {
+			return nil
+		}
+	} else {
+		parentCopies = parentIndexCopies(current, desired, parent)
+	}
+	columns := indexColumns(desired, t, t)
+
+	copies := map[string]bool{}
+	for _, idx := range t.Indexes.All() {
+		for parentName, parentIdx := range parent.Indexes.All() {
+			if parentExists {
+				currentIdx, ok := currentIndexes.GetOk(parentName)
+				if !ok || !equalIndexDef(currentIdx.Definition, parentIdx.Definition, columns) {
+					continue
+				}
+			} else if !parentCopies[parentName] {
+				continue
+			}
+			if isPartitionIndexCopy(idx, parentIdx, columns) {
+				copies[idx.Name] = true
+				break
+			}
+		}
+	}
+	return copies
+}
+
+// isPartitionIndexCopy reports whether idx, an index of a partition, is the
+// copy PostgreSQL makes of parentIdx, an index of its parent: it carries the
+// name PostgreSQL gives the copy, and it indexes what parentIdx does, the
+// storage parameters included. The two are compared with the index name and
+// the table of idx replaced by those of parentIdx. columns are the ones the
+// definition of idx is compared against; see equalIndexDef.
+func isPartitionIndexCopy(idx, parentIdx *model.Index, columns *orderedmap.Map[string, *model.Column]) bool {
+	result, is, err := parseIndexDef(idx.Definition)
+	if err != nil || idx.Name != parser.AutoNameIndex(is) {
+		return false
+	}
+	_, parentIS, err := parseIndexDef(parentIdx.Definition)
+	if err != nil {
+		return false
+	}
+	is.Idxname = parentIS.Idxname
+	is.Relation = parentIS.Relation
+	def, err := pg_query.Deparse(result)
+	return err == nil && equalIndexDef(parentIdx.Definition, def, columns)
+}
+
 // newTableExtras returns non-FK extras and FK statements separately. For a
 // partitioned table, the indexes and their comments go in idxStmts instead.
-func newTableExtras(t *model.Table) (stmts, idxStmts, fkStmts []string, hasConcurrently bool, err error) {
+// The indexes in copies are left out, since PostgreSQL creates them with the
+// table; their comments are not.
+func newTableExtras(t *model.Table, copies map[string]bool) (stmts, idxStmts, fkStmts []string, hasConcurrently bool, err error) {
 	stmts = append(stmts, t.NotValidConSQL()...)
 	stmts = append(stmts, t.FoldedKeySQL()...)
 	stmts = append(stmts, t.StorageSQL()...)
 	for _, idx := range t.Indexes.CollectValues() {
+		if copies[idx.Name] {
+			continue
+		}
 		if err := checkPartitionedConcurrently(idx, t.Partitioned); err != nil {
 			return nil, nil, nil, false, err
 		}
