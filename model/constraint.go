@@ -72,11 +72,21 @@ type Constraint struct {
 	// catalog has no such name to report. The diff keeps that index out of
 	// the index drops and adds, and takes an existing constraint of the same
 	// name, type and deferral as satisfying the declaration.
-	IndexName string `json:"index_name"`
+	IndexName string  `json:"index_name"`
+	Comment   *string `json:"comment"`
 }
 
 func (con *Constraint) String() string {
 	return fmt.Sprintf("%#v", *con)
+}
+
+// CommentSQL renders the constraint's COMMENT ON, or an empty string when it
+// carries none. fqtn is the table the constraint is on.
+func (con Constraint) CommentSQL(fqtn string) string {
+	if con.Comment == nil {
+		return ""
+	}
+	return "COMMENT ON CONSTRAINT " + Ident(con.Name) + " ON " + fqtn + " IS " + QuoteLiteral(*con.Comment) + ";"
 }
 
 type ForeignKey struct {

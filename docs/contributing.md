@@ -48,7 +48,7 @@ ordinary `make test` replays it from then on, so commit it with the fix.
 
 ## The JSON Schema
 
-`docs/json/schema-1.1.json` describes the JSON `pista parse` and `pista dump --json`
+`docs/json/schema-1.2.json` describes the JSON `pista parse` and `pista dump --json`
 write. It is
 generated from the structs rather than written by hand.
 

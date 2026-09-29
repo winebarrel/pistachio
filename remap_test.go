@@ -1806,3 +1806,72 @@ CREATE FUNCTION myschema.label(s myschema.status) RETURNS text
 	// so there is nothing to do.
 	assert.Empty(t, strings.TrimSpace(got.SQL))
 }
+
+// The comments on a constraint, a foreign key, a trigger, a policy and a
+// domain constraint follow the mapped schema. The dump plans clean when fed
+// back, and a changed comment is set on the object under its real schema.
+func TestSchemaMap_ConstraintTriggerPolicyComments(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE FUNCTION myschema.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+CREATE DOMAIN myschema.pos AS integer CONSTRAINT pos_check CHECK (VALUE > 0);
+CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE myschema.posts (
+    id integer NOT NULL,
+    user_id integer,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);
+ALTER TABLE myschema.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES myschema.users(id);
+CREATE POLICY posts_read ON myschema.posts FOR SELECT USING (true);
+CREATE TRIGGER posts_stamp BEFORE INSERT ON myschema.posts FOR EACH ROW EXECUTE FUNCTION myschema.stamp();
+COMMENT ON CONSTRAINT pos_check ON DOMAIN myschema.pos IS 'domain check';
+COMMENT ON CONSTRAINT posts_pkey ON myschema.posts IS 'pk';
+COMMENT ON CONSTRAINT posts_user_id_fkey ON myschema.posts IS 'author';
+COMMENT ON POLICY posts_read ON myschema.posts IS 'reads';
+COMMENT ON TRIGGER posts_stamp ON myschema.posts IS 'stamps';
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+		SchemaMap:  map[string]string{"myschema": "public"},
+	})
+
+	dumped, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+	output := dumped.String()
+
+	for _, want := range []string{
+		"COMMENT ON CONSTRAINT pos_check ON DOMAIN public.pos IS 'domain check';",
+		"COMMENT ON CONSTRAINT posts_pkey ON public.posts IS 'pk';",
+		"COMMENT ON CONSTRAINT posts_user_id_fkey ON public.posts IS 'author';",
+		"COMMENT ON POLICY posts_read ON public.posts IS 'reads';",
+		"COMMENT ON TRIGGER posts_stamp ON public.posts IS 'stamps';",
+	} {
+		assert.Contains(t, output, want)
+	}
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(output), 0o644))
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got.SQL)
+
+	changed := strings.NewReplacer("'pk'", "'primary key'", "'author'", "'writer'", "'reads'", "'readers'", "'stamps'", "'stamper'", "'domain check'", "'positive'").Replace(output)
+	require.NoError(t, os.WriteFile(desiredFile, []byte(changed), 0o644))
+	got, err = client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	for _, want := range []string{
+		"COMMENT ON CONSTRAINT pos_check ON DOMAIN myschema.pos IS 'positive';",
+		"COMMENT ON CONSTRAINT posts_pkey ON myschema.posts IS 'primary key';",
+		"COMMENT ON CONSTRAINT posts_user_id_fkey ON myschema.posts IS 'writer';",
+		"COMMENT ON POLICY posts_read ON myschema.posts IS 'readers';",
+		"COMMENT ON TRIGGER posts_stamp ON myschema.posts IS 'stamper';",
+	} {
+		assert.Contains(t, got.SQL, want)
+	}
+}

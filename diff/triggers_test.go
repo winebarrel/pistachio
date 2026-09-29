@@ -425,3 +425,30 @@ func TestEqualTriggerDef_QualifiedFunction(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, same)
 }
+
+// CREATE OR REPLACE TRIGGER keeps the comment. A constraint trigger is dropped
+// and created, so its comment is set again.
+func TestDiffTriggers_comment(t *testing.T) {
+	c := "stamps"
+	withComment := func(trg *model.Trigger) { trg.Comment = &c }
+
+	stmts, _, err := diffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef)), triggers(newTrigger("events_stamp", insertDef, withComment)), allowTriggerDrops())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"COMMENT ON TRIGGER events_stamp ON public.events IS 'stamps';"}, stmts)
+
+	stmts, _, err = diffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef, withComment)), triggers(newTrigger("events_stamp", insertDef)), allowTriggerDrops())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"COMMENT ON TRIGGER events_stamp ON public.events IS NULL;"}, stmts)
+
+	stmts, _, err = diffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef, withComment)), triggers(newTrigger("events_stamp", updateDef, withComment)), allowTriggerDrops())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"CREATE OR REPLACE TRIGGER events_stamp BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION stamp();"}, stmts)
+
+	stmts, _, err = diffTriggers("public.events", triggers(newTrigger("events_stamp", insertDef, withComment)), triggers(newTrigger("events_stamp", conDef, withComment)), allowTriggerDrops())
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"DROP TRIGGER events_stamp ON public.events;",
+		conDef + ";",
+		"COMMENT ON TRIGGER events_stamp ON public.events IS 'stamps';",
+	}, stmts)
+}

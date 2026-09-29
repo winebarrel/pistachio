@@ -148,7 +148,8 @@ func TestConstraint_MarshalJSON(t *testing.T) {
 		"deferred": false,
 		"validated": true,
 		"inherited": false,
-		"index_name": ""
+		"index_name": "",
+		"comment": null
 	}`, marshalJSON(t, con))
 }
 
@@ -184,6 +185,7 @@ func TestForeignKey_MarshalJSON(t *testing.T) {
 		"validated": true,
 		"inherited": false,
 		"index_name": "",
+		"comment": null,
 		"schema": "public",
 		"table": "posts",
 		"ref_schema": "public",
@@ -273,7 +275,8 @@ func TestPolicy_MarshalJSON(t *testing.T) {
 		"command": "SELECT",
 		"roles": ["app"],
 		"using": "user_id = current_user_id()",
-		"with_check": null
+		"with_check": null,
+		"comment": null
 	}`, marshalJSON(t, p))
 }
 
@@ -290,7 +293,8 @@ func TestTrigger_MarshalJSON(t *testing.T) {
 		"name": "trg",
 		"rename_from": null,
 		"definition": "CREATE TRIGGER trg BEFORE INSERT ON public.items FOR EACH ROW EXECUTE FUNCTION f()",
-		"state": "enabled"
+		"state": "enabled",
+		"comment": null
 	}`, marshalJSON(t, trg))
 }
 
@@ -411,7 +415,7 @@ func TestDomain_MarshalJSON(t *testing.T) {
 		"default": null,
 		"collation": null,
 		"constraints": [
-			{"name": "email_check", "definition": "CHECK (VALUE ~ '@')", "validated": true}
+			{"name": "email_check", "definition": "CHECK (VALUE ~ '@')", "validated": true, "comment": null}
 		],
 		"comment": null,
 		"ignore": false

@@ -1,0 +1,19 @@
+init: |
+  CREATE FUNCTION public.redirect() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.items (id integer);
+  CREATE VIEW public.items_v AS SELECT id FROM public.items;
+  CREATE TRIGGER items_v_insert INSTEAD OF INSERT ON public.items_v FOR EACH ROW EXECUTE FUNCTION public.redirect();
+desired: |
+  CREATE TABLE public.items (id integer);
+  CREATE VIEW public.items_v AS SELECT id FROM public.items;
+  CREATE TRIGGER items_v_insert INSTEAD OF INSERT ON public.items_v FOR EACH ROW EXECUTE FUNCTION public.redirect();
+  COMMENT ON TRIGGER items_v_insert ON public.items_v IS 'redirects inserts';
+  CREATE VIEW public.items_w AS SELECT id FROM public.items;
+  CREATE TRIGGER items_w_insert INSTEAD OF INSERT ON public.items_w FOR EACH ROW EXECUTE FUNCTION public.redirect();
+  COMMENT ON TRIGGER items_w_insert ON public.items_w IS 'redirects inserts too';
+plan: |
+  COMMENT ON TRIGGER items_v_insert ON public.items_v IS 'redirects inserts';
+  CREATE OR REPLACE VIEW public.items_w AS
+  SELECT id FROM public.items;
+  CREATE TRIGGER items_w_insert INSTEAD OF INSERT ON public.items_w FOR EACH ROW EXECUTE FUNCTION public.redirect();
+  COMMENT ON TRIGGER items_w_insert ON public.items_w IS 'redirects inserts too';

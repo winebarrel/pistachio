@@ -1,0 +1,60 @@
+# Renaming the table or a column and changing a column's type keep the
+# comments, so the plan writes none. Quoted names and a quote in the comment
+# survive the round trip.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.posts (
+      id integer NOT NULL,
+      n integer NOT NULL,
+      CONSTRAINT "Posts PK" PRIMARY KEY (id),
+      CONSTRAINT posts_n_check CHECK (n > 0)
+  );
+  CREATE POLICY "Posts Read" ON public.posts FOR SELECT USING (n > 0);
+  CREATE TRIGGER "Posts Stamp" BEFORE UPDATE OF n ON public.posts FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  COMMENT ON CONSTRAINT "Posts PK" ON public.posts IS 'it''s the key';
+  COMMENT ON CONSTRAINT posts_n_check ON public.posts IS 'positive';
+  COMMENT ON POLICY "Posts Read" ON public.posts IS 'reads';
+  COMMENT ON TRIGGER "Posts Stamp" ON public.posts IS 'stamps';
+desired: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  -- pista:renamed-from public.posts
+  CREATE TABLE public.articles (
+      id bigint NOT NULL,
+      -- pista:renamed-from n
+      num integer NOT NULL,
+      CONSTRAINT "Posts PK" PRIMARY KEY (id),
+      CONSTRAINT posts_n_check CHECK (num > 0)
+  );
+  CREATE POLICY "Posts Read" ON public.articles FOR SELECT USING (num > 0);
+  CREATE TRIGGER "Posts Stamp" BEFORE UPDATE OF num ON public.articles FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  COMMENT ON CONSTRAINT "Posts PK" ON public.articles IS 'it''s the key';
+  COMMENT ON CONSTRAINT posts_n_check ON public.articles IS 'positive';
+  COMMENT ON POLICY "Posts Read" ON public.articles IS 'reads';
+  COMMENT ON TRIGGER "Posts Stamp" ON public.articles IS 'stamps';
+applied_sql: |
+  ALTER TABLE public.posts RENAME TO articles;
+  ALTER TABLE public.articles RENAME COLUMN n TO num;
+  ALTER TABLE public.articles ALTER COLUMN id SET DATA TYPE bigint;
+applied: |
+  -- public.stamp()
+  CREATE OR REPLACE FUNCTION public.stamp()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$ BEGIN RETURN NEW; END $$;
+
+  -- public.articles
+  CREATE TABLE public.articles (
+      id bigint NOT NULL,
+      num integer NOT NULL,
+      CONSTRAINT "Posts PK" PRIMARY KEY (id),
+      CONSTRAINT posts_n_check CHECK (num > 0)
+  );
+
+  CREATE POLICY "Posts Read" ON public.articles FOR SELECT USING ((num > 0));
+
+  CREATE TRIGGER "Posts Stamp" BEFORE UPDATE OF num ON articles FOR EACH ROW EXECUTE FUNCTION stamp();
+  COMMENT ON CONSTRAINT "Posts PK" ON public.articles IS 'it''s the key';
+  COMMENT ON CONSTRAINT posts_n_check ON public.articles IS 'positive';
+  COMMENT ON POLICY "Posts Read" ON public.articles IS 'reads';
+  COMMENT ON TRIGGER "Posts Stamp" ON public.articles IS 'stamps';

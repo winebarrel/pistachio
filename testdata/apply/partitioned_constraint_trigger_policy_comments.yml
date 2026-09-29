@@ -1,0 +1,72 @@
+# A partitioned table's constraints, foreign key, trigger and policy carry
+# their comments, and so do a partition's own trigger and policy. The
+# partition's copies of the parent's keys carry none of their own.
+manage_routine: true
+init: ""
+desired: |
+  CREATE FUNCTION public.stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT events_pkey PRIMARY KEY (id),
+      CONSTRAINT events_id_check CHECK (id >= 0)
+  )
+  PARTITION BY RANGE (id);
+  CREATE TABLE public.events_0 PARTITION OF public.events FOR VALUES FROM (0) TO (100);
+  ALTER TABLE public.events ADD CONSTRAINT events_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+  CREATE POLICY events_read ON public.events FOR SELECT USING (true);
+  CREATE POLICY events_0_read ON public.events_0 FOR SELECT USING (true);
+  CREATE TRIGGER events_stamp BEFORE INSERT ON public.events FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  CREATE TRIGGER events_0_stamp BEFORE UPDATE ON public.events_0 FOR EACH ROW EXECUTE FUNCTION public.stamp();
+  COMMENT ON CONSTRAINT events_pkey ON public.events IS 'pk';
+  COMMENT ON CONSTRAINT events_id_check ON public.events IS 'not negative';
+  COMMENT ON CONSTRAINT events_user_id_fkey ON public.events IS 'author';
+  COMMENT ON POLICY events_read ON public.events IS 'parent policy';
+  COMMENT ON POLICY events_0_read ON public.events_0 IS 'partition policy';
+  COMMENT ON TRIGGER events_stamp ON public.events IS 'parent trigger';
+  COMMENT ON TRIGGER events_0_stamp ON public.events_0 IS 'partition trigger';
+applied: |
+  -- public.stamp()
+  CREATE OR REPLACE FUNCTION public.stamp()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$ BEGIN RETURN NEW; END $$;
+
+  -- public.events
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      user_id integer,
+      CONSTRAINT events_pkey PRIMARY KEY (id),
+      CONSTRAINT events_id_check CHECK (id >= 0)
+  )
+  PARTITION BY RANGE (id);
+
+  ALTER TABLE public.events ADD CONSTRAINT events_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+  CREATE POLICY events_read ON public.events FOR SELECT USING (true);
+
+  CREATE TRIGGER events_stamp BEFORE INSERT ON events FOR EACH ROW EXECUTE FUNCTION stamp();
+  COMMENT ON CONSTRAINT events_pkey ON public.events IS 'pk';
+  COMMENT ON CONSTRAINT events_id_check ON public.events IS 'not negative';
+  COMMENT ON CONSTRAINT events_user_id_fkey ON public.events IS 'author';
+  COMMENT ON POLICY events_read ON public.events IS 'parent policy';
+  COMMENT ON TRIGGER events_stamp ON public.events IS 'parent trigger';
+
+  -- public.events_0
+  CREATE TABLE public.events_0 PARTITION OF public.events FOR VALUES FROM (0) TO (100);
+
+  CREATE POLICY events_0_read ON public.events_0 FOR SELECT USING (true);
+
+  CREATE TRIGGER events_0_stamp BEFORE UPDATE ON events_0 FOR EACH ROW EXECUTE FUNCTION stamp();
+  COMMENT ON POLICY events_0_read ON public.events_0 IS 'partition policy';
+  COMMENT ON TRIGGER events_0_stamp ON public.events_0 IS 'partition trigger';
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

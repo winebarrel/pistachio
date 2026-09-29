@@ -143,6 +143,13 @@ func (v View) CommentSQL() string {
 			}
 		}
 	}
+	if v.Triggers != nil {
+		for _, trg := range v.Triggers.CollectValues() {
+			if s := trg.CommentSQL(); s != "" {
+				stmts = append(stmts, s)
+			}
+		}
+	}
 	return strings.Join(stmts, "\n")
 }
 

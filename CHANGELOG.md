@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+* Comments on constraints, foreign keys, triggers, policies and domain constraints are now managed. Before, `COMMENT ON CONSTRAINT`, `COMMENT ON TRIGGER` and `COMMENT ON POLICY` in a schema file were ignored with a warning, and `dump` did not write them.
+
+* The plan file version is now 5. Run `plan --out` again for a plan file an older pista wrote.
+
+* The JSON Schema is now `schema-1.2.json`. It adds `comment` to a constraint, a foreign key, a trigger, a policy and a domain constraint.
+
 * A `USING INDEX` constraint that keeps the index's own name, or names none, no longer fails with `duplicate relation name`.
 
 * The comment on a table, view or column is now read only from comments on relations. After OID wraparound, a comment on another kind of object that shared the OID could be read as the table's.

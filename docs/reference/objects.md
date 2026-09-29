@@ -11,7 +11,7 @@
 - Columns (serial/bigserial/smallserial, identity, generated, TOAST storage and compression). An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed; a change goes out as `ALTER TABLE ... ALTER COLUMN ... SET`. No `RESTART` is planned, the same as `ALTER SEQUENCE`, so a change that puts the sequence's current value outside the new range fails at apply with the server's error.
 - Constraints (primary key, unique, check, exclusion, foreign key). See [Constraints](#constraints).
 - Indexes (unique, partial, expression, hash, multi-column)
-- Comments (on tables, columns, views, materialized views, view and materialized view columns, indexes, types, domains, composite types, composite attributes, sequences, routines). See [Comments](#comments).
+- Comments (on tables, columns, views, materialized views, view and materialized view columns, indexes, constraints, foreign keys, triggers, policies, types, domains, domain constraints, composite types, composite attributes, sequences, routines). See [Comments](#comments).
 - Row-level security (`ALTER TABLE ... ENABLE/DISABLE/FORCE/NO FORCE ROW LEVEL SECURITY`, policies via `CREATE POLICY` / `ALTER POLICY` / `DROP POLICY`)
 - Triggers (`CREATE TRIGGER`, `CREATE CONSTRAINT TRIGGER`, `INSTEAD OF` triggers on views, and the enable state via `ALTER TABLE ... ENABLE/DISABLE TRIGGER`); see [Triggers](#triggers)
 - Routines (`CREATE FUNCTION`, `CREATE PROCEDURE`), opt-in with `--manage-routine`. An overload set is several objects, keyed by argument type. See [Routines](#routines).
@@ -19,7 +19,7 @@
 - Array, JSON, UUID, and other built-in types
 - Quoted identifiers
 
-pistachio parses only the statements above. It drops any other statement in a schema file, such as `SET`, `GRANT`, or `CREATE EXTENSION`, and prints a `pista: <file>:<line>:<column>: ignored unsupported statement:` warning to standard error for each one. The same warning covers the parts it does not read of a statement it does parse, such as the `ALTER TABLE ... ADD COLUMN` and `ALTER COLUMN ... SET DEFAULT` a `pg_dump` file carries, a `LIKE` clause in `CREATE TABLE`, or `COMMENT ON CONSTRAINT`. The `ALTER COLUMN ... SET STORAGE` and `SET COMPRESSION` such a file carries are read. An `ALTER TABLE`, `ALTER SEQUENCE`, `CREATE INDEX`, `CREATE POLICY` or `CREATE TRIGGER` has to come after the `CREATE` of the table, view, sequence or materialized view it names, in the same file or an earlier one, and a trigger state or a storage setting after the trigger or column it names; one that does not is an error. To keep an unsupported statement in the file and run it during `apply`, mark it with `-- pista:execute`, which also silences the warning. A `BEGIN` or `COMMIT` warning points at `--with-tx` and `--try-tx`, which wrap the apply in a transaction.
+pistachio parses only the statements above. It drops any other statement in a schema file, such as `SET`, `GRANT`, or `CREATE EXTENSION`, and prints a `pista: <file>:<line>:<column>: ignored unsupported statement:` warning to standard error for each one. The same warning covers the parts it does not read of a statement it does parse, such as the `ALTER TABLE ... ADD COLUMN` and `ALTER COLUMN ... SET DEFAULT` a `pg_dump` file carries, a `LIKE` clause in `CREATE TABLE`, or `COMMENT ON SCHEMA`. The `ALTER COLUMN ... SET STORAGE` and `SET COMPRESSION` such a file carries are read. An `ALTER TABLE`, `ALTER SEQUENCE`, `CREATE INDEX`, `CREATE POLICY` or `CREATE TRIGGER` has to come after the `CREATE` of the table, view, sequence or materialized view it names, in the same file or an earlier one, and a trigger state or a storage setting after the trigger or column it names; one that does not is an error. To keep an unsupported statement in the file and run it during `apply`, mark it with `-- pista:execute`, which also silences the warning. A `BEGIN` or `COMMIT` warning points at `--with-tx` and `--try-tx`, which wrap the apply in a transaction.
 
 
 ## Storage parameters
@@ -252,7 +252,20 @@ COMMENT ON INDEX public.users_email_idx IS 'Lookup by email';
 
 Recreating an index drops its comment, so a definition change writes the comment again after the `CREATE INDEX`.
 
-A comment on a constraint, a trigger or a policy is not managed, and the index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE` constraint owns belongs to the constraint. A `COMMENT ON INDEX` naming one of those, or an index no schema file declares, is dropped without a warning. `pg_dump` writes such lines and they are lost on the way in.
+A comment on a constraint, a foreign key, a trigger or a policy names the table it is on. A comment on a domain constraint names the domain:
+
+```sql
+COMMENT ON CONSTRAINT users_email_key ON public.users IS 'One account per address';
+COMMENT ON TRIGGER users_touch ON public.users IS 'Sets updated_at';
+COMMENT ON POLICY users_own ON public.users IS 'Own rows only';
+COMMENT ON CONSTRAINT email_check ON DOMAIN public.email IS 'Has an at sign';
+```
+
+When one of these is dropped and created again, the plan writes its comment again. A rename, `CREATE OR REPLACE TRIGGER`, `ALTER POLICY`, `ALTER CONSTRAINT` and `VALIDATE CONSTRAINT` keep the comment.
+
+A `COMMENT ON CONSTRAINT`, `TRIGGER` or `POLICY` naming an object no schema file declares is ignored without a warning. That includes a comment on a `NOT NULL` constraint, which PostgreSQL 18 `pg_dump` writes and pistachio does not read as a constraint.
+
+The index a `PRIMARY KEY`, `UNIQUE` or `EXCLUDE` constraint owns belongs to the constraint, so write its comment with `COMMENT ON CONSTRAINT`. A `COMMENT ON INDEX` on such an index, or on an index no schema file declares, is ignored without a warning.
 
 ## Indexes on a partitioned table
 

@@ -29,13 +29,18 @@ func (c *Catalog) ListTriggers(ctx context.Context) ([]*model.Trigger, error) {
 			-- the plain one wraps every operator in, and adds no line breaks of
 			-- its own, so the definition stays on one line either way.
 			pg_catalog.pg_get_triggerdef(t.oid, true) AS definition,
-			t.tgenabled
+			t.tgenabled,
+			descr.description AS comment
 		FROM
 			-- https://www.postgresql.org/docs/current/catalog-pg-trigger.html
 			pg_catalog.pg_trigger t
 			JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
 			JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 			LEFT JOIN dependency_extension de ON de.objid = t.oid
+			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
+			LEFT JOIN pg_catalog.pg_description descr ON descr.objoid = t.oid
+			AND descr.classoid = 'pg_trigger'::regclass
+			AND descr.objsubid = 0
 		WHERE
 			n.nspname = ANY(@schemas)
 			AND de.objid IS NULL
@@ -56,7 +61,7 @@ func (c *Catalog) ListTriggers(ctx context.Context) ([]*model.Trigger, error) {
 
 	var triggers []*model.Trigger
 	var trg model.Trigger
-	err := c.eachRow(ctx, "trigger info", q, []any{&trg.Schema, &trg.Table, &trg.Name, &trg.Definition, &trg.State}, func() {
+	err := c.eachRow(ctx, "trigger info", q, []any{&trg.Schema, &trg.Table, &trg.Name, &trg.Definition, &trg.State, &trg.Comment}, func() {
 		t := trg
 		triggers = append(triggers, &t)
 	})

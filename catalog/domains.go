@@ -123,9 +123,14 @@ func (c *Catalog) listDomainConstraints(ctx context.Context, domainOIDs []uint32
 			con.contypid,
 			con.conname,
 			pg_catalog.pg_get_constraintdef(con.oid) AS definition,
-			con.convalidated
+			con.convalidated,
+			descr.description AS comment
 		FROM
 			pg_catalog.pg_constraint con
+			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
+			LEFT JOIN pg_catalog.pg_description descr ON descr.objoid = con.oid
+			AND descr.classoid = 'pg_constraint'::regclass
+			AND descr.objsubid = 0
 		WHERE
 			con.contypid = ANY(@domain_oids::oid[])
 			AND con.contype = 'c'
@@ -152,7 +157,7 @@ func (c *Catalog) listDomainConstraints(ctx context.Context, domainOIDs []uint32
 	for rows.Next() {
 		var dc model.DomainConstraint
 		var domainOID uint32
-		err := rows.Scan(&domainOID, &dc.Name, &dc.Definition, &dc.Validated)
+		err := rows.Scan(&domainOID, &dc.Name, &dc.Definition, &dc.Validated, &dc.Comment)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan domain constraint: %w", err)
 		}

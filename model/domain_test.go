@@ -98,3 +98,16 @@ func TestDomainsToSQL(t *testing.T) {
 	assert.Contains(t, sql, "public.pos_int")
 	assert.Contains(t, sql, "public.email")
 }
+
+func TestDomainToSQL_constraintComment(t *testing.T) {
+	c := "it's positive"
+	d := &model.Domain{Schema: "public", Name: "pos", BaseType: "integer", Constraints: []*model.DomainConstraint{
+		{Name: "pos_check", Definition: "CHECK (VALUE > 0)", Validated: true, Comment: &c},
+		{Name: "pos_small", Definition: "CHECK (VALUE < 100)", Validated: true},
+	}}
+	assert.Equal(t, `-- public.pos
+CREATE DOMAIN public.pos AS integer
+    CONSTRAINT pos_check CHECK (VALUE > 0)
+    CONSTRAINT pos_small CHECK (VALUE < 100);
+COMMENT ON CONSTRAINT pos_check ON DOMAIN public.pos IS 'it''s positive';`, model.DomainToSQL(d))
+}

@@ -38,10 +38,15 @@ func (c *Catalog) ListPoliciesByTables(ctx context.Context, tables []*model.Tabl
 				ARRAY[]::name[]
 			) AS roles,
 			pg_catalog.pg_get_expr(pol.polqual, pol.polrelid) AS using_expr,
-			pg_catalog.pg_get_expr(pol.polwithcheck, pol.polrelid) AS with_check
+			pg_catalog.pg_get_expr(pol.polwithcheck, pol.polrelid) AS with_check,
+			descr.description AS comment
 		FROM
 			-- https://www.postgresql.org/docs/current/catalog-pg-policy.html
 			pg_catalog.pg_policy pol
+			-- https://www.postgresql.org/docs/current/catalog-pg-description.html
+			LEFT JOIN pg_catalog.pg_description descr ON descr.objoid = pol.oid
+			AND descr.classoid = 'pg_policy'::regclass
+			AND descr.objsubid = 0
 		WHERE
 			pol.polrelid = ANY(@table_oids::oid[])
 		ORDER BY
@@ -76,6 +81,7 @@ func (c *Catalog) ListPoliciesByTables(ctx context.Context, tables []*model.Tabl
 			&p.Roles,
 			&p.Using,
 			&p.WithCheck,
+			&p.Comment,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan policy info: %w", err)

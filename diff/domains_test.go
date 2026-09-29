@@ -296,3 +296,34 @@ func TestDiffDomains_Rename_DestinationExists_Error(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "destination already exists")
 }
+
+// A new domain writes its constraints' comments. On an existing domain a
+// constraint that is dropped and added back has none, so its comment is set
+// again, and one that stays only takes a changed comment.
+func TestDiffDomains_constraintComment(t *testing.T) {
+	c := "positive"
+	domain := func(def string, comment *string) *model.Domain {
+		return &model.Domain{Schema: "public", Name: "pos", BaseType: "integer", Constraints: []*model.DomainConstraint{
+			{Name: "pos_check", Definition: def, Validated: true, Comment: comment},
+		}}
+	}
+
+	result, err := DiffDomains(newDomainMap(), newDomainMap(domain("CHECK (VALUE > 0)", &c)), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"CREATE DOMAIN public.pos AS integer\n    CONSTRAINT pos_check CHECK (VALUE > 0);",
+		"COMMENT ON CONSTRAINT pos_check ON DOMAIN public.pos IS 'positive';",
+	}, result.Stmts)
+
+	result, err = DiffDomains(newDomainMap(domain("CHECK (VALUE > 0)", &c)), newDomainMap(domain("CHECK (VALUE > 0)", nil)), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"COMMENT ON CONSTRAINT pos_check ON DOMAIN public.pos IS NULL;"}, result.Stmts)
+
+	result, err = DiffDomains(newDomainMap(domain("CHECK (VALUE > 0)", &c)), newDomainMap(domain("CHECK (VALUE > 1)", &c)), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"ALTER DOMAIN public.pos DROP CONSTRAINT pos_check;",
+		"ALTER DOMAIN public.pos ADD CONSTRAINT pos_check CHECK (VALUE > 1);",
+		"COMMENT ON CONSTRAINT pos_check ON DOMAIN public.pos IS 'positive';",
+	}, result.Stmts)
+}

@@ -59,6 +59,7 @@ type Trigger struct {
 	// diff.equalTriggerDef.
 	Definition string       `json:"definition"`
 	State      TriggerState `json:"state"`
+	Comment    *string      `json:"comment"`
 }
 
 func (trg *Trigger) String() string {
@@ -72,6 +73,15 @@ func (trg Trigger) FQTN() string {
 
 func (trg Trigger) SQL() string {
 	return trg.Definition + ";"
+}
+
+// CommentSQL renders the trigger's COMMENT ON, or an empty string when it
+// carries none.
+func (trg Trigger) CommentSQL() string {
+	if trg.Comment == nil {
+		return ""
+	}
+	return "COMMENT ON TRIGGER " + Ident(trg.Name) + " ON " + trg.FQTN() + " IS " + QuoteLiteral(*trg.Comment) + ";"
 }
 
 // StateSQL renders the ALTER TABLE that leaves the trigger in a non-default
