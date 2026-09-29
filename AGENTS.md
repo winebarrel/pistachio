@@ -116,3 +116,4 @@ Leave a change to CI, the build or other repository tooling without a label. Do 
 - Write simply and concisely.
 - Write in prose.
 - Model the documentation under `docs/` on the PostgreSQL reference manual: its tone, its structure and the way it states behavior.
+- Every document in the repository, `README.md` included, is a technical document, not marketing. State what the tool does; do not sell it.
