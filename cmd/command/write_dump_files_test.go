@@ -3,6 +3,7 @@ package command
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -141,7 +142,9 @@ func TestWriteDumpFiles_WriteFileError(t *testing.T) {
 	count, err := writeDumpFiles(dir, map[string]string{"safe.sql": "x"})
 	require.Error(t, err)
 	assert.Equal(t, 0, count)
-	assert.Contains(t, err.Error(), "failed to write")
+	assert.True(t, strings.HasPrefix(err.Error(), "failed to write dump file: open "), err.Error())
+	// The wrapped error already names the file, so the message names it once.
+	assert.Equal(t, 1, strings.Count(err.Error(), filepath.Join(dir, "safe.sql")), err.Error())
 }
 
 func TestWriteDumpFiles_StopsOnUnsafeName(t *testing.T) {
