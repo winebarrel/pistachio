@@ -119,12 +119,15 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
       # Point the release pull request's CHANGELOG link at the tag, which
-      # keeps showing the changelog as it was released.
-      - name: Pin the CHANGELOG link
+      # keeps showing the changelog as it was released, and its Changes
+      # link at the tags on either side, since the release branch goes away.
+      - name: Pin the CHANGELOG and Changes links
         run: |
           number=$(sed -n '1s/^Merge pull request #\([0-9]\+\) .*/\1/p' <<<"$MESSAGE")
           body=$(gh pr view "$number" --json body --jq .body)
-          gh pr edit "$number" --body "${body//\/blob\/main\/CHANGELOG.md//blob/v$VERSION/CHANGELOG.md}"
+          body=${body//\/blob\/main\/CHANGELOG.md//blob/v$VERSION/CHANGELOG.md}
+          body=$(sed -E "s/\.\.\.release-from-v[0-9]+\.[0-9]+\.[0-9]+/...v$VERSION/g" <<<"$body")
+          gh pr edit "$number" --body "$body"
         env:
           MESSAGE: ${{ github.event.head_commit.message }}
           VERSION: ${{ needs.version.outputs.version }}
