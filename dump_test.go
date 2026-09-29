@@ -36,6 +36,8 @@ type dumpTestCase struct {
 	// index. An init that wants the estimates runs ANALYZE; write {{today}}
 	// in the expected dump for the date it prints.
 	Explain bool `yaml:"explain,omitempty"`
+	// OmitPartitionChildIndex sets --omit-partition-child-index.
+	OmitPartitionChildIndex bool `yaml:"omit_partition_child_index,omitempty"`
 }
 
 func (tc *dumpTestCase) expectedDump(major int) string {
@@ -727,8 +729,9 @@ func TestDump(t *testing.T) {
 				SkipPartitionChild: tc.SkipPartitionChild,
 			})
 			got, err := client.Dump(ctx, &DumpOptions{
-				OmitSchema: tc.OmitSchema,
-				Explain:    tc.Explain,
+				OmitSchema:              tc.OmitSchema,
+				Explain:                 tc.Explain,
+				OmitPartitionChildIndex: tc.OmitPartitionChildIndex,
 			})
 			require.NoError(t, err)
 			expected := strings.TrimSpace(expandToday(tc.expectedDump(pgMajor)))

@@ -172,6 +172,17 @@ func TestRun_DumpJSONExclusiveFlags(t *testing.T) {
 	}
 }
 
+// --skip-partition-child leaves the partitions out of the dump, so
+// --omit-partition-child-index has nothing to leave out, and kong refuses the
+// two together.
+func TestRun_DumpSkipPartitionChildWithOmitPartitionChildIndex(t *testing.T) {
+	var stdout bytes.Buffer
+	code, stderr := runCLI(t, &stdout, "dump", "--skip-partition-child", "--omit-partition-child-index")
+	assert.Equal(t, 80, code)
+	assert.Contains(t, stderr, "--skip-partition-child and --omit-partition-child-index can't be used together")
+	assert.Empty(t, stdout.String())
+}
+
 // The connection flags belong to the commands that open a connection, so they
 // follow the command instead of preceding it. fmt reads no database and takes
 // none of them; parse takes --schemas alone. kong rejects the rest before a

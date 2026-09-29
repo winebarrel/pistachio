@@ -7,6 +7,7 @@ import (
 
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/catalog"
+	"github.com/winebarrel/pistachio/diff"
 	"github.com/winebarrel/pistachio/format"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
@@ -23,7 +24,8 @@ type DumpOptions struct {
 	JSON bool `xor:"json-split,json-no-format,json-explain" env:"PISTA_DUMP_JSON" help:"Write the dump as JSON instead of SQL."`
 	// Explain writes the size estimate of each table, materialized view and
 	// index into the comment above it. The JSON carries no comment to hold it.
-	Explain bool `xor:"json-explain" env:"PISTA_DUMP_EXPLAIN" help:"Comment each table, materialized view and index with its size estimate from pg_class."`
+	Explain                 bool `xor:"json-explain" env:"PISTA_DUMP_EXPLAIN" help:"Comment each table, materialized view and index with its size estimate from pg_class."`
+	OmitPartitionChildIndex bool `xor:"partition-child" help:"Omit a partition's copy of its parent's index, which PostgreSQL creates with the parent's index."`
 }
 
 type DumpResult struct {
@@ -394,6 +396,42 @@ func toFileName(schema, name string) string {
 	return fileNameReplacer.Replace(base) + ".sql"
 }
 
+// omitPartitionChildIndexes leaves out each index of a partition that is the
+// copy PostgreSQL makes of an index of its parent, for
+// --omit-partition-child-index. Loading the dump creates the copy again: a
+// partition created after the parent's index gets it with the table, and one
+// created before gets it when the parent's index is created. An index with a
+// comment is kept, since the comment would have nothing to go on.
+//
+// Every partition is checked against its parent's indexes before any is left
+// out, so a partition of a partition still finds the index it copies.
+func omitPartitionChildIndexes(tables *orderedmap.Map[string, *model.Table]) {
+	kept := map[*model.Table]*orderedmap.Map[string, *model.Index]{}
+	for _, t := range tables.All() {
+		if t.PartitionOf == nil {
+			continue
+		}
+		parent, ok := tables.GetOk(*t.PartitionOf)
+		if !ok {
+			continue
+		}
+		kept[t] = t.Indexes.Filter(func(_ string, idx *model.Index) bool {
+			if !idx.Attached || idx.Comment != nil {
+				return true
+			}
+			for _, parentIdx := range parent.Indexes.All() {
+				if diff.IsPartitionIndexCopy(idx, parentIdx) {
+					return false
+				}
+			}
+			return true
+		})
+	}
+	for t, indexes := range kept {
+		t.Indexes = indexes
+	}
+}
+
 func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResult, error) {
 	if err := client.validateSchemas(); err != nil {
 		return nil, err
@@ -416,6 +454,10 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	current, err := readCurrent(ctx, cat, &client.FilterOptions)
 	if err != nil {
 		return nil, err
+	}
+
+	if options.OmitPartitionChildIndex {
+		omitPartitionChildIndexes(current.Tables)
 	}
 
 	// The estimates are keyed by the names the catalog read, so they are

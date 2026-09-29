@@ -2,7 +2,7 @@
 
 Every variable stands for one option and takes the value the option takes. The option overrides the variable; the two are not merged. Precedence: command-line flag, then environment variable, then config file, then default.
 
-`--schema-map`, `--split`, `--omit-schema`, `--force` and `--pager` have no variable. `PISTA_PAGER` names the pager command, not the flag.
+`--schema-map`, `--split`, `--omit-schema`, `--omit-partition-child-index`, `--force` and `--pager` have no variable. `PISTA_PAGER` names the pager command, not the flag.
 
 | Variable | Option | Commands |
 |---|---|---|

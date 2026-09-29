@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* `dump --omit-partition-child-index` leaves out a partition's copy of an index of its parent. PostgreSQL creates the copy again when the dump is loaded, so a file written this way adds a partition with `CREATE TABLE ... PARTITION OF` alone. A partition index under another name, with other storage parameters or with a comment is still written.
+
 * Adding a partition to a partitioned table that already has an index no longer fails when the file also declares the partition's copy of that index, the way `dump` writes it. `CREATE TABLE ... PARTITION OF` creates the copy, so the plan leaves out the `CREATE INDEX` for an index that has the name PostgreSQL gives the copy and the definition of an index the parent already has. Before, the `CREATE INDEX` failed with `relation ... already exists`.
 
 ## [1.71.0] - 2026-09-29
