@@ -124,6 +124,16 @@ CREATE TABLE public.items (
 `,
 		},
 		{
+			name:  "drop trailing whitespace after a line comment",
+			input: "-- the items \t\nCREATE TABLE public.items (\n    id integer, -- the key  \n    name text\n);\n",
+			expected: `-- the items
+CREATE TABLE public.items (
+    id integer, -- the key
+    name text
+);
+`,
+		},
+		{
 			name: "keep a comma off a line that ends in a comment",
 			input: `CREATE TABLE public.cmt (
     id int -- no comma here
