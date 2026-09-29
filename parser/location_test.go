@@ -561,6 +561,20 @@ func TestParseSQLSources_DirectiveWithoutStatement(t *testing.T) {
   | ^`, err.Error())
 	})
 
+	// A bare semicolon is an empty statement, which parses to nothing, so the
+	// directive before it binds to no statement even with one after it.
+	t.Run("followed by a bare semicolon", func(t *testing.T) {
+		_, err := ParseSQLSourcesWithSchema([]Source{
+			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer);\n-- pista:ignore\n;\nCREATE TABLE public.b (id integer);\n"},
+		}, "public")
+		require.Error(t, err)
+		assert.Equal(t, `directive must be followed by a statement in the same file
+ --> a.sql:2:1
+  |
+2 | -- pista:ignore
+  | ^`, err.Error())
+	})
+
 	t.Run("without a trailing newline", func(t *testing.T) {
 		_, err := ParseSQLSourcesWithSchema([]Source{
 			{Name: "a.sql", SQL: "CREATE TABLE public.a (id integer);\n-- pista:ignore"},

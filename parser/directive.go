@@ -139,10 +139,12 @@ func validateDirectivePlacement(sql string, spans []fileSpan) error {
 			return &locatedError{msg: "directive must be on its own line", offset: start}
 		}
 
+		// A bare semicolon is an empty statement, which parses to nothing,
+		// so it does not count as the statement the directive binds to.
 		followed := false
 		for _, next := range scan.Tokens[i+1:] {
 			if next.Token != pg_query.Token_SQL_COMMENT && next.Token != pg_query.Token_C_COMMENT {
-				followed = int(next.Start) < fileEnd(start)
+				followed = next.Token != pg_query.Token_ASCII_59 && int(next.Start) < fileEnd(start)
 				break
 			}
 		}
