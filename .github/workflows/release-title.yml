@@ -1,0 +1,44 @@
+name: release-title
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+
+jobs:
+  # Checks the title of the release pull request before it is merged, so
+  # that release-tag.yml does not stop on it after the merge. The title must
+  # be "Release for vX.Y.Z" and name the next patch, minor or major version
+  # after the latest tag. A draft still has the placeholder title and is not
+  # checked; marking it ready for review runs the check.
+  title:
+    if: >-
+      startsWith(github.head_ref, 'release-from-') &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          version=$(sed -n 's/^Release for v\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p' <<<"$TITLE")
+          if [ -z "$version" ]; then
+            echo "::error::The title must be \"Release for vX.Y.Z\" with X.Y.Z replaced by the version: $TITLE"
+            exit 1
+          fi
+          latest=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v[0-9]*' | sed 's|.*refs/tags/v||' | sort -V | tail -n 1)
+          IFS=. read -r major minor patch <<<"$latest"
+          next=("$major.$minor.$((patch + 1))" "$major.$((minor + 1)).0" "$((major + 1)).0.0")
+          for v in "${next[@]}"; do
+            if [ "$version" = "$v" ]; then
+              echo "v$version follows v$latest"
+              exit 0
+            fi
+          done
+          echo "::error::v$version is not the next version after v$latest (v${next[0]}, v${next[1]} or v${next[2]})"
+          exit 1
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
