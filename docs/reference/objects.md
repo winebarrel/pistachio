@@ -241,7 +241,7 @@ A `TABLESPACE` written on an index stays in its definition, which the catalog ne
 
 ### On a partitioned table
 
-`pg_get_indexdef` writes `ON ONLY` for every index on a partitioned table, so `ONLY` is ignored when two definitions are compared. It matters only to `CREATE INDEX`: without it PostgreSQL also creates an index on each partition and attaches it. The `CREATE INDEX` on a partitioned table runs after the creates and alters of every table, deepest level first, so the partitions exist when it runs. See [Order of statements](#order-of-statements).
+`pg_get_indexdef` writes `ON ONLY` for every index on a partitioned table, so `ONLY` is ignored when two definitions are compared. It matters only to `CREATE INDEX`: without it PostgreSQL also creates an index on each partition and attaches it. The `CREATE INDEX` on a partitioned table runs after the creates and alters of every table, `DROP COLUMN` included, deepest level first, so the partitions exist when it runs. See [Order of statements](#order-of-statements).
 
 An index attached to the parent's is dropped with it, and PostgreSQL rejects a `DROP INDEX` on one, so pistachio never emits that statement. `CONCURRENTLY` cannot be used on a partitioned table, and an index opted in there is an error at plan time.
 
@@ -427,7 +427,7 @@ The body, the language and the attributes are compared, and a change is applied 
 
 Without the flag the plan writes the `DROP` as `-- skipped:` and leaves the routine as it is.
 
-Adding or removing an `IN` parameter is not a change to the routine. The argument types are its identity, so the new signature is a new routine and the old one is dropped, which needs `--allow-drop routine` as well. Without the flag the new routine is still created and the `DROP` of the old one is written as `-- skipped:`, so the database holds both overloads.
+Adding or removing an input parameter, `IN`, `INOUT` or `VARIADIC`, is not a change to the routine. The input types are its identity, so the new signature is a new routine and the old one is dropped, which needs `--allow-drop routine` as well. Without the flag the new routine is still created and the `DROP` of the old one is written as `-- skipped:`, so the database holds both overloads.
 
 PostgreSQL refuses the `DROP` of a recreate while anything calls the routine: a `CHECK` constraint, a column default, a generated column, an index, a view, a policy, a trigger, a domain constraint or a `BEGIN ATOMIC` routine. A body written as a string records no dependency and does not block. `plan` fails and names them:
 
