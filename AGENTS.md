@@ -78,6 +78,18 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
    - Add a `CHANGELOG.md` entry under `## [Unreleased]` when the change is one a user of pista would notice, creating that section above the newest release if it is not there. The release fills in the version and date. What they cannot see gets no entry: a sample database, a test or fixture, documentation, a dependency bump, or a refactor that leaves behavior alone.
 5. Do not run tests in parallel (`make test` uses `-p 1`).
 
+## Pull request labels
+
+Give each pull request one label for the kind of change it is. The release pull request lists the pull requests it releases grouped by label, `feat`, `bug`, `refactor` and `test` first, and a pull request with no label goes under `other`.
+
+- `feat` - a new feature, or a change to what pista does that is not a fix.
+- `bug` - a fix for behavior that was wrong.
+- `refactor` - a code change that leaves behavior alone.
+- `test` - tests, fixtures or the test harness only.
+- `documentation` - documentation only.
+
+Use `feat`, not `enhancement`. Leave a change to CI, the build or other repository tooling without a label. Do not add `release` or `dependencies`: the release workflow adds the first, and Renovate and Dependabot the second.
+
 ## Code conventions
 
 - Package-level tests generally use external test packages (e.g., `package catalog_test`, `package model_test`). Use same-package tests only when access to unexported identifiers is required (e.g., `package diff`).
