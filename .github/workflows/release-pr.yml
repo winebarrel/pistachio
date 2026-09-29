@@ -83,7 +83,7 @@ jobs:
                 )})
               | group_by(.group)
               | sort_by(.[0].group as $g | [($order | index($g)) // (if $g == null then 1e9 else 1e8 end), $g])
-              | map("### \(.[0].group // "Other")\n\n" + (map("- #\(.number)") | join("\n")))
+              | map("### \(.[0].group // "other")\n\n" + (map("- #\(.number)") | join("\n")))
               | join("\n\n")')
             body+=$'\n\n## Pull requests\n\n'"$prs"
           fi
