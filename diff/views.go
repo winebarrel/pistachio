@@ -348,11 +348,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 				// otherwise emit a commented DROP for visibility (no CREATE,
 				// since recreation requires the drop).
 				if dc.IsDropAllowed("view") {
-					if currentView.Materialized {
-						result.DropStmts = append(result.DropStmts, "DROP MATERIALIZED VIEW "+dropName+";")
-					} else {
-						result.DropStmts = append(result.DropStmts, "DROP VIEW "+dropName+";")
-					}
+					result.DropStmts = append(result.DropStmts, "DROP "+currentView.ObjType()+" "+dropName+";")
 					result.DroppedViews = append(result.DroppedViews, dropName)
 					result.CreateStmts = append(result.CreateStmts, desiredView.SQL())
 					// DROP VIEW takes the view's triggers with it, so the
@@ -363,11 +359,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 					}
 					recreated[k] = true
 				} else {
-					if currentView.Materialized {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP MATERIALIZED VIEW "+dropName+";")
-					} else {
-						result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP VIEW "+dropName+";")
-					}
+					result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP "+currentView.ObjType()+" "+dropName+";")
 					recreateDenied[k] = true
 				}
 			} else {
@@ -415,10 +407,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 	viewAllowed := dc.IsDropAllowed("view")
 	for k, v := range current.All() {
 		if _, ok := desired.GetOk(k); !ok {
-			drop := "DROP VIEW " + k + ";"
-			if v.Materialized {
-				drop = "DROP MATERIALIZED VIEW " + k + ";"
-			}
+			drop := "DROP " + v.ObjType() + " " + k + ";"
 			if viewAllowed {
 				result.DropStmts = append(result.DropStmts, drop)
 				result.DroppedViews = append(result.DroppedViews, k)
@@ -448,10 +437,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			currentComment = currentView.Comment
 		}
 		if !equalPtr(currentComment, desiredView.Comment) {
-			objType := "VIEW"
-			if desiredView.Materialized {
-				objType = "MATERIALIZED VIEW"
-			}
+			objType := desiredView.ObjType()
 			if desiredView.Comment != nil {
 				result.CreateStmts = append(result.CreateStmts, "COMMENT ON "+objType+" "+k+" IS "+model.QuoteLiteral(*desiredView.Comment)+";")
 			} else {
