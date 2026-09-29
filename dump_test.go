@@ -740,6 +740,14 @@ func TestDump(t *testing.T) {
 			formatted, err := format.Format(expected + "\n")
 			require.NoError(t, err)
 			assert.Equal(t, expected, strings.TrimSpace(formatted), "the dump is not what pista fmt writes")
+
+			// The dump fed back as the desired schema must plan clean, with
+			// the same scope the dump was read with.
+			desired := filepath.Join(t.TempDir(), "schema.sql")
+			require.NoError(t, os.WriteFile(desired, []byte(got.String()), 0o644))
+			plan, err := client.Plan(ctx, &PlanOptions{Files: []string{desired}})
+			require.NoError(t, err)
+			assert.Empty(t, plan.SQL, "the dump does not plan clean")
 		})
 	}
 }
