@@ -172,7 +172,7 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 // detectDomainRenames finds desired domains with RenameFrom that match a current domain.
 func detectDomainRenames(current, desired *orderedmap.Map[string, *model.Domain]) ([]string, *orderedmap.Map[string, *model.Domain], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newKey, desiredDomain := range desired.All() {
 		if desiredDomain.RenameFrom == nil {

@@ -13,7 +13,7 @@ import (
 // detectEnumRenames finds desired enums with RenameFrom that match a current enum.
 func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([]string, *orderedmap.Map[string, *model.Enum], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newKey, desiredEnum := range desired.All() {
 		if desiredEnum.RenameFrom == nil {
@@ -55,7 +55,7 @@ func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([
 // detectSequenceRenames finds desired sequences with RenameFrom that match a current sequence.
 func detectSequenceRenames(current, desired *orderedmap.Map[string, *model.Sequence]) ([]string, *orderedmap.Map[string, *model.Sequence], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newKey, desiredSeq := range desired.All() {
 		if desiredSeq.RenameFrom == nil {
@@ -103,7 +103,7 @@ func detectSequenceRenames(current, desired *orderedmap.Map[string, *model.Seque
 // A single plan may emit redundant DROP/CREATE for dependent objects.
 func detectTableRenames(current, desired *orderedmap.Map[string, *model.Table]) ([]string, *orderedmap.Map[string, *model.Table], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newKey, desiredTable := range desired.All() {
 		if desiredTable.RenameFrom == nil {
@@ -248,7 +248,7 @@ func renameTriggerRelation(triggers *orderedmap.Map[string, *model.Trigger], new
 // detectViewRenames finds desired views with RenameFrom that match a current view.
 func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([]string, *orderedmap.Map[string, *model.View], map[string]string, error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 	renamedFrom := map[string]string{}
 
 	for newKey, desiredView := range desired.All() {
@@ -320,7 +320,7 @@ func detectViewRenames(current, desired *orderedmap.Map[string, *model.View]) ([
 // LIMITATIONS.md "A rename is not carried into another object's reference".
 func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Column]) ([]string, *orderedmap.Map[string, *model.Column], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newName, desiredCol := range desired.All() {
 		if desiredCol.RenameFrom == nil {
@@ -361,7 +361,7 @@ func detectColumnRenames(fqtn string, current, desired *orderedmap.Map[string, *
 // so it can leave out the ones whose constraint is being recreated and keep the
 // rest in the desired schema's order.
 func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint]) (*orderedmap.Map[string, *model.Constraint], map[string]string, error) {
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 	renamedFrom := map[string]string{}
 
 	for newName, desiredCon := range desired.All() {
@@ -400,7 +400,7 @@ func detectConstraintRenames(fqtn string, current, desired *orderedmap.Map[strin
 // detectIndexRenames finds desired indexes with RenameFrom that match a current index.
 func detectIndexRenames(current, desired *orderedmap.Map[string, *model.Index]) ([]string, *orderedmap.Map[string, *model.Index], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newName, desiredIdx := range desired.All() {
 		if desiredIdx.RenameFrom == nil {
@@ -464,7 +464,7 @@ func updateIndexName(def string, newName string) (string, error) {
 // error). The caller renders the ALTER TABLE ... RENAME CONSTRAINT statements,
 // the same way detectConstraintRenames leaves it to diffConstraints.
 func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[string, *model.ForeignKey]) (*orderedmap.Map[string, *model.ForeignKey], map[string]string, error) {
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 	renamedFrom := map[string]string{}
 
 	for newName, desiredFK := range desired.All() {
@@ -506,7 +506,7 @@ func detectForeignKeyRenames(fqtn string, current, desired *orderedmap.Map[strin
 // ALTER POLICY ... RENAME statements, so it can both suppress the ones whose
 // policy needs DROP+CREATE and keep the rest in the desired schema's order.
 func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *model.Policy]) (*orderedmap.Map[string, *model.Policy], map[string]string, error) {
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 	renamedFrom := map[string]string{}
 
 	for newName, desiredPol := range desired.All() {
@@ -540,15 +540,6 @@ func detectPolicyRenames(fqtn string, current, desired *orderedmap.Map[string, *
 	}
 
 	return adjusted, renamedFrom, nil
-}
-
-// cloneMap creates a shallow copy of an orderedmap.
-func cloneMap[K comparable, V any](m *orderedmap.Map[K, V]) *orderedmap.Map[K, V] {
-	clone := orderedmap.New[K, V]()
-	for k, v := range m.All() {
-		clone.Set(k, v)
-	}
-	return clone
 }
 
 // collectColumnRenames returns a map of old column name -> new column name
