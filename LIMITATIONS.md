@@ -476,8 +476,9 @@ Origin: INHERITS local column support.
 
 `CREATE TABLE ... PARTITION OF` copies the parent's indexes, and the plan
 leaves out a `CREATE INDEX` for a copy the file writes. It recognizes the copy
-by the name PostgreSQL gives it. When two of the parent's indexes give the same
-name, PostgreSQL numbers the second copy:
+by the name PostgreSQL gives it. When the copies of two of the parent's
+indexes would get the same name on the partition, PostgreSQL numbers the
+second copy:
 
 ```sql
 CREATE INDEX logs_at_idx ON public.logs USING btree (at);
