@@ -12,7 +12,7 @@ pista apply [option...] file...
 
 `pista apply` computes the plan [`pista plan`](plan.md) prints and runs it. The files, the scope and the statement options are the same as `plan`'s, so `pista plan` followed by `pista apply` with the same arguments runs what the plan showed.
 
-The statements run in this order: the pre-SQL, the concurrently-pre-SQL, the `-- pista:execute-first` statements, the DDL, then the `-- pista:execute` statements. Nothing is run when the plan holds no executable DDL, and the output ends with `-- No changes`. Otherwise it ends with the time the apply took:
+The statements run in this order: the pre-SQL, the concurrently-pre-SQL, the `-- pista:execute-first` statements, the DDL, then the `-- pista:execute` statements. Nothing is run when the plan holds no statement, a `-- pista:execute` statement included, and the output ends with `-- No changes`. Otherwise it ends with the time the apply took:
 
 ```sql
 -- Connected to postgres://postgres@localhost:5432/postgres
@@ -75,7 +75,7 @@ The [general options](index.md#general-options) apply as well.
 ### Statements
 
 `--allow-drop=`*type*
-:   Allow dropping these object types: `all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`. Repeatable. Without it no drop runs; each is written as a `-- skipped:` comment. `constraint` covers CHECK, UNIQUE, PRIMARY KEY and EXCLUSION; `foreign_key` covers foreign keys. `composite_type` also gates `DROP ATTRIBUTE`. `routine` also gates the drop half of a recreate. Environment: `PISTA_ALLOW_DROP`. See [Controlling drops](../../guides/drops.md).
+:   Allow dropping these object types: `all`, `table`, `view`, `enum`, `domain`, `composite_type`, `sequence`, `routine`, `column`, `constraint`, `foreign_key`, `index`, `policy`, `trigger`. Repeatable. Without it no drop runs; each is written as a `-- skipped:` comment. `constraint` covers CHECK, UNIQUE, PRIMARY KEY and EXCLUSION; `foreign_key` covers foreign keys. `composite_type` also gates `DROP ATTRIBUTE`. A view, routine or trigger recreate is gated by its type too. Environment: `PISTA_ALLOW_DROP`. See [Controlling drops](../../guides/drops.md).
 
 `--pre-sql=`*sql*
 :   SQL to run before the DDL, inside the transaction when there is one. Conflicts with `--pre-sql-file`. Environment: `PISTA_PRE_SQL`.
@@ -96,7 +96,7 @@ The [general options](index.md#general-options) apply as well.
 :   Run `CONCURRENTLY` on every `CREATE INDEX` and `DROP INDEX`, including the drop of an index the desired schema no longer holds, which no directive can reach. Conflicts with `--with-tx`. Environment: `PISTA_FORCE_INDEX_CONCURRENTLY`.
 
 `--bulk-alter`
-:   Merge consecutive `ALTER TABLE` actions on one table into one statement. Foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, row-level security toggles and skipped drops stay separate. The `-- pista:bulk-alter` directive does the same for one table. Environment: `PISTA_BULK_ALTER`.
+:   Merge consecutive `ALTER TABLE` actions on one table into one statement. Only column and constraint actions merge; foreign keys, `RENAME`, `VALIDATE CONSTRAINT`, row-level security toggles, storage parameters and skipped drops stay separate. The `-- pista:bulk-alter` directive does the same for one table. Environment: `PISTA_BULK_ALTER`.
 
 `--assume-validated`
 :   Treat every table constraint, domain constraint and foreign key as validated. `NOT VALID` in the desired schema is ignored, and neither `NOT VALID` nor `VALIDATE CONSTRAINT` is run. Environment: `PISTA_ASSUME_VALIDATED`.
@@ -134,7 +134,7 @@ Without `--with-tx` or `--try-tx` each statement commits on its own. `--with-tx`
 
 ### Timing
 
-`--timing` writes a `-- Time:` comment after every statement the run writes out: the pre-SQL, the concurrently-pre-SQL, the DDL, the `-- pista:execute` statements, and `BEGIN` and `COMMIT`. The `search_path` setup and a directive's check SQL are not written out, so they are not timed.
+`--timing` writes a `-- Time:` comment after every statement the run writes out: the pre-SQL, the concurrently-pre-SQL, the `-- pista:execute-first` and `-- pista:execute` statements, the DDL, and `BEGIN` and `COMMIT`. The `search_path` setup and a directive's check SQL are not written out, so they are not timed.
 
 ```sql
 -- Transaction started

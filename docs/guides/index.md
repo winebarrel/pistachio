@@ -1,6 +1,6 @@
 # Guides
 
-Each guide covers one task. The [Reference](../reference/commands/index.md) lists every option and every object kind.
+Each guide covers one task. [Commands](../reference/commands/index.md) lists every option and [Supported objects](../reference/objects.md) every object kind.
 
 ## Writing the schema
 

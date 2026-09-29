@@ -1,4 +1,4 @@
-# Development
+# Contributing
 
 ```bash
 docker compose up -d

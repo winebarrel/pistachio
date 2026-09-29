@@ -10,7 +10,7 @@ pista dump [option...]
 
 ## Description
 
-`pista dump` reads the schema from the database and writes it as SQL. The output is a schema file: fed back to [`pista plan`](plan.md), it plans no changes.
+`pista dump` reads the schema from the database and writes it as SQL. The output is a schema file: fed back to [`pista plan`](plan.md), it plans no changes. See [The contract](../../about/design.md#the-contract).
 
 The SQL output opens with the connection and a count of what it found, then writes each object under a comment naming it. An index, a comment, a policy and a trigger are written with the table they belong to. Objects are ordered by type and then by name.
 

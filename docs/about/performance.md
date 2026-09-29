@@ -17,7 +17,7 @@ Five cases are measured:
   to read.
 - **noop plan**: `plan` of the full schema against a database that already
   matches it. This is the common case in CI. It runs the full path (parse, read
-  the catalog, diff) and produces empty output.
+  the catalog, diff) and prints `-- No changes`.
 - **modify plan**: `plan` of a changed schema against a matching database. Each
   table gets a new column, a column type change, and a new index, so the diff is
   three ALTER/CREATE statements per table. This measures diff generation and SQL
