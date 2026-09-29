@@ -61,15 +61,32 @@ jobs:
       # Created once and never retitled, so the version a person puts in the
       # title stays. The body is rewritten on every run: the link to
       # CHANGELOG.md, the changes since the latest tag and the pull requests
-      # merged since then. The pull request's own diff is empty, so the
-      # comparison is what shows the code being released. It names the
-      # branch, not a commit, so it follows each rebuild.
+      # merged since then, grouped by label. The pull request's own diff is
+      # empty, so the comparison is what shows the code being released. It
+      # names the branch, not a commit, so it follows each rebuild.
       - name: Open or update the release pull request
         run: |
           body="See [CHANGELOG.md](https://github.com/$GH_REPO/blob/main/CHANGELOG.md)."
           body+=$'\n\n'"Changes: [$TAG...$BRANCH](https://github.com/$GH_REPO/compare/$TAG...$BRANCH)"
-          prs=$(gh api "repos/$GH_REPO/compare/$TAG...$MAIN" --jq '.commits[].commit.message | select(test("^Merge pull request #[0-9]+ from [^ ]+/release-from-") | not) | capture("^Merge pull request (?<n>#[0-9]+) ") | "- " + .n')
-          if [ -n "$prs" ]; then
+          numbers=$(gh api "repos/$GH_REPO/compare/$TAG...$MAIN" --jq '.commits[].commit.message | select(test("^Merge pull request #[0-9]+ from [^ ]+/release-from-") | not) | capture("^Merge pull request #(?<n>[0-9]+) ") | .n')
+          # Grouped by label: feat, bug, refactor and test first, then any
+          # other label by name, then "other", which also takes the pull
+          # requests with no label. One with several labels goes under the
+          # first of them in that order.
+          if [ -n "$numbers" ]; then
+            prs=$(for n in $numbers; do
+              gh api "repos/$GH_REPO/issues/$n" --jq '{number, labels: [.labels[].name]}'
+            done | jq -rs '
+              ["feat", "bug", "refactor", "test"] as $order
+              | map(. + {group: (
+                  (.labels | map(select(. as $l | $order | index($l))) | sort_by(. as $l | $order | index($l)) | first)
+                  // (.labels | sort | first)
+                  // "other"
+                )})
+              | group_by(.group)
+              | sort_by(.[0].group as $g | [($order | index($g)) // (if $g == "other" then 1e9 else 1e8 end), $g])
+              | map("### \(.[0].group)\n\n" + (map("- #\(.number)") | join("\n")))
+              | join("\n\n")')
             body+=$'\n\n## Pull requests\n\n'"$prs"
           fi
           number=$(gh pr list --label release --state open --json number --jq '.[0].number // empty')
