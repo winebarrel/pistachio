@@ -51,16 +51,9 @@ func DiffDomains(current, desired *orderedmap.Map[string, *model.Domain], dc Dro
 	}
 
 	// Dropped domains. When the domain-drop policy disallows it, emit a commented DROP.
-	domainAllowed := dc.IsDropAllowed("domain")
-	for k := range current.Keys() {
-		if _, ok := desired.GetOk(k); !ok {
-			if domainAllowed {
-				result.DropStmts = append(result.DropStmts, "DROP DOMAIN "+k+";")
-			} else {
-				result.DisallowedDropStmts = append(result.DisallowedDropStmts, "-- skipped: DROP DOMAIN "+k+";")
-			}
-		}
-	}
+	drops, skipped := dropMissing(current, desired, "DOMAIN", dc.IsDropAllowed("domain"))
+	result.DropStmts = append(result.DropStmts, drops...)
+	result.DisallowedDropStmts = append(result.DisallowedDropStmts, skipped...)
 
 	return result, nil
 }
@@ -105,11 +98,7 @@ func diffDomain(fqdn string, current, desired *model.Domain) ([]string, error) {
 
 	// Comment change
 	if !equalPtr(current.Comment, desired.Comment) {
-		if desired.Comment != nil {
-			stmts = append(stmts, "COMMENT ON DOMAIN "+fqdn+" IS "+model.QuoteLiteral(*desired.Comment)+";")
-		} else {
-			stmts = append(stmts, "COMMENT ON DOMAIN "+fqdn+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL("DOMAIN "+fqdn, desired.Comment))
 	}
 
 	return stmts, nil
@@ -172,7 +161,7 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 // detectDomainRenames finds desired domains with RenameFrom that match a current domain.
 func detectDomainRenames(current, desired *orderedmap.Map[string, *model.Domain]) ([]string, *orderedmap.Map[string, *model.Domain], error) {
 	var stmts []string
-	adjusted := cloneMap(current)
+	adjusted := current.Clone()
 
 	for newKey, desiredDomain := range desired.All() {
 		if desiredDomain.RenameFrom == nil {
