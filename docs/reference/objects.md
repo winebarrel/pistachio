@@ -28,7 +28,7 @@ Renaming any of these objects, and enum values and composite attributes, goes th
 pistachio reads only the statements the sections below name. Every other statement in a schema file is dropped with a warning on standard error:
 
 ```
-pista: schema.sql:12:1: ignored unsupported statement: GRANT SELECT ON public.users TO app
+pista: schema.sql:12:1: ignored unsupported statement: GRANT select ON public.users TO app
 ```
 
 That covers `SET`, `GRANT`, `CREATE EXTENSION`, `CREATE RULE`, `CREATE AGGREGATE`, every `DROP`, and every `ALTER` the sections below do not list. The desired state is what `CREATE` says. The same warning covers the part of a statement pistachio does not read: the `ALTER TABLE ... ADD COLUMN` a `pg_dump` file carries, or a `LIKE` clause in `CREATE TABLE`. A `BEGIN` or `COMMIT` warning points at `--with-tx` and `--try-tx`.
@@ -38,10 +38,14 @@ To keep such a statement in the file and run it during `apply`, mark it with [`-
 A statement that names another object, `ALTER TABLE`, `CREATE INDEX`, `CREATE TRIGGER` or `CREATE POLICY` for one, has to come after that object's `CREATE`, in the same file or an earlier one. One that does not is an error:
 
 ```
-pista: error: schema.sql:3:1: ALTER TABLE public.users: table public.users is not declared before it
+pista: error: ALTER TABLE public.users: table public.users is not declared before it
+ --> schema.sql:3:1
+  |
+3 | ALTER TABLE public.users ADD CONSTRAINT users_id_check CHECK (id > 0);
+  | ^
 ```
 
-Two objects of one name in one schema are an error, whatever their kinds.
+Two objects that PostgreSQL keeps in one namespace, two relations or two types, cannot share a name in one schema. A routine is identified by its name and argument types, so overloads are separate objects.
 
 ## Order of statements
 
@@ -141,7 +145,7 @@ pista: error: cannot change the type of public.t.n: view public.v depends on it
 
 A trigger blocks even when the column is only in its `UPDATE OF` list. The change reaches the table's partitions and `INHERITS` children, so a dependent on their copy of the column blocks too. A view or a `BEGIN ATOMIC` routine the same plan drops does not block. A trigger, a policy or a generated column the plan drops still does, since those drops run after the type change. Indexes and constraints do not block, since PostgreSQL rebuilds them. `SET DATA TYPE` resets storage and compression, so both are written again after it when the file names them.
 
-`DROP NOT NULL` runs after the table's constraint statements, so a primary key dropped in the same plan goes first. `DROP COLUMN` runs after every other statement on the table.
+`DROP NOT NULL` runs after the table's constraint statements, so a primary key dropped in the same plan goes first. `DROP COLUMN` runs after the table's constraint, index, trigger, policy and comment statements.
 
 An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed. No `RESTART` is planned, so a change that puts the current value outside the new range fails at apply with the server's error.
 
@@ -187,7 +191,7 @@ A foreign key or a view the same plan drops does not block. To change a referenc
 
 `--assume-validated` treats every constraint as validated on both sides, so no `NOT VALID` and no `VALIDATE CONSTRAINT` is written. A validated constraint the desired schema writes `NOT VALID` is otherwise added back, because nothing takes the flag away.
 
-A `NOT VALID` check on a new table is added after the `CREATE TABLE`, as `ALTER TABLE ONLY ... ADD CONSTRAINT ... NOT VALID`. A constraint added to a table that exists takes no `ONLY`.
+A `NOT VALID` check on a new table is added after the `CREATE TABLE`, as `ALTER TABLE ONLY ... ADD CONSTRAINT ... NOT VALID`, without `ONLY` on a partitioned table. A constraint added to a table that exists takes no `ONLY`.
 
 ## Foreign keys
 
@@ -237,7 +241,7 @@ A `TABLESPACE` written on an index stays in its definition, which the catalog ne
 
 ### On a partitioned table
 
-`pg_get_indexdef` writes `ON ONLY` for every index on a partitioned table, so `ONLY` is ignored when two definitions are compared. It matters only to `CREATE INDEX`: without it PostgreSQL also creates an index on each partition and attaches it. The `CREATE INDEX` on a partitioned table runs after every table statement, deepest level first, so the partitions exist when it runs.
+`pg_get_indexdef` writes `ON ONLY` for every index on a partitioned table, so `ONLY` is ignored when two definitions are compared. It matters only to `CREATE INDEX`: without it PostgreSQL also creates an index on each partition and attaches it. The `CREATE INDEX` on a partitioned table runs after the creates and alters of every table, deepest level first, so the partitions exist when it runs. See [Order of statements](#order-of-statements).
 
 An index attached to the parent's is dropped with it, and PostgreSQL rejects a `DROP INDEX` on one, so pistachio never emits that statement. `CONCURRENTLY` cannot be used on a partitioned table, and an index opted in there is an error at plan time.
 
@@ -275,7 +279,7 @@ A query is compared as PostgreSQL stores it: a schema on a table, a table prefix
 | Indexes of a materialized view | as on a table |
 | Renamed | `ALTER VIEW ... RENAME TO` or `ALTER MATERIALIZED VIEW ... RENAME TO` |
 
-`CREATE OR REPLACE VIEW` is used where PostgreSQL accepts it: when the new query keeps the output column names in order, with new ones only at the end. A change that removes, renames or reorders a column is a drop and a create instead, and so is a query whose column names cannot be told from the text, a `SELECT *` for one. Only the names are compared, so a query that changes a column's type and keeps its name goes out as `CREATE OR REPLACE VIEW` and fails at apply with `cannot change data type of view column`.
+`CREATE OR REPLACE VIEW` is used where PostgreSQL accepts it: when the new query keeps the output column names in order, with new ones only at the end. A change that removes, renames or reorders a column is a drop and a create instead, and so is a query whose column names cannot be told from the text, a `SELECT *` for one, which also re-plans on every run; see [Known limitations](../about/limitations.md). Only the names are compared, so a query that changes a column's type and keeps its name goes out as `CREATE OR REPLACE VIEW` and fails at apply with `cannot change data type of view column`.
 
 A recreate needs `--allow-drop view`. Without it the plan writes the `DROP` as `-- skipped:` and no `CREATE`. A recreated view gets its comments and triggers again.
 
@@ -319,7 +323,7 @@ A rename of the type is carried into the columns, composite attributes and domai
 
 ### What is read
 
-`CREATE DOMAIN` with the base type, `COLLATE`, `DEFAULT`, `NOT NULL` and `CHECK` constraints. A `NOT VALID` constraint is written as `ALTER DOMAIN ... ADD CONSTRAINT ... NOT VALID` after the `CREATE DOMAIN`, which is the one `ALTER DOMAIN` form read. Every other `ALTER DOMAIN` is warned about and dropped. A `CHECK` without a name is named `<domain>_check`.
+`CREATE DOMAIN` with the base type, `COLLATE`, `DEFAULT`, `NOT NULL` and `CHECK` constraints. `ALTER DOMAIN ... ADD CONSTRAINT ... CHECK` after the `CREATE DOMAIN` is read too, which is how `dump` writes a `NOT VALID` constraint. Every other `ALTER DOMAIN` is warned about and dropped. A `CHECK` without a name is named `<domain>_check`.
 
 ### Changes
 
@@ -340,7 +344,7 @@ PostgreSQL cannot change a domain's base type or collation. Either is an error a
 pista: error: cannot change base type of domain public.email from text to character varying: PostgreSQL does not support this
 ```
 
-A domain constraint has no rename, so a renamed constraint is dropped and added. `--assume-validated` reaches domain constraints as it does table constraints.
+pistachio does not rename a domain constraint, so a renamed one is dropped and added. `--assume-validated` reaches domain constraints as it does table constraints.
 
 ## Composite types
 
@@ -386,7 +390,7 @@ No `RESTART` is planned, so a change that puts the current value outside the new
 
 ## Routines
 
-Functions and procedures are managed only when `--manage-routine` is passed. Without it `pg_proc` is never read, so a schema maintained with `-- pista:execute` keeps working and plan output is unchanged.
+Functions and procedures are managed only when `--manage-routine` is passed. Without it routines are not read, so a schema maintained with `-- pista:execute` keeps working and plan output is unchanged.
 
 ```bash
 pista dump --manage-routine
@@ -421,7 +425,9 @@ The body, the language and the attributes are compared, and a change is applied 
 - removing a parameter default
 - turning a function into a procedure, or back
 
-Adding or removing an `IN` parameter is not a change to the routine. The argument types are its identity, so the new signature is a new routine and the old one is dropped, which needs `--allow-drop routine` as well. Without the flag the plan writes the `DROP` as `-- skipped:` and leaves the routine as it is.
+Without the flag the plan writes the `DROP` as `-- skipped:` and leaves the routine as it is.
+
+Adding or removing an `IN` parameter is not a change to the routine. The argument types are its identity, so the new signature is a new routine and the old one is dropped, which needs `--allow-drop routine` as well. Without the flag the new routine is still created and the `DROP` of the old one is written as `-- skipped:`, so the database holds both overloads.
 
 PostgreSQL refuses the `DROP` of a recreate while anything calls the routine: a `CHECK` constraint, a column default, a generated column, an index, a view, a policy, a trigger, a domain constraint or a `BEGIN ATOMIC` routine. A body written as a string records no dependency and does not block. `plan` fails and names them:
 
