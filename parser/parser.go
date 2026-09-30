@@ -1012,7 +1012,7 @@ func clipIdent(s string, n int) string {
 }
 
 // makeObjectName mirrors PostgreSQL's makeObjectName
-// (src/backend/catalog/catalog.c). It joins name1, name2 and label with
+// (src/backend/commands/indexcmds.c). It joins name1, name2 and label with
 // underscores, shortening name1 and name2 - the longer one first - until the
 // whole name fits in nameDataLen-1 bytes. The label is never shortened, so a
 // long name keeps its _pkey / _check / ... suffix instead of losing it to a
