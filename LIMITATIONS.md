@@ -178,7 +178,7 @@ with a sub-query plans an `ALTER POLICY` on every run.
 The walk of `normalizeCheckExpr` reaches sub-queries, but none of its
 normalizations strips a column qualifier. Closing this limitation means
 dropping a qualifier that names the sub-query's own relation or alias, or the
-policy's table. `normalizeCheckExpr` does not know either of them today.
+policy's table. `normalizeCheckExpr` does not do that today.
 
 Workaround: write the sub-query the way `pista dump` emits it, or wrap it in a
 function.
@@ -483,7 +483,7 @@ Origin: INHERITS local column support.
 
 ## A new partition's numbered copy of its parent's index
 
-`CREATE TABLE ... PARTITION OF` copies the parent's indexes. So the plan leaves
+`CREATE TABLE ... PARTITION OF` copies the parent's indexes. The plan leaves
 out a `CREATE INDEX` for a copy that the file writes. The plan recognizes the
 copy by the name that PostgreSQL gives it. When the copies of two of the
 parent's indexes would get the same name on the partition, PostgreSQL numbers
@@ -540,9 +540,9 @@ Origin: expression normalization review, 2026-08-30.
 
 Priority: low.
 
-A list reaches the catalog as `= ANY (ARRAY[...])`, and `diff/desugar.go` folds
-that form back. This happens only when no item names a column and the left
-operand is not a row. Two shapes are expanded into comparisons instead
+A list reaches the catalog as `= ANY (ARRAY[...])` only when no item names a
+column and the left operand is not a row. `diff/desugar.go` folds that form
+back. Two shapes are expanded into comparisons instead
 (`transformAExprIn`, `src/backend/parser/parse_expr.c`):
 
 - A row on the left. `(a, b) IN ((1, 2))` is stored as `(a = 1) AND (b = 2)`.
