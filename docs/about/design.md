@@ -2,46 +2,37 @@
 
 ## The contract
 
-When `pista dump` output is used as the desired schema, `plan` produces no
-changes. A break in that round trip is a bug. CI dumps and re-plans dozens of
-real-world schemas. CI also reloads a smaller set of schemas, each covering one
-object kind, into an empty database and compares the result with the original
-using `pg_dump`. The second check catches what the dump drops when the plan
-overlooks it too.
+`pista dump` writes the schema of a database as SQL. When that output is fed
+back to `plan` as the desired schema, `plan` finds no changes. If it finds any,
+that is a bug.
 
-Drift that appears only with a desired schema written in another form has lower
-priority. Writing the schema in the form that `dump` writes avoids it. [Known
-limitations](limitations.md) marks those entries `Priority: low` and gives the
-workaround.
+A schema written in a form other than `dump` output may drift. Fixing such
+drift has lower priority. [Known limitations](limitations.md) lists these cases
+as `Priority: low`.
 
 ## What is not managed
 
-`CREATE EXTENSION`, `CREATE ROLE` and `GRANT` are out of scope. They belong to
-a different privilege layer than a schema. The role that runs a migration is
-usually not the role that owns the cluster. A grant often belongs in the same
-place where the database itself is provisioned. Manage them where the rest of
-the infrastructure is managed, for example in Terraform.
+`CREATE EXTENSION`, `CREATE ROLE` and `GRANT` are out of scope. They are
+privileges, not schema. Manage them with the rest of the infrastructure, for
+example in Terraform.
 
-pistachio parses only the statements that it manages. It drops every other
-statement in a schema file and prints an `ignored unsupported statement:`
-warning for each one. Nothing is lost silently. To keep such a statement in the
-file and run it during `apply`, mark it with
+pistachio reads only the statements that it manages. It skips every other
+statement and prints an `ignored unsupported statement:` warning for each one.
+For a statement that must still run, consider
 [`-- pista:execute`](../reference/directives.md).
 
-## Only the DDL a change needs
+## Explicit directives
 
-pistachio emits a statement only when something has to change, and never
-implicitly. Low load on the database comes before a simple interface. So the
-schema file uses a directive where an inference would be easier to use but more
-costly to get wrong:
+pistachio emits the DDL that a change needs, and nothing more. Extra statements
+cost the database time and locks. It also does not guess what the user wants.
+The user says it with a directive.
 
-- `CONCURRENTLY` on an index is opt-in per index, not applied everywhere.
-- Combining a table's `ALTER TABLE` actions into one statement is opt-in.
-- A rename is a directive. pistachio does not guess that a dropped table and an
-  added table are the same table. A wrong guess drops data.
+For example, pistachio does not detect a rename. A renamed table looks like a
+drop and an add, and a wrong guess would drop data. Mark the rename with
+`-- pista:renamed-from`.
 
 ## Rare inputs
 
-A rare input is not worth an implementation that is hard to follow. When a
-corner case is left open, it is recorded in [Known
-limitations](limitations.md), together with what the fix would look like.
+pistachio does not cover every rare input. Code for a rare case makes the rest
+harder to follow. [Known limitations](limitations.md) lists the open cases and
+what a fix would take.
