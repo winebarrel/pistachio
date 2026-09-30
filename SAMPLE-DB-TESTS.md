@@ -415,15 +415,18 @@ sample covers is not lost unnoticed.
 
 Indexes:
 
-- gin: musicbrainz, synapse, danbooru, windmill, openreplay, langfuse, logto,
-  uyuni, hexpm, lobehub.
+- gin: synapse, rt, musicbrainz, danbooru, lago, mattermost, windmill,
+  langfuse, openreplay, logto, concourse, uyuni, lobehub, hexpm, zed,
+  hoppscotch.
 - gist: musicbrainz, osm, chado, inaturalist.
 - hash: musicbrainz, langfuse, uyuni.
 - brin: musicbrainz, logto.
 - hnsw, pgvector's method: citizenlab, affine, lobehub.
-- Partial indexes: musicbrainz, synapse, lago, lemmy, windmill, penpot,
-  danbooru, openreplay, lobehub.
-- Expression indexes: musicbrainz, danbooru, penpot, dcm4chee, lobehub, hexpm.
+- Partial indexes: mediawiki, synapse, musicbrainz, chado, danbooru, lago,
+  mattermost, lemmy, windmill, feedbin, penpot, openreplay, logto, omero,
+  uyuni, lobehub, hydra.
+- Expression indexes: rt, musicbrainz, danbooru, mattermost, feedbin, langfuse,
+  penpot, dcm4chee, logto, omero, uyuni, lobehub, hexpm.
 - Unique indexes over an expression: rt, mattermost.
 - gin over `to_tsvector`: rt, langfuse, uyuni, hexpm (with another function
   inside it).
