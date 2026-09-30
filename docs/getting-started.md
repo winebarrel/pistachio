@@ -1,6 +1,6 @@
 # Getting started
 
-This page takes a database from its first dump to a first applied change. It needs a PostgreSQL server and pistachio; see [Installation](index.md#installation).
+This page takes you from the first dump of a database to the first applied change. You need a PostgreSQL server and pistachio. See [Installation](index.md#installation).
 
 ## Connect
 
@@ -19,19 +19,19 @@ Options can also come from a YAML file. See [Configuration](reference/configurat
 
 ## Dump the schema
 
-`dump` writes the current schema as SQL. That file is the starting point: fed back to `plan`, it plans no changes.
+`dump` writes the current schema as SQL. That file is the starting point. When you pass it back to `plan`, `plan` produces no changes.
 
 ```bash
 pista dump > schema.sql
 ```
 
-Every command targets the `public` schema unless `-n` names another. See [Working with multiple schemas](guides/multiple-schemas.md).
+Every command targets the `public` schema unless `-n` selects another. See [Working with multiple schemas](guides/multiple-schemas.md).
 
 `--split` writes one file per object into a directory instead. See [`pista dump`](reference/commands/dump.md).
 
 ## Edit
 
-Change the file the way the schema should look. A new column:
+Change the file so that it declares the schema you want. This example adds a new column:
 
 ```sql
 CREATE TABLE public.users (
@@ -44,7 +44,7 @@ CREATE TABLE public.users (
 
 ## Plan
 
-`plan` prints the DDL that brings the database in line with the file, and runs nothing:
+`plan` prints the DDL that makes the database match the file. It runs nothing:
 
 ```bash
 pista plan schema.sql
@@ -56,7 +56,7 @@ pista plan schema.sql
 ALTER TABLE public.users ADD COLUMN email text;
 ```
 
-A drop is not planned unless `--allow-drop` names its type; it is written as a `-- skipped:` comment. See [Controlling drops](guides/drops.md).
+`plan` does not include a drop unless `--allow-drop` includes its type. Instead, it writes the drop as a `-- skipped:` comment. See [Controlling drops](guides/drops.md).
 
 ## Apply
 
@@ -73,10 +73,10 @@ ALTER TABLE public.users ADD COLUMN email text;
 -- Apply finished in 12ms
 ```
 
-A second `plan` now prints `-- No changes`. From here on, edit the file, plan, apply. Keep the file in version control next to the application.
+A second `plan` now prints `-- No changes`. From here on, edit the file, run `plan`, and run `apply`. Keep the file in version control next to the application.
 
 ## Next
 
 - [`pista plan`](reference/commands/plan.md) and [`pista apply`](reference/commands/apply.md) list every option.
 - [Transactions and locks](guides/transactions.md) covers `--with-tx` and index builds that do not block writes.
-- [Supported objects](reference/objects.md) says what pistachio reads and what each change becomes.
+- [Supported objects](reference/objects.md) lists what pistachio reads and what each change becomes.

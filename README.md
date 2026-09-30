@@ -5,18 +5,18 @@
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/winebarrel/pistachio)](https://www.coderabbit.ai)
 [![Greptile: The War on Bugs](https://www.greptile.com/badge.svg)](https://www.greptile.com/?utm_source=oss_badge&utm_medium=readme&utm_campaign=greptile_for_open_source)
 
-pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL; pistachio generates the DDL diff.
+pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL, and pistachio generates the DDL diff.
 
-pistachio manages a PostgreSQL schema from SQL files. The files hold the whole schema as DDL, the way `pista dump` writes it. `pista plan` reads the database's catalog, compares it with the files, and prints the DDL that makes the two agree; `pista apply` runs that DDL. `pista dump` writes the files from a database you already have.
+pistachio manages a PostgreSQL schema from SQL files. The files contain the whole schema as DDL, in the form that `pista dump` writes. `pista plan` reads the database catalog and compares it with the files. It then prints the DDL that makes the database match the files. `pista apply` runs that DDL. `pista dump` writes the files from a database that you already have.
 
 > [!TIP]
-> The [playground](https://pistachio-demo.winebarrel.workers.dev) runs `pista diff` on two schemas you edit in the page, with nothing to install.
+> The [playground](https://pistachio-demo.winebarrel.workers.dev) runs `pista diff` on two schemas that you edit in the page. There is nothing to install.
 
 **[Documentation](https://winebarrel.github.io/pistachio/)** | [Getting started](https://winebarrel.github.io/pistachio/getting-started/) | [Guides](https://winebarrel.github.io/pistachio/guides/) | [Commands](https://winebarrel.github.io/pistachio/reference/commands/) | [Supported objects](https://winebarrel.github.io/pistachio/reference/objects/)
 
 ## How it works
 
-Every run computes the difference between the database and the files, so there is no migration history to keep. A column added to the file becomes `ALTER TABLE ... ADD COLUMN`; a changed `CHECK` becomes a drop and an add; an object removed from the file is reported, and dropped only when `--allow-drop` names its type.
+Every run computes the difference between the database and the files. There is no migration history to keep. A column added to the file becomes `ALTER TABLE ... ADD COLUMN`. A changed `CHECK` becomes a drop and an add. An object removed from the file is reported. It is dropped only when `--allow-drop` includes its type.
 
 ![pistachio workflow](docs/workflow.svg)
 
@@ -29,7 +29,7 @@ brew install winebarrel/pistachio/pistachio     # Homebrew
 mise use github:winebarrel/pistachio            # mise
 ```
 
-Or download a binary from [Releases](https://github.com/winebarrel/pistachio/releases): macOS and Linux on amd64 and arm64, Windows on amd64.
+Alternatively, download a binary from [Releases](https://github.com/winebarrel/pistachio/releases). Binaries exist for macOS and Linux on amd64 and arm64, and for Windows on amd64.
 
 The demo image bundles PostgreSQL and a sample schema:
 
@@ -56,18 +56,18 @@ ALTER TABLE public.users ADD COLUMN email text;
 CREATE INDEX users_email_idx ON public.users USING btree (email);
 ```
 
-A second `plan` prints `-- No changes`. From then on, edit the file, plan, apply. Every command targets the `public` schema unless `-n` names another. [Getting started](https://winebarrel.github.io/pistachio/getting-started/) walks through this with a real database; [Commands](https://winebarrel.github.io/pistachio/reference/commands/) lists every option.
+A second `plan` prints `-- No changes`. From then on, edit the file, run `plan`, and run `apply`. Every command targets the `public` schema unless `-n` selects another. [Getting started](https://winebarrel.github.io/pistachio/getting-started/) shows these steps with a real database. [Commands](https://winebarrel.github.io/pistachio/reference/commands/) lists every option.
 
 ## Features
 
-- An object removed from the file is dropped only when `--allow-drop` names its type; until then the plan shows the drop as a `-- skipped:` comment. [Controlling drops](https://winebarrel.github.io/pistachio/guides/drops/)
-- `-- pista:renamed-from old_name` above an object turns a drop and a create into `RENAME`. [Renaming objects](https://winebarrel.github.io/pistachio/guides/renaming/)
-- `apply --with-tx` runs the plan in one transaction. `-- pista:concurrently` opts an index into `CONCURRENTLY`, which cannot run in one; `--try-tx` handles both. [Transactions and locks](https://winebarrel.github.io/pistachio/guides/transactions/)
-- `plan --explain` says which statements scan or rewrite a table, what they block, and how big the table is. [Explaining a plan](https://winebarrel.github.io/pistachio/guides/explaining-plans/)
-- `plan --out` writes a plan file that `apply-from` runs later, and refuses to run if the database changed in between. [Plan files](https://winebarrel.github.io/pistachio/guides/plan-files/)
-- `pista diff --git origin/main...HEAD schema.sql` prints the DDL a branch would apply, with no database. [Diffing schema files](https://winebarrel.github.io/pistachio/guides/diffing/)
-- `dump --split` writes one file per object, and `pista fmt` lays the files out. [Formatting schema files](https://winebarrel.github.io/pistachio/guides/formatting/)
-- Tables, columns, constraints, indexes, views, enums, domains, composite types, sequences, triggers, policies and comments are managed, and routines with `--manage-routine`. [Supported objects](https://winebarrel.github.io/pistachio/reference/objects/)
+- An object removed from the file is dropped only when `--allow-drop` includes its type. Until then, the plan shows the drop as a `-- skipped:` comment. See [Controlling drops](https://winebarrel.github.io/pistachio/guides/drops/).
+- `-- pista:renamed-from old_name` above an object changes a drop and a create into a `RENAME`. See [Renaming objects](https://winebarrel.github.io/pistachio/guides/renaming/).
+- `apply --with-tx` runs the plan in one transaction. `-- pista:concurrently` marks an index for `CONCURRENTLY`, which cannot run in a transaction. `--try-tx` handles both cases. See [Transactions and locks](https://winebarrel.github.io/pistachio/guides/transactions/).
+- `plan --explain` reports which statements scan or rewrite a table, what they block, and how big the table is. See [Explaining a plan](https://winebarrel.github.io/pistachio/guides/explaining-plans/).
+- `plan --out` writes a plan file. `apply-from` runs it later, and refuses to run if the database changed in between. See [Plan files](https://winebarrel.github.io/pistachio/guides/plan-files/).
+- `pista diff --git origin/main...HEAD schema.sql` prints the DDL that a branch would apply. It needs no database. See [Diffing schema files](https://winebarrel.github.io/pistachio/guides/diffing/).
+- `dump --split` writes one file per object, and `pista fmt` formats the files. See [Formatting schema files](https://winebarrel.github.io/pistachio/guides/formatting/).
+- pistachio manages tables, columns, constraints, indexes, views, enums, domains, composite types, sequences, triggers, policies and comments. Routines are managed with `--manage-routine`. See [Supported objects](https://winebarrel.github.io/pistachio/reference/objects/).
 
 `CREATE EXTENSION`, `CREATE ROLE` and `GRANT` are out of scope. See [Design and scope](https://winebarrel.github.io/pistachio/about/design/) and [Known limitations](https://winebarrel.github.io/pistachio/about/limitations/).
 
@@ -82,5 +82,5 @@ See [Contributing](https://winebarrel.github.io/pistachio/contributing/) for the
 
 ## Related projects
 
-- [ridgepole](https://github.com/ridgepole/ridgepole): DB schema management using a Rails DSL.
-- [qrev](https://github.com/winebarrel/qrev): SQL execution history management tool.
+- [ridgepole](https://github.com/ridgepole/ridgepole) is a DB schema management tool using a Rails DSL.
+- [qrev](https://github.com/winebarrel/qrev) is a SQL execution history management tool.
