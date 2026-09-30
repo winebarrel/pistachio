@@ -536,7 +536,8 @@ once in `sample-db.mk`. On a fresh database the server reports a dump that
 drops what it is about to create with `IF EXISTS`, an identifier longer than
 63 characters that it truncates, and an index that a constraint takes over.
 None of that is about the schema under test, and the runner passes a loader's
-stderr through. ranger raises the level to `error` from its `SAMPLES` record.
+stderr through. A sample can raise the level further, to `error`, from its
+`SAMPLES` record.
 
 A loader that installs a contrib extension into `public` follows the install
 with `ALTER EXTENSION ... SET SCHEMA public`. In `make schema`, every sample
