@@ -409,422 +409,119 @@ gitlab is also the reason that `reset-db` resets only `public` between samples.
 ### Shapes
 
 Beyond size, the samples bring in shapes that the hand-written fixtures do not
-always reach.
+always reach. This list names the samples that bring in each one. Check it
+before dropping a sample or changing its loader, so that a shape only one
+sample covers is not lost unnoticed.
 
-- **Index methods and predicates**: musicbrainz has partial and expression
-  indexes and the gin, gist, hash, and brin methods. synapse adds 12 partial
-  and 2 gin indexes. The samples have 13 hnsw indexes between them, which is
-  pgvector's method. citizenlab brings the first one, over its one `vector`
-  column. That index names `vector_cosine_ops` from the schema that the
-  extension sits in. affine brings two, one over each of its `vector(1024)`
-  embedding columns. Those two name the same operator class unqualified.
-  lobehub brings the other 10, one over each of the 10 `vector(1024)` columns
-  that hold what it remembers about a user. Those 10 name the operator class
-  unqualified as well. lobehub leaves its eleventh such column, a document
-  chunk's embedding, unindexed. langfuse brings four hash indexes, all over a
-  `text` column, and two gin indexes. One gin index is over a `text[]` column.
-  The other is over `to_tsvector('english', content)`, which is the only
-  expression index that langfuse has. logto brings one brin index over a
-  timestamp. Beside it are 179 btree indexes, 11 of them partial and 13 over
-  an expression, and a single gin index. uyuni has one hash index, over the
-  column that holds a package capability's name. Beside it are 931 btree
-  indexes, 34 of them partial, and 3 gin indexes. Two of the gin indexes name
-  `gin_trgm_ops` and the third is over `to_tsvector`.
-- **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to
-  a table, which is denser than any other sample. 55 of them are gin, 29 of
-  those over an expression and 17 naming `gin_trgm_ops`. 49 are partial.
-  mediawiki has 192 over 64 tables. Only one of them is partial and none is
-  over an expression. lago has 801 over 143 tables, 123 of them partial and 16
-  gin. feedbin has 161 over 44 tables. Every one of them is btree, only 7 are
-  partial and 3 are over an expression. opencms's 164 over 41 tables are four
-  to a table like danbooru's, but plainer. Every one of them is btree, 120 are
-  non-unique, and not one is partial or over an expression. openreplay's 268
-  over 62 tables are four to a table as well, and they lean the other way. 54
-  are gin, and every one of those names `gin_trgm_ops`, which is what
-  openreplay searches a session's metadata with. 55 are partial. dcm4chee's
-  290 over 41 tables are seven to a table, as dense as danbooru's and plainer
-  still. All are btree and none is partial. The only three over an expression
-  are `upper()` of a name or a description, which is how dcm4chee searches
-  case-insensitively. lobehub's 972 over 182 tables are five to a table. 958
-  of them are btree, 72 of those partial, 10 are hnsw, and 4 are gin. One of
-  the gin indexes is over a key that is read out of a `jsonb` column, with
-  `jsonb_path_ops`. lobehub has four other expression indexes. Two of them
-  cast a `jsonb` key to `numeric`, and two wrap a nullable column in
-  `COALESCE` to key on it.
-- **Partial indexes**: 37 of lemmy's 290 indexes are partial, and 88 of
-  windmill's 392. windmill also has 31 gin indexes. 50 of penpot's 169 are
-  partial. 35 of penpot's predicates test a `deleted_at` or `archived_at`
-  timestamp for NULL, and two read a key out of a `jsonb` column. Every one of
-  penpot's indexes is btree. Its 5 expression indexes are all over `jsonb`
-  too, and one of them is over a `COALESCE` of two keys.
-- **Unique indexes over an expression and a gin index over `to_tsvector`**: rt
-  has them. mattermost has 11, six of them over the concatenation of two to
-  five columns. hexpm's four gin indexes are three shapes at once. One names
-  `gin_trgm_ops` over a plain column. Two are over a `->` key of a `jsonb`
-  column, and one of those names `jsonb_path_ops`. The fourth is over
-  `to_tsvector('english', regexp_replace(...))` of such a key cast to text.
-  That is a `to_tsvector` index with another function inside it.
-- **gist indexes naming an operator class**: osm has two that name `inet_ops`
-  and one over four columns, which needs `btree_gist`.
-- **btree and gin indexes naming an operator class**: Five of mattermost's
-  nine btree indexes over `lower()` name `text_pattern_ops`. Its two gin
-  indexes over a `->` expression name `jsonb_path_ops`. hoppscotch's four gin
-  indexes split two ways. Two name `gin_trgm_ops` over a title, and the
-  operator class resolves from `public`, where its loader installs `pg_trgm`.
-  Two are over a `jsonb` column at the default operator class. So the dump has
-  to write one pair with the class and the other pair without it.
-- **gist indexes over a function the schema defines itself**: chado's three
-  name `boxrange`. One of them is partial and is declared from another schema.
-- **`NULLS NOT DISTINCT` and `INCLUDE`**: discourse has four unique indexes
-  declared `NULLS NOT DISTINCT` and one index with an `INCLUDE` column. lago
-  has one `NULLS NOT DISTINCT` index and eight with `INCLUDE` columns. hexpm
-  has one more `INCLUDE` index, over two columns and covering a third. hydra's
-  one is both at once. It is the only index that any sample declares as
-  partial and covering together: three columns, `INCLUDE (client_id)`, and
-  `WHERE login_session_id IS NOT NULL`.
-- **Storage parameters on an index**: concourse's two gin indexes are both
-  over a `jsonb` column with `jsonb_path_ops`, and both are declared
-  `WITH (FASTUPDATE = false)`. So its dump is where an index's storage
-  parameter has to survive the round trip. hatchet's storage parameters are on
-  tables instead.
-- **Exclusion constraints and unlogged tables**: demodb has them and needs
-  `btree_gist`. boundary's 19 exclusion constraints need it too. hatchet's 2
-  compare a range column with `&&`. lago has one. In bigbluebutton, every one
-  of the 54 tables is unlogged. omero declares no exclusion constraint. It
-  leaves one table of its 161 unlogged, the one that its triggers write the
-  current administrative privileges into.
-- **Stored generated columns**: bigbluebutton has 17. Three of them are over a
-  function of its own that calls `unaccent`. uyuni has one, which is over a
-  field of the composite-typed column beside it.
-- **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb
-  have them. icingadb's 13 types are 6 enums and 7 domains, and each domain
-  carries a named CHECK. icinga_director's 20 enums come with one domain that
-  carries two anonymous CHECKs. guacamole has 5 enums. listmonk has 14 over 16
-  tables. coder has 61, and 73 columns are typed by them. hatchet has 57,
-  glific 19, and lago 45. calcom has 46 and triggerdev 48, and five columns
-  between them are typed as an array of one. mattermost's 7 type 9 columns,
-  and a partial index predicate casts to one of them. lemmy has 16 over 24
-  columns and windmill 33 over 57. plausible has 3, one of which is Oban's job
-  state. dokploy has 27, and 40 of its columns are typed by them. All of
-  dokploy's are quoted mixed-case names, as calcom's and triggerdev's are.
-  hyperswitch is denser than any of them. It has 46 enums over 50 tables, and
-  they type 74 columns and one array-of-enum column. The 695 labels between
-  them are lopsided too, because `CountryAlpha2` carries 249 of them and
-  `Currency` carries 158. documenso's 30 over 51 tables are close behind, and
-  they type 34 columns. langfuse's 35 over 74 tables type 45 of its columns,
-  with 116 labels between them. boundary declares 36 domains and no enum. 30
-  of the domains carry 39 CHECKs between them, and 1,039 of its 1,530 columns
-  are typed by a domain. openreplay's 19 enums carry 374 labels between them,
-  and logto's 8 carry 32. omero's 12 types are 7 enums and 5 domains. The
-  enums hold 157 labels between them. The labels are the SI-prefixed symbols
-  of the units that a measurement can carry, so many of them reach past ASCII.
-  Each domain carries one anonymous CHECK that bounds a number. concourse
-  declares 5 enums, affine 11 with 40 labels, and teable 8. formbricks's 32
-  over 59 tables type 32 of its columns, one apiece, with 109 labels between
-  them. hoppscotch's 4 type 8 columns with 11 labels. ghostfolio is dense for
-  its size: 10 over 21 tables type 14 columns with 49 labels. typebot's 5 over
-  31 tables type 7 columns with 18 labels. uyuni goes the other way for its
-  size. It has 4 enums with 10 labels between them over 433 tables, because
-  what it constrains, it constrains with a CHECK instead.
-- **Identity columns**: openreplay has them. 19 of its 62 tables draw
-  their surrogate key from an `integer GENERATED BY DEFAULT AS IDENTITY`
-  column instead of from a serial or a standalone sequence. So its dump is
-  where the identity clause and the sequence behind it have to survive the
-  round trip. uyuni has 21 of them, one per table. 18 are on tables that SUSE
-  added and 3 are on the RBAC tables in its `access` schema. The tables around
-  them take their key from one of its 207 standalone sequences instead.
-- **Composite types**: ovirt declares 10 of them, more than any other sample.
-  sourcegraph, chado, and coder declare 2 each. marquez declares 1, and one of
-  its views builds an array of it with ROW(). uyuni has 1 as well, the
-  four-field type that its package versions are stored in. Two columns are
-  typed by it, two indexes read one of its fields, a generated column stores
-  another field, and 12 of its routines take or return it.
-- **tsvector columns**: dvdrental and pagila have them.
-- **A non-default collation**: musicbrainz has one.
-- **Columns typed by a contrib extension**: sourcegraph has 49 `citext`
-  columns and six extensions installed at once. lemmy's `comment.path` is an
-  `ltree`, and lemmy installs `pg_trgm` and `pgcrypto` beside it. plausible
-  has 3 more `citext` columns. hexpm has 1 more `citext` column and five
-  extensions installed for 36 tables: `citext`, `fuzzystrmatch`, `pg_trgm`,
-  `pgcrypto`, and `uuid-ossp`. One column defaults through the last of those.
-  feedbin has 2 `hstore` columns and `pg_stat_statements` installed beside
-  them.
-- **Columns typed by an extension that is not contrib**: discourse's three
-  `halfvec` columns need pgvector. The `geometry` columns need PostGIS: osm's
-  one `geometry(Polygon,4326)`, dhis2's one unmodified `geometry`, and
-  inaturalist's 26. 8 of inaturalist's 26 carry a modifier of their own, and 8
-  gist indexes are over them. Those modifiers are the only ones that any
-  sample reports in mixed case. citizenlab needs both extensions, for one
-  `vector` column and three `geography` columns. Those are the only
-  `geography` columns that any sample declares. lobehub declares 11
-  `vector(1024)` columns, more than every other sample together. Ten of them
-  are the embeddings of what it remembers about a user, and one is the
-  embedding of a document chunk.
-- **Foreign keys that all declare their referential actions**: All 171 of
-  icinga_director's name both ON UPDATE and ON DELETE, in six combinations.
-  Every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and an
-  ON DELETE action, which is CASCADE for most. 137 of glific's 142 name ON
-  DELETE, 106 of them CASCADE. 132 of dokploy's 133 name ON DELETE, 113 of them
-  CASCADE and 19 SET NULL. Neither glific's nor dokploy's names ON UPDATE at
-  all. Every one of langfuse's 113 names ON UPDATE CASCADE as well, 90 of them
-  with ON DELETE CASCADE and the other 23 with SET NULL. Every one of logto's
-  152 names ON UPDATE CASCADE too, 149 of them with ON DELETE CASCADE. All 84 of
-  openreplay's name ON DELETE alone, 72 CASCADE and 12 SET NULL. lobehub is the
-  largest of that shape. 541 of its 550 name ON DELETE: 417 CASCADE, 117 SET
-  NULL and 7 RESTRICT. Not one names ON UPDATE. uyuni mixes the two. 432 of its
-  692 name ON DELETE: 371 CASCADE, 59 SET NULL and 2 RESTRICT. The other 260
-  name nothing, and not one names ON UPDATE. formbricks names ON UPDATE CASCADE
-  on all 91 of its foreign keys and ON DELETE on 90: 77 CASCADE, 11 SET NULL and
-  2 RESTRICT. hoppscotch names ON UPDATE CASCADE on all 22 of its foreign keys
-  and ON DELETE CASCADE on 20. hydra is the sample that uses RESTRICT on the
-  update side. 14 of its 31 name ON UPDATE RESTRICT with ON DELETE CASCADE,
-  which is how every reference to the tenant row is written. 16 more name ON
-  DELETE alone. authelia splits its 15 down the middle: 7 ON DELETE CASCADE and
-  8 ON DELETE RESTRICT. All but one of them name ON UPDATE CASCADE as well.
-- **Foreign keys over more than one column**: 3 of zed's 42 are, and each
-  names two columns on both sides. So the dump has to write a pair of column
-  lists back. One of them points a worktree's settings files at
-  `worktrees(project_id, id)`, which is that table's composite primary key.
-  formbricks has 9 of 91, more than any other sample. Every one of them pairs
-  the id that it references with the `"workspaceId"` beside it. So a row can
-  only ever point at a row of its own tenant. One of the nine names the
-  referencing columns in two spellings at once, `feedback_source_id` and
-  `"workspaceId"`. hydra has 10 of 31. One of them is the only three-column
-  foreign key that any sample declares: a trusted JWT bearer issuer points at
-  `hydra_jwk(sid, kid, nid)`. The other nine name two columns. Every one of
-  the ten carries the tenant's `nid` as its last column, the way formbricks's
-  carry `"workspaceId"`.
-- **Column comments**: gravitino comments 183 of its 186 columns and every one
-  of its 20 tables, which is the densest share of any sample. shenyu comments
-  360 of its 391 columns and 6 of its 45 tables. nacos comments 102 of 175
-  columns and 10 of 16 tables. glific comments 274 of its 590 columns.
-  streampark comments 114 of its 290 columns and not one of its 26 tables.
-- **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
-  its five schemas. 12 of mimiciv's 51 point from `mimiciv_icu` into
-  `mimiciv_hosp`. 4 of chado's 472 point from `frange` into `chado`. Every one
-  of gitlab's partitions is attached across a schema boundary.
-- **Standalone sequences rather than serial columns**: ranger's 85 tables come
-  with 84 of them. wso2apim mixes 104 of them in with serial columns. wso2is
-  declares 92 for its 172 tables and wires 87 of them into a column DEFAULT.
-  dcm4chee declares 30 for its 41 tables and alfresco declares 38 for its 45.
-  Neither wires one into a DEFAULT at all. Both are Java applications that ask
-  for the next value themselves, so the sequence and the column that it feeds
-  are related only by name. roundcube goes the other way with the same syntax.
-  It declares 8 and names each one in the `nextval` DEFAULT of the column that
-  it belongs to, which is what `serial` would have written for it. omero
-  declares 130 for its 161 tables, and it is Java again. 129 are named `seq_`
-  and the table that they feed. Only 2 are named in a DEFAULT, and the
-  application alone reads the rest. uyuni declares more than any other sample,
-  207 for its 433 tables, and names exactly one of them in a DEFAULT. They are
-  the Oracle schema's sequences, and Java asks each one for the next value
-  before it inserts. streampark declares 24 for its 26 tables and is Java too.
-  But it wires 23 of them into the DEFAULT of the `id` that they feed, and it
-  leaves the application to read only the twenty-fourth, `t_flink_app`'s.
-  Every one of the 24 carries a non-default `START WITH 10000` and
-  `MINVALUE 10000`. So the dump has to write both back.
-- **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
-  tables have them, where chinook has 11. hatchet quotes 72 of its 133 tables.
-  calcom quotes 99 of its 102 tables and 747 of its 1,092 columns. triggerdev
-  quotes 79 of its 85 tables and 798 of its 1,123 columns. In documenso, all
-  51 tables and 314 of the 490 columns are quoted. In bigbluebutton, 451 of
-  532 columns and half of the tables and views are camelCase. langfuse is the
-  Prisma schema that went the other way. Only 2 of its 74 tables and 3 of its
-  757 columns are quoted, and the rest are snake_case. But all 35 of its enum
-  types are PascalCase. formbricks is back to the usual Prisma spelling: 58 of
-  its 59 tables and 258 of its 559 columns are quoted. hoppscotch quotes every
-  one of its 23 tables and 115 of its 171 columns.
-- **Width without variety**: openolat's 382 tables are behind only gitlab and
-  dhis2. Every one of its 1,239 indexes is btree, and every one of its 632
-  foreign keys is left at NO ACTION. omero is the same shape one size down.
-  All 811 of its indexes are btree, one of them partial and one over an
-  expression. All 696 of its foreign keys are at NO ACTION too. Those 696 over
-  161 tables are more per table than in any other sample. 373 of its indexes
-  are there for a key, behind 157 primary keys and 216 unique constraints.
-- **A schema that is nearly all keys**: In dhis2, 461 primary keys and 464
-  unique constraints back all but 30 of its 955 indexes. It declares no CHECK
-  at all. Its 989 foreign keys are more than in any sample but gitlab.
-  vaultwarden is smaller, and its indexes are all keys. 28 primary keys and 5
-  unique constraints over 28 tables back every one of its 33 indexes. So it
-  declares no index that is not a key, and no CHECK either. 10 of those
-  primary keys are composite. They are on the link tables between a user, an
-  organization, a collection, and a cipher. bonita has about three times as
-  many tables and is keyed as densely. It has 80 primary keys, 15 of them
-  composite, and 35 unique constraints behind 115 of its 191 indexes. It has
-  no CHECK, and only 4 of its 707 columns carry a DEFAULT at all.
-- **Foreign keys at the highest density**: omop's 39 tables carry 176 of them,
-  4.5 to a table, ahead of omero's 4.3 over 161 tables. They nearly all point
-  one way. Every clinical event names the vocabulary entry that says what it
-  was, so `concept` alone is referenced by 118 of the 176. 3 are
-  self-references. The rest of the schema is as lopsided. 28 primary keys over
-  those 39 tables leave 11 tables unkeyed. omop declares no unique constraint
-  and no CHECK at all, so its 28 constraints are 28 primary keys and nothing
-  else. All 98 of its indexes are btree, 28 backing a key and 70 not. It has
-  no view, sequence, routine, trigger, or type. Its ids are integers that an
-  ETL supplies, not serial columns, so nothing is counted behind them.
-- **CHECK constraints written by hand**: affine declares 54 over its 72
-  tables. Prisma wrote none of them, because its schema language declares no
-  CHECK at all. A migration added every one of them. Most hold a text column
-  to a fixed list of roles or states. The rest pair two nullable columns so
-  that either both are set or neither is. Its 16 triggers are hand-written for
-  the same reason.
-- **CHECK constraints written by the installer**: uyuni declares 109 by hand.
-  Nearly all of them hold a one-character column to `Y`/`N` or to a short
-  list of codes, the way the Oracle schema that it was ported from did. Nobody
-  wrote the other 635. The last statement of the install walks the catalog and
-  adds a CHECK to every `varchar` column. That CHECK rejects the empty string,
-  which Oracle would have read as NULL. So 744 of the sample's 1,102
-  constraints are CHECKs. The dump has to write back a schema whose constraint
-  names were computed at install time.
-- **A schema that barely keys at all**: mattermost backs its 86 tables with 85
-  primary keys and 19 unique constraints. It declares no CHECK. It leaves all
-  but 3 of the references between its tables to the application. mediawiki,
-  temporal, imdb, dolphinscheduler, nightingale, joomla, hyperswitch,
-  icinga_ido, bareos, opencms, kamailio, shenyu, nacos, gravitino, and
-  streampark declare no foreign key at all. openfire declares exactly one,
-  over 35 tables. gravitino is the one of them that keys everything else. A
-  primary key on each of its 20 tables and 19 unique constraints beside them
-  back 39 of its 52 indexes. So the references alone are what it leaves to the
-  application. streampark is keyed as tightly for its size. It has a primary
-  key on each of its 26 tables and one unique constraint beside them. shenyu
-  goes furthest. Half of its tables are unkeyed either way: 22 of 45 have no
-  primary key. Its 45 tables carry 24 constraints between them, 23 primary
-  keys and one CHECK. icinga_ido is the widest of them. It has 61 tables and
-  791 columns, indexed 234 times and keyed by 61 primary keys and 33 unique
-  constraints. Every reference between them is left to Icinga. kamailio has
-  the most tables of any of them, 73. They are keyed by one primary key each
-  and 36 unique constraints, with no CHECK anywhere. But it does default 380
-  of its 614 columns. Its schema is assembled one module at a time. So what
-  ties the tables together lives in Kamailio's configuration, not in the
-  database. teable is the same shape from the other end of the stack. Its 62
-  tables are keyed by 60 primary keys and no unique constraint at all. It has
-  2 CHECKs and only 23 foreign keys. The rest of what ties its rows together
-  is left to the application. concourse leaves 15 of its 45 tables without a
-  primary key.
-- **Unique indexes standing in for unique constraints**: lobehub backs its 182
-  tables with 182 primary keys and only 20 unique constraints. It writes the
-  other 138 of its 340 unique indexes as a bare `CREATE UNIQUE INDEX`, which
-  is what Drizzle emits. 54 of those carry a predicate and 2 are over an
-  expression. A constraint could not spell either of those at all. So the dump
-  has to write every one of them back as an index. The rest of the schema is
-  tables and indexes and nothing else. It has no view, no enum, no domain, no
-  composite type, no trigger, and no routine. It has one standalone sequence,
-  named in the DEFAULT of the one column that it feeds, 35 CHECKs that its
-  migrations wrote by hand, and autovacuum storage parameters on the two
-  tables that hold its embeddings. zed is the same shape one size down, and
-  stricter. It has 29 primary keys over 29 tables, no unique constraint and no
-  CHECK at all. So all 29 of its constraints are primary keys, and 14 of its
-  43 unique indexes stand on their own. Of the 35 indexes that are not unique,
-  2 are gin over a name with `gin_trgm_ops`, and the other 33 are btree. The
-  operator class of those 2 resolves from the schema that the extension sits
-  in, `public` here, as citizenlab's hnsw index does from its own. formbricks
-  is the shape again, from Prisma instead of Drizzle. It has 58 primary keys
-  over 59 tables, no unique constraint and no CHECK at all. So its 58
-  constraints are primary keys and nothing else, and 51 of its 109 unique
-  indexes stand on their own.
-  hoppscotch, Prisma as well, goes the other way for four of them. 21 primary
-  keys and 4 unique constraints over 23 tables leave 15 of its 40 unique
-  indexes bare. authelia is the shape from a hand-written migration history
-  instead of an ORM. It has 24 primary keys over 25 tables and no unique
-  constraint at all, and 16 of its 40 unique indexes stand on their own.
-  typebot relies on bare unique indexes more than any other Prisma schema. It
-  has 23 primary keys over 31 tables, so 8 of its tables are keyed by a bare
-  unique index alone. 22 of its 45 unique indexes are bare. ghostfolio has 9
-  bare unique indexes of 30 over 21 tables, and every table is keyed.
-- **A large object and the trigger that frees it**: bonita is the only sample
-  with a column of type `oid`. `temporary_content.content` holds the
-  identifier of a large object, not the bytes. The sample's one trigger is an
-  `AFTER DELETE` that calls its one routine. It runs `lo_unlink` on the row's
-  old value, so the object goes with the row.
-- **Materialized views**: adventureworks, pagila, listmonk, lago, mattermost,
-  and marquez have them. All three of listmonk's views are materialized. All
-  six of mattermost's are materialized, and one of them carries an index. One
-  of marquez's four is materialized. hexpm has only two views, and both are
-  materialized. Both carry indexes, four between them. Two are unique, which
-  is what a concurrent refresh needs. Two order a column `DESC NULLS LAST`,
-  and in one of those it is the second column of three.
-- **Extensions in a schema of their own**: citizenlab puts all five of its
-  extensions in `shared_extensions` and qualifies every use with it. So 135 of
-  its column defaults call `shared_extensions.gen_random_uuid()`, and two of
-  its indexes name an operator class from there. windmill does the same with
-  `uuid-ossp` in an `extensions` schema. lemmy installs its three into the
-  schema that it loads into.
-- **An extension installed and then left unused**: formbricks has one. One of
-  its migrations declares three tables with a `vector(512)` column and
-  installs pgvector for them. A later migration drops all three tables, and
-  the extension stays. Nothing in the schema that the check reads is typed by
-  it. But the load still needs it on the server. So the sample sits with
-  discourse and citizenlab in what `run.sh` asks for up front.
-- **Views at scale**: chado's 1,864 are nearly ten times every other sample
-  put together. 1,832 of them are the Sequence Ontology views in its `so`
-  schema, and each selects from tables in `chado`. bigbluebutton's 86 over 54
-  tables are the most of any other sample, and five of them select from
-  another view. omero's 50 come next, one per link table. Each counts the
-  links that a table holds and groups them by owner.
-- **Partitioned tables at scale**: gitlab declares 100 of them and attaches
-  2,054 partitions. All of the partitions live in schemas of their own.
-  hatchet declares 22, 20 by range and 2 by hash, and attaches none, because
-  it creates its partitions at run time. 13 of its tables set autovacuum
-  storage parameters. lago declares one and attaches five in its own schema.
-  triggerdev declares two by range and attaches none. thingsboard declares 11,
-  all by range, and attaches none for the same reason. windmill declares one
-  by range and attaches four beside it. penpot declares one by hash and
-  attaches all 16 of its partitions beside it, which is a quarter of the
-  sample's 61 tables. Both of the parent's indexes are partitioned along with
-  it.
-- **Row-level security**: windmill turns it on for 38 of its 173 tables and
-  backs them with 366 policies. 32 names are reused across the tables. 98 are
-  declared for ALL, 73 for SELECT, 71 for INSERT, and 62 each for UPDATE and
-  DELETE. 77 carry a WITH CHECK as well as a USING. Every one of them names a
-  role, `windmill_admin` or `windmill_user`, which the migrations create
-  themselves. Pistachio does not manage roles, but it has to write the names
-  back. logto is the other sample that declares a policy, and it declares them
-  the other way round. 77 of its 79 tables turn RLS on. Each one gets the same
-  pair that its seeder writes after every table: a RESTRICTIVE policy that
-  scopes the rows to the tenant, and a permissive one over it. That is 153
-  policies, 76 of them restrictive. All of them are FOR ALL, and none names a
-  role or carries a WITH CHECK. windmill declares none that are restrictive,
-  so logto's 76 are the only restrictive policies that any sample has. No
-  other sample declares a policy.
-- **Table inheritance**: ledgersmb attaches 21 children with INHERITS. It is
-  the only sample that does.
-- **Triggers**: uyuni's 224 sit on 201 of its 433 tables. 174 of them are the
-  same trigger written 174 times: a row-level `BEFORE INSERT OR UPDATE` that
-  stamps the row's `modified` column. Each calls a function of its own instead
-  of one shared between them. So 174 of its 412 routines exist to do nothing
-  else. boundary's 741, more than any other sample, spread over 182 of its 293
-  tables, and 7 of them are constraint triggers. gitlab has 388, and one of
-  them is held in `ENABLE ALWAYS` state. logto has 85, and 76 of them are the
-  one that its seeder puts on every table it creates. kea's 81 outnumber its
-  64 tables. coder's 30, lemmy's 66, bigbluebutton's 25, hatchet's 22, and
-  ledgersmb's 11 come next. 21 of hatchet's are statement-level triggers with
-  transition tables, and 12 sit on a partitioned table. One of marquez's 2 is
-  an INSTEAD OF trigger on a view, not a table. So its dump has to name the
-  view. omero's 130 sit on 54 of its 161 tables, and every one of them is
-  row-level. 4 are deferrable constraint triggers that guard a privilege
-  change. affine's 16 sit on 11 of its 72 tables. 4 of them fire
-  `BEFORE UPDATE OF` a column list, one of four columns. So the dump has to
-  write the list back. formbricks's 11 are that shape throughout. 10 of them
-  fire `AFTER INSERT OR DELETE OR UPDATE OF` a column list, one of four
-  columns. All 11 call the same function with three arguments apiece. So the
-  dump has to write the argument list back as well. streampark's 8 are the
-  uyuni trigger done the cheap way. Each is a row-level `BEFORE UPDATE` that
-  stamps a `modify_time`, but one function is shared by all 8 instead of one
-  written per table. hoppscotch's 2 are `BEFORE INSERT OR UPDATE OF` a single
-  column. concourse's 7 sit on 5 tables. 2 call `pg_notify`. 4 create or drop
-  a child table with INHERITS as a pipeline or a team comes and goes, so none
-  of those children is in the dump. 1 stands in for a foreign key.
-- **Routines spread over a dozen schemas**: uyuni is checked with 13 schemas,
-  more than any other sample. Its tables are in two of them: 426 in the one
-  that it loads into and 7 in `access`. The other 11 hold routines alone.
-  There is one per Oracle package that it was ported from, `rhn_channel` down
-  to `rhn_org`, plus `rpm` and `deb` for comparing a package version. 94 of
-  its 412 routines sit in those 11. So the dump has to carry the qualifier
-  for the 318 in the main schema to call them.
-- **Trigger functions in a schema of their own**: Every one of lemmy's 66
-  triggers sits on a table in `lemmy` and calls a function in `r`. `r` is the
-  schema that Lemmy's migration runner drops and rebuilds whenever those
-  functions change. So the dump has to carry the qualifier for the plan to
-  read it back.
+Indexes:
+
+- gin, gist, hash, and brin: musicbrainz (all four), synapse, langfuse, logto,
+  uyuni.
+- hnsw, pgvector's method: citizenlab, affine, lobehub.
+- Partial indexes: musicbrainz, synapse, lago, lemmy, windmill, penpot,
+  danbooru, openreplay, lobehub.
+- Expression indexes: musicbrainz, danbooru, penpot, dcm4chee, lobehub, hexpm.
+- Unique indexes over an expression: rt, mattermost.
+- gin over `to_tsvector`: rt, langfuse, uyuni, hexpm (with another function
+  inside it).
+- An operator class named: `gin_trgm_ops` (danbooru, openreplay, uyuni, hexpm,
+  zed, hoppscotch), `jsonb_path_ops` (mattermost, hexpm, lobehub, concourse),
+  `text_pattern_ops` (mattermost), `inet_ops` (osm).
+- An operator class from an extension: qualified with the extension's schema
+  (citizenlab), unqualified (affine, lobehub, zed, hoppscotch).
+- The default operator class beside a named one on the same kind of index:
+  hoppscotch.
+- gist over a function the schema defines: chado.
+- gist over several columns, needing `btree_gist`: osm.
+- `NULLS NOT DISTINCT`: discourse, lago, hydra.
+- `INCLUDE`: discourse, lago, hexpm, hydra (also partial).
+- Storage parameters on an index: concourse.
+- Bare unique indexes where a unique constraint could stand: lobehub, zed,
+  formbricks, hoppscotch, authelia, typebot, ghostfolio.
+
+Constraints and keys:
+
+- Exclusion constraints: demodb, boundary, hatchet, lago.
+- CHECK constraints added by hand to an ORM schema: affine, lobehub.
+- CHECK constraints named at install time: uyuni.
+- No CHECK at all: dhis2, mattermost, vaultwarden, bonita, omop, zed,
+  formbricks.
+- Foreign keys over more than one column: zed, formbricks, hydra (three
+  columns).
+- Foreign keys across schemas: adventureworks, mimiciv, chado.
+- Referential actions on both sides: icinga_director, calcom, triggerdev,
+  langfuse, logto, formbricks, hoppscotch, authelia; `ON UPDATE RESTRICT`:
+  hydra.
+- `ON DELETE` alone: glific, dokploy, openreplay, lobehub, uyuni.
+- No foreign key at all: mediawiki, temporal, imdb, dolphinscheduler,
+  nightingale, joomla, hyperswitch, icinga_ido, bareos, opencms, kamailio,
+  shenyu, nacos, gravitino, streampark.
+- Tables with no primary key: shenyu, concourse, omop, teable, typebot,
+  authelia.
+- Composite primary keys: vaultwarden, bonita.
+
+Types and columns:
+
+- Enums: dvdrental, pagila, employees, mediawiki, icingadb, and most of the
+  ORM schemas. hyperswitch has the most labels, omero has labels past ASCII,
+  calcom and triggerdev type columns as an array of one, and mattermost casts
+  to one in a partial index predicate.
+- Domains with CHECKs: icingadb (named), icinga_director, boundary, omero.
+- Composite types: ovirt, sourcegraph, chado, coder, marquez (built with ROW()
+  in a view), uyuni (read by an index and a generated column).
+- Stored generated columns: bigbluebutton (over a function of its own), uyuni.
+- Identity columns: openreplay, uyuni.
+- Standalone sequences: ranger, wso2apim, wso2is, dcm4chee, alfresco,
+  roundcube, omero, uyuni, streampark (non-default `START WITH` and
+  `MINVALUE`).
+- tsvector columns: dvdrental, pagila.
+- A non-default collation: musicbrainz.
+- Types from a contrib extension: sourcegraph, plausible, hexpm (`citext`),
+  lemmy (`ltree`), feedbin (`hstore`).
+- Types from an extension that is not contrib: discourse (`halfvec`),
+  citizenlab, affine, lobehub (`vector`), osm, inaturalist, dhis2
+  (`geometry`), citizenlab (`geography`). inaturalist's type modifiers are in
+  mixed case.
+- An `oid` column for a large object: bonita.
+- Quoted mixed-case identifiers: chinook, hive, hatchet, calcom, triggerdev,
+  documenso, bigbluebutton, dokploy, formbricks, hoppscotch; langfuse for its
+  enum types only.
+- Table and column comments: gravitino, shenyu, nacos, glific, streampark.
+
+Tables and views:
+
+- Unlogged tables: demodb, bigbluebutton (every table), omero.
+- Partitioned tables: gitlab (partitions in other schemas), hatchet (range and
+  hash, none attached), lago, triggerdev, thingsboard, windmill, penpot (hash,
+  with partitioned indexes).
+- Table inheritance: ledgersmb.
+- Storage parameters on a table: hatchet, lobehub.
+- Materialized views: adventureworks, pagila, listmonk, lago, marquez,
+  mattermost and hexpm (with indexes; hexpm's are unique and order a column
+  `DESC NULLS LAST`).
+- Views at scale: chado, bigbluebutton (views over views), omero.
+- Row-level security: windmill (policies naming roles), logto (restrictive
+  policies).
+
+Triggers:
+
+- Constraint triggers: boundary, omero.
+- A trigger in `ENABLE ALWAYS` state: gitlab.
+- Statement-level triggers with transition tables, and triggers on a
+  partitioned table: hatchet.
+- An INSTEAD OF trigger on a view: marquez.
+- `UPDATE OF` a column list: affine, formbricks (with arguments), hoppscotch.
+- One trigger function per table: uyuni. One shared by every table:
+  streampark.
+- Trigger functions in another schema: lemmy.
+- A trigger that frees a large object: bonita.
+
+Schemas and extensions:
+
+- Many schemas, most holding routines alone: uyuni.
+- Extensions in a schema of their own: citizenlab, windmill, lemmy.
+- An extension installed and then left unused: formbricks (pgvector, which
+  the load still needs on the server).
 
 ### Routines
 
@@ -1527,7 +1224,9 @@ flag.
 3. If the source is on GitHub, put a commit SHA in the URL, not a branch name.
 4. Run `make test-samples SAMPLE=<name>` and confirm the new sample reports
    `PASS`.
-5. Leave `CHANGELOG.md` alone. A sample is test-only, and nothing about it
+5. If the sample brings in a shape that the list under Shapes does not name,
+   add it there, and add the sample to any entry that it also covers.
+6. Leave `CHANGELOG.md` alone. A sample is test-only, and nothing about it
    reaches someone who uses pista.
 
 A `DRIFT` result is the interesting outcome. It means that pistachio reads or
