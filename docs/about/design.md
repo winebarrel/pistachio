@@ -12,9 +12,9 @@ as `Priority: low`.
 
 ## What is not managed
 
-`CREATE EXTENSION`, `CREATE ROLE` and `GRANT` are out of scope. They are
-privileges, not schema. Manage them with the rest of the infrastructure, for
-example in Terraform.
+`CREATE EXTENSION`, `CREATE ROLE` and `GRANT` are out of scope. They belong to
+a different privilege layer than the schema. Manage them with the rest of the
+infrastructure, for example in Terraform.
 
 pistachio reads only the statements that it manages. It skips every other
 statement and prints an `ignored unsupported statement:` warning for each one.
