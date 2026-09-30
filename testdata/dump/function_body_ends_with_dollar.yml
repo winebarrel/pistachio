@@ -1,0 +1,12 @@
+# The $ at the end of the body must not join the closing tag.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS text
+      LANGUAGE sql
+      AS $_$ SELECT 'a' -- ends in $$_$;
+dump: |
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS text
+      LANGUAGE sql
+      AS $_$ SELECT 'a' -- ends in $$_$;
