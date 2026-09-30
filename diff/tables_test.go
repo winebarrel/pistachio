@@ -4699,12 +4699,15 @@ func TestEqualIndexDef_storageParamValueChange(t *testing.T) {
 	))
 }
 
-func TestEqualIndexDef_defaultCollation(t *testing.T) {
+func TestEqualIndexDef_columnCollation(t *testing.T) {
 	columns := orderedmap.New[string, *model.Column]()
 	columns.Set("t", &model.Column{Name: "t", TypeName: "text"})
 	columns.Set("v", &model.Column{Name: "v", TypeName: "character varying(10)[]"})
 	columns.Set("c", &model.Column{Name: "c", TypeName: "text", Collation: new(`"C"`)})
 	columns.Set("n", &model.Column{Name: "n", TypeName: "name"})
+	columns.Set("q", &model.Column{Name: "q", TypeName: "text", Collation: new(`pg_catalog."C"`)})
+	columns.Set("u", &model.Column{Name: "u", TypeName: "text", Collation: new(`"C.utf8"`)})
+	columns.Set("b", &model.Column{Name: "b", TypeName: "text", Collation: new("ucs_basic")})
 
 	tests := []struct {
 		name    string
@@ -4721,7 +4724,11 @@ func TestEqualIndexDef_defaultCollation(t *testing.T) {
 		{"column with a collation", "(c)", `(c COLLATE "default" ASC)`, columns, false},
 		{"column's own collation", "(c)", `(c COLLATE "C" ASC)`, columns, true},
 		{"column's own collation qualified", "(c)", `(c COLLATE pg_catalog."C" ASC)`, columns, true},
+		{"column's own collation, column qualified", "(q)", `(q COLLATE "C" ASC)`, columns, true},
+		{"column's own collation with a dot", "(u)", `(u COLLATE "C.utf8" ASC)`, columns, true},
+		{"column's own collation unquoted", "(b)", `(b COLLATE ucs_basic ASC)`, columns, true},
 		{"collation other than the column's", "(c)", `(c COLLATE "POSIX" ASC)`, columns, false},
+		{"collation differing only in case", "(c)", `(c COLLATE c ASC)`, columns, false},
 		{"column's own collation on the current side", `(c COLLATE "POSIX")`, `(c COLLATE "C" ASC)`, columns, false},
 		{"expression element on a collated column", "(lower(c))", `(lower(c) COLLATE "C" ASC)`, columns, false},
 		{"name column", `(n COLLATE "default")`, `(n COLLATE "default" ASC)`, columns, true},

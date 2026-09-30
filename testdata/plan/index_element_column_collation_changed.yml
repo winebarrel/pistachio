@@ -1,5 +1,5 @@
-# A collation other than the column's is a real choice, so changing the index
-# to it rebuilds the index.
+# A collation other than the column's is a real change. The index is created
+# again.
 init: |
   CREATE TABLE public.users (
       email text COLLATE "C" NOT NULL

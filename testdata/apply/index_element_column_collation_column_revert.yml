@@ -1,5 +1,5 @@
 # The column leaves "C" and the index keeps it. "C" is no longer the column's
-# own collation, so the index is rebuilt with the clause.
+# collation, so the index is created again with the clause.
 init: |
   CREATE TABLE public.users (
       email text COLLATE "C"

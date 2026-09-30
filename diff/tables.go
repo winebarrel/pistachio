@@ -2125,8 +2125,8 @@ func normalizeIndexStmt(is *pg_query.IndexStmt) {
 // Which class and which collation the element names is left alone. PostgreSQL
 // omits the class when it is the default for the column's type, so a file that
 // writes it out still drifts; telling that from a real change means a lookup
-// the diff does not thread. LIMITATIONS.md covers it. A collation that is the
-// column's own needs the table's columns, which dropColumnCollation takes.
+// the diff does not thread. LIMITATIONS.md covers it. The collation is handled
+// by dropColumnCollation, which needs the table's columns.
 func normalizeIndexElem(ie *pg_query.IndexElem) {
 	if ie.Ordering == pg_query.SortByDir_SORTBY_ASC {
 		ie.Ordering = pg_query.SortByDir_SORTBY_DEFAULT
@@ -2185,12 +2185,11 @@ func normalizeStorageParams(options []*pg_query.Node) {
 	})
 }
 
-// dropColumnCollation removes the COLLATE clause from each desired element that
-// names its column's own collation: COLLATE "default" on a column of the
-// default collation, or the collation the column declares. pg_get_indexdef
-// omits an element's collation when it matches the column's, so such an index
-// reads back without it. Any other collation is a real choice and stays. An
-// expression element has no column and is left alone.
+// dropColumnCollation removes the COLLATE clause from each desired element when
+// the clause names the column's own collation. That is the collation the
+// column declares, or "default" on a column of the default collation.
+// pg_get_indexdef leaves such a clause out. Any other collation is a real
+// choice and stays. An expression element has no column and is left alone.
 func dropColumnCollation(is *pg_query.IndexStmt, columns *orderedmap.Map[string, *model.Column]) {
 	if columns == nil {
 		return
@@ -2211,8 +2210,8 @@ func dropColumnCollation(is *pg_query.IndexStmt, columns *orderedmap.Map[string,
 	}
 }
 
-// collationName renders a COLLATE clause's name list the way a column's
-// collation is stored, so equalCollation can compare the two.
+// collationName writes a COLLATE clause's name in the form a column's
+// collation is stored in, so that equalCollation can compare them.
 func collationName(name []*pg_query.Node) string {
 	parts := make([]string, len(name))
 	for i, n := range name {

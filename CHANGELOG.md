@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* An index element that writes out its column's own collation, as `(name COLLATE "C")` on a column declared `COLLATE "C"`, no longer drops and recreates the index on every plan. `pg_get_indexdef` leaves that collation out.
+* An index on a column declared `COLLATE "C"` that is written as `(name COLLATE "C")` is no longer dropped and created on every plan.
 
 ## [1.72.0] - 2026-09-30
 

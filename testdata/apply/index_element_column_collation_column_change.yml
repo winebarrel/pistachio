@@ -1,6 +1,6 @@
-# The column moves to "C" and the index is written with the column's new
-# collation. Changing the column's type rebuilds the index under that
-# collation, so the index itself needs no statement.
+# The column moves to "C" and the index is written with COLLATE "C". Changing
+# the column's type rebuilds the index with the new collation, so no statement
+# for the index runs.
 init: |
   CREATE TABLE public.users (
       email text

@@ -1,5 +1,5 @@
-# The catalog omits an element's collation when it is the column's own, so
-# writing the column's collation on the index is not a change.
+# The catalog leaves out an index column's collation when it is the column's
+# own. Writing it out is not a change.
 init: |
   CREATE TABLE public.users (
       id integer NOT NULL,
