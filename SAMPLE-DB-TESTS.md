@@ -1,9 +1,9 @@
 # Sample database tests
 
-pistachio is checked against real-world PostgreSQL schemas, not just the
-hand-written fixtures in `testdata/`. Each sample database is downloaded from
-its upstream source, loaded into an isolated database, and round-tripped
-through `pista dump` and `pista plan`.
+pistachio is checked against real-world PostgreSQL schemas, not only against
+the hand-written fixtures in `testdata/`. Each sample database is downloaded
+from its upstream source and loaded into an isolated database. It is then
+round-tripped through `pista dump` and `pista plan`.
 
 ## Running
 
@@ -11,13 +11,13 @@ through `pista dump` and `pista plan`.
 make test-samples
 ```
 
-The target runs `test/samples/run.sh`, which builds `pista` and drives the
-check. It needs a running PostgreSQL instance (`PGHOST=localhost`,
-`PGUSER=postgres`, exported by the Makefile), plus `psql`, `curl`, and network
-access to the upstream hosts. The uyuni sample needs GNU `make` and `python3`
-as well: its schema is a source tree rather than a file, and the loader runs
-the build that turns it into one. The same target runs in CI as the `samples`
-job.
+The target runs `test/samples/run.sh`. That script builds `pista` and drives
+the check. It needs a running PostgreSQL instance (`PGHOST=localhost` and
+`PGUSER=postgres`, which the Makefile exports). It also needs `psql`, `curl`,
+and network access to the upstream hosts. The uyuni sample needs GNU `make` and
+`python3` as well. Its schema is a source tree rather than a file, and the
+loader runs the build that turns the tree into a file. The same target runs in
+CI as the `samples` job.
 
 To check some of the samples rather than all of them, name them in `SAMPLE`,
 separated by commas:
@@ -26,84 +26,85 @@ separated by commas:
 make test-samples SAMPLE=lemmy,cratesio
 ```
 
-They run in manifest order whatever order they are named in, and a name the
-manifest does not hold stops the run. The pgvector and PostGIS checks below
-apply only when a named sample needs the extension.
+The named samples run in manifest order, whatever order they are named in. A
+name that the manifest does not hold stops the run. The pgvector and PostGIS
+checks below apply only when a named sample needs the extension.
 
-The runner exports `PISTA_MANAGE_ROUTINE=1` and `PISTA_MANAGE_STORAGE_PARAM=1`,
-so functions, procedures and a table's storage parameters are part of the round
-trip even though they are opt-in on the command line. They are environment
-variables rather than per-sample flags because they have to reach both the dump
-and the plan, and the manifest's flags column reaches only the plan.
+The runner exports `PISTA_MANAGE_ROUTINE=1` and `PISTA_MANAGE_STORAGE_PARAM=1`.
+So functions, procedures and a table's storage parameters are part of the round
+trip, even though they are opt-in on the command line. These settings are
+environment variables rather than per-sample flags because they have to reach
+both the dump and the plan. The manifest's flags column reaches only the plan.
 
 The server also needs pgvector for the discourse sample's `halfvec` columns and
-citizenlab's `vector` column, and PostGIS for the osm, inaturalist, and dhis2
-samples' `geometry` columns and citizenlab's `geography` ones. The
-official postgres image ships neither. compose.yaml installs
-`postgresql-<major>-pgvector` and `postgresql-<major>-postgis-3` from PGDG when
-a container starts, and the samples CI job installs the same packages into its
-service container, so both keep the official image and add the extensions to it.
-The runner checks for them up front and says so if one is missing; recreate the
-container with `docker compose down && docker compose up -d`.
+for citizenlab's `vector` column. It needs PostGIS for the `geometry` columns
+of the osm, inaturalist, and dhis2 samples and for citizenlab's `geography`
+columns. The official postgres image ships neither extension. compose.yaml
+installs `postgresql-<major>-pgvector` and `postgresql-<major>-postgis-3` from
+PGDG when a container starts. The samples CI job installs the same packages
+into its service container. So both keep the official image and add the
+extensions to it. The runner checks for the extensions up front and reports a
+missing one. In that case, recreate the container with
+`docker compose down && docker compose up -d`.
 
-To load every sample into one database for manual inspection instead of
+To load every sample into one database for manual inspection, instead of
 checking them one at a time, use `make schema`.
 
 ## What the check does
 
-The runner starts with `make clean-schema`, which drops every extension and
-then every user schema, so neither a schema nor an extension left behind by an
-earlier run can make a load fail on objects that already exist. The extensions
-go first because a table an extension owns, PostGIS's `spatial_ref_sys` among
-them, cannot be dropped while the extension is there. Then, for each sample,
-it:
+The runner starts with `make clean-schema`. That target drops every extension
+and then every user schema. So a schema or an extension that an earlier run
+left behind cannot make a load fail on objects that already exist. The
+extensions go first because a table that an extension owns cannot be dropped
+while the extension is there. PostGIS's `spatial_ref_sys` is one such table.
+Then, for each sample, the runner:
 
-1. Runs `make reset-db`, which drops and recreates `public` and drops every
-   extension. The samples that load into `public` are the only ones that can
-   collide with each other; every other sample owns a schema of its own and is
-   checked with `pista -n`, so what it leaves behind is invisible to the next
-   sample. Extensions are the exception: they are visible whichever schema they
-   sit in, and a dump that says `CREATE EXTENSION IF NOT EXISTS` does nothing
-   when an earlier sample already installed that extension somewhere else,
-   leaving its types and operator classes unresolvable.
+1. Runs `make reset-db`. That target drops and recreates `public` and drops
+   every extension. The samples that load into `public` are the only ones that
+   can collide with each other. Every other sample owns a schema of its own and
+   is checked with `pista -n`. So what such a sample leaves behind is invisible
+   to the next sample. Extensions are the exception. They are visible whichever
+   schema they sit in. A dump that says `CREATE EXTENSION IF NOT EXISTS` does
+   nothing when an earlier sample already installed that extension somewhere
+   else. That leaves the extension's types and operator classes unresolvable.
 2. Runs the sample's loader target to download and load the schema. Every
-   loader pipes into `psql -v ON_ERROR_STOP=1`, so a statement that fails
-   stops the load and the sample reports `FAIL (load)`. Without it psql
-   prints the error, carries on, and exits 0, and the check then runs on a
-   schema quietly missing whatever the failed statement was going to create;
-   `dump` and `plan` agree about what is there, so the sample passes and the
-   loss goes unnoticed.
+   loader pipes into `psql -v ON_ERROR_STOP=1`. So a statement that fails
+   stops the load, and the sample reports `FAIL (load)`. Without that option,
+   psql prints the error, carries on, and exits 0. The check then runs on a
+   schema that quietly lacks whatever the failed statement was going to
+   create. `dump` and `plan` agree about what is there. So the sample passes,
+   and the loss goes unnoticed.
 3. Runs `pista dump -n <schemas>` to capture pistachio's model of the loaded
    schema as SQL.
 4. Runs `pista plan -n <schemas> <dump>` and requires the output to be
    "No changes".
 
 The two commands exercise opposite directions of the same model. `dump` goes
-catalog reader -> model -> SQL; `plan` goes parser -> model -> diff against the
+catalog reader -> model -> SQL. `plan` goes parser -> model -> diff against the
 catalog. If the dump plans to anything other than "No changes", the catalog
-reader and the parser disagree about the schema, which is a bug regardless of
-which side is wrong.
+reader and the parser disagree about the schema. That disagreement is a bug,
+whichever side is wrong.
 
 Each sample reports `PASS`, `DRIFT` (the plan was not empty), or a `FAIL` with
 the failing stage (`load`, `dump`, or `plan`). Failure output is printed
-indented under the sample name, and the script exits non-zero if any sample
-failed.
+indented under the sample name. The script exits non-zero if any sample failed.
 
 ## Samples
 
 The sample list lives in the `SAMPLES` variable in `sample-db.mk`, which the
-Makefile includes, one record per line: name, loader target, loader variables,
-the schemas passed to `pista -n` (blank means `public`), and any extra
-`pista plan` flags (only gitlab needs one). `make print-samples` prints it for
-shell consumers, so `sample-db.mk` stays the single source of the list.
+Makefile includes. The variable holds one record per line: name, loader target,
+loader variables, the schemas that are passed to `pista -n` (blank means
+`public`), and any extra `pista plan` flags (only gitlab needs one).
+`make print-samples` prints the list for shell consumers. So `sample-db.mk`
+stays the single source of the list.
 
-Every GitHub source is fetched at a pinned commit rather than a branch, so an
-upstream schema change cannot turn CI red on its own and the object counts
+Every GitHub source is fetched at a pinned commit rather than at a branch. So
+an upstream schema change cannot turn CI red on its own, and the object counts
 below stay accurate. To move a sample to a newer upstream schema, resolve the
-branch with `git ls-remote https://github.com/<owner>/<repo> <branch>`, replace
-the SHA in `sample-db.mk`, and re-run `make test-samples`. omop is pinned to a
-release tag rather than a branch tip, since the files at the tip do not load;
-its loader says why.
+branch with `git ls-remote https://github.com/<owner>/<repo> <branch>`. Then
+replace the SHA in `sample-db.mk` and re-run `make test-samples`. omop is
+pinned to a release tag rather than to a branch tip, because the files at the
+tip do not load. Its loader says why.
 
 | Sample | Schemas | Source |
 |---|---|---|
@@ -219,58 +220,63 @@ its loader says why.
 
 ## Coverage
 
-Object counts of the loaded schemas.
+This section gives the object counts of the loaded schemas.
 
 ### How the counts were taken
 
-Counted 2026-08-08 on PostgreSQL 15.18, except:
+The counts were taken on 2026-08-08 on PostgreSQL 15.18, with these
+exceptions:
 
-- icingadb, rt, znuny, gitlab, hive, ranger, ambari, ovirt, and chado on 16.13,
-  chado counted 2026-08-24.
-- wso2is, nightingale, and danbooru 2026-08-29 on 15.17.
-- openolat and inaturalist 2026-08-30 on 16.13.
-- joomla and harbor 2026-09-01 on 16.13.
-- bigbluebutton and listmonk 2026-09-11 on 16.13.
-- dhis2 2026-09-15 on 15.18.
+- icingadb, rt, znuny, gitlab, hive, ranger, ambari, ovirt, and chado were
+  counted on 16.13. chado was counted on 2026-08-24.
+- wso2is, nightingale, and danbooru were counted on 2026-08-29 on 15.17.
+- openolat and inaturalist were counted on 2026-08-30 on 16.13.
+- joomla and harbor were counted on 2026-09-01 on 16.13.
+- bigbluebutton and listmonk were counted on 2026-09-11 on 16.13.
+- dhis2 was counted on 2026-09-15 on 15.18.
 - coder, boundary, hatchet, thingsboard, glific, lago, calcom, and triggerdev
-  2026-09-17 on 15.18.
-- mattermost, lemmy, windmill, plausible, feedbin, and citizenlab 2026-09-17
-  on 16.13, and dokploy, hyperswitch, documenso, langfuse, icinga_ido,
-  openfire, bareos, opencms, and marquez 2026-09-18 on the same, and penpot
-  2026-09-20 on 16.13 as well, and dcm4chee, kamailio, alfresco, roundcube,
-  shenyu, and nacos the same day on the same.
-- openreplay and logto 2026-09-20 on 16.13, and omero, concourse, affine, and
-  teable 2026-09-21 on 15.18, and uyuni, lobehub, hexpm, omop, zed,
-  gravitino, formbricks, hoppscotch, and streampark the same day on 16.13,
-  and vaultwarden, authelia, hydra, bonita, ghostfolio, and typebot
-  2026-09-22 on the same.
-- cratesio 2026-09-25 on 16.13.
-- The Sequences column on 15.18 throughout, and Triggers, added 2026-08-24, and
-  Routines, added 2026-08-25, on 15.18 for every sample.
+  were counted on 2026-09-17 on 15.18.
+- mattermost, lemmy, windmill, plausible, feedbin, and citizenlab were counted
+  on 2026-09-17 on 16.13. dokploy, hyperswitch, documenso, langfuse,
+  icinga_ido, openfire, bareos, opencms, and marquez were counted on 2026-09-18
+  on 16.13. penpot was counted on 2026-09-20 on 16.13. dcm4chee, kamailio,
+  alfresco, roundcube, shenyu, and nacos were counted on 2026-09-20 on 16.13.
+- openreplay and logto were counted on 2026-09-20 on 16.13. omero, concourse,
+  affine, and teable were counted on 2026-09-21 on 15.18. uyuni, lobehub,
+  hexpm, omop, zed, gravitino, formbricks, hoppscotch, and streampark were
+  counted on 2026-09-21 on 16.13. vaultwarden, authelia, hydra, bonita,
+  ghostfolio, and typebot were counted on 2026-09-22 on 16.13.
+- cratesio was counted on 2026-09-25 on 16.13.
+- The Sequences column was counted on 15.18 throughout. The Triggers column was
+  added on 2026-08-24 and the Routines column on 2026-08-25. Both were counted
+  on 15.18 for every sample.
 
-What each column holds:
+The columns hold the following:
 
 - **Constraints** excludes foreign keys.
 - **Types** counts enums and domains.
-- **Sequences** counts standalone sequences only, since pistachio manages the
-  sequence behind a serial or identity column as an attribute of that column
-  rather than as an object of its own. Counting those too would add 2,319 more,
-  886 of them gitlab's, 210 chado's, and 31 hexpm's, which declares no
-  standalone sequence at all, as zed's 17 and gravitino's 1 do not either.
-  authelia's 25, one per table but for its unkeyed one, and hydra's 2 are the
-  same shape.
-- **Triggers** excludes the internal triggers a foreign key installs and the
-  clones PostgreSQL puts on each partition of a partitioned table's trigger, the
-  same as what pistachio reads and dump writes.
-- **Routines** counts what `--manage-routine` reads, so the aggregates and
-  window functions pistachio leaves to `-- pista:execute` are out of it. lemmy
-  is the only sample with a SQL-standard body, in 6 of its 80 functions.
-- **Policies** are not a column. windmill declares 366 of them and logto 153,
-  and no other sample turns row-level security on at all.
+- **Sequences** counts standalone sequences only. Pistachio manages the
+  sequence behind a serial or identity column as an attribute of that column,
+  not as an object of its own. Counting those sequences too would add 2,319
+  more. 886 of them are gitlab's, 210 are chado's, and 31 are hexpm's. hexpm
+  declares no standalone sequence at all. zed, with 17 such sequences, and
+  gravitino, with 1, declare none either. authelia's 25 and hydra's 2 are the
+  same shape. authelia has one per table except for its unkeyed table.
+- **Triggers** excludes the internal triggers that a foreign key installs. It
+  also excludes the clones that PostgreSQL puts on each partition of a
+  partitioned table's trigger. This matches what pistachio reads and what dump
+  writes.
+- **Routines** counts what `--manage-routine` reads. So the aggregates and
+  window functions that pistachio leaves to `-- pista:execute` are not
+  counted. lemmy is the only sample with a SQL-standard body. 6 of its 80
+  functions have one.
+- **Policies** are not a column. windmill declares 366 of them and logto
+  declares 153. No other sample turns row-level security on at all.
 
-All counts are limited to the schemas the sample is checked with, and exclude
-what an extension owns: the two views `pg_stat_statements` adds to sourcegraph's
-schema are not sourcegraph's schema and pistachio does not read them either.
+All counts are limited to the schemas that the sample is checked with. They
+exclude what an extension owns. For example, `pg_stat_statements` adds two
+views to sourcegraph's schema. Those views are not sourcegraph's schema, and
+pistachio does not read them either.
 
 | Sample | Tables | Columns | Indexes | FKs | Constraints | Views | Types | Sequences | Triggers | Routines |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -387,1083 +393,1127 @@ schema are not sourcegraph's schema and pistachio does not read them either.
 
 ### Size
 
-The 109 dumps come to about 289,000 lines of SQL. chado is 43,700 of them, the
-longest dump of any sample, gitlab 34,700, and uyuni 19,700. gitlab is still
-about a quarter of the constraints, a fifth of the indexes, a sixth of the
-foreign keys and of the columns, and a seventh of the tables; dhis2, uyuni,
-openolat, musicbrainz, and discourse are the largest of what remains, and chado
-is nearly all of the views.
+The 109 dumps come to about 289,000 lines of SQL. chado is 43,700 of them,
+which is the longest dump of any sample. gitlab is 34,700 and uyuni is 19,700.
+gitlab is still about a quarter of the constraints, a fifth of the indexes, a
+sixth of the foreign keys and of the columns, and a seventh of the tables.
+dhis2, uyuni, openolat, musicbrainz, and discourse are the largest of what
+remains. chado is nearly all of the views.
 
-gitlab is also why `clean-schema` drops tables a batch at a time rather than
-cascading through `DROP SCHEMA`: a single statement takes locks on every object
-it reaches, and gitlab's 1,422 tables and their indexes run the server out of
-lock table space at the default `max_locks_per_transaction`. It is why
-`reset-db` resets only `public` between samples, too.
+gitlab is also the reason that `clean-schema` drops tables a batch at a time
+instead of cascading through `DROP SCHEMA`. A single statement takes locks on
+every object that it reaches. gitlab's 1,422 tables and their indexes run the
+server out of lock table space at the default `max_locks_per_transaction`.
+gitlab is also the reason that `reset-db` resets only `public` between samples.
 
 ### Shapes
 
-Beyond size, the samples bring in shapes the hand-written fixtures do not
+Beyond size, the samples bring in shapes that the hand-written fixtures do not
 always reach.
 
-- **Index methods and predicates**: partial and expression indexes and gin,
-  gist, hash, and brin methods (musicbrainz, plus 12 partial and 2 gin indexes
-  in synapse). citizenlab brings the first of the thirteen hnsw indexes the
-  samples have between them, pgvector's, over its one `vector` column and
-  naming `vector_cosine_ops` from the schema the extension sits in; affine
-  brings two, one over each of its `vector(1024)` embedding columns, naming
-  the same operator class unqualified; and lobehub brings the other ten, one
-  over each of the `vector(1024)` columns it remembers a user in, naming it
-  unqualified as well and leaving its eleventh such column, a document
-  chunk's embedding, unindexed. langfuse brings four hash indexes, all over
-  a `text` column, and two gin, one over a `text[]` column and one over
-  `to_tsvector('english', content)`, which is the only expression index it has.
-  logto brings one brin index over a timestamp, beside 179 btree, 11 of them
-  partial and 13 over an expression, and a single gin. uyuni has one hash
-  index, over the column holding a package capability's name, beside 931 btree,
-  34 of them partial, and 3 gin, two naming `gin_trgm_ops` and the third over
-  `to_tsvector`.
-- **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to a
-  table, denser than any other sample, 55 of them gin, 29 of those over an
-  expression and 17 naming `gin_trgm_ops`, and 49 partial; mediawiki's 192 over
-  64, only one of them partial and none over an expression; lago's 801 over 143,
-  123 of them partial and 16 gin; feedbin's 161 over 44, every one of them
-  btree, only 7 partial and 3 over an expression; opencms's 164 over 41 are
-  four to a table like danbooru's but plainer: every one of them is btree, 120
-  are non-unique, and not one is partial or over an expression. openreplay's
-  268 over 62 are four to a table as well and lean the other way: 54 are gin
-  and every one of those names `gin_trgm_ops`, which is what it searches a
-  session's metadata with, and 55 are partial. dcm4chee's 290
-  over 41 are seven to a table, as dense as danbooru's and plainer still: all
-  btree, none partial, and the only three over an expression are `upper()` of
-  a name or a description, which is how it searches case-insensitively.
-  lobehub's 972 over 182 are five to a table, 958 of them btree with 72
-  partial, 10 hnsw, and 4 gin, one of those over a key read out of a `jsonb`
-  column with `jsonb_path_ops`. Two of its four other expression indexes cast
-  a `jsonb` key to `numeric` and two wrap a nullable column in `COALESCE` to
-  key on it.
-- **Partial indexes**: 37 of lemmy's 290 and 88 of windmill's 392, which also
-  has 31 gin indexes, and 50 of penpot's 169, where 35 of the predicates test a
-  `deleted_at` or `archived_at` timestamp for NULL and two read a key out of a
-  `jsonb` column. Every one of penpot's indexes is btree, and its 5 expression
-  indexes are all over `jsonb` too, one of them over a `COALESCE` of two keys.
-- **Unique indexes over an expression and a gin index over `to_tsvector`**: rt,
-  plus mattermost's 11, six of them over the concatenation of two to five
-  columns. hexpm's four gin indexes are three shapes at once: one names
-  `gin_trgm_ops` over a plain column, two are over a `->` key of a `jsonb`
-  column and one of those names `jsonb_path_ops`, and the fourth is over
-  `to_tsvector('english', regexp_replace(...))` of such a key cast to text, a
-  `to_tsvector` index with another function inside it.
-- **gist indexes naming an operator class**: two that name `inet_ops` and one
-  over four columns, which needs `btree_gist` (osm).
-- **btree and gin indexes naming an operator class**: five of mattermost's nine
-  btree indexes over `lower()` name `text_pattern_ops`, and its two gin indexes
-  over a `->` expression name `jsonb_path_ops`. hoppscotch's four gin indexes
-  split two ways: two name `gin_trgm_ops` over a title, the operator class
-  resolving from the `public` its loader installs `pg_trgm` into, and two are
-  over a `jsonb` column at the default operator class, so the dump has to
-  write one pair with the class and the other without.
-- **gist indexes over a function the schema defines itself**: chado's three name
-  `boxrange`, one of them partial and declared from another schema.
-- **`NULLS NOT DISTINCT` and `INCLUDE`**: four unique indexes declared
-  `NULLS NOT DISTINCT` and one index with an `INCLUDE` column (discourse), and
-  one `NULLS NOT DISTINCT` index and eight with `INCLUDE` columns (lago), plus
-  one more `INCLUDE` index in hexpm, over two columns and covering a third.
-  hydra's one is both at once, the only index any sample declares that is
+- **Index methods and predicates**: musicbrainz has partial and expression
+  indexes and the gin, gist, hash, and brin methods. synapse adds 12 partial
+  and 2 gin indexes. The samples have thirteen hnsw indexes between them, which
+  is pgvector's method. citizenlab brings the first one, over its one `vector`
+  column. That index names `vector_cosine_ops` from the schema that the
+  extension sits in. affine brings two, one over each of its `vector(1024)`
+  embedding columns. Those two name the same operator class unqualified.
+  lobehub brings the other ten, one over each of the `vector(1024)` columns
+  that it remembers a user in. Those ten name the operator class unqualified
+  as well. lobehub leaves its eleventh such column, a document chunk's
+  embedding, unindexed. langfuse brings four hash indexes, all over a `text`
+  column, and two gin indexes. One gin index is over a `text[]` column. The
+  other is over `to_tsvector('english', content)`, which is the only
+  expression index that langfuse has. logto brings one brin index over a
+  timestamp. Beside it are 179 btree indexes, 11 of them partial and 13 over
+  an expression, and a single gin index. uyuni has one hash index, over the
+  column that holds a package capability's name. Beside it are 931 btree
+  indexes, 34 of them partial, and 3 gin indexes. Two of the gin indexes name
+  `gin_trgm_ops` and the third is over `to_tsvector`.
+- **Index-heavy schemas**: danbooru's 456 indexes over 66 tables are seven to
+  a table, which is denser than any other sample. 55 of them are gin, 29 of
+  those over an expression and 17 naming `gin_trgm_ops`. 49 are partial.
+  mediawiki has 192 over 64 tables. Only one of them is partial and none is
+  over an expression. lago has 801 over 143 tables, 123 of them partial and 16
+  gin. feedbin has 161 over 44 tables. Every one of them is btree, only 7 are
+  partial and 3 are over an expression. opencms's 164 over 41 tables are four
+  to a table like danbooru's, but plainer. Every one of them is btree, 120 are
+  non-unique, and not one is partial or over an expression. openreplay's 268
+  over 62 tables are four to a table as well, and they lean the other way. 54
+  are gin, and every one of those names `gin_trgm_ops`, which is what
+  openreplay searches a session's metadata with. 55 are partial. dcm4chee's
+  290 over 41 tables are seven to a table, as dense as danbooru's and plainer
+  still. All are btree and none is partial. The only three over an expression
+  are `upper()` of a name or a description, which is how dcm4chee searches
+  case-insensitively. lobehub's 972 over 182 tables are five to a table. 958
+  of them are btree, 72 of those partial, 10 are hnsw, and 4 are gin. One of
+  the gin indexes is over a key that is read out of a `jsonb` column, with
+  `jsonb_path_ops`. lobehub has four other expression indexes. Two of them
+  cast a `jsonb` key to `numeric`, and two wrap a nullable column in
+  `COALESCE` to key on it.
+- **Partial indexes**: 37 of lemmy's 290 indexes are partial, and 88 of
+  windmill's 392. windmill also has 31 gin indexes. 50 of penpot's 169 are
+  partial. 35 of penpot's predicates test a `deleted_at` or `archived_at`
+  timestamp for NULL, and two read a key out of a `jsonb` column. Every one of
+  penpot's indexes is btree. Its 5 expression indexes are all over `jsonb`
+  too, and one of them is over a `COALESCE` of two keys.
+- **Unique indexes over an expression and a gin index over `to_tsvector`**: rt
+  has them. mattermost has 11, six of them over the concatenation of two to
+  five columns. hexpm's four gin indexes are three shapes at once. One names
+  `gin_trgm_ops` over a plain column. Two are over a `->` key of a `jsonb`
+  column, and one of those names `jsonb_path_ops`. The fourth is over
+  `to_tsvector('english', regexp_replace(...))` of such a key cast to text.
+  That is a `to_tsvector` index with another function inside it.
+- **gist indexes naming an operator class**: osm has two that name `inet_ops`
+  and one over four columns, which needs `btree_gist`.
+- **btree and gin indexes naming an operator class**: Five of mattermost's
+  nine btree indexes over `lower()` name `text_pattern_ops`. Its two gin
+  indexes over a `->` expression name `jsonb_path_ops`. hoppscotch's four gin
+  indexes split two ways. Two name `gin_trgm_ops` over a title, and the
+  operator class resolves from `public`, where its loader installs `pg_trgm`.
+  Two are over a `jsonb` column at the default operator class. So the dump has
+  to write one pair with the class and the other pair without it.
+- **gist indexes over a function the schema defines itself**: chado's three
+  name `boxrange`. One of them is partial and is declared from another schema.
+- **`NULLS NOT DISTINCT` and `INCLUDE`**: discourse has four unique indexes
+  declared `NULLS NOT DISTINCT` and one index with an `INCLUDE` column. lago
+  has one `NULLS NOT DISTINCT` index and eight with `INCLUDE` columns. hexpm
+  has one more `INCLUDE` index, over two columns and covering a third. hydra's
+  one is both at once. It is the only index that any sample declares as
   partial and covering together: three columns, `INCLUDE (client_id)`, and
   `WHERE login_session_id IS NOT NULL`.
-- **Storage parameters on an index**: concourse's two gin indexes, both over a
-  `jsonb` column with `jsonb_path_ops` and both declared
-  `WITH (FASTUPDATE = false)`, so its dump is where an index's storage
-  parameter has to survive the round trip; hatchet's are on tables instead.
-- **Exclusion constraints and unlogged tables**: demodb, which needs
-  `btree_gist`, boundary, whose 19 exclusion constraints need it too, hatchet,
-  whose 2 compare a range column with `&&`, lago, with one, and bigbluebutton,
-  where every one of the 54 tables is unlogged. omero declares no exclusion
-  constraint and leaves one table of its 161 unlogged, the one its triggers
-  write the current administrative privileges into.
-- **Stored generated columns**: bigbluebutton's 17, three of them over a
-  function of its own that calls `unaccent`, and uyuni's one, which is over a
+- **Storage parameters on an index**: concourse's two gin indexes are both
+  over a `jsonb` column with `jsonb_path_ops`, and both are declared
+  `WITH (FASTUPDATE = false)`. So its dump is where an index's storage
+  parameter has to survive the round trip. hatchet's storage parameters are on
+  tables instead.
+- **Exclusion constraints and unlogged tables**: demodb has them and needs
+  `btree_gist`. boundary's 19 exclusion constraints need it too. hatchet's 2
+  compare a range column with `&&`. lago has one. In bigbluebutton, every one
+  of the 54 tables is unlogged. omero declares no exclusion constraint. It
+  leaves one table of its 161 unlogged, the one that its triggers write the
+  current administrative privileges into.
+- **Stored generated columns**: bigbluebutton has 17. Three of them are over a
+  function of its own that calls `unaccent`. uyuni has one, which is over a
   field of the composite-typed column beside it.
-- **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb,
-  whose 13 types are 6 enums and 7 domains, each domain carrying a named CHECK,
-  plus icinga_director, whose 20 enums come with one domain that carries two
-  anonymous CHECKs, guacamole's 5 enums, listmonk's 14 over 16 tables, coder's
-  61, which 73 columns are typed by, hatchet's 57, glific's 19, lago's 45, and
-  calcom's 46 and triggerdev's 48, five columns between them typed as an array
-  of one, mattermost's 7, which type 9 columns and one of which a partial
-  index predicate casts to, lemmy's 16 over 24 columns, windmill's 33 over 57,
-  plausible's 3, one of which is Oban's job state, and dokploy's 27, which 40
-  of its columns are typed by and which are all quoted mixed-case names, as
-  calcom's and triggerdev's are.
-  hyperswitch is denser than any of them: 46 enums over 50 tables, typing 74
-  columns and one array-of-enum column, and the 695 labels between them are
-  lopsided too, since `CountryAlpha2` carries 249 of them and `Currency` 158.
-  documenso's 30 over 51 tables are close behind, typing 34 columns, and
-  langfuse's 35 over 74 tables type 45 of its columns with 116 labels between
+- **Enums and domains**: dvdrental, pagila, employees, mediawiki, and icingadb
+  have them. icingadb's 13 types are 6 enums and 7 domains, and each domain
+  carries a named CHECK. icinga_director's 20 enums come with one domain that
+  carries two anonymous CHECKs. guacamole has 5 enums. listmonk has 14 over 16
+  tables. coder has 61, and 73 columns are typed by them. hatchet has 57,
+  glific 19, and lago 45. calcom has 46 and triggerdev 48, and five columns
+  between them are typed as an array of one. mattermost's 7 type 9 columns,
+  and a partial index predicate casts to one of them. lemmy has 16 over 24
+  columns and windmill 33 over 57. plausible has 3, one of which is Oban's job
+  state. dokploy has 27, and 40 of its columns are typed by them. All of
+  dokploy's are quoted mixed-case names, as calcom's and triggerdev's are.
+  hyperswitch is denser than any of them. It has 46 enums over 50 tables, and
+  they type 74 columns and one array-of-enum column. The 695 labels between
+  them are lopsided too, because `CountryAlpha2` carries 249 of them and
+  `Currency` carries 158. documenso's 30 over 51 tables are close behind, and
+  they type 34 columns. langfuse's 35 over 74 tables type 45 of its columns,
+  with 116 labels between them. boundary declares 36 domains and no enum. 30
+  of the domains carry 39 CHECKs between them, and 1,039 of its 1,530 columns
+  are typed by a domain. openreplay's 19 enums carry 374 labels between them,
+  and logto's 8 carry 32. omero's 12 types are 7 enums and 5 domains. The
+  enums hold 157 labels between them. The labels are the SI-prefixed symbols
+  of the units that a measurement can carry, so many of them reach past ASCII.
+  Each domain carries one anonymous CHECK that bounds a number. concourse
+  declares 5 enums, affine 11 with 40 labels, and teable 8. formbricks's 32
+  over 59 tables type 32 of its columns, one apiece, with 109 labels between
+  them. hoppscotch's 4 type 8 columns with 11 labels. ghostfolio is dense for
+  its size: 10 over 21 tables type 14 columns with 49 labels. typebot's 5 over
+  31 tables type 7 columns with 18 labels. uyuni goes the other way for its
+  size. It has 4 enums with 10 labels between them over 433 tables, because
+  what it constrains, it constrains with a CHECK instead.
+- **Identity columns**: openreplay has them. Nineteen of its 62 tables draw
+  their surrogate key from an `integer GENERATED BY DEFAULT AS IDENTITY`
+  column instead of from a serial or a standalone sequence. So its dump is
+  where the identity clause and the sequence behind it have to survive the
+  round trip. uyuni has 21 of them, one per table. 18 are on tables that SUSE
+  added and 3 are on the RBAC tables in its `access` schema. The tables around
+  them take their key from one of its 207 standalone sequences instead.
+- **Composite types**: ovirt declares 10 of them, more than any other sample.
+  sourcegraph, chado, and coder declare 2 each. marquez declares 1, and one of
+  its views builds an array of it with ROW(). uyuni has 1 as well, the
+  four-field type that its package versions are stored in. Two columns are
+  typed by it, two indexes read one of its fields, a generated column stores
+  another field, and 12 of its routines take or return it.
+- **tsvector columns**: dvdrental and pagila have them.
+- **A non-default collation**: musicbrainz has one.
+- **Columns typed by a contrib extension**: sourcegraph has 49 `citext`
+  columns and six extensions installed at once. lemmy's `comment.path` is an
+  `ltree`, and lemmy installs `pg_trgm` and `pgcrypto` beside it. plausible
+  has 3 more `citext` columns. hexpm has 1 more `citext` column and five
+  extensions installed for 36 tables: `citext`, `fuzzystrmatch`, `pg_trgm`,
+  `pgcrypto`, and `uuid-ossp`. One column defaults through the last of those.
+  feedbin has 2 `hstore` columns and `pg_stat_statements` installed beside
   them.
-  boundary declares 36 domains and no enum, 30 of the domains carry 39 CHECKs
-  between them, and 1,039 of its 1,530 columns are typed by one.
-  openreplay's 19 enums carry 374 labels between them and logto's 8 carry 32.
-  omero's 12 types are 7 enums and 5 domains. The enums hold 157 labels between
-  them, the SI-prefixed symbols of the units a measurement can carry, so many
-  of the labels reach past ASCII, and each domain carries one anonymous CHECK
-  bounding a number. concourse declares 5 enums, affine 11 with 40 labels, and
-  teable 8. formbricks's 32 over 59 tables type 32 of its columns, one apiece,
-  with 109 labels between them, and hoppscotch's 4 type 8 columns with 11.
-  ghostfolio is dense for its size, 10 over 21 tables typing 14 columns with
-  49 labels, and typebot's 5 over 31 tables type 7 with 18.
-  uyuni goes the other way for its size: 4 enums with 10 labels
-  between them over 433 tables, since what it constrains it constrains with a
-  CHECK instead.
-- **Identity columns**: openreplay. Nineteen of its 62 tables draw their
-  surrogate key from an `integer GENERATED BY DEFAULT AS IDENTITY` column
-  rather than from a serial or a standalone sequence, so its dump is where the
-  identity clause and the sequence behind it have to survive the round trip.
-  uyuni has 21 of them, one per table, 18 on tables SUSE added and 3 on the
-  RBAC tables in its `access` schema, while the tables around them take their
-  key from one of its 207 standalone sequences instead.
-- **Composite types**: ovirt declares 10 of them, more than any other sample,
-  sourcegraph, chado, and coder 2 each, and marquez 1, which one of its views
-  builds an array of with ROW(). uyuni has 1 as well, the four-field type its
-  package versions are stored in: two columns are typed by it, two indexes read
-  one of its fields, a generated column stores another, and 12 of its routines
-  take or return it.
-- **tsvector columns**: dvdrental, pagila.
-- **A non-default collation**: musicbrainz.
-- **Columns typed by a contrib extension**: sourcegraph, with 49 `citext`
-  columns, and six extensions installed at once; lemmy, whose `comment.path` is
-  an `ltree` and which installs `pg_trgm` and `pgcrypto` beside it; plausible,
-  with 3 more `citext` columns; hexpm, with 1 more and five extensions
-  installed for 36 tables, `citext`, `fuzzystrmatch`, `pg_trgm`, `pgcrypto`,
-  and `uuid-ossp`, the last of which one column defaults through; and feedbin,
-  with 2 `hstore` columns and
-  `pg_stat_statements` installed beside them.
 - **Columns typed by an extension that is not contrib**: discourse's three
-  `halfvec` columns, which need pgvector, and the `geometry` columns that need
-  PostGIS: osm's one `geometry(Polygon,4326)`, dhis2's one unmodified
-  `geometry`, and inaturalist's 26, 8 of them carrying a modifier of their own
-  and 8 gist indexes over them, and those modifiers are the only ones any sample
-  reports in mixed case. citizenlab needs both, for one `vector` column and
-  three `geography` ones, the only `geography` any sample declares. lobehub
-  declares 11 `vector(1024)` columns, more than every other sample together,
-  ten of them the embeddings of what it remembers about a user and one the
+  `halfvec` columns need pgvector. The `geometry` columns need PostGIS: osm's
+  one `geometry(Polygon,4326)`, dhis2's one unmodified `geometry`, and
+  inaturalist's 26. 8 of inaturalist's 26 carry a modifier of their own, and 8
+  gist indexes are over them. Those modifiers are the only ones that any
+  sample reports in mixed case. citizenlab needs both extensions, for one
+  `vector` column and three `geography` columns. Those are the only
+  `geography` columns that any sample declares. lobehub declares 11
+  `vector(1024)` columns, more than every other sample together. Ten of them
+  are the embeddings of what it remembers about a user, and one is the
   embedding of a document chunk.
-- **Foreign keys that all declare their referential actions**: all 171 of
-  icinga_director's name both ON UPDATE and ON DELETE, in six combinations, and
-  every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and an
-  ON DELETE action, CASCADE for most. 137 of glific's 142 name ON DELETE, 106 of
-  them CASCADE, and 132 of dokploy's 133 name ON DELETE, 113 of them CASCADE
-  and 19 SET NULL, while none of them names ON UPDATE at all. Every one of
-  langfuse's 113 names ON UPDATE CASCADE as well, 90 of them with ON DELETE
-  CASCADE and the other 23 with SET NULL. So does every one of logto's 152,
-  149 of them with ON DELETE CASCADE, while all 84 of openreplay's name
-  ON DELETE alone, 72 CASCADE and 12 SET NULL. lobehub is the largest of that
-  shape: 541 of its 550 name ON DELETE, 417 CASCADE, 117 SET NULL and 7
-  RESTRICT, and not one names ON UPDATE. uyuni mixes the two: 432 of its
-  692 name ON DELETE, 371 CASCADE, 59 SET NULL and 2 RESTRICT, the other 260
-  name nothing, and not one names ON UPDATE. formbricks names ON UPDATE
-  CASCADE on all 91 of its and ON DELETE on 90, 77 CASCADE, 11 SET NULL and 2
-  RESTRICT, and hoppscotch names ON UPDATE CASCADE on all 22 of its and
-  ON DELETE CASCADE on 20. hydra is the sample that reaches for RESTRICT on
-  the update side: 14 of its 31 name ON UPDATE RESTRICT with ON DELETE
-  CASCADE, which is how every reference to the tenant row is written, and
-  16 more name ON DELETE alone. authelia splits its 15 down the middle, 7
-  ON DELETE CASCADE and 8 ON DELETE RESTRICT, all but one of them naming
-  ON UPDATE CASCADE as well.
-- **Foreign keys over more than one column**: 3 of zed's 42, each naming two
-  columns on both sides, so the dump has to write a pair of column lists back;
-  one points a worktree's settings files at `worktrees(project_id, id)`, that
-  table's composite primary key. formbricks has 9 of 91, more than any other
-  sample, and every one of them pairs the id it references with the
-  `"workspaceId"` beside it, so a row can only ever point at a row of its own
-  tenant. One of the nine names the referencing columns in two spellings at
-  once, `feedback_source_id` and `"workspaceId"`. hydra has 10 of 31, and one
-  of them is the only three-column foreign key any sample declares: a trusted
-  JWT bearer issuer points at `hydra_jwk(sid, kid, nid)`. The other nine name
-  two columns, and every one of the ten carries the tenant's `nid` as its
-  last, the way formbricks's carry `"workspaceId"`.
+- **Foreign keys that all declare their referential actions**: All 171 of
+  icinga_director's name both ON UPDATE and ON DELETE, in six combinations.
+  Every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and
+  an ON DELETE action, which is CASCADE for most. 137 of glific's 142 name
+  ON DELETE, 106 of them CASCADE. 132 of dokploy's 133 name ON DELETE, 113 of
+  them CASCADE and 19 SET NULL. None of them names ON UPDATE at all. Every one
+  of langfuse's 113 names ON UPDATE CASCADE as well, 90 of them with ON DELETE
+  CASCADE and the other 23 with SET NULL. Every one of logto's 152 names
+  ON UPDATE CASCADE too, 149 of them with ON DELETE CASCADE. All 84 of
+  openreplay's name ON DELETE alone, 72 CASCADE and 12 SET NULL. lobehub is
+  the largest of that shape. 541 of its 550 name ON DELETE: 417 CASCADE, 117
+  SET NULL and 7 RESTRICT. Not one names ON UPDATE. uyuni mixes the two. 432
+  of its 692 name ON DELETE: 371 CASCADE, 59 SET NULL and 2 RESTRICT. The
+  other 260 name nothing, and not one names ON UPDATE. formbricks names
+  ON UPDATE CASCADE on all 91 of its foreign keys and ON DELETE on 90: 77
+  CASCADE, 11 SET NULL and 2 RESTRICT. hoppscotch names ON UPDATE CASCADE on
+  all 22 of its foreign keys and ON DELETE CASCADE on 20. hydra is the sample
+  that uses RESTRICT on the update side. 14 of its 31 name ON UPDATE RESTRICT
+  with ON DELETE CASCADE, which is how every reference to the tenant row is
+  written. 16 more name ON DELETE alone. authelia splits its 15 down the
+  middle: 7 ON DELETE CASCADE and 8 ON DELETE RESTRICT. All but one of them
+  name ON UPDATE CASCADE as well.
+- **Foreign keys over more than one column**: 3 of zed's 42 are, and each
+  names two columns on both sides. So the dump has to write a pair of column
+  lists back. One of them points a worktree's settings files at
+  `worktrees(project_id, id)`, which is that table's composite primary key.
+  formbricks has 9 of 91, more than any other sample. Every one of them pairs
+  the id that it references with the `"workspaceId"` beside it. So a row can
+  only ever point at a row of its own tenant. One of the nine names the
+  referencing columns in two spellings at once, `feedback_source_id` and
+  `"workspaceId"`. hydra has 10 of 31. One of them is the only three-column
+  foreign key that any sample declares: a trusted JWT bearer issuer points at
+  `hydra_jwk(sid, kid, nid)`. The other nine name two columns. Every one of
+  the ten carries the tenant's `nid` as its last column, the way formbricks's
+  carry `"workspaceId"`.
 - **Column comments**: gravitino comments 183 of its 186 columns and every one
-  of its 20 tables, the densest share of any sample; shenyu 360 of its 391
-  columns and 6 of its 45 tables; nacos 102 of 175 and 10 of 16; glific 274 of
-  its 590 columns; streampark 114 of its 290 and not one of its 26 tables.
+  of its 20 tables, which is the densest share of any sample. shenyu comments
+  360 of its 391 columns and 6 of its 45 tables. nacos comments 102 of 175
+  columns and 10 of 16 tables. glific comments 274 of its 590 columns.
+  streampark comments 114 of its 290 columns and not one of its 26 tables.
 - **Foreign keys that cross a schema boundary**: 20 of adventureworks' 90 span
-  its five schemas, 12 of mimiciv's 51 point from `mimiciv_icu` into
-  `mimiciv_hosp`, 4 of chado's 472 point from `frange` into `chado`, and every
-  one of gitlab's partitions is attached across one.
-- **Standalone sequences rather than serial columns**: ranger, whose 85 tables
-  come with 84 of them, wso2apim, which mixes 104 of them in with serial
-  columns, and wso2is, which declares 92 for its 172 tables and wires 87 of them
-  into a column DEFAULT. dcm4chee declares 30 for its 41 tables and alfresco 38
-  for its 45, and neither wires one into a DEFAULT at all: both are Java
-  applications that ask for the next value themselves, so the sequence and the
-  column it feeds are related only by name. roundcube goes the other way with
-  the same syntax, declaring 8 and naming each one in the `nextval` DEFAULT of
-  the column it belongs to, which is what `serial` would have written for it.
-  omero declares 130 for its 161 tables, and is Java again: 129 are named
-  `seq_` and the table they feed, only 2 are named in a DEFAULT, and the rest
-  are read by the application alone. uyuni declares more than any other sample,
-  207 for its 433 tables, and names exactly one of them in a DEFAULT: they are
-  the Oracle schema's sequences, and Java asks each for the next value before
-  it inserts. streampark declares 24 for its 26 tables and is Java too, but
-  wires 23 of them into the DEFAULT of the `id` they feed and leaves the
-  application to read only the twenty-fourth, `t_flink_app`'s. Every one of
-  the 24 carries a non-default `START WITH 10000` and `MINVALUE 10000`, so
-  the dump has to write both back.
+  its five schemas. 12 of mimiciv's 51 point from `mimiciv_icu` into
+  `mimiciv_hosp`. 4 of chado's 472 point from `frange` into `chado`. Every one
+  of gitlab's partitions is attached across a schema boundary.
+- **Standalone sequences rather than serial columns**: ranger's 85 tables come
+  with 84 of them. wso2apim mixes 104 of them in with serial columns. wso2is
+  declares 92 for its 172 tables and wires 87 of them into a column DEFAULT.
+  dcm4chee declares 30 for its 41 tables and alfresco declares 38 for its 45.
+  Neither wires one into a DEFAULT at all. Both are Java applications that ask
+  for the next value themselves, so the sequence and the column that it feeds
+  are related only by name. roundcube goes the other way with the same syntax.
+  It declares 8 and names each one in the `nextval` DEFAULT of the column that
+  it belongs to, which is what `serial` would have written for it. omero
+  declares 130 for its 161 tables, and it is Java again. 129 are named `seq_`
+  and the table that they feed. Only 2 are named in a DEFAULT, and the
+  application alone reads the rest. uyuni declares more than any other sample,
+  207 for its 433 tables, and names exactly one of them in a DEFAULT. They are
+  the Oracle schema's sequences, and Java asks each one for the next value
+  before it inserts. streampark declares 24 for its 26 tables and is Java too.
+  But it wires 23 of them into the DEFAULT of the `id` that they feed, and it
+  leaves the application to read only the twenty-fourth, `t_flink_app`'s.
+  Every one of the 24 carries a non-default `START WITH 10000` and
+  `MINVALUE 10000`. So the dump has to write both back.
 - **Quoted mixed-case identifiers, so every name is case-sensitive**: hive's 84
-  tables, where chinook has 11, hatchet's 72 of 133, calcom's 99 of 102 with 747
-  of its 1,092 columns, triggerdev's 79 of 85 with 798 of 1,123, documenso,
-  where all 51 tables and 314 of the 490 columns are, and bigbluebutton, where
-  451 of 532 columns and half the tables and views are camelCase. langfuse is
-  the Prisma schema that went the other way: only 2 of its 74 tables and 3 of
-  its 757 columns are quoted and the rest are snake_case, though all 35 of its
-  enum types are PascalCase. formbricks is back to the usual Prisma spelling,
-  58 of its 59 tables and 258 of its 559 columns, and hoppscotch quotes every
+  tables have them, where chinook has 11. hatchet quotes 72 of its 133 tables.
+  calcom quotes 99 of its 102 tables and 747 of its 1,092 columns. triggerdev
+  quotes 79 of its 85 tables and 798 of its 1,123 columns. In documenso, all
+  51 tables and 314 of the 490 columns are quoted. In bigbluebutton, 451 of
+  532 columns and half of the tables and views are camelCase. langfuse is the
+  Prisma schema that went the other way. Only 2 of its 74 tables and 3 of its
+  757 columns are quoted, and the rest are snake_case. But all 35 of its enum
+  types are PascalCase. formbricks is back to the usual Prisma spelling: 58 of
+  its 59 tables and 258 of its 559 columns are quoted. hoppscotch quotes every
   one of its 23 tables and 115 of its 171 columns.
-- **Width without variety**: openolat, whose 382 tables are behind only gitlab
-  and dhis2, has every one of its 1,239 indexes btree and every one of its 632
-  foreign keys left at NO ACTION. omero is the same shape one size down: all
-  811 of its indexes are btree, one of them partial and one over an expression,
-  and all 696 of its foreign keys are at NO ACTION too. Those 696 over 161
-  tables are more per table than any other sample, and 373 of its indexes are
-  there for a key, behind 157 primary keys and 216 unique constraints.
-- **A schema that is nearly all keys**: dhis2, where 461 primary keys and 464
-  unique constraints back all but 30 of its 955 indexes, it declares no CHECK at
-  all, and its 989 foreign keys are more than any sample but gitlab.
-  vaultwarden goes all the way at its own size: 28 primary keys and 5 unique
-  constraints over 28 tables back every one of its 33 indexes, so it declares
-  no index that is not a key and no CHECK either, and 10 of those primary
-  keys are composite, the link tables between a user, an organization, a
-  collection, and a cipher. bonita keys as hard over three times the tables:
-  80 primary keys, 15 of them composite, and 35 unique constraints behind
-  115 of its 191 indexes, no CHECK, and only 4 of its 707 columns carry a
-  DEFAULT at all.
+- **Width without variety**: openolat's 382 tables are behind only gitlab and
+  dhis2. Every one of its 1,239 indexes is btree, and every one of its 632
+  foreign keys is left at NO ACTION. omero is the same shape one size down.
+  All 811 of its indexes are btree, one of them partial and one over an
+  expression. All 696 of its foreign keys are at NO ACTION too. Those 696 over
+  161 tables are more per table than in any other sample. 373 of its indexes
+  are there for a key, behind 157 primary keys and 216 unique constraints.
+- **A schema that is nearly all keys**: In dhis2, 461 primary keys and 464
+  unique constraints back all but 30 of its 955 indexes. It declares no CHECK
+  at all. Its 989 foreign keys are more than in any sample but gitlab.
+  vaultwarden goes all the way at its own size. 28 primary keys and 5 unique
+  constraints over 28 tables back every one of its 33 indexes. So it declares
+  no index that is not a key, and no CHECK either. 10 of those primary keys
+  are composite. They are on the link tables between a user, an organization,
+  a collection, and a cipher. bonita keys as hard over three times the tables.
+  It has 80 primary keys, 15 of them composite, and 35 unique constraints
+  behind 115 of its 191 indexes. It has no CHECK, and only 4 of its 707
+  columns carry a DEFAULT at all.
 - **Foreign keys at the highest density**: omop's 39 tables carry 176 of them,
-  4.5 to a table, ahead of omero's 4.3 over 161, and they nearly all point one
-  way: every clinical event names the vocabulary entry that says what it was,
-  so `concept` alone is referenced by 118 of the 176 and 3 are
+  4.5 to a table, ahead of omero's 4.3 over 161 tables. They nearly all point
+  one way. Every clinical event names the vocabulary entry that says what it
+  was, so `concept` alone is referenced by 118 of the 176. 3 are
   self-references. The rest of the schema is as lopsided. 28 primary keys over
-  those 39 tables leave 11 unkeyed, and it declares no unique constraint and no
-  CHECK at all, so its 28 constraints are 28 primary keys and nothing else. All
-  98 of its indexes are btree, 28 backing a key and 70 not, and it has no view,
-  sequence, routine, trigger, or type: its ids are integers an ETL supplies
-  rather than serial columns, so nothing is counted behind them.
-- **CHECK constraints written by hand**: affine declares 54 over its 72 tables,
-  none of which Prisma wrote, since its schema language declares no CHECK at
-  all and every one of them was added by a migration: most hold a text column
-  to a fixed list of roles or states, and the rest pair two nullable columns so
+  those 39 tables leave 11 tables unkeyed. omop declares no unique constraint
+  and no CHECK at all, so its 28 constraints are 28 primary keys and nothing
+  else. All 98 of its indexes are btree, 28 backing a key and 70 not. It has
+  no view, sequence, routine, trigger, or type. Its ids are integers that an
+  ETL supplies, not serial columns, so nothing is counted behind them.
+- **CHECK constraints written by hand**: affine declares 54 over its 72
+  tables. Prisma wrote none of them, because its schema language declares no
+  CHECK at all. A migration added every one of them. Most hold a text column
+  to a fixed list of roles or states. The rest pair two nullable columns so
   that either both are set or neither is. Its 16 triggers are hand-written for
   the same reason.
-- **CHECK constraints written by the installer**: uyuni declares 109 by hand,
-  nearly all of them holding a one-character column to `Y`/`N` or to a short
-  list of codes, the way the Oracle schema it was ported from did. The other
-  635 nobody wrote: the last statement of the install walks the catalog and
-  adds a CHECK to every `varchar` column rejecting the empty string, which
-  Oracle would have read as NULL. So 744 of the sample's 1,102 constraints are
-  CHECKs, and the dump has to write back a schema whose constraint names were
-  computed at install time.
+- **CHECK constraints written by the installer**: uyuni declares 109 by hand.
+  Nearly all of them hold a one-character column to `Y`/`N` or to a short
+  list of codes, the way the Oracle schema that it was ported from did. Nobody
+  wrote the other 635. The last statement of the install walks the catalog and
+  adds a CHECK to every `varchar` column. That CHECK rejects the empty string,
+  which Oracle would have read as NULL. So 744 of the sample's 1,102
+  constraints are CHECKs. The dump has to write back a schema whose constraint
+  names were computed at install time.
 - **A schema that barely keys at all**: mattermost backs its 86 tables with 85
-  primary keys and 19 unique constraints, declares no CHECK, and leaves all but
-  3 of the references between them to the application. mediawiki, temporal,
-  imdb, dolphinscheduler, nightingale, joomla, hyperswitch, icinga_ido,
-  bareos, opencms, kamailio, shenyu, nacos, gravitino, and streampark declare
-  no foreign key at all, and openfire declares exactly one, over 35 tables.
-  gravitino is the one of them that keys everything else: a primary key on
-  each of its 20 tables and 19 unique constraints beside them back 39 of its
-  52 indexes, so the references alone are what it leaves to the application.
-  streampark keys as tightly for its size, a primary key on each of its 26
-  tables and one unique constraint beside them. shenyu goes furthest:
-  half its tables are unkeyed either way, 22 of 45 without a primary key, and
-  its 45 tables carry 24 constraints between them, 23 primary keys and one
-  CHECK. icinga_ido is the widest of them: 61
-  tables and 791 columns, indexed 234 times and keyed by 61 primary keys and 33
-  unique constraints, with every reference between them left to Icinga.
-  kamailio has the most tables of any of them, 73, keyed by one primary key
-  each and 36 unique constraints with no CHECK anywhere, though it does default
-  380 of its 614 columns. Its schema is assembled one module at a time, so what
-  ties the tables together lives in Kamailio's configuration rather than in the
-  database. teable is the same shape from the other end of the stack: 62 tables
-  keyed by 60 primary keys and no unique constraint at all, 2 CHECKs, and only
-  23 foreign keys, with the rest of what ties its rows together left to the
-  application. concourse leaves 15 of its 45 tables without a primary key.
+  primary keys and 19 unique constraints. It declares no CHECK. It leaves all
+  but 3 of the references between its tables to the application. mediawiki,
+  temporal, imdb, dolphinscheduler, nightingale, joomla, hyperswitch,
+  icinga_ido, bareos, opencms, kamailio, shenyu, nacos, gravitino, and
+  streampark declare no foreign key at all. openfire declares exactly one,
+  over 35 tables. gravitino is the one of them that keys everything else. A
+  primary key on each of its 20 tables and 19 unique constraints beside them
+  back 39 of its 52 indexes. So the references alone are what it leaves to the
+  application. streampark keys as tightly for its size. It has a primary key
+  on each of its 26 tables and one unique constraint beside them. shenyu goes
+  furthest. Half of its tables are unkeyed either way: 22 of 45 have no
+  primary key. Its 45 tables carry 24 constraints between them, 23 primary
+  keys and one CHECK. icinga_ido is the widest of them. It has 61 tables and
+  791 columns, indexed 234 times and keyed by 61 primary keys and 33 unique
+  constraints. Every reference between them is left to Icinga. kamailio has
+  the most tables of any of them, 73. They are keyed by one primary key each
+  and 36 unique constraints, with no CHECK anywhere. But it does default 380
+  of its 614 columns. Its schema is assembled one module at a time. So what
+  ties the tables together lives in Kamailio's configuration, not in the
+  database. teable is the same shape from the other end of the stack. Its 62
+  tables are keyed by 60 primary keys and no unique constraint at all. It has
+  2 CHECKs and only 23 foreign keys. The rest of what ties its rows together
+  is left to the application. concourse leaves 15 of its 45 tables without a
+  primary key.
 - **Unique indexes standing in for unique constraints**: lobehub backs its 182
-  tables with 182 primary keys and only 20 unique constraints, and writes the
+  tables with 182 primary keys and only 20 unique constraints. It writes the
   other 138 of its 340 unique indexes as a bare `CREATE UNIQUE INDEX`, which
   is what Drizzle emits. 54 of those carry a predicate and 2 are over an
-  expression, which a constraint could not spell at all, so the dump has to
-  write every one of them back as an index. The rest of the schema is tables
-  and indexes and nothing else: no view, no enum, no domain, no composite
-  type, no trigger, and no routine, one standalone sequence named in the
-  DEFAULT of the one column it feeds, 35 CHECKs its migrations wrote by hand,
-  and autovacuum storage parameters on the two tables that hold its
-  embeddings. zed is the same shape one size down and stricter: 29 primary
-  keys over 29 tables, no unique constraint and no CHECK at all, so all 29 of
-  its constraints are primary keys, and 14 of its 43 unique indexes stand on
-  their own. Of the 35 indexes that are not unique, 2 are gin over a name
-  with `gin_trgm_ops`, the operator class resolving from the `public` the
-  extension sits in as citizenlab's hnsw one does, and the other 33 are
-  btree. formbricks is the shape again from Prisma rather than Drizzle: 58
-  primary keys over 59 tables, no unique constraint and no CHECK at all, so
-  its 58 constraints are primary keys and nothing else, and 51 of its 109
-  unique indexes stand on their own. hoppscotch, Prisma as well, goes the
-  other way for four of them: 21 primary keys and 4 unique constraints over
-  23 tables leave 15 of its 40 unique indexes bare. authelia is the shape
-  from a hand-written migration history rather than an ORM: 24 primary keys
-  over 25 tables, no unique constraint at all, and 16 of its 40 unique
-  indexes standing on their own. typebot leans on it hardest of the Prisma
-  schemas: 23 primary keys over 31 tables, so 8 of its tables are keyed by
-  a bare unique index alone, and 22 of its 45 unique indexes are bare.
-  ghostfolio has 9 of 30 over 21 tables, every table keyed.
-- **A large object and the trigger that frees it**: bonita, the only sample
+  expression. A constraint could not spell either of those at all. So the dump
+  has to write every one of them back as an index. The rest of the schema is
+  tables and indexes and nothing else. It has no view, no enum, no domain, no
+  composite type, no trigger, and no routine. It has one standalone sequence,
+  named in the DEFAULT of the one column that it feeds, 35 CHECKs that its
+  migrations wrote by hand, and autovacuum storage parameters on the two
+  tables that hold its embeddings. zed is the same shape one size down, and
+  stricter. It has 29 primary keys over 29 tables, no unique constraint and no
+  CHECK at all. So all 29 of its constraints are primary keys, and 14 of its
+  43 unique indexes stand on their own. Of the 35 indexes that are not unique,
+  2 are gin over a name with `gin_trgm_ops`, and the other 33 are btree. The
+  operator class of those 2 resolves from `public`, where the extension sits,
+  as citizenlab's hnsw index does. formbricks is the shape again, from Prisma
+  instead of Drizzle. It has 58 primary keys over 59 tables, no unique
+  constraint and no CHECK at all. So its 58 constraints are primary keys and
+  nothing else, and 51 of its 109 unique indexes stand on their own.
+  hoppscotch, Prisma as well, goes the other way for four of them. 21 primary
+  keys and 4 unique constraints over 23 tables leave 15 of its 40 unique
+  indexes bare. authelia is the shape from a hand-written migration history
+  instead of an ORM. It has 24 primary keys over 25 tables and no unique
+  constraint at all, and 16 of its 40 unique indexes stand on their own.
+  typebot leans on it hardest of the Prisma schemas. It has 23 primary keys
+  over 31 tables, so 8 of its tables are keyed by a bare unique index alone.
+  22 of its 45 unique indexes are bare. ghostfolio has 9 bare unique indexes
+  of 30 over 21 tables, and every table is keyed.
+- **A large object and the trigger that frees it**: bonita is the only sample
   with a column of type `oid`. `temporary_content.content` holds the
-  identifier of a large object rather than the bytes, and the sample's one
-  trigger, an `AFTER DELETE` calling its one routine, runs `lo_unlink` on
-  the row's old value so the object goes with it.
-- **Materialized views**: adventureworks, pagila, listmonk, whose three views
-  are all materialized, lago, mattermost, whose six are all materialized and
-  one of which carries an index, and marquez, where one of the four is. hexpm
-  has only two views and both are materialized, and both carry indexes, four
-  between them: two are unique, which is what a concurrent refresh needs, and
-  two order a column `DESC NULLS LAST`, one of those the second column of
-  three.
-- **Extensions in a schema of their own**: citizenlab puts all five of its in
-  `shared_extensions` and qualifies every use with it, so 135 of its column
-  defaults call `shared_extensions.gen_random_uuid()` and two of its indexes
-  name an operator class from there. windmill does the same with `uuid-ossp`
-  in an `extensions` schema, and lemmy installs its three into the schema it
-  loads into.
-- **An extension installed and then left unused**: formbricks. One of its
-  migrations declares three tables with a `vector(512)` column and installs
-  pgvector for them, a later one drops all three, and the extension stays.
-  Nothing in the schema the check reads is typed by it, but the load still
-  needs it on the server, so the sample sits with discourse and citizenlab
-  in what `run.sh` asks for up front.
-- **Views at scale**: chado's 1,864 are nearly ten times every other sample put
-  together, and 1,832 of them are the Sequence Ontology views in its `so`
-  schema, each selecting from tables in `chado`; bigbluebutton's 86 over 54
-  tables are the most of any other sample, five of them selecting from another
-  view. omero's 50 come next, one per link table, each counting the links a
-  table holds and grouping them by owner.
+  identifier of a large object, not the bytes. The sample's one trigger is an
+  `AFTER DELETE` that calls its one routine. It runs `lo_unlink` on the row's
+  old value, so the object goes with the row.
+- **Materialized views**: adventureworks, pagila, listmonk, lago, mattermost,
+  and marquez have them. All three of listmonk's views are materialized. All
+  six of mattermost's are materialized, and one of them carries an index. One
+  of marquez's four is materialized. hexpm has only two views, and both are
+  materialized. Both carry indexes, four between them. Two are unique, which
+  is what a concurrent refresh needs. Two order a column `DESC NULLS LAST`,
+  and in one of those it is the second column of three.
+- **Extensions in a schema of their own**: citizenlab puts all five of its
+  extensions in `shared_extensions` and qualifies every use with it. So 135 of
+  its column defaults call `shared_extensions.gen_random_uuid()`, and two of
+  its indexes name an operator class from there. windmill does the same with
+  `uuid-ossp` in an `extensions` schema. lemmy installs its three into the
+  schema that it loads into.
+- **An extension installed and then left unused**: formbricks has one. One of
+  its migrations declares three tables with a `vector(512)` column and
+  installs pgvector for them. A later migration drops all three tables, and
+  the extension stays. Nothing in the schema that the check reads is typed by
+  it. But the load still needs it on the server. So the sample sits with
+  discourse and citizenlab in what `run.sh` asks for up front.
+- **Views at scale**: chado's 1,864 are nearly ten times every other sample
+  put together. 1,832 of them are the Sequence Ontology views in its `so`
+  schema, and each selects from tables in `chado`. bigbluebutton's 86 over 54
+  tables are the most of any other sample, and five of them select from
+  another view. omero's 50 come next, one per link table. Each counts the
+  links that a table holds and groups them by owner.
 - **Partitioned tables at scale**: gitlab declares 100 of them and attaches
-  2,054 partitions, all of which live in schemas of their own. hatchet declares
-  22, 20 by range and 2 by hash, and attaches none, since it creates its
-  partitions at run time; 13 of its tables set autovacuum storage parameters.
-  lago declares one and attaches five in its own schema, and triggerdev
-  declares two by range and attaches none. thingsboard declares
-  11, all by range, and attaches none for the same
-  reason. windmill declares one by range and attaches four beside it. penpot
-  declares one by hash and attaches all 16 of its partitions beside it, which
-  is a quarter of the sample's 61 tables, and both of the parent's indexes are
-  partitioned along with it.
+  2,054 partitions. All of the partitions live in schemas of their own.
+  hatchet declares 22, 20 by range and 2 by hash, and attaches none, because
+  it creates its partitions at run time. 13 of its tables set autovacuum
+  storage parameters. lago declares one and attaches five in its own schema.
+  triggerdev declares two by range and attaches none. thingsboard declares 11,
+  all by range, and attaches none for the same reason. windmill declares one
+  by range and attaches four beside it. penpot declares one by hash and
+  attaches all 16 of its partitions beside it, which is a quarter of the
+  sample's 61 tables. Both of the parent's indexes are partitioned along with
+  it.
 - **Row-level security**: windmill turns it on for 38 of its 173 tables and
-  backs them with 366 policies, 32 names reused across the tables. 98 are
-  declared for ALL, 73 for SELECT, 71 for INSERT, 62 each for UPDATE and
-  DELETE, and 77 carry a WITH CHECK as well as a USING. Every one of them names
-  a role, `windmill_admin` or `windmill_user`, which the migrations create
-  themselves; pistachio does not manage roles, but it has to write the names
-  back. logto is the other sample that declares one, and it declares them the
-  other way round: 77 of its 79 tables turn RLS on, and each one gets the same
-  pair its seeder writes after every table, a RESTRICTIVE policy scoping the
-  rows to the tenant and a permissive one over it. That is 153 policies, 76 of
-  them restrictive, all of them FOR ALL, and none naming a role or carrying a
-  WITH CHECK. windmill declares none that are restrictive, so logto's 76 are
-  the only ones any sample has. No other sample declares a policy.
-- **Table inheritance**: ledgersmb attaches 21 children with INHERITS, the only
-  sample that does.
-- **Triggers**: uyuni's 224 sit on 201 of its 433 tables, and 174 of them are
-  the same trigger written 174 times: a row-level `BEFORE INSERT OR UPDATE`
-  that stamps the row's `modified` column, each calling a function of its own
-  rather than one shared between them, so 174 of its 412 routines exist to do
-  nothing else. boundary's 741, more than any other sample, spread over 182
-  of its 293 tables, 7 of them constraint triggers; gitlab's 388, one of them
-  held in `ENABLE ALWAYS` state; logto's 85, 76 of which are the one its seeder
-  puts on every table it creates; kea's 81 outnumber its 64 tables; coder's 30,
-  lemmy's 66, bigbluebutton's 25, hatchet's 22, and ledgersmb's 11 come next.
-  21 of hatchet's are statement-level triggers with transition tables, and 12
-  sit on a partitioned table. One of marquez's 2 is an INSTEAD OF trigger on a
-  view rather than a table, so its dump has to name the view. omero's 130 sit
-  on 54 of its 161 tables, every one of them row-level, and 4 are deferrable
-  constraint triggers that guard a privilege change. affine's 16 sit on 11 of
-  its 72 tables and 4 of them fire `BEFORE UPDATE OF` a column list, one of
-  four columns, so the dump has to write the list back. formbricks's 11 are
-  that shape throughout: 10 of them fire `AFTER INSERT OR DELETE OR UPDATE OF`
-  a column list, one of four columns, and all 11 call the same function with
-  three arguments apiece, so the dump has to write the argument list back as
-  well. streampark's 8 are the uyuni trigger done the cheap way: a row-level
-  `BEFORE UPDATE` stamping a `modify_time`, but one function shared by all 8
-  rather than one written per table. hoppscotch's 2 are
-  `BEFORE INSERT OR UPDATE OF` a single column. concourse's 7 sit on 5
-  tables: 2 call `pg_notify`, 4 create or drop a child table with INHERITS as a
-  pipeline or a team comes and goes, so none of those children is in the dump,
-  and 1 stands in for a foreign key.
+  backs them with 366 policies. 32 names are reused across the tables. 98 are
+  declared for ALL, 73 for SELECT, 71 for INSERT, and 62 each for UPDATE and
+  DELETE. 77 carry a WITH CHECK as well as a USING. Every one of them names a
+  role, `windmill_admin` or `windmill_user`, which the migrations create
+  themselves. Pistachio does not manage roles, but it has to write the names
+  back. logto is the other sample that declares a policy, and it declares them
+  the other way round. 77 of its 79 tables turn RLS on. Each one gets the same
+  pair that its seeder writes after every table: a RESTRICTIVE policy that
+  scopes the rows to the tenant, and a permissive one over it. That is 153
+  policies, 76 of them restrictive. All of them are FOR ALL, and none names a
+  role or carries a WITH CHECK. windmill declares none that are restrictive,
+  so logto's 76 are the only restrictive policies that any sample has. No
+  other sample declares a policy.
+- **Table inheritance**: ledgersmb attaches 21 children with INHERITS. It is
+  the only sample that does.
+- **Triggers**: uyuni's 224 sit on 201 of its 433 tables. 174 of them are the
+  same trigger written 174 times: a row-level `BEFORE INSERT OR UPDATE` that
+  stamps the row's `modified` column. Each calls a function of its own instead
+  of one shared between them. So 174 of its 412 routines exist to do nothing
+  else. boundary's 741, more than any other sample, spread over 182 of its 293
+  tables, and 7 of them are constraint triggers. gitlab has 388, and one of
+  them is held in `ENABLE ALWAYS` state. logto has 85, and 76 of them are the
+  one that its seeder puts on every table it creates. kea's 81 outnumber its
+  64 tables. coder's 30, lemmy's 66, bigbluebutton's 25, hatchet's 22, and
+  ledgersmb's 11 come next. 21 of hatchet's are statement-level triggers with
+  transition tables, and 12 sit on a partitioned table. One of marquez's 2 is
+  an INSTEAD OF trigger on a view, not a table. So its dump has to name the
+  view. omero's 130 sit on 54 of its 161 tables, and every one of them is
+  row-level. 4 are deferrable constraint triggers that guard a privilege
+  change. affine's 16 sit on 11 of its 72 tables. 4 of them fire
+  `BEFORE UPDATE OF` a column list, one of four columns. So the dump has to
+  write the list back. formbricks's 11 are that shape throughout. 10 of them
+  fire `AFTER INSERT OR DELETE OR UPDATE OF` a column list, one of four
+  columns. All 11 call the same function with three arguments apiece. So the
+  dump has to write the argument list back as well. streampark's 8 are the
+  uyuni trigger done the cheap way. Each is a row-level `BEFORE UPDATE` that
+  stamps a `modify_time`, but one function is shared by all 8 instead of one
+  written per table. hoppscotch's 2 are `BEFORE INSERT OR UPDATE OF` a single
+  column. concourse's 7 sit on 5 tables. 2 call `pg_notify`. 4 create or drop
+  a child table with INHERITS as a pipeline or a team comes and goes, so none
+  of those children is in the dump. 1 stands in for a foreign key.
 - **Routines spread over a dozen schemas**: uyuni is checked with 13 schemas,
-  more than any other sample. Its tables are in two of them, 426 in the one it
-  loads into and 7 in `access`, and the other eleven hold routines alone: one
-  per Oracle package it was ported from, `rhn_channel` down to `rhn_org`, plus
-  `rpm` and `deb` for comparing a package version. 94 of its 412 routines sit
-  in those eleven, so the dump has to carry the qualifier for the 318 in the
-  main schema to call them.
-- **Trigger functions in a schema of their own**: every one of lemmy's 66
-  triggers sits on a table in `lemmy` and calls a function in `r`, the schema
-  Lemmy's migration runner drops and rebuilds whenever those functions change,
-  so the dump has to carry the qualifier for the plan to read it back.
+  more than any other sample. Its tables are in two of them: 426 in the one
+  that it loads into and 7 in `access`. The other eleven hold routines alone.
+  There is one per Oracle package that it was ported from, `rhn_channel` down
+  to `rhn_org`, plus `rpm` and `deb` for comparing a package version. 94 of
+  its 412 routines sit in those eleven. So the dump has to carry the qualifier
+  for the 318 in the main schema to call them.
+- **Trigger functions in a schema of their own**: Every one of lemmy's 66
+  triggers sits on a table in `lemmy` and calls a function in `r`. `r` is the
+  schema that Lemmy's migration runner drops and rebuilds whenever those
+  functions change. So the dump has to carry the qualifier for the plan to
+  read it back.
 
 ### Routines
 
 Routines are concentrated the same way. Fifty-two of the 109 samples declare
-one at all, and uyuni's 412, gitlab's 337, boundary's 225, kea's and
-musicbrainz's 130 each, and chado's 94 are 1,328 of the 1,823. Two in three of
-them, 1,216, return `trigger`, though not every one of those has a trigger to
-call it: musicbrainz's 89 do not, since its loader concatenates a file list
-that leaves triggers out.
+one at all. uyuni's 412, gitlab's 337, boundary's 225, kea's and musicbrainz's
+130 each, and chado's 94 are 1,328 of the 1,823. Two in three of them, 1,216,
+return `trigger`. But not every one of those has a trigger to call it.
+musicbrainz's 89 do not, because its loader concatenates a file list that
+leaves triggers out.
 
-1,695 are written in plpgsql and 128 in sql. omero's 57, the next largest after
-lemmy's 80, are 56 of the plpgsql and one of the sql, and 49 of them return
-`trigger`; concourse and affine declare 7 each, 6 of concourse's and all of
-affine's returning `trigger`, and teable 2. formbricks declares 2, a plpgsql
-trigger function and an sql one taking two `jsonb` arguments, and hoppscotch
-and streampark 1 each, both plpgsql and both returning `trigger`. uyuni's 412
-are 407 plpgsql and 5 sql, and 224 of them return `trigger`. sourcegraph
-declares one procedure,
-thingsboard three, and lemmy and uyuni two each, the only procedures any sample
-has, and inaturalist the only aggregate, which `--manage-routine` does not read
-and so is in neither count; uyuni declares one as well, for the composite type
-its loader creates, and it is out of the count for the same reason. bareos's
-`decode_lstat` returns a 16-column `TABLE`, so the dump has to write the whole
-column list back. Two of logto's ten are
-declared `SET search_path`, so the dump has to carry the configuration along
-with the body, and one of those two takes a VARIADIC argument. hexpm's two are
-sql as well and both return `json`: one takes a VARIADIC `text[]` like logto's,
-the other a polymorphic `anyelement`, so the dump has to write both argument
-forms back. Only chado, kea,
-boundary, and uyuni overload a name, 11 of them, 3, 1, and 1, though danbooru's
-three, all sql, include a `lower(text[])` that shadows a built-in, and
-documenso's `nanoid` gives all three of its arguments a default. Only sourcegraph,
-ledgersmb, gitlab, coder, and boundary comment a routine, 137 between them, 124
-of those boundary's.
+1,695 are written in plpgsql and 128 in sql. omero's 57 are the next largest
+after lemmy's 80. They are 56 of the plpgsql and one of the sql, and 49 of them
+return `trigger`. concourse and affine declare 7 each. 6 of concourse's and all
+of affine's return `trigger`. teable declares 2. formbricks declares 2: a
+plpgsql trigger function and an sql function that takes two `jsonb` arguments.
+hoppscotch and streampark declare 1 each, both plpgsql and both returning
+`trigger`. uyuni's 412 are 407 plpgsql and 5 sql, and 224 of them return
+`trigger`. sourcegraph declares one procedure, thingsboard three, and lemmy and
+uyuni two each. Those are the only procedures that any sample has. inaturalist
+declares the only aggregate. `--manage-routine` does not read an aggregate, so
+it is in neither count. uyuni declares one aggregate as well, for the composite
+type that its loader creates, and it is out of the count for the same reason.
+bareos's `decode_lstat` returns a 16-column `TABLE`. So the dump has to write
+the whole column list back. Two of logto's ten are declared `SET search_path`.
+So the dump has to carry the configuration along with the body. One of those
+two takes a VARIADIC argument. hexpm's two are sql as well, and both return
+`json`. One takes a VARIADIC `text[]` like logto's, and the other takes a
+polymorphic `anyelement`. So the dump has to write both argument forms back.
+Only chado, kea, boundary, and uyuni overload a name: 11 of them, 3, 1, and 1.
+But danbooru's three, all sql, include a `lower(text[])` that shadows a
+built-in. documenso's `nanoid` gives all three of its arguments a default. Only
+sourcegraph, ledgersmb, gitlab, coder, and boundary comment a routine. They
+have 137 between them, and 124 of those are boundary's.
 
 ## Load-time adjustments
 
-Every loader runs its `psql` with `client_min_messages` raised to `warning`,
-set once in `sample-db.mk` rather than sample by sample. Dumps drop what they
-are about to create with `IF EXISTS`, declare an identifier past 63 characters
-the server truncates, or hand an index to a constraint that renames it, and
-each says so on a fresh database; none of it is about the schema under test,
-and the runner passes a loader's stderr through. ranger raises the level
-further, to `error`, from its `SAMPLES` record.
+Every loader runs its `psql` with `client_min_messages` raised to `warning`.
+The setting is made once in `sample-db.mk`, not sample by sample. A dump may
+drop what it is about to create with `IF EXISTS`. It may declare an identifier
+longer than 63 characters, which the server truncates. It may hand an index to
+a constraint that renames it. The server reports each of these on a fresh
+database. None of the reports is about the schema under test, and the runner
+passes a loader's stderr through. ranger raises the level further, to `error`,
+from its `SAMPLES` record.
 
 Every loader that installs a contrib extension into `public` follows the
 install with `ALTER EXTENSION ... SET SCHEMA public`. The install alone is
-enough in `make test-samples`, where `reset-db` drops every extension before
-each sample, and not enough in `make schema`, where all 109 load after one
-`clean-schema`: `CREATE EXTENSION IF NOT EXISTS ... WITH SCHEMA public`
-places a new extension but does not move one, so once boundary has put
-`pgcrypto` in its own schema, lemmy `pg_trgm` in its, windmill `uuid-ossp` in
-`extensions`, and citizenlab its five in `shared_extensions`, the install is a
-no-op and the later sample's type, function, or operator class does not
-resolve. The relocation moves the member objects, leaves the indexes already
-built on them alone, and is a no-op when the extension is in `public`
-already. penpot, openreplay, concourse, affine, uyuni, lobehub, formbricks,
-and hoppscotch all need it. dhis2 does not get one: PostGIS is not
-relocatable, and the sample that installs PostGIS anywhere else, citizenlab,
-loads after it.
+enough in `make test-samples`, because `reset-db` drops every extension before
+each sample. It is not enough in `make schema`, where all 109 samples load
+after one `clean-schema`. `CREATE EXTENSION IF NOT EXISTS ... WITH SCHEMA
+public` places a new extension but does not move an existing one. So once
+boundary has put `pgcrypto` in its own schema, lemmy has put `pg_trgm` in its
+own schema, windmill has put `uuid-ossp` in `extensions`, and citizenlab has
+put its five in `shared_extensions`, the install is a no-op. The later
+sample's type, function, or operator class then does not resolve. The
+relocation moves the member objects. It leaves the indexes that are already
+built on them alone. It is a no-op when the extension is in `public` already.
+penpot, openreplay, concourse, affine, uyuni, lobehub, formbricks, and
+hoppscotch all need it. dhis2 does not get one. PostGIS is not relocatable,
+and citizenlab, the sample that installs PostGIS anywhere else, loads after
+dhis2.
 
-Some upstream dumps cannot be piped into `psql` as they are, either. The loader
+Some upstream dumps also cannot be piped into `psql` as they are. The loader
 targets strip only what is irrelevant to a schema round trip:
 
-- **adventureworks**: `\copy` lines are dropped (the data lives in CSVs that are
-  not fetched), along with the inline `Production.ProductReview` INSERT, whose
-  foreign key targets would be missing.
-- **affine**: the schema ships as a Prisma migration history like calcom's,
-  123 directories replayed in name order into a schema of its own, but it needs
-  two extensions in the search path as well, so it has a loader of its own
-  rather than sharing `sample-db-prisma`. pgvector types its two `vector(1024)`
-  embedding columns and the two hnsw indexes over them, and pgcrypto is
-  installed and used to hash rows in the same migration file, so it has to
-  resolve when that statement runs. Both are contrib or already required by
-  another sample, and both are installed into `public` up front the way
-  openreplay's are, with `public` second in the search path, since the
-  `CREATE EXTENSION IF NOT EXISTS` the migrations write names no schema and
-  gets nothing when another sample installed it somewhere else first.
-- **authelia**: the schema ships as one flat directory per backend, a file
-  per migration named `V0001.<what>.up.sql` beside its `down` half. Only the
-  `postgres` directory is extracted and only the `up` files are replayed, and
-  since the version is zero padded, name order is the order Authelia applies
-  them in. Nothing else is touched: the migrations name no schema and qualify
-  nothing with `public`.
+- **adventureworks**: the `\copy` lines are dropped, because the data lives in
+  CSVs that are not fetched. The inline `Production.ProductReview` INSERT is
+  dropped as well, because its foreign key targets would be missing.
+- **affine**: the schema ships as a Prisma migration history like calcom's:
+  123 directories that are replayed in name order into a schema of its own.
+  But it also needs two extensions in the search path. So it has a loader of
+  its own instead of sharing `sample-db-prisma`. pgvector types its two
+  `vector(1024)` embedding columns and the two hnsw indexes over them.
+  pgcrypto is installed and used to hash rows in the same migration file, so
+  it has to resolve when that statement runs. Both extensions are contrib or
+  already required by another sample. Both are installed into `public` up
+  front, the way openreplay's are, with `public` second in the search path.
+  The reason is that the `CREATE EXTENSION IF NOT EXISTS` that the migrations
+  write names no schema. That statement gets nothing when another sample
+  installed the extension somewhere else first.
+- **authelia**: the schema ships as one flat directory per backend. Each
+  migration is a file named `V0001.<what>.up.sql` beside its `down` half. Only
+  the `postgres` directory is extracted, and only the `up` files are replayed.
+  Because the version is zero padded, name order is the order in which
+  Authelia applies them. Nothing else is touched: the migrations name no
+  schema and qualify nothing with `public`.
 - **bigbluebutton**: the file names no schema for almost everything it
-  creates, so `search_path` places it, but three of its views are qualified
-  with `public`. Those three would land outside the sample's schema and the
-  views that select from them would then not resolve, so the qualifier is
-  stripped. The file also installs `unaccent`, which a function behind three
-  of its stored generated columns calls; it is contrib, so the official image
+  creates, so `search_path` places it. But three of its views are qualified
+  with `public`. Those three would land outside the sample's schema, and the
+  views that select from them would then not resolve. So the qualifier is
+  stripped. The file also installs `unaccent`. A function behind three of its
+  stored generated columns calls it. It is contrib, so the official image
   already has it.
-- **bonita**: the schema is not a migration history but the two create
-  scripts Bonita's installer runs, one dialect directory per backend:
-  `createTables.sql` for the engine and `createQuartzTables.sql` for the
-  Quartz scheduler it embeds, concatenated in that order. `initTables.sql`
-  beside them is reference data rather than schema and the drop and clean
-  scripts tear an install down, so none of the three is run. Nothing in the
-  two files needs rewriting: they name no schema and qualify nothing with
-  `public`.
-- **boundary**: the schema ships as migrations only, 290 files that Boundary
-  replays in order: the two base files, then one directory per schema version
-  in numeric order, with the files in each in name order. The repository
-  tarball is fetched once and only the migrations directory is extracted,
-  since fetching 290 files one at a time is slow. None of the files names a
-  schema, so `boundary` is created up front and `search_path` places
-  everything, the `citext`, `pgcrypto`, and `btree_gist` extensions included;
-  all three are contrib. The migrations also assume the database holds
-  Boundary alone: one runs a bare `analyze;` and another renames every unique
-  constraint and foreign key in `pg_constraint`, whichever schema its table is
-  in. Either stops the load when another sample's schema is already there, so
-  boundary is the first sample in `SAMPLES`, loaded right after
-  `clean-schema`.
-- **calcom**, **triggerdev**: each schema ships as a Prisma migration history,
-  596 and 828 directories each holding a `migration.sql`, replayed in name order
-  into a schema of its own. The repository tarball is fetched once and only the
-  migrations directory is extracted. A few files end without a semicolon or on a
-  comment, so each is followed by a newline and one, and the `public` qualifier
-  Prisma writes in some statements is stripped. Some migrations insert or update
-  rows as well; they run, and the rows are not part of the check.
-- **alfresco**: the schema ships as 11 create scripts, one per subsystem, and
-  the order they run in is not their name order but the list in
-  `db-schema-context.xml`, which the loader repeats: the repository tables
-  first, since the rest key back into them, and the authorization tables last.
-  Alfresco's runner rewrites each script before running it and the loader does
-  the same two things. `${TRUE}` becomes `TRUE`, which is what `SchemaBootstrap`
-  substitutes on a dialect with a boolean type and what 8 rows of bootstrap
-  data here need. And a statement marked `--(optional)` is one its runner
-  carries on past: there is exactly one, a `DROP TABLE` that means something
-  only when an upgrade left the table behind, so on an empty database it can
-  only fail and is dropped. The three marked `-- (optional)`, with a space,
-  create a sequence, an index, and a table, and they stay. The scripts are
-  CRLF, which psql reads as whitespace, so only the annotation match allows for
-  the carriage return.
-- **camunda**: the schema ships as one file per engine component and none of
-  them create a schema, so `camunda` is created up front and the files are
-  concatenated in dependency order (process engine, history, identity, then the
-  case and decision engines with their history).
-- **chado**: the file names no schema for the objects it creates, but four
-  times partway through it sets `search_path` itself with `public` in it, which
-  overrides anything `PGOPTIONS` passes in. The `public` in those four lines is
-  rewritten to `chado`, the way hive's one line is. The lines that name
-  `genetic_code`, `so`, and `frange` keep them: the file creates those three
-  schemas itself, so the sample is checked with all four. Nine of its SQL
-  functions are dropped, the six written against the `@` box operator that
-  PostgreSQL 14 removed and the three that call one of those six; they error
-  out on every version in the CI matrix.
+- **bonita**: the schema is not a migration history. It is the two create
+  scripts that Bonita's installer runs, with one dialect directory per
+  backend: `createTables.sql` for the engine and `createQuartzTables.sql` for
+  the Quartz scheduler that it embeds. They are concatenated in that order.
+  `initTables.sql` beside them is reference data rather than schema, and the
+  drop and clean scripts tear an install down. So none of those three is run.
+  Nothing in the two files needs rewriting: they name no schema and qualify
+  nothing with `public`.
+- **boundary**: the schema ships as migrations only: 290 files that Boundary
+  replays in order. The two base files come first, then one directory per
+  schema version in numeric order, with the files in each directory in name
+  order. The repository tarball is fetched once, and only the migrations
+  directory is extracted, because fetching 290 files one at a time is slow.
+  None of the files names a schema. So `boundary` is created up front, and
+  `search_path` places everything, the `citext`, `pgcrypto`, and `btree_gist`
+  extensions included. All three are contrib. The migrations also assume that
+  the database holds Boundary alone. One runs a bare `analyze;`. Another
+  renames every unique constraint and foreign key in `pg_constraint`,
+  whichever schema its table is in. Either one stops the load when another
+  sample's schema is already there. So boundary is the first sample in
+  `SAMPLES`, and it loads right after `clean-schema`.
+- **calcom**, **triggerdev**: each schema ships as a Prisma migration history:
+  596 and 828 directories, each holding a `migration.sql`. They are replayed
+  in name order into a schema of its own. The repository tarball is fetched
+  once, and only the migrations directory is extracted. A few files end
+  without a semicolon or on a comment. So each file is followed by a newline
+  and a semicolon. The `public` qualifier that Prisma writes in some
+  statements is stripped. Some migrations insert or update rows as well. They
+  run, and the rows are not part of the check.
+- **alfresco**: the schema ships as 11 create scripts, one per subsystem. The
+  order in which they run is not their name order but the list in
+  `db-schema-context.xml`, which the loader repeats. The repository tables
+  come first, because the rest key back into them, and the authorization
+  tables come last. Alfresco's runner rewrites each script before it runs it,
+  and the loader does the same two things. `${TRUE}` becomes `TRUE`. That is
+  what `SchemaBootstrap` substitutes on a dialect with a boolean type, and it
+  is what 8 rows of bootstrap data here need. And a statement marked
+  `--(optional)` is one that its runner carries on past. There is exactly one:
+  a `DROP TABLE` that means something only when an upgrade left the table
+  behind. On an empty database it can only fail, so it is dropped. The three
+  statements marked `-- (optional)`, with a space, create a sequence, an
+  index, and a table. They stay. The scripts are CRLF, which psql reads as
+  whitespace. So only the annotation match allows for the carriage return.
+- **camunda**: the schema ships as one file per engine component, and none of
+  them creates a schema. So `camunda` is created up front, and the files are
+  concatenated in dependency order (process engine, history, identity, then
+  the case and decision engines with their history).
+- **chado**: the file names no schema for the objects it creates. But four
+  times partway through, it sets `search_path` itself with `public` in it.
+  That overrides anything `PGOPTIONS` passes in. The `public` in those four
+  lines is rewritten to `chado`, the way hive's one line is. The lines that
+  name `genetic_code`, `so`, and `frange` keep those names. The file creates
+  those three schemas itself, so the sample is checked with all four. Nine of
+  its SQL functions are dropped: the six that are written against the `@` box
+  operator that PostgreSQL 14 removed, and the three that call one of those
+  six. They error out on every version in the CI matrix.
   The 94 that load are part of the round trip like any other object. The
-  `create_point` calls in the bodies of `boxrange` and `boxquery` are qualified
-  with `chado.`, because PostgreSQL 17 runs `CREATE INDEX` with `search_path`
-  set to `pg_catalog, pg_temp`: the three gist indexes over `boxrange` inline
-  it, which re-resolves an unqualified `create_point` under that `search_path`
-  and does not find it. With the calls qualified, every table, index,
-  constraint, and view loads on all four versions of the CI matrix, the three
-  gist indexes among them.
-- **citizenlab**: the schema is Rails' `db/structure.sql` like discourse's, but
-  multi-tenant: its five extensions live in a `shared_extensions` schema the
-  file creates, and every use of them is qualified with it, so only the
-  `public.` qualifier is stripped and `search_path` places the rest. It was
-  dumped with `--clean`, so everything before the first `-- Name:` header is
-  skipped, as it is for lago. Here that matters for more than tidiness: the
-  preamble ends with `DROP SCHEMA IF EXISTS shared_extensions` and
-  `DROP SCHEMA IF EXISTS public`, and the second would take every public sample
-  with it in `make schema`. Skipping it also drops the `SET` lines `pg_dump`
-  writes at the top, so `check_function_bodies` is passed in instead, and the
-  `CREATE SCHEMA public` that opens the body is dropped, since `reset-db` has
-  just created it.
-- **clubdata**: the dump creates its own database and reconnects to it, which
-  cannot be done mid-pipe. Those two lines are dropped; the rest creates the
+  `create_point` calls in the bodies of `boxrange` and `boxquery` are
+  qualified with `chado.`. The reason is that PostgreSQL 17 runs
+  `CREATE INDEX` with `search_path` set to `pg_catalog, pg_temp`. The three
+  gist indexes over `boxrange` inline it. That re-resolves an unqualified
+  `create_point` under that `search_path` and does not find it. With the calls
+  qualified, every table, index, constraint, and view loads on all four
+  versions of the CI matrix, the three gist indexes among them.
+- **citizenlab**: the schema is Rails' `db/structure.sql` like discourse's,
+  but it is multi-tenant. Its five extensions live in a `shared_extensions`
+  schema that the file creates, and every use of them is qualified with that
+  schema. So only the `public.` qualifier is stripped, and `search_path`
+  places the rest. The file was dumped with `--clean`, so everything before
+  the first `-- Name:` header is skipped, as it is for lago. Here that matters
+  for more than tidiness. The preamble ends with
+  `DROP SCHEMA IF EXISTS shared_extensions` and
+  `DROP SCHEMA IF EXISTS public`. The second would take every public sample
+  with it in `make schema`. Skipping the preamble also drops the `SET` lines
+  that `pg_dump` writes at the top, so `check_function_bodies` is passed in
+  instead. The `CREATE SCHEMA public` that opens the body is dropped, because
+  `reset-db` has just created it.
+- **clubdata**: the dump creates its own database and reconnects to it. That
+  cannot be done mid-pipe. Those two lines are dropped. The rest creates the
   `cd` schema itself.
 - **coder**: the dump is `pg_dump` output with the preamble stripped, and the
-  preamble is where `pg_dump` turns `check_function_bodies` off. Left on, a
-  plpgsql function that declares a variable of a table's row type stops the
-  load, since the table comes later in the file, so the loader turns it off.
-- **concourse**: the schema ships as golang-migrate migrations, 151 `.up.sql`
-  files replayed in name order like mattermost's. Seven migrations beside them
-  are Go rather than SQL and run in the same sequence; three only rewrite rows,
-  and four change a table, dropping `teams.basic_auth`, renaming `teams.auth`
-  to `legacy_auth` beside a new `auth`, and adding `resources.type` and
-  `resource_pins.config`. Nothing in the SQL files depends on any of that, so
-  the sample is checked without them, the way marquez is checked without its
-  Java migrations' views, and its `teams` keeps the `basic_auth` column
-  upstream drops. One migration installs pgcrypto and hashes rows with
-  `digest()` in the same file, so pgcrypto is installed into `public` up front
-  and `public` stays second in the search path.
-- **cratesio**: the schema ships as Diesel migrations, 287 directories each
-  holding an `up.sql`. The repository tarball is fetched once and only the
+  preamble is where `pg_dump` turns `check_function_bodies` off. If the
+  setting is left on, a plpgsql function that declares a variable of a table's
+  row type stops the load, because the table comes later in the file. So the
+  loader turns it off.
+- **concourse**: the schema ships as golang-migrate migrations: 151 `.up.sql`
+  files that are replayed in name order like mattermost's. Seven migrations
+  beside them are Go rather than SQL, and they run in the same sequence. Three
+  of them only rewrite rows. Four change a table: they drop
+  `teams.basic_auth`, rename `teams.auth` to `legacy_auth` beside a new
+  `auth`, and add `resources.type` and `resource_pins.config`. Nothing in the
+  SQL files depends on any of that. So the sample is checked without them, the
+  way marquez is checked without its Java migrations' views, and its `teams`
+  keeps the `basic_auth` column that upstream drops. One migration installs
+  pgcrypto and hashes rows with `digest()` in the same file. So pgcrypto is
+  installed into `public` up front, and `public` stays second in the search
+  path.
+- **cratesio**: the schema ships as Diesel migrations: 287 directories, each
+  holding an `up.sql`. The repository tarball is fetched once, and only the
   migrations directory is extracted, the way lemmy's is. Unlike hyperswitch's,
   the directories are named in two styles, `20170804200817_` and
-  `2017-09-23-182408_`, which sort apart by name, so the loader orders them the
-  way Diesel does: by the part before the first underscore with the dashes
-  removed. Two files end without a semicolon, so each is followed by a newline
-  and one. The migrations install ltree, pg_trgm, and pgcrypto with `IF NOT
-  EXISTS ... SCHEMA public`, so the three are installed into `public` and
-  relocated up front, and `public` stays second in the search path. Five
-  expression indexes call the schema's own `canon_crate_name` and
-  `canon_username`, one of them with `gin_trgm_ops` from `public`, so the dump
-  has to qualify the function and leave the operator class bare.
+  `2017-09-23-182408_`. Those two styles sort apart by name. So the loader
+  orders them the way Diesel does: by the part before the first underscore,
+  with the dashes removed. Two files end without a semicolon, so each is
+  followed by a newline and a semicolon. The migrations install ltree,
+  pg_trgm, and pgcrypto with `IF NOT EXISTS ... SCHEMA public`. So the three
+  are installed into `public` and relocated up front, and `public` stays
+  second in the search path. Five expression indexes call the schema's own
+  `canon_crate_name` and `canon_username`. One of them also uses
+  `gin_trgm_ops` from `public`. So the dump has to qualify the function and
+  leave the operator class bare.
 - **dcm4chee**: the schema ships as plain DDL rather than migrations, in three
-  files concatenated in dependency order: the tables and their 30 sequences,
-  then the indexes over the foreign key columns, then the three
-  case-insensitive ones, both of which need the tables.
-- **demodb**: `btree_gist` is created first for the `bookings.routes` exclusion
-  constraint, and the `\copy` lines are dropped.
-- **dhis2**: the dump is the base schema Flyway starts from, a `pg_dump` that
-  names no schema and no owner, so it loads into a schema of its own like the
-  group below. It does not install PostGIS, which the one `geometry` column in
-  `programstageinstance` needs, so the loader creates the extension first,
-  `WITH SCHEMA public` since its own `search_path` names the sample's schema
-  first, and leaves `public` in the search path for the type to resolve from.
+  files. They are concatenated in dependency order: the tables and their 30
+  sequences, then the indexes over the foreign key columns, then the three
+  case-insensitive indexes. Both index files need the tables.
+- **demodb**: `btree_gist` is created first, for the `bookings.routes`
+  exclusion constraint. The `\copy` lines are dropped.
+- **dhis2**: the dump is the base schema that Flyway starts from. It is a
+  `pg_dump` that names no schema and no owner, so it loads into a schema of
+  its own like the group below. It does not install PostGIS, which the one
+  `geometry` column in `programstageinstance` needs. So the loader creates the
+  extension first. It does so `WITH SCHEMA public`, because its own
+  `search_path` names the sample's schema first. It leaves `public` in the
+  search path so that the type resolves from there.
 - **discourse**, **osm**, **danbooru**, **inaturalist**, **feedbin**: all five
-  ship their schema as Rails' `db/structure.sql`, which belongs in a schema of
-  its own like the group below but is `pg_dump` output that empties
-  `search_path` and qualifies every object with `public`, so neither
+  ship their schema as Rails' `db/structure.sql`. That file belongs in a
+  schema of its own like the group below. But it is `pg_dump` output that
+  empties `search_path` and qualifies every object with `public`. So neither
   `PGOPTIONS` nor hive's one-line rewrite reaches it. The line that empties
-  `search_path` is dropped and the `public.` qualifier is stripped, which
+  `search_path` is dropped, and the `public.` qualifier is stripped. That
   leaves every name unqualified for `search_path` to place. The
   `CREATE EXTENSION` lines say `WITH SCHEMA public` without a dot, so they are
-  untouched and the types they own still resolve from `public`, which stays
+  untouched. The types that they own still resolve from `public`, which stays
   second in the search path. The tail of the file is Rails' own
-  `SET search_path` followed by the migration versions it inserts into
-  `schema_migrations`, which is data, so everything from that line on is
-  dropped. danbooru installs five extensions of its own, `btree_gin`,
-  `fuzzystrmatch`, `pg_trgm`, `pgcrypto`, and `pgstattuple`, but all five are
-  contrib and the official image already has them, so it needs nothing installed
-  the way discourse and osm do. inaturalist needs PostGIS, as osm does, and
-  `uuid-ossp`, which is contrib and which 16 of its columns default through.
-  feedbin installs three contrib extensions of its own, `hstore`,
-  `pg_stat_statements`, and `uuid-ossp`.
+  `SET search_path`, followed by the migration versions that it inserts into
+  `schema_migrations`. Those versions are data, so everything from that line
+  on is dropped. danbooru installs five extensions of its own: `btree_gin`,
+  `fuzzystrmatch`, `pg_trgm`, `pgcrypto`, and `pgstattuple`. All five are
+  contrib, and the official image already has them. So danbooru needs nothing
+  installed the way discourse and osm do. inaturalist needs PostGIS, as osm
+  does, and `uuid-ossp`. `uuid-ossp` is contrib, and 16 of inaturalist's
+  columns default through it. feedbin installs three contrib extensions of its
+  own: `hstore`, `pg_stat_statements`, and `uuid-ossp`.
 - **documenso**: the schema ships as a Prisma migration history like calcom's
-  and triggerdev's, 164 directories replayed through `sample-db-prisma`, so it
-  needs no loader of its own. It installs `pg_trgm` and `pgcrypto`, both
-  contrib, into the schema it loads into.
-- **dokploy**: the schema ships as Drizzle migrations, the fifth migration tool
-  in this list after Diesel, sqlx, golang-migrate, and Prisma. The repository
-  tarball is fetched once and only the drizzle directory is extracted. Which
-  files to replay comes from `meta/_journal.json` rather than from the
-  directory listing, because the two do not agree: `0130_abandoned_dagger.sql`
-  is on disk but not in the journal, so Drizzle never applies it, and replaying
-  it adds a column that a later migration adds again, which stops the load. The
-  journal lists its tags in the order Drizzle applies them, so they are read out
-  of it and each file catted in turn, followed by a newline and a semicolon
-  since a few end without one. None of the files names a schema, so `dokploy` is
-  created up front and `search_path` places everything, but the foreign keys
-  Drizzle writes qualify their target with `"public"`, which is stripped. Two
-  of those foreign key names run past the 63 character identifier limit and the
-  server truncates them, as it does wso2is's.
-- **dvdrental**: the dump was taken by a `pg_dump` new enough to set
-  `transaction_timeout` in its preamble, which 15 and 16 do not have, so that
-  one line is dropped. It sets nothing the schema depends on.
-- **omop**: the CDM's PostgreSQL DDL ships as four files under one directory,
-  so `ddl`, `primary_keys`, `constraints`, and `indices` are fetched by name
+  and triggerdev's: 164 directories that are replayed through
+  `sample-db-prisma`. So it needs no loader of its own. It installs `pg_trgm`
+  and `pgcrypto`, both contrib, into the schema that it loads into.
+- **dokploy**: the schema ships as Drizzle migrations. Drizzle is the fifth
+  migration tool in this list, after Diesel, sqlx, golang-migrate, and Prisma.
+  The repository tarball is fetched once, and only the drizzle directory is
+  extracted. The list of files to replay comes from `meta/_journal.json`
+  rather than from the directory listing, because the two do not agree.
+  `0130_abandoned_dagger.sql` is on disk but not in the journal, so Drizzle
+  never applies it. Replaying it adds a column that a later migration adds
+  again, which stops the load. The journal lists its tags in the order in
+  which Drizzle applies them. So the tags are read out of the journal, and
+  each file is catted in turn. Each file is followed by a newline and a
+  semicolon, because a few end without one. None of the files names a schema,
+  so `dokploy` is created up front and `search_path` places everything. But
+  the foreign keys that Drizzle writes qualify their target with `"public"`,
+  and that qualifier is stripped. Two of those foreign key names run past the
+  63 character identifier limit. The server truncates them, as it does
+  wso2is's.
+- **dvdrental**: the dump was taken by a `pg_dump` that is new enough to set
+  `transaction_timeout` in its preamble. PostgreSQL 15 and 16 do not have that
+  setting, so that one line is dropped. The line sets nothing that the schema
+  depends on.
+- **omop**: the CDM's PostgreSQL DDL ships as four files under one directory.
+  So `ddl`, `primary_keys`, `constraints`, and `indices` are fetched by name
   and concatenated in that order, the way mimiciv's three are. Every table
-  name in all four carries an `@cdmDatabaseSchema` placeholder that OHDSI's R
-  package fills in at install time, 529 of them, and the loader substitutes
-  the sample's schema for it; nothing else in the files is a template. The pin
-  is the v5.4.2 tag rather than the branch tip, the one sample where those
-  differ for a reason other than where the schema lives: at the tip the
-  primary key file leaves out `vocabulary`'s, which two foreign keys need, so
-  the load stops on the first of them, and 5.5's files have the same gap.
-- **formbricks**: the schema ships as a Prisma migration history like calcom's,
-  175 directories holding a `migration.sql`, but `sample-db-prisma` cannot
-  replay it. Two of its migrations ask the catalog whether an earlier rename
-  has already happened and look in `public` to do it, and a later migration
-  drops, unguarded, the index that rename produces: loaded anywhere else the
-  guards answer no, the rename is skipped, and the drop fails on an index
-  nobody renamed. `sample-db-formbricks` is `sample-db-prisma` with those two
-  lookups pointed at `current_schema()`, and the unscoped `conname` lookup
-  beside them narrowed to the sample's schema the way lemmy's is, so that a
-  constraint another sample left behind cannot answer for this one. The
-  schema also installs pgvector, which the official postgres image does not
-  ship and `compose.yaml` adds for discourse and citizenlab already. That
-  `CREATE EXTENSION IF NOT EXISTS` names no schema, so it gets nothing in
+  name in all four files carries an `@cdmDatabaseSchema` placeholder that
+  OHDSI's R package fills in at install time. There are 529 of them, and the
+  loader substitutes the sample's schema for each. Nothing else in the files
+  is a template. The pin is the v5.4.2 tag rather than the branch tip. This is
+  the one sample where those two differ for a reason other than where the
+  schema lives. At the tip, the primary key file leaves out `vocabulary`'s
+  primary key, which two foreign keys need. So the load stops on the first of
+  those foreign keys. The 5.5 files have the same gap.
+- **formbricks**: the schema ships as a Prisma migration history like
+  calcom's: 175 directories that hold a `migration.sql`. But
+  `sample-db-prisma` cannot replay it. Two of its migrations ask the catalog
+  whether an earlier rename has already happened, and they look in `public` to
+  do it. A later migration drops, unguarded, the index that the rename
+  produces. When the schema is loaded anywhere else, the guards answer no, the
+  rename is skipped, and the drop fails on an index that nobody renamed.
+  `sample-db-formbricks` is `sample-db-prisma` with those two lookups pointed
+  at `current_schema()`. The unscoped `conname` lookup beside them is narrowed
+  to the sample's schema, the way lemmy's is, so that a constraint that
+  another sample left behind cannot answer for this one. The schema also
+  installs pgvector. The official postgres image does not ship it, and
+  `compose.yaml` adds it for discourse and citizenlab already. That
+  `CREATE EXTENSION IF NOT EXISTS` names no schema. So it gets nothing in
   `make schema`, where an earlier sample has already installed pgvector
-  somewhere else; the loader installs it into `public` up front the way
-  affine's does, relocates one already installed elsewhere the way the note
-  above describes, and puts `public` second in the search path, and the
-  columns the migration declares then resolve. Nothing the check reads is
-  typed by it: the three tables that carried those `vector(512)` columns
-  were dropped by a later migration and the extension was left behind.
+  somewhere else. The loader installs it into `public` up front, the way
+  affine's does. It relocates one that is already installed elsewhere, the way
+  the note above describes. It puts `public` second in the search path. The
+  columns that the migration declares then resolve. Nothing that the check
+  reads is typed by pgvector: the three tables that carried those
+  `vector(512)` columns were dropped by a later migration, and the extension
+  was left behind.
 - **ghostfolio**: the schema ships as a Prisma migration history like
-  calcom's, 126 directories replayed through `sample-db-prisma`, so it needs
-  no loader of its own. It installs no extension and qualifies nothing with
-  `public`.
-- **glific**, **plausible**, **hexpm**: the schema is Ecto's `structure.sql`,
-  the same `pg_dump` output as the group above, so it loads the same way. None
-  has a `SET search_path` line before its migration versions, so those rows go
-  into the sample's own `schema_migrations`. They are data, not schema.
-  plausible installs `citext`, which is contrib and which three of its columns
-  are typed by, and hexpm five, `citext`, `fuzzystrmatch`, `pg_trgm`,
-  `pgcrypto`, and `uuid-ossp`, all contrib as well: one column is a `citext`,
-  one gin index names the trgm operator class, and one column defaults through
-  `uuid_generate_v4()` the way inaturalist's sixteen do, though hexpm's is
-  nested inside a `json_build_object` cast to `jsonb`. `fuzzystrmatch` and
-  `pgcrypto` the schema itself never names.
-- **harbor**: the schema ships as one file per release, each a delta meant to
-  be replayed by golang-migrate, which tracks what it has applied in a
-  `schema_migrations` table of its own. One delta `ALTER TABLE`s that table
-  directly, so a stand-in `schema_migrations` is created before the deltas run
-  and dropped once they have; it is golang-migrate's bookkeeping, not part of
-  Harbor's schema. A few deltas also omit their file's closing `;`, which
-  merges the next file's opening statement into it once concatenated, so
-  every file gets one appended regardless of whether it already ends in one.
-- **hatchet**: the schema ships as three files, so `v0.sql`, `v1-core.sql`, and
-  `v1-olap.sql` are concatenated in the order Hatchet's `sqlc.yaml` lists them.
-  None of them names a schema, so `hatchet` is created up front and
-  `search_path` places everything.
-- **hive**: the dump belongs in a schema of its own like the group below, but
-  it is `pg_dump` output that sets `search_path` to `public` itself, which
+  calcom's: 126 directories that are replayed through `sample-db-prisma`. So
+  it needs no loader of its own. It installs no extension and qualifies
+  nothing with `public`.
+- **glific**, **plausible**, **hexpm**: the schema is Ecto's `structure.sql`.
+  It is the same `pg_dump` output as the group above, so it loads the same
+  way. None of the three has a `SET search_path` line before its migration
+  versions. So those rows go into the sample's own `schema_migrations`. They
+  are data, not schema. plausible installs `citext`, which is contrib and
+  which three of its columns are typed by. hexpm installs five: `citext`,
+  `fuzzystrmatch`, `pg_trgm`, `pgcrypto`, and `uuid-ossp`, all contrib as
+  well. One column is a `citext`. One gin index names the trgm operator class.
+  One column defaults through `uuid_generate_v4()`, the way inaturalist's
+  sixteen do, though hexpm's call is nested inside a `json_build_object` cast
+  to `jsonb`. The schema itself never names `fuzzystrmatch` and `pgcrypto`.
+- **harbor**: the schema ships as one file per release. Each file is a delta
+  that golang-migrate is meant to replay. golang-migrate tracks what it has
+  applied in a `schema_migrations` table of its own. One delta runs
+  `ALTER TABLE` on that table directly. So a stand-in `schema_migrations` is
+  created before the deltas run, and it is dropped once they have run. That
+  table is golang-migrate's bookkeeping, not part of Harbor's schema. A few
+  deltas also omit the closing `;` of their file. Once the files are
+  concatenated, that merges the next file's opening statement into the
+  previous one. So every file gets a `;` appended, whether or not it already
+  ends in one.
+- **hatchet**: the schema ships as three files. So `v0.sql`, `v1-core.sql`,
+  and `v1-olap.sql` are concatenated in the order in which Hatchet's
+  `sqlc.yaml` lists them. None of them names a schema. So `hatchet` is created
+  up front, and `search_path` places everything.
+- **hive**: the dump belongs in a schema of its own like the group below. But
+  it is `pg_dump` output that sets `search_path` to `public` itself, and that
   overrides anything `PGOPTIONS` passes in. That one line is rewritten to name
   the `hive` schema.
-- **hoppscotch**: the schema ships as a Prisma migration history like calcom's,
-  22 directories replayed in name order, and `sample-db-prisma` would replay
-  it as it stands but for one thing: a migration installs `pg_trgm` with a
-  `CREATE EXTENSION IF NOT EXISTS` that names no schema, and two later ones
-  name `gin_trgm_ops`. In `make schema`, where an earlier sample has already
-  installed `pg_trgm` somewhere else, that statement gets nothing and the
-  operator class does not resolve. `sample-db-hoppscotch` is
-  `sample-db-prisma` with the extension installed into `public` up front the
-  way affine's is, relocated there when an earlier sample has installed it
-  somewhere else, and `public` second in the search path, which is where the
-  two gin indexes then resolve `gin_trgm_ops` from.
-- **hydra**: the schema is not a migration history here but the `pg_dump` Ory
-  keeps in `internal/testhelpers/sql_schemas` to check its migrations against,
-  so it loads the way the Rails group above does, through
-  `sample-db-pgdump-schema`: the line emptying `search_path` goes, the
-  `public` qualifier comes off, and the `SET search_path TO public` at the
-  tail and everything after it is cut. It installs `uuid-ossp`, which is
-  contrib, and then uses nothing from it, so no column default has to resolve
+- **hoppscotch**: the schema ships as a Prisma migration history like
+  calcom's: 22 directories that are replayed in name order. `sample-db-prisma`
+  would replay it as it stands, but for one thing. A migration installs
+  `pg_trgm` with a `CREATE EXTENSION IF NOT EXISTS` that names no schema, and
+  two later migrations name `gin_trgm_ops`. In `make schema`, an earlier
+  sample has already installed `pg_trgm` somewhere else. There, that statement
+  gets nothing, and the operator class does not resolve.
+  `sample-db-hoppscotch` is `sample-db-prisma` with three changes. The
+  extension is installed into `public` up front, the way affine's is. It is
+  relocated there when an earlier sample has installed it somewhere else. And
+  `public` is second in the search path, which is where the two gin indexes
+  then resolve `gin_trgm_ops` from.
+- **hydra**: the schema here is not a migration history. It is the `pg_dump`
+  that Ory keeps in `internal/testhelpers/sql_schemas` to check its migrations
+  against. So it loads the way the Rails group above does, through
+  `sample-db-pgdump-schema`. The line that empties `search_path` is dropped.
+  The `public` qualifier is stripped. The `SET search_path TO public` at the
+  tail, and everything after it, is cut. It installs `uuid-ossp`, which is
+  contrib, and then uses nothing from it. So no column default has to resolve
   through the extension.
-- **hyperswitch**: the schema ships as Diesel migrations, 530 directories each
-  holding an `up.sql`, replayed in name order. The repository tarball is fetched
-  once and only the migrations directory is extracted, the way lemmy's is. Every
-  directory but Diesel's own `00000000000000_diesel_initial_setup` is named for
-  a date, so plain name order is the order Diesel applies them in. Four of the
-  files end without a semicolon, so each is followed by a newline and one.
-  Nothing in them names a schema, qualifies anything with `public`, or installs
-  an extension, so `search_path` places the lot.
-- **imdb**: the schema and its foreign key indexes ship as two files, so
+- **hyperswitch**: the schema ships as Diesel migrations: 530 directories,
+  each holding an `up.sql`, replayed in name order. The repository tarball is
+  fetched once, and only the migrations directory is extracted, the way
+  lemmy's is. Every directory but Diesel's own
+  `00000000000000_diesel_initial_setup` is named for a date. So plain name
+  order is the order in which Diesel applies them. Four of the files end
+  without a semicolon, so each is followed by a newline and a semicolon.
+  Nothing in them names a schema, qualifies anything with `public`, or
+  installs an extension. So `search_path` places all of them.
+- **imdb**: the schema and its foreign key indexes ship as two files. So
   `schema.sql` and `fkindexes.sql` are concatenated.
-- **joomla**: the schema ships as three files that must load in order --
-  `base.sql`, `extensions.sql`, and `supports.sql`, the last of which
-  references content types `extensions.sql` creates -- so they are
-  concatenated. None of the three create a schema or set `search_path`
-  themselves, and every table name carries the literal `#__` prefix Joomla
-  substitutes at install time; quoted, it is just an ordinary identifier and
-  needs no rewriting.
-- **kamailio**: the schema is one file per module rather than one per release,
-  and which modules a database gets is the installer's choice: `kamdbctl`
-  creates the standard set always and asks about the presence, extra, and uid
-  sets. The loader concatenates all four, in the order `kamdbctl.base` lists
-  them, which puts `standard` first because every file writes a row into the
-  `version` table it creates. The five files left over are four IMS ones and
-  `matrix`, which `kamdbctl` does not offer. A schema of its own matters more
-  here than usual: this is where the generic names live, `domain`, `group`,
-  `location`, `subscriber`, `uri`, `address`, `version`.
-- **lago**: the schema is Rails' `db/structure.sql` like discourse's, and loads
-  the same way with two things taken out first. It was dumped with `--clean`,
-  so everything before the first `-- Name:` header, about 1,400 lines of
-  `DROP ... IF EXISTS` and placeholder views, is skipped; with `public` second
-  in `search_path` those could reach another sample's objects in `make schema`.
-  It also installs `pg_partman`, which is not contrib, into a schema of its own
-  with one template table, so every statement that names partman is dropped.
-- **langfuse**: the schema ships as a Prisma migration history like calcom's,
-  triggerdev's, and documenso's, 438 directories replayed through
+- **joomla**: the schema ships as three files that must load in order:
+  `base.sql`, `extensions.sql`, and `supports.sql`. The last one references
+  content types that `extensions.sql` creates. So the three are concatenated.
+  None of the three creates a schema or sets `search_path` itself. Every table
+  name carries the literal `#__` prefix that Joomla substitutes at install
+  time. Because the prefix is quoted, it is an ordinary identifier and needs
+  no rewriting.
+- **kamailio**: the schema is one file per module rather than one file per
+  release. The installer chooses which modules a database gets: `kamdbctl`
+  always creates the standard set and asks about the presence, extra, and uid
+  sets. The loader concatenates all four sets in the order that `kamdbctl.base`
+  lists them. That order puts `standard` first, because every file writes a row
+  into the `version` table that `standard` creates. The five files left over
+  are four IMS files and `matrix`. `kamdbctl` does not offer them. A schema of
+  its own matters more here than usual, because this is where the generic names
+  live: `domain`, `group`, `location`, `subscriber`, `uri`, `address`,
+  `version`.
+- **lago**: the schema is Rails' `db/structure.sql`, like discourse's. It loads
+  the same way, after two things are taken out. The file was dumped with
+  `--clean`. So everything before the first `-- Name:` header is skipped: about
+  1,400 lines of `DROP ... IF EXISTS` and placeholder views. With `public`
+  second in `search_path`, those statements could reach another sample's
+  objects in `make schema`. The file also installs `pg_partman`, which is not
+  contrib, into a schema of its own with one template table. So every statement
+  that names partman is dropped.
+- **langfuse**: the schema ships as a Prisma migration history, like calcom's,
+  triggerdev's, and documenso's. Its 438 directories are replayed through
   `sample-db-prisma`, so it needs no loader of its own. It installs no
-  extension and qualifies nothing with `public`, so the sed that strips the
+  extension and qualifies nothing with `public`. So the sed that strips the
   qualifier has nothing to strip. One of its index names runs past 63
-  characters, which the server truncates, and one migration turns a unique
-  index into a primary key with `ADD CONSTRAINT ... USING INDEX`, which renames
-  the index; neither object survives into the schema the check reads, since a
-  later migration drops the table behind them.
-- **lemmy**: the schema ships as Diesel migrations, 342 directories each holding
-  an `up.sql`, and that is only half of it: every trigger function lives in a
-  schema named `r` that Lemmy's own runner builds afterwards out of two files.
-  So the migrations are followed by `CREATE SCHEMA r` and those two files, in
-  the order `schema_setup/mod.rs` lists them. The repository tarball is fetched
-  once and both paths are extracted from it. None of the files names a schema,
-  so `lemmy` is created up front and `search_path` places everything, the
-  contrib extensions `ltree`, `pg_trgm`, and `pgcrypto` included; the migrations
-  create a `utils` schema themselves, so the sample is checked with all three.
-  Some migrations qualify a table or a function with `public`, which is
-  stripped. One of them puts a trigger on `__diesel_schema_migrations`, Diesel's
-  bookkeeping table, which the CLI creates rather than a migration, so a
-  stand-in is created before the migrations run and dropped once they have, the
-  way harbor's is. Twenty-two turn a table's indexes off around a bulk update
-  and find the table with `SELECT oid FROM pg_class WHERE relname = '<table>'`,
-  naming no schema: upstream Lemmy owns its database, but here the samples
-  before it are still there and `comment` alone matches several, so those
+  characters, and the server truncates it. One migration turns a unique index
+  into a primary key with `ADD CONSTRAINT ... USING INDEX`, which renames the
+  index. Neither object survives into the schema that the check reads, because
+  a later migration drops the table behind them.
+- **lemmy**: the schema ships as Diesel migrations: 342 directories, each
+  holding an `up.sql`. That is only half of it. Every trigger function lives in
+  a schema named `r`, which Lemmy's own runner builds afterwards out of two
+  files. So the migrations are followed by `CREATE SCHEMA r` and those two
+  files, in the order that `schema_setup/mod.rs` lists them. The repository
+  tarball is fetched once, and both paths are extracted from it. None of the
+  files names a schema. So `lemmy` is created up front, and `search_path`
+  places everything, including the contrib extensions `ltree`, `pg_trgm`, and
+  `pgcrypto`. The migrations create a `utils` schema themselves, so the sample
+  is checked with all three schemas. Some migrations qualify a table or a
+  function with `public`, and the qualifier is stripped. One migration puts a
+  trigger on `__diesel_schema_migrations`, Diesel's bookkeeping table. The CLI
+  creates that table, not a migration. So a stand-in is created before the
+  migrations run and dropped once they have run, the way harbor's is.
+  Twenty-two migrations turn a table's indexes off around a bulk update. They
+  find the table with `SELECT oid FROM pg_class WHERE relname = '<table>'` and
+  name no schema. Upstream Lemmy owns its database, but here the samples before
+  it are still there, and `comment` alone matches several tables. So those
   lookups are scoped to the `lemmy` schema. The one `relname LIKE` inside a
   function body is left alone.
-- **lobehub**: the schema ships as Drizzle migrations like dokploy's and is
+- **lobehub**: the schema ships as Drizzle migrations, like dokploy's. It is
   read the same way, from `meta/_journal.json` rather than from the directory,
-  because the two do not agree here either:
-  `0065_add_document_fields.sql` is on disk but not in the journal, left
-  behind by the rename that made it `0066_add_document_fields.sql`, and the
-  two differ in the ON DELETE action of the foreign key they add, so replaying
-  the directory would take the older one. Each file is followed by a newline
-  and a semicolon since a few end without one, and the `public` qualifier
-  Drizzle writes into a foreign key's target is stripped, along with the one
-  the `to_regclass` and `::regclass` guards in a handful of hand-written
-  migrations carry, which leaves those guards reading through `search_path`.
-  Twelve other guards look a constraint up by name alone,
-  `SELECT 1 FROM pg_constraint WHERE conname = '<name>'`, and skip the
-  `ALTER TABLE` after them when they find one: upstream LobeHub owns its
-  database, but here the samples before it are still there, and a name one of
-  them already uses -- `users_email_unique` is one -- would cost this sample
-  a constraint without saying so, the way lemmy's unscoped `pg_class` lookups
-  would, so they are scoped to the sample's schema. The project was LobeChat
-  before it was renamed, and codeload names the archive's top directory after
-  the repository as it is now, so the URL and the prefix both say `lobehub`.
-  It has a loader of its own rather than sharing dokploy's
-  for two reasons. pgvector types its 11 `vector(1024)` columns and the 10
-  hnsw indexes over them, so it is installed into `public` up front the way
-  affine's is, with `public` second in the search path, since the
-  `CREATE EXTENSION IF NOT EXISTS vector` a migration writes names no schema.
-  And two migrations need ParadeDB's `pg_search`, which is not contrib and
-  which the official image does not ship, so they are skipped: one installs
-  the extension and the other writes 14 bm25 indexes with it, and nothing
-  else in the history reads them.
-- **logto**: the schema is one file per table under `packages/schemas/tables`,
-  which Logto's CLI seeds rather than replaying migrations, so the repository
-  tarball is fetched once and that directory is extracted, along with the model
-  file beside it that holds the one table the directory does not. The order the
-  files load in is the one `compareQuery` sorts them into, the ones carrying an
-  `init_order` comment first by that number and the rest by name, so the number
-  is cut out of each file and sorted on its own and a file without one is given
-  a number past every real order. `tenants` comes first at order 0, and it is
-  the table Logto keeps as a template literal in a TypeScript model rather than
-  in `tables/`, so the SQL is cut out of the literal and the one placeholder in
-  it substituted with the tag Logto's own enum gives it; every other table keys
-  back into it. A few files end without a semicolon, so each is followed by a
-  newline and one. `_after_each.sql` is emitted after every file that does not
-  say `/* no_after_each */`, with `${name}` substituted, which is what the CLI
-  does with it and where the 153 policies come from. `_before_all.sql` is not
-  run: all it does is create the role the grants in `_after_all.sql` name, and
-  roles and grants are out of pistachio's scope, so those grant and revoke
-  statements are dropped too and only the two around them are kept, the ones
-  that turn RLS on for `tenants` and write its policy. None of the files
-  creates a schema, so `logto` is created up front and `search_path` places
-  everything; the handful that qualify a table or a function with `public` have
-  the qualifier stripped, and the two functions declared
+  because the two do not agree here either. `0065_add_document_fields.sql` is
+  on disk but not in the journal. The rename that made it
+  `0066_add_document_fields.sql` left it behind. The two files differ in the ON
+  DELETE action of the foreign key that they add. So replaying the directory
+  would take the older one. A few files end without a semicolon, so each file
+  is followed by a newline and a semicolon. Drizzle writes a `public` qualifier
+  into a foreign key's target, and that qualifier is stripped. The
+  `to_regclass` and `::regclass` guards in a handful of hand-written migrations
+  carry the same qualifier, and it is stripped there too. That leaves those
+  guards reading through `search_path`. Twelve other guards look a constraint
+  up by name alone, with `SELECT 1 FROM pg_constraint WHERE conname = '<name>'`,
+  and skip the `ALTER TABLE` after them when they find one. Upstream LobeHub
+  owns its database, but here the samples before it are still there. A name
+  that one of them already uses -- `users_email_unique` is one -- would cost
+  this sample a constraint without saying so, the way lemmy's unscoped
+  `pg_class` lookups would. So those guards are scoped to the sample's schema.
+  The project was LobeChat before it was renamed, but codeload names the
+  archive's top directory after the repository as it is now. So the URL and the
+  prefix both say `lobehub`. The sample has a loader of its own rather than
+  sharing dokploy's, for two reasons. First, pgvector types its 11
+  `vector(1024)` columns and the 10 hnsw indexes over them. So pgvector is
+  installed into `public` up front, the way affine's is, with `public` second
+  in the search path, because the `CREATE EXTENSION IF NOT EXISTS vector` that
+  a migration writes names no schema. Second, two migrations need ParadeDB's
+  `pg_search`, which is not contrib and which the official image does not ship.
+  So those two migrations are skipped. One installs the extension, and the
+  other writes 14 bm25 indexes with it. Nothing else in the history reads them.
+- **logto**: the schema is one file per table under `packages/schemas/tables`.
+  Logto's CLI seeds those files rather than replaying migrations. So the
+  repository tarball is fetched once, and that directory is extracted, along
+  with the model file beside it. That model file holds the one table that the
+  directory does not. The files load in the order that `compareQuery` sorts
+  them into: the files that carry an `init_order` comment come first, by that
+  number, and the rest follow by name. So the number is cut out of each file
+  and sorted on its own, and a file without a number is given a number past
+  every real order. `tenants` comes first at order 0. It is the table that
+  Logto keeps as a template literal in a TypeScript model rather than in
+  `tables/`. So the SQL is cut out of the literal, and the one placeholder in
+  it is substituted with the tag that Logto's own enum gives it. Every other
+  table keys back into `tenants`. A few files end without a semicolon, so each
+  file is followed by a newline and a semicolon. `_after_each.sql` is emitted
+  after every file that does not say `/* no_after_each */`, with `${name}`
+  substituted. That is what the CLI does with it, and that is where the 153
+  policies come from. `_before_all.sql` is not run. All it does is create the
+  role that the grants in `_after_all.sql` name, and roles and grants are out
+  of pistachio's scope. So those grant and revoke statements are dropped too.
+  Only the two statements around them are kept: the ones that turn RLS on for
+  `tenants` and write its policy. None of the files creates a schema. So
+  `logto` is created up front, and `search_path` places everything. The
+  handful of files that qualify a table or a function with `public` have the
+  qualifier stripped. The two functions that are declared
   `set search_path = public` are pointed at the sample's schema, which is the
-  schema Logto means by it.
-- **marquez**: the schema ships as Flyway migrations, 81 versioned files and 3
-  repeatable ones in one directory, which the repository tarball is fetched
-  once for. Flyway applies the versioned files in version order rather than
-  name order, since V10 comes after V9 and V17.1 sits between V17 and V18, so
-  the version is cut out of each name and sorted on its own; the repeatable
-  files, the ones named `R__`, follow in name order, where Flyway runs them.
-  A few end without a semicolon, so each is followed by a newline and one.
-  Marquez also ships seven Java migrations that Flyway runs in the same
-  sequence: six backfill rows and the seventh creates facet views, so the
-  sample is checked without those views, the way musicbrainz is checked without
-  the triggers its file list leaves out.
-- **mattermost**: the schema ships as golang-migrate migrations, 227 `.up.sql`
-  files replayed in name order. The repository tarball is fetched once and only
-  the migrations directory is extracted, since fetching 227 files one at a time
-  is slow. None of the files names a schema, and the guards they write against
-  `information_schema` all say `current_schema()`, so `mattermost` is created up
-  front and `search_path` places everything. Eight of the files end without a
-  semicolon, so each is followed by a newline and one.
+  schema that Logto means by it.
+- **marquez**: the schema ships as Flyway migrations: 81 versioned files and 3
+  repeatable files in one directory. The repository tarball is fetched once for
+  that directory. Flyway applies the versioned files in version order rather
+  than name order: V10 comes after V9, and V17.1 sits between V17 and V18. So
+  the version is cut out of each name and sorted on its own. The repeatable
+  files, the ones named `R__`, follow in name order, which is where Flyway runs
+  them. A few files end without a semicolon, so each file is followed by a
+  newline and a semicolon. Marquez also ships seven Java migrations that Flyway
+  runs in the same sequence. Six of them backfill rows, and the seventh creates
+  facet views. So the sample is checked without those views, the way
+  musicbrainz is checked without the triggers that its file list leaves out.
+- **mattermost**: the schema ships as golang-migrate migrations: 227 `.up.sql`
+  files replayed in name order. The repository tarball is fetched once, and
+  only the migrations directory is extracted, because fetching 227 files one at
+  a time is slow. None of the files names a schema, and the guards that they
+  write against `information_schema` all say `current_schema()`. So
+  `mattermost` is created up front, and `search_path` places everything. Eight
+  of the files end without a semicolon, so each of them is followed by a
+  newline and a semicolon.
 - **mediawiki**, **synapse**, **temporal**, **icingadb**, **icinga_ido**,
   **rt**, **znuny**, **ranger**, **ambari**, **ovirt**, **gitlab**,
   **ledgersmb**, **koji**, **kea**, **dolphinscheduler**, **wso2apim**,
   **icinga_director**, **openfire**, **bareos**, **opencms**, **roundcube**,
   **flowable**, **ejabberd**, **guacamole**, **dotcms**, **wso2is**,
   **nightingale**, **openolat**, **listmonk**, **dhis2**, **coder**, **nacos**,
-  **gravitino**: these
-  dumps name no schema at all, so whichever schema comes first in `search_path`
-  gets them.
-  Each is loaded into a schema of its own instead of `public`, so that
-  `make schema`, which puts every sample in one database, does not stack them on
-  top of the other public samples (mediawiki and pagila both define `actor` and
-  `category`). gitlab creates
-  `gitlab_partitions_static` and `gitlab_partitions_dynamic` itself and never
-  qualifies anything with `public`, so its 1,083 top-level tables follow
-  `search_path` into `gitlab` while its partitions stay in the two schemas it
-  named.
-- **mimiciv**: the schema ships as three files, so `create.sql` (tables),
+  **gravitino**: these dumps name no schema at all. So whichever schema comes
+  first in `search_path` gets them. Each dump is loaded into a schema of its
+  own instead of `public`. `make schema` puts every sample in one database, and
+  a schema of its own keeps the dump from stacking on top of the other public
+  samples (mediawiki and pagila both define `actor` and `category`). gitlab
+  creates `gitlab_partitions_static` and `gitlab_partitions_dynamic` itself and
+  never qualifies anything with `public`. So its 1,083 top-level tables follow
+  `search_path` into `gitlab`, while its partitions stay in the two schemas
+  that it named.
+- **mimiciv**: the schema ships as three files. So `create.sql` (tables),
   `constraint.sql` (primary and foreign keys), and `index.sql` are concatenated
   in that order.
-- **musicbrainz**: the schema ships as one file per object kind and none of them
-  create the schema, so `musicbrainz` is created up front and the files are
-  concatenated in dependency order (extensions and collation, search
+- **musicbrainz**: the schema ships as one file per object kind, and none of
+  the files creates the schema. So `musicbrainz` is created up front, and the
+  files are concatenated in dependency order (extensions and collation, search
   configuration, types, tables, functions, then keys, indexes, constraints, and
   views).
-- **omero**: a fresh database is the four files `omero db script`
-  concatenates, in that order: `psql-header.sql`, which opens the transaction
-  and declares the domains and the unit enums, `schema.sql`, the tables
-  Hibernate generates, `views.sql`, and `psql-footer.sql`, which adds the
-  indexes, the functions, and the triggers and commits. `omero db script`
-  renders the header and the footer through Python's `%` formatting, so every
-  literal percent sign in them is written twice and the loader undoubles them.
-  That is the whole substitution: the header's `%(TIME)s` and the rest of its
-  placeholders sit in comments, and the footer's one `@ROOTPASS@` goes into a
-  row of the `password` table rather than into the schema, so it loads as the
-  literal string. Nothing in the files names a schema or an extension, so
-  `omero` is created up front and `search_path` places everything.
+- **omero**: a fresh database is the four files that `omero db script`
+  concatenates, in this order: `psql-header.sql`, which opens the transaction
+  and declares the domains and the unit enums; `schema.sql`, which holds the
+  tables that Hibernate generates; `views.sql`; and `psql-footer.sql`, which
+  adds the indexes, the functions, and the triggers and then commits.
+  `omero db script` renders the header and the footer through Python's `%`
+  formatting. So every literal percent sign in them is written twice, and the
+  loader undoubles them. That is the whole substitution. The header's
+  `%(TIME)s` and the rest of its placeholders sit in comments. The footer's one
+  `@ROOTPASS@` goes into a row of the `password` table rather than into the
+  schema, so it loads as the literal string. Nothing in the files names a
+  schema or an extension. So `omero` is created up front, and `search_path`
+  places everything.
 - **openreplay**: the schema is one file that qualifies almost everything it
-  creates with `public`, so the qualifier is stripped the way it is for the
-  group above and `search_path` places the rest; the four schemas it names
-  itself it also creates, so the sample is checked with all five. It opens by
-  asking whether `public.tenants` is already there and quitting with `\q` when
-  it is, which is how OpenReplay refuses to re-run over an installed database.
-  That lookup is scoped to the sample's schema, the way windmill's and lemmy's
-  are: left naming `public` it asks about a schema this sample never writes to,
-  and in `make schema` it could match another sample's table and quietly load
-  nothing. The `SET client_min_messages TO NOTICE` on its second line is
-  dropped, for the same reason every loader raises the level to `warning`. It
-  installs `pg_trgm`, which its 54 gin indexes all name `gin_trgm_ops` from,
-  and `pgcrypto`. Both are contrib, so the official image has them, but the
-  file says `IF NOT EXISTS` and names no schema, so both are installed into
-  `public` up front the way penpot's `uuid-ossp` is, and `public` stays second
-  in the search path for the operator class to resolve from.
-- **penpot**: the schema ships as 165 SQL migration files in one directory,
-  which the repository tarball is fetched once for, along with the
+  creates with `public`. So the qualifier is stripped, the way it is for the
+  group above, and `search_path` places the rest. The file also creates the
+  four schemas that it names itself, so the sample is checked with all five.
+  The file opens by asking whether `public.tenants` is already there and
+  quitting with `\q` when it is. That is how OpenReplay refuses to re-run over
+  an installed database. That lookup is scoped to the sample's schema, the way
+  windmill's and lemmy's are. Left naming `public`, it would ask about a schema
+  that this sample never writes to. In `make schema`, it could match another
+  sample's table and quietly load nothing. The `SET client_min_messages TO
+  NOTICE` on the file's second line is dropped, for the same reason that every
+  loader raises the level to `warning`. The file installs `pg_trgm`, from
+  which its 54 gin indexes all name `gin_trgm_ops`, and `pgcrypto`. Both are
+  contrib, so the official image has them. But the file says `IF NOT EXISTS`
+  and names no schema. So both are installed into `public` up front, the way
+  penpot's `uuid-ossp` is, and `public` stays second in the search path so
+  that the operator class resolves from it.
+- **penpot**: the schema ships as 165 SQL migration files in one directory. The
+  repository tarball is fetched once for that directory, along with the
   `migrations.clj` beside it. That file, not the directory listing, says which
-  files to replay and in which order, and the two do not agree: three files on
-  disk are not in the list, and replaying `XXXX-drop-obsolete-tables.sql`
-  alone would drop a table and three columns the sample is meant to carry.
-  Nor is the list in name order, since six files share their number with
-  another and are listed the other way round. It names each file as a resource
-  path under `app/`, which the extracted directory is the tail of, so that
-  prefix is cut. Two files end without a trailing newline, so each is followed
-  by a newline and a semicolon. Penpot's two Clojure migrations run in the same
-  sequence and both rewrite rows rather than schema, so the sample is checked
-  without them, the way marquez is checked without Flyway's Java migrations.
-  The first migration installs `uuid-ossp`, which is contrib, but it says
-  `IF NOT EXISTS` and names no schema, so it is installed into `public` up
-  front and `public` stays second in the search path for the one column default
-  that still calls `uuid_generate_v4` to resolve from.
-- **ranger**: the dump drops every object it is about to create with
-  `IF EXISTS` and commits outside a transaction, which adds a warning per
-  statement, so `client_min_messages` is raised from `warning` to `error` for
-  the load, the one sample that moves it at all.
-- **shenyu**: the schema ships as one file that loads like the group above but
-  qualifies every name in it with `public`, the sequences and the `DEFAULT
-  nextval` that reads them included, so the qualifier is stripped the way
-  sample-db-prisma strips it. That is not only about where the objects land:
-  the file opens each table with `DROP TABLE IF EXISTS "public"."<name>"`, and
-  in `make schema`, where every sample shares one database, several of those
-  names belong to another sample.
+  files to replay and in which order. The two do not agree. Three files on disk
+  are not in the list, and replaying `XXXX-drop-obsolete-tables.sql` alone
+  would drop a table and three columns that the sample is meant to carry. The
+  list is not in name order either, because six files share their number with
+  another file and are listed the other way round. The list names each file as
+  a resource path under `app/`. The extracted directory is the tail of that
+  path, so the prefix is cut. Two files end without a trailing newline, so each
+  of them is followed by a newline and a semicolon. Penpot's two Clojure
+  migrations run in the same sequence, and both rewrite rows rather than
+  schema. So the sample is checked without them, the way marquez is checked
+  without Flyway's Java migrations. The first migration installs `uuid-ossp`,
+  which is contrib. But it says `IF NOT EXISTS` and names no schema. So the
+  extension is installed into `public` up front, and `public` stays second in
+  the search path so that the one column default that still calls
+  `uuid_generate_v4` resolves from it.
+- **ranger**: the dump drops every object that it is about to create with
+  `IF EXISTS`, and it commits outside a transaction. That adds a warning per
+  statement. So `client_min_messages` is raised from `warning` to `error` for
+  the load. ranger is the one sample that moves it at all.
+- **shenyu**: the schema ships as one file that loads like the group above. But
+  it qualifies every name in it with `public`, including the sequences and the
+  `DEFAULT nextval` that reads them. So the qualifier is stripped, the way
+  sample-db-prisma strips it. That is not only about where the objects land.
+  The file opens each table with `DROP TABLE IF EXISTS "public"."<name>"`. In
+  `make schema`, where every sample shares one database, several of those names
+  belong to another sample.
 - **streampark**: the schema ships as one file that qualifies every name in it
-  with `"public"` exactly as shenyu's does, the sequences and the `DEFAULT
-  nextval` that reads them included, so it gets a loader of shenyu's shape and
-  the quoted qualifier is stripped. It opens with a `DROP TABLE IF EXISTS`
-  per table and a `DROP SEQUENCE IF EXISTS` per sequence, but only 23 of the
-  24 sequences it goes on to create, so a second load into a schema it
-  already owns stops on `streampark_t_resource_id_seq`. The check loads each
-  sample once into a schema of its own, so it never reaches that.
-- **teable**: the schema ships as a Prisma migration history like calcom's,
-  115 directories replayed in name order into a schema of its own.
-- **thingsboard**: the schema ships as one file per part, loaded in the order
-  ThingsBoard's installer runs them, with the views before the functions that
-  declare variables of their row types. `schema-ts-latest-psql.sql` is left
-  out, since only the migration from Cassandra reads it and
-  `schema-entities.sql` already creates its table.
-- **typebot**: the schema ships as a Prisma migration history like calcom's,
-  84 directories replayed through `sample-db-prisma`, so it needs no loader
-  of its own. It qualifies nothing with `public`; the only `public` in the
-  files is the `"publicId"` column three of them declare, which the sed
-  leaves alone since it strips `public.` and nothing else.
+  with `"public"`, exactly as shenyu's does, including the sequences and the
+  `DEFAULT nextval` that reads them. So it gets a loader of shenyu's shape, and
+  the quoted qualifier is stripped. The file opens with a
+  `DROP TABLE IF EXISTS` per table and a `DROP SEQUENCE IF EXISTS` per
+  sequence. But it drops only 23 of the 24 sequences that it goes on to create.
+  So a second load into a schema that it already owns stops on
+  `streampark_t_resource_id_seq`. The check loads each sample once into a
+  schema of its own, so it never reaches that.
+- **teable**: the schema ships as a Prisma migration history, like calcom's.
+  Its 115 directories are replayed in name order into a schema of its own.
+- **thingsboard**: the schema ships as one file per part. The files are loaded
+  in the order that ThingsBoard's installer runs them, with the views before
+  the functions that declare variables of their row types.
+  `schema-ts-latest-psql.sql` is left out, because only the migration from
+  Cassandra reads it and `schema-entities.sql` already creates its table.
+- **typebot**: the schema ships as a Prisma migration history, like calcom's.
+  Its 84 directories are replayed through `sample-db-prisma`, so it needs no
+  loader of its own. It qualifies nothing with `public`. The only `public` in
+  the files is the `"publicId"` column that three of them declare. The sed
+  leaves that alone, because it strips `public.` and nothing else.
 - **uyuni**: the schema is not a file but a source tree.
   `schema/spacewalk/common` holds a file per table, view, and reference data
-  load shared with the Oracle port it came from, `schema/spacewalk/postgres` the
-  PostgreSQL side -- the enums, the functions, the triggers, and one schema per
-  Oracle package it rewrote -- and beside them a `.deps` file per directory
-  saying what has to come first. `blend`, the Python tool in the tree, reads
-  those and writes one `main.sql`. The loader runs that build rather than
-  reimplementing the order, so this is the sample that needs GNU `make` and
-  `python3`; the repository tarball is fetched once and only the schema tree and
-  one file from the container image come out of it. One file in the tree is a
-  template rather than SQL, `rhnVersionInfo.pre`, which `Makefile.schema` fills
-  in with the schema name, version, and release before the build runs and which
-  blend stops without, so the loader substitutes it the same way; the values
-  only reach a row. `evr_t`, the composite type `rhnPackageEVR.evr` is declared
-  with, is not in the tree at all -- the server container's entrypoint creates
-  it, with the functions, operators, and operator class that compare two of them
-  -- so the SQL in that script runs first, taken out of the heredoc it is
-  wrapped in with the shell's escaping undone. Two of those functions call
-  `rpm.vercmp` and `deb.debvercmp`, which SUSE ships as C extensions; both
-  bodies are plpgsql, so nothing resolves them when the function is created and
-  nothing the check runs calls them. The tree names no schema, so `uyuni` is
-  created up front and `search_path` places everything; it creates twelve more
-  itself, so the sample is checked with all thirteen. Two REFERENCES qualify
-  `public`, which is where upstream installs, so the qualifier is stripped.
-  `pg_trgm`, which the two indexes that name `gin_trgm_ops` need -- the third
-  gin index is over `to_tsvector` and takes the built-in `tsvector_ops` --
-  is installed into `public` up front the way concourse's `pgcrypto` is, and the
-  tree's own `CREATE EXTENSION pg_trgm` is dropped, since it names no schema and
-  no IF NOT EXISTS and would stop the load in `make schema` once another sample
-  has installed it. The last thing the build appends walks the catalog and puts
-  a CHECK constraint on every `varchar` column, rejecting the empty string
-  Oracle would have read as NULL; it takes the tables `current_user` owns that
-  `search_path` can see, which upstream is Uyuni's alone and here would reach
-  every sample in `public`, so that lookup is scoped to the sample's schema, the
-  way lemmy's are. The 635 constraints it writes are the same either way, since
-  the only other schema in the search path is the empty `public` the runner has
-  just recreated. Every `commit` in the reference data loads warns that there is
-  no transaction in progress, so `client_min_messages` is raised to `error` as
+  load. Those are shared with the Oracle port that the schema came from.
+  `schema/spacewalk/postgres` holds the PostgreSQL side: the enums, the
+  functions, the triggers, and one schema per Oracle package that it rewrote.
+  Beside them sits a `.deps` file per directory, which says what has to come
+  first. `blend`, the Python tool in the tree, reads those files and writes one
+  `main.sql`. The loader runs that build rather than reimplementing the order.
+  So this is the sample that needs GNU `make` and `python3`. The repository
+  tarball is fetched once, and only the schema tree and one file from the
+  container image come out of it. One file in the tree is a template rather
+  than SQL: `rhnVersionInfo.pre`. `Makefile.schema` fills it in with the schema
+  name, version, and release before the build runs, and blend stops without
+  it. So the loader substitutes it the same way. The values only reach a row.
+  `evr_t`, the composite type that `rhnPackageEVR.evr` is declared with, is
+  not in the tree at all. The server container's entrypoint creates it, with
+  the functions, operators, and operator class that compare two of them. So
+  the SQL in that script runs first. It is taken out of the heredoc that wraps
+  it, with the shell's escaping undone. Two of those functions call
+  `rpm.vercmp` and `deb.debvercmp`, which SUSE ships as C extensions. Both
+  bodies are plpgsql, so nothing resolves them when the function is created,
+  and nothing that the check runs calls them. The tree names no schema. So
+  `uyuni` is created up front, and `search_path` places everything. The tree
+  creates twelve more schemas itself, so the sample is checked with all
+  thirteen. Two REFERENCES qualify `public`, which is where upstream installs,
+  so the qualifier is stripped. The two indexes that name `gin_trgm_ops` need
+  `pg_trgm`. The third gin index is over `to_tsvector` and takes the built-in
+  `tsvector_ops`. So `pg_trgm` is installed into `public` up front, the way
+  concourse's `pgcrypto` is. The tree's own `CREATE EXTENSION pg_trgm` is
+  dropped, because it names no schema and no IF NOT EXISTS, and it would stop
+  the load in `make schema` once another sample has installed the extension.
+  The last thing that the build appends walks the catalog and puts a CHECK
+  constraint on every `varchar` column. That constraint rejects the empty
+  string, which Oracle would have read as NULL. The walk takes the tables that
+  `current_user` owns and that `search_path` can see. Upstream, those are
+  Uyuni's alone. Here, they would reach every sample in `public`. So that
+  lookup is scoped to the sample's schema, the way lemmy's are. The 635
+  constraints that it writes are the same either way, because the only other
+  schema in the search path is the empty `public` that the runner has just
+  recreated. Every `commit` in the reference data loads warns that there is no
+  transaction in progress. So `client_min_messages` is raised to `error`, as
   it is for ranger.
-- **vaultwarden**: the schema ships as Diesel migrations like hyperswitch's,
-  one directory per migration holding an `up.sql`, and the repository carries
-  a set per backend. Only `postgresql` is extracted, every directory in it is
-  named for a date, so name order is the order Diesel applies them in, and
-  nothing in the files needs rewriting.
-- **windmill**: the schema ships as sqlx migrations, 661 `.up.sql` files
-  replayed in name order. The repository tarball is fetched once and only the
-  migrations directory is extracted. It names no schema, so `windmill` is
-  created up front and `search_path` places everything; the five files that
-  qualify something with `public` have the qualifier stripped. The migrations
-  create an `extensions` schema of their own and install `uuid-ossp` there,
-  which is contrib, so `extensions` stays second in the search path for the
-  column defaults that call it and is not part of the check. They also create
-  the `windmill_user` and `windmill_admin` roles, each in a `DO` block that
-  swallows the error when the role is already there; pistachio does not manage
-  roles, but 366 of Windmill's policies name one, so they have to exist for the
-  policies to load. One migration reads `_sqlx_migrations`, sqlx's own
-  bookkeeping table, so a stand-in is created and dropped around the run the way
-  harbor's is, and several functions are declared before the tables they read,
-  so `check_function_bodies` is turned off as it is for coder. Four catalog
-  lookups assume Windmill owns the database and are scoped to the sample's
-  schema: two read `information_schema.columns` with no schema filter, one of
-  them to build `queue_view` out of whichever columns it finds, which picks up
-  another sample's `queue`; two name `schemaname = 'public'` against
-  `pg_policies`, which finds nothing here, and one of those is the migration
-  that rewrites every policy reading a session GUC, so without the rewrite the
+- **vaultwarden**: the schema ships as Diesel migrations, like hyperswitch's:
+  one directory per migration, each holding an `up.sql`. The repository
+  carries a set per backend, and only `postgresql` is extracted. Every
+  directory in it is named for a date, so name order is the order that Diesel
+  applies them in. Nothing in the files needs rewriting.
+- **windmill**: the schema ships as sqlx migrations: 661 `.up.sql` files
+  replayed in name order. The repository tarball is fetched once, and only the
+  migrations directory is extracted. The files name no schema. So `windmill`
+  is created up front, and `search_path` places everything. The five files
+  that qualify something with `public` have the qualifier stripped. The
+  migrations create an `extensions` schema of their own and install
+  `uuid-ossp`, which is contrib, there. So `extensions` stays second in the
+  search path for the column defaults that call it, and it is not part of the
+  check. The migrations also create the `windmill_user` and `windmill_admin`
+  roles, each in a `DO` block that swallows the error when the role is already
+  there. pistachio does not manage roles, but 366 of Windmill's policies name
+  one. So the roles have to exist for the policies to load. One migration
+  reads `_sqlx_migrations`, sqlx's own bookkeeping table. So a stand-in is
+  created and dropped around the run, the way harbor's is. Several functions
+  are declared before the tables that they read, so `check_function_bodies` is
+  turned off, as it is for coder. Four catalog lookups assume that Windmill
+  owns the database, and they are scoped to the sample's schema. Two read
+  `information_schema.columns` with no schema filter. One of them builds
+  `queue_view` out of whichever columns it finds, which picks up another
+  sample's `queue`. The other two name `schemaname = 'public'` against
+  `pg_policies`, which finds nothing here. One of those is the migration that
+  rewrites every policy that reads a session GUC. Without the rewrite, the
   sample would carry its 366 policies with the wrong expressions in them.
 - **wso2is**: five of its index names run past the 63 character identifier
   limit, and the server truncates them.
-- **zed**: the schema is a dump of Zed's collaboration server, which its own
-  `cargo xtask db dump-schema` writes, so it is `pg_dump` output qualified
-  with `public` and loads the way the Rails group above does, minus the two
-  things they need: it has no line emptying `search_path` and no migration
-  versions at the tail, so only the qualifier is stripped. It installs
-  `pg_trgm`, which is contrib, for the two gin indexes it declares over a name
-  with `public.gin_trgm_ops`; the qualifier comes off that too and the
-  operator class resolves from `public`, which stays second in the search
-  path. Its other 76 indexes are btree.
-- **znuny**: the schema ships as two files, so `schema.postgresql.sql` (tables
+- **zed**: the schema is a dump of Zed's collaboration server, which Zed's own
+  `cargo xtask db dump-schema` writes. So it is `pg_dump` output qualified
+  with `public`, and it loads the way the Rails group above does, minus the
+  two things that they need. It has no line that empties `search_path` and no
+  migration versions at the tail. So only the qualifier is stripped. It
+  installs `pg_trgm`, which is contrib, for the two gin indexes that it
+  declares over a name with `public.gin_trgm_ops`. The qualifier comes off
+  that too, and the operator class resolves from `public`, which stays second
+  in the search path. Its other 76 indexes are btree.
+- **znuny**: the schema ships as two files. So `schema.postgresql.sql` (tables
   and indexes) and `schema-post.postgresql.sql` (foreign keys, which need every
   table to exist) are concatenated in that order.
 
-None of these touch table, column, index, constraint, view, type, or routine
-definitions, chado's nine unloadable functions, the `search_path` two of
-logto's functions are declared with, and lobehub's 14 bm25 indexes aside, so
-the round trip still covers the full schema. The bm25 indexes are the one case
-where a sample is checked against less than its upstream schema, and the
-reason is the server rather than pistachio: the extension that defines the
-access method is not one the official image can install.
+None of these rewrites touches table, column, index, constraint, view, type, or
+routine definitions, with three exceptions: chado's nine unloadable functions,
+the `search_path` that two of logto's functions are declared with, and
+lobehub's 14 bm25 indexes. So the round trip still covers the full schema. The
+bm25 indexes are the one case where a sample is checked against less than its
+upstream schema. The reason is the server rather than pistachio: the official
+image cannot install the extension that defines the access method.
 
 ## Check-time flags
 
 The last field of a `SAMPLES` record holds extra flags for the `pista plan`
 step. No sample uses it today. gitlab used `--assume-validated` while `pista
 dump` wrote every CHECK constraint inline in `CREATE TABLE`, where `NOT VALID`
-cannot be spelled; dump now writes such a check as its own `ALTER TABLE`, and
-gitlab's 68 `NOT VALID` constraints round-trip without the flag.
+cannot be spelled. `pista dump` now writes such a check as its own
+`ALTER TABLE`. So gitlab's 68 `NOT VALID` constraints round-trip without the
+flag.
 
 ## Adding a sample
 
@@ -1472,14 +1522,14 @@ gitlab's 68 `NOT VALID` constraints round-trip without the flag.
 2. Reuse a loader target if the source fits one (`sample-db` for the Neon
    collection, `sample-db-tar` for a tarball, `sample-db-url` for a plain SQL
    URL, `sample-db-url-schema` for a plain SQL URL that names no schema and
-   should not land in `public`). Otherwise add a target, and comment why the
+   should not land in `public`). Otherwise, add a target and comment why the
    plain pipe does not work.
 3. If the source is on GitHub, put a commit SHA in the URL, not a branch name.
 4. Run `make test-samples SAMPLE=<name>` and confirm the new sample reports
    `PASS`.
 5. Leave `CHANGELOG.md` alone. A sample is test-only, and nothing about it
-   reaches someone using pista.
+   reaches someone who uses pista.
 
-A `DRIFT` result is the interesting outcome: it means pistachio reads or writes
-that schema incorrectly. Fix the catalog reader, the parser, or the diff before
-adding the sample, rather than trimming the schema to make it pass.
+A `DRIFT` result is the interesting outcome. It means that pistachio reads or
+writes that schema incorrectly. Fix the catalog reader, the parser, or the diff
+before adding the sample. Do not trim the schema to make it pass.
