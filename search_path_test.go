@@ -191,3 +191,30 @@ CREATE VIEW `+model.Ident(role)+`.active_users AS SELECT id FROM `+model.Ident(r
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "FROM users")
 }
+
+// The catalog writes the base type without its schema when the schema is on
+// the search path. The plan must still match it to the file, which names the
+// schema, when the schema name needs quoting.
+func TestPlan_SearchPathDomainBaseTypeQuotedSchema(t *testing.T) {
+	ctx := context.Background()
+	desired := `
+CREATE TYPE "App".mood AS ENUM ('ok', 'ng');
+CREATE DOMAIN "App".good_mood AS "App".mood;
+`
+	connString := setupSchemaDB(t, ctx, `"App"`, desired)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(desired), 0o600))
+
+	searchPath := `"App"`
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"App"},
+		SearchPath: &searchPath,
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Empty(t, got.SQL)
+}
