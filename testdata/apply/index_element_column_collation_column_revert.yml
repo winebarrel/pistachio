@@ -1,0 +1,18 @@
+# The column leaves "C" and the index keeps it. "C" is no longer the column's
+# own collation, so the index is rebuilt with the clause.
+init: |
+  CREATE TABLE public.users (
+      email text COLLATE "C"
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email);
+desired: |
+  CREATE TABLE public.users (
+      email text
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      email text
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");

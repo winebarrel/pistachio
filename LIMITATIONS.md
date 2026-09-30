@@ -1145,10 +1145,12 @@ The diff does not thread that information, and an expression element has no
 column type to look it up by. Matching the name against the classes that are
 a default for some type answers a different question. `bpchar_ops` on a `text`
 column is legal and is not that column's default, but it would fold away. The
-collation needs the column's own collation. Only `COLLATE "default"` on an
-index column of type `text`, `varchar` or `char`, or an array of one of them,
-with no collation of its own, is folded. Any other collation that is written
-out still drifts. That includes a collation on a column of another type, on an
+collation needs the column's own collation. Two cases are folded: the collation
+that the column declares with `COLLATE`, and `COLLATE "default"` on an index
+column of type `text`, `varchar` or `char`, or an array of one of them, with
+no collation of its own. Any other collation that is written out still drifts.
+That includes the collation that a column takes from its type, such as `"C"`
+on a `name` column or on a domain that declares it, and a collation on an
 expression element, on a materialized view's index, or in an exclusion
 constraint.
 

@@ -1,0 +1,15 @@
+# A collation other than the column's is a real choice, so changing the index
+# to it rebuilds the index.
+init: |
+  CREATE TABLE public.users (
+      email text COLLATE "C" NOT NULL
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+desired: |
+  CREATE TABLE public.users (
+      email text COLLATE "C" NOT NULL
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "POSIX");
+plan: |
+  DROP INDEX public.users_email_idx;
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "POSIX");
