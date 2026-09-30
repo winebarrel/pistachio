@@ -1,0 +1,21 @@
+# The catalog leaves out an index column's collation when it is the column's
+# own. Writing it out is not a change.
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text COLLATE "C" NOT NULL,
+      name text COLLATE "C" NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+  CREATE INDEX users_name_email_idx ON public.users USING btree (name COLLATE pg_catalog."C" DESC, email);
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email text COLLATE "C" NOT NULL,
+      name text COLLATE "C" NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+  CREATE INDEX users_name_email_idx ON public.users USING btree (name COLLATE pg_catalog."C" DESC, email);
+plan: ""

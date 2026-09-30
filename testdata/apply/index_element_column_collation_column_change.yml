@@ -1,0 +1,21 @@
+# The column moves to "C" and the index is written with COLLATE "C". Changing
+# the column's type rebuilds the index with the new collation, so no statement
+# for the index runs.
+init: |
+  CREATE TABLE public.users (
+      email text
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email);
+desired: |
+  CREATE TABLE public.users (
+      email text COLLATE "C"
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email COLLATE "C");
+applied_sql: |
+  ALTER TABLE public.users ALTER COLUMN email SET DATA TYPE text COLLATE "C";
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      email text COLLATE pg_catalog."C"
+  );
+  CREATE INDEX users_email_idx ON public.users USING btree (email);

@@ -2123,10 +2123,10 @@ func normalizeIndexStmt(is *pg_query.IndexStmt) {
 // tradeoff stripFuncSchema does.
 //
 // Which class and which collation the element names is left alone. PostgreSQL
-// omits the class when it is the default for the column's type, and the
-// collation when it is the column's own, so a file that writes either out
-// still drifts; telling that from a real change means a lookup the diff does
-// not thread. LIMITATIONS.md covers it.
+// omits the class when it is the default for the column's type, so a file that
+// writes it out still drifts; telling that from a real change means a lookup
+// the diff does not thread. LIMITATIONS.md covers it. The collation is handled
+// by dropColumnCollation, which needs the table's columns.
 func normalizeIndexElem(ie *pg_query.IndexElem) {
 	if ie.Ordering == pg_query.SortByDir_SORTBY_ASC {
 		ie.Ordering = pg_query.SortByDir_SORTBY_DEFAULT
@@ -2185,12 +2185,12 @@ func normalizeStorageParams(options []*pg_query.Node) {
 	})
 }
 
-// dropDefaultCollation removes COLLATE "default" from each desired element on
-// a column of the default collation. pg_get_indexdef omits an element's
-// collation when it matches the column's, so such an index reads back without
-// it. On a column of another collation the clause is a real choice and stays.
-// An expression element has no column and is left alone.
-func dropDefaultCollation(is *pg_query.IndexStmt, columns *orderedmap.Map[string, *model.Column]) {
+// dropColumnCollation removes the COLLATE clause from each desired element when
+// the clause names the column's own collation. That is the collation the
+// column declares, or "default" on a column of the default collation.
+// pg_get_indexdef leaves such a clause out. Any other collation is a real
+// choice and stays. An expression element has no column and is left alone.
+func dropColumnCollation(is *pg_query.IndexStmt, columns *orderedmap.Map[string, *model.Column]) {
 	if columns == nil {
 		return
 	}
@@ -2199,13 +2199,25 @@ func dropDefaultCollation(is *pg_query.IndexStmt, columns *orderedmap.Map[string
 		if ie == nil || ie.Name == "" || len(ie.Collation) == 0 {
 			continue
 		}
-		if !isDefaultCollation(ie.Collation) {
+		col, ok := columns.GetOk(ie.Name)
+		if !ok {
 			continue
 		}
-		if col, ok := columns.GetOk(ie.Name); ok && hasDefaultCollation(col) {
+		if isDefaultCollation(ie.Collation) && hasDefaultCollation(col) ||
+			col.Collation != nil && equalCollation(col.Collation, new(collationName(ie.Collation))) {
 			ie.Collation = nil
 		}
 	}
+}
+
+// collationName writes a COLLATE clause's name in the form a column's
+// collation is stored in, so that equalCollation can compare them.
+func collationName(name []*pg_query.Node) string {
+	parts := make([]string, len(name))
+	for i, n := range name {
+		parts[i] = model.Ident(n.GetString_().GetSval())
+	}
+	return strings.Join(parts, ".")
 }
 
 // defaultCollatedTypes are the built-in types whose own collation is the
@@ -2273,7 +2285,7 @@ func alignIndexCasts(desired, current *pg_query.IndexStmt) {
 // the desired side is a bare numeric A_Const); same pipeline as
 // equalConstraintDef.
 //
-// columns are the table's, which dropDefaultCollation needs. nil columns fold
+// columns are the table's, which dropColumnCollation needs. nil columns fold
 // nothing.
 func equalIndexDef(current, desired string, columns *orderedmap.Map[string, *model.Column]) bool {
 	if current == desired {
@@ -2284,7 +2296,7 @@ func equalIndexDef(current, desired string, columns *orderedmap.Map[string, *mod
 	if parseErrCur != nil || parseErrDes != nil {
 		return false
 	}
-	dropDefaultCollation(desIS, columns)
+	dropColumnCollation(desIS, columns)
 	normalizeIndexStmt(curIS)
 	normalizeIndexStmt(desIS)
 	alignIndexCasts(desIS, curIS)
