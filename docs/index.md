@@ -70,7 +70,7 @@ Download the latest binary from [Releases](https://github.com/winebarrel/pistach
 |---------|--------------|
 | macOS   | amd64, arm64 |
 | Linux   | amd64, arm64 |
-| Windows | amd64        |
+| Windows | amd64, arm64 |
 
 
 

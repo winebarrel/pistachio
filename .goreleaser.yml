@@ -56,6 +56,14 @@ builds:
       - CXX=x86_64-w64-mingw32-g++
     goos: [windows]
     goarch: [amd64]
+  - <<: *build
+    id: windows-arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=/llvm-mingw/bin/aarch64-w64-mingw32-gcc
+      - CXX=/llvm-mingw/bin/aarch64-w64-mingw32-g++
+    goos: [windows]
+    goarch: [arm64]
 archives:
   - formats: [tar.gz]
     format_overrides:
