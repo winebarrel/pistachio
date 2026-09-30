@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.72.1] - 2026-09-30
 
 * A routine whose body ends in `$` is now written in a form that parses. Before, `dump`, `plan` and `apply` wrote its body as `$$...$$$`.
 
