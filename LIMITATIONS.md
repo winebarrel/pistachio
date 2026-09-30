@@ -293,8 +293,9 @@ foreign key cases were added 2026-09-26, and the replaced dependent
 
 ## Amazon Aurora DSQL is not supported
 
-A DSQL-targeted schema never holds what DSQL cannot create. So what stands in
-the way is narrower than the feature list. The connection sends a parameter
+A schema that is written for DSQL never holds what DSQL cannot create. So the
+obstacles are fewer than DSQL's list of unsupported features suggests. The
+connection sends a parameter
 that DSQL rejects. `CREATE INDEX` carries an access method that DSQL refuses,
 and its build has to be awaited. A primary key reads back with columns that
 pistachio did not write. Several transitions have a DSQL syntax that pistachio
@@ -654,9 +655,8 @@ call half was closed later; the literal half is what remains.
 
 ## Perpetual drift on a view defined with `SELECT *`
 
-Priority: low, with the caveat that the consequence is heavier than the rest
-of the class: with the view drop allowed, every apply drops and recreates the
-view.
+Priority: low. The consequence is heavier than in the other entries of this
+kind. With the view drop allowed, every apply drops and recreates the view.
 
 A view whose desired definition uses `SELECT *` or `t.*` is re-emitted on
 every plan. `pg_get_viewdef` returns the star expanded into an explicit column
