@@ -191,3 +191,31 @@ CREATE VIEW `+model.Ident(role)+`.active_users AS SELECT id FROM `+model.Ident(r
 	require.NoError(t, err)
 	assert.Contains(t, got.String(), "FROM users")
 }
+
+// A domain over a type in its own schema reads back with the base type bare
+// when the schema is on the path. The comparison strips the schema from the
+// type the file names in full, which it has to do in the quoted form the type
+// name is written in.
+func TestPlan_SearchPathDomainBaseTypeQuotedSchema(t *testing.T) {
+	ctx := context.Background()
+	desired := `
+CREATE TYPE "App".mood AS ENUM ('ok', 'ng');
+CREATE DOMAIN "App".good_mood AS "App".mood;
+`
+	connString := setupSchemaDB(t, ctx, `"App"`, desired)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(desired), 0o600))
+
+	searchPath := `"App"`
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"App"},
+		SearchPath: &searchPath,
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	assert.Empty(t, got.SQL)
+}
