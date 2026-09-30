@@ -8,18 +8,18 @@ pistachio manages the objects below. Each section says what the parser reads fro
 | [Columns](#columns) | the column list of `CREATE TABLE` | | `column` | `table` |
 | [Constraints](#constraints) | column and table constraints, `ALTER TABLE ... ADD CONSTRAINT` | | `constraint` | `table` |
 | [Foreign keys](#foreign-keys) | `REFERENCES`, `FOREIGN KEY`, `ALTER TABLE ... ADD CONSTRAINT` | | `foreign_key` | `table` |
-| [Indexes](#indexes) | `CREATE INDEX` | | `index` | `table` |
+| [Indexes](#indexes) | `CREATE INDEX` | | `index` | `table` or `view` |
 | [Views](#views) | `CREATE VIEW`, `CREATE MATERIALIZED VIEW` | | `view` | `view` |
 | [Enum types](#enum-types) | `CREATE TYPE ... AS ENUM` | | `enum` | `enum` |
 | [Domains](#domains) | `CREATE DOMAIN`, `ALTER DOMAIN ... ADD CONSTRAINT` | | `domain` | `domain` |
 | [Composite types](#composite-types) | `CREATE TYPE ... AS (...)` | | `composite_type` | `composite_type` |
 | [Sequences](#sequences) | `CREATE SEQUENCE`, `ALTER SEQUENCE ... OWNED BY` | | `sequence` | `sequence` |
 | [Routines](#routines) | `CREATE FUNCTION`, `CREATE PROCEDURE` | `--manage-routine` | `routine` | `routine` |
-| [Triggers](#triggers) | `CREATE TRIGGER`, `ALTER TABLE ... ENABLE/DISABLE TRIGGER` | | `trigger` | `table` |
+| [Triggers](#triggers) | `CREATE TRIGGER`, `ALTER TABLE ... ENABLE/DISABLE TRIGGER` | | `trigger` | `table` or `view` |
 | [Policies](#policies-and-row-level-security) | `CREATE POLICY`, `ALTER TABLE ... ROW LEVEL SECURITY` | | `policy` | `table` |
 | [Comments](#comments) | `COMMENT ON` | | | the object's type |
 
-`--enable` and `--disable` select object types. `--enable` keeps only the named types, and `--disable` leaves them out. A column, constraint, index, trigger or policy is part of its table, so `table` covers it. A comment goes with the object it is on. See [Filtering what is managed](../guides/filtering.md#by-object-type).
+`--enable` and `--disable` select object types. `--enable` keeps only the named types, and `--disable` leaves them out. A column, constraint, index, trigger or policy goes with the table it is on, so `table` covers it. An index on a materialized view and a trigger on a view go with the view, so `view` covers them. A comment goes with the object it is on. See [Filtering what is managed](../guides/filtering.md#by-object-type).
 
 `--allow-drop` controls a pure removal: an object that the desired schema no longer contains. Without the object's type in `--allow-drop`, the plan writes the drop as a `-- skipped:` comment and nothing runs. The drop that is part of a constraint's or an index's definition change does not require `--allow-drop`. A recreate of a view, a routine or a trigger does. See [Controlling drops](../guides/drops.md).
 
