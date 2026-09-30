@@ -18,7 +18,7 @@ pista plan schema.sql
 
 After the apply the directive is skipped, since nothing carries the old name any more. Leave it in place or remove it at the next cleanup.
 
-The directive renames tables, views, enums and their values, domains, composite types and their attributes, sequences, columns, constraints, foreign keys, indexes, policies and triggers. Routines cannot be renamed. Where the directive goes for each is under [Directives](../reference/directives.md#-pistarenamed-from), and the statement each rename becomes is in the Renamed row of its kind under [Supported objects](../reference/objects.md).
+The directive renames tables, views, enums and their values, domains, composite types and their attributes, sequences, columns, constraints, foreign keys, indexes, policies and triggers. Routines cannot be renamed. Where the directive goes for each is under [Directives](../reference/directives.md#-pistarenamed-from), and the statement that each rename becomes is in the Renamed row of its kind under [Supported objects](../reference/objects.md).
 
 ## Renaming a column
 

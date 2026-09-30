@@ -1,12 +1,12 @@
 # Guides
 
-Each guide covers one task. [Commands](../reference/commands/index.md) lists every option and [Supported objects](../reference/objects.md) every object kind.
+Each guide covers one task. [Commands](../reference/commands/index.md) lists every option and [Supported objects](../reference/objects.md) lists every object kind.
 
 ## Writing the schema
 
 - [Working with multiple schemas](multiple-schemas.md): targeting a schema other than `public`, files without schema names, mapping names.
 - [Renaming objects](renaming.md): a rename instead of a drop and a create.
-- [Running arbitrary SQL](executing-sql.md): statements pistachio does not manage, run before or after the DDL.
+- [Running arbitrary SQL](executing-sql.md): statements that pistachio does not manage, run before or after the DDL.
 
 ## Running plan and apply
 

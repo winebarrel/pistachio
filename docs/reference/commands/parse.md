@@ -1,6 +1,6 @@
 # pista parse
 
-Print the objects schema SQL files declare as JSON.
+Print the objects that schema SQL files declare as JSON.
 
 ## Synopsis
 
@@ -10,7 +10,7 @@ pista parse [option...] file...
 
 ## Description
 
-`pista parse` reads the files through the parser [`pista plan`](plan.md) and [`pista apply`](apply.md) use and prints the objects they declare as JSON. A file that plans is a file that parses. No database is read, and nothing is compared.
+`pista parse` reads the files through the parser that [`pista plan`](plan.md) and [`pista apply`](apply.md) use and prints the objects that they declare as JSON. A file that plans is a file that parses. No database is read, and nothing is compared.
 
 The document has one object per managed type, keyed by qualified name, and the `-- pista:execute` statements after them. Its JSON Schema is published at [json/schema-1.2.json](../../json/schema-1.2.json). See [Parsing schema files](../../guides/parsing.md) for the shape and the fields.
 
@@ -21,11 +21,11 @@ The document has one object per managed type, keyed by qualified name, and the `
 The [general options](index.md#general-options) apply as well.
 
 `-n` *schema*, `--schemas=`*schema*
-:   Schema to qualify an unqualified name with. Only the first is used. Default: `public`. Environment: `PISTA_SCHEMAS`.
+:   The schema to qualify an unqualified name with. Only the first is used. The default is `public`. The environment variable is `PISTA_SCHEMAS`.
 
 ## Exit status
 
-0 when the document was written, 1 when a file could not be parsed, 80 on a usage error.
+The exit status is 0 when the document was written, 1 when a file could not be parsed, and 80 on a usage error.
 
 ## Environment
 

@@ -30,7 +30,7 @@ CREATE INDEX CONCURRENTLY users_email_idx ON public.users USING btree (email);
 CREATE INDEX users_name_idx ON public.users USING btree (name);
 ```
 
-The opt-in also drops the index with `DROP INDEX CONCURRENTLY`. An index the desired schema no longer holds carries no directive, so `--force-index-concurrently` is the way to drop it that way; it puts `CONCURRENTLY` on every index statement of the run.
+The opt-in also drops the index with `DROP INDEX CONCURRENTLY`. An index that the desired schema no longer holds carries no directive, so `--force-index-concurrently` is the way to drop it that way. It puts `CONCURRENTLY` on every index statement of the run.
 
 `--try-tx` runs the plan in a transaction when it can, and without one when the plan holds a `CONCURRENTLY` statement:
 
@@ -43,7 +43,7 @@ pista apply --try-tx schema.sql
 CREATE INDEX CONCURRENTLY users_email_idx ON public.users USING btree (email);
 ```
 
-Such a run is not all-or-nothing, and a `CREATE INDEX CONCURRENTLY` that fails leaves an invalid index to drop by hand. To run one plan in a transaction in spite of the opt-ins, add `--disable-index-concurrently`; the directives stay in the files for the next run.
+Such a run is not all-or-nothing, and a `CREATE INDEX CONCURRENTLY` that fails leaves an invalid index to drop by hand. To run one plan in a transaction in spite of the opt-ins, add `--disable-index-concurrently`. The directives stay in the files for the next run.
 
 ## Bounding lock waits
 

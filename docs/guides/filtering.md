@@ -1,6 +1,6 @@
 # Filtering what is managed
 
-The filters below apply to `dump`, `plan`, `apply` and `diff`. An object they leave out is out of scope on both sides: it is not dumped, not created and not dropped.
+The filters below apply to `dump`, `plan`, `apply` and `diff`. An object that they leave out is out of scope on both sides: it is not dumped, not created and not dropped.
 
 ## By name
 
@@ -25,13 +25,13 @@ pista dump --disable view
 pista plan --manage-routine --enable routine schema.sql
 ```
 
-A type filter can leave out an object another depends on, an enum a table column uses for one, so it suits `dump`, `plan` and `diff` better than `apply`. `routine` narrows what `--manage-routine` turned on; it does not turn routines on by itself.
+A type filter can leave out an object that another depends on, an enum that a table column uses for one, so it suits `dump`, `plan` and `diff` better than `apply`. `routine` narrows what `--manage-routine` turned on. It does not turn routines on by itself.
 
 Every filter has an environment variable, `PISTA_INCLUDE`, `PISTA_EXCLUDE`, `PISTA_ENABLE` and `PISTA_DISABLE`. A flag replaces the variable rather than adding to it. See [Environment variables](../reference/environment.md).
 
 ## Ignoring one object
 
-The `-- pista:ignore` directive leaves one declared object unmanaged, for a table another tool owns or one that drifts on purpose:
+The `-- pista:ignore` directive leaves one declared object unmanaged, for a table that another tool owns or one that drifts on purpose:
 
 ```sql
 -- pista:ignore
@@ -41,11 +41,11 @@ CREATE TABLE public.legacy (
 );
 ```
 
-The object is neither created, altered nor dropped, and the plan lists it under `-- ignored:`. It is the in-file form of `--exclude` for one object, and the way to keep an existing object a plan would otherwise drop. See [Directives](../reference/directives.md#-pistaignore).
+The object is neither created, altered nor dropped, and the plan lists it under `-- ignored:`. It is the in-file form of `--exclude` for one object, and the way to keep an existing object that a plan would otherwise drop. See [Directives](../reference/directives.md#-pistaignore).
 
 ## Skipping partition children
 
-`--skip-partition-child` manages a partitioned table without its partitions. `dump` writes the parent alone, and `plan` / `apply` neither create a partition the schema file declares nor drop one the database holds. Environment: `PISTA_SKIP_PARTITION_CHILD`.
+`--skip-partition-child` manages a partitioned table without its partitions. `dump` writes the parent alone, and `plan` / `apply` neither create a partition that the schema file declares nor drop one that the database holds. The environment variable is `PISTA_SKIP_PARTITION_CHILD`.
 
 ```bash
 pista plan --skip-partition-child schema.sql

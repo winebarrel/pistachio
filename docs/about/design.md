@@ -6,10 +6,10 @@
 that round trip is a bug. CI dumps and re-plans dozens of real-world schemas, and
 reloads a smaller set covering one object kind each into an empty database to
 compare it against the original with `pg_dump`. The second check is what
-catches something the dump drops when the plan overlooks it too.
+catches something that the dump drops when the plan overlooks it too.
 
 Drift that appears only with a desired schema written some other way is lower
-priority. Writing the schema the way `dump` does avoids it. [Known
+priority. Writing the schema in the form that `dump` writes avoids it. [Known
 limitations](limitations.md) marks those entries `Priority: low` and says what
 the workaround is.
 
@@ -18,10 +18,10 @@ the workaround is.
 `CREATE EXTENSION`, `CREATE ROLE` and `GRANT` are out of scope. They sit at a
 different privilege layer than a schema: the role that runs a migration is
 usually not the role that owns the cluster, and a grant often belongs to the
-same place the database itself is provisioned. Manage them where the rest of
-the infrastructure is managed, Terraform for example.
+same place where the database itself is provisioned. Manage them where the rest
+of the infrastructure is managed, Terraform for example.
 
-pistachio parses only the statements it manages. It drops anything else in a
+pistachio parses only the statements that it manages. It drops anything else in a
 schema file and prints an `ignored unsupported statement:` warning for each
 one, so nothing is lost silently. To keep such a statement in the file and run
 it during `apply`, mark it with
@@ -42,5 +42,5 @@ expensive to get wrong:
 ## Rare inputs
 
 A rare input is not worth an implementation that is hard to follow. Where a
-corner case is left open it is written down in [Known
+corner case is left open, it is written down in [Known
 limitations](limitations.md), with what the fix would look like.

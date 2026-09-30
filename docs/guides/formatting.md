@@ -1,6 +1,6 @@
 # Formatting schema files
 
-`pista fmt` lays out schema SQL files. It rewrites each file in place and prints the names of the ones it changed.
+`pista fmt` lays out schema SQL files. It rewrites each file in place and prints the names of the ones that it changed.
 
 ```bash
 pista fmt schema/*.sql
@@ -39,7 +39,7 @@ create table public.items (
 );
 ```
 
-The definition list is broken up, the commas move to the end of their lines, the quotes the identifiers do not need are gone, and the spaces inside the parentheses and the array brackets are closed up. The lower-case keywords stay lower-case.
+The definition list is broken up, the commas move to the end of their lines, the quotes that the identifiers do not need are gone, and the spaces inside the parentheses and the array brackets are closed up. The lower-case keywords stay lower-case.
 
 
 ## What it changes
@@ -76,13 +76,13 @@ ALTER TABLE public.items
   );
 ```
 
-The `ADD CONSTRAINT` line is outside the parentheses, so it keeps the two spaces it was written with, and the body hangs off it.
+The `ADD CONSTRAINT` line is outside the parentheses, so it keeps the two spaces that it was written with, and the body hangs off it.
 
 Consecutive spaces collapse to one, and the space before a comma or a semicolon, just inside a parenthesis, around an array subscript, and around a cast is closed up. Consecutive blank lines collapse to one, trailing whitespace goes, and a statement that shares a line with another moves to its own line. A statement starts at the first column, and so does a comment on a line of its own outside a statement.
 
 A quoted identifier that reads the same without its quotes loses them, so `"items"` becomes `items` while `"Value"`, `"select"` and `"left"` keep theirs.
 
-Everything else stays where it was written. A statement written on one line stays on one line, and one broken across several keeps its breaks; the definition lists above are the only thing `fmt` breaks up on its own. The body of a view is left alone, since PostgreSQL writes it back with an indentation of its own, and so is the body of a routine, which is a single quoted token. A statement pistachio does not manage, a `GRANT` for example, is formatted like any other.
+Everything else stays where it was written. A statement written on one line stays on one line, and one broken across several keeps its breaks. The definition lists above are the only thing that `fmt` breaks up on its own. The body of a view is left alone, since PostgreSQL writes it back with an indentation of its own, and so is the body of a routine, which is a single quoted token. A statement pistachio does not manage, a `GRANT` for example, is formatted like any other.
 
 ```sql
 CREATE OR REPLACE VIEW public.recent AS
@@ -95,7 +95,7 @@ CREATE FUNCTION public.norm(e text) RETURNS text
     AS $$   SELECT lower(e)   $$;
 ```
 
-The view keeps the layout PostgreSQL gave its body. The routine's clauses are indented, and the spacing inside `$$ ... $$` is left as it is.
+The view keeps the layout that PostgreSQL gave its body. The routine's clauses are indented, and the spacing inside `$$ ... $$` is left as it is.
 
 Line endings are written as newlines, so a file that uses CRLF comes back with LF.
 
@@ -111,6 +111,6 @@ A file that cannot be parsed is reported and left as it was. The other files on 
 
 ## The relation to dump
 
-`pista dump` writes its output through the same formatter, so a dump needs no formatting and `fmt` leaves it untouched. Pass `--no-format` to `dump` for the layout the model renders on its own.
+`pista dump` writes its output through the same formatter, so a dump needs no formatting and `fmt` leaves it untouched. Pass `--no-format` to `dump` for the layout that the model renders on its own.
 
 Running `fmt` over a hand-written file does not make it identical to a dump of the same schema. It changes the layout, not the spelling of the names or the expressions. Use `dump` for the canonical form.

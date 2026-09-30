@@ -8,15 +8,15 @@ social:
 
 # ![pistachio](assets/logo.webp)
 
-Declarative schema management tool for PostgreSQL with a Terraform-like
-plan/apply workflow, built on
+pistachio is a declarative schema management tool for PostgreSQL with a
+Terraform-like plan/apply workflow, built on
 [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired
-schema in SQL; pistachio generates the DDL diff.
+schema in SQL, and pistachio generates the DDL diff.
 
 !!! tip "Try it in your browser"
     The **[pistachio playground](https://pistachio-demo.winebarrel.workers.dev)**
-    runs `pista diff` on two schemas you edit in the page and shows the DDL it
-    generates. Nothing to install.
+    runs `pista diff` on two schemas that you edit in the page and shows the DDL
+    that it generates. There is nothing to install.
 
 ![pistachio workflow](workflow.svg)
 
@@ -110,7 +110,7 @@ pista plan --allow-drop all schema.sql # review the diff (with drops)
 pista apply schema.sql                 # apply it
 ```
 
-Or split the schema across multiple files:
+Alternatively, split the schema across multiple files:
 
 ```bash
 pista dump --split ./schema/       # dump per table/view/enum/domain/composite type/sequence
@@ -121,14 +121,14 @@ pista apply ./schema/*.sql         # apply it
 
 ## Where to go next
 
-- [Getting started](getting-started.md) walks through dump, edit, plan, apply.
-- [Guides](guides/index.md) cover one task each: renaming, drops, transactions, multiple schemas.
+- [Getting started](getting-started.md) walks through dump, edit, plan and apply.
+- [Guides](guides/index.md) cover one task each: renaming, drops, transactions and multiple schemas.
 - [Commands](reference/commands/index.md) has a page per command with every option.
 - [Design and scope](about/design.md) says what pistachio does not manage, and
   why.
 
 ## Related projects
 
-- [ridgepole](https://github.com/ridgepole/ridgepole): DB schema
-  management using a Rails DSL.
-- [qrev](https://github.com/winebarrel/qrev): SQL execution history management tool.
+- [ridgepole](https://github.com/ridgepole/ridgepole) is a DB schema
+  management tool using a Rails DSL.
+- [qrev](https://github.com/winebarrel/qrev) is a SQL execution history management tool.

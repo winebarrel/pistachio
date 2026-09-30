@@ -21,11 +21,11 @@ Only the whitespace between the tokens moves, and a quoted identifier loses its 
 The [general options](index.md#general-options) apply as well.
 
 `--check`
-:   Write nothing. Report the files that are not formatted and exit with 2 when there are any. Environment: `PISTA_FMT_CHECK`.
+:   Write nothing. Report the files that are not formatted and exit with 2 when there are any. The environment variable is `PISTA_FMT_CHECK`.
 
 ## Exit status
 
-0 when every file was formatted, or with `--check` when every file was already formatted; 1 when a file could not be parsed or written; 80 on a usage error. With `--check`, 2 when a file is not formatted.
+The exit status is 0 when every file was formatted, or, with `--check`, when every file was already formatted. It is 1 when a file could not be parsed or written, and 80 on a usage error. With `--check`, it is 2 when a file is not formatted.
 
 ## Environment
 

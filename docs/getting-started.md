@@ -1,6 +1,6 @@
 # Getting started
 
-This page takes a database from its first dump to a first applied change. It needs a PostgreSQL server and pistachio; see [Installation](index.md#installation).
+This page takes a database from its first dump to a first applied change. It needs a PostgreSQL server and pistachio. See [Installation](index.md#installation).
 
 ## Connect
 
@@ -19,7 +19,7 @@ Options can also come from a YAML file. See [Configuration](reference/configurat
 
 ## Dump the schema
 
-`dump` writes the current schema as SQL. That file is the starting point: fed back to `plan`, it plans no changes.
+`dump` writes the current schema as SQL. That file is the starting point. When it is fed back to `plan`, it plans no changes.
 
 ```bash
 pista dump > schema.sql
@@ -31,7 +31,7 @@ Every command targets the `public` schema unless `-n` names another. See [Workin
 
 ## Edit
 
-Change the file the way the schema should look. A new column:
+Change the file so that it declares the schema as it should look. This example adds a new column:
 
 ```sql
 CREATE TABLE public.users (
@@ -56,7 +56,7 @@ pista plan schema.sql
 ALTER TABLE public.users ADD COLUMN email text;
 ```
 
-A drop is not planned unless `--allow-drop` names its type; it is written as a `-- skipped:` comment. See [Controlling drops](guides/drops.md).
+A drop is not planned unless `--allow-drop` names its type. It is written as a `-- skipped:` comment. See [Controlling drops](guides/drops.md).
 
 ## Apply
 
@@ -73,7 +73,7 @@ ALTER TABLE public.users ADD COLUMN email text;
 -- Apply finished in 12ms
 ```
 
-A second `plan` now prints `-- No changes`. From here on, edit the file, plan, apply. Keep the file in version control next to the application.
+A second `plan` now prints `-- No changes`. From here on, edit the file, run `plan`, and run `apply`. Keep the file in version control next to the application.
 
 ## Next
 

@@ -15,7 +15,7 @@ CREATE INDEX events_at_idx ON public.events USING btree (at);
 ALTER TABLE public.orders ALTER COLUMN note SET DEFAULT '';
 ```
 
-Also available as `$PISTA_EXPLAIN`, and as `$PISTA_DUMP_EXPLAIN` for `dump`. The comments are SQL comments, so the output still pipes into `psql`.
+The option is also available as `$PISTA_EXPLAIN`, and as `$PISTA_DUMP_EXPLAIN` for `dump`. The comments are SQL comments, so the output still pipes into `psql`.
 
 
 ## What the comment says
@@ -24,11 +24,11 @@ The first word is what the statement does to the rows that already exist. `rewri
 
 The phrase after it is what the statement's lock stops while it runs. `blocks reads and writes` is ACCESS EXCLUSIVE, where even a `SELECT` waits. `blocks writes` is SHARE or SHARE ROW EXCLUSIVE. `blocks nothing` is SHARE UPDATE EXCLUSIVE or weaker, where only another DDL on the same table waits.
 
-Then come the tables the statement touches, each with its size. The rows and bytes are the estimates VACUUM and ANALYZE last wrote to `pg_class`, the TOAST relation's pages included, so the comment costs no read of the table itself. A table neither has visited reads as `not analyzed`.
+Then come the tables that the statement touches, each with its size. The rows and bytes are the estimates that VACUUM and ANALYZE last wrote to `pg_class`, the TOAST relation's pages included, so the comment costs no read of the table itself. A table that neither has visited reads as `not analyzed`.
 
 `as of` is the date of that last VACUUM or ANALYZE, autovacuum's included, so a plan says how much the numbers next to it are worth. A table written heavily since then is larger than it reads, and one loaded and never analyzed since reads as a year old. The date is in the local time zone, and over several tables it is the oldest of them. It is left out when the server no longer has the time, after a statistics reset or a `pg_upgrade`. `CREATE INDEX` writes the row estimate too and keeps no time of its own, so an estimate is sometimes newer than the date says.
 
-A rewrite also names how many indexes it builds again. A partitioned table shows the sum of its partitions and their number, an `INHERITS` parent its own rows plus its children's. A foreign key names the referenced table next to the referencing one, since both are locked, and a domain change names every table with a column of the domain.
+A rewrite also names how many indexes it builds again. A partitioned table shows the sum of its partitions and their number, and an `INHERITS` parent shows its own rows plus its children's. A foreign key names the referenced table next to the referencing one, since both are locked, and a domain change names every table with a column of the domain.
 
 
 ## Which statements get one
@@ -37,28 +37,28 @@ A rewrite comes from a column type change that is not a widening, from `ADD COLU
 
 A scan comes from `SET NOT NULL`, from `ADD COLUMN ... NOT NULL` without a default, from `ADD CONSTRAINT` for a check, a primary key, a unique key or a foreign key, from `VALIDATE CONSTRAINT` and from `CREATE INDEX`. The lock differs across them: a foreign key takes SHARE ROW EXCLUSIVE on both tables, `VALIDATE CONSTRAINT` and `CREATE INDEX CONCURRENTLY` take SHARE UPDATE EXCLUSIVE, a plain `CREATE INDEX` takes SHARE, and the rest take ACCESS EXCLUSIVE.
 
-`ALTER DOMAIN` scans every table with a column of the domain when it sets NOT NULL, adds a validated constraint, or validates one. `CREATE MATERIALIZED VIEW` scans the tables its query reads.
+`ALTER DOMAIN` scans every table with a column of the domain when it sets NOT NULL, adds a validated constraint, or validates one. `CREATE MATERIALIZED VIEW` scans the tables that its query reads.
 
-Everything else changes the catalog alone and takes no comment: `DROP COLUMN`, `DROP CONSTRAINT`, `DROP INDEX`, `SET DEFAULT`, `RENAME`, `COMMENT ON`, the row-level security toggles, the storage parameters, a constraint added `NOT VALID`, and a column widened from `varchar(50)` to `varchar(100)` or to `text`. So does every statement on a table the same plan creates, since that table is empty.
+Everything else changes the catalog alone and takes no comment: `DROP COLUMN`, `DROP CONSTRAINT`, `DROP INDEX`, `SET DEFAULT`, `RENAME`, `COMMENT ON`, the row-level security toggles, the storage parameters, a constraint added `NOT VALID`, and a column widened from `varchar(50)` to `varchar(100)` or to `text`. So does every statement on a table that the same plan creates, since that table is empty.
 
 
 ## What it reads
 
-The classification comes from a table in pistachio, applied to the statement it is about to print. Three things cannot be decided that way and are asked of the server: whether a column type change is a binary-coercible relabel or a conversion, one read of `pg_cast`; whether a column default calls a volatile function, one read of `pg_proc`; and the rows and bytes with the date they were written, one read of `pg_class`, with the vacuum and analyze times the server keeps in its statistics. Each is skipped when nothing in the plan needs it, so a plan that only creates and drops tables, and a plan with no statements at all, read no more than they would without the flag.
+The classification comes from a table in pistachio, applied to the statement that it is about to print. Three things cannot be decided that way and are asked of the server: whether a column type change is a binary-coercible relabel or a conversion, one read of `pg_cast`; whether a column default calls a volatile function, one read of `pg_proc`; and the rows and bytes with the date when they were written, one read of `pg_class`, with the vacuum and analyze times that the server keeps in its statistics. Each is skipped when nothing in the plan needs it, so a plan that only creates and drops tables, and a plan with no statements at all, read no more than they would without the flag.
 
 
 ## What it does not say
 
 The comment is about the statement, not the data. Whether a `SET NOT NULL` finds a NULL, or an `ADD CONSTRAINT ... UNIQUE` finds a duplicate, is between the server and the rows.
 
-It reports the lock the statement takes, not the wait to get it. An ACCESS EXCLUSIVE lock queues behind every transaction already reading the table, and everything arriving later queues behind the lock, so even a statement that changes the catalog alone can stop the table for as long as one old transaction runs. `--pre-sql "SET lock_timeout = '5s'"` bounds that wait.
+It reports the lock that the statement takes, not the wait to get it. An ACCESS EXCLUSIVE lock queues behind every transaction already reading the table, and everything arriving later queues behind the lock, so even a statement that changes the catalog alone can stop the table for as long as one old transaction runs. `--pre-sql "SET lock_timeout = '5s'"` bounds that wait.
 
-Two cases read coarser than PostgreSQL treats them. A binary-coercible type change that still changes an index's operator class, `integer` to `oid`, rebuilds that index and takes no comment. An `ALTER TABLE` on an `INHERITS` parent counts every child even for `ADD CONSTRAINT ... PRIMARY KEY` and `ADD CONSTRAINT ... FOREIGN KEY`, which do not recurse; pistachio writes foreign keys with `ONLY`, so nothing it emits reaches this.
+Two cases read coarser than PostgreSQL treats them. A binary-coercible type change that still changes an index's operator class, `integer` to `oid`, rebuilds that index and takes no comment. An `ALTER TABLE` on an `INHERITS` parent counts every child even for `ADD CONSTRAINT ... PRIMARY KEY` and `ADD CONSTRAINT ... FOREIGN KEY`, which do not recurse. Since pistachio writes foreign keys with `ONLY`, nothing that it emits reaches this.
 
 
 ## In a diff
 
-`pista diff --explain` writes the same comment without a database. A table carries the indexes a rewrite builds again, as `may be rebuilt` for `may rewrite`, and its number of partitions, but no size. A column type change and an added column whose default calls a function read `may rewrite`: `plan` asks the server whether the change is a relabel and whether the function is volatile, and `diff` has no server to ask.
+`pista diff --explain` writes the same comment without a database. A table carries the indexes that a rewrite builds again, as `may be rebuilt` for `may rewrite`, and its number of partitions, but no size. A column type change and an added column whose default calls a function read `may rewrite`: `plan` asks the server whether the change is a relabel and whether the function is volatile, and `diff` has no server to ask.
 
 ```sql
 $ pista diff --explain old.sql new.sql
@@ -84,6 +84,6 @@ PARTITION BY RANGE (at);
 CREATE INDEX events_at_idx ON ONLY public.events USING btree (at);
 ```
 
-A partitioned table sums its partitions, and an index on it sums the indexes on the partitions. A partition counts even when `-I`, `-E` or `--skip-partition-child` leaves it out of the dump, but not when it sits in a schema `-n` does not name. An `INHERITS` parent counts its own rows alone, since each child has a comment of its own.
+A partitioned table sums its partitions, and an index on it sums the indexes on the partitions. A partition counts even when `-I`, `-E` or `--skip-partition-child` leaves it out of the dump, but not when it sits in a schema that `-n` does not name. An `INHERITS` parent counts its own rows alone, since each child has a comment of its own.
 
 An index size has no date. VACUUM and ANALYZE write it together with the table's, so the table's date applies. An index that a primary key, unique or exclusion constraint owns is written inside `CREATE TABLE` and has no comment.

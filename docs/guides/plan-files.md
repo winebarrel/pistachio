@@ -11,7 +11,7 @@ pista apply-from plan.json
 
 ## The drift check
 
-`plan --out` records a hash of the schema it read. `apply-from` reads the same way and compares. When the two differ, nothing runs:
+`plan --out` records a hash of the schema that it read. `apply-from` reads the same way and compares. When the two differ, nothing runs:
 
 ```
 pista: error: the database has drifted since plan file plan.json was written: run plan again, or pass --force to apply it as it is
@@ -25,7 +25,7 @@ pista: error: the database has drifted since plan file plan.json was written: ru
 
 The hash covers what the plan compared. An object left out by `--include` or `--exclude` is not in it, and neither are the storage parameters under the default `--manage-storage-param`. A table dropped and created again with the same definition does change it, since each object's OID is part of it.
 
-An object the desired schema marks `-- pista:ignore` is out of it as well. The plan file names those objects, and `apply-from` drops them from its read before it hashes it, so something else can own such a table and change it without standing between a plan and its apply.
+An object that the desired schema marks `-- pista:ignore` is out of it as well. The plan file names those objects, and `apply-from` drops them from its read before it hashes it, so something else can own such a table and change it without standing between a plan and its apply.
 
 Data is not covered, and neither is which database the connection points at. A plan applies to another database whose schema is identical.
 
@@ -35,7 +35,7 @@ The major version of the server is recorded and compared as well. It decides wha
 
 The plan file records the options that decide what the plan read: `--schemas`, `--schema-map`, `--search-path`, `--include`, `--exclude`, `--enable`, `--disable`, `--manage-routine`, `--manage-storage-param` and `--skip-partition-child`. `apply-from` reads the database with those.
 
-It does not take them on the command line. A filter given there would narrow the read the hash is taken over and report drift that is not there.
+It does not take them on the command line. A filter given there would narrow the read that the hash is taken over and report drift that is not there.
 
 It does take the connection options and the flags that decide how the statements run: `--with-tx`, `--try-tx`, `--timing`, `--exclusive` and `--exclusive-wait`.
 
@@ -43,7 +43,7 @@ It does take the connection options and the flags that decide how the statements
 
 ## Execute directives
 
-A `-- pista:execute` check is evaluated when the plan file is written. The file holds the statements it selected, without the condition, and `apply-from` runs them.
+A `-- pista:execute` check is evaluated when the plan file is written. The file holds the statements that it selected, without the condition, and `apply-from` runs them.
 
 A check that cannot be evaluated fails `plan --out`:
 
@@ -57,6 +57,6 @@ A check that reads data can go stale. The hash does not cover data, and the stat
 
 ## The file
 
-The plan file is JSON. pista writes it and pista reads it. No schema is published for it and nothing about its shape is guaranteed beyond the version it carries; a file of another version is refused.
+The plan file is JSON. pista writes it and pista reads it. No schema is published for it and nothing about its shape is guaranteed beyond the version that it carries. A file of another version is refused.
 
-That version is raised when what the file holds or how the hash is taken changes, which includes a change to the model pistachio reads the schema into. Upgrading pista between `plan --out` and `apply-from` means planning again.
+That version is raised when what the file holds or how the hash is taken changes, which includes a change to the model that pistachio reads the schema into. Upgrading pista between `plan --out` and `apply-from` means planning again.

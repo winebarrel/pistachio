@@ -8,7 +8,7 @@ pista plan -n public,myschema schema.sql
 PISTA_SCHEMAS=myschema pista apply schema.sql
 ```
 
-Objects outside the named schemas are out of scope on both sides: they are not dumped, and not dropped.
+Objects outside the named schemas are out of scope on both sides: they are not dumped, and they are not dropped.
 
 ## Files without schema names
 
@@ -28,7 +28,7 @@ pista dump -n staging --omit-schema > schema.sql
 
 ## Mapping schema names
 
-`-m` / `--schema-map` reads one schema from the database under another name, for files that qualify their objects with a schema the database does not use. With `-m staging=public`, the files say `public` and the database holds `staging`:
+`-m` / `--schema-map` reads one schema from the database under another name, for files that qualify their objects with a schema that the database does not use. With `-m staging=public`, the files say `public` and the database holds `staging`:
 
 ```bash
 pista dump -n staging -m staging=public
@@ -36,8 +36,8 @@ pista plan -n staging -m staging=public schema.sql
 pista apply -n staging -m staging=public schema.sql
 ```
 
-The map reaches every place a schema name appears: a column's type and default, a partition's parent, a constraint, a domain's base type.
+The map reaches every place where a schema name appears: a column's type and default, a partition's parent, a constraint, a domain's base type.
 
 ## Names the catalog leaves bare
 
-The catalog reports an object reachable through `search_path` without its schema, so under the default `--search-path=public` a `dump` writes `status` for `public.status` and `plan` compares that form. `--search-path=` qualifies everything. See the [notes on `plan`](../reference/commands/plan.md#notes).
+The catalog reports an object that is reachable through `search_path` without its schema, so under the default `--search-path=public` a `dump` writes `status` for `public.status` and `plan` compares that form. `--search-path=` qualifies everything. See the [notes on `plan`](../reference/commands/plan.md#notes).

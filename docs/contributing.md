@@ -14,7 +14,7 @@ docker compose up -d pg17          # 17 only, on port 5417
 docker compose --profile all up -d # 15, 16, 17 and 18
 ```
 
-`PGPORT` selects the one the tests use, and defaults to 5415:
+`PGPORT` selects the one that the tests use, and defaults to 5415:
 
 ```bash
 make PGPORT=5417 test
@@ -22,13 +22,13 @@ make PGPORT=5417 test
 
 `make test-scenario` runs the CLI scenario tests, and `make test-fidelity`
 checks that a `pista dump` reloaded into an empty database produces the schema
-it was taken from, comparing `pg_dump` output on both sides. The latter needs a
-`pg_dump` at least as new as the server.
+that it was taken from, comparing `pg_dump` output on both sides. The latter
+needs a `pg_dump` at least as new as the server.
 
 `make test-samples` checks pista against real-world schemas downloaded from
 their upstream sources: each is loaded into a database of its own, dumped, and
 planned back, and the plan has to come out empty. `SAMPLE=lemmy,cratesio`
-narrows the run to the samples it names. The sample list, the check
+narrows the run to the samples that it names. The sample list, the check
 itself, and how to add a sample live in
 [SAMPLE-DB-TESTS.md](https://github.com/winebarrel/pistachio/blob/main/SAMPLE-DB-TESTS.md).
 
@@ -48,9 +48,9 @@ ordinary `make test` replays it from then on, so commit it with the fix.
 
 ## The JSON Schema
 
-`docs/json/schema-1.2.json` describes the JSON `pista parse` and `pista dump --json`
-write. It is
-generated from the structs rather than written by hand.
+`docs/json/schema-1.2.json` describes the JSON that `pista parse` and
+`pista dump --json` write. It is generated from the structs rather than written
+by hand.
 
 ```sh
 make json-schema

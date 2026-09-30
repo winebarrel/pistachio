@@ -1,6 +1,6 @@
 # Running arbitrary SQL
 
-Use the `-- pista:execute` directive to include SQL statements that pistachio doesn't manage declaratively (grants, extensions, etc.). These are executed after schema changes during `apply`. Functions and procedures can be managed declaratively instead; see [Routines](../reference/objects.md#routines).
+Use the `-- pista:execute` directive to include SQL statements that pistachio does not manage declaratively (grants, extensions, etc.). These are executed after schema changes during `apply`. Functions and procedures can be managed declaratively instead. See [Routines](../reference/objects.md#routines).
 
 ```sql
 -- pista:execute
@@ -24,11 +24,11 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-`plan` evaluates the check and shows the statements it selects. `apply` evaluates it again and runs the statements it selects then.
+`plan` evaluates the check and shows the statements that it selects. `apply` evaluates it again and runs the statements that it selects then.
 
 ## Check patterns
 
-`plan` leaves out the statements `apply` would skip. A common check skips when
+`plan` leaves out the statements that `apply` would skip. A common check skips when
 the object already exists:
 
 ```sql
@@ -48,7 +48,7 @@ DO $do$ BEGIN
 END $do$;
 ```
 
-When the body changes, update the tag in both places (e.g. `'v1'` -> `'v2'`); the next `apply` runs it again.
+When the body changes, update the tag in both places (e.g. `'v1'` -> `'v2'`). The next `apply` runs it again.
 
 `-- pista:execute` runs after the managed DDL. Use `-- pista:execute-first` when the managed DDL calls the function, as a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy can:
 
@@ -66,5 +66,5 @@ CREATE TABLE public.users (
 
 The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after.
 
-With `plan --out` the check is evaluated when the plan file is written, and the file holds the statements it selected. Both kinds of check therefore see the schema before the change, and a check that cannot be evaluated fails the plan instead of being left to `apply`. See [Plan files](plan-files.md).
+With `plan --out` the check is evaluated when the plan file is written, and the file holds the statements that it selected. Both kinds of check therefore see the schema before the change, and a check that cannot be evaluated fails the plan instead of being left to `apply`. See [Plan files](plan-files.md).
 
