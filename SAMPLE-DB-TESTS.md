@@ -415,8 +415,11 @@ sample covers is not lost unnoticed.
 
 Indexes:
 
-- gin, gist, hash, and brin: musicbrainz (all four), synapse, langfuse, logto,
-  uyuni.
+- gin: musicbrainz, synapse, danbooru, windmill, openreplay, langfuse, logto,
+  uyuni, hexpm, lobehub.
+- gist: musicbrainz, osm, chado, inaturalist.
+- hash: musicbrainz, langfuse, uyuni.
+- brin: musicbrainz, logto.
 - hnsw, pgvector's method: citizenlab, affine, lobehub.
 - Partial indexes: musicbrainz, synapse, lago, lemmy, windmill, penpot,
   danbooru, openreplay, lobehub.
@@ -1224,8 +1227,8 @@ flag.
 3. If the source is on GitHub, put a commit SHA in the URL, not a branch name.
 4. Run `make test-samples SAMPLE=<name>` and confirm the new sample reports
    `PASS`.
-5. If the sample brings in a shape that the list under Shapes does not name,
-   add it there, and add the sample to any entry that it also covers.
+5. Add the sample to every entry under Shapes that it covers. If it brings in
+   a shape that the list does not name, add an entry for it.
 6. Leave `CHANGELOG.md` alone. A sample is test-only, and nothing about it
    reaches someone who uses pista.
 
