@@ -113,7 +113,7 @@ A table's storage parameters, the `WITH (...)` clause, are managed only with `--
 
 Without the flag, the parameters are removed from both sides of the diff. Nothing is planned. The clause that a schema file writes is left off the `CREATE`, and `dump` does not write one.
 
-With the flag, the schema file states every parameter that the relation is to have. A change is emitted as `ALTER TABLE ... SET (...)`, with a `RESET (...)` for the parameters that the file no longer names. Neither statement rewrites the relation. A `toast.` parameter belongs to the TOAST relation. PostgreSQL creates that relation only for a table with a toastable column, and discards the setting when there is none. So on such a table, the parameter appears in the plan on every run. A partitioned table has no parameter, and a partition does not inherit the parent's.
+With the flag, the schema file states every parameter that the relation should have. A change is emitted as `ALTER TABLE ... SET (...)`, with a `RESET (...)` for the parameters that the file no longer names. Neither statement rewrites the relation. A `toast.` parameter belongs to the TOAST relation. PostgreSQL creates that relation only for a table with a toastable column, and discards the setting when there is none. So on such a table, the parameter appears in the plan on every run. A partitioned table has no parameter, and a partition does not inherit the parent's.
 
 An index's parameters are part of its definition and are managed with or without the flag. The same is true of a plain view's `WITH (...)`, which contains only `security_barrier` and `security_invoker`. See [Views](#views).
 
@@ -318,7 +318,7 @@ A `TABLESPACE` written on an index remains in its definition. The catalog never 
 
 `pg_get_indexdef` writes `ON ONLY` for every index on a partitioned table, so pistachio ignores `ONLY` when it compares two definitions. `ONLY` matters only to `CREATE INDEX`. Without it, PostgreSQL also creates an index on each partition and attaches it. The `CREATE INDEX` on a partitioned table runs after the creates and alters of every table, `DROP COLUMN` included. It runs deepest level first, so the partitions exist when it runs. See [Order of statements](#order-of-statements).
 
-An index attached to the parent's index is dropped with it. PostgreSQL rejects a `DROP INDEX` on an attached index, so pistachio never emits that statement. `CONCURRENTLY` cannot be used on a partitioned table. An index opted in there is an error at plan time.
+An index attached to the parent's index is dropped with it. PostgreSQL rejects a `DROP INDEX` on an attached index, so pistachio never emits that statement. `CONCURRENTLY` cannot be used on a partitioned table. An index on a partitioned table that opts into `CONCURRENTLY` is an error at plan time.
 
 ## Views
 
@@ -368,7 +368,7 @@ A materialized view written with `WITH NO DATA` is created with it, so its query
 | Indexes of a materialized view | They are handled as on a table. |
 | Renamed | `ALTER VIEW ... RENAME TO` or `ALTER MATERIALIZED VIEW ... RENAME TO` |
 
-pistachio uses `CREATE OR REPLACE VIEW` where PostgreSQL accepts it: when the new query keeps the output column names in order, with new ones only at the end. A change that removes, renames or reorders a column is a drop and a create instead. So is a query whose column names cannot be told from the text, such as `SELECT *`. Such a view also appears in the plan on every run. See [Known limitations](../about/limitations.md). pistachio compares only the names. So a query that changes a column's type and keeps its name is emitted as `CREATE OR REPLACE VIEW`, and fails at apply with `cannot change data type of view column`.
+pistachio uses `CREATE OR REPLACE VIEW` where PostgreSQL accepts it: when the new query keeps the output column names in order, with new ones only at the end. A change that removes, renames or reorders a column is a drop and a create instead. So is a query whose column names cannot be determined from the text, such as `SELECT *`. Such a view also appears in the plan on every run. See [Known limitations](../about/limitations.md). pistachio compares only the names. So a query that changes a column's type and keeps its name is emitted as `CREATE OR REPLACE VIEW`, and fails at apply with `cannot change data type of view column`.
 
 A recreate requires `--allow-drop view`. Without it, the plan writes the `DROP` as `-- skipped:` and no `CREATE`. A definition change includes the `WITH (...)` clause and the check option on its `CREATE`. They replace the view's options as a whole. A recreated view gets its comments and triggers again.
 
@@ -378,7 +378,7 @@ PostgreSQL refuses to drop a view that another object reads. It does not cascade
 pista: error: cannot drop public.staff: materialized view public.staff_count, view public.eng_staff depend on it
 ```
 
-Drops run deepest first, so a dependent that the same plan drops does not block. A chain of views that all change shape works as it is. So does a view whose dependent the desired schema no longer contains. Any other dependent has to be handled in a run of its own.
+Drops run deepest first, so a dependent that the same plan drops does not block. A chain of views whose columns all change is handled in one plan. So does a view whose dependent the desired schema no longer contains. Any other dependent has to be handled in a run of its own.
 
 pistachio finds dependents in the catalog, not in the schema file. A view that `--include` / `--exclude` hides, or one outside `-n`, blocks the drop just the same. So do a rule, a policy and a routine, each named the way PostgreSQL names it. A routine counts when it reads the view in a `BEGIN ATOMIC` body, or when it returns the view's row type. A routine whose body is a string literal records no dependency and does not block anything.
 
@@ -482,7 +482,7 @@ The parser reads `CREATE SEQUENCE` and `CREATE UNLOGGED SEQUENCE` with:
 - `CYCLE`
 - `OWNED BY`
 
-An option that is left out means the default that PostgreSQL gives it, not an unmanaged option. Removing `CACHE 20` from the file plans `CACHE 1`. Of `ALTER SEQUENCE`, the parser reads only `OWNED BY`. Any other option is ignored with a warning.
+An option that is left out means the default that PostgreSQL gives it, not an unmanaged option. Removing `CACHE 20` from the file produces `CACHE 1` in the plan. Of `ALTER SEQUENCE`, the parser reads only `OWNED BY`. Any other option is ignored with a warning.
 
 ### Changes
 
@@ -530,7 +530,7 @@ CREATE FUNCTION public.normalize(e text, keep_case boolean) RETURNS text
     AS $$ SELECT CASE WHEN keep_case THEN e ELSE lower(e) END $$;
 ```
 
-An attribute left at its default is not written back. PostgreSQL reports `VOLATILE`, `PARALLEL UNSAFE` and the default `COST` as absent. So a desired schema may write them out or leave them off. Argument and return types are reported without their schema when `search_path` reaches them, like any other name that pistachio reads back. A desired schema may write a type in the routine's own schema with or without the schema.
+An attribute left at its default is not written back. PostgreSQL reports `VOLATILE`, `PARALLEL UNSAFE` and the default `COST` as absent. So a desired schema may write them out or leave them off. Argument and return types are reported without their schema when `search_path` reaches them, like any other name that pistachio reads back. A desired schema may write a type in the routine's own schema with or without the schema name.
 
 ### Changes
 

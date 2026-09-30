@@ -140,7 +140,7 @@ pista diff --check --git origin/main...HEAD schema.sql
 
 The current side plays the role of the catalog. Only objects in the target schemas (`-n` / `--schemas`) are compared. An object outside them is out of scope on both sides; it is not a drop. Functions and procedures are read only under `--manage-routine`. A sequence that a column owns is left out, as in the catalog. See [Sequences](../reference/objects.md#sequences).
 
-Directives on the current side count as part of its state. A `-- pista:concurrently` there makes a dropped index a `DROP INDEX CONCURRENTLY`. A plan against a database cannot know that. `--disable-index-concurrently` clears the directive on both sides.
+Directives on the current side count as part of its state. A `-- pista:concurrently` there makes a dropped index a `DROP INDEX CONCURRENTLY`. `plan` against a database has no such directive. `--disable-index-concurrently` clears the directive on both sides.
 
 
 ## Execute directives

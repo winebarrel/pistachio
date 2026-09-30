@@ -43,7 +43,7 @@ pista apply --try-tx schema.sql
 CREATE INDEX CONCURRENTLY users_email_idx ON public.users USING btree (email);
 ```
 
-Such a run is not all-or-nothing. A `CREATE INDEX CONCURRENTLY` that fails leaves an invalid index, which you drop by hand. To run one plan in a transaction despite the opt-ins, add `--disable-index-concurrently`. The directives remain in the files for the next run.
+Such a run is not all-or-nothing. A `CREATE INDEX CONCURRENTLY` that fails leaves an invalid index, which you must drop by hand. To run one plan in a transaction despite the opt-ins, add `--disable-index-concurrently`. The directives remain in the files for the next run.
 
 ## Bounding lock waits
 

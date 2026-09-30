@@ -106,7 +106,7 @@ The [general options](index.md#general-options) apply as well.
 :   Write every name without its schema, for a dump that will be loaded into a schema with another name.
 
 `--omit-partition-child-index`
-:   Leave out the copy of a parent index on a partition. PostgreSQL creates the copy again when the dump is loaded. An index counts as the copy when it meets four conditions. It is attached to the parent's index. It has the name that PostgreSQL gives the copy. It has the definition and the storage parameters of the parent index. And it has no comment. Any other partition index is written. This option cannot be used with `--skip-partition-child`. The environment variable is `PISTA_DUMP_OMIT_PARTITION_CHILD_INDEX`.
+:   Leave out the copy of a parent index on a partition. PostgreSQL creates the copy again when the dump is loaded. An index counts as the copy when it is attached to the parent's index, has the name that PostgreSQL gives the copy, has the definition and the storage parameters of the parent index, and has no comment. Any other partition index is written. This option cannot be used with `--skip-partition-child`. The environment variable is `PISTA_DUMP_OMIT_PARTITION_CHILD_INDEX`.
 
 `--no-format`
 :   Write the layout that the model produces on its own, without the formatter. This option cannot be used with `--json`. The environment variable is `PISTA_NO_FORMAT`.

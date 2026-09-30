@@ -10,7 +10,7 @@ pista parse [option...] file...
 
 ## Description
 
-`pista parse` reads the files with the parser that [`pista plan`](plan.md) and [`pista apply`](apply.md) use. It prints those objects as JSON. Every file that `plan` accepts, `parse` accepts too. No database is read, and nothing is compared.
+`pista parse` reads the files with the parser that [`pista plan`](plan.md) and [`pista apply`](apply.md) use. It prints the objects that the files declare. The output is JSON. Every file that `plan` accepts, `parse` accepts too. No database is read, and nothing is compared.
 
 The document contains one JSON object per managed type, keyed by qualified name. After them come the `-- pista:execute` statements. Its JSON Schema is published at [json/schema-1.2.json](../../json/schema-1.2.json). See [Parsing schema files](../../guides/parsing.md) for the shape and the fields.
 

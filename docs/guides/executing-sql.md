@@ -1,6 +1,6 @@
 # Running arbitrary SQL
 
-Use the `-- pista:execute` directive to include SQL statements that pistachio does not manage declaratively (grants, extensions, etc.). `apply` runs them after the schema changes. Functions and procedures can be managed declaratively instead. See [Routines](../reference/objects.md#routines).
+Use the `-- pista:execute` directive to include SQL statements that pistachio does not manage declaratively, for example grants and extensions. `apply` runs them after the schema changes. Functions and procedures can be managed declaratively instead. See [Routines](../reference/objects.md#routines).
 
 ```sql
 -- pista:execute
@@ -47,7 +47,7 @@ DO $do$ BEGIN
 END $do$;
 ```
 
-When the body changes, update the tag in both places (e.g. `'v1'` -> `'v2'`). The next `apply` runs it again.
+When the body changes, update the tag in both places, for example `'v1'` to `'v2'`. The next `apply` runs it again.
 
 `-- pista:execute` runs after the managed DDL. Use `-- pista:execute-first` when the managed DDL calls the function. A `CHECK` constraint, a `GENERATED` expression, an index expression or a policy can do that:
 
