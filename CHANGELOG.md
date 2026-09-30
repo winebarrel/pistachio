@@ -6,6 +6,8 @@
 
 * A routine whose body ends in `$` is now written in a form that parses. Before, `dump`, `plan` and `apply` wrote its body as `$$...$$$`.
 
+* `plan` no longer fails with `cannot change base type of domain` for a domain whose base type is in the same schema, when the schema name needs quoting and `--search-path` includes the schema.
+
 * An index on a column declared `COLLATE "C"` that is written as `(name COLLATE "C")` is no longer dropped and created on every plan.
 
 ## [1.72.0] - 2026-09-30
