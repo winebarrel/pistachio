@@ -153,6 +153,68 @@ jobs:
           disable_search: true
           flags: windows
 
+  windows-arm:
+    runs-on: windows-11-arm
+    # The image's gcc is the x86_64 mingw-w64 and its LLVM targets MSVC, so
+    # neither builds cgo for windows/arm64. Install llvm-mingw, the toolchain
+    # the release binary is cross-built with. The image has no PostgreSQL
+    # and no Docker, so run the x64 build under emulation: the tests reach
+    # the server over TCP and only pista needs to be arm64.
+    env:
+      CGO_ENABLED: "1"
+      PGPORT: "5432"
+      TEST_PISTA_CONN_STR: postgres://postgres@localhost:5432/postgres?sslmode=disable
+      LLVM_MINGW_VERSION: "20251216"
+      POSTGRES_VERSION: 18.4-1
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install GNU Make
+        run: choco install -y --no-progress make
+      - name: Disable Defender real-time protection
+        shell: pwsh
+        run: |
+          try {
+            Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop
+          } catch {
+            Write-Warning "could not disable Defender real-time protection: $_"
+          }
+      - name: Install llvm-mingw
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = "llvm-mingw-$env:LLVM_MINGW_VERSION-ucrt-aarch64"
+          Invoke-WebRequest -Uri "https://github.com/mstorsjo/llvm-mingw/releases/download/$env:LLVM_MINGW_VERSION/$name.zip" -OutFile "$env:RUNNER_TEMP\llvm-mingw.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\llvm-mingw.zip" -DestinationPath $env:RUNNER_TEMP
+          Add-Content -Path $env:GITHUB_ENV -Value "CC=$env:RUNNER_TEMP\$name\bin\aarch64-w64-mingw32-gcc.exe"
+      # The same settings as the windows job: trust auth, and no WAL flush
+      # on each of the commits the fixtures make.
+      - name: Start PostgreSQL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest -Uri "https://get.enterprisedb.com/postgresql/postgresql-$env:POSTGRES_VERSION-windows-x64-binaries.zip" -OutFile "$env:RUNNER_TEMP\pgsql.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\pgsql.zip" -DestinationPath $env:RUNNER_TEMP
+          $bin = "$env:RUNNER_TEMP\pgsql\bin"
+          $data = "$env:RUNNER_TEMP\pgdata"
+          & "$bin\initdb" -D $data -U postgres -A trust -E UTF8 --no-instructions
+          if ($LASTEXITCODE -ne 0) { throw "initdb failed" }
+          Add-Content -Path "$data\postgresql.conf" -Value "`nfsync = off`nsynchronous_commit = off`nfull_page_writes = off"
+          & "$bin\pg_ctl" -D $data -l "$env:RUNNER_TEMP\postgres.log" -w start
+          if ($LASTEXITCODE -ne 0) { Get-Content "$env:RUNNER_TEMP\postgres.log"; throw "pg_ctl start failed" }
+          & "$bin\psql" -h localhost -U postgres -Atc "SELECT version()"
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
+      - name: Build
+        run: go build -o pista.exe ./cmd/pista
+      - name: Check the binary is arm64
+        run: go version -m pista.exe | grep -x $'\tbuild\tGOARCH=arm64'
+      - name: Smoke test
+        run: ./pista.exe --help
+      - run: make
+
   test:
     runs-on: ubuntu-latest
     strategy:
