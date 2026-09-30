@@ -221,6 +221,37 @@ func TestDiffDomains_BaseTypeModCaseOnly_NoChange(t *testing.T) {
 	assert.Empty(t, result.Stmts)
 }
 
+// The catalog writes a base type in the domain's own schema without the schema
+// when the schema is on the search path. The file may name it with the schema.
+func TestDiffDomains_BaseTypeOwnSchema(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		schema  string
+		current string
+		desired string
+		wantErr bool
+	}{
+		{"bare in catalog", "app", "mood", "app.mood", false},
+		{"bare in file", "app", "app.mood", "mood", false},
+		{"quoted schema, bare in catalog", "App", "mood", `"App".mood`, false},
+		{"quoted schema, bare in file", "App", `"App".mood`, "mood", false},
+		{"type in another schema", "app", "mood", "other.mood", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			current := newDomainMap(&model.Domain{Schema: tc.schema, Name: "d", BaseType: tc.current})
+			desired := newDomainMap(&model.Domain{Schema: tc.schema, Name: "d", BaseType: tc.desired})
+			result, err := DiffDomains(current, desired, allowAllDrops{})
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "cannot change base type")
+				return
+			}
+			require.NoError(t, err)
+			assert.Empty(t, result.Stmts)
+		})
+	}
+}
+
 func TestDiffDomains_AddComment(t *testing.T) {
 	comment := "Positive int"
 	current := newDomainMap(&model.Domain{Schema: "public", Name: "pos_int", BaseType: "integer"})

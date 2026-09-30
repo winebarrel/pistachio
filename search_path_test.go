@@ -192,10 +192,9 @@ CREATE VIEW `+model.Ident(role)+`.active_users AS SELECT id FROM `+model.Ident(r
 	assert.Contains(t, got.String(), "FROM users")
 }
 
-// A domain over a type in its own schema reads back with the base type bare
-// when the schema is on the path. The comparison strips the schema from the
-// type the file names in full, which it has to do in the quoted form the type
-// name is written in.
+// The catalog writes the base type without its schema when the schema is on
+// the search path. The plan must still match it to the file, which names the
+// schema, when the schema name needs quoting.
 func TestPlan_SearchPathDomainBaseTypeQuotedSchema(t *testing.T) {
 	ctx := context.Background()
 	desired := `
