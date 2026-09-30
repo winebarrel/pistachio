@@ -19,7 +19,7 @@ pistachio manages the objects below. Each section says what the parser reads fro
 | [Policies](#policies-and-row-level-security) | `CREATE POLICY`, `ALTER TABLE ... ROW LEVEL SECURITY` | | `policy` |
 | [Comments](#comments) | `COMMENT ON` | | |
 
-`--allow-drop` controls a pure removal: an object that the desired schema no longer contains. Without the object's type in `--allow-drop`, the plan writes the drop as a `-- skipped:` comment and nothing runs. The drop that is part of a definition change does not require `--allow-drop`. A constraint or an index that is dropped and added back is such a drop. A recreate of a view, a routine or a trigger does require it. See [Controlling drops](../guides/drops.md).
+`--allow-drop` controls a pure removal: an object that the desired schema no longer contains. Without the object's type in `--allow-drop`, the plan writes the drop as a `-- skipped:` comment and nothing runs. The drop that is part of a constraint's or an index's definition change does not require `--allow-drop`. A recreate of a view, a routine or a trigger does. See [Controlling drops](../guides/drops.md).
 
 To rename any of these objects, an enum value or a composite attribute, use the [`-- pista:renamed-from`](directives.md#-pistarenamed-from) directive. Routines cannot be renamed.
 
@@ -208,7 +208,7 @@ A trigger blocks the change even when the column is only in its `UPDATE OF` list
 
 An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed. pistachio plans no `RESTART`. So a change that puts the current value outside the new range fails at apply with the server's error.
 
-A generated column cannot be altered. Making a column generated or plain, or changing its expression, is an error at plan time:
+A column cannot become generated or plain in place, and a generated column's expression cannot change in place. Either is an error at plan time:
 
 ```
 pista: error: column public.t.total: cannot change GENERATED expression; DROP COLUMN + ADD COLUMN is required
@@ -567,7 +567,7 @@ The routine is recreated before the tables change, so changing the dependent in 
 
 ### Order
 
-A routine is created after the types that its signature names, and before every table. This is because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call a routine. A signature can name a table instead of a type, as `RETURNS SETOF <table>` does. Such a routine comes after that table. It comes before every other table, where that does not form a cycle. Drops run the other way, dependents first.
+A routine is created after the types that its signature names, and before every table. This is because a `CHECK` constraint, a `GENERATED` expression, an index expression, a policy or a trigger can call a routine. A signature can name a table instead of a type, as `RETURNS SETOF <table>` does. Such a routine comes after that table. It comes before every other table where that does not form a cycle. Drops run the other way, dependents first.
 
 Because of that order, a `LANGUAGE sql` routine whose body reads a table created in the same run fails to apply. PostgreSQL parses a SQL body at creation time. The same is true for a routine that calls a routine defined later, and for a `plpgsql` routine whose `DECLARE` uses a table's row type or `%TYPE`. Applying with `--pre-sql 'SET check_function_bodies = off'` skips that check. Marking the routine `-- pista:ignore` and creating it with `-- pista:execute` also works. So does writing the body as `BEGIN ATOMIC`.
 

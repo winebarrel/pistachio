@@ -99,7 +99,7 @@ CREATE TABLE public.users (
 );
 ```
 
-The check SQL is evaluated where the statement runs. So an `execute-first` check sees the schema before the change, and an `execute` check sees it after. Put a check that tests for a table or column that the same run creates on `execute`. `plan` cannot answer it and shows the statement as undetermined, but `apply` decides correctly. An `execute-first` check gives the same answer in both commands, because both evaluate it against the schema before the change.
+The check SQL is evaluated where the statement runs. So an `execute-first` check sees the schema before the change, and an `execute` check sees it after. Put a check that tests for a table or column that the same run creates on `execute`. `plan` cannot answer it and shows the statement as undetermined, but `apply` decides correctly. An `execute-first` check that `plan` can evaluate gives the same answer in both commands, because both evaluate it against the schema before the change.
 
 Statements keep their file order within each group. There is no dependency resolution between them.
 

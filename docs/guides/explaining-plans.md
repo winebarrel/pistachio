@@ -22,7 +22,7 @@ The option is also available as `$PISTA_EXPLAIN`, and as `$PISTA_DUMP_EXPLAIN` f
 
 The first word says what the statement does to the rows that already exist. `rewrite` copies the table into a new file and builds every index on it again. So it needs as much free disk space as the table takes, and it writes that much WAL for a replica to replay. `scan` reads every row once and writes no new heap. A constraint validation, an index build and a NOT NULL check do this.
 
-The phrase after it says what the statement's lock blocks while the statement runs. `blocks reads and writes` is ACCESS EXCLUSIVE; even a `SELECT` waits. `blocks writes` is SHARE or SHARE ROW EXCLUSIVE. `blocks nothing` is SHARE UPDATE EXCLUSIVE or weaker; only another DDL on the same table waits.
+The phrase after it says what the statement's lock blocks while the statement runs. `blocks reads and writes` is ACCESS EXCLUSIVE; even a `SELECT` waits. `blocks writes` is SHARE or SHARE ROW EXCLUSIVE. `blocks nothing` is SHARE UPDATE EXCLUSIVE or weaker; only another DDL, `VACUUM` or `ANALYZE` on the same table waits.
 
 Then come the tables that the statement touches, each with its size. The rows and bytes are the estimates that VACUUM and ANALYZE last wrote to `pg_class`, including the pages of the TOAST relation. So the comment does not read the table itself. A table that neither VACUUM nor ANALYZE has visited is shown as `not analyzed`.
 

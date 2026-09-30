@@ -124,7 +124,7 @@ These options shape the DDL. `plan --out` writes the result into the plan file.
 :   Add a comment to each statement that scans or rewrites a table. The comment says what the statement does, what its lock blocks, and the table's row and byte estimate from `pg_class`. The environment variable is `PISTA_EXPLAIN`. See [Explaining a plan](../../guides/explaining-plans.md).
 
 `--out=`*file*
-:   Also write the plan to *file*, for [`pista apply-from`](apply-from.md). The plan is fixed when it is written. `apply-from` runs these statements and only checks that the schema has not changed since. A `-- pista:execute` check is evaluated now. A check that cannot be evaluated is an error. The environment variable is `PISTA_OUT`. See [Plan files](../../guides/plan-files.md).
+:   Also write the plan to *file*, for [`pista apply-from`](apply-from.md). The plan is fixed when it is written. `apply-from` runs these statements. It checks only that the schema has not changed since and that the server's major version is the same. A `-- pista:execute` check is evaluated now. A check that cannot be evaluated is an error. The environment variable is `PISTA_OUT`. See [Plan files](../../guides/plan-files.md).
 
 `--check`
 :   Exit with 2 when the plan contains executable DDL. The output does not change. The environment variable is `PISTA_CHECK`.

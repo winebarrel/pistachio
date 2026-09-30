@@ -6,7 +6,7 @@
 pista fmt schema/*.sql
 ```
 
-`--check` reports the files that are not formatted, without writing them. It exits with code 2 when there are any. When every file is already formatted, the run prints nothing and exits with 0.
+`--check` reports the files that are not formatted, without writing them. It exits with code 2 when there are any and no file failed to parse. When every file is already formatted, the run prints nothing and exits with 0.
 
 ```bash
 pista fmt --check schema/*.sql

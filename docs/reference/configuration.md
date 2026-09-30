@@ -34,7 +34,7 @@ A command-line flag overrides an environment variable. An environment variable o
 
 ## Paging long output
 
-Set `$PISTA_PAGER` to send the output of any command through an external command when stdout is a TTY. `sh -c` (`cmd /c` on Windows) runs the command, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are not affected. The pager runs only for interactive output. Use `--no-pager` to disable it for a single invocation. Use `--pager` to force it on when stdout is not a TTY (for example, when piping into another pager-aware tool). `--pager` does nothing unless `PISTA_PAGER` is set.
+Set `$PISTA_PAGER` to send the output of any command through an external command when stdout is a TTY. `sh -c` (`cmd /c` on Windows) runs the command, so quoting and arguments work as in the shell. By default, pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are not paged. The pager runs only for interactive output. Use `--no-pager` to disable it for a single invocation. Use `--pager` to force it on when stdout is not a TTY (for example, when piping into another pager-aware tool). `--pager` does nothing unless `PISTA_PAGER` is set.
 
 ```bash
 # Page with less, keeping ANSI colors

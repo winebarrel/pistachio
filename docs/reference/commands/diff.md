@@ -93,7 +93,7 @@ Under `--git`, paths resolve against the working directory, not against the repo
 
 The file list itself is not read from git. A shell glob expands against the working tree. So a file that the branch deleted is never named, and its drop is not reported, not even with `--check`. Name such a file on the command line.
 
-Directives on the current side count as its state. A `-- pista:concurrently` on the current side makes a dropped index a `DROP INDEX CONCURRENTLY`. `plan` against a database has no such directive. A `-- pista:renamed-from` on the desired side resolves against the names on the current side.
+Directives on the current side count as its state. A `-- pista:concurrently` on the current side makes a dropped index a `DROP INDEX CONCURRENTLY`. `plan` against a database has no such directive, so it writes a plain `DROP INDEX`. A `-- pista:renamed-from` on the desired side resolves against the names on the current side.
 
 ## Examples
 

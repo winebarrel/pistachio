@@ -47,7 +47,7 @@ Such a run is not all-or-nothing. A `CREATE INDEX CONCURRENTLY` that fails leave
 
 ## Bounding lock waits
 
-A DDL statement waits for every transaction that holds a conflicting lock. Every statement that arrives later waits behind it. `lock_timeout` limits that wait, and `--pre-sql` sets it for the run:
+A DDL statement waits for every transaction that holds a conflicting lock. Every later statement that needs a conflicting lock waits behind it. `lock_timeout` limits that wait, and `--pre-sql` sets it for the run:
 
 ```bash
 pista apply --pre-sql "SET lock_timeout = '5s';" schema.sql
