@@ -562,26 +562,25 @@ always reach.
   embedding of a document chunk.
 - **Foreign keys that all declare their referential actions**: All 171 of
   icinga_director's name both ON UPDATE and ON DELETE, in six combinations.
-  Every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and
-  an ON DELETE action, which is CASCADE for most. 137 of glific's 142 name
-  ON DELETE, 106 of them CASCADE. 132 of dokploy's 133 name ON DELETE, 113 of
-  them CASCADE and 19 SET NULL. None of them names ON UPDATE at all. Every one
-  of langfuse's 113 names ON UPDATE CASCADE as well, 90 of them with ON DELETE
-  CASCADE and the other 23 with SET NULL. Every one of logto's 152 names
-  ON UPDATE CASCADE too, 149 of them with ON DELETE CASCADE. All 84 of
-  openreplay's name ON DELETE alone, 72 CASCADE and 12 SET NULL. lobehub is
-  the largest of that shape. 541 of its 550 name ON DELETE: 417 CASCADE, 117
-  SET NULL and 7 RESTRICT. Not one names ON UPDATE. uyuni mixes the two. 432
-  of its 692 name ON DELETE: 371 CASCADE, 59 SET NULL and 2 RESTRICT. The
-  other 260 name nothing, and not one names ON UPDATE. formbricks names
-  ON UPDATE CASCADE on all 91 of its foreign keys and ON DELETE on 90: 77
-  CASCADE, 11 SET NULL and 2 RESTRICT. hoppscotch names ON UPDATE CASCADE on
-  all 22 of its foreign keys and ON DELETE CASCADE on 20. hydra is the sample
-  that uses RESTRICT on the update side. 14 of its 31 name ON UPDATE RESTRICT
-  with ON DELETE CASCADE, which is how every reference to the tenant row is
-  written. 16 more name ON DELETE alone. authelia splits its 15 down the
-  middle: 7 ON DELETE CASCADE and 8 ON DELETE RESTRICT. All but one of them
-  name ON UPDATE CASCADE as well.
+  Every one of calcom's 179 and triggerdev's 135 names ON UPDATE CASCADE and an
+  ON DELETE action, which is CASCADE for most. 137 of glific's 142 name ON
+  DELETE, 106 of them CASCADE. 132 of dokploy's 133 name ON DELETE, 113 of them
+  CASCADE and 19 SET NULL. Neither glific's nor dokploy's names ON UPDATE at
+  all. Every one of langfuse's 113 names ON UPDATE CASCADE as well, 90 of them
+  with ON DELETE CASCADE and the other 23 with SET NULL. Every one of logto's
+  152 names ON UPDATE CASCADE too, 149 of them with ON DELETE CASCADE. All 84 of
+  openreplay's name ON DELETE alone, 72 CASCADE and 12 SET NULL. lobehub is the
+  largest of that shape. 541 of its 550 name ON DELETE: 417 CASCADE, 117 SET
+  NULL and 7 RESTRICT. Not one names ON UPDATE. uyuni mixes the two. 432 of its
+  692 name ON DELETE: 371 CASCADE, 59 SET NULL and 2 RESTRICT. The other 260
+  name nothing, and not one names ON UPDATE. formbricks names ON UPDATE CASCADE
+  on all 91 of its foreign keys and ON DELETE on 90: 77 CASCADE, 11 SET NULL and
+  2 RESTRICT. hoppscotch names ON UPDATE CASCADE on all 22 of its foreign keys
+  and ON DELETE CASCADE on 20. hydra is the sample that uses RESTRICT on the
+  update side. 14 of its 31 name ON UPDATE RESTRICT with ON DELETE CASCADE,
+  which is how every reference to the tenant row is written. 16 more name ON
+  DELETE alone. authelia splits its 15 down the middle: 7 ON DELETE CASCADE and
+  8 ON DELETE RESTRICT. All but one of them name ON UPDATE CASCADE as well.
 - **Foreign keys over more than one column**: 3 of zed's 42 are, and each
   names two columns on both sides. So the dump has to write a pair of column
   lists back. One of them points a worktree's settings files at
@@ -648,8 +647,8 @@ always reach.
   unique constraints over 28 tables back every one of its 33 indexes. So it
   declares no index that is not a key, and no CHECK either. 10 of those
   primary keys are composite. They are on the link tables between a user, an
-  organization, a collection, and a cipher. bonita has three times as many
-  tables and is keyed as densely. It has 80 primary keys, 15 of them
+  organization, a collection, and a cipher. bonita has about three times as
+  many tables and is keyed as densely. It has 80 primary keys, 15 of them
   composite, and 35 unique constraints behind 115 of its 191 indexes. It has
   no CHECK, and only 4 of its 707 columns carry a DEFAULT at all.
 - **Foreign keys at the highest density**: omop's 39 tables carry 176 of them,
@@ -716,11 +715,12 @@ always reach.
   CHECK at all. So all 29 of its constraints are primary keys, and 14 of its
   43 unique indexes stand on their own. Of the 35 indexes that are not unique,
   2 are gin over a name with `gin_trgm_ops`, and the other 33 are btree. The
-  operator class of those 2 resolves from `public`, where the extension sits,
-  as citizenlab's hnsw index does. formbricks is the shape again, from Prisma
-  instead of Drizzle. It has 58 primary keys over 59 tables, no unique
-  constraint and no CHECK at all. So its 58 constraints are primary keys and
-  nothing else, and 51 of its 109 unique indexes stand on their own.
+  operator class of those 2 resolves from the schema that the extension sits
+  in, `public` here, as citizenlab's hnsw index does from its own. formbricks
+  is the shape again, from Prisma instead of Drizzle. It has 58 primary keys
+  over 59 tables, no unique constraint and no CHECK at all. So its 58
+  constraints are primary keys and nothing else, and 51 of its 109 unique
+  indexes stand on their own.
   hoppscotch, Prisma as well, goes the other way for four of them. 21 primary
   keys and 4 unique constraints over 23 tables leave 15 of its 40 unique
   indexes bare. authelia is the shape from a hand-written migration history
