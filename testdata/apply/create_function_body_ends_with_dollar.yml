@@ -1,0 +1,12 @@
+manage_routine: true
+init: ""
+desired: |
+  CREATE FUNCTION public.f() RETURNS text
+      LANGUAGE sql
+      AS $_$ SELECT 'a' -- ends in $$_$;
+applied: |
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS text
+      LANGUAGE sql
+      AS $_$ SELECT 'a' -- ends in $$_$;

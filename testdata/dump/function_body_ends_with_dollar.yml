@@ -1,0 +1,12 @@
+# A body that ends in $ gets a tag that the $ cannot run into.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS text
+      LANGUAGE sql
+      AS $_$ SELECT 'a' -- ends in $$_$;
+dump: |
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS text
+      LANGUAGE sql
+      AS $_$ SELECT 'a' -- ends in $$_$;

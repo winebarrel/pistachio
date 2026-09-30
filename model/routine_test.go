@@ -19,6 +19,8 @@ func TestDollarQuote(t *testing.T) {
 		{"empty", "", "$$$$"},
 		{"contains the default tag", " SELECT '$$' ", "$_$ SELECT '$$' $_$"},
 		{"contains the next tag too", " $$ $_$ ", "$__$ $$ $_$ $__$"},
+		{"ends in a dollar sign", "a$", "$_$a$$_$"},
+		{"ends in the next tag but its last dollar sign", " $$ $_", "$__$ $$ $_$__$"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, model.DollarQuote(tc.body))
