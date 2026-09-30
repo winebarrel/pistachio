@@ -292,8 +292,8 @@ func formatFloat(f float64) string {
 }
 
 // DollarQuote wraps s in the shortest dollar-quote delimiter it does not
-// already contain. A trailing $ counts toward the closing tag, so the check
-// runs on s with one appended.
+// already contain. A $ at the end of s would join the closing tag, so the
+// check adds one to s.
 func DollarQuote(s string) string {
 	tag := "$$"
 	for i := 1; strings.Contains(s+"$", tag); i++ {

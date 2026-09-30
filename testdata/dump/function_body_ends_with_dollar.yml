@@ -1,4 +1,4 @@
-# A body that ends in $ gets a tag that the $ cannot run into.
+# The $ at the end of the body must not join the closing tag.
 manage_routine: true
 init: |
   CREATE FUNCTION public.f() RETURNS text

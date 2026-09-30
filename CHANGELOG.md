@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* A routine whose body ends in `$` is now written with a dollar-quote tag the `$` does not run into. Before, `dump`, `plan` and `apply` wrote it as `$$...$$$`, which does not parse.
+* A routine whose body ends in `$` is now written in a form that parses. Before, `dump`, `plan` and `apply` wrote its body as `$$...$$$`.
 
 * An index on a column declared `COLLATE "C"` that is written as `(name COLLATE "C")` is no longer dropped and created on every plan.
 
