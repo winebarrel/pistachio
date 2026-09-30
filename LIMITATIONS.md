@@ -540,21 +540,21 @@ Origin: expression normalization review, 2026-08-30.
 
 Priority: low.
 
-A list reaches the catalog as `= ANY (ARRAY[...])` only when no item names a
-column and the left operand is not a row. `diff/desugar.go` folds that form
-back. Two shapes are expanded into comparisons instead
+A list reaches the catalog as `= ANY (ARRAY[...])` only when no item contains
+a column reference and the left operand is not a row. `diff/desugar.go` folds
+that form back. Two shapes are expanded into comparisons instead
 (`transformAExprIn`, `src/backend/parser/parse_expr.c`):
 
 - A row on the left. `(a, b) IN ((1, 2))` is stored as `(a = 1) AND (b = 2)`.
   That is one comparison per column, joined with AND. More than one row ORs
   those groups together: `(a, b) IN ((1, 2), (3, 4))` becomes
   `((a = 1) AND (b = 2)) OR ((a = 3) AND (b = 4))`.
-- An item that names a column. `a IN (b, c)` is stored as `(a = b) OR (a = c)`,
-  and `a NOT IN (b, c)` as `(a <> b) AND (a <> c)`. A mixed list splits. The
-  items that name no column keep the array form: `a IN (b, 1, 2)` becomes
-  `(a = ANY (ARRAY[1, 2])) OR (a = b)`. The test is the column, not the
-  constant. So a call over literals stays whole: `a IN (length('xx'),
-  length('yyy'))` keeps the array form.
+- An item that contains a column reference. `a IN (b, c)` is stored as
+  `(a = b) OR (a = c)`, and `a NOT IN (b, c)` as `(a <> b) AND (a <> c)`. A
+  mixed list splits. The items that contain no column reference keep the
+  array form: `a IN (b, 1, 2)` becomes `(a = ANY (ARRAY[1, 2])) OR (a = b)`.
+  The test is the column reference, not the constant. So a call over literals
+  stays whole: `a IN (length('xx'), length('yyy'))` keeps the array form.
 
 In both cases the written list never matches what comes back. So its `CHECK`
 is dropped and added again on every plan, and the whole table is revalidated.
@@ -566,8 +566,9 @@ that form. A one-row list of a row, `(a, b) IN ((1, 2))`, still drifts.
 
 Closing this means writing those expansions out, which is more than rewriting
 an operator. The row form needs a comparison per column and an OR per row. The
-other form needs to tell an item that names a column from one that does not,
-and it needs to print the two halves in the order PostgreSQL uses.
+other form needs to tell an item that contains a column reference from one
+that does not, and it needs to print the two halves in the order PostgreSQL
+uses.
 
 `dump` writes the expanded form. So a dump fed back plans clean, and only a
 hand-written list reaches this.
