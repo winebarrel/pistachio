@@ -5,6 +5,8 @@
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/winebarrel/pistachio)](https://www.coderabbit.ai)
 [![Greptile: The War on Bugs](https://www.greptile.com/badge.svg)](https://www.greptile.com/?utm_source=oss_badge&utm_medium=readme&utm_campaign=greptile_for_open_source)
 
+pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL; pistachio generates the DDL diff.
+
 pistachio manages a PostgreSQL schema from SQL files. The files hold the whole schema as DDL, the way `pista dump` writes it. `pista plan` reads the database's catalog, compares it with the files, and prints the DDL that makes the two agree; `pista apply` runs that DDL. `pista dump` writes the files from a database you already have.
 
 > [!TIP]
@@ -27,7 +29,7 @@ brew install winebarrel/pistachio/pistachio     # Homebrew
 mise use github:winebarrel/pistachio            # mise
 ```
 
-Or download a binary from [Releases](https://github.com/winebarrel/pistachio/releases): macOS and Linux on amd64 and arm64, Windows on amd64. `mise use github:winebarrel/pistachio@<version>` pins a version.
+Or download a binary from [Releases](https://github.com/winebarrel/pistachio/releases): macOS and Linux on amd64 and arm64, Windows on amd64.
 
 The demo image bundles PostgreSQL and a sample schema:
 
