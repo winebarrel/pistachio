@@ -456,9 +456,10 @@ Constraints and keys:
   columns).
 - Foreign keys across schemas: adventureworks, mimiciv, chado.
 - Referential actions on both sides: icinga_director, calcom, triggerdev,
-  langfuse, logto, formbricks, hoppscotch, authelia; `ON UPDATE RESTRICT`:
+  langfuse, logto, formbricks, hoppscotch, authelia, hydra.
+- `ON UPDATE RESTRICT`: hydra.
+- `ON DELETE` alone: glific, dokploy, openreplay, uyuni, lobehub, authelia,
   hydra.
-- `ON DELETE` alone: glific, dokploy, openreplay, lobehub, uyuni.
 - No foreign key at all: mediawiki, temporal, imdb, dolphinscheduler,
   nightingale, joomla, hyperswitch, icinga_ido, bareos, opencms, kamailio,
   shenyu, nacos, gravitino, streampark.
@@ -468,11 +469,16 @@ Constraints and keys:
 
 Types and columns:
 
-- Enums: dvdrental, pagila, employees, mediawiki, icingadb, and most of the
-  ORM schemas. hyperswitch has the most labels, omero has labels past ASCII,
-  calcom and triggerdev type columns as an array of one, and mattermost casts
-  to one in a partial index predicate.
-- Domains with CHECKs: icingadb (named), icinga_director, boundary, omero.
+- Enums: dvdrental, pagila, employees, mediawiki, icingadb, sourcegraph,
+  musicbrainz, discourse, icinga_director, guacamole, osm, listmonk, coder,
+  hatchet, glific, lago, calcom, triggerdev, mattermost, lemmy, windmill,
+  plausible, dokploy, hyperswitch, documenso, langfuse, openreplay, logto,
+  omero, concourse, affine, teable, uyuni, hexpm, formbricks, hoppscotch,
+  ghostfolio, typebot. hyperswitch has the most labels, omero has labels past
+  ASCII, calcom and triggerdev type columns as an array of one, and mattermost
+  casts to one in a partial index predicate.
+- Domains: boundary, icingadb, icinga_director, coder, omero. Every sample
+  but coder puts a CHECK on a domain, and icingadb names its CHECKs.
 - Composite types: ovirt, sourcegraph, chado, coder, marquez (built with ROW()
   in a view), uyuni (read by an index and a generated column).
 - Stored generated columns: bigbluebutton (over a function of its own), uyuni.
