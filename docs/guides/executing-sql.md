@@ -1,6 +1,6 @@
 # Running arbitrary SQL
 
-Use the `-- pista:execute` directive to include SQL statements that pistachio does not manage declaratively (grants, extensions, etc.). These are executed after schema changes during `apply`. Functions and procedures can be managed declaratively instead. See [Routines](../reference/objects.md#routines).
+Use the `-- pista:execute` directive to include SQL statements that pistachio does not manage declaratively (grants, extensions, etc.). `apply` runs them after the schema changes. Functions and procedures can be managed declaratively instead. See [Routines](../reference/objects.md#routines).
 
 ```sql
 -- pista:execute
@@ -12,7 +12,7 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-Add a check SQL expression after `-- pista:execute` to execute conditionally. The SQL runs only when the check returns `true`:
+To run the SQL conditionally, add a check SQL expression after `-- pista:execute`. The SQL runs only when the check returns `true`:
 
 ```sql
 -- pista:execute SELECT NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_timestamp')
@@ -24,19 +24,18 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-`plan` evaluates the check and shows the statements that it selects. `apply` evaluates it again and runs the statements that it selects then.
+`plan` evaluates the check and shows the statements that the check selects. `apply` evaluates the check again and runs the statements that it selects at that time.
 
 ## Check patterns
 
-`plan` leaves out the statements that `apply` would skip. A common check skips when
-the object already exists:
+`plan` leaves out the statements that `apply` would skip. A common check skips the statement when the object already exists:
 
 ```sql
 -- pista:execute SELECT to_regprocedure('public.my_func()') IS NULL
 CREATE OR REPLACE FUNCTION public.my_func() RETURNS void AS $$ ... $$ LANGUAGE plpgsql;
 ```
 
-To manage a function whose body changes over time, embed a version tag in `COMMENT ON FUNCTION` and execute only when the installed comment differs. Wrap the `CREATE` and `COMMENT` in a `DO` block so they are a single statement:
+To manage a function whose body changes over time, put a version tag in `COMMENT ON FUNCTION`. Run the statement only when the installed comment differs from the tag. Wrap the `CREATE` and the `COMMENT` in a `DO` block, so that they are a single statement:
 
 ```sql
 -- pista:execute SELECT obj_description(to_regprocedure('public.get_user_count()'), 'pg_proc') IS DISTINCT FROM 'v1'
@@ -50,7 +49,7 @@ END $do$;
 
 When the body changes, update the tag in both places (e.g. `'v1'` -> `'v2'`). The next `apply` runs it again.
 
-`-- pista:execute` runs after the managed DDL. Use `-- pista:execute-first` when the managed DDL calls the function, as a `CHECK` constraint, a `GENERATED` expression, an index expression, or a policy can:
+`-- pista:execute` runs after the managed DDL. Use `-- pista:execute-first` when the managed DDL calls the function. A `CHECK` constraint, a `GENERATED` expression, an index expression or a policy can do that:
 
 ```sql
 -- pista:execute-first SELECT to_regprocedure('public.lower_v(text)') IS NULL
@@ -64,7 +63,7 @@ CREATE TABLE public.users (
 );
 ```
 
-The check SQL is evaluated where the statement runs, so an `execute-first` check sees the schema before the change and an `execute` check sees it after.
+The check SQL is evaluated at the point where the statement runs. So an `execute-first` check sees the schema before the change, and an `execute` check sees it after the change.
 
-With `plan --out` the check is evaluated when the plan file is written, and the file holds the statements that it selected. Both kinds of check therefore see the schema before the change, and a check that cannot be evaluated fails the plan instead of being left to `apply`. See [Plan files](plan-files.md).
+With `plan --out`, the check is evaluated when the plan file is written. The file contains the statements that the check selected. Therefore both kinds of check see the schema before the change. A check that cannot be evaluated fails the plan, instead of being left to `apply`. See [Plan files](plan-files.md).
 

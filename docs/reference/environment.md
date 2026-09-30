@@ -1,8 +1,16 @@
 # Environment variables
 
-Every variable stands for one option and takes the value that the option takes. The option overrides the variable. The two are not merged. A command-line flag overrides an environment variable, which overrides the config file, which overrides the default.
+Every variable stands for one option and takes the same value as the option. The option overrides the variable. The two are not merged. A command-line flag overrides an environment variable. An environment variable overrides the config file. The config file overrides the default.
 
-`--schema-map`, `--split`, `--omit-schema`, `--force` and `--pager` have no variable. `PISTA_PAGER` names the pager command, not the flag.
+These options have no variable:
+
+- `--schema-map`
+- `--split`
+- `--omit-schema`
+- `--force`
+- `--pager`
+
+`PISTA_PAGER` contains the pager command. It does not stand for the `--pager` flag.
 
 | Variable | Option | Commands |
 |---|---|---|

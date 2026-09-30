@@ -27,14 +27,14 @@ export PISTA_CONFIG=pista.yml
 pista dump
 ```
 
-One file works for every command. Keys that the running command does not use are ignored. The file cannot set `force`, since a value there would turn off the drift check of every `apply-from` that reads the file. Pass `--force` on the command line.
+One file works for every command. A key that the running command does not use is ignored. The file cannot set `force`. A value there would turn off the drift check of every `apply-from` that reads the file. Pass `--force` on the command line.
 
-A command-line flag overrides an environment variable, which overrides the config file, which overrides the default.
+A command-line flag overrides an environment variable. An environment variable overrides the config file. The config file overrides the default.
 
 
 ## Paging long output
 
-Set `$PISTA_PAGER` to forward the output of any command through an external command when stdout is a TTY. The command is interpreted by `sh -c` (`cmd /c` on Windows), so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are unaffected. The pager runs only for interactive output. Use `--no-pager` to disable it for a single invocation, or `--pager` to force it on when stdout is not a TTY (for example, when piping into another pager-aware tool). `PISTA_PAGER` must still be set for `--pager` to do anything.
+Set `$PISTA_PAGER` to send the output of any command through an external command when stdout is a TTY. `sh -c` (`cmd /c` on Windows) runs the command, so quoting and arguments work as in the shell. Pipes and redirects (`pista dump > file.sql`, `pista dump | grep ...`) are not affected. The pager runs only for interactive output. Use `--no-pager` to disable it for a single invocation. Use `--pager` to force it on when stdout is not a TTY (for example, when piping into another pager-aware tool). `--pager` does nothing unless `PISTA_PAGER` is set.
 
 ```bash
 # Page with less, keeping ANSI colors

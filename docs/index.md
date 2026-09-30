@@ -26,7 +26,7 @@ schema in SQL, and pistachio generates the DDL diff.
 
 ## Try it with Docker
 
-A demo image bundles PostgreSQL with a sample schema for trying `pista` without a local install:
+A demo image bundles PostgreSQL with a sample schema. It lets you try `pista` without a local install:
 
 ```bash
 docker run --rm -it ghcr.io/winebarrel/pistachio-demo
@@ -41,7 +41,7 @@ pista plan  desired.sql     # ...should now print -- No changes
 pista dump                  # dump the current schema
 ```
 
-The image sets `$PISTA_MANAGE_ROUTINE`, so the functions and procedures in the demo schema are managed too.
+The image sets `$PISTA_MANAGE_ROUTINE`, so pistachio manages the functions and procedures in the demo schema too.
 
 The source for the image is under [`demo/`](https://github.com/winebarrel/pistachio/tree/main/demo).
 
@@ -121,10 +121,10 @@ pista apply ./schema/*.sql         # apply it
 
 ## Where to go next
 
-- [Getting started](getting-started.md) walks through dump, edit, plan and apply.
+- [Getting started](getting-started.md) shows the steps: dump, edit, plan and apply.
 - [Guides](guides/index.md) cover one task each: renaming, drops, transactions and multiple schemas.
 - [Commands](reference/commands/index.md) has a page per command with every option.
-- [Design and scope](about/design.md) says what pistachio does not manage, and
+- [Design and scope](about/design.md) explains what pistachio does not manage, and
   why.
 
 ## Related projects

@@ -1,6 +1,6 @@
 # Guides
 
-Each guide covers one task. [Commands](../reference/commands/index.md) lists every option and [Supported objects](../reference/objects.md) lists every object kind.
+Each guide covers one task. [Commands](../reference/commands/index.md) lists every option. [Supported objects](../reference/objects.md) lists every object kind.
 
 ## Writing the schema
 
@@ -10,7 +10,7 @@ Each guide covers one task. [Commands](../reference/commands/index.md) lists eve
 
 ## Running plan and apply
 
-- [Controlling drops](drops.md): what `--allow-drop` gates.
+- [Controlling drops](drops.md): which drops require `--allow-drop`.
 - [Filtering what is managed](filtering.md): by name, by object type, one object, partitions.
 - [Transactions and locks](transactions.md): `--with-tx`, index builds that do not block writes, lock timeouts.
 - [Explaining a plan](explaining-plans.md): what each statement scans or rewrites, and what it blocks.
