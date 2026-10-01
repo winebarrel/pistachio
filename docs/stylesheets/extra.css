@@ -16,3 +16,19 @@
 .md-typeset h1:has(> img) .headerlink {
   display: none;
 }
+
+/* The playground link in the header, added by overrides/partials/header.html.
+   A narrow header has room for the icon only. */
+.md-header__button.md-header__playground {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+@media screen and (max-width: 59.984375em) {
+  .md-header__playground span {
+    display: none;
+  }
+}
