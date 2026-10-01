@@ -161,44 +161,62 @@ func TestParseSQL_WarnsCreateTableAs(t *testing.T) {
 	assert.Contains(t, buf.String(), "ignored unsupported statement: CREATE TABLE public.t AS SELECT 1 AS a")
 }
 
-// A LIKE clause is not expanded. The table is still read with the columns it
-// declares itself, and the warning carries the LIKE clause alone.
-func TestParseSQL_WarnsCreateTableLike(t *testing.T) {
-	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
-
-	sql := "CREATE TABLE public.t (id integer);\nCREATE TABLE public.t2 (LIKE public.t INCLUDING ALL, x integer);"
-	result, err := parseSQLNoFile(sql, "public")
-	require.NoError(t, err)
-
-	t2, ok := result.Tables.GetOk("public.t2")
-	require.True(t, ok)
-	assert.Equal(t, []string{"x"}, slices.Collect(t2.Columns.Keys()))
-	assert.Contains(t, buf.String(), "ignored unsupported statement: CREATE TABLE public.t2 (LIKE public.t INCLUDING ALL)")
-	assert.NotContains(t, buf.String(), "x integer")
+// A LIKE clause is not expanded. Reading the table with its own columns alone
+// would plan a DROP COLUMN for each column LIKE copies, so the clause is an
+// error.
+func TestParseSQL_CreateTableLikeIsError(t *testing.T) {
+	for _, tc := range []struct{ sql, err string }{
+		{
+			"CREATE TABLE public.t (id integer);\nCREATE TABLE public.t2 (LIKE public.t INCLUDING ALL);",
+			"CREATE TABLE public.t2: LIKE is not supported (list the columns instead)",
+		},
+		{
+			"CREATE TABLE public.t (id integer);\nCREATE TABLE public.t2 (x integer, LIKE public.t);",
+			"CREATE TABLE public.t2: LIKE is not supported (list the columns instead)",
+		},
+		{
+			"CREATE TABLE public.a (x integer);\nCREATE TABLE public.b (y integer);\nCREATE TABLE public.c (LIKE public.a, id integer, LIKE public.b);",
+			"CREATE TABLE public.c: LIKE is not supported (list the columns instead)",
+		},
+		{
+			"CREATE TABLE t (id integer);\nCREATE TABLE t2 (LIKE t);",
+			"CREATE TABLE public.t2: LIKE is not supported (list the columns instead)",
+		},
+		{
+			"CREATE TABLE public.t (id integer);\nCREATE TABLE public.p (LIKE public.t) PARTITION BY RANGE (id);",
+			"CREATE TABLE public.p: LIKE is not supported (list the columns instead)",
+		},
+	} {
+		_, err := parseSQLNoFile(tc.sql, "public")
+		require.EqualError(t, err, tc.err, tc.sql)
+	}
 }
 
-// Two LIKE clauses in one table warn once, together.
-func TestParseSQL_WarnsCreateTableLike_TwoClauses(t *testing.T) {
-	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
-
-	sql := "CREATE TABLE public.a (x integer);\nCREATE TABLE public.b (y integer);\nCREATE TABLE public.c (LIKE public.a, id integer, LIKE public.b);"
-	_, err := parseSQLNoFile(sql, "public")
-	require.NoError(t, err)
-	assert.Equal(t, "pista: ignored unsupported statement: CREATE TABLE public.c (LIKE public.a, LIKE public.b)\n", buf.String())
-}
-
-// A table marked -- pista:ignore is out of the diff, so its LIKE clause does
-// not warn.
-func TestParseSQL_CreateTableLike_IgnoredTableDoesNotWarn(t *testing.T) {
+// A table marked -- pista:ignore is not read, so its LIKE clause is not an
+// error.
+func TestParseSQL_CreateTableLike_IgnoredTableIsNotError(t *testing.T) {
 	var buf bytes.Buffer
 	defer setWarnWriter(&buf)()
 
 	sql := "CREATE TABLE public.t (id integer);\n-- pista:ignore\nCREATE TABLE public.t2 (LIKE public.t);"
-	_, err := parseSQLNoFile(sql, "public")
+	result, err := parseSQLNoFile(sql, "public")
 	require.NoError(t, err)
+	t2, ok := result.Tables.GetOk("public.t2")
+	require.True(t, ok)
+	assert.True(t, t2.Ignore)
 	assert.Empty(t, buf.String())
+}
+
+// A statement marked -- pista:execute is run as written, not read, so its
+// LIKE clause is not an error.
+func TestParseSQL_CreateTableLike_ExecuteIsNotError(t *testing.T) {
+	sql := "CREATE TABLE public.t (id integer);\n-- pista:execute\nCREATE TABLE public.t2 (LIKE public.t);"
+	result, err := parseSQLNoFile(sql, "public")
+	require.NoError(t, err)
+	_, ok := result.Tables.GetOk("public.t2")
+	assert.False(t, ok)
+	require.Len(t, result.ExecuteStmts, 1)
+	assert.Contains(t, result.ExecuteStmts[0].SQL, "LIKE public.t")
 }
 
 // ALTER INDEX, ALTER VIEW and ALTER MATERIALIZED VIEW share ALTER TABLE's

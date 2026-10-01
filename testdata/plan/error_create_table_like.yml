@@ -1,0 +1,7 @@
+init: |
+  CREATE TABLE public.users (id integer, tenant text);
+  CREATE TABLE public.u2 (id integer, tenant text);
+desired: |
+  CREATE TABLE public.users (id integer, tenant text);
+  CREATE TABLE public.u2 (LIKE public.users INCLUDING ALL);
+error: "CREATE TABLE public.u2: LIKE is not supported (list the columns instead)"

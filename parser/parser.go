@@ -91,35 +91,18 @@ func warnIgnoredStmt(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt) {
 	fmt.Fprintf(warnWriter, "pista: %signored unsupported statement: %s%s\n", at, snippet, txHint(rawStmt)) //nolint:errcheck
 }
 
-// warnIgnoredCreateTableLike warns about a LIKE clause, which the parser does
-// not expand. The columns it would copy read as absent from the desired
-// schema, so a table created this way would plan as a DROP COLUMN for each of
-// them. The warning carries a statement rebuilt from the LIKE clauses alone.
-func warnIgnoredCreateTableLike(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt, cs *pg_query.CreateStmt) {
-	var likes []*pg_query.Node
-
+// createTableLikeError rejects a LIKE clause, which the parser does not
+// expand. The columns it would copy would read as absent from the desired
+// schema, so a table created this way would plan a DROP COLUMN for each of
+// them, or be created with no columns.
+func createTableLikeError(cs *pg_query.CreateStmt, fqtn string, offset int32) error {
 	for _, elt := range cs.TableElts {
 		if elt.GetTableLikeClause() != nil {
-			likes = append(likes, elt)
+			return &locatedError{msg: "CREATE TABLE " + fqtn + ": LIKE is not supported (list the columns instead)", offset: int(offset)}
 		}
 	}
 
-	if len(likes) == 0 {
-		return
-	}
-
-	warnIgnoredStmt(sql, spans, &pg_query.RawStmt{
-		Stmt: &pg_query.Node{
-			Node: &pg_query.Node_CreateStmt{
-				CreateStmt: &pg_query.CreateStmt{
-					Relation:  cs.Relation,
-					TableElts: likes,
-				},
-			},
-		},
-		StmtLocation: rawStmt.StmtLocation,
-		StmtLen:      rawStmt.StmtLen,
-	})
+	return nil
 }
 
 // alterTableSupportedCmds lists the ALTER TABLE actions the parser reads into
@@ -442,7 +425,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 
 			table.Ignore = ignore
 			if !table.Ignore {
-				warnIgnoredCreateTableLike(sql, spans, rawStmt, node.GetCreateStmt())
+				if err := createTableLikeError(node.GetCreateStmt(), table.FQTN(), stmtOffset); err != nil {
+					return nil, err
+				}
 			}
 			if err := setUnique(tables, table.FQTN(), "table", table, "", stmtOffset); err != nil {
 				return nil, err

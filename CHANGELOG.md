@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `LIKE` in `CREATE TABLE` is now an error. Before, pistachio ignored it with a warning, so the plan dropped every column it would copy. A table with only `LIKE` was created with no columns.
+
 ## [1.73.0] - 2026-10-01
 
 * Update pg_query_go to 6.2.5.

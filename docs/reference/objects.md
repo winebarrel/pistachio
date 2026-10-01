@@ -39,7 +39,7 @@ This includes:
 - every `DROP`
 - every `ALTER` that the sections below do not list
 
-The desired state is what `CREATE` says. The same warning covers a part of a statement that pistachio does not read, such as the `ALTER TABLE ... ADD COLUMN` that a `pg_dump` file includes, or a `LIKE` clause in `CREATE TABLE`. The warning for `BEGIN` or `COMMIT` points to `--with-tx` and `--try-tx`.
+The desired state is what `CREATE` says. The same warning covers a part of a statement that pistachio does not read, such as the `ALTER TABLE ... ADD COLUMN` that a `pg_dump` file includes. The warning for `BEGIN` or `COMMIT` points to `--with-tx` and `--try-tx`.
 
 To keep such a statement in the file and run it during `apply`, mark it with [`-- pista:execute`](directives.md#-pistaexecute). The directive also silences the warning.
 
@@ -81,6 +81,8 @@ The parser reads `CREATE TABLE` with these clauses:
 - `INHERITS`
 - `TABLESPACE`
 - `WITH (...)`
+
+`LIKE` is an error. List the columns instead. A table marked [`-- pista:ignore`](directives.md#-pistaignore) or a statement marked [`-- pista:execute`](directives.md#-pistaexecute) is not read, so it may use `LIKE`.
 
 Of `ALTER TABLE`, the parser reads only these actions:
 

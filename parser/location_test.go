@@ -415,19 +415,19 @@ func TestParseSQLFiles_IgnoredAlterTableActionWarningLocation(t *testing.T) {
 	assert.Contains(t, buf.String(), "pista: "+paths[0]+":2:1: ignored unsupported statement: ALTER TABLE public.items ALTER COLUMN id SET STATISTICS 100")
 }
 
-// The LIKE warning is built from a rebuilt statement, and carries the position
-// of the CREATE TABLE it came from.
-func TestParseSQLFiles_IgnoredLikeClauseWarningLocation(t *testing.T) {
-	var buf bytes.Buffer
-	defer setWarnWriter(&buf)()
-
+// The LIKE error points at the CREATE TABLE it came from.
+func TestParseSQLFiles_CreateTableLikeErrorLocation(t *testing.T) {
 	paths := writeSQLFiles(t, map[string]string{
 		"items.sql": "CREATE TABLE public.items (id integer);\n\nCREATE TABLE public.copies (\n    LIKE public.items\n);\n",
 	})
 
 	_, err := ParseSQLFilesWithSchema(paths, "public")
-	require.NoError(t, err)
-	assert.Equal(t, "pista: "+paths[0]+":3:1: ignored unsupported statement: CREATE TABLE public.copies (LIKE public.items)\n", buf.String())
+	require.Error(t, err)
+	assert.Equal(t, `CREATE TABLE public.copies: LIKE is not supported (list the columns instead)
+ --> `+paths[0]+`:3:1
+  |
+3 | CREATE TABLE public.copies (
+  | ^`, err.Error())
 }
 
 // Parsing a string names no file, so the warning reads as it did before
