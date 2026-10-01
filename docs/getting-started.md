@@ -1,6 +1,6 @@
 # Getting started
 
-This page takes you from the first dump of a database to the first applied change. You need a PostgreSQL server and pistachio. See [Installation](index.md#installation).
+This page takes you from the first dump of a database to the first applied change. You need a PostgreSQL server and pistachio. See [Installation](installation.md).
 
 ## Connect
 
