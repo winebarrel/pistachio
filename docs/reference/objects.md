@@ -43,8 +43,6 @@ The desired state is what `CREATE` says. The same warning covers a part of a sta
 
 To keep such a statement in the file and run it during `apply`, mark it with [`-- pista:execute`](directives.md#-pistaexecute). The directive also silences the warning.
 
-A `LIKE` clause in `CREATE TABLE` is an error. pistachio does not expand it, so the columns it would copy would read as absent from the desired schema. Write the columns out instead. A table marked [`-- pista:ignore`](directives.md#-pistaignore) is not read, so its `LIKE` clause is not an error.
-
 A statement that names another object must come after that object's `CREATE`, in the same file or an earlier one. `ALTER TABLE`, `CREATE INDEX`, `CREATE TRIGGER` and `CREATE POLICY` are such statements. A statement that comes before the `CREATE` is an error:
 
 ```
@@ -83,6 +81,8 @@ The parser reads `CREATE TABLE` with these clauses:
 - `INHERITS`
 - `TABLESPACE`
 - `WITH (...)`
+
+`LIKE` is an error. List the columns instead. A table marked [`-- pista:ignore`](directives.md#-pistaignore) or a statement marked [`-- pista:execute`](directives.md#-pistaexecute) is not read, so it may use `LIKE`.
 
 Of `ALTER TABLE`, the parser reads only these actions:
 

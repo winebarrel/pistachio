@@ -98,7 +98,7 @@ func warnIgnoredStmt(sql string, spans []fileSpan, rawStmt *pg_query.RawStmt) {
 func createTableLikeError(cs *pg_query.CreateStmt, fqtn string, offset int32) error {
 	for _, elt := range cs.TableElts {
 		if elt.GetTableLikeClause() != nil {
-			return &locatedError{msg: "CREATE TABLE " + fqtn + ": LIKE is not supported in CREATE TABLE (write the columns out)", offset: int(offset)}
+			return &locatedError{msg: "CREATE TABLE " + fqtn + ": LIKE is not supported (list the columns instead)", offset: int(offset)}
 		}
 	}
 

@@ -423,7 +423,7 @@ func TestParseSQLFiles_CreateTableLikeErrorLocation(t *testing.T) {
 
 	_, err := ParseSQLFilesWithSchema(paths, "public")
 	require.Error(t, err)
-	assert.Equal(t, `CREATE TABLE public.copies: LIKE is not supported in CREATE TABLE (write the columns out)
+	assert.Equal(t, `CREATE TABLE public.copies: LIKE is not supported (list the columns instead)
  --> `+paths[0]+`:3:1
   |
 3 | CREATE TABLE public.copies (

@@ -4,4 +4,4 @@ init: |
 desired: |
   CREATE TABLE public.users (id integer, tenant text);
   CREATE TABLE public.u2 (LIKE public.users INCLUDING ALL);
-error: "CREATE TABLE public.u2: LIKE is not supported in CREATE TABLE (write the columns out)"
+error: "CREATE TABLE public.u2: LIKE is not supported (list the columns instead)"

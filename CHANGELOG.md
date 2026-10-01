@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* A `LIKE` clause in `CREATE TABLE` is now an error. pistachio warned and read the table with the columns it declared itself, so a table written with `LIKE` planned a `DROP COLUMN` for each column it would copy, or was created with no columns.
+* `LIKE` in `CREATE TABLE` is now an error. Before, pistachio ignored it with a warning, so the plan dropped every column it would copy. A table with only `LIKE` was created with no columns.
 
 ## [1.73.0] - 2026-10-01
 
