@@ -39,9 +39,11 @@ This includes:
 - every `DROP`
 - every `ALTER` that the sections below do not list
 
-The desired state is what `CREATE` says. The same warning covers a part of a statement that pistachio does not read, such as the `ALTER TABLE ... ADD COLUMN` that a `pg_dump` file includes, or a `LIKE` clause in `CREATE TABLE`. The warning for `BEGIN` or `COMMIT` points to `--with-tx` and `--try-tx`.
+The desired state is what `CREATE` says. The same warning covers a part of a statement that pistachio does not read, such as the `ALTER TABLE ... ADD COLUMN` that a `pg_dump` file includes. The warning for `BEGIN` or `COMMIT` points to `--with-tx` and `--try-tx`.
 
 To keep such a statement in the file and run it during `apply`, mark it with [`-- pista:execute`](directives.md#-pistaexecute). The directive also silences the warning.
+
+A `LIKE` clause in `CREATE TABLE` is an error. pistachio does not expand it, so the columns it would copy would read as absent from the desired schema. Write the columns out instead. A table marked [`-- pista:ignore`](directives.md#-pistaignore) is not read, so its `LIKE` clause is not an error.
 
 A statement that names another object must come after that object's `CREATE`, in the same file or an earlier one. `ALTER TABLE`, `CREATE INDEX`, `CREATE TRIGGER` and `CREATE POLICY` are such statements. A statement that comes before the `CREATE` is an error:
 

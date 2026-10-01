@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A `LIKE` clause in `CREATE TABLE` is now an error. pistachio warned and read the table with the columns it declared itself, so a table written with `LIKE` planned a `DROP COLUMN` for each column it would copy, or was created with no columns.
+
 ## [1.73.0] - 2026-10-01
 
 * Update pg_query_go to 6.2.5.
