@@ -1,5 +1,4 @@
-# A key named value is a column, not the VALUE of a domain constraint, so the
-# constraint follows the rename and is not rebuilt.
+# Renaming a key column to value does not rebuild the constraint.
 init: |
   CREATE TABLE public.items (
       id integer NOT NULL,

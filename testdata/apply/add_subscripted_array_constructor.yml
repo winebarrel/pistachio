@@ -1,5 +1,7 @@
-# A subscript on an array constructor needs the parentheses around it.
+# The parentheses in (ARRAY[...])[n] are kept.
 init: |
+  CREATE FUNCTION public.noop() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW; END$$;
+
   CREATE TABLE public.pairs (
       id integer NOT NULL,
       a integer,
@@ -11,9 +13,20 @@ desired: |
       id integer NOT NULL,
       a integer,
       b integer,
+      c integer DEFAULT (ARRAY[1, 2])[1],
+      d integer GENERATED ALWAYS AS ((ARRAY[a, b])[1]) STORED,
       CONSTRAINT pairs_pkey PRIMARY KEY (id),
       CONSTRAINT pairs_first_check CHECK ((ARRAY[a, b])[1] > 0)
   );
+
+  CREATE INDEX pairs_first_idx ON public.pairs (((ARRAY[a, b])[1]));
+
+  ALTER TABLE public.pairs ENABLE ROW LEVEL SECURITY;
+
+  CREATE POLICY pairs_first ON public.pairs USING ((ARRAY[a, b])[1] > 0);
+
+  CREATE TRIGGER pairs_first BEFORE UPDATE ON public.pairs
+      FOR EACH ROW WHEN ((ARRAY[NEW.a, NEW.b])[1] > 0) EXECUTE FUNCTION public.noop();
 
   CREATE VIEW public.pair_firsts AS SELECT (ARRAY[a, b])[1] AS first FROM public.pairs;
 applied: |
@@ -22,9 +35,17 @@ applied: |
       id integer NOT NULL,
       a integer,
       b integer,
+      c integer DEFAULT (ARRAY[1, 2])[1],
+      d integer GENERATED ALWAYS AS ((ARRAY[a, b])[1]) STORED,
       CONSTRAINT pairs_pkey PRIMARY KEY (id),
       CONSTRAINT pairs_first_check CHECK ((ARRAY[a, b])[1] > 0)
   );
+  CREATE INDEX pairs_first_idx ON public.pairs USING btree (((ARRAY[a, b])[1]));
+
+  ALTER TABLE public.pairs ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY pairs_first ON public.pairs USING (((ARRAY[a, b])[1] > 0));
+
+  CREATE TRIGGER pairs_first BEFORE UPDATE ON pairs FOR EACH ROW WHEN ((ARRAY[new.a, new.b])[1] > 0) EXECUTE FUNCTION noop();
 
   -- public.pair_firsts
   CREATE OR REPLACE VIEW public.pair_firsts AS

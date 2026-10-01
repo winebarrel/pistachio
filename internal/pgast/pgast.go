@@ -11,14 +11,11 @@ import (
 )
 
 // ParseTreeVersion is the parse tree version the bundled libpg_query writes.
-// Deparse rejects a ParseResult whose Version differs, so a ParseResult built
-// by hand rather than returned by Parse has to carry it.
+// Deparse rejects a ParseResult with any other Version, so a ParseResult
+// built by hand must set it. An empty string always parses.
 var ParseTreeVersion = func() int32 {
-	result, err := pg_query.Parse("")
-	if err != nil {
-		panic(err)
-	}
-	return result.Version
+	result, _ := pg_query.Parse("")
+	return result.GetVersion()
 }()
 
 // constraintWrapPrefix is the wrapper used to parse a constraint definition

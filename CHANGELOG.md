@@ -6,9 +6,11 @@
 
 * Update pg_query_go to 6.2.5.
 
-* A subscript on an array constructor, as in `(ARRAY[a, b])[1]`, now keeps its parentheses in a check constraint, a view and other expressions pista writes. Before, `plan` and `apply` wrote `ARRAY[a, b][1]`, which PostgreSQL rejects.
+* `plan` and `apply` now keep the parentheses in `(ARRAY[a, b])[1]`. They wrote `ARRAY[a, b][1]`, which PostgreSQL rejects. This affected check constraints, defaults, generated columns, indexes, policies, triggers and views.
 
-* Renaming a column to `value` no longer drops and re-adds the unique or primary key constraint that names it. The column list was lost when the constraint was rewritten for the rename.
+* Renaming a column to `value` no longer drops and re-creates the unique or primary key constraint on it.
+
+* `ADD CONSTRAINT` now quotes a key column named after a keyword such as `time`, as PostgreSQL does.
 
 ## [1.72.1] - 2026-09-30
 
