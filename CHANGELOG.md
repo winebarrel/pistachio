@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.73.0] - 2026-10-01
 
 * Update pg_query_go to 6.2.5.
 
