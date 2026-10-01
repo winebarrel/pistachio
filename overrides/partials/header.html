@@ -1,6 +1,7 @@
 {#-
   Material's partials/header.html at 9.7.7 with the playground link added
-  before the repository link. The partial has no block to extend, so the whole
+  before the repository link, and the site name in the title linked to the
+  home page. The partial has no block to extend, so the whole
   file is copied: compare it with upstream when mkdocs-material is upgraded.
 -#}
 {% set class = "md-header" %}
@@ -21,9 +22,9 @@
     <div class="md-header__title" data-md-component="header-title">
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
-          <span class="md-ellipsis">
+          <a href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}" class="md-ellipsis">
             {{ config.site_name }}
-          </span>
+          </a>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
