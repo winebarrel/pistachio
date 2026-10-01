@@ -10,6 +10,17 @@ import (
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
+// ParseTreeVersion is the parse tree version the bundled libpg_query writes.
+// Deparse rejects a ParseResult whose Version differs, so a ParseResult built
+// by hand rather than returned by Parse has to carry it.
+var ParseTreeVersion = func() int32 {
+	result, err := pg_query.Parse("")
+	if err != nil {
+		panic(err)
+	}
+	return result.Version
+}()
+
 // constraintWrapPrefix is the wrapper used to parse a constraint definition
 // fragment (e.g. "PRIMARY KEY (id)") as part of a full statement so that
 // pg_query produces a Constraint node we can inspect or mutate.

@@ -258,3 +258,19 @@ func TestDeparseConstraintDef_NotAConstraintResult(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected deparsed form")
 }
+
+func TestParseTreeVersion(t *testing.T) {
+	stmt := parseStmt(t, "SELECT 1")
+
+	// Deparse refuses a hand-built tree that leaves Version unset.
+	_, err := pg_query.Deparse(&pg_query.ParseResult{Stmts: []*pg_query.RawStmt{{Stmt: stmt}}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "version mismatch")
+
+	out, err := pg_query.Deparse(&pg_query.ParseResult{
+		Version: pgast.ParseTreeVersion,
+		Stmts:   []*pg_query.RawStmt{{Stmt: stmt}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "SELECT 1", out)
+}

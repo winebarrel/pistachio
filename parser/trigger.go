@@ -5,6 +5,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -29,6 +30,7 @@ func parseCreateTrigStmt(ct *pg_query.CreateTrigStmt, defaultSchema string) (*mo
 	ct.Replace = false
 
 	def, err := pg_query.Deparse(&pg_query.ParseResult{
+		Version: pgast.ParseTreeVersion,
 		Stmts: []*pg_query.RawStmt{
 			{Stmt: &pg_query.Node{Node: &pg_query.Node_CreateTrigStmt{CreateTrigStmt: ct}}},
 		},

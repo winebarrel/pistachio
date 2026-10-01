@@ -20,7 +20,8 @@ func parseStmt(t *testing.T, sql string) *pg_query.Node {
 func deparse(t *testing.T, node *pg_query.Node) string {
 	t.Helper()
 	out, err := pg_query.Deparse(&pg_query.ParseResult{
-		Stmts: []*pg_query.RawStmt{{Stmt: node}},
+		Version: pgast.ParseTreeVersion,
+		Stmts:   []*pg_query.RawStmt{{Stmt: node}},
 	})
 	require.NoError(t, err)
 	return out

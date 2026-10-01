@@ -38,7 +38,7 @@ var warnWriter io.Writer = os.Stderr
 // deparse. The caller collapses whitespace, so a multi-line body from either
 // path becomes one line.
 func ignoredStmtSnippet(sql string, rawStmt *pg_query.RawStmt) string {
-	single := &pg_query.ParseResult{Stmts: []*pg_query.RawStmt{rawStmt}}
+	single := &pg_query.ParseResult{Version: pgast.ParseTreeVersion, Stmts: []*pg_query.RawStmt{rawStmt}}
 	if deparsed, err := pg_query.Deparse(single); err == nil {
 		return deparsed
 	}
@@ -1524,7 +1524,8 @@ func parseIndexStmt(is *pg_query.IndexStmt, rawStmt *pg_query.RawStmt, defaultSc
 	}
 
 	result := &pg_query.ParseResult{
-		Stmts: []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},
+		Version: pgast.ParseTreeVersion,
+		Stmts:   []*pg_query.RawStmt{{Stmt: rawStmt.Stmt}},
 	}
 	def, err := pg_query.Deparse(result)
 	if err != nil {
@@ -1555,6 +1556,7 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 
 	// Deparse the SELECT query
 	selectResult := &pg_query.ParseResult{
+		Version: pgast.ParseTreeVersion,
 		Stmts: []*pg_query.RawStmt{{
 			Stmt: vs.Query,
 		}},
@@ -1631,6 +1633,7 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 
 	// Deparse the SELECT query
 	selectResult := &pg_query.ParseResult{
+		Version: pgast.ParseTreeVersion,
 		Stmts: []*pg_query.RawStmt{{
 			Stmt: as.Query,
 		}},
@@ -2532,6 +2535,7 @@ func deparseTypeName(tn *pg_query.TypeName) (string, error) {
 		return s, nil
 	}
 	result := &pg_query.ParseResult{
+		Version: pgast.ParseTreeVersion,
 		Stmts: []*pg_query.RawStmt{{
 			Stmt: &pg_query.Node{
 				Node: &pg_query.Node_CreateStmt{
@@ -2707,6 +2711,7 @@ func fillNumericScale(mod string) string {
 
 func deparseExpr(node *pg_query.Node) (string, error) {
 	result := &pg_query.ParseResult{
+		Version: pgast.ParseTreeVersion,
 		Stmts: []*pg_query.RawStmt{{
 			Stmt: &pg_query.Node{
 				Node: &pg_query.Node_SelectStmt{
@@ -2771,43 +2776,12 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 	con.Conname = ""
 	defer func() { con.Conname = origConname }()
 
-	// Work around a libpg_query deparse bug: a single key column named "value"
-	// is dropped from the deparsed column list, even though the parse tree
-	// keeps it. Swap each key column name for a collision-free placeholder that
-	// deparses reliably, then substitute the real identifiers back into the
-	// output. Only UNIQUE/PRIMARY KEY constraints populate Keys, so other
-	// constraint types are unaffected.
-	//
-	// Upstream: https://github.com/pganalyze/pg_query_go/issues/148
-	// Revert this workaround once that bug is fixed.
-	swapped := make([]*pg_query.String, 0, len(con.Keys))
-	origKeys := make([]string, 0, len(con.Keys))
-	repl := make(map[string]string, len(con.Keys))
-	for i, k := range con.Keys {
-		s := k.GetString_()
-		if s == nil {
-			continue
-		}
-		// The trailing "_e" delimits the index so one placeholder is never a
-		// substring of another (e.g. "..._1_e" vs "..._10_e"), which would
-		// corrupt replacement for constraints with ten or more key columns.
-		placeholder := fmt.Sprintf("pistachio_key_placeholder_%d_e", i)
-		swapped = append(swapped, s)
-		origKeys = append(origKeys, s.Sval)
-		repl[placeholder] = model.Ident(s.Sval)
-		s.Sval = placeholder
-	}
-	defer func() {
-		for i, s := range swapped {
-			s.Sval = origKeys[i]
-		}
-	}()
-
 	alterCmd := &pg_query.AlterTableCmd{
 		Subtype: pg_query.AlterTableType_AT_AddConstraint,
 		Def:     &pg_query.Node{Node: &pg_query.Node_Constraint{Constraint: con}},
 	}
 	result := &pg_query.ParseResult{
+		Version: pgast.ParseTreeVersion,
 		Stmts: []*pg_query.RawStmt{{
 			Stmt: &pg_query.Node{
 				Node: &pg_query.Node_AlterTableStmt{
@@ -2827,18 +2801,11 @@ func deparseConstraintDef(con *pg_query.Constraint) (string, error) {
 		return "", fmt.Errorf("failed to deparse constraint: %w", err)
 	}
 
-	restorePlaceholders := func(def string) string {
-		for placeholder, ident := range repl {
-			def = strings.ReplaceAll(def, placeholder, ident)
-		}
-		return def
-	}
-
 	def, ok := strings.CutPrefix(sql, "ALTER TABLE _t ADD ")
 	if !ok {
 		return "", fmt.Errorf("could not extract constraint definition from: %s", sql)
 	}
-	return restorePlaceholders(strings.TrimSpace(def)), nil
+	return strings.TrimSpace(def), nil
 }
 
 func deparsePartitionSpec(cs *pg_query.CreateStmt) (string, error) {
@@ -2852,6 +2819,7 @@ func deparsePartitionSpec(cs *pg_query.CreateStmt) (string, error) {
 		Partspec: cs.Partspec,
 	}
 	result := &pg_query.ParseResult{
+		Version: pgast.ParseTreeVersion,
 		Stmts: []*pg_query.RawStmt{{
 			Stmt: &pg_query.Node{Node: &pg_query.Node_CreateStmt{CreateStmt: minCS}},
 		}},
@@ -2877,6 +2845,7 @@ func deparsePartitionBound(cs *pg_query.CreateStmt) (string, error) {
 		Partbound: cs.Partbound,
 	}
 	result := &pg_query.ParseResult{
+		Version: pgast.ParseTreeVersion,
 		Stmts: []*pg_query.RawStmt{{
 			Stmt: &pg_query.Node{Node: &pg_query.Node_CreateStmt{CreateStmt: minCS}},
 		}},

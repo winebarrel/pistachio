@@ -1,0 +1,32 @@
+# A subscript on an array constructor needs the parentheses around it.
+init: |
+  CREATE TABLE public.pairs (
+      id integer NOT NULL,
+      a integer,
+      b integer,
+      CONSTRAINT pairs_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.pairs (
+      id integer NOT NULL,
+      a integer,
+      b integer,
+      CONSTRAINT pairs_pkey PRIMARY KEY (id),
+      CONSTRAINT pairs_first_check CHECK ((ARRAY[a, b])[1] > 0)
+  );
+
+  CREATE VIEW public.pair_firsts AS SELECT (ARRAY[a, b])[1] AS first FROM public.pairs;
+applied: |
+  -- public.pairs
+  CREATE TABLE public.pairs (
+      id integer NOT NULL,
+      a integer,
+      b integer,
+      CONSTRAINT pairs_pkey PRIMARY KEY (id),
+      CONSTRAINT pairs_first_check CHECK ((ARRAY[a, b])[1] > 0)
+  );
+
+  -- public.pair_firsts
+  CREATE OR REPLACE VIEW public.pair_firsts AS
+  SELECT (ARRAY[a, b])[1] AS first
+     FROM pairs;
