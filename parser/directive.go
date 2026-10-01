@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -198,7 +199,8 @@ func extractExecuteDirectives(rawSQL string, stmts []*pg_query.RawStmt) ([]*Exec
 
 		// Deparse the statement to get canonical SQL
 		deparsed, err := pg_query.Deparse(&pg_query.ParseResult{
-			Stmts: []*pg_query.RawStmt{stmt},
+			Version: pgast.ParseTreeVersion,
+			Stmts:   []*pg_query.RawStmt{stmt},
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to deparse execute statement: %w", err)

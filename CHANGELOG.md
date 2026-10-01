@@ -2,6 +2,16 @@
 
 # Changelog
 
+## [Unreleased]
+
+* Update pg_query_go to 6.2.5.
+
+* `plan` and `apply` now keep the parentheses in `(ARRAY[a, b])[1]`. They wrote `ARRAY[a, b][1]`, which PostgreSQL rejects. This affected check constraints, defaults, generated columns, indexes, policies, triggers and views.
+
+* Renaming a column to `value` no longer drops and re-creates the unique or primary key constraint on it.
+
+* `ADD CONSTRAINT` now quotes a key column named after a keyword such as `time`, as PostgreSQL does.
+
 ## [1.72.1] - 2026-09-30
 
 * A routine whose body ends in `$` is now written in a form that parses. Before, `dump`, `plan` and `apply` wrote its body as `$$...$$$`.

@@ -8,6 +8,7 @@ import (
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/internal/pgast"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -296,7 +297,7 @@ func deparseSQLBody(body *pg_query.Node) (string, error) {
 		// A RETURN statement cannot be deparsed on its own, so it is taken out
 		// of a CREATE FUNCTION that carries nothing else.
 		const prefix = "CREATE FUNCTION _f() "
-		out, err := pg_query.Deparse(&pg_query.ParseResult{Stmts: []*pg_query.RawStmt{{
+		out, err := pg_query.Deparse(&pg_query.ParseResult{Version: pgast.ParseTreeVersion, Stmts: []*pg_query.RawStmt{{
 			Stmt: &pg_query.Node{Node: &pg_query.Node_CreateFunctionStmt{CreateFunctionStmt: &pg_query.CreateFunctionStmt{
 				Funcname: []*pg_query.Node{pg_query.MakeStrNode("_f")},
 				SqlBody:  body,
@@ -312,7 +313,7 @@ func deparseSQLBody(body *pg_query.Node) (string, error) {
 	lines := []string{"BEGIN ATOMIC"}
 	for _, item := range body.GetList().GetItems() {
 		for _, stmt := range item.GetList().GetItems() {
-			out, err := pg_query.Deparse(&pg_query.ParseResult{Stmts: []*pg_query.RawStmt{{Stmt: stmt}}})
+			out, err := pg_query.Deparse(&pg_query.ParseResult{Version: pgast.ParseTreeVersion, Stmts: []*pg_query.RawStmt{{Stmt: stmt}}})
 			if err != nil {
 				return "", fmt.Errorf("failed to deparse routine body: %w", err)
 			}

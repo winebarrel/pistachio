@@ -1,0 +1,16 @@
+# A key column named after a keyword such as time is quoted, as PostgreSQL does.
+init: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      "time" timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.events (
+      id integer NOT NULL,
+      "time" timestamp with time zone NOT NULL,
+      CONSTRAINT events_pkey PRIMARY KEY (id),
+      CONSTRAINT events_time_key UNIQUE ("time")
+  );
+plan: |
+  ALTER TABLE public.events ADD CONSTRAINT events_time_key UNIQUE ("time");

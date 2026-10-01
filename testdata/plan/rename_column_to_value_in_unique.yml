@@ -1,0 +1,18 @@
+# Renaming a key column to value does not rebuild the constraint.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      val integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id),
+      CONSTRAINT items_val_key UNIQUE (val)
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      -- pista:renamed-from val
+      value integer NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id),
+      CONSTRAINT items_val_key UNIQUE (value)
+  );
+plan: |
+  ALTER TABLE public.items RENAME COLUMN val TO value;
