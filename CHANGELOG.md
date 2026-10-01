@@ -12,6 +12,8 @@
 
 * `ADD CONSTRAINT` now quotes a key column named after a keyword such as `time`, as PostgreSQL does.
 
+* `--version` now prints the version of pg_query_go on a second line.
+
 ## [1.72.1] - 2026-09-30
 
 * A routine whose body ends in `$` is now written in a form that parses. Before, `dump`, `plan` and `apply` wrote its body as `$$...$$$`.

@@ -107,8 +107,9 @@ func TestRun_Version(t *testing.T) {
 	code, stderr := runCLI(t, &out, "--version")
 	assert.Equal(t, 0, code)
 	assert.Empty(t, stderr)
-	// version is set by the linker and empty under go test.
-	assert.Equal(t, "\n", out.String())
+	// version is set by the linker and empty under go test. The pg_query_go
+	// version comes from the build info, which go test fills in too.
+	assert.Regexp(t, `\A\npg_query_go v\d+\.\d+\.\d+\n\z`, out.String())
 }
 
 func TestRun_ParseError(t *testing.T) {
