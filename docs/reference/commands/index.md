@@ -29,7 +29,7 @@ These options apply to every command. They can come before or after the command 
 :   `--pager` sends the output through `$PISTA_PAGER` even when standard output is not a terminal. `--no-pager` turns the pager off for this run. Without either, the pager runs when standard output is a terminal and `PISTA_PAGER` is set. See [Paging long output](../configuration.md#paging-long-output).
 
 `--version`
-:   Print the version and exit.
+:   Print the version of pista, then the version of pg_query_go on a second line, and exit. pg_query_go parses and deparses the SQL.
 
 `-h`, `--help`
 :   Print the usage of the command and exit.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"runtime/debug"
 
 	"github.com/alecthomas/kong"
 	"github.com/winebarrel/pistachio"
@@ -12,6 +13,20 @@ import (
 )
 
 var version string
+
+// versionString is what --version prints: the version of pista, then the
+// version of pg_query_go, which parses and deparses the SQL.
+func versionString() string {
+	var pgQueryGo string
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, dep := range info.Deps {
+			if dep.Path == "github.com/pganalyze/pg_query_go/v6" {
+				pgQueryGo = dep.Version
+			}
+		}
+	}
+	return version + "\npg_query_go " + pgQueryGo
+}
 
 // cli holds only what every command shares. The connection flags sit on the
 // commands that open a connection, so kong does not offer them to fmt, which
@@ -42,7 +57,7 @@ func run(args []string, stdout, stderr io.Writer, exit func(int)) {
 	var cli cli
 	ctx := context.Background()
 	parser, err := kong.New(&cli,
-		kong.Vars{"version": version},
+		kong.Vars{"version": versionString()},
 		kong.Configuration(pistachio.YAMLConfig),
 		kong.Writers(stdout, stderr),
 		kong.Exit(exit),
