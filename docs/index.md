@@ -49,30 +49,8 @@ The source for the image is under [`demo/`](https://github.com/winebarrel/pistac
 
 ## Installation
 
-### Homebrew
-
-```bash
-brew install winebarrel/pistachio/pistachio
-```
-
-### mise
-
-```bash
-mise use github:winebarrel/pistachio            # latest
-mise use github:winebarrel/pistachio@<version>  # a specific version
-```
-
-### Download binary
-
-Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
-
-| OS      | Arch         |
-|---------|--------------|
-| macOS   | amd64, arm64 |
-| Linux   | amd64, arm64 |
-| Windows | amd64        |
-
-
+pistachio is available from Homebrew, mise and GitHub Releases. See
+[Installation](installation.md).
 
 ## Example
 
@@ -121,6 +99,7 @@ pista apply ./schema/*.sql         # apply it
 
 ## Where to go next
 
+- [Installation](installation.md) lists the ways to install `pista`.
 - [Getting started](getting-started.md) shows the steps: dump, edit, plan and apply.
 - [Guides](guides/index.md) cover one task each: renaming, drops, transactions and multiple schemas.
 - [Commands](reference/commands/index.md) has a page per command with every option.
