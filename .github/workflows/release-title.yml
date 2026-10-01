@@ -16,10 +16,14 @@ jobs:
   # that release-tag.yml does not stop on it after the merge. The title must
   # be "Release for vX.Y.Z" and name the next patch, minor or major version
   # after the latest tag. A draft still has the placeholder title and is not
-  # checked; marking it ready for review runs the check.
+  # checked; marking it ready for review runs the check. A closed one is not
+  # checked either: release-tag.yml edits the body of the merged pull
+  # request after pushing its tag, and the title no longer names the next
+  # version by then.
   title:
     if: >-
       startsWith(github.head_ref, 'release-from-') &&
+      github.event.pull_request.state == 'open' &&
       !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
