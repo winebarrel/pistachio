@@ -86,8 +86,9 @@ func (p *DBPool) Connect(t *testing.T) *pgx.Conn {
 }
 
 // connStringFor returns ConnString with its database replaced by db. It takes
-// both forms libpq does: a URL, whose path is the database, and keyword/value
-// pairs, where a later dbname overrides an earlier one.
+// both forms libpq does: a URL, whose path is the database unless a dbname
+// parameter overrides it, and keyword/value pairs, where a later dbname
+// overrides an earlier one.
 func connStringFor(t *testing.T, db string) string {
 	t.Helper()
 	s := ConnString()
@@ -95,6 +96,9 @@ func connStringFor(t *testing.T, db string) string {
 		u, err := url.Parse(s)
 		require.NoError(t, err)
 		u.Path = "/" + db
+		q := u.Query()
+		q.Del("dbname")
+		u.RawQuery = q.Encode()
 		return u.String()
 	}
 	return s + " dbname=" + db
