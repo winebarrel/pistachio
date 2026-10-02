@@ -147,7 +147,6 @@ jobs:
         with:
           name: coverage-windows
           path: coverage.txt
-          retention-days: 14
       # Uploaded even when the tests failed, since a failed test is what the
       # report is there to describe.
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -215,7 +214,6 @@ jobs:
         with:
           name: coverage-pg${{ matrix.postgres }}
           path: coverage.txt
-          retention-days: 14
       # Uploaded even when the tests failed, since a failed test is what the
       # report is there to describe.
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
