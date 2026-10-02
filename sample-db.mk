@@ -156,6 +156,11 @@ CLIENT_MIN_MESSAGES ?= warning
 PGOPTS =
 PSQL = PGOPTIONS='$(strip -c client_min_messages=$(CLIENT_MIN_MESSAGES) $(PGOPTS))' psql -v ON_ERROR_STOP=1
 
+# Every loader downloads its source with $(FETCH) URL, which writes the body to
+# stdout. test/samples/fetch.sh says how SAMPLE_CACHE keeps the bodies between
+# runs. The path is absolute because some recipes cd before they fetch.
+FETCH = $(CURDIR)/test/samples/fetch.sh
+
 # A loader that needs a contrib extension in `public` installs it and then
 # relocates it:
 #
@@ -194,17 +199,17 @@ schema: clean-schema
 # sets nothing the schema depends on.
 .PHONY: sample-db
 sample-db:
-	curl -sSf --retry 3 --retry-delay 2 https://raw.githubusercontent.com/neondatabase/postgres-sample-dbs/b54cb67534bf20775803b181b7a1c6f573422161/$(SQL_FILE) \
+	$(FETCH) https://raw.githubusercontent.com/neondatabase/postgres-sample-dbs/b54cb67534bf20775803b181b7a1c6f573422161/$(SQL_FILE) \
 	  | sed '/^SET transaction_timeout = /d' \
 	  | $(PSQL)
 
 .PHONY: sample-db-tar
 sample-db-tar:
-	curl -sSfL --retry 3 --retry-delay 2 $(TAR_URL) | tar xzO $(TAR_SQL_PATH) | $(PSQL)
+	$(FETCH) $(TAR_URL) | tar xzO $(TAR_SQL_PATH) | $(PSQL)
 
 .PHONY: sample-db-url
 sample-db-url:
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) | $(PSQL)
+	$(FETCH) $(URL) | $(PSQL)
 
 # MIMIC-IV (MIT-LCP/mimic-code, MIT). The schema ships as three files, so
 # concatenate them in dependency order: create.sql (which creates the mimiciv_*
@@ -216,7 +221,7 @@ MIMICIV_SQL_FILES = create.sql constraint.sql index.sql
 .PHONY: sample-db-mimiciv
 sample-db-mimiciv:
 	for f in $(MIMICIV_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/MIT-LCP/mimic-code/3a914fce11e05888a4b659c7788e207bc34d1728/mimic-iv/buildmimic/postgres/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/MIT-LCP/mimic-code/3a914fce11e05888a4b659c7788e207bc34d1728/mimic-iv/buildmimic/postgres/$$f || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -238,7 +243,7 @@ sample-db-url-schema: PGOPTS = -c search_path=$(SCHEMA) -c check_function_bodies
 .PHONY: sample-db-url-schema
 sample-db-url-schema:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) | $(PSQL)
+	$(FETCH) $(URL) | $(PSQL)
 
 # Hive metastore (apache/hive, Apache-2.0). Like the sample-db-url-schema
 # dumps this one belongs in a schema of its own, but it is a pg_dump-style
@@ -248,7 +253,7 @@ sample-db-url-schema:
 .PHONY: sample-db-hive
 sample-db-hive:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | awk '/^SET search_path = / { print "SET search_path = $(SCHEMA), pg_catalog;"; next } { print }' \
 	  | $(PSQL)
 
@@ -281,7 +286,7 @@ sample-db-chado: PGOPTS = -c search_path=chado
 .PHONY: sample-db-chado
 sample-db-chado:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS chado'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | sed -E 's/^(SET search_path ?=[^;]*)public/\1chado/; /^CREATE/! s/create_point\(/chado.create_point(/g' \
 	  | awk '/^CREATE OR REPLACE FUNCTION/ && !hold { buf = $$0; hold = 1; next } \
 	         hold { buf = buf ORS $$0; \
@@ -297,7 +302,7 @@ sample-db-chado:
 .PHONY: sample-db-imdb
 sample-db-imdb:
 	for f in schema.sql fkindexes.sql; do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/gregrahn/join-order-benchmark/a39603662e023e449cb2121997a5034df9e02ebf/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/gregrahn/join-order-benchmark/a39603662e023e449cb2121997a5034df9e02ebf/$$f || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -306,7 +311,7 @@ sample-db-imdb:
 # Production.ProductReview INSERT (FK target rows aren't loaded).
 .PHONY: sample-db-adventureworks
 sample-db-adventureworks:
-	curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/b474991f0df1c4bf55ca4735eb0254ca0709eed2/install.sql \
+	$(FETCH) https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/b474991f0df1c4bf55ca4735eb0254ca0709eed2/install.sql \
 	  | awk '/^\\copy/ { next } /^INSERT INTO Production.ProductReview/ { skip=1 } skip { if (/\);[[:space:]]*$$/) skip=0; next } { print }' \
 	  | $(PSQL)
 
@@ -316,7 +321,7 @@ sample-db-adventureworks:
 # the `cd` schema and sets search_path itself.
 .PHONY: sample-db-clubdata
 sample-db-clubdata:
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | awk '/^CREATE DATABASE exercises;/ { next } /^\\c exercises/ { next } { print }' \
 	  | $(PSQL)
 
@@ -330,7 +335,7 @@ sample-db-clubdata:
 .PHONY: sample-db-demodb
 sample-db-demodb:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS btree_gist'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | awk '/^[[:space:]]*\\copy/ { next } { print }' \
 	  | $(PSQL)
 
@@ -359,7 +364,7 @@ sample-db-musicbrainz: PGOPTS = -c search_path=musicbrainz,public
 sample-db-musicbrainz:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS musicbrainz'
 	for f in $(MUSICBRAINZ_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/metabrainz/musicbrainz-server/424c5fad44da2b3ad55d08286fe8ad07c11ec471/admin/sql/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/metabrainz/musicbrainz-server/424c5fad44da2b3ad55d08286fe8ad07c11ec471/admin/sql/$$f || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -377,7 +382,7 @@ sample-db-znuny: PGOPTS = -c search_path=znuny
 sample-db-znuny:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS znuny'
 	for f in $(ZNUNY_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/znuny/Znuny/0b894348ebc458621545ccdab5f3d24d1b396a70/scripts/database/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/znuny/Znuny/0b894348ebc458621545ccdab5f3d24d1b396a70/scripts/database/$$f || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -401,7 +406,7 @@ sample-db-camunda: PGOPTS = -c search_path=camunda
 sample-db-camunda:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS camunda'
 	for f in $(CAMUNDA_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/camunda/camunda-bpm-platform/ee4826e5e76c2348a1510ef46a2f4ccd3b080e48/engine/src/main/resources/org/camunda/bpm/engine/db/create/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/camunda/camunda-bpm-platform/ee4826e5e76c2348a1510ef46a2f4ccd3b080e48/engine/src/main/resources/org/camunda/bpm/engine/db/create/$$f || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -452,7 +457,7 @@ sample-db-pgdump-schema: PGOPTS = -c search_path=$(SCHEMA),public
 .PHONY: sample-db-pgdump-schema
 sample-db-pgdump-schema:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
 	  | $(PSQL)
 
@@ -471,7 +476,7 @@ sample-db-joomla: PGOPTS = -c search_path=joomla
 sample-db-joomla:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS joomla'
 	for f in $(JOOMLA_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/joomla/joomla-cms/b2648c39655a1dc9ceb2791cf9131acc4f98d22e/installation/sql/postgresql/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/joomla/joomla-cms/b2648c39655a1dc9ceb2791cf9131acc4f98d22e/installation/sql/postgresql/$$f || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -506,7 +511,7 @@ sample-db-harbor:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS harbor'
 	$(PSQL) -c 'SET search_path = harbor; CREATE TABLE schema_migrations (version bigint NOT NULL PRIMARY KEY, dirty boolean NOT NULL DEFAULT false)'
 	for f in $(HARBOR_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/goharbor/harbor/fb4e2406747df0b01dec994bf593f49261f6a874/make/migrations/postgresql/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/goharbor/harbor/fb4e2406747df0b01dec994bf593f49261f6a874/make/migrations/postgresql/$$f || exit 1; \
 	  echo ';'; \
 	done | $(PSQL)
 	$(PSQL) -c 'SET search_path = harbor; DROP TABLE schema_migrations'
@@ -523,7 +528,7 @@ sample-db-bigbluebutton: PGOPTS = -c search_path=$(SCHEMA)
 .PHONY: sample-db-bigbluebutton
 sample-db-bigbluebutton:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | sed -E 's/^(CREATE OR REPLACE VIEW )public\./\1/' \
 	  | $(PSQL)
 
@@ -539,7 +544,7 @@ sample-db-dhis2: PGOPTS = -c search_path=$(SCHEMA),public
 sample-db-dhis2:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | $(PSQL)
 
 # HashiCorp Boundary (hashicorp/boundary, BUSL-1.1). The schema ships as
@@ -565,7 +570,7 @@ sample-db-boundary: PGOPTS = -c search_path=boundary
 sample-db-boundary:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS boundary'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/hashicorp/boundary/tar.gz/$(BOUNDARY_SHA) \
+	$(FETCH) https://codeload.github.com/hashicorp/boundary/tar.gz/$(BOUNDARY_SHA) \
 	  | tar xz -C "$$dir" --strip-components=5 boundary-$(BOUNDARY_SHA)/internal/db/schema/migrations && \
 	cd "$$dir" && \
 	{ ls base/postgres/*.up.sql; ls oss/postgres/*/*.up.sql | sort -t/ -k3,3n -k4,4; } \
@@ -586,7 +591,7 @@ sample-db-hatchet: PGOPTS = -c search_path=hatchet
 sample-db-hatchet:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hatchet'
 	for f in $(HATCHET_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/hatchet-dev/hatchet/1b410eb672448014bb1c6a29df92c63554f46034/sql/schema/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/hatchet-dev/hatchet/1b410eb672448014bb1c6a29df92c63554f46034/sql/schema/$$f || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -613,7 +618,7 @@ sample-db-thingsboard: PGOPTS = -c search_path=thingsboard
 sample-db-thingsboard:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS thingsboard'
 	for f in $(THINGSBOARD_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/thingsboard/thingsboard/562b19aa90f92c97b96c255b14816c32da7f4958/dao/src/main/resources/sql/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/thingsboard/thingsboard/562b19aa90f92c97b96c255b14816c32da7f4958/dao/src/main/resources/sql/$$f || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -631,7 +636,7 @@ sample-db-lago: PGOPTS = -c search_path=lago,public
 .PHONY: sample-db-lago
 sample-db-lago:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lago'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | awk '/^-- Name: /{body=1} !body && /^(DROP |ALTER TABLE IF EXISTS |CREATE OR REPLACE VIEW )/{skip=1} body{skip=0} !skip' \
 	  | awk -v RS= -v ORS='\n\n' '!/partman/' \
 	  | sed -E "/^SELECT pg_catalog.set_config\('search_path', '', false\);\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
@@ -650,7 +655,7 @@ sample-db-prisma: PGOPTS = -c search_path=$(SCHEMA)
 sample-db-prisma:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/$(REPO)/tar.gz/$(SHA) \
+	$(FETCH) https://codeload.github.com/$(REPO)/tar.gz/$(SHA) \
 	  | tar xz -C "$$dir" --strip-components=$$((1 + $(words $(subst /, ,$(DIR))))) $(notdir $(REPO))-$(SHA)/$(DIR) && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -683,7 +688,7 @@ sample-db-marquez: PGOPTS = -c search_path=marquez
 sample-db-marquez:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS marquez'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/MarquezProject/marquez/tar.gz/$(MARQUEZ_SHA) \
+	$(FETCH) https://codeload.github.com/MarquezProject/marquez/tar.gz/$(MARQUEZ_SHA) \
 	  | tar xz -C "$$dir" --strip-components=8 marquez-$(MARQUEZ_SHA)/api/src/main/resources/marquez/db/migration && \
 	cd "$$dir" && LC_ALL=C && \
 	{ for f in V*.sql; do v=$${f#V}; printf '%s\t%s\n' "$${v%%__*}" "$$f"; done | sort -V | cut -f2; ls R__*.sql; } \
@@ -707,7 +712,7 @@ sample-db-mattermost: PGOPTS = -c search_path=mattermost
 sample-db-mattermost:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS mattermost'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/mattermost/mattermost/tar.gz/$(MATTERMOST_SHA) \
+	$(FETCH) https://codeload.github.com/mattermost/mattermost/tar.gz/$(MATTERMOST_SHA) \
 	  | tar xz -C "$$dir" --strip-components=6 mattermost-$(MATTERMOST_SHA)/server/channels/db/migrations/postgres && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -754,7 +759,7 @@ sample-db-lemmy:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lemmy'
 	$(PSQL) -c 'SET search_path = lemmy; CREATE TABLE __diesel_schema_migrations (version varchar(50) NOT NULL PRIMARY KEY, run_on timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP)'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/LemmyNet/lemmy/tar.gz/$(LEMMY_SHA) \
+	$(FETCH) https://codeload.github.com/LemmyNet/lemmy/tar.gz/$(LEMMY_SHA) \
 	  | tar xz -C "$$dir" --strip-components=1 \
 	      lemmy-$(LEMMY_SHA)/migrations lemmy-$(LEMMY_SHA)/$(LEMMY_REPLACEABLE) && \
 	cd "$$dir" && LC_ALL=C && \
@@ -807,7 +812,7 @@ sample-db-windmill:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS windmill'
 	$(PSQL) -c 'SET search_path = windmill; CREATE TABLE _sqlx_migrations (version bigint NOT NULL PRIMARY KEY, description text NOT NULL, installed_on timestamptz NOT NULL DEFAULT now(), success boolean NOT NULL, checksum bytea NOT NULL, execution_time bigint NOT NULL)'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/windmill-labs/windmill/tar.gz/$(WINDMILL_SHA) \
+	$(FETCH) https://codeload.github.com/windmill-labs/windmill/tar.gz/$(WINDMILL_SHA) \
 	  | tar xz -C "$$dir" --strip-components=3 windmill-$(WINDMILL_SHA)/backend/migrations && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -842,7 +847,7 @@ sample-db-citizenlab: PGOPTS = -c search_path=citizenlab -c check_function_bodie
 .PHONY: sample-db-citizenlab
 sample-db-citizenlab:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS citizenlab'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | awk '/^-- Name: /{body=1} body' \
 	  | sed -E "/^CREATE SCHEMA public;\$$/d; /^SET search_path TO /,\$$d; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
 	  | $(PSQL)
@@ -872,7 +877,7 @@ sample-db-dokploy: PGOPTS = -c search_path=dokploy
 sample-db-dokploy:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS dokploy'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/Dokploy/dokploy/tar.gz/$(DOKPLOY_SHA) \
+	$(FETCH) https://codeload.github.com/Dokploy/dokploy/tar.gz/$(DOKPLOY_SHA) \
 	  | tar xz -C "$$dir" --strip-components=4 dokploy-$(DOKPLOY_SHA)/apps/dokploy/drizzle && \
 	cd "$$dir" && \
 	grep -oE '"tag": "[^"]+"' meta/_journal.json | sed 's/.*: "//; s/"$$//' \
@@ -899,7 +904,7 @@ sample-db-hyperswitch: PGOPTS = -c search_path=hyperswitch
 sample-db-hyperswitch:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hyperswitch'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/juspay/hyperswitch/tar.gz/$(HYPERSWITCH_SHA) \
+	$(FETCH) https://codeload.github.com/juspay/hyperswitch/tar.gz/$(HYPERSWITCH_SHA) \
 	  | tar xz -C "$$dir" --strip-components=2 hyperswitch-$(HYPERSWITCH_SHA)/migrations && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in */up.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -952,7 +957,7 @@ sample-db-penpot:
 	$(PSQL) -c 'ALTER EXTENSION "uuid-ossp" SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS penpot'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/penpot/penpot/tar.gz/$(PENPOT_SHA) \
+	$(FETCH) https://codeload.github.com/penpot/penpot/tar.gz/$(PENPOT_SHA) \
 	  | tar xz -C "$$dir" --strip-components=4 \
 	      penpot-$(PENPOT_SHA)/backend/src/app/migrations penpot-$(PENPOT_SHA)/backend/src/app/migrations.clj && \
 	cd "$$dir" && \
@@ -980,7 +985,7 @@ sample-db-dcm4chee: PGOPTS = -c search_path=dcm4chee
 sample-db-dcm4chee:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS dcm4chee'
 	for f in $(DCM4CHEE_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/dcm4che/dcm4chee-arc-light/09a7bb64080d6b76294cfda3e6807fc6faedc7a0/dcm4chee-arc-entity/src/main/resources/sql/psql/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/dcm4che/dcm4chee-arc-light/09a7bb64080d6b76294cfda3e6807fc6faedc7a0/dcm4chee-arc-entity/src/main/resources/sql/psql/$$f || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -1014,7 +1019,7 @@ sample-db-kamailio: PGOPTS = -c search_path=kamailio
 sample-db-kamailio:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS kamailio'
 	for m in $(KAMAILIO_MODULES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/kamailio/kamailio/72acbabee92122e24fc13a5c2f09228450da7263/utils/kamctl/postgres/$$m-create.sql || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/kamailio/kamailio/72acbabee92122e24fc13a5c2f09228450da7263/utils/kamctl/postgres/$$m-create.sql || exit 1; \
 	  echo; \
 	done | $(PSQL)
 
@@ -1050,7 +1055,7 @@ sample-db-alfresco: PGOPTS = -c search_path=alfresco
 sample-db-alfresco:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS alfresco'
 	for s in $(ALFRESCO_SCRIPTS); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/Alfresco/alfresco-community-repo/$(ALFRESCO_SHA)/repository/src/main/resources/alfresco/dbscripts/create/org.alfresco.repo.domain.dialect.PostgreSQLDialect/AlfrescoCreate-$$s.sql || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/Alfresco/alfresco-community-repo/$(ALFRESCO_SHA)/repository/src/main/resources/alfresco/dbscripts/create/org.alfresco.repo.domain.dialect.PostgreSQLDialect/AlfrescoCreate-$$s.sql || exit 1; \
 	  echo; \
 	done \
 	  | sed -E 's/\$$\{TRUE\}/TRUE/g; /--\(optional\)[[:space:]]*$$/d' \
@@ -1074,7 +1079,7 @@ sample-db-shenyu: PGOPTS = -c search_path=shenyu
 .PHONY: sample-db-shenyu
 sample-db-shenyu:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS shenyu'
-	curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/apache/shenyu/$(SHENYU_SHA)/db/init/pg/create-table.sql \
+	$(FETCH) https://raw.githubusercontent.com/apache/shenyu/$(SHENYU_SHA)/db/init/pg/create-table.sql \
 	  | sed 's/"public"\.//g' \
 	  | $(PSQL)
 
@@ -1113,7 +1118,7 @@ sample-db-openreplay:
 	$(PSQL) -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public'
 	$(PSQL) -c 'ALTER EXTENSION pgcrypto SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | sed -E "/^SET client_min_messages TO /d; s/table_schema = 'public'/table_schema = current_schema()/; s/^public\.//; s/([^A-Za-z0-9_])public\./\1/g" \
 	  | $(PSQL)
 
@@ -1161,7 +1166,7 @@ sample-db-logto: PGOPTS = -c search_path=logto
 sample-db-logto:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS logto'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/logto-io/logto/tar.gz/$(LOGTO_SHA) \
+	$(FETCH) https://codeload.github.com/logto-io/logto/tar.gz/$(LOGTO_SHA) \
 	  | tar xz -C "$$dir" --strip-components=3 \
 	      logto-$(LOGTO_SHA)/$(LOGTO_PACKAGE)/tables logto-$(LOGTO_SHA)/$(LOGTO_PACKAGE)/src/models/tenants.ts && \
 	cd "$$dir" && LC_ALL=C && \
@@ -1211,7 +1216,7 @@ sample-db-omero: PGOPTS = -c search_path=omero
 sample-db-omero:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS omero'
 	for f in $(OMERO_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/ome/openmicroscopy/$(OMERO_SHA)/$(OMERO_DIR)/$$f || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/ome/openmicroscopy/$(OMERO_SHA)/$(OMERO_DIR)/$$f || exit 1; \
 	  echo; \
 	done | sed 's/%%/%/g' | $(PSQL)
 
@@ -1247,7 +1252,7 @@ sample-db-concourse:
 	$(PSQL) -c 'ALTER EXTENSION pgcrypto SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS concourse'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/concourse/concourse/tar.gz/$(CONCOURSE_SHA) \
+	$(FETCH) https://codeload.github.com/concourse/concourse/tar.gz/$(CONCOURSE_SHA) \
 	  | tar xz -C "$$dir" --strip-components=5 concourse-$(CONCOURSE_SHA)/atc/db/migration/migrations && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -1284,7 +1289,7 @@ sample-db-affine:
 	$(PSQL) -c 'ALTER EXTENSION pgcrypto SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS affine'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/toeverything/AFFiNE/tar.gz/$(AFFINE_SHA) \
+	$(FETCH) https://codeload.github.com/toeverything/AFFiNE/tar.gz/$(AFFINE_SHA) \
 	  | tar xz -C "$$dir" --strip-components=5 AFFiNE-$(AFFINE_SHA)/$(AFFINE_DIR) && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -1366,7 +1371,7 @@ sample-db-uyuni:
 	$(PSQL) -c 'ALTER EXTENSION pg_trgm SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS uyuni'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/uyuni-project/uyuni/tar.gz/$(UYUNI_SHA) \
+	$(FETCH) https://codeload.github.com/uyuni-project/uyuni/tar.gz/$(UYUNI_SHA) \
 	  | tar xz -C "$$dir" --strip-components=1 \
 	      uyuni-$(UYUNI_SHA)/schema/spacewalk uyuni-$(UYUNI_SHA)/$(UYUNI_EVR_T) && \
 	cd "$$dir" && \
@@ -1435,7 +1440,7 @@ sample-db-lobehub:
 	$(PSQL) -c 'ALTER EXTENSION vector SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS lobehub'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/lobehub/lobehub/tar.gz/$(LOBEHUB_SHA) \
+	$(FETCH) https://codeload.github.com/lobehub/lobehub/tar.gz/$(LOBEHUB_SHA) \
 	  | tar xz -C "$$dir" --strip-components=4 lobehub-$(LOBEHUB_SHA)/packages/database/migrations && \
 	cd "$$dir" && \
 	grep -oE '"tag": "[^"]+"' meta/_journal.json | sed 's/.*: "//; s/"$$//' \
@@ -1484,7 +1489,7 @@ sample-db-omop: PGOPTS = -c search_path=omop
 sample-db-omop:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS omop'
 	for f in $(OMOP_SQL_FILES); do \
-	  curl -sSfL --retry 3 --retry-delay 2 https://raw.githubusercontent.com/OHDSI/CommonDataModel/$(OMOP_SHA)/$(OMOP_DIR)/OMOPCDM_postgresql_5.4_$$f.sql || exit 1; \
+	  $(FETCH) https://raw.githubusercontent.com/OHDSI/CommonDataModel/$(OMOP_SHA)/$(OMOP_DIR)/OMOPCDM_postgresql_5.4_$$f.sql || exit 1; \
 	  echo; \
 	done \
 	  | sed 's/@cdmDatabaseSchema/omop/g' \
@@ -1514,7 +1519,7 @@ sample-db-formbricks:
 	$(PSQL) -c 'ALTER EXTENSION vector SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS formbricks'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/formbricks/formbricks/tar.gz/$(FORMBRICKS_SHA) \
+	$(FETCH) https://codeload.github.com/formbricks/formbricks/tar.gz/$(FORMBRICKS_SHA) \
 	  | tar xz -C "$$dir" --strip-components=4 formbricks-$(FORMBRICKS_SHA)/packages/database/migration && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -1539,7 +1544,7 @@ sample-db-hoppscotch:
 	$(PSQL) -c 'ALTER EXTENSION pg_trgm SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS hoppscotch'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/hoppscotch/hoppscotch/tar.gz/$(HOPPSCOTCH_SHA) \
+	$(FETCH) https://codeload.github.com/hoppscotch/hoppscotch/tar.gz/$(HOPPSCOTCH_SHA) \
 	  | tar xz -C "$$dir" --strip-components=5 hoppscotch-$(HOPPSCOTCH_SHA)/$(HOPPSCOTCH_DIR) && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in */migration.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -1554,7 +1559,7 @@ sample-db-streampark: PGOPTS = -c search_path=$(SCHEMA)
 .PHONY: sample-db-streampark
 sample-db-streampark:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS $(SCHEMA)'
-	curl -sSfL --retry 3 --retry-delay 2 $(URL) \
+	$(FETCH) $(URL) \
 	  | sed -E 's/"public"\.//g' \
 	  | $(PSQL)
 
@@ -1571,7 +1576,7 @@ sample-db-vaultwarden: PGOPTS = -c search_path=vaultwarden
 sample-db-vaultwarden:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS vaultwarden'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/dani-garcia/vaultwarden/tar.gz/$(VAULTWARDEN_SHA) \
+	$(FETCH) https://codeload.github.com/dani-garcia/vaultwarden/tar.gz/$(VAULTWARDEN_SHA) \
 	  | tar xz -C "$$dir" --strip-components=3 vaultwarden-$(VAULTWARDEN_SHA)/migrations/postgresql && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in */up.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -1590,7 +1595,7 @@ sample-db-authelia: PGOPTS = -c search_path=authelia
 sample-db-authelia:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS authelia'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/authelia/authelia/tar.gz/$(AUTHELIA_SHA) \
+	$(FETCH) https://codeload.github.com/authelia/authelia/tar.gz/$(AUTHELIA_SHA) \
 	  | tar xz -C "$$dir" --strip-components=5 authelia-$(AUTHELIA_SHA)/$(AUTHELIA_DIR) && \
 	cd "$$dir" && LC_ALL=C && \
 	for f in *.up.sql; do cat "$$f"; printf '\n;\n'; done \
@@ -1611,7 +1616,7 @@ sample-db-bonita: PGOPTS = -c search_path=bonita
 sample-db-bonita:
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS bonita'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/bonitasoft/bonita-engine/tar.gz/$(BONITA_SHA) \
+	$(FETCH) https://codeload.github.com/bonitasoft/bonita-engine/tar.gz/$(BONITA_SHA) \
 	  | tar xz -C "$$dir" --strip-components=8 bonita-engine-$(BONITA_SHA)/$(BONITA_DIR) && \
 	cd "$$dir" && \
 	for f in $(BONITA_SQL_FILES); do cat "$$f.sql"; printf '\n;\n'; done \
@@ -1653,7 +1658,7 @@ sample-db-cratesio:
 	$(PSQL) -c 'ALTER EXTENSION pgcrypto SET SCHEMA public'
 	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS cratesio'
 	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
-	curl -sSfL --retry 3 --retry-delay 2 https://codeload.github.com/rust-lang/crates.io/tar.gz/$(CRATESIO_SHA) \
+	$(FETCH) https://codeload.github.com/rust-lang/crates.io/tar.gz/$(CRATESIO_SHA) \
 	  | tar xz -C "$$dir" --strip-components=2 crates.io-$(CRATESIO_SHA)/migrations && \
 	cd "$$dir" && \
 	for d in */; do echo "$${d%/}"; done \

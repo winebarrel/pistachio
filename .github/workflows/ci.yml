@@ -298,4 +298,20 @@ jobs:
           cid=$(docker ps --filter ancestor=postgres:18 --format '{{.ID}}')
           [ -n "$cid" ] || { echo "postgres service container not found" >&2; exit 1; }
           docker exec -u root "$cid" bash -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends postgresql-18-pgvector postgresql-18-postgis-3'
+      # Every sample source is pinned, so a body test/samples/fetch.sh kept on
+      # an earlier run is still the one the loader would download. The key
+      # follows sample-db.mk, where the URLs are, and falls back to the shard's
+      # last entry, so a change to one sample leaves the others cached. The
+      # bodies no sample read in this run are removed before the save, which
+      # keeps a replaced pin from staying in the cache.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/sample-cache
+          key: samples-${{ matrix.shard }}-${{ hashFiles('sample-db.mk') }}
+          restore-keys: samples-${{ matrix.shard }}-
+      - run: touch "$RUNNER_TEMP/sample-start"
       - run: make test-samples
+        env:
+          SAMPLE_CACHE: ${{ runner.temp }}/sample-cache
+      - name: Drop cached bodies this run did not read
+        run: find "$RUNNER_TEMP/sample-cache" -type f ! -newer "$RUNNER_TEMP/sample-start" -delete
