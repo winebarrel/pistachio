@@ -50,7 +50,7 @@ func NewDBPool(t *testing.T) *DBPool {
 	t.Helper()
 	ctx := context.Background()
 	conn := ConnectDB(t)
-	defer conn.Close(ctx)
+	defer conn.Close(ctx) //nolint:errcheck
 
 	size := runtime.GOMAXPROCS(0)
 	p := &DBPool{names: make(chan string, size)}
@@ -79,7 +79,7 @@ func (p *DBPool) Connect(t *testing.T) *pgx.Conn {
 	}
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		conn.Close(context.Background())
+		conn.Close(context.Background()) //nolint:errcheck
 		p.names <- name
 	})
 	return conn
