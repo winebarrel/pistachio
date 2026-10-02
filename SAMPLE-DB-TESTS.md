@@ -26,6 +26,15 @@ CI sets it to `1/3`, `2/3` and `3/3`. A local run can use it the same way:
 SAMPLE_SHARD=2/3 make test-samples
 ```
 
+`SAMPLE_CACHE` names a directory in which the loaders keep what they
+download, one file per URL, and read it from there on the next run. Every
+source is pinned, so a kept file does not go stale. CI keeps the directory
+between runs:
+
+```bash
+SAMPLE_CACHE=~/.cache/pista-samples make test-samples
+```
+
 To check some of the samples rather than all of them, name them in `SAMPLE`,
 separated by commas:
 
