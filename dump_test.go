@@ -724,6 +724,7 @@ func TestDump(t *testing.T) {
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
 	pgMajor := testutil.ServerMajorVersion(t, ctx, conn)
+	pool := testutil.NewDBPool(t)
 
 	files, err := filepath.Glob("testdata/dump/*.yml")
 	require.NoError(t, err)
@@ -732,13 +733,15 @@ func TestDump(t *testing.T) {
 	for _, file := range files {
 		name := strings.TrimSuffix(filepath.Base(file), ".yml")
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			tc := loadYAML[dumpTestCase](t, file)
 			if tc.MinPG > 0 && pgMajor < tc.MinPG {
 				t.Skipf("requires PostgreSQL %d or later", tc.MinPG)
 			}
-			testutil.SetupDB(t, ctx, conn, tc.Init)
+			db := pool.Connect(t)
+			testutil.SetupDB(t, ctx, db, tc.Init)
 			client := NewClient(&Options{
-				ConnString:         conn.Config().ConnString(),
+				ConnString:         db.Config().ConnString(),
 				Schemas:            []string{"public"},
 				Include:            tc.Include,
 				Exclude:            tc.Exclude,
