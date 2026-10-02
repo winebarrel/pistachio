@@ -105,6 +105,31 @@ selected() {
   return 1
 }
 
+# SAMPLE_SHARD, written i/n, narrows the selection to every n-th sample starting
+# with the i-th, so CI can split the run across n jobs. Each job starts from
+# clean-schema, and the order within a shard is the manifest's, so boundary
+# stays the first sample of shard 1.
+if [ -n "${SAMPLE_SHARD:-}" ]; then
+  IFS=/ read -r _shard _shards <<<"$SAMPLE_SHARD"
+  if ! [[ "$_shard" =~ ^[1-9][0-9]*$ && "$_shards" =~ ^[1-9][0-9]*$ ]] || [ "$_shard" -gt "$_shards" ]; then
+    echo "SAMPLE_SHARD must be i/n with 1 <= i <= n, not $SAMPLE_SHARD." >&2
+    exit 1
+  fi
+  _k=0
+  _sharded=()
+  while IFS='|' read -r _name _; do
+    [ -n "$_name" ] || continue
+    selected "$_name" || continue
+    [ $((_k % _shards + 1)) -eq "$_shard" ] && _sharded+=("$_name")
+    _k=$((_k + 1))
+  done <<<"$_manifest"
+  if [ ${#_sharded[@]} -eq 0 ]; then
+    echo "Shard $SAMPLE_SHARD holds no sample." >&2
+    exit 1
+  fi
+  _selected=("${_sharded[@]}")
+fi
+
 # The discourse, citizenlab, affine, lobehub, and formbricks samples need
 # pgvector, and the osm, inaturalist, and citizenlab samples and the dhis2
 # loader need PostGIS, neither of which the official postgres image ships. Say

@@ -68,12 +68,38 @@ jobs:
       # commit it.
       - run: go mod tidy -diff
 
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+      - run: make deadcode
+
   windows:
     runs-on: windows-latest
     # cgo (libpg_query) builds with the mingw-w64 gcc bundled in the
     # windows-latest image, found on PATH as gcc. This deliberately
     # exercises the native Windows toolchain; the release binary is
     # cross-built with mingw-w64 via goreleaser-cross (.goreleaser.yml).
+    #
+    # The tests run about three times slower here than on Linux, and TestApply
+    # and TestPlan take most of that time, so the run is split across three
+    # jobs: TestApply, TestPlan, and everything else. The filter goes in
+    # GOFLAGS so that the regular expression never passes through make or the
+    # shell. \b keeps TestApplyFrom and TestPlan_* out of the first two shards.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: apply
+            goflags: -run=^TestApply\b
+          - shard: plan
+            goflags: -run=^TestPlan\b
+          - shard: rest
+            goflags: -skip=^Test(Apply|Plan)\b
     env:
       CGO_ENABLED: "1"
       # The runner's PostgreSQL listens on the default port; the Makefile
@@ -138,6 +164,8 @@ jobs:
       - name: Smoke test
         run: ./pista.exe --help
       - run: make TEST_OPTS='-coverprofile=coverage.txt' TEST_JUNIT=junit.xml
+        env:
+          GOFLAGS: ${{ matrix.goflags }}
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -145,7 +173,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
         with:
-          name: coverage-windows
+          name: coverage-windows-${{ matrix.shard }}
           path: coverage.txt
       # Uploaded even when the tests failed, since a failed test is what the
       # report is there to describe.
@@ -185,8 +213,6 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-      - run: make deadcode
       - run: make TEST_OPTS='-coverprofile=coverage.txt' TEST_JUNIT=junit.xml
       - run: make test-scenario
       # test-fidelity reloads a dump and compares pg_dump output, and pg_dump
@@ -231,10 +257,18 @@ jobs:
     # external host, loads it into an isolated database, then verifies that
     # `pista dump` plans back to "No changes". A diff means the catalog reader
     # and parser disagree.
+    #
+    # The samples load one after another, so the run is split across three
+    # jobs; test/samples/run.sh picks every third sample for each.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
       # The service keeps the default port; the Makefile otherwise defaults to
       # the port compose.yaml publishes locally.
       PGPORT: "5432"
+      SAMPLE_SHARD: ${{ matrix.shard }}/3
     services:
       postgres:
         image: postgres:18
