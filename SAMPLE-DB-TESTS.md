@@ -17,7 +17,14 @@ the check. It needs a running PostgreSQL instance (`PGHOST=localhost` and
 and network access to the upstream hosts. The uyuni sample needs GNU `make` and
 `python3` as well. Its schema is a source tree rather than a file, and the
 loader runs the build that turns the tree into a file. The same target runs in
-CI as the `samples` job.
+CI as the `samples` job, split across three jobs.
+
+`SAMPLE_SHARD`, written `i/n`, checks every n-th sample starting with the i-th.
+CI sets it to `1/3`, `2/3` and `3/3`. A local run can use it the same way:
+
+```bash
+SAMPLE_SHARD=2/3 make test-samples
+```
 
 To check some of the samples rather than all of them, name them in `SAMPLE`,
 separated by commas:
