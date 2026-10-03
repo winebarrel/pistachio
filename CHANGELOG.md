@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A primary key written `USING INDEX` now marks its columns NOT NULL. Before, a column the file left nullable planned a `DROP NOT NULL` on every run, which PostgreSQL rejects.
+
 ## [1.73.2] - 2026-10-03
 
 * `--explain` now shows the size of a table that a foreign key references without a schema name. Before, it showed only the table name.

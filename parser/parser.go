@@ -665,6 +665,8 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		return nil, err
 	}
 
+	applyUsingIndexPrimaryKeyNotNull(tables)
+
 	if err := validateColumnRefs(tables); err != nil {
 		return nil, err
 	}
@@ -815,6 +817,21 @@ func applyPrimaryKeyNotNull(table *model.Table, con *model.Constraint) {
 	for _, colName := range con.Columns {
 		if col, ok := table.Columns.GetOk(colName); ok {
 			col.NotNull = true
+		}
+	}
+}
+
+// applyUsingIndexPrimaryKeyNotNull marks NOT NULL the columns of a primary
+// key written USING INDEX, which applyPrimaryKeyNotNull cannot reach: the key
+// lists no columns, and the index it takes over may come later in the files.
+// So this runs once every statement is read. A key with a column list is
+// already marked.
+func applyUsingIndexPrimaryKeyNotNull(tables *orderedmap.Map[string, *model.Table]) {
+	for _, t := range tables.All() {
+		for _, colName := range primaryKeyColumns(t) {
+			if col, ok := t.Columns.GetOk(colName); ok {
+				col.NotNull = true
+			}
 		}
 	}
 }

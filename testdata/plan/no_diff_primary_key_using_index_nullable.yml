@@ -1,0 +1,12 @@
+# A primary key written USING INDEX lists no columns, but PostgreSQL still
+# marks the index's columns NOT NULL. The desired side reads them through the
+# index, so a column the file leaves nullable plans no DROP NOT NULL.
+init: |
+  CREATE TABLE public.t (id integer, name text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+desired: |
+  CREATE TABLE public.t (id integer, name text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+plan: ""

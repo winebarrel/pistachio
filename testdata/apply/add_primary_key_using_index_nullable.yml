@@ -1,0 +1,16 @@
+# A primary key added USING INDEX over a column the file leaves nullable. The
+# re-plan must find no drift.
+init: |
+  CREATE TABLE public.t (id integer, name text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+desired: |
+  CREATE TABLE public.t (id integer, name text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      name text,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );

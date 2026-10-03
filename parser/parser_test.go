@@ -1632,6 +1632,25 @@ ALTER TABLE ONLY public.items ADD PRIMARY KEY USING INDEX items_pkey;`
 	assert.Equal(t, "items_pkey", pk.IndexName)
 }
 
+func TestParseSQL_PrimaryKeyUsingIndexNotNull(t *testing.T) {
+	// The index comes after the key, so its columns are read once every
+	// statement is.
+	sql := `CREATE TABLE public.items (
+    id integer,
+    code text
+);
+ALTER TABLE public.items ADD CONSTRAINT items_pkey PRIMARY KEY USING INDEX items_id_idx;
+CREATE UNIQUE INDEX items_id_idx ON public.items (id);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.items")
+	require.NotNil(t, tbl)
+	assert.True(t, tbl.Columns.Get("id").NotNull)
+	assert.False(t, tbl.Columns.Get("code").NotNull)
+}
+
 func TestParseSQL_CommentOnUnknownTable(t *testing.T) {
 	// COMMENT on unknown table is silently skipped
 	sql := `COMMENT ON TABLE public.nonexistent IS 'test';`
