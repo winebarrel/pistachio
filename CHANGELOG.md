@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.73.2] - 2026-10-03
 
 * `--explain` now shows the size of a table that a foreign key references without a schema name. Before, it showed only the table name.
 
