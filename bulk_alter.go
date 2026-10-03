@@ -32,18 +32,7 @@ func mergeAlterTable(stmts []string, shouldMerge func(fqtn string) bool) []strin
 			// reformatting drift from rebuilding the statement.
 			result = append(result, groupOriginals[0])
 		default:
-			var b strings.Builder
-			b.WriteString("ALTER TABLE ")
-			b.WriteString(groupFQTN)
-			for i, a := range groupActions {
-				b.WriteString("\n  ")
-				b.WriteString(a)
-				if i < len(groupActions)-1 {
-					b.WriteByte(',')
-				}
-			}
-			b.WriteByte(';')
-			result = append(result, b.String())
+			result = append(result, "ALTER TABLE "+groupFQTN+"\n  "+strings.Join(groupActions, ",\n  ")+";")
 		}
 		groupFQTN = ""
 		groupActions = nil

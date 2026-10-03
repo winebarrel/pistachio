@@ -311,7 +311,7 @@ func parseOneStmt(sql string) *pg_query.Node {
 // creates has no current entry and resolves to nil, and so does a statement
 // with no relation at all.
 func (ex *explainer) currentTable(rv *pg_query.RangeVar) (string, *model.Table) {
-	key := model.Ident(rv.GetSchemaname(), rv.GetRelname())
+	key := rangeVarIdent(rv)
 	return key, ex.currentTableByKey(key)
 }
 
@@ -335,7 +335,7 @@ func (ex *explainer) referencedTable(rv *pg_query.RangeVar) (string, *model.Tabl
 			return key, t
 		}
 	}
-	return model.Ident(rv.GetSchemaname(), rv.GetRelname()), nil
+	return rangeVarIdent(rv), nil
 }
 
 // currentColumn resolves a column of the table the plan names, through a
