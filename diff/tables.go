@@ -1238,13 +1238,7 @@ func isNumericTypeName(tn *pg_query.TypeName) bool {
 // in the asymmetric cast-strip path so that desired-side quoted literals
 // (`'0'`, `'1'`) keep matching the cast-stripped Sval as before.
 func desiredIsNumericAConst(n *pg_query.Node) bool {
-	if n == nil {
-		return false
-	}
 	ac := n.GetAConst()
-	if ac == nil {
-		return false
-	}
 	return ac.GetIval() != nil || ac.GetFval() != nil
 }
 
@@ -1259,21 +1253,14 @@ func peerIsNumericAtTopLevel(n *pg_query.Node) bool {
 	if desiredIsNumericAConst(n) {
 		return true
 	}
-	if n == nil {
-		return false
-	}
 	tc := n.GetTypeCast()
 	if tc == nil || tc.Arg == nil || !isNumericTypeName(tc.TypeName) {
 		return false
 	}
-	ac := tc.Arg.GetAConst()
-	if ac == nil {
-		return false
-	}
-	if ac.GetIval() != nil || ac.GetFval() != nil {
+	if desiredIsNumericAConst(tc.Arg) {
 		return true
 	}
-	if sv := ac.GetSval(); sv != nil {
+	if sv := tc.Arg.GetAConst().GetSval(); sv != nil {
 		return numericAConstFromString(sv.Sval) != nil
 	}
 	return false
@@ -1780,10 +1767,7 @@ func indexCommentStmts(currentComment *string, desired *model.Index) []string {
 	if equalPtr(currentComment, desired.Comment) {
 		return nil
 	}
-	if desired.Comment != nil {
-		return []string{desired.CommentSQL()}
-	}
-	return []string{"COMMENT ON INDEX " + model.Ident(desired.Schema, desired.Name) + " IS NULL;"}
+	return []string{commentOnSQL("INDEX "+model.Ident(desired.Schema, desired.Name), desired.Comment)}
 }
 
 // dropIndexSQL builds a DROP INDEX statement, optionally with CONCURRENTLY

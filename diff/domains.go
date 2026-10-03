@@ -127,14 +127,12 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 	// Drop removed or changed constraints. One that only needs validating is
 	// kept.
 	for _, c := range current {
-		d, ok := desiredByName[c.Name]
-		if !ok {
-			stmts = append(stmts, "ALTER DOMAIN "+fqdn+" DROP CONSTRAINT "+model.Ident(c.Name)+";")
-			continue
+		if d, ok := desiredByName[c.Name]; ok {
+			if ch := change(c, d); !ch.changed || ch.validateOnly {
+				continue
+			}
 		}
-		if ch := change(c, d); ch.changed && !ch.validateOnly {
-			stmts = append(stmts, "ALTER DOMAIN "+fqdn+" DROP CONSTRAINT "+model.Ident(c.Name)+";")
-		}
+		stmts = append(stmts, "ALTER DOMAIN "+fqdn+" DROP CONSTRAINT "+model.Ident(c.Name)+";")
 	}
 
 	// Add new or changed constraints, or validate a NOT VALID one. A

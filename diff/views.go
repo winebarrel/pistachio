@@ -319,10 +319,8 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			// CREATE OR REPLACE; but PostgreSQL rejects it when the new
 			// query removes, renames, or reorders an existing output
 			// column, so detect that case and fall back to DROP+CREATE.
-			needsDropCreate := desiredView.Materialized || currentView.Materialized != desiredView.Materialized
-			if !needsDropCreate && !canCreateOrReplaceView(currentView.Definition, desiredView.Definition) {
-				needsDropCreate = true
-			}
+			needsDropCreate := desiredView.Materialized || currentView.Materialized != desiredView.Materialized ||
+				!canCreateOrReplaceView(currentView.Definition, desiredView.Definition)
 			if needsDropCreate {
 				// When the view was also renamed, drop the old name;
 				// the database still has it because the ALTER RENAME
