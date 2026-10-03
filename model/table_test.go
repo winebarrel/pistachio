@@ -381,7 +381,6 @@ func TestTable_CommentSQL(t *testing.T) {
 		"COMMENT ON TABLE public.users IS 'Main users table';",
 		"COMMENT ON COLUMN public.users.name IS 'User name';",
 		`COMMENT ON CONSTRAINT "Users PK" ON public.users IS 'it''s the key';`,
-		"COMMENT ON INDEX public.idx_users_name IS 'Lookup by name';",
 		"COMMENT ON CONSTRAINT users_org_fkey ON public.users IS 'Owner';",
 		"COMMENT ON POLICY own ON public.users IS 'Own rows';",
 		"COMMENT ON TRIGGER stamp ON public.users IS 'Stamps';",
@@ -829,7 +828,8 @@ func TestTable_UsingIndexConSQL(t *testing.T) {
 		&model.Constraint{Name: "t_pkey", Type: 'p', Definition: "PRIMARY KEY USING INDEX t_idx", IndexName: "t_idx"},
 		&model.Constraint{Name: "t_c_key", Type: 'u', Definition: "UNIQUE (c)"},
 	)
-	tbl.Indexes.Set("t_idx", &model.Index{Name: "t_idx", Schema: "public", Table: "t", Definition: "CREATE UNIQUE INDEX t_idx ON public.t USING btree (c)"})
+	idxComment := "idx"
+	tbl.Indexes.Set("t_idx", &model.Index{Name: "t_idx", Schema: "public", Table: "t", Definition: "CREATE UNIQUE INDEX t_idx ON public.t USING btree (c)", Comment: &idxComment})
 
 	assert.Equal(t, []string{"ALTER TABLE ONLY public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;"}, tbl.UsingIndexConSQL())
 	assert.Equal(t, `-- public.t
@@ -838,5 +838,6 @@ CREATE TABLE public.t (
     CONSTRAINT t_c_key UNIQUE (c)
 );
 CREATE UNIQUE INDEX t_idx ON public.t USING btree (c);
+COMMENT ON INDEX public.t_idx IS 'idx';
 ALTER TABLE ONLY public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;`, model.TableToSQL(tbl))
 }

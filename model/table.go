@@ -394,13 +394,13 @@ func (t Table) StorageSQL() []string {
 	return stmts
 }
 
-// CommentSQL renders every comment the table and the objects on it carry, in
-// the order dump writes the objects.
+// CommentSQL renders the comments the table and the objects on it carry, in
+// the order dump writes the objects. The index comments are left out: dump
+// writes them right after the indexes, with IndexCommentSQL.
 func (t Table) CommentSQL() []string {
 	return slices.Concat(
 		t.RelationCommentSQL(),
 		t.ConstraintCommentSQL(),
-		t.IndexCommentSQL(),
 		t.FkCommentSQL(),
 		t.PolicyCommentSQL(),
 		t.TrigCommentSQL(),
@@ -509,6 +509,9 @@ func TableToSQL(t *Table) string {
 	if s := t.IdxSQL(); s != "" {
 		parts = append(parts, s)
 	}
+	// The index comments go before the USING INDEX constraints, since ADD
+	// CONSTRAINT renames the index it takes over.
+	parts = append(parts, t.IndexCommentSQL()...)
 	parts = append(parts, t.UsingIndexConSQL()...)
 	if s := t.FkSQL(); s != "" {
 		parts = append(parts, "\n"+s)

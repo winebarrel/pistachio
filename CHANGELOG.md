@@ -12,6 +12,8 @@
 
 * Adding an index and a `USING INDEX` constraint on it to an existing table in one run now creates the index first. Before, the plan had no `CREATE INDEX`, so the `ADD CONSTRAINT` failed.
 
+* `dump` now writes an index comment right after its `CREATE INDEX`, rather than with the table's other comments at the end.
+
 ## [1.73.2] - 2026-10-03
 
 * `--explain` now shows the size of a table that a foreign key references without a schema name. Before, it showed only the table name.

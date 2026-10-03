@@ -361,6 +361,13 @@ func newTableExtras(t *model.Table, copies map[string]bool) (stmts, idxStmts, fk
 			hasConcurrently = true
 		}
 	}
+	// The index comments go before the USING INDEX constraints, since ADD
+	// CONSTRAINT renames the index it takes over.
+	if t.Partitioned {
+		idxStmts = append(idxStmts, t.IndexCommentSQL()...)
+	} else {
+		stmts = append(stmts, t.IndexCommentSQL()...)
+	}
 	stmts = append(stmts, t.UsingIndexConSQL()...)
 	for _, fk := range t.ForeignKeys.CollectValues() {
 		fkStmts = append(fkStmts, fk.SQL(t.Partitioned))
@@ -371,11 +378,6 @@ func newTableExtras(t *model.Table, copies map[string]bool) (stmts, idxStmts, fk
 	stmts = append(stmts, t.RelationCommentSQL()...)
 	stmts = append(stmts, t.ConstraintCommentSQL()...)
 	stmts = append(stmts, t.TrigCommentSQL()...)
-	if t.Partitioned {
-		idxStmts = append(idxStmts, t.IndexCommentSQL()...)
-	} else {
-		stmts = append(stmts, t.IndexCommentSQL()...)
-	}
 	return
 }
 
