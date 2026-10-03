@@ -28,16 +28,30 @@ jobs:
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           repositories: pistachio,homebrew-pistachio
           permission-contents: write
+      # The release notes link the release pull request, the nearest release
+      # merge before the tag on main. Other merges can come between: release-tag
+      # tags main as it stands after the approval.
+      - name: Find the release pull request
+        run: |
+          number=$(git log -1 --first-parent --format=%s -E \
+            --grep='^Merge pull request #[0-9]+ from [^ ]*/release-from-v' "$GITHUB_REF_NAME" |
+            sed -n 's/^Merge pull request #\([0-9]\+\) .*/\1/p')
+          if [ -z "$number" ]; then
+            echo "::error::No release pull request merge precedes $GITHUB_REF_NAME"
+            exit 1
+          fi
+          echo "RELEASE_PR=$number" >> "$GITHUB_ENV"
       - name: Run GoReleaser
         run: |
           docker run -q \
             --rm \
             -e CGO_ENABLED=1 \
             -e GITHUB_TOKEN \
+            -e RELEASE_PR \
             -v "$GITHUB_WORKSPACE:/src" \
             -w /src \
             "ghcr.io/goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION}" \
-            release --clean
+            release --clean --release-notes-tmpl .github/release-notes.md.tmpl
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
