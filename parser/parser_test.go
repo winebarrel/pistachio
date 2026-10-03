@@ -1610,6 +1610,7 @@ func TestParseSQL_AlterTableUsingIndex(t *testing.T) {
     id integer NOT NULL,
     code text NOT NULL
 );
+CREATE UNIQUE INDEX items_pkey ON public.items (id);
 ALTER TABLE ONLY public.items ADD CONSTRAINT items_code_key UNIQUE USING INDEX items_code_key;
 ALTER TABLE ONLY public.items ADD PRIMARY KEY USING INDEX items_pkey;`
 
@@ -1630,6 +1631,48 @@ ALTER TABLE ONLY public.items ADD PRIMARY KEY USING INDEX items_pkey;`
 	require.True(t, ok)
 	assert.True(t, pk.Type.IsPrimaryKeyConstraint())
 	assert.Equal(t, "items_pkey", pk.IndexName)
+}
+
+func TestParseSQL_PrimaryKeyUsingIndexNotNull(t *testing.T) {
+	// The indexes come after the constraints that use them.
+	sql := `CREATE TABLE public.items (
+    tenant_id integer,
+    id integer,
+    code text
+);
+ALTER TABLE public.items ADD CONSTRAINT items_pkey PRIMARY KEY USING INDEX items_id_idx;
+ALTER TABLE public.items ADD CONSTRAINT items_code_key UNIQUE USING INDEX items_code_idx;
+CREATE UNIQUE INDEX items_id_idx ON public.items (tenant_id, id);
+CREATE UNIQUE INDEX items_code_idx ON public.items (code);`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	tbl := result.Tables.Get("public.items")
+	require.NotNil(t, tbl)
+	assert.True(t, tbl.Columns.Get("tenant_id").NotNull)
+	assert.True(t, tbl.Columns.Get("id").NotNull)
+	// A unique constraint does not make its columns NOT NULL.
+	assert.False(t, tbl.Columns.Get("code").NotNull)
+}
+
+func TestParseSQL_PrimaryKeyUsingIndexUndeclared(t *testing.T) {
+	sql := `CREATE TABLE public.items (id integer);
+ALTER TABLE public.items ADD CONSTRAINT items_pkey PRIMARY KEY USING INDEX items_id_idx;`
+
+	_, err := parseSQLWithPublicSchema(sql)
+	require.EqualError(t, err, "index items_id_idx used by primary key items_pkey on table public.items is not declared")
+}
+
+// A table marked -- pista:ignore is out of the diff, so its undeclared index
+// is not an error.
+func TestParseSQL_PrimaryKeyUsingIndexUndeclaredIgnored(t *testing.T) {
+	sql := `-- pista:ignore
+CREATE TABLE public.items (id integer);
+ALTER TABLE public.items ADD CONSTRAINT items_pkey PRIMARY KEY USING INDEX items_id_idx;`
+
+	_, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
 }
 
 func TestParseSQL_CommentOnUnknownTable(t *testing.T) {

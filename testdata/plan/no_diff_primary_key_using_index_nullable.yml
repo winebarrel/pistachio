@@ -1,0 +1,12 @@
+# PostgreSQL makes the columns of a primary key NOT NULL, also when the key is
+# written USING INDEX. The file declares the column nullable, and the plan
+# must not drop NOT NULL.
+init: |
+  CREATE TABLE public.t (id integer, name text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+desired: |
+  CREATE TABLE public.t (id integer, name text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+plan: ""

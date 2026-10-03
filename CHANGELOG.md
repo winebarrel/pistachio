@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+* **BREAKING**: A primary key written `USING INDEX` now needs a `CREATE INDEX` for its index in the schema files. Without one, reading the files fails with an error.
+
+* The columns of a primary key written `USING INDEX` are now read as NOT NULL. Before, a column the file declared nullable got a `DROP NOT NULL` on every plan, and PostgreSQL rejected it.
+
 ## [1.73.2] - 2026-10-03
 
 * `--explain` now shows the size of a table that a foreign key references without a schema name. Before, it showed only the table name.

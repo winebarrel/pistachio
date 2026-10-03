@@ -1055,48 +1055,6 @@ Workaround: write `integer[]`, which is what `pista dump` emits.
 
 Origin: review of the column type canonicalization, 2026-09-08.
 
-## `PRIMARY KEY USING INDEX` does not mark its columns NOT NULL
-
-Priority: low.
-
-A primary key can take its columns from an existing unique index rather than
-from a column list:
-
-```sql
-CREATE TABLE public.t (id integer);
-CREATE UNIQUE INDEX t_idx ON public.t (id);
-ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
-```
-
-The constraint and the index converge as of 1.50.0. The index that the
-constraint takes over is left where it is rather than planned as a drop. A
-desired constraint that names an index compares equal to the constraint that
-PostgreSQL created from that index. What the form still does not carry is the
-NOT NULL that a primary key marks its columns with. There is no column list to
-read it from. So the desired side has the column nullable where the database
-has it not null, and every plan emits
-
-```
-ALTER TABLE public.t ALTER COLUMN id DROP NOT NULL;
-```
-
-That statement fails with `column "id" is in a primary key`. So the run does
-not converge. This was verified on 15 and 18.
-
-Closing this means resolving the constraint's columns through the index that
-the desired schema declares next to the constraint. That index is where the
-column list lives.
-
-`pista dump` writes the key inline, as `CONSTRAINT t_pkey PRIMARY KEY (id)`,
-with the column declared `NOT NULL` and no separate index. That output plans
-clean. Only a file that writes `USING INDEX` reaches this.
-
-Workaround: declare the key's columns `NOT NULL` in the file. That leaves
-nothing for the plan to emit.
-
-Origin: review of the primary key NOT NULL fix, 2026-09-09. Narrowed once
-`USING INDEX` constraints were read in 1.50.0.
-
 ## A subscripted ARRAY constructor loses its parentheses
 
 PostgreSQL needs parentheses to subscript an array constructor, and

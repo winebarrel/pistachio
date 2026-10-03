@@ -2,8 +2,8 @@
 # it names. That table may come later, sit in another schema, get its primary
 # key from ALTER TABLE or USING INDEX, or be the key's own table. A bare name
 # not in the default schema is looked up in the key's own schema. A key to a
-# table the schema does not declare, or whose primary key columns are not
-# known, is left as written.
+# table the schema does not declare, or to one with no primary key, is left
+# as written.
 input: |
   CREATE TABLE public.posts (
       id integer NOT NULL,
@@ -12,7 +12,6 @@ input: |
       tag_id integer REFERENCES tags,
       code text REFERENCES codes,
       idx_id integer REFERENCES by_index,
-      ext_id integer REFERENCES by_ext_index,
       a integer,
       b integer,
       CONSTRAINT posts_pkey PRIMARY KEY (id)
@@ -36,10 +35,6 @@ input: |
   );
   CREATE UNIQUE INDEX by_index_id_idx ON public.by_index (id);
   ALTER TABLE public.by_index ADD CONSTRAINT by_index_pkey PRIMARY KEY USING INDEX by_index_id_idx;
-  CREATE TABLE public.by_ext_index (
-      id integer NOT NULL
-  );
-  ALTER TABLE public.by_ext_index ADD CONSTRAINT by_ext_index_pkey PRIMARY KEY USING INDEX by_ext_index_id_idx;
   CREATE TABLE app.base (
       id integer PRIMARY KEY
   );
@@ -56,7 +51,6 @@ expected: |
       tag_id integer,
       code text,
       idx_id integer,
-      ext_id integer,
       a integer,
       b integer,
       CONSTRAINT posts_pkey PRIMARY KEY (id)
@@ -67,7 +61,6 @@ expected: |
   ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES tags;
   ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_code_fkey FOREIGN KEY (code) REFERENCES codes;
   ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_idx_id_fkey FOREIGN KEY (idx_id) REFERENCES by_index (id);
-  ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_ext_id_fkey FOREIGN KEY (ext_id) REFERENCES by_ext_index;
   ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_pair_fkey FOREIGN KEY (a, b) REFERENCES app."Pair" ("A", b) ON DELETE CASCADE;
 
   -- public.users
@@ -95,12 +88,6 @@ expected: |
       CONSTRAINT by_index_pkey PRIMARY KEY USING INDEX by_index_id_idx
   );
   CREATE UNIQUE INDEX by_index_id_idx ON public.by_index USING btree (id);
-
-  -- public.by_ext_index
-  CREATE TABLE public.by_ext_index (
-      id integer NOT NULL,
-      CONSTRAINT by_ext_index_pkey PRIMARY KEY USING INDEX by_ext_index_id_idx
-  );
 
   -- app.base
   CREATE TABLE app.base (

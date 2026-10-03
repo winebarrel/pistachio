@@ -661,6 +661,10 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		}
 	}
 
+	if err := applyUsingIndexPrimaryKeyNotNull(tables); err != nil {
+		return nil, err
+	}
+
 	if err := fillFKRefColumns(tables); err != nil {
 		return nil, err
 	}
@@ -817,6 +821,33 @@ func applyPrimaryKeyNotNull(table *model.Table, con *model.Constraint) {
 			col.NotNull = true
 		}
 	}
+}
+
+// applyUsingIndexPrimaryKeyNotNull marks the columns of a primary key written
+// USING INDEX NOT NULL. The key lists no columns, so they are read from its
+// index, and the index must be declared. The index can come later in the
+// files, so this runs after every statement is read. A table marked
+// -- pista:ignore is out of the diff, so it is skipped.
+func applyUsingIndexPrimaryKeyNotNull(tables *orderedmap.Map[string, *model.Table]) error {
+	for fqtn, t := range tables.All() {
+		if t.Ignore {
+			continue
+		}
+		for _, con := range t.Constraints.All() {
+			if !con.Type.IsPrimaryKeyConstraint() || con.IndexName == "" {
+				continue
+			}
+			if _, ok := t.Indexes.GetOk(con.IndexName); !ok {
+				return fmt.Errorf("index %s used by primary key %s on table %s is not declared", model.Ident(con.IndexName), model.Ident(con.Name), fqtn)
+			}
+			for _, colName := range primaryKeyColumns(t) {
+				if col, ok := t.Columns.GetOk(colName); ok {
+					col.NotNull = true
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // serialTypes lists the pseudo-types that expand to a column plus a sequence.

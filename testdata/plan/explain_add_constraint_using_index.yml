@@ -15,6 +15,7 @@ desired: |
       id integer NOT NULL,
       email text NOT NULL
   );
+  CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id);
   ALTER TABLE ONLY public.users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
   ALTER TABLE ONLY public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;
 plan: |

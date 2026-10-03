@@ -1,0 +1,11 @@
+# A primary key written USING INDEX takes its columns from the index, so the
+# index must be declared. Without it the key's columns are unknown, and a
+# column the file declares nullable gets a DROP NOT NULL that PostgreSQL
+# rejects.
+init: |
+  CREATE TABLE public.t (id integer, name text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+desired: |
+  CREATE TABLE public.t (id integer, name text);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+error: "index t_idx used by primary key t_pkey on table public.t is not declared"

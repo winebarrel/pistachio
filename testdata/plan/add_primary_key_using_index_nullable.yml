@@ -1,0 +1,12 @@
+# Adding a primary key USING INDEX on a nullable column plans SET NOT NULL
+# first, as for a key written with a column list.
+init: |
+  CREATE TABLE public.t (id integer, name text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+desired: |
+  CREATE TABLE public.t (id integer, name text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+plan: |
+  ALTER TABLE public.t ALTER COLUMN id SET NOT NULL;
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
