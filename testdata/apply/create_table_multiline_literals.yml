@@ -41,6 +41,8 @@ applied: |
   ALTER TABLE ONLY public.users ADD CONSTRAINT users_note_check CHECK (note <> 'a
   b'::text) NOT VALID;
   CREATE INDEX idx_users_note ON public.users USING btree (note);
+  COMMENT ON INDEX public.idx_users_note IS 'line one
+  line two';
 
   ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
   CREATE POLICY p ON public.users USING ((note <> 'c
@@ -51,6 +53,4 @@ applied: |
   COMMENT ON TABLE public.users IS 'line one
   line two';
   COMMENT ON COLUMN public.users.note IS 'line one
-  line two';
-  COMMENT ON INDEX public.idx_users_note IS 'line one
   line two';

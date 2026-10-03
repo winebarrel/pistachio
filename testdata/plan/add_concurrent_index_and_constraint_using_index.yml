@@ -1,0 +1,12 @@
+# The usual way to add a primary key without a long lock: build the index
+# CONCURRENTLY, then take it over. Both in one run.
+init: |
+  CREATE TABLE public.t (id integer NOT NULL);
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL);
+  -- pista:concurrently
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+plan: |
+  CREATE UNIQUE INDEX CONCURRENTLY t_idx ON public.t USING btree (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;

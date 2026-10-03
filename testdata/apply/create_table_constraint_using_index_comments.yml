@@ -1,0 +1,17 @@
+# ADD CONSTRAINT ... USING INDEX renames the index to the constraint's name,
+# so the index comment has to come before it. The constraint comment comes
+# after, since the constraint does not exist until the ADD.
+init: ""
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  COMMENT ON INDEX public.t_idx IS 'idx comment';
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+  COMMENT ON CONSTRAINT t_pkey ON public.t IS 'pk comment';
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+  COMMENT ON CONSTRAINT t_pkey ON public.t IS 'pk comment';

@@ -1,0 +1,15 @@
+# An index and the constraint that takes it over, both added to an existing
+# table in one run. The index is created first.
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, code text);
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, code text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  CREATE UNIQUE INDEX t_code_idx ON public.t (code);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+  ALTER TABLE public.t ADD CONSTRAINT t_code_key UNIQUE USING INDEX t_code_idx;
+plan: |
+  CREATE UNIQUE INDEX t_idx ON public.t USING btree (id);
+  CREATE UNIQUE INDEX t_code_idx ON public.t USING btree (code);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+  ALTER TABLE public.t ADD CONSTRAINT t_code_key UNIQUE USING INDEX t_code_idx;

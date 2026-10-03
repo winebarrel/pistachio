@@ -1,0 +1,17 @@
+# With --bulk-alter, the USING INDEX constraint is not merged with the other
+# ALTER TABLE statements, since its index is created between them.
+bulk_alter: true
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, code text);
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, code text NOT NULL, CONSTRAINT t_code_check CHECK (code <> ''));
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+  COMMENT ON CONSTRAINT t_pkey ON public.t IS 'key';
+plan: |
+  ALTER TABLE public.t
+    ALTER COLUMN code SET NOT NULL,
+    ADD CONSTRAINT t_code_check CHECK (code <> '');
+  CREATE UNIQUE INDEX t_idx ON public.t USING btree (id);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+  COMMENT ON CONSTRAINT t_pkey ON public.t IS 'key';

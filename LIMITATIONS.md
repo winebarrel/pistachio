@@ -1120,3 +1120,24 @@ there. So the class is written either way, and both sides name it.
 Workaround: leave both out, which is what `pista dump` and `pg_dump` write.
 
 Origin: review of the index element canonicalization, 2026-09-17.
+
+## A comment on the index of a key constraint is not managed
+
+The catalog reads a primary key or unique constraint, not the index behind it.
+So `COMMENT ON INDEX` on that index is not compared, and `dump` does not write
+it. A change to the comment plans nothing, and a database restored from
+`pista dump` loses it:
+
+```sql
+CREATE TABLE public.t (id integer NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (id));
+COMMENT ON INDEX public.t_pkey IS 'new';
+```
+
+A constraint written `USING INDEX` is affected the same way. When the plan
+creates the index, its comment is set before the `ADD CONSTRAINT`. Once the
+constraint has taken the index over, a change to the comment plans nothing.
+
+Workaround: comment on the constraint with `COMMENT ON CONSTRAINT`, which is
+managed.
+
+Origin: review of USING INDEX on a new table, 2026-10-03.
