@@ -401,7 +401,7 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 	// auto-inherit them), so they're still diffed here, mirroring how
 	// indexes and FKs work.
 	if desired.IsPartitionChild() {
-		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
+		idxResult, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(current.Constraints, desired.Constraints), desired.Partitioned, dc)
 		if err != nil {
 			return nil, err
 		}
@@ -463,7 +463,7 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 		current = &clone
 	}
 
-	conStmts, conCommentStmts, conDisallowed, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
+	conStmts, conCommentStmts, conDisallowed, usingIndexStmts, err := diffConstraints(fqtn, current.Constraints, desired.Constraints, dc)
 	if err != nil {
 		return nil, err
 	}
@@ -476,11 +476,12 @@ func diffTable(current, desired *model.Table, columns *orderedmap.Map[string, *m
 	// TABLE run that --bulk-alter merges in one piece.
 	result.Stmts = append(result.Stmts, notNullDrops...)
 
-	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(desired.Constraints), desired.Partitioned, dc)
+	idxResult2, err := diffIndexes(current.Indexes, desired.Indexes, columns, usingIndexNames(current.Constraints, desired.Constraints), desired.Partitioned, dc)
 	if err != nil {
 		return nil, err
 	}
 	result.Stmts = append(result.Stmts, idxResult2.Stmts...)
+	result.Stmts = append(result.Stmts, usingIndexStmts...)
 	result.PartitionedIndexStmts = append(result.PartitionedIndexStmts, idxResult2.PartitionedStmts...)
 	result.DisallowedDropStmts = append(result.DisallowedDropStmts, idxResult2.DisallowedDropStmts...)
 	if idxResult2.HasConcurrently {
@@ -1522,14 +1523,16 @@ func sameConstraintDef(current, desired *model.Constraint) bool {
 // diffConstraints returns the constraint statements and, apart from them, the
 // COMMENT ON statements the constraints need, so the caller can put the
 // comments with the table's other comments instead of between the ALTER
-// TABLE statements --bulk-alter merges.
-func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, commentStmts []string, disallowed []string, err error) {
+// TABLE statements --bulk-alter merges. The ADD of a constraint written USING
+// INDEX is returned apart as well, so the caller can put it after the index it
+// takes over is created.
+func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, commentStmts []string, disallowed []string, usingIndexStmts []string, err error) {
 	dc = normalizeDropChecker(dc)
 
 	// Detect renames
 	current, renamedFrom, err := detectConstraintRenames(fqtn, current, desired)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	changes := constraintChanges(current, desired)
@@ -1588,6 +1591,10 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 			continue
 		}
 		sql := "ALTER TABLE " + fqtn + " ADD CONSTRAINT " + model.Ident(name) + " " + desiredCon.Definition
+		if desiredCon.IndexName != "" {
+			usingIndexStmts = append(usingIndexStmts, sql+";")
+			continue
+		}
 		if !desiredCon.Validated {
 			sql += " NOT VALID"
 		}
@@ -1607,7 +1614,7 @@ func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *mode
 		}
 	}
 
-	return stmts, commentStmts, disallowed, nil
+	return stmts, commentStmts, disallowed, usingIndexStmts, nil
 }
 
 // constraintCommentSQL renders the COMMENT ON a table constraint and a foreign
@@ -1653,15 +1660,18 @@ type diffIndexesResult struct {
 }
 
 // usingIndexNames collects the index names the desired constraints take over
-// via ADD CONSTRAINT ... USING INDEX.
-func usingIndexNames(cons *orderedmap.Map[string, *model.Constraint]) map[string]bool {
+// via ADD CONSTRAINT ... USING INDEX. The value says whether the constraint
+// already exists and so has taken the index over. When it has not, the plan
+// adds the constraint, and the index has to exist first.
+func usingIndexNames(current, desired *orderedmap.Map[string, *model.Constraint]) map[string]bool {
 	var names map[string]bool
-	for _, con := range cons.All() {
+	for name, con := range desired.All() {
 		if con.IndexName != "" {
 			if names == nil {
 				names = map[string]bool{}
 			}
-			names[con.IndexName] = true
+			currentCon, ok := current.GetOk(name)
+			names[con.IndexName] = ok && sameConstraintDef(currentCon, con)
 		}
 	}
 	return names
@@ -1686,7 +1696,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], columns
 	idxAllowed := dc.IsDropAllowed("index")
 	for name, currentIdx := range current.All() {
 		desiredIdx, ok := desired.GetOk(name)
-		if !ok && consumed[name] {
+		if _, taken := consumed[name]; !ok && taken {
 			// The index is not going away: a desired USING INDEX constraint
 			// takes it over, so dropping it would pull the index out from
 			// under the ADD CONSTRAINT.
@@ -1729,7 +1739,7 @@ func diffIndexes(current, desired *orderedmap.Map[string, *model.Index], columns
 	for name, desiredIdx := range desired.All() {
 		currentIdx, ok := current.GetOk(name)
 		if !ok && consumed[name] {
-			// A desired USING INDEX constraint owns this index, and an owned
+			// An existing USING INDEX constraint owns this index, and an owned
 			// index is not read as a plain one, so declaring it next to the
 			// constraint is not a missing index.
 			continue

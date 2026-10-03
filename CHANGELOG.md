@@ -10,6 +10,8 @@
 
 * A new table with a constraint written `USING INDEX` is now created with the constraint added after its index. Before, the constraint was put inside `CREATE TABLE`, and PostgreSQL rejected it.
 
+* An index and a constraint that takes it over `USING INDEX`, added to an existing table in one run, now plan the `CREATE INDEX` before the `ADD CONSTRAINT`. Before, the `CREATE INDEX` was left out, and the `ADD CONSTRAINT` failed.
+
 ## [1.73.2] - 2026-10-03
 
 * `--explain` now shows the size of a table that a foreign key references without a schema name. Before, it showed only the table name.

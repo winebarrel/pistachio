@@ -1,0 +1,18 @@
+# An index and the constraint that takes it over, both added to an existing
+# table in one run. The plan after the apply must be empty.
+init: |
+  CREATE TABLE public.t (id integer NOT NULL, code text);
+desired: |
+  CREATE TABLE public.t (id integer NOT NULL, code text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  CREATE UNIQUE INDEX t_code_idx ON public.t (code);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+  ALTER TABLE public.t ADD CONSTRAINT t_code_key UNIQUE USING INDEX t_code_idx;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      code text,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_code_key UNIQUE (code)
+  );
