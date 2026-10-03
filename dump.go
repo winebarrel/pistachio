@@ -248,8 +248,8 @@ func (r *DumpResult) Document() *parser.ParseResult {
 	}
 }
 
-// String formats enums, domains, composite types, sequences, tables, and views
-// into canonical SQL output for dump.
+// String formats enums, domains, composite types, sequences, routines, tables,
+// and views into canonical SQL output for dump.
 // Order: enums -> domains -> composite types -> sequences -> routines ->
 // tables -> views -> routines with a SQL-standard body (enums/domains/composite
 // types first since later objects may depend on them; sequences before tables
