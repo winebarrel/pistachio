@@ -771,7 +771,7 @@ func setConcurrentlyDirectives(
 }
 
 // clearStorageParams drops the storage parameters off every table in the
-// given maps, used when --manage-storage-param was not passed. Clearing both
+// given map, used when --manage-storage-param was not passed. Clearing both
 // sides is what leaves them unmanaged: no SET or RESET is planned, a WITH
 // clause a desired schema writes is not carried into the CREATE TABLE, and
 // dump does not write one.
@@ -780,11 +780,9 @@ func setConcurrentlyDirectives(
 // whose parameters were not read, the way it writes {} for the routines it did
 // not read. The SQL is the same either way: the renderer and the diff both
 // take a nil map for an empty one.
-func clearStorageParams(tableMaps ...*orderedmap.Map[string, *model.Table]) {
-	for _, tables := range tableMaps {
-		for _, t := range tables.CollectValues() {
-			t.StorageParams = orderedmap.New[string, string]()
-		}
+func clearStorageParams(tables *orderedmap.Map[string, *model.Table]) {
+	for _, t := range tables.CollectValues() {
+		t.StorageParams = orderedmap.New[string, string]()
 	}
 }
 
@@ -792,12 +790,10 @@ func clearStorageParams(tableMaps ...*orderedmap.Map[string, *model.Table]) {
 // carries the parameters a table carries and is left unmanaged with it. A plain
 // view is not touched: it holds only security_barrier and security_invoker,
 // which decide what the view means rather than how it is stored.
-func clearMatViewStorageParams(viewMaps ...*orderedmap.Map[string, *model.View]) {
-	for _, views := range viewMaps {
-		for _, v := range views.CollectValues() {
-			if v.Materialized {
-				v.StorageParams = orderedmap.New[string, string]()
-			}
+func clearMatViewStorageParams(views *orderedmap.Map[string, *model.View]) {
+	for _, v := range views.CollectValues() {
+		if v.Materialized {
+			v.StorageParams = orderedmap.New[string, string]()
 		}
 	}
 }

@@ -216,8 +216,7 @@ func (r *DumpResult) sequences() *orderedmap.Map[string, *model.Sequence] {
 }
 
 // routines returns the routines with the schema stripped when --omit-schema is
-// set. A routine's argument types can name a type in the same schema, so those
-// lose the prefix too.
+// set.
 func (r *DumpResult) routines() *orderedmap.Map[string, *model.Routine] {
 	if r.Routines == nil {
 		return orderedmap.New[string, *model.Routine]()
@@ -229,11 +228,6 @@ func (r *DumpResult) routines() *orderedmap.Map[string, *model.Routine] {
 	for _, rt := range r.Routines.CollectValues() {
 		copied := *rt
 		copied.Schema = ""
-		copied.Args = make([]*model.RoutineArg, len(rt.Args))
-		for i, a := range rt.Args {
-			arg := *a
-			copied.Args[i] = &arg
-		}
 		routines.Set(copied.FQRN(), &copied)
 	}
 	return routines
@@ -254,26 +248,16 @@ func (r *DumpResult) Document() *parser.ParseResult {
 	}
 }
 
-func (r *DumpResult) String() string {
-	return r.formatSchemaSQL(r.enums(), r.domains(), r.compositeTypes(), r.sequences(), r.routines(), r.tables(), r.views())
-}
-
-// formatSchemaSQL formats enums, domains, composite types, sequences, tables,
+// String formats enums, domains, composite types, sequences, routines, tables,
 // and views into canonical SQL output for dump.
 // Order: enums -> domains -> composite types -> sequences -> routines ->
 // tables -> views -> routines with a SQL-standard body (enums/domains/composite
 // types first since later objects may depend on them; sequences before tables
 // since column defaults may reference them; a SQL-standard body last since
 // PostgreSQL parses it at creation time and it may read the tables and views).
-func (r *DumpResult) formatSchemaSQL(
-	enums *orderedmap.Map[string, *model.Enum],
-	domains *orderedmap.Map[string, *model.Domain],
-	compositeTypes *orderedmap.Map[string, *model.CompositeType],
-	sequences *orderedmap.Map[string, *model.Sequence],
-	routines *orderedmap.Map[string, *model.Routine],
-	tables *orderedmap.Map[string, *model.Table],
-	views *orderedmap.Map[string, *model.View],
-) string {
+func (r *DumpResult) String() string {
+	enums, domains, compositeTypes, sequences := r.enums(), r.domains(), r.compositeTypes(), r.sequences()
+	tables, views := r.tables(), r.views()
 	var parts []string
 	if enums.Len() > 0 {
 		parts = append(parts, model.EnumsToSQL(enums))
@@ -287,7 +271,7 @@ func (r *DumpResult) formatSchemaSQL(
 	if sequences.Len() > 0 {
 		parts = append(parts, model.SequencesToSQL(sequences))
 	}
-	plain, atomic := splitAtomicRoutines(routines)
+	plain, atomic := splitAtomicRoutines(r.routines())
 	if plain.Len() > 0 {
 		parts = append(parts, model.RoutinesToSQL(plain))
 	}
