@@ -70,16 +70,13 @@ func ParseRange(spec string) (*Range, error) {
 // side is their merge base. A bare revision has no desired revision: the
 // working tree stands in for it, which the empty string says.
 func splitRange(spec string) (left, right string, mergeBased bool) {
-	switch {
-	case strings.Contains(spec, "..."):
-		l, r, _ := strings.Cut(spec, "...")
+	if l, r, ok := strings.Cut(spec, "..."); ok {
 		return orHEAD(l), orHEAD(r), true
-	case strings.Contains(spec, ".."):
-		l, r, _ := strings.Cut(spec, "..")
-		return orHEAD(l), orHEAD(r), false
-	default:
-		return spec, "", false
 	}
+	if l, r, ok := strings.Cut(spec, ".."); ok {
+		return orHEAD(l), orHEAD(r), false
+	}
+	return spec, "", false
 }
 
 // Read returns the contents of path at rev. ok is false when rev does not

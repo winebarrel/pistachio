@@ -1674,8 +1674,6 @@ func parseCreateDomainStmt(ds *pg_query.CreateDomainStmt, defaultSchema string) 
 	// Extract collation
 	domain.Collation = collationFromClause(ds.CollClause)
 
-	// Extract constraints from deparsed SQL
-	// Parse the deparsed statement to get normalized constraints
 	for _, conNode := range ds.Constraints {
 		con := conNode.GetConstraint()
 		if con == nil {
@@ -2128,9 +2126,6 @@ func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
 		if s := item.GetString_(); s != nil {
 			names = append(names, s.Sval)
 		}
-	}
-	if len(names) == 1 && strings.EqualFold(names[0], "none") {
-		return nil, nil
 	}
 	if len(names) < 2 {
 		return nil, nil

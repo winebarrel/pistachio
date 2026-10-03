@@ -192,13 +192,7 @@ func collectColumnRefsInFKDef(def string) []string {
 	if con == nil {
 		return nil
 	}
-	var refs []string
-	for _, n := range con.FkAttrs {
-		if s := n.GetString_(); s != nil && s.Sval != "" {
-			refs = append(refs, s.Sval)
-		}
-	}
-	return refs
+	return fkAttrCols(con)
 }
 
 // collectColumnRefsInColumnExpr returns the unqualified column names
