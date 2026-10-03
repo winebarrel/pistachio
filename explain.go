@@ -312,13 +312,30 @@ func parseOneStmt(sql string) *pg_query.Node {
 // with no relation at all.
 func (ex *explainer) currentTable(rv *pg_query.RangeVar) (string, *model.Table) {
 	key := model.Ident(rv.GetSchemaname(), rv.GetRelname())
+	return key, ex.currentTableByKey(key)
+}
+
+// currentTableByKey is currentTable for a name already written as a key.
+func (ex *explainer) currentTableByKey(key string) *model.Table {
 	if old, ok := ex.tableAlias[key]; ok {
 		if t, ok := ex.current.GetOk(old); ok {
-			return key, t
+			return t
 		}
 	}
 	t, _ := ex.current.GetOk(key)
-	return key, t
+	return t
+}
+
+// referencedTable resolves the table a foreign key references. A name without
+// a schema is looked up in each managed schema and then in public, the same
+// order as the search_path that apply sets.
+func (ex *explainer) referencedTable(rv *pg_query.RangeVar) (string, *model.Table) {
+	for _, key := range ex.resolveRangeVar(rv) {
+		if t := ex.currentTableByKey(key); t != nil {
+			return key, t
+		}
+	}
+	return model.Ident(rv.GetSchemaname(), rv.GetRelname()), nil
 }
 
 // currentColumn resolves a column of the table the plan names, through a
@@ -469,7 +486,7 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 			// and every partition of it is locked. A referenced table the
 			// same plan creates is named without a size.
 			eff := self(touchScan, blockWrites)
-			refKey, ref := ex.currentTable(con.GetPktable())
+			refKey, ref := ex.referencedTable(con.GetPktable())
 			if ref != nil {
 				eff.addTarget(ex.target(refKey, ref, ref.Partitioned))
 			} else {
