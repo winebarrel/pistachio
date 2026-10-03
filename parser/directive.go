@@ -482,7 +482,11 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 			continue
 		}
 
-		if pendingRename != "" && trimmed != "" && !strings.HasPrefix(trimmed, "--") {
+		// Blank lines and other comments keep the pending rename.
+		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		if pendingRename != "" {
 			upper := strings.ToUpper(trimmed)
 			if strings.HasPrefix(upper, "CONSTRAINT ") {
 				conName := extractConstraintName(trimmed)
@@ -495,12 +499,8 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 					result.Columns[colName] = pendingRename
 				}
 			}
-			pendingRename = ""
-		} else if trimmed == "" || strings.HasPrefix(trimmed, "--") {
-			// Skip blank lines and other comments, keep pending
-		} else {
-			pendingRename = ""
 		}
+		pendingRename = ""
 	}
 
 	return result

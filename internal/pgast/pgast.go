@@ -49,11 +49,7 @@ func ParseConstraintDefStrict(def string) (*pg_query.ParseResult, *pg_query.Cons
 	if as == nil || len(as.Cmds) == 0 {
 		return nil, nil, fmt.Errorf("unexpected parse result for constraint definition")
 	}
-	cmd := as.Cmds[0].GetAlterTableCmd()
-	if cmd == nil || cmd.Def == nil {
-		return nil, nil, fmt.Errorf("unexpected parse result for constraint definition")
-	}
-	con := cmd.Def.GetConstraint()
+	con := as.Cmds[0].GetAlterTableCmd().GetDef().GetConstraint()
 	if con == nil {
 		return nil, nil, fmt.Errorf("unexpected parse result for constraint definition")
 	}
