@@ -1664,6 +1664,17 @@ ALTER TABLE public.items ADD CONSTRAINT items_pkey PRIMARY KEY USING INDEX items
 	require.EqualError(t, err, "index items_id_idx used by primary key items_pkey on table public.items is not declared")
 }
 
+// A table marked -- pista:ignore is out of the diff, so its undeclared index
+// is not an error.
+func TestParseSQL_PrimaryKeyUsingIndexUndeclaredIgnored(t *testing.T) {
+	sql := `-- pista:ignore
+CREATE TABLE public.items (id integer);
+ALTER TABLE public.items ADD CONSTRAINT items_pkey PRIMARY KEY USING INDEX items_id_idx;`
+
+	_, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+}
+
 func TestParseSQL_CommentOnUnknownTable(t *testing.T) {
 	// COMMENT on unknown table is silently skipped
 	sql := `COMMENT ON TABLE public.nonexistent IS 'test';`

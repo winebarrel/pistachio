@@ -826,9 +826,13 @@ func applyPrimaryKeyNotNull(table *model.Table, con *model.Constraint) {
 // applyUsingIndexPrimaryKeyNotNull marks the columns of a primary key written
 // USING INDEX NOT NULL. The key lists no columns, so they are read from its
 // index, and the index must be declared. The index can come later in the
-// files, so this runs after every statement is read.
+// files, so this runs after every statement is read. A table marked
+// -- pista:ignore is out of the diff, so it is skipped.
 func applyUsingIndexPrimaryKeyNotNull(tables *orderedmap.Map[string, *model.Table]) error {
 	for fqtn, t := range tables.All() {
+		if t.Ignore {
+			continue
+		}
 		for _, con := range t.Constraints.All() {
 			if !con.Type.IsPrimaryKeyConstraint() || con.IndexName == "" {
 				continue
