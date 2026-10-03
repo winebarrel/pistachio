@@ -1610,6 +1610,7 @@ func TestParseSQL_AlterTableUsingIndex(t *testing.T) {
     id integer NOT NULL,
     code text NOT NULL
 );
+CREATE UNIQUE INDEX items_pkey ON public.items (id);
 ALTER TABLE ONLY public.items ADD CONSTRAINT items_code_key UNIQUE USING INDEX items_code_key;
 ALTER TABLE ONLY public.items ADD PRIMARY KEY USING INDEX items_pkey;`
 
@@ -1653,6 +1654,14 @@ CREATE UNIQUE INDEX items_code_idx ON public.items (code);`
 	assert.True(t, tbl.Columns.Get("id").NotNull)
 	// A unique constraint does not make its columns NOT NULL.
 	assert.False(t, tbl.Columns.Get("code").NotNull)
+}
+
+func TestParseSQL_PrimaryKeyUsingIndexUndeclared(t *testing.T) {
+	sql := `CREATE TABLE public.items (id integer);
+ALTER TABLE public.items ADD CONSTRAINT items_pkey PRIMARY KEY USING INDEX items_id_idx;`
+
+	_, err := parseSQLWithPublicSchema(sql)
+	require.EqualError(t, err, "index items_id_idx used by primary key items_pkey on table public.items is not declared")
 }
 
 func TestParseSQL_CommentOnUnknownTable(t *testing.T) {
