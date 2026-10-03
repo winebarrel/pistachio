@@ -214,3 +214,80 @@ func TestMarkStruct_MissingProperty(t *testing.T) {
 func TestMarkStruct_NoProperties(t *testing.T) {
 	require.NoError(t, markStruct(&jsonschema.Schema{}, reflect.TypeFor[model.Column]()))
 }
+
+// A pointer field that is not written has no property to widen, so it is
+// skipped rather than reported missing.
+func TestMarkStruct_SkipsFieldNotWritten(t *testing.T) {
+	type s struct {
+		Name     *string `json:"name"`
+		Excluded *string `json:"-"`
+		Untagged *string
+	}
+
+	schema := &jsonschema.Schema{Properties: jsonschema.NewProperties()}
+	schema.Properties.Set("name", &jsonschema.Schema{Type: "string"})
+
+	require.NoError(t, markStruct(schema, reflect.TypeFor[s]()))
+
+	prop, ok := schema.Properties.Get("name")
+	require.True(t, ok)
+	require.Len(t, prop.OneOf, 2)
+	assert.Equal(t, "null", prop.OneOf[1].Type)
+	assert.Equal(t, 1, schema.Properties.Len())
+}
+
+// A definition no reachable Go type stands behind is reported, since its
+// pointer fields could not be widened.
+func TestMarkNullable_DefinitionWithoutGoType(t *testing.T) {
+	type root struct {
+		N int `json:"n"`
+	}
+
+	schema := &jsonschema.Schema{
+		Properties: jsonschema.NewProperties(),
+		Definitions: jsonschema.Definitions{
+			"Ghost": &jsonschema.Schema{Properties: jsonschema.NewProperties()},
+		},
+	}
+
+	err := markNullable(schema, reflect.TypeFor[root]())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `no Go type for definition "Ghost"`)
+}
+
+// A definition that lacks a property its Go type writes is reported, the same
+// as the root.
+func TestMarkNullable_DefinitionMissingProperty(t *testing.T) {
+	type root struct {
+		Column *model.Column `json:"column"`
+	}
+
+	props := jsonschema.NewProperties()
+	props.Set("column", &jsonschema.Schema{Ref: "#/$defs/Column"})
+	schema := &jsonschema.Schema{
+		Properties: props,
+		Definitions: jsonschema.Definitions{
+			"Column": &jsonschema.Schema{Properties: jsonschema.NewProperties()},
+		},
+	}
+	schema.Definitions["Column"].Properties.Set("name", &jsonschema.Schema{Type: "string"})
+
+	err := markNullable(schema, reflect.TypeFor[root]())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Column has no property")
+}
+
+// Two types of the same name stop the definitions from being collected.
+func TestAddDefinitions_DuplicateName(t *testing.T) {
+	type Column struct {
+		N int `json:"n"`
+	}
+	type root struct {
+		Mine  *Column       `json:"mine"`
+		Model *model.Column `json:"model"`
+	}
+
+	err := addDefinitions(&jsonschema.Reflector{}, &jsonschema.Schema{}, reflect.TypeFor[root]())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `two types named "Column"`)
+}

@@ -694,6 +694,22 @@ func TestParseSQL_CommentOnViewColumn(t *testing.T) {
 	assert.Equal(t, "mv id", mv.ColumnComments.Get("id"))
 }
 
+// COMMENT ON COLUMN with a bare column name parses, though PostgreSQL rejects
+// it for naming no relation. The parser records it nowhere rather than guess
+// the table.
+func TestParseSQL_CommentOnColumnUnqualified(t *testing.T) {
+	result, err := parseSQLWithPublicSchema(`
+		CREATE TABLE public.t (email text);
+		COMMENT ON COLUMN email IS 'c';
+	`)
+	require.NoError(t, err)
+
+	tbl, ok := result.Tables.GetOk("public.t")
+	require.True(t, ok)
+	assert.Nil(t, tbl.Columns.Get("email").Comment)
+	assert.Nil(t, tbl.Comment)
+}
+
 // An explicit NULL comment clears one the same file set earlier.
 func TestParseSQL_CommentIsNullClearsComment(t *testing.T) {
 	result, err := parseSQLWithPublicSchema(`

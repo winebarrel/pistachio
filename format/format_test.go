@@ -358,6 +358,24 @@ CREATE INDEX i ON public.t ((v::bigint));
 `,
 		},
 		{
+			name:  "expand the definition list of a table with an unqualified name",
+			input: `CREATE TABLE items (id integer, name text);`,
+			expected: `CREATE TABLE items (
+    id integer,
+    name text
+);
+`,
+		},
+		{
+			name:  "find the definition list past a comment after the table name",
+			input: `CREATE TABLE public.items /* the items */ (id integer, name text);`,
+			expected: `CREATE TABLE public.items /* the items */ (
+    id integer,
+    name text
+);
+`,
+		},
+		{
 			name:  "remove the quotes of an identifier that holds a dollar sign",
 			input: `CREATE TABLE public.t3 ("a$b" int);`,
 			expected: `CREATE TABLE public.t3 (
