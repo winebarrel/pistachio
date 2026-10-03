@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.74.0] - 2026-10-04
 
 * **BREAKING**: A primary key written `USING INDEX` now needs a `CREATE INDEX` for its index in the schema files. Without one, reading the files fails with an error.
 
