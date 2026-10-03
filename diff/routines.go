@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/winebarrel/orderedmap/v2"
@@ -171,11 +172,7 @@ func diffRoutine(current, desired *model.Routine, dropAllowed bool) (stmts, disa
 	}
 
 	if !equalPtr(current.Comment, desired.Comment) {
-		if desired.Comment != nil {
-			stmts = append(stmts, desired.CommentSQL())
-		} else {
-			stmts = append(stmts, "COMMENT ON "+desired.Kind()+" "+desired.Signature()+" IS NULL;")
-		}
+		stmts = append(stmts, commentOnSQL(desired.Kind()+" "+desired.Signature(), desired.Comment))
 	}
 
 	return stmts, nil, false
@@ -204,15 +201,9 @@ func needsDropCreate(current, desired *model.Routine) bool {
 // parameter and any change to the OUT or RETURNS TABLE parameters, each of
 // which PostgreSQL rejects in place.
 func equalArgShapes(current, desired []*model.RoutineArg) bool {
-	if len(current) != len(desired) {
-		return false
-	}
-	for i, c := range current {
-		if argShape(c) != argShape(desired[i]) {
-			return false
-		}
-	}
-	return true
+	return slices.EqualFunc(current, desired, func(c, d *model.RoutineArg) bool {
+		return argShape(c) == argShape(d)
+	})
 }
 
 func argShape(a *model.RoutineArg) string {

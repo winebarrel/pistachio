@@ -110,11 +110,7 @@ func diffPolicies(
 	// Add new or recreated policies, then ALTER for in-place changes.
 	for name, des := range desired.All() {
 		cur, ok := current.GetOk(name)
-		if !ok {
-			stmts = append(stmts, des.SQL())
-			continue
-		}
-		if needsRecreate(cur, des) {
+		if !ok || needsRecreate(cur, des) {
 			stmts = append(stmts, des.SQL())
 			continue
 		}
