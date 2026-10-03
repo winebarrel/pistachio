@@ -386,11 +386,78 @@ func TestPartitionedIndexConcurrently(t *testing.T) {
 		require.EqualError(t, err, wantErr)
 	})
 
+	t.Run("new table through DiffTables", func(t *testing.T) {
+		tbl := partitionedTable("logs", "", "logs_id_idx")
+		tbl.Indexes = concurrentIndexes()
+		desired := orderedmap.New[string, *model.Table]()
+		desired.Set("public.logs", tbl)
+		_, err := DiffTables(orderedmap.New[string, *model.Table](), desired, allowAllDrops{})
+		require.EqualError(t, err, wantErr)
+	})
+
 	t.Run("plain table", func(t *testing.T) {
 		result, err := diffIndexes(empty, concurrentIndexes(), nil, nil, false, allowAllDrops{})
 		require.NoError(t, err)
 		assert.Equal(t, []string{"CREATE INDEX CONCURRENTLY logs_id_idx ON public.logs USING btree (id);"}, result.Stmts)
 	})
+}
+
+// A rename directive naming a policy or trigger the table does not have
+// stops the diff, on a plain table and on a partition child alike.
+func TestDiffTables_RenameSourceMissing(t *testing.T) {
+	tests := []struct {
+		name    string
+		table   func() *model.Table
+		set     func(*model.Table)
+		wantErr string
+	}{
+		{
+			name:  "policy on plain table",
+			table: func() *model.Table { return newTable("public", "events") },
+			set: func(tbl *model.Table) {
+				tbl.Policies.Set("p_new", newPolicy("p_new", 'r', withUsing("true"), renameFrom("p_old")))
+			},
+			wantErr: "rename source policy p_old not found",
+		},
+		{
+			name:  "trigger on plain table",
+			table: func() *model.Table { return newTable("public", "events") },
+			set: func(tbl *model.Table) {
+				tbl.Triggers = triggers(newTrigger("events_new", insertDef, withTriggerRenameFrom("events_old")))
+			},
+			wantErr: "rename source trigger events_old not found",
+		},
+		{
+			name:  "policy on partition child",
+			table: func() *model.Table { return partitionedTable("events_1", "events", "events_1_id_idx") },
+			set: func(tbl *model.Table) {
+				tbl.Policies.Set("p_new", newPolicy("p_new", 'r', withUsing("true"), renameFrom("p_old")))
+			},
+			wantErr: "rename source policy p_old not found",
+		},
+		{
+			name:  "trigger on partition child",
+			table: func() *model.Table { return partitionedTable("events_1", "events", "events_1_id_idx") },
+			set: func(tbl *model.Table) {
+				tbl.Triggers = triggers(newTrigger("events_new", insertDef, withTriggerRenameFrom("events_old")))
+			},
+			wantErr: "rename source trigger events_old not found",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cur := tc.table()
+			des := tc.table()
+			tc.set(des)
+			current := orderedmap.New[string, *model.Table]()
+			current.Set(cur.FQTN(), cur)
+			desired := orderedmap.New[string, *model.Table]()
+			desired.Set(des.FQTN(), des)
+
+			_, err := DiffTables(current, desired, allowAllDrops{})
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
 }
 
 func TestPartitionDepth(t *testing.T) {

@@ -1789,3 +1789,19 @@ func TestDiffViews_columnComment(t *testing.T) {
 		"COMMENT ON COLUMN public.v2.\"X\" IS 'x';",
 	}, result.CreateStmts)
 }
+
+func TestDiffViews_TriggerRenameSourceMissing(t *testing.T) {
+	current := orderedmap.New[string, *model.View]()
+	current.Set("public.v1", &model.View{Schema: "public", Name: "v1", Definition: "SELECT 1"})
+	desired := orderedmap.New[string, *model.View]()
+	desired.Set("public.v1", &model.View{
+		Schema: "public", Name: "v1", Definition: "SELECT 1",
+		Triggers: triggers(&model.Trigger{
+			Schema: "public", Table: "v1", Name: "v1_new", RenameFrom: new("v1_old"),
+			Definition: "CREATE TRIGGER v1_new INSTEAD OF INSERT ON public.v1 FOR EACH ROW EXECUTE FUNCTION f()",
+		}),
+	})
+
+	_, err := DiffViews(current, desired, allowAllDrops{})
+	require.ErrorContains(t, err, "rename source trigger v1_old not found")
+}

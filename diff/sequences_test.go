@@ -168,6 +168,30 @@ func TestDiffSequences_RenameCrossSchemaError(t *testing.T) {
 	assert.Contains(t, err.Error(), "cross-schema rename")
 }
 
+func TestDiffSequences_RenameSourceNotFound(t *testing.T) {
+	desired := baseSeq()
+	desired.Name = "new"
+	renameFrom := "public.nonexistent"
+	desired.RenameFrom = &renameFrom
+	_, err := DiffSequences(newSeqMap(), newSeqMap(desired), allowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rename source public.nonexistent not found")
+}
+
+func TestDiffSequences_RenameDestinationExists(t *testing.T) {
+	old := baseSeq()
+	old.Name = "old"
+	current := baseSeq()
+	current.Name = "new"
+	desired := baseSeq()
+	desired.Name = "new"
+	renameFrom := "public.old"
+	desired.RenameFrom = &renameFrom
+	_, err := DiffSequences(newSeqMap(old, current), newSeqMap(desired), allowAllDrops{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "destination already exists")
+}
+
 func TestDiffSequences_SetUnlogged(t *testing.T) {
 	desired := baseSeq()
 	desired.Unlogged = true
