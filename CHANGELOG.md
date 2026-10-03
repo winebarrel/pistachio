@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `--explain` now shows the size of the table a foreign key references when the reference has no schema, as `dump` writes it. Before, it named the table alone, as it does a table outside the managed schemas.
+
 ## [1.73.1] - 2026-10-01
 
 * `LIKE` in `CREATE TABLE` is now an error. Before, pistachio ignored it with a warning, so the plan dropped every column it would copy. A table with only `LIKE` was created with no columns.
