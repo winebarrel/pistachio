@@ -145,12 +145,13 @@ func (t Table) SQL() string {
 // A NOT VALID check is left out, since the clause cannot be spelled there and
 // writing the constraint without it would restore it validated; NotValidConSQL
 // adds it back. A key foldedKeys finds is left out as well, and FoldedKeySQL
-// adds it back.
+// adds it back. So is a key written USING INDEX, since its index does not
+// exist yet; UsingIndexConSQL adds it back.
 func (t Table) inlineConstraintDefs() []string {
 	folded := t.foldedKeys()
 	var defs []string
 	for _, con := range t.Constraints.CollectValues() {
-		if con.Type.IsCheckConstraint() && !con.Validated || folded[con.Name] {
+		if con.Type.IsCheckConstraint() && !con.Validated || folded[con.Name] || con.IndexName != "" {
 			continue
 		}
 		defs = append(defs, "    CONSTRAINT "+Ident(con.Name)+" "+con.Definition)
@@ -233,6 +234,18 @@ func (t Table) NotValidConSQL() []string {
 			continue
 		}
 		stmts = append(stmts, t.alterPrefix()+" ADD CONSTRAINT "+Ident(con.Name)+" "+con.Definition+" NOT VALID;")
+	}
+	return stmts
+}
+
+// UsingIndexConSQL adds the keys written USING INDEX, each as its own ALTER
+// TABLE. It runs after the table's indexes, which the keys take over.
+func (t Table) UsingIndexConSQL() []string {
+	var stmts []string
+	for _, con := range t.Constraints.CollectValues() {
+		if con.IndexName != "" {
+			stmts = append(stmts, t.alterPrefix()+" ADD CONSTRAINT "+Ident(con.Name)+" "+con.Definition+";")
+		}
 	}
 	return stmts
 }
@@ -496,6 +509,7 @@ func TableToSQL(t *Table) string {
 	if s := t.IdxSQL(); s != "" {
 		parts = append(parts, s)
 	}
+	parts = append(parts, t.UsingIndexConSQL()...)
 	if s := t.FkSQL(); s != "" {
 		parts = append(parts, "\n"+s)
 	}

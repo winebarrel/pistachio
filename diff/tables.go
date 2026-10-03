@@ -361,6 +361,7 @@ func newTableExtras(t *model.Table, copies map[string]bool) (stmts, idxStmts, fk
 			hasConcurrently = true
 		}
 	}
+	stmts = append(stmts, t.UsingIndexConSQL()...)
 	for _, fk := range t.ForeignKeys.CollectValues() {
 		fkStmts = append(fkStmts, fk.SQL(t.Partitioned))
 	}

@@ -1,0 +1,18 @@
+# CREATE TABLE cannot take a constraint USING INDEX, since the index does not
+# exist yet. The constraint is added after the table and its indexes.
+init: ""
+desired: |
+  CREATE TABLE public.t (id integer, code text);
+  CREATE UNIQUE INDEX t_idx ON public.t (id);
+  CREATE UNIQUE INDEX t_code_idx ON public.t (code);
+  ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+  ALTER TABLE public.t ADD CONSTRAINT t_code_key UNIQUE USING INDEX t_code_idx;
+plan: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      code text
+  );
+  CREATE UNIQUE INDEX t_idx ON public.t USING btree (id);
+  CREATE UNIQUE INDEX t_code_idx ON public.t USING btree (code);
+  ALTER TABLE ONLY public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
+  ALTER TABLE ONLY public.t ADD CONSTRAINT t_code_key UNIQUE USING INDEX t_code_idx;

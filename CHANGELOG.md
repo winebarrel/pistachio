@@ -8,6 +8,8 @@
 
 * The columns of a primary key written `USING INDEX` are now read as NOT NULL. Before, a column the file declared nullable got a `DROP NOT NULL` on every plan, and PostgreSQL rejected it.
 
+* A new table with a constraint written `USING INDEX` is now created with the constraint added after its index. Before, the constraint was put inside `CREATE TABLE`, and PostgreSQL rejected it.
+
 ## [1.73.2] - 2026-10-03
 
 * `--explain` now shows the size of a table that a foreign key references without a schema name. Before, it showed only the table name.

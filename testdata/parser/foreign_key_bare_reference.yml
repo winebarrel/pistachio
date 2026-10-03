@@ -84,10 +84,10 @@ expected: |
 
   -- public.by_index
   CREATE TABLE public.by_index (
-      id integer NOT NULL,
-      CONSTRAINT by_index_pkey PRIMARY KEY USING INDEX by_index_id_idx
+      id integer NOT NULL
   );
   CREATE UNIQUE INDEX by_index_id_idx ON public.by_index USING btree (id);
+  ALTER TABLE ONLY public.by_index ADD CONSTRAINT by_index_pkey PRIMARY KEY USING INDEX by_index_id_idx;
 
   -- app.base
   CREATE TABLE app.base (

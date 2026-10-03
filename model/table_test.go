@@ -821,3 +821,22 @@ func TestTable_FoldedKeySQL_IgnoresStorage(t *testing.T) {
 		"ALTER TABLE ONLY public.t ADD CONSTRAINT t_d UNIQUE (c) DEFERRABLE;",
 	}, tbl.FoldedKeySQL())
 }
+
+// A key written USING INDEX cannot sit in CREATE TABLE, since its index does
+// not exist yet. It is added after the table and its indexes.
+func TestTable_UsingIndexConSQL(t *testing.T) {
+	tbl := keyTable(
+		&model.Constraint{Name: "t_pkey", Type: 'p', Definition: "PRIMARY KEY USING INDEX t_idx", IndexName: "t_idx"},
+		&model.Constraint{Name: "t_c_key", Type: 'u', Definition: "UNIQUE (c)"},
+	)
+	tbl.Indexes.Set("t_idx", &model.Index{Name: "t_idx", Schema: "public", Table: "t", Definition: "CREATE UNIQUE INDEX t_idx ON public.t USING btree (c)"})
+
+	assert.Equal(t, []string{"ALTER TABLE ONLY public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;"}, tbl.UsingIndexConSQL())
+	assert.Equal(t, `-- public.t
+CREATE TABLE public.t (
+    c integer,
+    CONSTRAINT t_c_key UNIQUE (c)
+);
+CREATE UNIQUE INDEX t_idx ON public.t USING btree (c);
+ALTER TABLE ONLY public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;`, model.TableToSQL(tbl))
+}
