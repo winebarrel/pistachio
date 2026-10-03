@@ -1414,6 +1414,20 @@ func TestUsingIndexNames(t *testing.T) {
 	assert.Equal(t, map[string]bool{"users_email_key": true}, usingIndexNames(current, cons))
 }
 
+func TestDiffConstraints_usingIndexAddApart(t *testing.T) {
+	// The ADD of a USING INDEX constraint comes back apart, so the caller can
+	// put it after the CREATE INDEX of the index it takes over.
+	current := orderedmap.New[string, *model.Constraint]()
+	desired := orderedmap.New[string, *model.Constraint]()
+	desired.Set("users_pkey", &model.Constraint{Name: "users_pkey", Type: model.ConstraintType('p'), Definition: "PRIMARY KEY USING INDEX users_id_idx", IndexName: "users_id_idx", Validated: true})
+	desired.Set("users_name_check", &model.Constraint{Name: "users_name_check", Type: model.ConstraintType('c'), Definition: "CHECK (name <> '')", Validated: true})
+
+	stmts, _, _, usingIndexStmts, err := diffConstraints("public.users", current, desired, allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER TABLE public.users ADD CONSTRAINT users_name_check CHECK (name <> '');"}, stmts)
+	assert.Equal(t, []string{"ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_id_idx;"}, usingIndexStmts)
+}
+
 func TestDiffIndexes_addTakenOverInPlan(t *testing.T) {
 	// A USING INDEX constraint the plan adds needs its index created first.
 	current := orderedmap.New[string, *model.Index]()

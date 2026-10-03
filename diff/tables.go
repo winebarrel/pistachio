@@ -1524,8 +1524,8 @@ func sameConstraintDef(current, desired *model.Constraint) bool {
 // COMMENT ON statements the constraints need, so the caller can put the
 // comments with the table's other comments instead of between the ALTER
 // TABLE statements --bulk-alter merges. The ADD of a constraint written USING
-// INDEX is returned apart as well, so the caller can put it after the index it
-// takes over is created.
+// INDEX is also returned apart, so the caller can put it after the CREATE
+// INDEX of its index.
 func diffConstraints(fqtn string, current, desired *orderedmap.Map[string, *model.Constraint], dc DropChecker) (stmts []string, commentStmts []string, disallowed []string, usingIndexStmts []string, err error) {
 	dc = normalizeDropChecker(dc)
 

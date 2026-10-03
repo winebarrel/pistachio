@@ -238,8 +238,8 @@ func (t Table) NotValidConSQL() []string {
 	return stmts
 }
 
-// UsingIndexConSQL adds the keys written USING INDEX, each as its own ALTER
-// TABLE. It runs after the table's indexes, which the keys take over.
+// UsingIndexConSQL adds the constraints written USING INDEX with ALTER TABLE.
+// They go after the table's indexes, since each takes one over.
 func (t Table) UsingIndexConSQL() []string {
 	var stmts []string
 	for _, con := range t.Constraints.CollectValues() {

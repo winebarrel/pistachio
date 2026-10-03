@@ -7,6 +7,7 @@ desired: |
   CREATE UNIQUE INDEX t_code_idx ON public.t (code);
   ALTER TABLE public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
   ALTER TABLE public.t ADD CONSTRAINT t_code_key UNIQUE USING INDEX t_code_idx;
+  COMMENT ON CONSTRAINT t_pkey ON public.t IS 'key';
 plan: |
   CREATE TABLE public.t (
       id integer NOT NULL,
@@ -16,3 +17,4 @@ plan: |
   CREATE UNIQUE INDEX t_code_idx ON public.t USING btree (code);
   ALTER TABLE ONLY public.t ADD CONSTRAINT t_pkey PRIMARY KEY USING INDEX t_idx;
   ALTER TABLE ONLY public.t ADD CONSTRAINT t_code_key UNIQUE USING INDEX t_code_idx;
+  COMMENT ON CONSTRAINT t_pkey ON public.t IS 'key';
