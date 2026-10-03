@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `--explain` now shows the size of the table a foreign key references when the reference has no schema, as `dump` writes it. Before, it named the table alone, as it does a table outside the managed schemas.
+* `--explain` now shows the size of a table that a foreign key references without a schema name. Before, it showed only the table name.
 
 ## [1.73.1] - 2026-10-01
 

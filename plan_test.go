@@ -566,3 +566,47 @@ INSERT INTO public.docs SELECT g, repeat(md5(g::text), 20000) FROM generate_seri
 	require.True(t, strings.HasPrefix(line, "-- rewrite,"), "want a rewrite comment, got %q", line)
 	assert.Contains(t, line, "~5 rows, "+wantSize+",", "the TOAST pages belong in the size, printed as pg_size_pretty writes it")
 }
+
+// Fixtures run in public, so this Go test covers a foreign key reference
+// without a schema name in another schema.
+func TestPlan_ExplainUnqualifiedForeignKey_NonPublicSchema(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE myschema.posts (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    CONSTRAINT posts_pkey PRIMARY KEY (id)
+);
+INSERT INTO myschema.users SELECT g FROM generate_series(1, 3) g;
+ANALYZE myschema.users;
+ANALYZE myschema.posts;
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE myschema.users (
+    id integer NOT NULL,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE myschema.posts (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    CONSTRAINT posts_pkey PRIMARY KEY (id),
+    CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id)
+);`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{Explain: true, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	line, _, _ := strings.Cut(got.SQL, "\n")
+	assert.Contains(t, line, ", myschema.users (~3 rows, ")
+}

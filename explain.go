@@ -326,10 +326,9 @@ func (ex *explainer) currentTableByKey(key string) *model.Table {
 	return t
 }
 
-// referencedTable resolves the table a foreign key references. dump writes
-// the reference without its schema when the schema is on search_path, so an
-// unqualified name is tried in each managed schema and then public, the
-// search path apply sets. A table found in none keeps the name as written.
+// referencedTable resolves the table a foreign key references. A name without
+// a schema is looked up in each managed schema and then in public, the same
+// order as the search_path that apply sets.
 func (ex *explainer) referencedTable(rv *pg_query.RangeVar) (string, *model.Table) {
 	for _, key := range ex.resolveRangeVar(rv) {
 		if t := ex.currentTableByKey(key); t != nil {
