@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* A primary key written `USING INDEX` now marks its columns NOT NULL. Before, a column the file left nullable planned a `DROP NOT NULL` on every run, which PostgreSQL rejects.
+* The columns of a primary key written `USING INDEX` are now read as NOT NULL. Before, a column the file declared nullable got a `DROP NOT NULL` on every plan, and PostgreSQL rejected it.
 
 ## [1.73.2] - 2026-10-03
 

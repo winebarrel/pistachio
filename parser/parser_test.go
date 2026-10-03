@@ -1633,21 +1633,25 @@ ALTER TABLE ONLY public.items ADD PRIMARY KEY USING INDEX items_pkey;`
 }
 
 func TestParseSQL_PrimaryKeyUsingIndexNotNull(t *testing.T) {
-	// The index comes after the key, so its columns are read once every
-	// statement is.
+	// The indexes come after the constraints that use them.
 	sql := `CREATE TABLE public.items (
+    tenant_id integer,
     id integer,
     code text
 );
 ALTER TABLE public.items ADD CONSTRAINT items_pkey PRIMARY KEY USING INDEX items_id_idx;
-CREATE UNIQUE INDEX items_id_idx ON public.items (id);`
+ALTER TABLE public.items ADD CONSTRAINT items_code_key UNIQUE USING INDEX items_code_idx;
+CREATE UNIQUE INDEX items_id_idx ON public.items (tenant_id, id);
+CREATE UNIQUE INDEX items_code_idx ON public.items (code);`
 
 	result, err := parseSQLWithPublicSchema(sql)
 	require.NoError(t, err)
 
 	tbl := result.Tables.Get("public.items")
 	require.NotNil(t, tbl)
+	assert.True(t, tbl.Columns.Get("tenant_id").NotNull)
 	assert.True(t, tbl.Columns.Get("id").NotNull)
+	// A unique constraint does not make its columns NOT NULL.
 	assert.False(t, tbl.Columns.Get("code").NotNull)
 }
 

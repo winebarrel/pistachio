@@ -1,5 +1,5 @@
-# A primary key added USING INDEX over a column the file leaves nullable. The
-# re-plan must find no drift.
+# Adding a primary key USING INDEX on a column the file declares nullable.
+# The plan after the apply must be empty.
 init: |
   CREATE TABLE public.t (id integer, name text);
   CREATE UNIQUE INDEX t_idx ON public.t (id);

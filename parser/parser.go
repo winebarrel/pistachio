@@ -821,11 +821,10 @@ func applyPrimaryKeyNotNull(table *model.Table, con *model.Constraint) {
 	}
 }
 
-// applyUsingIndexPrimaryKeyNotNull marks NOT NULL the columns of a primary
-// key written USING INDEX, which applyPrimaryKeyNotNull cannot reach: the key
-// lists no columns, and the index it takes over may come later in the files.
-// So this runs once every statement is read. A key with a column list is
-// already marked.
+// applyUsingIndexPrimaryKeyNotNull marks the columns of a primary key written
+// USING INDEX NOT NULL. The key lists no columns, so they are read from its
+// index. The index can come later in the files, so this runs after every
+// statement is read.
 func applyUsingIndexPrimaryKeyNotNull(tables *orderedmap.Map[string, *model.Table]) {
 	for _, t := range tables.All() {
 		for _, colName := range primaryKeyColumns(t) {

@@ -1,5 +1,5 @@
-# A primary key added USING INDEX over a nullable column marks the column NOT
-# NULL first, as a key added with a column list does.
+# Adding a primary key USING INDEX on a nullable column plans SET NOT NULL
+# first, as for a key written with a column list.
 init: |
   CREATE TABLE public.t (id integer, name text);
   CREATE UNIQUE INDEX t_idx ON public.t (id);
