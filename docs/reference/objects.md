@@ -335,11 +335,14 @@ This section covers plain views and materialized views.
 The parser reads `CREATE VIEW` and `CREATE MATERIALIZED VIEW` with:
 
 - the query
+- the column name list, `CREATE VIEW v (x, y) AS ...`
 - `WITH (...)`
 - a plain view's `WITH [LOCAL | CASCADED] CHECK OPTION`
 - a materialized view's `WITH NO DATA`
 
 `ALTER VIEW` and `REFRESH MATERIALIZED VIEW` in a schema file are ignored with a warning.
+
+PostgreSQL stores the column name list as the names of the query's output columns, and `dump` writes them there, as `SELECT a AS x, b AS y`. The parser does the same, so both forms mean the same view. When the query has no output column to name, as with `SELECT *` or `VALUES`, the list stays on the `CREATE` statement.
 
 A plain view's `WITH (...)` contains `security_barrier` and `security_invoker`. These decide what the view means, not how it is stored, so the clause is managed with or without `--manage-storage-param`. The clause comes before `AS`:
 

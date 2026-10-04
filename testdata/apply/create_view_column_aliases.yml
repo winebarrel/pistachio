@@ -1,0 +1,78 @@
+init: |
+  CREATE TABLE public.t (a integer, b integer);
+desired: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v_partial (x) AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_override (x, y) AS SELECT a + 1, b AS bb FROM public.t;
+  CREATE VIEW public.v_union (x, y) AS SELECT a, b FROM public.t UNION SELECT b, a FROM public.t;
+  CREATE MATERIALIZED VIEW public.m (x, y) AS SELECT a, b FROM public.t;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer,
+      b integer
+  );
+
+  -- public.m
+  CREATE MATERIALIZED VIEW public.m AS
+  SELECT t.a AS x,
+      t.b AS y
+     FROM t;
+
+  -- public.v_override
+  CREATE OR REPLACE VIEW public.v_override AS
+  SELECT t.a + 1 AS x,
+      t.b AS y
+     FROM t;
+
+  -- public.v_partial
+  CREATE OR REPLACE VIEW public.v_partial AS
+  SELECT t.a AS x,
+      t.b
+     FROM t;
+
+  -- public.v_union
+  CREATE OR REPLACE VIEW public.v_union AS
+  SELECT t.a AS x,
+      t.b AS y
+     FROM t
+  UNION
+   SELECT t.b AS x,
+      t.a AS y
+     FROM t;
+applied_pg16: &applied_pg16plus |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer,
+      b integer
+  );
+
+  -- public.m
+  CREATE MATERIALIZED VIEW public.m AS
+  SELECT a AS x,
+      b AS y
+     FROM t;
+
+  -- public.v_override
+  CREATE OR REPLACE VIEW public.v_override AS
+  SELECT a + 1 AS x,
+      b AS y
+     FROM t;
+
+  -- public.v_partial
+  CREATE OR REPLACE VIEW public.v_partial AS
+  SELECT a AS x,
+      b
+     FROM t;
+
+  -- public.v_union
+  CREATE OR REPLACE VIEW public.v_union AS
+  SELECT t.a AS x,
+      t.b AS y
+     FROM t
+  UNION
+   SELECT t.b AS x,
+      t.a AS y
+     FROM t;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

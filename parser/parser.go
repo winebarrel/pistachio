@@ -1576,6 +1576,8 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 		schema = defaultSchema
 	}
 
+	columnNames := applyColumnNames(vs.Query, vs.Aliases)
+
 	// Deparse the SELECT query
 	selectResult := &pg_query.ParseResult{
 		Version: pgast.ParseTreeVersion,
@@ -1592,12 +1594,62 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 		Schema:         schema,
 		Name:           vs.View.Relname,
 		Definition:     def,
+		ColumnNames:    columnNames,
 		CheckOption:    viewCheckOption(vs),
 		StorageParams:  parseViewStorageParams(vs.Options),
 		Indexes:        orderedmap.New[string, *model.Index](),
 		Triggers:       orderedmap.New[string, *model.Trigger](),
 		ColumnComments: orderedmap.New[string, string](),
 	}, nil
+}
+
+// applyColumnNames writes the column list of CREATE VIEW v (x, y) onto the
+// target list of the query, which is where PostgreSQL keeps it and where
+// pg_get_viewdef writes it back, so the definition compares with the catalog.
+// A set operation takes its names from its leftmost SELECT. A name equal to
+// the column a target reads is left off, as pg_get_viewdef leaves it off.
+//
+// It returns the names it could not write, to be kept as a column list: all of
+// them when the query has no target list (VALUES), when a star sits among the
+// named targets, or when there are more names than targets.
+func applyColumnNames(query *pg_query.Node, colNames []*pg_query.Node) []string {
+	if len(colNames) == 0 {
+		return nil
+	}
+	names := make([]string, len(colNames))
+	for i, n := range colNames {
+		names[i] = n.GetString_().GetSval()
+	}
+
+	ss := query.GetSelectStmt()
+	for ss != nil && ss.Op != pg_query.SetOperation_SETOP_NONE {
+		ss = ss.Larg
+	}
+	if ss == nil || len(ss.TargetList) < len(names) {
+		return names
+	}
+	targets := make([]*pg_query.ResTarget, len(names))
+	for i := range names {
+		rt := ss.TargetList[i].GetResTarget()
+		if rt == nil || isStarTarget(rt) {
+			return names
+		}
+		targets[i] = rt
+	}
+
+	for i, rt := range targets {
+		rt.Name = names[i]
+		if fields := rt.Val.GetColumnRef().GetFields(); len(fields) > 0 && fields[len(fields)-1].GetString_().GetSval() == names[i] {
+			rt.Name = ""
+		}
+	}
+	return nil
+}
+
+// isStarTarget reports whether a target is * or t.*.
+func isStarTarget(rt *pg_query.ResTarget) bool {
+	fields := rt.Val.GetColumnRef().GetFields()
+	return len(fields) > 0 && fields[len(fields)-1].GetAStar() != nil
 }
 
 // parseViewStorageParams reads the WITH (...) that precedes AS in a CREATE VIEW
@@ -1653,6 +1705,8 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 		schema = defaultSchema
 	}
 
+	columnNames := applyColumnNames(as.Query, into.ColNames)
+
 	// Deparse the SELECT query
 	selectResult := &pg_query.ParseResult{
 		Version: pgast.ParseTreeVersion,
@@ -1669,6 +1723,7 @@ func parseCreateMatViewStmt(as *pg_query.CreateTableAsStmt, defaultSchema string
 		Schema:         schema,
 		Name:           into.Rel.Relname,
 		Definition:     def,
+		ColumnNames:    columnNames,
 		Materialized:   true,
 		WithNoData:     into.SkipData,
 		StorageParams:  parseViewStorageParams(into.Options),

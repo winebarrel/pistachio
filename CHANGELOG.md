@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* The column name list of `CREATE VIEW` and `CREATE MATERIALIZED VIEW`, as in `CREATE VIEW v (x, y) AS ...`, is now read. Before, it was dropped, so the view was created with the query's own column names and planned again on every run.
+
 ## [1.76.0] - 2026-10-04
 
 * `fmt --strip-renamed-from` removes every `-- pista:renamed-from` directive.

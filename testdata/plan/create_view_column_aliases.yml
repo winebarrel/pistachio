@@ -1,0 +1,29 @@
+init: |
+  CREATE TABLE public.t (a integer, b integer, c text);
+desired: |
+  CREATE TABLE public.t (a integer, b integer, c text);
+  CREATE VIEW public.v_all (x, y) AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_partial (x) AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_override (x, y) AS SELECT a + 1, b AS bb FROM public.t;
+  CREATE VIEW public.v_same (a, y) AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_union (x, y) AS SELECT a, b FROM public.t UNION SELECT b, a FROM public.t;
+  CREATE VIEW public.v_star (x, y) AS SELECT * FROM public.t;
+  CREATE VIEW public.v_values (x, y) AS VALUES (1, 2);
+  CREATE MATERIALIZED VIEW public.m (x, y) AS SELECT a, b FROM public.t;
+plan: |
+  CREATE MATERIALIZED VIEW public.m AS
+  SELECT a AS x, b AS y FROM public.t;
+  CREATE OR REPLACE VIEW public.v_all AS
+  SELECT a AS x, b AS y FROM public.t;
+  CREATE OR REPLACE VIEW public.v_override AS
+  SELECT a + 1 AS x, b AS y FROM public.t;
+  CREATE OR REPLACE VIEW public.v_partial AS
+  SELECT a AS x, b FROM public.t;
+  CREATE OR REPLACE VIEW public.v_same AS
+  SELECT a, b AS y FROM public.t;
+  CREATE OR REPLACE VIEW public.v_star (x, y) AS
+  SELECT * FROM public.t;
+  CREATE OR REPLACE VIEW public.v_union AS
+  SELECT a AS x, b AS y FROM public.t UNION SELECT b, a FROM public.t;
+  CREATE OR REPLACE VIEW public.v_values (x, y) AS
+  VALUES (1, 2);
