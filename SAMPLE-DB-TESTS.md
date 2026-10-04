@@ -233,6 +233,7 @@ tip do not load. Its loader says why.
 | ghostfolio | ghostfolio | [ghostfolio/ghostfolio](https://github.com/ghostfolio/ghostfolio) |
 | typebot | typebot | [baptisteArno/typebot.io](https://github.com/baptisteArno/typebot.io) |
 | cratesio | cratesio | [rust-lang/crates.io](https://github.com/rust-lang/crates.io) |
+| panoptes | panoptes | [zooniverse/panoptes](https://github.com/zooniverse/panoptes) |
 
 ## Coverage
 
@@ -262,7 +263,7 @@ exceptions:
   hexpm, omop, zed, gravitino, formbricks, hoppscotch, and streampark were
   counted on 2026-09-21 on 16.13. vaultwarden, authelia, hydra, bonita,
   ghostfolio, and typebot were counted on 2026-09-22 on 16.13.
-- cratesio was counted on 2026-09-25 on 16.13.
+- cratesio was counted on 2026-09-25 on 16.13. panoptes was counted on 2026-10-04 on 16.14.
 - The Sequences column was counted on 15.18 throughout. The Triggers column was
   added on 2026-08-24 and the Routines column on 2026-08-25. Both were counted
   on 15.18 for every sample.
@@ -405,11 +406,12 @@ pistachio does not read them either.
 | ghostfolio | 21 | 150 | 74 | 23 | 21 | 0 | 10 | 0 | 0 | 0 |
 | typebot | 31 | 245 | 53 | 31 | 23 | 0 | 5 | 0 | 0 | 0 |
 | cratesio | 35 | 207 | 85 | 35 | 47 | 1 | 0 | 0 | 25 | 31 |
-| **Total** | **10,164** | **87,412** | **30,868** | **13,579** | **16,865** | **2,311** | **715** | **873** | **2,023** | **1,823** |
+| panoptes | 54 | 530 | 202 | 68 | 52 | 0 | 0 | 0 | 4 | 0 |
+| **Total** | **10,218** | **87,942** | **31,070** | **13,647** | **16,917** | **2,311** | **715** | **873** | **2,027** | **1,823** |
 
 ### Size
 
-The 109 dumps come to about 289,000 lines of SQL. chado is 43,700 of them,
+The 110 dumps come to about 290,000 lines of SQL. chado is 43,700 of them,
 which is the longest dump of any sample. gitlab is 34,700 and uyuni is 19,700.
 gitlab is still about a quarter of the constraints, a fifth of the indexes, a
 sixth of the foreign keys and of the columns, and a seventh of the tables.
@@ -433,16 +435,16 @@ Indexes:
 
 - gin: synapse, rt, musicbrainz, danbooru, lago, mattermost, windmill,
   langfuse, openreplay, logto, concourse, uyuni, lobehub, hexpm, zed,
-  hoppscotch.
+  hoppscotch, panoptes.
 - gist: musicbrainz, osm, chado, inaturalist.
 - hash: musicbrainz, langfuse, uyuni.
 - brin: musicbrainz, logto.
 - hnsw, pgvector's method: citizenlab, affine, lobehub.
 - Partial indexes: mediawiki, synapse, musicbrainz, chado, danbooru, lago,
   mattermost, lemmy, windmill, feedbin, penpot, openreplay, logto, omero,
-  uyuni, lobehub, hydra.
+  uyuni, lobehub, hydra, panoptes.
 - Expression indexes: rt, musicbrainz, danbooru, mattermost, feedbin, langfuse,
-  penpot, dcm4chee, logto, omero, uyuni, lobehub, hexpm.
+  penpot, dcm4chee, logto, omero, uyuni, lobehub, hexpm, panoptes.
 - Unique indexes over an expression: rt, mattermost.
 - gin over `to_tsvector`: rt, langfuse, uyuni, hexpm (with another function
   inside it).
@@ -496,7 +498,7 @@ Types and columns:
 - Standalone sequences: ranger, wso2apim, wso2is, dcm4chee, alfresco,
   roundcube, omero, uyuni, streampark (non-default `START WITH` and
   `MINVALUE`).
-- tsvector columns: dvdrental, pagila.
+- tsvector columns: dvdrental, pagila, panoptes.
 - A non-default collation: musicbrainz.
 - Types from a contrib extension: sourcegraph, plausible, hexpm (`citext`),
   lemmy (`ltree`), feedbin (`hstore`).
