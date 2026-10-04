@@ -1,0 +1,32 @@
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text DEFAULT 'active' NOT NULL,
+      flag integer,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.items VALUES (1, 'inactive', 1), (2, 'active', 0);
+desired: |
+  CREATE TYPE public.item_status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      -- pista:retype-using status::public.item_status
+      status public.item_status DEFAULT 'active' NOT NULL,
+      -- pista:retype-using flag <> 0
+      flag boolean,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+applied: |
+  -- public.item_status
+  CREATE TYPE public.item_status AS ENUM (
+      'active',
+      'inactive'
+  );
+
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status item_status DEFAULT 'active'::item_status NOT NULL,
+      flag boolean,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );

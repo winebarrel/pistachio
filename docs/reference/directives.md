@@ -7,6 +7,7 @@ A directive that follows code or a `/* ... */` comment on the same line is an er
 | Directive | Arguments | Applies to | Purpose |
 |---|---|---|---|
 | `renamed-from` | old name (required) | tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies, triggers | Renames the object instead of dropping and creating it. |
+| `retype-using` | expression (required) | columns | Gives the `USING` expression of a column type change. |
 | `execute` | check SQL (optional) | any statement | Runs non-managed SQL after the managed DDL. |
 | `execute-first` | check SQL (optional) | any statement | Runs non-managed SQL before the managed DDL. |
 | `concurrently` | none | `CREATE INDEX` | Creates and drops the index with `CONCURRENTLY`. |
@@ -59,6 +60,35 @@ CREATE TYPE public.postal_address AS (
 ```
 
 See [Renaming objects](../guides/renaming.md) for column rename caveats.
+
+## -- pista:retype-using
+
+Gives the `USING` expression for a column type change. The expression computes the new column value from the old one. pistachio adds it to `ALTER COLUMN ... SET DATA TYPE` without changing it. Write the directive inside `CREATE TABLE`, on the line before the column.
+
+Without a `USING` expression, PostgreSQL converts the values with an assignment cast. If the two types have no implicit or assignment cast between them, the type change fails. `text` to an enum is an example.
+
+```sql
+CREATE TYPE public.item_status AS ENUM ('active', 'inactive');
+
+CREATE TABLE public.items (
+    id integer NOT NULL,
+    -- pista:retype-using status::public.item_status
+    status public.item_status DEFAULT 'active' NOT NULL,
+    CONSTRAINT items_pkey PRIMARY KEY (id)
+);
+```
+
+If the column was `text`, the plan is:
+
+```sql
+ALTER TABLE public.items ALTER COLUMN status DROP DEFAULT;
+ALTER TABLE public.items ALTER COLUMN status SET DATA TYPE public.item_status USING status::public.item_status;
+ALTER TABLE public.items ALTER COLUMN status SET DEFAULT 'active';
+```
+
+PostgreSQL does not apply the `USING` expression to the column default. So if the column has a default, pistachio drops it before the type change and sets it again after. A serial column keeps its default. Indexes and constraints that use the column get no such handling, and the type change can still fail on them.
+
+If the type does not change, the directive does nothing. You can leave it in the file after the change is applied.
 
 ## -- pista:execute
 

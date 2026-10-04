@@ -1,0 +1,14 @@
+init: |
+  CREATE TABLE public.t (id integer, status text DEFAULT 'a');
+desired: |
+  -- pista:bulk-alter
+  CREATE TABLE public.t (
+      id integer,
+      -- pista:retype-using status::character(1)
+      status character(1) DEFAULT 'a'
+  );
+plan: |
+  ALTER TABLE public.t
+    ALTER COLUMN status DROP DEFAULT,
+    ALTER COLUMN status SET DATA TYPE character(1) USING status::character(1),
+    ALTER COLUMN status SET DEFAULT 'a';

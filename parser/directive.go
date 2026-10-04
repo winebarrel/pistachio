@@ -20,7 +20,10 @@ var (
 	// Matches -- pista:renamed-from with no name (invalid usage). The pattern
 	// above needs a name, so without this a bare directive matched nothing
 	// and the object was dropped and created instead of renamed.
-	renameWithoutArgPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]*\r?$`)
+	renameWithoutArgPattern     = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:renamed-from[ \t]*\r?$`)
+	retypeUsingDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:retype-using[ \t]+(.+?)[ \t]*\r?$`)
+	// Matches -- pista:retype-using with no expression (invalid usage).
+	retypeUsingWithoutArgPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:retype-using[ \t]*\r?$`)
 	// execute-first shares a prefix with execute. The execute pattern accepts
 	// only whitespace or end-of-line after the name, so an execute-first
 	// comment never matches it.
@@ -47,6 +50,7 @@ var knownDirectives = map[string]bool{
 	"concurrently":  true,
 	"bulk-alter":    true,
 	"ignore":        true,
+	"retype-using":  true,
 }
 
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
@@ -80,6 +84,10 @@ func validateDirectives(rawSQL string) error {
 
 	if m := renameWithoutArgPattern.FindStringIndex(rawSQL); m != nil {
 		return &locatedError{msg: "-- pista:renamed-from requires an argument", offset: m[0]}
+	}
+
+	if m := retypeUsingWithoutArgPattern.FindStringIndex(rawSQL); m != nil {
+		return &locatedError{msg: "-- pista:retype-using requires an argument", offset: m[0]}
 	}
 
 	if m := concurrentlyWithArgsPattern.FindStringIndex(rawSQL); m != nil {
@@ -448,19 +456,22 @@ func blockCommentEnd(s string, pos int) int {
 	return -1
 }
 
-// inlineDirectives holds rename directives for columns and constraints within a CREATE TABLE.
+// inlineDirectives holds the directives for columns and constraints within a CREATE TABLE.
 type inlineDirectives struct {
 	Columns     map[string]string // new column name -> old column name
 	Constraints map[string]string // new constraint name -> old constraint name
+	RetypeUsing map[string]string // column name -> USING expression
 }
 
 // extractInlineDirectives scans the raw text of a CREATE TABLE statement for
-// `-- pista:renamed-from <old_name>` directives that appear on lines immediately
-// before column or constraint definitions.
+// `-- pista:renamed-from <old_name>` and `-- pista:retype-using <expression>`
+// directives that appear on lines immediately before column or constraint
+// definitions. retype-using applies to a column only.
 func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	result := &inlineDirectives{
 		Columns:     make(map[string]string),
 		Constraints: make(map[string]string),
+		RetypeUsing: make(map[string]string),
 	}
 
 	// Only scan lines inside the column/constraint list (after the opening parenthesis)
@@ -471,7 +482,7 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	body := rawCreateTableSQL[parenIdx:]
 	lines := strings.Split(body, "\n")
 
-	var pendingRename string
+	var pendingRename, pendingRetype string
 	for _, line := range lines {
 		// A leading comma belongs to the previous element, so the name that
 		// follows it is the one the directive renames.
@@ -481,26 +492,34 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 			pendingRename = normalizeUnqualifiedDirective(m[1])
 			continue
 		}
+		if m := retypeUsingDirectivePattern.FindStringSubmatch(line); m != nil {
+			pendingRetype = m[1]
+			continue
+		}
 
-		// Blank lines and other comments keep the pending rename.
+		// Blank lines and other comments keep the pending directives.
 		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}
-		if pendingRename != "" {
+		if pendingRename != "" || pendingRetype != "" {
 			upper := strings.ToUpper(trimmed)
 			if strings.HasPrefix(upper, "CONSTRAINT ") {
 				conName := extractConstraintName(trimmed)
-				if conName != "" {
+				if conName != "" && pendingRename != "" {
 					result.Constraints[conName] = pendingRename
 				}
 			} else {
 				colName := extractColumnName(trimmed)
-				if colName != "" {
+				if colName != "" && pendingRename != "" {
 					result.Columns[colName] = pendingRename
+				}
+				if colName != "" && pendingRetype != "" {
+					result.RetypeUsing[colName] = pendingRetype
 				}
 			}
 		}
 		pendingRename = ""
+		pendingRetype = ""
 	}
 
 	return result

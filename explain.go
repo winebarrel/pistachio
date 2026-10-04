@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -447,9 +448,16 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 
 	case pg_query.AlterTableType_AT_AlterColumnType:
 		col := ex.currentColumn(key, t, cmd.GetName())
-		tn := cmd.GetDef().GetColumnDef().GetTypeName()
+		cd := cmd.GetDef().GetColumnDef()
+		tn := cd.GetTypeName()
 		if col == nil || tn == nil {
 			return explainEffect{}
+		}
+		// A USING expression other than the column itself, or the column cast
+		// to the target type, computes new values, so every row is rewritten
+		// whatever the types.
+		if u := cd.GetRawDefault(); u != nil && !isColumnCast(u, cmd.GetName(), tn) {
+			return self(touchRewrite, blockAll)
 		}
 		return self(ex.alterTypeTouch(col.TypeName, tn), blockAll)
 
@@ -550,6 +558,24 @@ func (ex *explainer) isConstrainedDomain(tn *pg_query.TypeName) bool {
 		}
 	}
 	return false
+}
+
+// isColumnCast reports whether expr is the named column, bare or cast to the
+// target type once. As a USING expression it changes the values only as the
+// types alone would. A cast to any other type can change them, as
+// code::varchar(10) truncates on the way to varchar(100).
+func isColumnCast(expr *pg_query.Node, name string, target *pg_query.TypeName) bool {
+	if tc := expr.GetTypeCast(); tc != nil {
+		ct := tc.GetTypeName()
+		if typeNameString(ct) != typeNameString(target) ||
+			!slices.Equal(typmodsOf(ct), typmodsOf(target)) ||
+			len(ct.GetArrayBounds()) != len(target.GetArrayBounds()) {
+			return false
+		}
+		expr = tc.GetArg()
+	}
+	fields := expr.GetColumnRef().GetFields()
+	return len(fields) > 0 && fields[len(fields)-1].GetString_().GetSval() == name
 }
 
 // alterTypeTouch decides what SET DATA TYPE does to the rows. A change the

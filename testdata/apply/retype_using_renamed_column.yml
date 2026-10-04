@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.t (id integer, old_flag integer, "Code" text);
+  INSERT INTO public.t VALUES (1, 1, '10'), (2, 0, '20');
+desired: |
+  CREATE TABLE public.t (
+      id integer,
+      -- pista:renamed-from old_flag
+      -- pista:retype-using flag <> 0
+      flag boolean,
+      -- pista:retype-using "Code"::integer
+      "Code" integer
+  );
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer,
+      flag boolean,
+      "Code" integer
+  );

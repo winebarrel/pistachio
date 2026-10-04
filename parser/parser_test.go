@@ -1102,6 +1102,19 @@ ALTER TABLE public.orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCE
 	assert.Equal(t, []string{"user_id"}, fk.Columns)
 }
 
+func TestParseSQL_RetypeUsing(t *testing.T) {
+	sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    -- pista:retype-using status::public.item_status
+    status public.item_status NOT NULL
+);`
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+	table := result.Tables.Get("public.items")
+	assert.Nil(t, table.Columns.Get("id").RetypeUsing)
+	assert.Equal(t, new("status::public.item_status"), table.Columns.Get("status").RetypeUsing)
+}
+
 func TestParseSQL_InlineForeignKey(t *testing.T) {
 	sql := `CREATE TABLE public.groups (
     id integer NOT NULL,

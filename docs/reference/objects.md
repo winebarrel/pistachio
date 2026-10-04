@@ -206,7 +206,7 @@ A type or collation change is the first statement for the column. PostgreSQL ref
 pista: error: cannot change the type of public.t.n: view public.v depends on it
 ```
 
-A trigger blocks the change even when the column is only in its `UPDATE OF` list. The change also applies to the table's partitions and `INHERITS` children, so a dependent on their copy of the column blocks it too. A view or a `BEGIN ATOMIC` routine that the same plan drops does not block it. A trigger, a policy or a generated column that the plan drops still blocks it, because those drops run after the type change. Indexes and constraints do not block it, because PostgreSQL rebuilds them. `SET DATA TYPE` resets storage and compression. So when the file names them, both are written again after it.
+A trigger blocks the change even when the column is only in its `UPDATE OF` list. The change also applies to the table's partitions and `INHERITS` children, so a dependent on their copy of the column blocks it too. A view or a `BEGIN ATOMIC` routine that the same plan drops does not block it. A trigger, a policy or a generated column that the plan drops still blocks it, because those drops run after the type change. Indexes and constraints do not block it, because PostgreSQL rebuilds them. `SET DATA TYPE` resets storage and compression. So when the file names them, both are written again after it. A type change with no implicit or assignment cast needs a `USING` expression. See [`-- pista:retype-using`](directives.md#-pistaretype-using).
 
 `DROP NOT NULL` runs after the table's constraint statements, so a primary key dropped in the same plan comes first. `DROP COLUMN` runs after the table's constraint, index, trigger, policy and comment statements.
 
