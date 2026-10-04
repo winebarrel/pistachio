@@ -27,7 +27,7 @@ export PISTA_CONFIG=pista.yml
 pista dump
 ```
 
-One file works for every command. A key that the running command does not use is ignored. The file cannot set `force`. A value there would turn off the drift check of every `apply-from` that reads the file. Pass `--force` on the command line.
+One file works for every command. A key that the running command does not use is ignored. The file cannot set `force` or `strip-renamed-from`. A value there would apply to every run. `force` would turn off the drift check of every `apply-from`, and `strip-renamed-from` would make every `pista fmt` remove rename directives that are not applied yet. Pass them on the command line.
 
 A command-line flag overrides an environment variable. An environment variable overrides the config file. The config file overrides the default.
 

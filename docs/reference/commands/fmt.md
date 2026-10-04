@@ -24,7 +24,7 @@ The [general options](index.md#general-options) apply as well.
 :   Write nothing. Report the files that are not formatted. Exit with 2 when there is at least one such file and no file failed. The environment variable is `PISTA_FMT_CHECK`.
 
 `--strip-renamed-from`
-:   Remove every `-- pista:renamed-from` directive, then format the file. A directive is removed only when it is on a line of its own. Use this after the renames are applied. The environment variable is `PISTA_FMT_STRIP_RENAMED_FROM`.
+:   Remove every `-- pista:renamed-from` directive, then format the file. A directive is removed only when it is on a line of its own. Use this after the renames are applied. This option cannot be set from the config file.
 
 ## Exit status
 
@@ -32,7 +32,7 @@ The exit status is 0 when every file was formatted. With `--check`, it is 0 when
 
 ## Environment
 
-`PISTA_FMT_CHECK` and `PISTA_FMT_STRIP_RENAMED_FROM` are described above. `PISTA_CONFIG` and `PISTA_PAGER` are described under [Commands](index.md#environment).
+`PISTA_FMT_CHECK` is described above. `PISTA_CONFIG` and `PISTA_PAGER` are described under [Commands](index.md#environment).
 
 ## Examples
 

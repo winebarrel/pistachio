@@ -18,7 +18,7 @@ type Fmt struct {
 	Files []string `arg:"" help:"Path to the schema SQL file(s)."`
 	Check bool     `env:"PISTA_FMT_CHECK" help:"Report the files that are not formatted instead of writing them. Exits with code 2 when there are any."`
 	// StripRenamedFrom is for the cleanup after a rename has been applied.
-	StripRenamedFrom bool `env:"PISTA_FMT_STRIP_RENAMED_FROM" help:"Remove every -- pista:renamed-from directive."`
+	StripRenamedFrom bool `noconfig:"" help:"Remove every -- pista:renamed-from directive."`
 }
 
 func (cmd *Fmt) Run(w io.Writer) error {
