@@ -933,6 +933,7 @@ CREATE MATERIALIZED VIEW public.full_items AS SELECT id FROM public.items WITH D
 
 func TestParseSQL_ViewColumnNames(t *testing.T) {
 	sql := `CREATE TABLE public.t (a integer, b integer);
+CREATE TABLE public.u (a integer);
 CREATE VIEW public.v_all (x, y) AS SELECT a, b FROM public.t;
 CREATE VIEW public.v_same (a, y) AS SELECT t.a, b AS bb FROM public.t;
 CREATE VIEW public.v_union (x) AS SELECT a FROM public.t UNION SELECT b FROM public.t;
@@ -943,6 +944,8 @@ CREATE VIEW public.v_order (x) AS SELECT a AS z FROM public.t ORDER BY z;
 CREATE VIEW public.v_unreferenced (x) AS SELECT a AS z FROM public.t ORDER BY a;
 CREATE VIEW public.v_new_name (a) AS SELECT b FROM public.t ORDER BY a;
 CREATE VIEW public.v_own_column (x) AS SELECT a FROM public.t ORDER BY a;
+CREATE VIEW public.v_group_new_name (a) AS SELECT count(*) AS z FROM public.t GROUP BY a;
+CREATE VIEW public.v_sub_order (a) AS SELECT b FROM public.t ORDER BY (SELECT a FROM public.u LIMIT 1);
 CREATE MATERIALIZED VIEW public.m (x) AS SELECT a FROM public.t;`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -952,17 +955,19 @@ CREATE MATERIALIZED VIEW public.m (x) AS SELECT a FROM public.t;`
 		def   string
 		names []string
 	}{
-		"v_all":          {"SELECT a AS x, b AS y FROM public.t", nil},
-		"v_same":         {"SELECT t.a, b AS y FROM public.t", nil},
-		"v_union":        {"SELECT a AS x FROM public.t UNION SELECT b FROM public.t", nil},
-		"v_star_after":   {"SELECT a AS x, * FROM public.t", nil},
-		"v_star":         {"SELECT a, * FROM public.t", []string{"x", "y"}},
-		"v_values":       {"VALUES (1, 2)", []string{"x", "y"}},
-		"v_order":        {"SELECT a AS z FROM public.t ORDER BY z", []string{"x"}},
-		"v_unreferenced": {"SELECT a AS x FROM public.t ORDER BY a", nil},
-		"v_new_name":     {"SELECT b FROM public.t ORDER BY a", []string{"a"}},
-		"v_own_column":   {"SELECT a AS x FROM public.t ORDER BY a", nil},
-		"m":              {"SELECT a AS x FROM public.t", nil},
+		"v_all":            {"SELECT a AS x, b AS y FROM public.t", nil},
+		"v_same":           {"SELECT t.a, b AS y FROM public.t", nil},
+		"v_union":          {"SELECT a AS x FROM public.t UNION SELECT b FROM public.t", nil},
+		"v_star_after":     {"SELECT a AS x, * FROM public.t", nil},
+		"v_star":           {"SELECT a, * FROM public.t", []string{"x", "y"}},
+		"v_values":         {"VALUES (1, 2)", []string{"x", "y"}},
+		"v_order":          {"SELECT a AS z FROM public.t ORDER BY z", []string{"x"}},
+		"v_unreferenced":   {"SELECT a AS x FROM public.t ORDER BY a", nil},
+		"v_new_name":       {"SELECT b FROM public.t ORDER BY a", []string{"a"}},
+		"v_own_column":     {"SELECT a AS x FROM public.t ORDER BY a", nil},
+		"v_group_new_name": {"SELECT count(*) AS a FROM public.t GROUP BY a", nil},
+		"v_sub_order":      {"SELECT b AS a FROM public.t ORDER BY (SELECT a FROM public.u LIMIT 1)", nil},
+		"m":                {"SELECT a AS x FROM public.t", nil},
 	} {
 		v, ok := result.Views.GetOk("public." + name)
 		require.True(t, ok, name)

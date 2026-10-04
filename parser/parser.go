@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
@@ -1652,15 +1653,19 @@ func applyColumnNames(query *pg_query.Node, colNames []*pg_query.Node) []string 
 
 // refersToChangedName reports whether the query refers by a bare name to an
 // output name that applyColumnNames would change. An alias the query wrote
-// goes away, so ORDER BY z breaks. A new name is resolved before an input
-// column of the same name in ORDER BY, so SELECT b FROM t ORDER BY a with the
-// list (a) would sort by b instead of t.a. The name a column reference gives
-// its target is not counted: once it goes, the bare name still finds the same
-// input column.
-// Output names are visible only in ORDER BY, GROUP BY and DISTINCT ON, of the
-// SELECT that carries the targets and, for a set operation, of the whole.
+// goes away, so ORDER BY z or GROUP BY z breaks. A new name is resolved before
+// an input column of the same name in ORDER BY and DISTINCT ON, so
+// SELECT b FROM t ORDER BY a with the list (a) would sort by b instead of t.a.
+// GROUP BY resolves an input column first, so a new name there is harmless.
+// The name a column reference gives its target is not counted: once it goes,
+// the bare name still finds the same input column.
+//
+// Output names are visible only in these clauses, of the SELECT that carries
+// the targets and, for a set operation, of the whole, and not in a sub-query
+// under them.
 func refersToChangedName(top, ss *pg_query.SelectStmt, targets []*pg_query.ResTarget, names []string) bool {
-	changed := map[string]bool{}
+	removed := map[string]bool{}
+	added := map[string]bool{}
 	for i, rt := range targets {
 		cur := rt.Name
 		if cur == "" {
@@ -1670,25 +1675,27 @@ func refersToChangedName(top, ss *pg_query.SelectStmt, targets []*pg_query.ResTa
 			continue
 		}
 		if rt.Name != "" {
-			changed[rt.Name] = true
+			removed[rt.Name] = true
 		}
-		changed[names[i]] = true
+		added[names[i]] = true
 	}
-	if len(changed) == 0 {
-		return false
-	}
-	var clauses []*pg_query.Node
-	for _, s := range []*pg_query.SelectStmt{top, ss} {
-		clauses = slices.Concat(clauses, s.SortClause, s.GroupClause, s.DistinctClause)
-	}
+	either := maps.Clone(removed)
+	maps.Copy(either, added)
 	found := false
-	for _, c := range clauses {
-		pgast.Walk(c, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
-			if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 1 && changed[cr.Fields[0].GetString_().GetSval()] {
-				found = true
-			}
-			return n
-		})
+	refers := func(clause []*pg_query.Node, names map[string]bool) {
+		for _, c := range clause {
+			pgast.Walk(c, pgast.WalkOptions{SkipSubqueries: true}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+				if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 1 && names[cr.Fields[0].GetString_().GetSval()] {
+					found = true
+				}
+				return n
+			})
+		}
+	}
+	for _, s := range []*pg_query.SelectStmt{top, ss} {
+		refers(s.SortClause, either)
+		refers(s.DistinctClause, either)
+		refers(s.GroupClause, removed)
 	}
 	return found
 }
