@@ -10,22 +10,31 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// detectEnumRenames finds desired enums with RenameFrom that match a current enum.
-func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([]string, *orderedmap.Map[string, *model.Enum], error) {
+// detectRenames finds desired objects with RenameFrom that match a current
+// object, emits ALTER <keyword> ... RENAME TO for each, and returns the current
+// map with the renamed objects moved to their new keys. ident reports an
+// object's schema, name and RenameFrom; rename returns a copy of old named name.
+func detectRenames[V any](
+	current, desired *orderedmap.Map[string, V],
+	keyword string,
+	ident func(V) (schema, name string, renameFrom *string),
+	rename func(old V, name string) V,
+) ([]string, *orderedmap.Map[string, V], error) {
 	var stmts []string
 	adjusted := current.Clone()
 
-	for newKey, desiredEnum := range desired.All() {
-		if desiredEnum.RenameFrom == nil {
+	for newKey, desiredObj := range desired.All() {
+		desiredSchema, desiredName, renameFrom := ident(desiredObj)
+		if renameFrom == nil {
 			continue
 		}
-		oldKey := *desiredEnum.RenameFrom
+		oldKey := *renameFrom
 
 		if oldKey == newKey {
 			continue
 		}
 
-		oldEnum, ok := adjusted.GetOk(oldKey)
+		oldObj, ok := adjusted.GetOk(oldKey)
 		if !ok {
 			if _, exists := adjusted.GetOk(newKey); exists {
 				continue
@@ -37,61 +46,39 @@ func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([
 			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
 		}
 
-		if oldEnum.Schema != desiredEnum.Schema {
+		if oldSchema, _, _ := ident(oldObj); oldSchema != desiredSchema {
 			return nil, nil, fmt.Errorf("cannot rename %s to %s: cross-schema rename is not supported", oldKey, newKey)
 		}
 
-		stmts = append(stmts, "ALTER TYPE "+oldKey+" RENAME TO "+model.Ident(desiredEnum.Name)+";")
+		stmts = append(stmts, "ALTER "+keyword+" "+oldKey+" RENAME TO "+model.Ident(desiredName)+";")
 
 		adjusted.Delete(oldKey)
-		renamed := *oldEnum
-		renamed.Name = desiredEnum.Name
-		adjusted.Set(newKey, &renamed)
+		adjusted.Set(newKey, rename(oldObj, desiredName))
 	}
 
 	return stmts, adjusted, nil
 }
 
+// detectEnumRenames finds desired enums with RenameFrom that match a current enum.
+func detectEnumRenames(current, desired *orderedmap.Map[string, *model.Enum]) ([]string, *orderedmap.Map[string, *model.Enum], error) {
+	return detectRenames(current, desired, "TYPE",
+		func(e *model.Enum) (string, string, *string) { return e.Schema, e.Name, e.RenameFrom },
+		func(old *model.Enum, name string) *model.Enum {
+			renamed := *old
+			renamed.Name = name
+			return &renamed
+		})
+}
+
 // detectSequenceRenames finds desired sequences with RenameFrom that match a current sequence.
 func detectSequenceRenames(current, desired *orderedmap.Map[string, *model.Sequence]) ([]string, *orderedmap.Map[string, *model.Sequence], error) {
-	var stmts []string
-	adjusted := current.Clone()
-
-	for newKey, desiredSeq := range desired.All() {
-		if desiredSeq.RenameFrom == nil {
-			continue
-		}
-		oldKey := *desiredSeq.RenameFrom
-
-		if oldKey == newKey {
-			continue
-		}
-
-		oldSeq, ok := adjusted.GetOk(oldKey)
-		if !ok {
-			if _, exists := adjusted.GetOk(newKey); exists {
-				continue
-			}
-			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
-		}
-
-		if _, exists := adjusted.GetOk(newKey); exists {
-			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
-		}
-
-		if oldSeq.Schema != desiredSeq.Schema {
-			return nil, nil, fmt.Errorf("cannot rename %s to %s: cross-schema rename is not supported", oldKey, newKey)
-		}
-
-		stmts = append(stmts, "ALTER SEQUENCE "+oldKey+" RENAME TO "+model.Ident(desiredSeq.Name)+";")
-
-		adjusted.Delete(oldKey)
-		renamed := *oldSeq
-		renamed.Name = desiredSeq.Name
-		adjusted.Set(newKey, &renamed)
-	}
-
-	return stmts, adjusted, nil
+	return detectRenames(current, desired, "SEQUENCE",
+		func(s *model.Sequence) (string, string, *string) { return s.Schema, s.Name, s.RenameFrom },
+		func(old *model.Sequence, name string) *model.Sequence {
+			renamed := *old
+			renamed.Name = name
+			return &renamed
+		})
 }
 
 // detectTableRenames finds desired tables with RenameFrom that match a current table.

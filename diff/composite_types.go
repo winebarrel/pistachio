@@ -169,43 +169,12 @@ func diffCompositeType(fqcn string, current, desired *model.CompositeType, dc Dr
 // detectCompositeTypeRenames finds desired composite types with RenameFrom that
 // match a current composite type.
 func detectCompositeTypeRenames(current, desired *orderedmap.Map[string, *model.CompositeType]) ([]string, *orderedmap.Map[string, *model.CompositeType], error) {
-	var stmts []string
-	adjusted := current.Clone()
-
-	for newKey, desiredCT := range desired.All() {
-		if desiredCT.RenameFrom == nil {
-			continue
-		}
-		oldKey := *desiredCT.RenameFrom
-
-		if oldKey == newKey {
-			continue
-		}
-
-		oldCT, ok := adjusted.GetOk(oldKey)
-		if !ok {
-			if _, exists := adjusted.GetOk(newKey); exists {
-				continue
-			}
-			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
-		}
-
-		if _, exists := adjusted.GetOk(newKey); exists {
-			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
-		}
-
-		if oldCT.Schema != desiredCT.Schema {
-			return nil, nil, fmt.Errorf("cannot rename %s to %s: cross-schema rename is not supported", oldKey, newKey)
-		}
-
-		stmts = append(stmts, "ALTER TYPE "+oldKey+" RENAME TO "+model.Ident(desiredCT.Name)+";")
-
-		adjusted.Delete(oldKey)
-		renamed := *oldCT
-		renamed.Name = desiredCT.Name
-		renamed.Attributes = cloneCompositeAttributes(oldCT.Attributes)
-		adjusted.Set(newKey, &renamed)
-	}
-
-	return stmts, adjusted, nil
+	return detectRenames(current, desired, "TYPE",
+		func(ct *model.CompositeType) (string, string, *string) { return ct.Schema, ct.Name, ct.RenameFrom },
+		func(old *model.CompositeType, name string) *model.CompositeType {
+			renamed := *old
+			renamed.Name = name
+			renamed.Attributes = cloneCompositeAttributes(old.Attributes)
+			return &renamed
+		})
 }

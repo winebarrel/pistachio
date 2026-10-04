@@ -170,43 +170,12 @@ func diffDomainConstraints(fqdn string, current, desired []*model.DomainConstrai
 
 // detectDomainRenames finds desired domains with RenameFrom that match a current domain.
 func detectDomainRenames(current, desired *orderedmap.Map[string, *model.Domain]) ([]string, *orderedmap.Map[string, *model.Domain], error) {
-	var stmts []string
-	adjusted := current.Clone()
-
-	for newKey, desiredDomain := range desired.All() {
-		if desiredDomain.RenameFrom == nil {
-			continue
-		}
-		oldKey := *desiredDomain.RenameFrom
-
-		if oldKey == newKey {
-			continue
-		}
-
-		oldDomain, ok := adjusted.GetOk(oldKey)
-		if !ok {
-			if _, exists := adjusted.GetOk(newKey); exists {
-				continue
-			}
-			return nil, nil, fmt.Errorf("rename source %s not found for %s", oldKey, newKey)
-		}
-
-		if _, exists := adjusted.GetOk(newKey); exists {
-			return nil, nil, fmt.Errorf("cannot rename %s to %s: destination already exists", oldKey, newKey)
-		}
-
-		if oldDomain.Schema != desiredDomain.Schema {
-			return nil, nil, fmt.Errorf("cannot rename %s to %s: cross-schema rename is not supported", oldKey, newKey)
-		}
-
-		stmts = append(stmts, "ALTER DOMAIN "+oldKey+" RENAME TO "+model.Ident(desiredDomain.Name)+";")
-
-		adjusted.Delete(oldKey)
-		renamed := *oldDomain
-		renamed.Name = desiredDomain.Name
-		renamed.Constraints = slices.Clone(oldDomain.Constraints)
-		adjusted.Set(newKey, &renamed)
-	}
-
-	return stmts, adjusted, nil
+	return detectRenames(current, desired, "DOMAIN",
+		func(d *model.Domain) (string, string, *string) { return d.Schema, d.Name, d.RenameFrom },
+		func(old *model.Domain, name string) *model.Domain {
+			renamed := *old
+			renamed.Name = name
+			renamed.Constraints = slices.Clone(old.Constraints)
+			return &renamed
+		})
 }
