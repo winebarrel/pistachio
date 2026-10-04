@@ -1,0 +1,44 @@
+# PostgreSQL stores a call that spreads arguments over a VARIADIC parameter
+# as VARIADIC ARRAY[...]. A call written either way must plan clean.
+init: |
+  CREATE FUNCTION public.noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      d jsonb,
+      k text DEFAULT jsonb_extract_path_text('{}'::jsonb, 'a', 'b'),
+      g text GENERATED ALWAYS AS (jsonb_extract_path_text(d, 'a', 'b')) STORED,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_d_check CHECK (jsonb_extract_path_text(d, 'a', 'b') <> 'x')
+  );
+  CREATE INDEX t_expr_idx ON public.t (jsonb_extract_path_text(d, 'a', 'b'));
+  CREATE INDEX t_partial_idx ON public.t (id) WHERE jsonb_extract_path(d, 'a', 'b') IS NOT NULL;
+  CREATE INDEX t_explicit_idx ON public.t (jsonb_extract_path_text(d, VARIADIC ARRAY['c', 'd']));
+  CREATE INDEX t_column_idx ON public.t (jsonb_extract_path_text(d, VARIADIC ARRAY[k]));
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY t_policy ON public.t USING (jsonb_extract_path_text(d, 'a', 'b') = current_user);
+  CREATE TRIGGER t_trigger BEFORE UPDATE ON public.t
+      FOR EACH ROW WHEN (jsonb_extract_path_text(NEW.d, 'a', 'b') IS NOT NULL)
+      EXECUTE FUNCTION public.noop();
+  CREATE VIEW public.v AS SELECT jsonb_extract_path_text(d, 'a', 'b') AS ab FROM public.t;
+  CREATE MATERIALIZED VIEW public.m AS SELECT jsonb_extract_path_text(d, 'a', 'b') AS ab FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      d jsonb,
+      k text DEFAULT jsonb_extract_path_text('{}'::jsonb, 'a', 'b'),
+      g text GENERATED ALWAYS AS (jsonb_extract_path_text(d, 'a', 'b')) STORED,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_d_check CHECK (jsonb_extract_path_text(d, 'a', 'b') <> 'x')
+  );
+  CREATE INDEX t_expr_idx ON public.t (jsonb_extract_path_text(d, 'a', 'b'));
+  CREATE INDEX t_partial_idx ON public.t (id) WHERE jsonb_extract_path(d, 'a', 'b') IS NOT NULL;
+  CREATE INDEX t_explicit_idx ON public.t (jsonb_extract_path_text(d, VARIADIC ARRAY['c', 'd']));
+  CREATE INDEX t_column_idx ON public.t (jsonb_extract_path_text(d, VARIADIC ARRAY[k]));
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY t_policy ON public.t USING (jsonb_extract_path_text(d, 'a', 'b') = current_user);
+  CREATE TRIGGER t_trigger BEFORE UPDATE ON public.t
+      FOR EACH ROW WHEN (jsonb_extract_path_text(NEW.d, 'a', 'b') IS NOT NULL)
+      EXECUTE FUNCTION noop();
+  CREATE VIEW public.v AS SELECT jsonb_extract_path_text(d, 'a', 'b') AS ab FROM public.t;
+  CREATE MATERIALIZED VIEW public.m AS SELECT jsonb_extract_path_text(d, 'a', 'b') AS ab FROM public.t;
+plan: ""

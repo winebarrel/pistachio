@@ -6,6 +6,8 @@
 
 * pistachio now reads the column names in `CREATE VIEW v (x, y) AS ...`, and in `CREATE MATERIALIZED VIEW`. Before, it ignored them, so the view got the column names of its query and appeared in the plan on every run.
 
+* A call that spreads its arguments over a `VARIADIC` parameter, such as `jsonb_extract_path_text(d, 'a', 'b')`, no longer appears in the plan on every run. PostgreSQL stores it as `VARIADIC ARRAY['a', 'b']`. Before, an index, a constraint, a default, a policy, a trigger or a view that used one was planned again on every run, and a generated column that used one failed the plan.
+
 ## [1.76.0] - 2026-10-04
 
 * `fmt --strip-renamed-from` removes every `-- pista:renamed-from` directive.

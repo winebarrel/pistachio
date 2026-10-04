@@ -4775,6 +4775,33 @@ func TestStripFuncSchema(t *testing.T) {
 	})
 }
 
+func TestSpreadVariadicArray(t *testing.T) {
+	t.Run("index expression", func(t *testing.T) {
+		assert.True(t, equalIndexDef(
+			"CREATE INDEX i ON public.t USING btree (jsonb_extract_path_text(d, VARIADIC ARRAY['a'::text, 'b'::text]))",
+			"CREATE INDEX i ON public.t (jsonb_extract_path_text(d, 'a', 'b'))", nil))
+	})
+
+	t.Run("view body", func(t *testing.T) {
+		assert.True(t, equalViewDef(
+			"SELECT jsonb_extract_path_text(d, VARIADIC ARRAY['a'::text, 'b'::text]) AS ab FROM t",
+			"SELECT jsonb_extract_path_text(d, 'a', 'b') AS ab FROM public.t"))
+	})
+
+	t.Run("element change is seen", func(t *testing.T) {
+		assert.False(t, equalSelectExpr(
+			"jsonb_extract_path_text(d, VARIADIC ARRAY['a'::text, 'b'::text])",
+			"jsonb_extract_path_text(d, 'a', 'c')"))
+	})
+
+	// VARIADIC over an expression or an empty array has no spread form.
+	t.Run("not an array literal", func(t *testing.T) {
+		assert.True(t, equalSelectExpr("f(VARIADIC k)", "f(VARIADIC k)"))
+		assert.False(t, equalSelectExpr("f(VARIADIC k)", "f(k)"))
+		assert.True(t, equalSelectExpr("f(VARIADIC ARRAY[]::text[])", "f(VARIADIC ARRAY[]::text[])"))
+	})
+}
+
 func TestEqualIndexDef_storageParamQuoting(t *testing.T) {
 	// pg_get_indexdef quotes the value, a file writes it bare.
 	assert.True(t, equalIndexDef(
