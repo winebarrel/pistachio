@@ -1,0 +1,17 @@
+init: |
+  CREATE TABLE public.t (a integer, b integer);
+desired: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v_order (x) AS SELECT a AS z FROM public.t ORDER BY z;
+  CREATE VIEW public.v_group (x, n) AS SELECT a AS z, count(*) FROM public.t GROUP BY z;
+  CREATE VIEW public.v_union_order (x) AS SELECT a AS z FROM public.t UNION SELECT b FROM public.t ORDER BY z;
+  CREATE VIEW public.v_unreferenced (x) AS SELECT a AS z FROM public.t ORDER BY a;
+plan: |
+  CREATE OR REPLACE VIEW public.v_group (x, n) AS
+  SELECT a AS z, count(*) FROM public.t GROUP BY z;
+  CREATE OR REPLACE VIEW public.v_order (x) AS
+  SELECT a AS z FROM public.t ORDER BY z;
+  CREATE OR REPLACE VIEW public.v_union_order (x) AS
+  SELECT a AS z FROM public.t UNION SELECT b FROM public.t ORDER BY z;
+  CREATE OR REPLACE VIEW public.v_unreferenced AS
+  SELECT a AS x FROM public.t ORDER BY a;

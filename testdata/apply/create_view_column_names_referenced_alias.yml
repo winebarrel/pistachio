@@ -1,0 +1,50 @@
+# The query refers to the alias the column list replaces, so the list stays
+# on the CREATE. pg_get_viewdef writes the ORDER BY and GROUP BY as the
+# expression, so the view drifts, as it does without a column list.
+init: |
+  CREATE TABLE public.t (a integer, b integer);
+desired: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v_order (x) AS SELECT a AS z FROM public.t ORDER BY z;
+  CREATE VIEW public.v_group (x, n) AS SELECT a AS z, count(*) FROM public.t GROUP BY z;
+skip_drift_check: true
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer,
+      b integer
+  );
+
+  -- public.v_group
+  CREATE OR REPLACE VIEW public.v_group AS
+  SELECT t.a AS x,
+      count(*) AS n
+     FROM t
+    GROUP BY t.a;
+
+  -- public.v_order
+  CREATE OR REPLACE VIEW public.v_order AS
+  SELECT t.a AS x
+     FROM t
+    ORDER BY t.a;
+applied_pg16: &applied_pg16plus |
+  -- public.t
+  CREATE TABLE public.t (
+      a integer,
+      b integer
+  );
+
+  -- public.v_group
+  CREATE OR REPLACE VIEW public.v_group AS
+  SELECT a AS x,
+      count(*) AS n
+     FROM t
+    GROUP BY a;
+
+  -- public.v_order
+  CREATE OR REPLACE VIEW public.v_order AS
+  SELECT a AS x
+     FROM t
+    ORDER BY a;
+applied_pg17: *applied_pg16plus
+applied_pg18: *applied_pg16plus

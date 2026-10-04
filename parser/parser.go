@@ -1611,7 +1611,8 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 //
 // It returns the names it could not write, to be kept as a column list: all of
 // them when the query has no target list (VALUES), when a star sits among the
-// named targets, or when there are more names than targets.
+// named targets, when there are more names than targets, or when the query
+// refers to an alias that a name would replace, as in ORDER BY z.
 func applyColumnNames(query *pg_query.Node, colNames []*pg_query.Node) []string {
 	if len(colNames) == 0 {
 		return nil
@@ -1636,6 +1637,9 @@ func applyColumnNames(query *pg_query.Node, colNames []*pg_query.Node) []string 
 		}
 		targets[i] = rt
 	}
+	if refersToReplacedAlias(query, targets, names) {
+		return names
+	}
 
 	for i, rt := range targets {
 		rt.Name = names[i]
@@ -1644,6 +1648,30 @@ func applyColumnNames(query *pg_query.Node, colNames []*pg_query.Node) []string 
 		}
 	}
 	return nil
+}
+
+// refersToReplacedAlias reports whether the query refers by a bare name to an
+// alias that applyColumnNames would replace. It looks through the whole query,
+// so a column of the same name in a sub-query counts too; that keeps the
+// column list, which is still correct.
+func refersToReplacedAlias(query *pg_query.Node, targets []*pg_query.ResTarget, names []string) bool {
+	replaced := map[string]bool{}
+	for i, rt := range targets {
+		if rt.Name != "" && rt.Name != names[i] {
+			replaced[rt.Name] = true
+		}
+	}
+	if len(replaced) == 0 {
+		return false
+	}
+	found := false
+	pgast.Walk(query, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+		if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 1 && replaced[cr.Fields[0].GetString_().GetSval()] {
+			found = true
+		}
+		return n
+	})
+	return found
 }
 
 // isStarTarget reports whether a target is * or t.*.
