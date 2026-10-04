@@ -196,6 +196,10 @@ jobs:
       # One version per job, so the service can keep the default port; the
       # Makefile otherwise defaults to the port compose.yaml publishes locally.
       PGPORT: "5432"
+    # The data directory is a tmpfs at the path each image declares as its
+    # volume; anywhere else, an anonymous volume on disk is mounted over it.
+    # postgres:18 moved that path up a level and refuses to start with a mount
+    # at the old one.
     services:
       postgres:
         image: postgres:${{ matrix.postgres }}
@@ -204,6 +208,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
+          --tmpfs ${{ matrix.postgres >= 18 && '/var/lib/postgresql' || '/var/lib/postgresql/data' }}
           --health-cmd "pg_isready -U postgres"
           --health-interval 1s
           --health-timeout 5s
@@ -213,6 +218,18 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      # As on Windows, the database is thrown away with the runner, so skip the
+      # WAL flushes every fixture's commits would otherwise wait on. A service
+      # container takes no server arguments, but all three settings take effect
+      # on a reload.
+      - name: Turn off durability
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q \
+            -c 'ALTER SYSTEM SET fsync = off' \
+            -c 'ALTER SYSTEM SET synchronous_commit = off' \
+            -c 'ALTER SYSTEM SET full_page_writes = off' \
+            -c 'SELECT pg_reload_conf()'
+          psql -h localhost -U postgres -Atc 'SHOW fsync'
       - run: make TEST_OPTS='-coverprofile=coverage.txt' TEST_JUNIT=junit.xml
       - run: make test-scenario
       # test-fidelity reloads a dump and compares pg_dump output, and pg_dump
