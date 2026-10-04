@@ -1612,7 +1612,7 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 // It returns the names it could not write, to be kept as a column list: all of
 // them when the query has no target list (VALUES), when a star sits among the
 // named targets, when there are more names than targets, or when the query
-// refers to an alias that a name would replace, as in ORDER BY z.
+// refers to a name that the rewrite would take away or add, as in ORDER BY z.
 func applyColumnNames(query *pg_query.Node, colNames []*pg_query.Node) []string {
 	if len(colNames) == 0 {
 		return nil
@@ -1637,41 +1637,70 @@ func applyColumnNames(query *pg_query.Node, colNames []*pg_query.Node) []string 
 		}
 		targets[i] = rt
 	}
-	if refersToReplacedAlias(query, targets, names) {
+	if refersToChangedName(query.GetSelectStmt(), ss, targets, names) {
 		return names
 	}
 
 	for i, rt := range targets {
 		rt.Name = names[i]
-		if fields := rt.Val.GetColumnRef().GetFields(); len(fields) > 0 && fields[len(fields)-1].GetString_().GetSval() == names[i] {
+		if columnRefName(rt) == names[i] {
 			rt.Name = ""
 		}
 	}
 	return nil
 }
 
-// refersToReplacedAlias reports whether the query refers by a bare name to an
-// alias that applyColumnNames would replace. It looks through the whole query,
-// so a column of the same name in a sub-query counts too; that keeps the
-// column list, which is still correct.
-func refersToReplacedAlias(query *pg_query.Node, targets []*pg_query.ResTarget, names []string) bool {
-	replaced := map[string]bool{}
+// refersToChangedName reports whether the query refers by a bare name to an
+// output name that applyColumnNames would change. An alias the query wrote
+// goes away, so ORDER BY z breaks. A new name is resolved before an input
+// column of the same name in ORDER BY, so SELECT b FROM t ORDER BY a with the
+// list (a) would sort by b instead of t.a. The name a column reference gives
+// its target is not counted: once it goes, the bare name still finds the same
+// input column.
+// Output names are visible only in ORDER BY, GROUP BY and DISTINCT ON, of the
+// SELECT that carries the targets and, for a set operation, of the whole.
+func refersToChangedName(top, ss *pg_query.SelectStmt, targets []*pg_query.ResTarget, names []string) bool {
+	changed := map[string]bool{}
 	for i, rt := range targets {
-		if rt.Name != "" && rt.Name != names[i] {
-			replaced[rt.Name] = true
+		cur := rt.Name
+		if cur == "" {
+			cur = columnRefName(rt)
 		}
+		if cur == names[i] {
+			continue
+		}
+		if rt.Name != "" {
+			changed[rt.Name] = true
+		}
+		changed[names[i]] = true
 	}
-	if len(replaced) == 0 {
+	if len(changed) == 0 {
 		return false
 	}
+	var clauses []*pg_query.Node
+	for _, s := range []*pg_query.SelectStmt{top, ss} {
+		clauses = slices.Concat(clauses, s.SortClause, s.GroupClause, s.DistinctClause)
+	}
 	found := false
-	pgast.Walk(query, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
-		if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 1 && replaced[cr.Fields[0].GetString_().GetSval()] {
-			found = true
-		}
-		return n
-	})
+	for _, c := range clauses {
+		pgast.Walk(c, pgast.WalkOptions{}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+			if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 1 && changed[cr.Fields[0].GetString_().GetSval()] {
+				found = true
+			}
+			return n
+		})
+	}
 	return found
+}
+
+// columnRefName returns the name of the column a target reads, or "" when the
+// target is not a column reference.
+func columnRefName(rt *pg_query.ResTarget) string {
+	fields := rt.Val.GetColumnRef().GetFields()
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[len(fields)-1].GetString_().GetSval()
 }
 
 // isStarTarget reports whether a target is * or t.*.

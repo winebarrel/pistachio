@@ -941,6 +941,8 @@ CREATE VIEW public.v_star (x, y) AS SELECT a, * FROM public.t;
 CREATE VIEW public.v_values (x, y) AS VALUES (1, 2);
 CREATE VIEW public.v_order (x) AS SELECT a AS z FROM public.t ORDER BY z;
 CREATE VIEW public.v_unreferenced (x) AS SELECT a AS z FROM public.t ORDER BY a;
+CREATE VIEW public.v_new_name (a) AS SELECT b FROM public.t ORDER BY a;
+CREATE VIEW public.v_own_column (x) AS SELECT a FROM public.t ORDER BY a;
 CREATE MATERIALIZED VIEW public.m (x) AS SELECT a FROM public.t;`
 
 	result, err := parseSQLWithPublicSchema(sql)
@@ -958,6 +960,8 @@ CREATE MATERIALIZED VIEW public.m (x) AS SELECT a FROM public.t;`
 		"v_values":       {"VALUES (1, 2)", []string{"x", "y"}},
 		"v_order":        {"SELECT a AS z FROM public.t ORDER BY z", []string{"x"}},
 		"v_unreferenced": {"SELECT a AS x FROM public.t ORDER BY a", nil},
+		"v_new_name":     {"SELECT b FROM public.t ORDER BY a", []string{"a"}},
+		"v_own_column":   {"SELECT a AS x FROM public.t ORDER BY a", nil},
 		"m":              {"SELECT a AS x FROM public.t", nil},
 	} {
 		v, ok := result.Views.GetOk("public." + name)

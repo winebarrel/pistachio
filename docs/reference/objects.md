@@ -348,7 +348,7 @@ pistachio keeps the list in the `CREATE` statement in these cases:
 
 - A name in the list falls on `*` or `t.*`.
 - The query is `VALUES`.
-- The query refers to an alias that the list replaces, as in `CREATE VIEW v (x) AS SELECT a AS z FROM t ORDER BY z`.
+- `ORDER BY`, `GROUP BY` or `DISTINCT ON` refers to an alias that the list replaces, as in `CREATE VIEW v (x) AS SELECT a AS z FROM t ORDER BY z`, or to a name that the list adds, as in `CREATE VIEW v (a) AS SELECT b FROM t ORDER BY a`.
 
 Such a view appears in the plan on every run.
 

@@ -6,6 +6,8 @@ init: |
   CREATE VIEW public.v_quoted ("X", "y z") AS SELECT a, b FROM public.t;
   CREATE VIEW public.v_union (x, y) AS SELECT a, b FROM public.t UNION SELECT b, a FROM public.t;
   CREATE VIEW public.v_union3 (x) AS SELECT a FROM public.t UNION SELECT b FROM public.t EXCEPT SELECT 1;
+  CREATE VIEW public.v_own_column (x) AS SELECT a FROM public.t ORDER BY a;
+  CREATE VIEW public.v_unreferenced (x) AS SELECT a AS z FROM public.t ORDER BY a;
   CREATE MATERIALIZED VIEW public.m (x, y) AS SELECT a, b FROM public.t;
 desired: |
   CREATE TABLE public.t (a integer, b integer);
@@ -15,5 +17,7 @@ desired: |
   CREATE VIEW public.v_quoted ("X", "y z") AS SELECT a, b FROM public.t;
   CREATE VIEW public.v_union (x, y) AS SELECT a, b FROM public.t UNION SELECT b, a FROM public.t;
   CREATE VIEW public.v_union3 (x) AS SELECT a FROM public.t UNION SELECT b FROM public.t EXCEPT SELECT 1;
+  CREATE VIEW public.v_own_column (x) AS SELECT a FROM public.t ORDER BY a;
+  CREATE VIEW public.v_unreferenced (x) AS SELECT a AS z FROM public.t ORDER BY a;
   CREATE MATERIALIZED VIEW public.m (x, y) AS SELECT a, b FROM public.t;
 plan: ""
