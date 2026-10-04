@@ -3,9 +3,9 @@
 [![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
 
-pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL, and pistachio generates the DDL diff.
+pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow. You write the schema you want as DDL in SQL files. pistachio compares the database with the files and prints the DDL that makes the database match.
 
-pistachio manages a PostgreSQL schema from SQL files. The files contain the whole schema as DDL, in the form that `pista dump` writes. `pista plan` reads the database catalog and compares it with the files. It then prints the DDL that makes the database match the files. `pista apply` runs that DDL. `pista dump` writes the files from a database that you already have.
+`pista plan` prints that DDL. `pista apply` runs it. `pista dump` writes the files from an existing database.
 
 > [!TIP]
 > The [playground](https://pistachio-demo.winebarrel.workers.dev) runs `pista diff` on two schemas that you edit in the page. There is nothing to install.
@@ -15,6 +15,8 @@ pistachio manages a PostgreSQL schema from SQL files. The files contain the whol
 ## How it works
 
 Every run computes the difference between the database and the files. There is no migration history to keep. A column added to the file becomes `ALTER TABLE ... ADD COLUMN`. A changed `CHECK` becomes a drop and an add. An object removed from the file is reported. It is dropped only when `--allow-drop` includes its type.
+
+pistachio reads the SQL files with [pg_query_go](https://github.com/pganalyze/pg_query_go), a Go binding for the PostgreSQL parser. The files can use any SQL that PostgreSQL accepts.
 
 ![pistachio workflow](docs/workflow.svg)
 
