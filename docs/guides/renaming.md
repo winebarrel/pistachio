@@ -16,7 +16,7 @@ pista plan schema.sql
 # => ALTER TABLE public.users RENAME COLUMN name TO display_name;
 ```
 
-After the apply, the directive is skipped, because nothing has the old name any more. Leave it as it is, or remove it at the next cleanup.
+After the apply, the directive is skipped, because nothing has the old name any more. Leave it as it is, or remove it at the next cleanup. `pista fmt --strip-renamed-from` removes every such directive.
 
 The directive renames these objects:
 

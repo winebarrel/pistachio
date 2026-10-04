@@ -17,6 +17,8 @@ var ErrFormatDiff = errors.New("files need formatting")
 type Fmt struct {
 	Files []string `arg:"" help:"Path to the schema SQL file(s)."`
 	Check bool     `env:"PISTA_FMT_CHECK" help:"Report the files that are not formatted instead of writing them. Exits with code 2 when there are any."`
+	// StripRenamedFrom is for the cleanup after a rename has been applied.
+	StripRenamedFrom bool `env:"PISTA_FMT_STRIP_RENAMED_FROM" help:"Remove every -- pista:renamed-from directive."`
 }
 
 func (cmd *Fmt) Run(w io.Writer) error {
@@ -65,7 +67,14 @@ func (cmd *Fmt) formatFile(path string, w io.Writer) (bool, error) {
 		return false, err
 	}
 
-	out, err := format.Format(string(src))
+	in := string(src)
+	if cmd.StripRenamedFrom {
+		if in, err = format.StripRenamedFrom(in); err != nil {
+			return false, err
+		}
+	}
+
+	out, err := format.Format(in)
 	if err != nil {
 		return false, err
 	}

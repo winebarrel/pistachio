@@ -52,5 +52,6 @@ These options have no variable:
 | `PISTA_DUMP_EXPLAIN` | `--explain` | dump |
 | `PISTA_DUMP_OMIT_PARTITION_CHILD_INDEX` | `--omit-partition-child-index` | dump |
 | `PISTA_FMT_CHECK` | `--check` | fmt |
+| `PISTA_FMT_STRIP_RENAMED_FROM` | `--strip-renamed-from` | fmt |
 
 Each option is described on its command's page under [Commands](commands/index.md).
