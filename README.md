@@ -3,7 +3,7 @@
 [![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
 
-pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow, built on [pg_query_go](https://github.com/pganalyze/pg_query_go). Define the desired schema in SQL, and pistachio generates the DDL diff.
+pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow. Define the desired schema in SQL, and pistachio generates the DDL diff.
 
 pistachio manages a PostgreSQL schema from SQL files. The files contain the whole schema as DDL, in the form that `pista dump` writes. `pista plan` reads the database catalog and compares it with the files. It then prints the DDL that makes the database match the files. `pista apply` runs that DDL. `pista dump` writes the files from a database that you already have.
 
@@ -14,7 +14,7 @@ pistachio manages a PostgreSQL schema from SQL files. The files contain the whol
 
 ## How it works
 
-Every run computes the difference between the database and the files. There is no migration history to keep. A column added to the file becomes `ALTER TABLE ... ADD COLUMN`. A changed `CHECK` becomes a drop and an add. An object removed from the file is reported. It is dropped only when `--allow-drop` includes its type.
+pistachio parses the files with [pg_query_go](https://github.com/pganalyze/pg_query_go), which wraps the PostgreSQL parser itself, so it reads the same SQL that PostgreSQL does. Every run computes the difference between the database and the files. There is no migration history to keep. A column added to the file becomes `ALTER TABLE ... ADD COLUMN`. A changed `CHECK` becomes a drop and an add. An object removed from the file is reported. It is dropped only when `--allow-drop` includes its type.
 
 ![pistachio workflow](docs/workflow.svg)
 
