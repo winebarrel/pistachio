@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.75.0] - 2026-10-04
 
 * On PostgreSQL 18, `dump` now keeps a NOT NULL constraint name after a table or column rename. Before, it dropped every name ending in `_not_null`, so the restored constraint got a different name.
 
