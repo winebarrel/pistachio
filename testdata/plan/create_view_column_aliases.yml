@@ -5,25 +5,40 @@ desired: |
   CREATE VIEW public.v_all (x, y) AS SELECT a, b FROM public.t;
   CREATE VIEW public.v_partial (x) AS SELECT a, b FROM public.t;
   CREATE VIEW public.v_override (x, y) AS SELECT a + 1, b AS bb FROM public.t;
-  CREATE VIEW public.v_same (a, y) AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_same (a, y) AS SELECT t.a, b FROM public.t;
+  CREATE VIEW public.v_quoted ("X", "y z") AS SELECT a, b FROM public.t;
   CREATE VIEW public.v_union (x, y) AS SELECT a, b FROM public.t UNION SELECT b, a FROM public.t;
+  CREATE VIEW public.v_union3 (x) AS SELECT a FROM public.t UNION SELECT b FROM public.t EXCEPT SELECT 1;
+  CREATE VIEW public.v_star_after (x) AS SELECT a, * FROM public.t;
   CREATE VIEW public.v_star (x, y) AS SELECT * FROM public.t;
+  CREATE VIEW public.v_star_named (x, y) AS SELECT a, t.* FROM public.t;
   CREATE VIEW public.v_values (x, y) AS VALUES (1, 2);
   CREATE MATERIALIZED VIEW public.m (x, y) AS SELECT a, b FROM public.t;
+  CREATE MATERIALIZED VIEW public.m_star (x, y) AS SELECT * FROM public.t;
 plan: |
   CREATE MATERIALIZED VIEW public.m AS
   SELECT a AS x, b AS y FROM public.t;
+  CREATE MATERIALIZED VIEW public.m_star (x, y) AS
+  SELECT * FROM public.t;
   CREATE OR REPLACE VIEW public.v_all AS
   SELECT a AS x, b AS y FROM public.t;
   CREATE OR REPLACE VIEW public.v_override AS
   SELECT a + 1 AS x, b AS y FROM public.t;
   CREATE OR REPLACE VIEW public.v_partial AS
   SELECT a AS x, b FROM public.t;
+  CREATE OR REPLACE VIEW public.v_quoted AS
+  SELECT a AS "X", b AS "y z" FROM public.t;
   CREATE OR REPLACE VIEW public.v_same AS
-  SELECT a, b AS y FROM public.t;
+  SELECT t.a, b AS y FROM public.t;
   CREATE OR REPLACE VIEW public.v_star (x, y) AS
   SELECT * FROM public.t;
+  CREATE OR REPLACE VIEW public.v_star_after AS
+  SELECT a AS x, * FROM public.t;
+  CREATE OR REPLACE VIEW public.v_star_named (x, y) AS
+  SELECT a, t.* FROM public.t;
   CREATE OR REPLACE VIEW public.v_union AS
   SELECT a AS x, b AS y FROM public.t UNION SELECT b, a FROM public.t;
+  CREATE OR REPLACE VIEW public.v_union3 AS
+  (SELECT a AS x FROM public.t UNION SELECT b FROM public.t) EXCEPT SELECT 1;
   CREATE OR REPLACE VIEW public.v_values (x, y) AS
   VALUES (1, 2);
