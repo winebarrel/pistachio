@@ -1,0 +1,19 @@
+init: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v_all (x, y) AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_partial (x) AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_same (a, y) AS SELECT t.a, b FROM public.t;
+  CREATE VIEW public.v_quoted ("X", "y z") AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_union (x, y) AS SELECT a, b FROM public.t UNION SELECT b, a FROM public.t;
+  CREATE VIEW public.v_union3 (x) AS SELECT a FROM public.t UNION SELECT b FROM public.t EXCEPT SELECT 1;
+  CREATE MATERIALIZED VIEW public.m (x, y) AS SELECT a, b FROM public.t;
+desired: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v_all (x, y) AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_partial (x) AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_same (a, y) AS SELECT t.a, b FROM public.t;
+  CREATE VIEW public.v_quoted ("X", "y z") AS SELECT a, b FROM public.t;
+  CREATE VIEW public.v_union (x, y) AS SELECT a, b FROM public.t UNION SELECT b, a FROM public.t;
+  CREATE VIEW public.v_union3 (x) AS SELECT a FROM public.t UNION SELECT b FROM public.t EXCEPT SELECT 1;
+  CREATE MATERIALIZED VIEW public.m (x, y) AS SELECT a, b FROM public.t;
+plan: ""

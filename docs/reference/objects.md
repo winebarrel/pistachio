@@ -335,11 +335,16 @@ This section covers plain views and materialized views.
 The parser reads `CREATE VIEW` and `CREATE MATERIALIZED VIEW` with:
 
 - the query
+- the column name list, `CREATE VIEW v (x, y) AS ...`
 - `WITH (...)`
 - a plain view's `WITH [LOCAL | CASCADED] CHECK OPTION`
 - a materialized view's `WITH NO DATA`
 
 `ALTER VIEW` and `REFRESH MATERIALIZED VIEW` in a schema file are ignored with a warning.
+
+PostgreSQL stores the column names in the query. `CREATE VIEW v (x, y) AS SELECT a, b FROM t` is dumped as `SELECT a AS x, b AS y FROM t`. pistachio reads both forms as the same view. Changing a name in the list renames a column, so the view is dropped and created.
+
+If a name in the list falls on `*` or `t.*`, or the query is `VALUES`, pistachio keeps the list in the `CREATE` statement. Such a view appears in the plan on every run.
 
 A plain view's `WITH (...)` contains `security_barrier` and `security_invoker`. These decide what the view means, not how it is stored, so the clause is managed with or without `--manage-storage-param`. The clause comes before `AS`:
 

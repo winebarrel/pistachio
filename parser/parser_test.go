@@ -931,6 +931,38 @@ CREATE MATERIALIZED VIEW public.full_items AS SELECT id FROM public.items WITH D
 	assert.Equal(t, "CREATE MATERIALIZED VIEW public.full_items AS\nSELECT id FROM public.items;", full.SQL())
 }
 
+func TestParseSQL_ViewColumnNames(t *testing.T) {
+	sql := `CREATE TABLE public.t (a integer, b integer);
+CREATE VIEW public.v_all (x, y) AS SELECT a, b FROM public.t;
+CREATE VIEW public.v_same (a, y) AS SELECT t.a, b AS bb FROM public.t;
+CREATE VIEW public.v_union (x) AS SELECT a FROM public.t UNION SELECT b FROM public.t;
+CREATE VIEW public.v_star_after (x) AS SELECT a, * FROM public.t;
+CREATE VIEW public.v_star (x, y) AS SELECT a, * FROM public.t;
+CREATE VIEW public.v_values (x, y) AS VALUES (1, 2);
+CREATE MATERIALIZED VIEW public.m (x) AS SELECT a FROM public.t;`
+
+	result, err := parseSQLWithPublicSchema(sql)
+	require.NoError(t, err)
+
+	for name, want := range map[string]struct {
+		def   string
+		names []string
+	}{
+		"v_all":        {"SELECT a AS x, b AS y FROM public.t", nil},
+		"v_same":       {"SELECT t.a, b AS y FROM public.t", nil},
+		"v_union":      {"SELECT a AS x FROM public.t UNION SELECT b FROM public.t", nil},
+		"v_star_after": {"SELECT a AS x, * FROM public.t", nil},
+		"v_star":       {"SELECT a, * FROM public.t", []string{"x", "y"}},
+		"v_values":     {"VALUES (1, 2)", []string{"x", "y"}},
+		"m":            {"SELECT a AS x FROM public.t", nil},
+	} {
+		v, ok := result.Views.GetOk("public." + name)
+		require.True(t, ok, name)
+		assert.Equal(t, want.def, v.Definition, name)
+		assert.Equal(t, want.names, v.ColumnNames, name)
+	}
+}
+
 func TestParseSQL_ViewCommentOnColumn(t *testing.T) {
 	sql := `CREATE TABLE public.users (
     id integer NOT NULL,

@@ -21,6 +21,11 @@ type View struct {
 	// shapes the CREATE statement: whether a view is populated is data state
 	// that REFRESH changes, so it is not compared and dump does not write it.
 	WithNoData bool `json:"-"`
+	// ColumnNames is the column list of CREATE VIEW v (x, y) that the parser
+	// could not write onto the query's target list: a star or VALUES gives it
+	// no target to name. Only the desired side sets it, and it only shapes the
+	// CREATE statement.
+	ColumnNames []string `json:"-"`
 	// StorageParams holds the view's storage parameters, pg_class.reloptions,
 	// keyed by parameter name and ordered by it. check_option sits in the same
 	// column but is read as the view's WITH CHECK OPTION, so it is not here. A
@@ -64,9 +69,22 @@ func (v View) SQL() string {
 		if v.WithNoData {
 			noData = "\n  WITH NO DATA"
 		}
-		return "CREATE MATERIALIZED VIEW " + v.FQVN() + v.storageParamsClause() + " AS\n" + def + noData + ";"
+		return "CREATE MATERIALIZED VIEW " + v.FQVN() + v.columnNamesClause() + v.storageParamsClause() + " AS\n" + def + noData + ";"
 	}
-	return "CREATE OR REPLACE VIEW " + v.FQVN() + v.storageParamsClause() + " AS\n" + def + v.checkOptionClause() + ";"
+	return "CREATE OR REPLACE VIEW " + v.FQVN() + v.columnNamesClause() + v.storageParamsClause() + " AS\n" + def + v.checkOptionClause() + ";"
+}
+
+// columnNamesClause renders the column list that follows the view name, or
+// nothing for a view without one.
+func (v View) columnNamesClause() string {
+	if len(v.ColumnNames) == 0 {
+		return ""
+	}
+	names := make([]string, len(v.ColumnNames))
+	for i, n := range v.ColumnNames {
+		names[i] = Ident(n)
+	}
+	return " (" + strings.Join(names, ", ") + ")"
 }
 
 // storageParamsClause renders the WITH clause that precedes AS, or nothing for

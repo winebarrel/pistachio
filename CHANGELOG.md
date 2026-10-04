@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* pistachio now reads the column names in `CREATE VIEW v (x, y) AS ...`, and in `CREATE MATERIALIZED VIEW`. Before, it ignored them, so the view got the column names of its query and appeared in the plan on every run.
+
 ## [1.76.0] - 2026-10-04
 
 * `fmt --strip-renamed-from` removes every `-- pista:renamed-from` directive.

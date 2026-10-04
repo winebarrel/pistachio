@@ -1,0 +1,10 @@
+init: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v (x, y) AS SELECT a, b FROM public.t;
+desired: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v (x, z) AS SELECT a, b FROM public.t;
+plan: |
+  DROP VIEW public.v;
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT a AS x, b AS z FROM public.t;
