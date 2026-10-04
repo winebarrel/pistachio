@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.76.0] - 2026-10-04
 
 * `fmt --strip-renamed-from` removes every `-- pista:renamed-from` directive.
 
