@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSizePretty(t *testing.T) {
@@ -108,4 +109,24 @@ func TestParseOneStmt(t *testing.T) {
 	assert.Nil(t, parseOneStmt("-- a comment alone"))
 	assert.Nil(t, parseOneStmt("ALTER TABLE public.t ADD COLUMN a integer; DROP TABLE public.u;"))
 	assert.Nil(t, parseOneStmt("not sql"))
+}
+
+// typeNameString writes the name the way to_regtype reads it, so a part that
+// needs quotes keeps them.
+func TestTypeNameString(t *testing.T) {
+	for typ, want := range map[string]string{
+		"integer":              "int4",
+		"varchar(10)":          "varchar",
+		"text[]":               "text",
+		"public.mood":          "public.mood",
+		`"App".mood`:           `"App".mood`,
+		`"Mood"`:               `"Mood"`,
+		`pg_catalog."varchar"`: "varchar",
+	} {
+		node := parseOneStmt("ALTER TABLE t ALTER COLUMN c TYPE " + typ + ";")
+		require.NotNil(t, node, typ)
+		cmd := node.GetAlterTableStmt().GetCmds()[0].GetAlterTableCmd()
+		tn := cmd.GetDef().GetColumnDef().GetTypeName()
+		assert.Equal(t, want, typeNameString(tn), typ)
+	}
 }

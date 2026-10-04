@@ -611,6 +611,56 @@ CREATE TABLE myschema.posts (
 	assert.Contains(t, line, ", myschema.users (~3 rows, ")
 }
 
+// A type in a schema whose name needs quoting has to be quoted when the server
+// resolves it. Unquoted, the server folds the name to lower case and finds no
+// such type.
+func TestPlan_ExplainTypeInQuotedSchema(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, `"App"`, `
+CREATE DOMAIN "App".plain_text AS text;
+CREATE DOMAIN "App".posint AS integer CHECK (VALUE > 0);
+CREATE TABLE "App".users (
+    id integer NOT NULL,
+    note text,
+    code integer,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+INSERT INTO "App".users SELECT g, 'n', g FROM generate_series(1, 3) g;
+ANALYZE "App".users;
+`)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE DOMAIN "App".plain_text AS text;
+CREATE DOMAIN "App".posint AS integer CHECK (VALUE > 0);
+CREATE TABLE "App".users (
+    id integer NOT NULL,
+    note "App".plain_text,
+    code "App".posint,
+    extra "App".posint,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);`), 0o644))
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"App"},
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{Explain: true, Files: []string{desiredFile}})
+	require.NoError(t, err)
+
+	lines := strings.Split(strings.TrimSpace(got.SQL), "\n")
+	require.Len(t, lines, 5, got.SQL)
+	// A constrained domain is checked by rewriting the table, whether the
+	// column is added with it or changed to it.
+	assert.True(t, strings.HasPrefix(lines[0], `-- rewrite, blocks reads and writes: "App".users (`), lines[0])
+	assert.Equal(t, `ALTER TABLE "App".users ADD COLUMN extra "App".posint;`, lines[1])
+	// An unconstrained domain over the same type is a relabel.
+	assert.Equal(t, `ALTER TABLE "App".users ALTER COLUMN note SET DATA TYPE "App".plain_text;`, lines[2])
+	assert.True(t, strings.HasPrefix(lines[3], `-- rewrite, blocks reads and writes: "App".users (`), lines[3])
+	assert.Equal(t, `ALTER TABLE "App".users ALTER COLUMN code SET DATA TYPE "App".posint;`, lines[4])
+}
+
 // Outside the search_path the catalog qualifies a sequence in a column default,
 // so the serial check, the owned sequence and a dump of them have to agree on
 // the qualified name.

@@ -10,6 +10,8 @@
 
 * `plan --explain` now writes `may rewrite` for a column type change to a type that the same plan creates. Before, the change got no comment.
 
+* `plan --explain` now resolves a type in a schema whose name needs quoting, such as `"App"`. Before, a change to such a type got no comment, and a column added with such a constrained domain was not reported as a rewrite.
+
 ## [1.75.0] - 2026-10-04
 
 * On PostgreSQL 18, `dump` now keeps a NOT NULL constraint name after a table or column rename. Before, it dropped every name ending in `_not_null`, so the restored constraint got a different name.
