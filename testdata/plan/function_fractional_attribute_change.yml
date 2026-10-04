@@ -1,0 +1,18 @@
+# A fractional COST, ROWS or SET value is read from the desired file and
+# compared with what the database holds.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS SETOF integer
+      LANGUAGE sql COST 0.5 ROWS 10.5 SET seq_page_cost = 1.5
+      AS $$ SELECT 1 $$;
+desired: |
+  CREATE FUNCTION public.f() RETURNS SETOF integer
+      LANGUAGE sql COST 0.25 ROWS 10.5 SET seq_page_cost = 2.5
+      AS $$ SELECT 1 $$;
+plan: |
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS SETOF integer
+      LANGUAGE sql
+      COST 0.25 ROWS 10.5
+      SET seq_page_cost TO '2.5'
+      AS $$ SELECT 1 $$;

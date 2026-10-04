@@ -1,0 +1,15 @@
+# COST and ROWS accept fractional values, and a SET clause can hold a number
+# that is not an integer.
+manage_routine: true
+init: |
+  CREATE FUNCTION public.f() RETURNS SETOF integer
+      LANGUAGE sql COST 0.5 ROWS 10.5 SET seq_page_cost = 1.5
+      AS $$ SELECT 1 $$;
+dump: |
+  -- public.f()
+  CREATE OR REPLACE FUNCTION public.f()
+      RETURNS SETOF integer
+      LANGUAGE sql
+      COST 0.5 ROWS 10.5
+      SET seq_page_cost TO '1.5'
+      AS $$ SELECT 1 $$;
