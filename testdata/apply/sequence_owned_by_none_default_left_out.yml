@@ -1,0 +1,27 @@
+# Detaching a sequence and leaving out the column default converge in one
+# apply.
+init: |
+  CREATE SEQUENCE public.custom_seq;
+  CREATE TABLE public.t (
+      id bigint DEFAULT nextval('custom_seq') NOT NULL
+  );
+  ALTER SEQUENCE public.custom_seq OWNED BY public.t.id;
+desired: |
+  CREATE SEQUENCE public.custom_seq;
+  CREATE TABLE public.t (
+      id bigint NOT NULL
+  );
+applied: |
+  -- public.custom_seq
+  CREATE SEQUENCE public.custom_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public.t
+  CREATE TABLE public.t (
+      id bigint NOT NULL
+  );

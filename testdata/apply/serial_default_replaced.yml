@@ -1,0 +1,15 @@
+# A serial column given another default drops its sequence in the same apply,
+# so the re-plan is clean.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer DEFAULT 0 NOT NULL
+  );
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id integer DEFAULT 0 NOT NULL
+  );

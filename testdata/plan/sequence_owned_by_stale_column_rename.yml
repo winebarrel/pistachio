@@ -1,0 +1,17 @@
+# A renamed-from directive left in the file after the rename was applied does
+# not hide the owning column, so the sequence is dropped once the column stops
+# using it.
+init: |
+  CREATE SEQUENCE public.custom_seq;
+  CREATE TABLE public.t (
+      b bigint DEFAULT nextval('custom_seq') NOT NULL
+  );
+  ALTER SEQUENCE public.custom_seq OWNED BY public.t.b;
+desired: |
+  CREATE TABLE public.t (
+      -- pista:renamed-from a
+      b bigint DEFAULT 0 NOT NULL
+  );
+plan: |
+  ALTER TABLE public.t ALTER COLUMN b SET DEFAULT 0;
+  DROP SEQUENCE public.custom_seq;

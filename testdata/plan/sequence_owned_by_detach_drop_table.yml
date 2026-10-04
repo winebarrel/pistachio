@@ -1,0 +1,13 @@
+# A sequence kept with no owner while its table is dropped is detached before
+# the DROP TABLE, which would take it otherwise.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.id;
+desired: |
+  CREATE SEQUENCE public.my_seq;
+plan: |
+  ALTER SEQUENCE public.my_seq OWNED BY NONE;
+  DROP TABLE public.t;

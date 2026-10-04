@@ -1,0 +1,16 @@
+# Tying an existing sequence to a column plans OWNED BY alone.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer DEFAULT nextval('my_seq'::regclass) NOT NULL
+  );
+desired: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer DEFAULT nextval('my_seq'::regclass) NOT NULL
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.id;
+plan: |
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.id;
+count:
+  sequences: 1

@@ -1,0 +1,17 @@
+# A sequence marked -- pista:ignore is not dropped when its column becomes an
+# identity column.
+init: |
+  CREATE TABLE public.items (
+      id serial NOT NULL
+  );
+desired: |
+  -- pista:ignore
+  CREATE SEQUENCE public.items_id_seq AS integer;
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY
+  );
+plan: |
+  ALTER TABLE public.items ALTER COLUMN id DROP DEFAULT;
+  ALTER TABLE public.items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;
+ignored: |
+  -- ignored: public.items_id_seq

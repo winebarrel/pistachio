@@ -1,7 +1,5 @@
-# ALTER SEQUENCE ... OWNED BY marks the sequence unmanaged on the desired side,
-# matching the catalog side. Applying must be a no-op: before, pista proposed
-# CREATE SEQUENCE for an existing sequence and apply failed with
-# "relation already exists".
+# An owned sequence is read back with its owner, as the desired schema
+# declares it, so apply changes nothing.
 init: |
   CREATE SEQUENCE public.my_seq;
   CREATE TABLE public.t (
@@ -17,9 +15,20 @@ desired: |
   );
   ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
 applied: |
+  -- public.my_seq
+  CREATE SEQUENCE public.my_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
   -- public.t
   CREATE TABLE public.t (
       id integer,
       val integer DEFAULT 42
   );
+
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
 applied_sql: ""

@@ -1,0 +1,42 @@
+# Runs the fallback-order plan against the database.
+# The domain public.d1 over text and the table public.text make a cycle that
+# sends the plan to the fallback order. The detach still runs before the
+# rename, under the old name.
+init: |
+  CREATE DOMAIN public.d1 AS text;
+  CREATE TABLE public.text (v public.d1);
+  CREATE SEQUENCE public.old_seq;
+  CREATE TABLE public.t (
+      id integer
+  );
+  ALTER SEQUENCE public.old_seq OWNED BY public.t.id;
+desired: |
+  CREATE DOMAIN public.d1 AS text;
+  CREATE TABLE public.text (v public.d1);
+  -- pista:renamed-from public.old_seq
+  CREATE SEQUENCE public.new_seq;
+  CREATE TABLE public.t (
+      id integer
+  );
+applied: |
+  -- public.d1
+  CREATE DOMAIN public.d1 AS text;
+
+  -- public.new_seq
+  CREATE SEQUENCE public.new_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public.t
+  CREATE TABLE public.t (
+      id integer
+  );
+
+  -- public.text
+  CREATE TABLE public.text (
+      v d1
+  );

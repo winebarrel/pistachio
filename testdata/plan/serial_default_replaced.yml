@@ -1,0 +1,13 @@
+# A serial column given another default no longer uses its sequence, so the
+# sequence is dropped in the same plan.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer DEFAULT 0 NOT NULL
+  );
+plan: |
+  ALTER TABLE public.t ALTER COLUMN id SET DEFAULT 0;
+  DROP SEQUENCE public.t_id_seq;

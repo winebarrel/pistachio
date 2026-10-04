@@ -2,6 +2,20 @@
 
 # Changelog
 
+## [Unreleased]
+
+* **BREAKING**: Sequences owned by a column are now managed. Before, pistachio ignored them. With `--allow-drop sequence`, an owned sequence that is not in the desired schema is now dropped, unless the column uses it as its default. Dumps from earlier versions do not include such sequences.
+
+* `plan` and `apply` now emit `ALTER SEQUENCE ... OWNED BY` or `OWNED BY NONE` when the owner of a sequence changes.
+
+* `dump` now writes an owned sequence with a custom name, with its options and `OWNED BY`. Before, it wrote the column as `serial`, so the restored sequence got the default name and options.
+
+* `dump` now keeps the `nextval` default of a column that is not `smallint`, `integer` or `bigint`.
+
+* A desired sequence with no owner now detaches a sequence of the same name that a column owns. Before, the plan created it again and apply failed.
+
+* When a `serial` column becomes an identity column or gets another default, its old sequence is now dropped. This needs `--allow-drop sequence`.
+
 ## [1.74.0] - 2026-10-04
 
 * **BREAKING**: A primary key written `USING INDEX` now needs a `CREATE INDEX` for its index in the schema files. Without one, reading the files fails with an error.

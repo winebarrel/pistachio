@@ -1,5 +1,5 @@
 # The sequence name in ALTER SEQUENCE may omit the schema; it resolves to the
-# target schema, so the sequence is still marked unmanaged.
+# target schema, so the owner is recorded on that sequence.
 init: |
   CREATE SEQUENCE public.my_seq;
   CREATE TABLE public.t (

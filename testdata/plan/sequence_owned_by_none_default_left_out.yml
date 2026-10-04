@@ -1,0 +1,16 @@
+# Detaching a sequence also ends the rule that keeps a default the desired
+# schema leaves out, so the default is dropped in the same plan.
+init: |
+  CREATE SEQUENCE public.custom_seq;
+  CREATE TABLE public.t (
+      id bigint DEFAULT nextval('custom_seq') NOT NULL
+  );
+  ALTER SEQUENCE public.custom_seq OWNED BY public.t.id;
+desired: |
+  CREATE SEQUENCE public.custom_seq;
+  CREATE TABLE public.t (
+      id bigint NOT NULL
+  );
+plan: |
+  ALTER SEQUENCE public.custom_seq OWNED BY NONE;
+  ALTER TABLE public.t ALTER COLUMN id DROP DEFAULT;

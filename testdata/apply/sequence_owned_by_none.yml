@@ -1,0 +1,28 @@
+# A desired sequence with no owner detaches the one a column owns in the
+# database. Before, the plan created it again and apply failed with
+# "relation already exists".
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.id;
+desired: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer
+  );
+applied: |
+  -- public.my_seq
+  CREATE SEQUENCE public.my_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public.t
+  CREATE TABLE public.t (
+      id integer
+  );

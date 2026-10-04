@@ -1,3 +1,5 @@
+# ADD IDENTITY creates a new sequence, so the serial's old sequence is dropped
+# after the default is removed.
 init: |
   CREATE TABLE public.items (
       id serial NOT NULL,
@@ -13,3 +15,4 @@ desired: |
 plan: |
   ALTER TABLE public.items ALTER COLUMN id DROP DEFAULT;
   ALTER TABLE public.items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;
+  DROP SEQUENCE public.items_id_seq;

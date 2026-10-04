@@ -1,0 +1,16 @@
+# A column that uses an owned sequence becomes an identity column. ADD
+# IDENTITY creates a new sequence, so the old one is dropped.
+init: |
+  CREATE SEQUENCE public.custom_seq AS integer;
+  CREATE TABLE public.items (
+      id integer DEFAULT nextval('custom_seq') NOT NULL
+  );
+  ALTER SEQUENCE public.custom_seq OWNED BY public.items.id;
+desired: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY
+  );
+plan: |
+  ALTER TABLE public.items ALTER COLUMN id DROP DEFAULT;
+  ALTER TABLE public.items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;
+  DROP SEQUENCE public.custom_seq;

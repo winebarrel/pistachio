@@ -97,7 +97,7 @@ func (t Table) SQL() string {
 				if col.Default != nil {
 					q += " GENERATED ALWAYS AS (" + *col.Default + ") STORED"
 				}
-			} else if col.Default != nil && col.SerialSequence == nil {
+			} else if col.Default != nil && !IsSerialType(col.TypeName) {
 				q += " DEFAULT " + *col.Default
 			}
 			if col.NotNull && !col.Identity.IsIdentityColumn() {

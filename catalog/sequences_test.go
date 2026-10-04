@@ -10,7 +10,7 @@ import (
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
-func TestListSequences(t *testing.T) {
+func TestSequences_List(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx)
@@ -24,46 +24,48 @@ func TestListSequences(t *testing.T) {
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
 		require.NoError(t, err)
-		seqs, err := cat.ListSequences(ctx)
+		seqMap, err := cat.Sequences(ctx)
 		require.NoError(t, err)
+		seqs := seqMap.CollectValues()
 		assert.Empty(t, seqs)
 	})
 
-	t.Run("serial sequence has owner", func(t *testing.T) {
+	t.Run("serial and identity sequences are left out", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.users (
 				id serial NOT NULL,
+				code integer NOT NULL GENERATED ALWAYS AS IDENTITY,
 				CONSTRAINT users_pkey PRIMARY KEY (id)
 			);
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
 		require.NoError(t, err)
-		seqs, err := cat.ListSequences(ctx)
+		seqMap, err := cat.Sequences(ctx)
 		require.NoError(t, err)
-		require.Len(t, seqs, 1)
-		assert.Equal(t, "users_id_seq", seqs[0].Name)
-		require.NotNil(t, seqs[0].OwnerTable)
-		assert.Contains(t, *seqs[0].OwnerTable, "users")
-		require.NotNil(t, seqs[0].OwnerColumn)
-		assert.Equal(t, "id", *seqs[0].OwnerColumn)
+		assert.Equal(t, 0, seqMap.Len())
 	})
 
-	t.Run("identity sequence has owner", func(t *testing.T) {
+	t.Run("owner table is not qualified outside the search path", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
-			CREATE TABLE public.users (
-				id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
-				CONSTRAINT users_pkey PRIMARY KEY (id)
+			DROP SCHEMA IF EXISTS seqowner CASCADE;
+			CREATE SCHEMA seqowner;
+			CREATE SEQUENCE seqowner.s;
+			CREATE TABLE seqowner.users (
+				id integer
 			);
+			ALTER SEQUENCE seqowner.s OWNED BY seqowner.users.id;
 		`)
-		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		t.Cleanup(func() {
+			_, _ = conn.Exec(ctx, "DROP SCHEMA IF EXISTS seqowner CASCADE")
+		})
+		cat, err := catalog.NewCatalog(conn, []string{"seqowner"})
 		require.NoError(t, err)
-		seqs, err := cat.ListSequences(ctx)
+		seqMap, err := cat.Sequences(ctx)
 		require.NoError(t, err)
+		seqs := seqMap.CollectValues()
 		require.Len(t, seqs, 1)
 		require.NotNil(t, seqs[0].OwnerTable)
-		assert.Contains(t, *seqs[0].OwnerTable, "users")
-		require.NotNil(t, seqs[0].OwnerColumn)
-		assert.Equal(t, "id", *seqs[0].OwnerColumn)
+		assert.Equal(t, "users", *seqs[0].OwnerTable)
 	})
 
 	t.Run("standalone sequence has no owner", func(t *testing.T) {
@@ -72,8 +74,9 @@ func TestListSequences(t *testing.T) {
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
 		require.NoError(t, err)
-		seqs, err := cat.ListSequences(ctx)
+		seqMap, err := cat.Sequences(ctx)
 		require.NoError(t, err)
+		seqs := seqMap.CollectValues()
 		require.Len(t, seqs, 1)
 		assert.Equal(t, "my_seq", seqs[0].Name)
 		assert.Nil(t, seqs[0].OwnerTable)
@@ -86,8 +89,9 @@ func TestListSequences(t *testing.T) {
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
 		require.NoError(t, err)
-		seqs, err := cat.ListSequences(ctx)
+		seqMap, err := cat.Sequences(ctx)
 		require.NoError(t, err)
+		seqs := seqMap.CollectValues()
 		require.Len(t, seqs, 2)
 		assert.Equal(t, "jobs_seq", seqs[0].Name)
 		assert.True(t, seqs[0].Unlogged)
@@ -102,8 +106,9 @@ func TestListSequences(t *testing.T) {
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
 		require.NoError(t, err)
-		seqs, err := cat.ListSequences(ctx)
+		seqMap, err := cat.Sequences(ctx)
 		require.NoError(t, err)
+		seqs := seqMap.CollectValues()
 		require.Len(t, seqs, 1)
 		require.NotNil(t, seqs[0].Comment)
 		assert.Equal(t, "id generator", *seqs[0].Comment)
@@ -121,8 +126,9 @@ func TestListSequences(t *testing.T) {
 		`)
 		cat, err := catalog.NewCatalog(conn, []string{"public"})
 		require.NoError(t, err)
-		seqs, err := cat.ListSequences(ctx)
+		seqMap, err := cat.Sequences(ctx)
 		require.NoError(t, err)
+		seqs := seqMap.CollectValues()
 		require.Len(t, seqs, 1)
 
 		seq := seqs[0]
@@ -136,8 +142,8 @@ func TestListSequences(t *testing.T) {
 	})
 }
 
-// TestSequences verifies the map getter returns only standalone sequences,
-// excluding serial/identity-owned ones.
+// TestSequences verifies the map getter leaves out the sequences of serial and
+// identity columns and keeps the rest, owned or not.
 func TestSequences(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
@@ -160,4 +166,38 @@ func TestSequences(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "standalone_seq", seq.Name)
 	assert.Nil(t, seq.OwnerTable)
+}
+
+// TestSequences_Owned covers the owned sequences that are not a serial
+// column's: under a name serial would not give them, behind a column of a type
+// a sequence cannot hold, and owned without drawing the default.
+func TestSequences_Owned(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+		CREATE SEQUENCE public.custom_seq;
+		CREATE TABLE public.users (
+			id bigint DEFAULT nextval('custom_seq') NOT NULL,
+			code serial NOT NULL,
+			note integer
+		);
+		ALTER SEQUENCE public.custom_seq OWNED BY public.users.id;
+		CREATE TABLE public.retyped (
+			id serial NOT NULL
+		);
+		ALTER TABLE public.retyped ALTER COLUMN id SET DATA TYPE text;
+		CREATE SEQUENCE public.plain_seq OWNED BY public.users.note;
+	`)
+	cat, err := catalog.NewCatalog(conn, []string{"public"})
+	require.NoError(t, err)
+	seqs, err := cat.Sequences(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"public.custom_seq", "public.plain_seq", "public.retyped_id_seq"}, seqs.CollectKeys())
+
+	seq := seqs.Get("public.custom_seq")
+	require.True(t, seq.Owned())
+	assert.Equal(t, "users", *seq.OwnerTable)
+	assert.Equal(t, "id", *seq.OwnerColumn)
 }

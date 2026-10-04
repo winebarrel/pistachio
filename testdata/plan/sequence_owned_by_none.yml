@@ -1,0 +1,19 @@
+# A desired sequence with no owner, of the same name as one a column owns in
+# the database, detaches it. It is not created again.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
+desired: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val integer DEFAULT 42
+  );
+plan: |
+  ALTER SEQUENCE public.my_seq OWNED BY NONE;
+count:
+  sequences: 1

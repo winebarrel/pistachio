@@ -207,3 +207,63 @@ func TestDiffSequences_SetLogged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ALTER SEQUENCE public.s SET LOGGED;"}, result.Stmts)
 }
+
+func ownedSeq(table, column string) *model.Sequence {
+	seq := baseSeq()
+	seq.OwnerTable, seq.OwnerColumn = &table, &column
+	return seq
+}
+
+func TestDiffSequences_CreateOwned(t *testing.T) {
+	result, err := DiffSequences(newSeqMap(), newSeqMap(ownedSeq("t", "id")), allowAllDrops{})
+	require.NoError(t, err)
+	require.Len(t, result.Stmts, 1)
+	assert.Contains(t, result.Stmts[0], "CREATE SEQUENCE public.s")
+	assert.Equal(t, []string{"ALTER SEQUENCE public.s OWNED BY public.t.id;"}, result.OwnedByStmts)
+	assert.Empty(t, result.DisownStmts)
+}
+
+func TestDiffSequences_SetOwner(t *testing.T) {
+	result, err := DiffSequences(newSeqMap(baseSeq()), newSeqMap(ownedSeq("t", "id")), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Equal(t, []string{"ALTER SEQUENCE public.s OWNED BY public.t.id;"}, result.OwnedByStmts)
+	assert.Empty(t, result.DisownStmts)
+}
+
+func TestDiffSequences_ChangeOwner(t *testing.T) {
+	result, err := DiffSequences(newSeqMap(ownedSeq("t", "a")), newSeqMap(ownedSeq("t", "b")), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER SEQUENCE public.s OWNED BY public.t.b;"}, result.OwnedByStmts)
+	assert.Empty(t, result.DisownStmts)
+}
+
+func TestDiffSequences_Disown(t *testing.T) {
+	result, err := DiffSequences(newSeqMap(ownedSeq("t", "id")), newSeqMap(baseSeq()), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.OwnedByStmts)
+	assert.Equal(t, []string{"ALTER SEQUENCE public.s OWNED BY NONE;"}, result.DisownStmts)
+}
+
+func TestDiffSequences_SameOwner(t *testing.T) {
+	result, err := DiffSequences(newSeqMap(ownedSeq("t", "id")), newSeqMap(ownedSeq("t", "id")), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.OwnedByStmts)
+	assert.Empty(t, result.DisownStmts)
+}
+
+func TestDiffSequences_DisownRenamed(t *testing.T) {
+	current := ownedSeq("t", "id")
+	current.Name = "old"
+	desired := baseSeq()
+	desired.Name = "new"
+	from := "public.old"
+	desired.RenameFrom = &from
+
+	result, err := DiffSequences(newSeqMap(current), newSeqMap(desired), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ALTER SEQUENCE public.old RENAME TO new;"}, result.Stmts)
+	assert.Equal(t, []string{"ALTER SEQUENCE public.old OWNED BY NONE;"}, result.DisownStmts)
+}

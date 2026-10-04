@@ -1,0 +1,17 @@
+# Moving a sequence to another column plans one OWNED BY.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      a integer,
+      b integer
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.a;
+desired: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      a integer,
+      b integer
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.b;
+plan: |
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.b;

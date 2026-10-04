@@ -415,6 +415,32 @@ CREATE SEQUENCE public.order_seq;`)
 	assert.Contains(t, files["public.order_seq.sql"], "CREATE SEQUENCE public.order_seq")
 }
 
+// The OWNED BY goes in the sequence's own file, since a file holds one object.
+func TestDumpResult_Files_OwnedSequence(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `
+CREATE SEQUENCE public.custom_seq;
+CREATE TABLE public.users (
+    id bigint DEFAULT nextval('custom_seq') NOT NULL
+);
+ALTER SEQUENCE public.custom_seq OWNED BY public.users.id;`)
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	})
+
+	got, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+	files := got.Files()
+	assert.Contains(t, files["public.custom_seq.sql"], "CREATE SEQUENCE public.custom_seq")
+	assert.Contains(t, files["public.custom_seq.sql"], "ALTER SEQUENCE public.custom_seq OWNED BY public.users.id;")
+	assert.NotContains(t, files["public.users.sql"], "OWNED BY")
+}
+
 func TestDumpResult_Files_SpecialCharacters(t *testing.T) {
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)

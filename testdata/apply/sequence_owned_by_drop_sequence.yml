@@ -1,0 +1,16 @@
+# The default stops drawing from the sequence before the sequence is dropped.
+init: |
+  CREATE SEQUENCE public.custom_user_id_seq;
+  CREATE TABLE public.users (
+      id bigint DEFAULT nextval('custom_user_id_seq') NOT NULL
+  );
+  ALTER SEQUENCE public.custom_user_id_seq OWNED BY public.users.id;
+desired: |
+  CREATE TABLE public.users (
+      id bigint DEFAULT 0 NOT NULL
+  );
+applied: |
+  -- public.users
+  CREATE TABLE public.users (
+      id bigint DEFAULT 0 NOT NULL
+  );

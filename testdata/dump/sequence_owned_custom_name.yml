@@ -1,0 +1,24 @@
+# An owned sequence with a custom name is written with its name, options and
+# owner. The column is written with its type and nextval default.
+init: |
+  CREATE SEQUENCE public.custom_user_id_seq CACHE 10;
+  CREATE TABLE public.users (
+      id bigint DEFAULT nextval('custom_user_id_seq') NOT NULL
+  );
+  ALTER SEQUENCE public.custom_user_id_seq OWNED BY public.users.id;
+dump: |
+  -- public.custom_user_id_seq
+  CREATE SEQUENCE public.custom_user_id_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 10;
+
+  -- public.users
+  CREATE TABLE public.users (
+      id bigint DEFAULT nextval('custom_user_id_seq'::regclass) NOT NULL
+  );
+
+  ALTER SEQUENCE public.custom_user_id_seq OWNED BY public.users.id;

@@ -1,0 +1,13 @@
+# Dropping a serial column drops its sequence too, so no DROP SEQUENCE is
+# planned.
+init: |
+  CREATE TABLE public.t (
+      id integer,
+      seq_no serial NOT NULL
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer
+  );
+plan: |
+  ALTER TABLE public.t DROP COLUMN seq_no;

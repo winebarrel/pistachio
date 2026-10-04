@@ -1992,6 +1992,11 @@ func TestEqualDefault(t *testing.T) {
 	assert.False(t, equalDefault(new("0"), new("1")))
 }
 
+func TestEqualDefault_Exported(t *testing.T) {
+	assert.True(t, EqualDefault(new("nextval('s'::regclass)"), new("nextval('s'::regclass)")))
+	assert.False(t, EqualDefault(new("nextval('s'::regclass)"), new("0")))
+}
+
 func TestEqualDefault_distinctFromNull(t *testing.T) {
 	// A DEFAULT is stored through the same rewrite. It cannot name a column,
 	// so both operands are constants.
@@ -5041,6 +5046,12 @@ func TestAlterSerialSequenceSQL(t *testing.T) {
 	t.Run("type a sequence cannot hold", func(t *testing.T) {
 		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq}
 		desired := &model.Column{Name: "id", TypeName: "text"}
+		assert.Empty(t, alterSerialSequenceSQL("public.t", current, desired))
+	})
+
+	t.Run("neither side a serial", func(t *testing.T) {
+		current := &model.Column{Name: "id", TypeName: "integer", SerialSequence: &seq}
+		desired := &model.Column{Name: "id", TypeName: "bigint"}
 		assert.Empty(t, alterSerialSequenceSQL("public.t", current, desired))
 	})
 }

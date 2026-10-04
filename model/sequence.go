@@ -8,10 +8,9 @@ import (
 	"github.com/winebarrel/orderedmap/v2"
 )
 
-// Sequence holds metadata for a standalone PostgreSQL sequence (one created by
-// CREATE SEQUENCE, not the sequence auto-generated behind a serial or identity
-// column). Sequences owned by a table column are handled as column attributes
-// and are excluded from the sequence diff pipeline.
+// Sequence holds a PostgreSQL sequence. The sequences of identity columns, and
+// of serial columns with the default sequence name, belong to the column and
+// are not held here. Other owned sequences are, with their owner.
 type Sequence struct {
 	OID       uint32 `json:"oid"`
 	Schema    string `json:"schema"`
@@ -24,9 +23,9 @@ type Sequence struct {
 	Cache     int64  `json:"cache"`
 	Cycle     bool   `json:"cycle"`
 	Unlogged  bool   `json:"unlogged"`
-	// OwnerTable and OwnerColumn are set from the OWNED BY relationship
-	// (pg_depend deptype 'a' for serial, 'i' for identity). They are nil for
-	// standalone sequences, which are the only ones the pipeline manages.
+	// OwnerTable and OwnerColumn name the column the sequence is OWNED BY,
+	// nil when no column owns it. PostgreSQL requires the table to be in the
+	// sequence's schema, so the table name is not qualified.
 	OwnerTable  *string `json:"owner_table"`
 	OwnerColumn *string `json:"owner_column"`
 	RenameFrom  *string `json:"rename_from"`
@@ -41,10 +40,28 @@ func (seq Sequence) FQN() string {
 	return Ident(seq.Schema, seq.Name)
 }
 
-// Owned reports whether the sequence is owned by a table column (serial or
-// identity). Owned sequences are not managed as standalone objects.
+// Owned reports whether a table column owns the sequence.
 func (seq Sequence) Owned() bool {
-	return seq.OwnerTable != nil
+	return seq.OwnerTable != nil && seq.OwnerColumn != nil
+}
+
+// OwnerFQTN returns the qualified name of the table that owns the sequence, or
+// "" when no column owns it.
+func (seq Sequence) OwnerFQTN() string {
+	if !seq.Owned() {
+		return ""
+	}
+	return Ident(seq.Schema, *seq.OwnerTable)
+}
+
+// OwnedBySQL returns the ALTER SEQUENCE ... OWNED BY for the sequence, or ""
+// when no column owns it. It is separate from SQL because the sequence is
+// created before the table and OWNED BY needs the table.
+func (seq Sequence) OwnedBySQL() string {
+	if !seq.Owned() {
+		return ""
+	}
+	return "ALTER SEQUENCE " + seq.FQN() + " OWNED BY " + Ident(seq.Schema, *seq.OwnerTable, *seq.OwnerColumn) + ";"
 }
 
 func (seq Sequence) SQL() string {
@@ -89,4 +106,16 @@ func SequenceToSQL(seq *Sequence) string {
 
 func SequencesToSQL(sequences *orderedmap.Map[string, *Sequence]) string {
 	return joinSQL(sequences, SequenceToSQL)
+}
+
+// SequencesOwnedBySQL returns the OWNED BY statement of every owned sequence,
+// in the order of the map, or "" when no column owns any of them.
+func SequencesOwnedBySQL(sequences *orderedmap.Map[string, *Sequence]) string {
+	var stmts []string
+	for _, seq := range sequences.All() {
+		if s := seq.OwnedBySQL(); s != "" {
+			stmts = append(stmts, s)
+		}
+	}
+	return strings.Join(stmts, "\n")
 }

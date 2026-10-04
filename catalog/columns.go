@@ -24,8 +24,13 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			-- column the child redeclares is local and inherited at once, and
 			-- stays.
 			a.attislocal,
+			-- A serial type only while the sequence has the default name.
+			-- Any other column that takes its default from a sequence it
+			-- owns keeps its own type and default, and catalog/sequences.go
+			-- reads the sequence, so that dump writes its name and options.
 			CASE
 				WHEN s.is_serial
+				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
 				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
 					WHEN 'integer' THEN 'serial'
 					WHEN 'bigint' THEN 'bigserial'
@@ -34,10 +39,11 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 				END
 				ELSE pg_catalog.format_type(a.atttypid, a.atttypmod)
 			END AS type_name,
-			-- The sequence a serial column owns. The diff needs its name to
-			-- keep its type in step with the column's: bigserial is a bigint
-			-- column and a bigint sequence, and ALTER TABLE reaches only the
-			-- column. NULL for every other column.
+			-- The sequence a column owns and takes its default from, whatever
+			-- its name. The diff uses it to change the sequence type with a
+			-- serial column's type: bigserial is a bigint column and a bigint
+			-- sequence, and ALTER TABLE changes only the column. NULL for
+			-- every other column.
 			CASE
 				WHEN s.is_serial
 				THEN pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)
@@ -103,6 +109,9 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 					false
 				) AS is_serial
 			) s
+			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
+			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
+			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
 			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
 			AND co.oid != t.typcollation
 			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace

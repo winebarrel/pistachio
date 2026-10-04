@@ -1,0 +1,18 @@
+# For a column written with its type and default, the sequence type changes
+# only as the desired schema declares it. No ALTER SEQUENCE comes from the
+# column's type change.
+init: |
+  CREATE SEQUENCE public.custom_seq AS integer;
+  CREATE TABLE public.items (
+      id integer DEFAULT nextval('custom_seq') NOT NULL
+  );
+  ALTER SEQUENCE public.custom_seq OWNED BY public.items.id;
+desired: |
+  CREATE SEQUENCE public.custom_seq AS bigint;
+  CREATE TABLE public.items (
+      id bigint DEFAULT nextval('custom_seq'::regclass) NOT NULL
+  );
+  ALTER SEQUENCE public.custom_seq OWNED BY public.items.id;
+plan: |
+  ALTER SEQUENCE public.custom_seq AS bigint MAXVALUE 9223372036854775807;
+  ALTER TABLE public.items ALTER COLUMN id SET DATA TYPE bigint;

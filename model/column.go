@@ -62,11 +62,11 @@ type Column struct {
 	Name       string  `json:"name"`
 	RenameFrom *string `json:"rename_from"`
 	TypeName   string  `json:"type"`
-	// SerialSequence names the sequence a serial column owns, schema
-	// qualified. Only the catalog fills it: a type name says the column is a
-	// serial, but not what PostgreSQL called its sequence. nil otherwise.
-	// Default still holds the nextval() the serial type implies, which
-	// PostgreSQL refuses alongside the type, so it is not written out.
+	// SerialSequence is the schema-qualified name of the sequence that the
+	// column owns and takes its default from. Only the catalog sets it; nil
+	// otherwise. The type name is a serial type only when the sequence has
+	// the default name. Default holds the nextval() in both cases. A serial
+	// type does not write it, because PostgreSQL rejects a default with it.
 	SerialSequence *string        `json:"serial_sequence"`
 	NotNull        bool           `json:"not_null"`
 	NotNullName    *string        `json:"not_null_name"`
@@ -95,4 +95,13 @@ type Column struct {
 
 func (col *Column) String() string {
 	return fmt.Sprintf("%#v", *col)
+}
+
+// IsSerialType reports whether a type name is one of the serial pseudo-types.
+func IsSerialType(typeName string) bool {
+	switch typeName {
+	case "serial", "bigserial", "smallserial":
+		return true
+	}
+	return false
 }

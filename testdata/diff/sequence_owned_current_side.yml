@@ -1,5 +1,5 @@
-# A CREATE SEQUENCE ... OWNED BY in the current file is unmanaged, the way the
-# catalog leaves out serial/identity-owned sequences, so no DROP is planned.
+# A CREATE SEQUENCE ... OWNED BY in the current file is a managed sequence, so
+# leaving it out of the desired file drops it.
 current: |
   CREATE TABLE public.t (
       id integer NOT NULL
@@ -9,6 +9,7 @@ desired: |
   CREATE TABLE public.t (
       id integer NOT NULL
   );
-diff: ""
+diff: |
+  DROP SEQUENCE public.s;
 count:
-  sequences: 0
+  sequences: 1

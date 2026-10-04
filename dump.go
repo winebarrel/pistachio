@@ -251,9 +251,10 @@ func (r *DumpResult) Document() *parser.ParseResult {
 // String formats enums, domains, composite types, sequences, routines, tables,
 // and views into canonical SQL output for dump.
 // Order: enums -> domains -> composite types -> sequences -> routines ->
-// tables -> views -> routines with a SQL-standard body (enums/domains/composite
-// types first since later objects may depend on them; sequences before tables
-// since column defaults may reference them; a SQL-standard body last since
+// tables -> sequence ownership -> views -> routines with a SQL-standard body
+// (enums/domains/composite types first since later objects may depend on them;
+// sequences before tables since column defaults may reference them; OWNED BY
+// after the tables since it names a column; a SQL-standard body last since
 // PostgreSQL parses it at creation time and it may read the tables and views).
 func (r *DumpResult) String() string {
 	enums, domains, compositeTypes, sequences := r.enums(), r.domains(), r.compositeTypes(), r.sequences()
@@ -277,6 +278,9 @@ func (r *DumpResult) String() string {
 	}
 	if tables.Len() > 0 {
 		parts = append(parts, model.TablesToSQL(tables))
+	}
+	if ownedBy := model.SequencesOwnedBySQL(sequences); ownedBy != "" {
+		parts = append(parts, ownedBy)
 	}
 	if views.Len() > 0 {
 		parts = append(parts, model.ViewsToSQL(views))
@@ -337,7 +341,13 @@ func (r *DumpResult) Files() map[string]string {
 		add(ct.Schema, ct.Name, model.CompositeTypeToSQL(ct))
 	}
 	for _, s := range r.sequences().CollectValues() {
-		add(s.Schema, s.Name, model.SequenceToSQL(s))
+		// OWNED BY goes in the sequence's file. The parser does not require
+		// the table to come first.
+		sql := model.SequenceToSQL(s)
+		if ownedBy := s.OwnedBySQL(); ownedBy != "" {
+			sql += "\n" + ownedBy
+		}
+		add(s.Schema, s.Name, sql)
 	}
 	for _, rt := range r.routines().CollectValues() {
 		// Overloads share a schema-qualified name, so uniqueFileName gives

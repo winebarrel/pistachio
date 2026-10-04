@@ -375,33 +375,6 @@ same-named tables.
 
 Origin: [#706](https://github.com/winebarrel/pistachio/pull/706).
 
-## A sequence a column owns in the database plans an unusable CREATE
-
-A desired standalone sequence can have the same name as a sequence that a
-column owns in the database. The plan then holds a `CREATE SEQUENCE` for a
-sequence that already exists, and apply fails with
-`relation "..." already exists` (SQLSTATE 42P07). A plain `CREATE SEQUENCE s;`
-does it. So does one followed by `ALTER SEQUENCE ... OWNED BY NONE`, which is
-the way a file would detach the sequence: the parser reads `OWNED BY NONE` and
-clears the owner, but nothing emits the detaching DDL.
-
-`catalog.Sequences` drops every sequence that has an owner. So the current
-side never sees it. A desired sequence with no owner is a managed standalone
-object. So the diff reads the missing current entry as "not created yet". The
-opposite direction is handled: `ALTER SEQUENCE ... OWNED BY <column>` marks
-the sequence unmanaged on the desired side. That matches the catalog, so an
-owned sequence no longer replans forever.
-
-Closing this means two changes. The catalog must surface the sequences that
-are merely owned, kept apart from the serial and identity ones that stay
-column attributes. `catalog.ListColumnsByTables` already draws that
-distinction by checking that the column default draws from the sequence. The
-diff must emit `ALTER SEQUENCE ... OWNED BY` / `OWNED BY NONE` for the
-transitions. That widens the set of objects that pistachio manages, so it is a
-feature rather than a fix. Workaround: detach the sequence by hand.
-
-Origin: bug audit, 2026-07-31.
-
 ## `COMMENT ON COLUMN` on an inherited column of an INHERITS child
 
 Priority: low.
@@ -951,6 +924,43 @@ Workaround: write the rule as `CREATE OR REPLACE RULE` under
 
 Origin: pg_dump fidelity comparison of the sample databases, 2026-09-23.
 
+## A serial sequence declared with another owner plans an unusable CREATE
+
+Priority: low.
+
+The sequence of a `serial` column is part of the column, so the catalog does
+not read it as a sequence. A desired schema can still declare it, with no
+owner or with another owner:
+
+```sql
+-- the database has: CREATE TABLE public.items (id serial NOT NULL);
+CREATE SEQUENCE public.items_id_seq AS integer;
+CREATE TABLE public.items (id integer GENERATED ALWAYS AS IDENTITY);
+```
+
+The plan then holds `CREATE SEQUENCE public.items_id_seq`, and apply fails
+with `relation "items_id_seq" already exists`. A declaration owned by the same
+column is taken as part of the column and works.
+
+Closing this means reading the sequence from the catalog whenever the desired
+schema declares it. Workaround: detach the sequence by hand with
+`ALTER SEQUENCE ... OWNED BY NONE` before the plan.
+
+Origin: review of #915, 2026-10-04.
+
+## `pista diff` drops an owned sequence the desired file leaves out
+
+Priority: low.
+
+`plan` keeps an owned sequence that the desired schema does not declare when
+the column still takes its default from it. It reads that from the catalog.
+`pista diff` reads the current side from a file, which does not say that the
+column's default uses the sequence. So with `--allow-drop sequence`, `diff`
+emits `DROP SEQUENCE` for it, and running that SQL fails because the default
+depends on the sequence. Workaround: declare the sequence in the desired file.
+
+Origin: review of #915, 2026-10-04.
+
 ## An identity column's sequence name is not managed
 
 Priority: low.
@@ -971,68 +981,6 @@ Managing the name also means that `dump` writes `SEQUENCE NAME` on every
 identity column. There is no plan to close this.
 
 Origin: identity sequence options, 2026-09-02.
-
-## A `nextval` default is dropped from a column a sequence cannot type
-
-A column is read as a serial when it owns a sequence and its default draws from
-that sequence. The type is not part of the test, but the rendering depends on
-the type. The type name reads back as `serial` only for `integer`, `bigint` and
-`smallint`, and the default is dropped either way. Therefore a column of any
-other type that owns its sequence loses its default:
-
-```sql
-CREATE TABLE public.t (id serial);
-ALTER TABLE public.t ALTER COLUMN id SET DATA TYPE text;
-```
-
-`pista dump` writes `id text NOT NULL`, though the column still carries
-`nextval('t_id_seq'::regclass)`. The plan of that dump reports no changes. So
-nothing says that the default was lost. Loading the dump gives a table without
-the default.
-
-The same happens to a column whose sequence was attached by hand. There the
-sequence goes too, because an owned sequence is left to the column that owns
-it:
-
-```sql
-CREATE SEQUENCE public.s;
-CREATE TABLE public.t (id numeric DEFAULT nextval('public.s'));
-ALTER SEQUENCE public.s OWNED BY public.t.id;
-```
-
-`pista dump` writes `id numeric` and no `CREATE SEQUENCE`.
-
-Closing this means gating the serial test on the type. Then a column that a
-sequence cannot type keeps its default, and its sequence surfaces as a
-standalone sequence.
-
-Origin: review of the serial retype fix, 2026-09-08.
-
-## A sequence a column owns loses its name in `dump`
-
-Priority: low.
-
-A column that owns a sequence and draws its default from it is read as a
-serial, whatever the sequence is called:
-
-```sql
-CREATE SEQUENCE public.custom_user_id_seq;
-CREATE TABLE public.users (id bigint DEFAULT nextval('custom_user_id_seq') NOT NULL);
-ALTER SEQUENCE public.custom_user_id_seq OWNED BY public.users.id;
-```
-
-`pista dump` writes `id bigserial NOT NULL` and no `CREATE SEQUENCE`. The plan
-of that dump is clean. But loading the dump into an empty database creates
-`users_id_seq`, and the options that were set on the sequence go back to their
-defaults. Use `pg_dump -s` to copy such a database.
-
-Closing this means reading a column as a serial only when its sequence has the
-name and the options that serial gives it. Any other column would be written
-as the sequence, the `nextval` default and the `OWNED BY`. The plan of that
-dump also needs a desired `OWNED BY` to keep the sequence managed, which it
-does not do today.
-
-Origin: sequence ownership review, 2026-09-23.
 
 ## Perpetual drift on an array written with dimensions or a bound
 

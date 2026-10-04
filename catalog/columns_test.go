@@ -202,6 +202,27 @@ func TestListColumnsByTables(t *testing.T) {
 		assert.Equal(t, "nextval('users_id_seq'::regclass)", *id.Default)
 	})
 
+	t.Run("owned sequence with its own name", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE SEQUENCE public.custom_seq;
+			CREATE TABLE public.users (
+				id bigint DEFAULT nextval('custom_seq') NOT NULL
+			);
+			ALTER SEQUENCE public.custom_seq OWNED BY public.users.id;
+		`)
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		id := tables.Get("public.users").Columns.Get("id")
+		assert.Equal(t, "bigint", id.TypeName)
+		require.NotNil(t, id.SerialSequence)
+		assert.Equal(t, "public.custom_seq", *id.SerialSequence)
+		require.NotNil(t, id.Default)
+		assert.Equal(t, "nextval('custom_seq'::regclass)", *id.Default)
+	})
+
 	t.Run("identity always", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.items (
