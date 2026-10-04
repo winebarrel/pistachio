@@ -1,0 +1,14 @@
+# With sequences left out by --disable sequence, the serial's old sequence is
+# not dropped when the column becomes an identity column.
+disable: [sequence]
+init: |
+  CREATE TABLE public.items (
+      id serial NOT NULL
+  );
+desired: |
+  CREATE TABLE public.items (
+      id integer GENERATED ALWAYS AS IDENTITY
+  );
+plan: |
+  ALTER TABLE public.items ALTER COLUMN id DROP DEFAULT;
+  ALTER TABLE public.items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;

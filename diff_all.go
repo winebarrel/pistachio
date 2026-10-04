@@ -358,7 +358,13 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	}
 
 	// This runs after the state hash, which must depend on the database only.
-	filteredSequences, desiredSequences = reconcileOwnedSequences(filteredSequences, desiredSequences, filteredTables, desiredTables)
+	// A sequence it adds back for a drop goes through the same filters and
+	// ignore list as the rest.
+	ignoredSet := nameSet(ignored)
+	admit := func(seqs *orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence] {
+		return options.filterSequences(seqs).Filter(func(k string, _ *model.Sequence) bool { return !ignoredSet[k] })
+	}
+	filteredSequences, desiredSequences = reconcileOwnedSequences(filteredSequences, desiredSequences, filteredTables, desiredTables, admit)
 
 	// The Diff* functions below read the current side with renamed types and
 	// sequences carried into their references. orderStatements keeps the
@@ -737,13 +743,16 @@ func blockedError(prefix string, targets []string, dependents map[string][]catal
 //     column's sequence. This is how pg_dump writes a serial.
 //   - A current owner is moved through a table or column rename, so the
 //     rename alone plans no OWNED BY.
-//   - When a serial column becomes an identity column, its old sequence is
-//     added to the current side so that it is dropped. ADD IDENTITY creates a
+//   - When a column that takes its default from an owned sequence becomes an
+//     identity column, the old sequence stays on the current side, or is
+//     added to it for a serial, so that it is dropped. ADD IDENTITY creates a
 //     new sequence. This is skipped when the desired schema declares the old
-//     one.
+//     one. admit applies the sequence filters and the ignore list to what is
+//     added.
 func reconcileOwnedSequences(
 	current, desired *orderedmap.Map[string, *model.Sequence],
 	currentTables, desiredTables *orderedmap.Map[string, *model.Table],
+	admit func(*orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence],
 ) (*orderedmap.Map[string, *model.Sequence], *orderedmap.Map[string, *model.Sequence]) {
 	current, desired = current.Clone(), desired.Clone()
 
@@ -762,7 +771,11 @@ func reconcileOwnedSequences(
 		}
 		table, col := renamedColumn(desiredTables, seq.OwnerFQTN(), *seq.OwnerColumn)
 		if !declared[k] {
-			if col == nil || model.IsSerialType(col.TypeName) || drawsFrom(currentTables, seq, col) {
+			if col == nil || model.IsSerialType(col.TypeName) {
+				current.Delete(k)
+				continue
+			}
+			if drawsFrom(currentTables, seq, col) && !col.Identity.IsIdentityColumn() {
 				current.Delete(k)
 			}
 			continue
@@ -774,24 +787,27 @@ func reconcileOwnedSequences(
 		}
 	}
 
+	retired := orderedmap.New[string, *model.Sequence]()
 	for _, t := range currentTables.All() {
 		for _, col := range t.Columns.All() {
-			if col.SerialSequence == nil || declared[*col.SerialSequence] {
+			// A serial column's sequence has the default name and is not on
+			// the current side.
+			if col.SerialSequence == nil || !model.IsSerialType(col.TypeName) {
 				continue
 			}
-			if _, ok := current.GetOk(*col.SerialSequence); ok {
+			seq := &model.Sequence{Schema: t.Schema, Name: t.Name + "_" + col.Name + "_seq"}
+			if declared[seq.FQN()] {
 				continue
 			}
 			_, desiredCol := renamedColumn(desiredTables, t.FQTN(), col.Name)
-			if desiredCol == nil || !desiredCol.Identity.IsIdentityColumn() || col.Identity.IsIdentityColumn() {
+			if desiredCol == nil || !desiredCol.Identity.IsIdentityColumn() {
 				continue
 			}
-			// Only the key is used, for the DROP.
-			current.Set(*col.SerialSequence, &model.Sequence{
-				Schema: t.Schema,
-				Name:   strings.TrimPrefix(*col.SerialSequence, model.Ident(t.Schema)+"."),
-			})
+			retired.Set(seq.FQN(), seq)
 		}
+	}
+	for k, seq := range admit(retired).All() {
+		current.Set(k, seq)
 	}
 
 	for _, e := range desired.Entries() {
@@ -833,25 +849,29 @@ func drawsFrom(currentTables *orderedmap.Map[string, *model.Table], seq *model.S
 // fqtn.column, following a table or column rename. It returns nil when the
 // desired schema has no such column.
 func renamedColumn(tables *orderedmap.Map[string, *model.Table], fqtn, column string) (*model.Table, *model.Column) {
-	t, ok := tables.GetOk(fqtn)
-	if !ok {
-		for _, candidate := range tables.All() {
-			if candidate.RenameFrom != nil && *candidate.RenameFrom == fqtn {
-				t, ok = candidate, true
-				break
-			}
+	// A rename comes first, so that a new object under the old name does not
+	// take its place. A directive left after the rename was applied names a
+	// source that is gone, and the name matches instead.
+	var t *model.Table
+	for _, candidate := range tables.All() {
+		if candidate.RenameFrom != nil && *candidate.RenameFrom == fqtn {
+			t = candidate
+			break
 		}
 	}
-	if !ok {
-		return nil, nil
-	}
-	if col, ok := t.Columns.GetOk(column); ok && col.RenameFrom == nil {
-		return t, col
+	if t == nil {
+		var ok bool
+		if t, ok = tables.GetOk(fqtn); !ok {
+			return nil, nil
+		}
 	}
 	for _, col := range t.Columns.All() {
 		if col.RenameFrom != nil && *col.RenameFrom == column {
 			return t, col
 		}
+	}
+	if col, ok := t.Columns.GetOk(column); ok {
+		return t, col
 	}
 	return nil, nil
 }
