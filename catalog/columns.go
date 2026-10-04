@@ -24,11 +24,10 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 			-- column the child redeclares is local and inherited at once, and
 			-- stays.
 			a.attislocal,
-			-- A serial type only while the sequence keeps the name serial
-			-- gave it. Any other column that draws from a sequence it owns
-			-- keeps its own type and its default, and the sequence is read
-			-- as one of its own (catalog/sequences.go), so that dump writes
-			-- the name and the options out.
+			-- A serial type only while the sequence has the default name.
+			-- Any other column that takes its default from a sequence it
+			-- owns keeps its own type and default, and catalog/sequences.go
+			-- reads the sequence, so that dump writes its name and options.
 			CASE
 				WHEN s.is_serial
 				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
@@ -40,11 +39,11 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 				END
 				ELSE pg_catalog.format_type(a.atttypid, a.atttypmod)
 			END AS type_name,
-			-- The sequence a column owns and draws its default from, whatever
-			-- its name. The diff needs it to keep the sequence's type in step
-			-- with a serial column's: bigserial is a bigint column and a
-			-- bigint sequence, and ALTER TABLE reaches only the column. NULL
-			-- for every other column.
+			-- The sequence a column owns and takes its default from, whatever
+			-- its name. The diff uses it to change the sequence type with a
+			-- serial column's type: bigserial is a bigint column and a bigint
+			-- sequence, and ALTER TABLE changes only the column. NULL for
+			-- every other column.
 			CASE
 				WHEN s.is_serial
 				THEN pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)

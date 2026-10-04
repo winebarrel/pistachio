@@ -9,10 +9,10 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// Sequences returns the sequences the diff manages in the filtered schemas,
-// keyed by FQN. The sequence behind an identity column, and the one behind a
-// column read as a serial, are column attributes and are left out. Any other
-// sequence a column owns is kept, with its owner.
+// Sequences returns the managed sequences in the filtered schemas, keyed by
+// FQN. The sequences of identity columns and of columns read as serial belong
+// to the column and are left out. Other owned sequences are included, with
+// their owner.
 func (c *Catalog) Sequences(ctx context.Context) (*orderedmap.Map[string, *model.Sequence], error) {
 	q := `
 		WITH
@@ -65,9 +65,9 @@ func (c *Catalog) Sequences(ctx context.Context) (*orderedmap.Map[string, *model
 			AND n.nspname = ANY(@schemas)
 			AND de.objid IS NULL
 			AND d.deptype IS DISTINCT FROM 'i'
-			-- The sequence of a column catalog/columns.go reads as a serial:
-			-- an integer column that draws its default from the sequence,
-			-- under the name serial gave it.
+			-- The sequence of a column that catalog/columns.go reads as a
+			-- serial: an integer column takes its default from it, and it
+			-- has the default name.
 			AND NOT COALESCE(
 				a.attidentity = ''
 				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)

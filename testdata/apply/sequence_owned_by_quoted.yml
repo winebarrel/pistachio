@@ -1,0 +1,26 @@
+# Names that need quoting, on the owner and in the serial name check.
+init: ""
+desired: |
+  CREATE SEQUENCE public."Custom Seq";
+  CREATE TABLE public."Users" (
+      "Id" bigint DEFAULT nextval('"Custom Seq"'::regclass) NOT NULL,
+      "Code" serial NOT NULL
+  );
+  ALTER SEQUENCE public."Custom Seq" OWNED BY public."Users"."Id";
+applied: |
+  -- public."Custom Seq"
+  CREATE SEQUENCE public."Custom Seq"
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- public."Users"
+  CREATE TABLE public."Users" (
+      "Id" bigint DEFAULT nextval('"Custom Seq"'::regclass) NOT NULL,
+      "Code" serial NOT NULL
+  );
+
+  ALTER SEQUENCE public."Custom Seq" OWNED BY public."Users"."Id";

@@ -1,5 +1,5 @@
-# A sequence a column owns is read back with its owner, the same as the
-# desired schema declares it, so applying is a no-op.
+# An owned sequence is read back with its owner, as the desired schema
+# declares it, so apply changes nothing.
 init: |
   CREATE SEQUENCE public.my_seq;
   CREATE TABLE public.t (

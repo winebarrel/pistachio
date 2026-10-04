@@ -1,7 +1,7 @@
-# A column that draws from a sequence it owns keeps its default when the
-# desired schema writes none, the way a serial column does. The sequence stays
-# with it, so nothing is dropped. A dump made before pistachio wrote such a
-# default left it out.
+# A column that takes its default from an owned sequence keeps the default
+# when the desired schema has none, as a serial column does. The sequence
+# stays too, so nothing changes. Dumps from earlier versions left out such a
+# default.
 init: |
   CREATE SEQUENCE public.custom_user_id_seq;
   CREATE TABLE public.users (

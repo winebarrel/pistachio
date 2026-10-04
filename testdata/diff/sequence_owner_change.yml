@@ -1,0 +1,17 @@
+# An owner change between two files plans OWNED BY.
+current: |
+  CREATE SEQUENCE public.s;
+  CREATE TABLE public.t (
+      a integer,
+      b integer
+  );
+  ALTER SEQUENCE public.s OWNED BY public.t.a;
+desired: |
+  CREATE SEQUENCE public.s;
+  CREATE TABLE public.t (
+      a integer,
+      b integer
+  );
+  ALTER SEQUENCE public.s OWNED BY public.t.b;
+diff: |
+  ALTER SEQUENCE public.s OWNED BY public.t.b;

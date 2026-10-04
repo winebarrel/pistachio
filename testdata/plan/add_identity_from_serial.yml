@@ -1,5 +1,5 @@
-# ADD IDENTITY creates a sequence of its own, so the serial's sequence is
-# dropped once the default no longer draws from it.
+# ADD IDENTITY creates a new sequence, so the serial's old sequence is dropped
+# after the default is removed.
 init: |
   CREATE TABLE public.items (
       id serial NOT NULL,

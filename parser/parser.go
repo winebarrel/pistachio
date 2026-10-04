@@ -2143,8 +2143,8 @@ func warnIgnoredAlterSeqOptions(sql string, spans []fileSpan, rawStmt *pg_query.
 }
 
 // parseSeqOwnedBy extracts the owner table and column from an OWNED BY clause.
-// OWNED BY NONE (list ["none"]) yields nil owner. A schema on the table is
-// dropped: PostgreSQL requires the table to be in the sequence's schema.
+// OWNED BY NONE (list ["none"]) yields nil owner. The table's schema is
+// dropped, because PostgreSQL requires it to be the sequence's schema.
 func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
 	list := arg.GetList()
 	if list == nil {

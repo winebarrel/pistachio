@@ -1,5 +1,5 @@
-# A sequence a column owns without drawing from it is written with its owner,
-# after the table.
+# A sequence owned by a column that does not use it for its default is written
+# with OWNED BY after the table.
 init: |
   CREATE SEQUENCE public.my_seq;
   CREATE TABLE public.t (

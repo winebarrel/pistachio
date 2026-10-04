@@ -610,3 +610,57 @@ CREATE TABLE myschema.posts (
 	line, _, _ := strings.Cut(got.SQL, "\n")
 	assert.Contains(t, line, ", myschema.users (~3 rows, ")
 }
+
+// Outside the search_path the catalog qualifies a sequence in a column default,
+// so the serial check, the owned sequence and a dump of them have to agree on
+// the qualified name.
+func TestPlan_OwnedSequence_NonPublicSchema(t *testing.T) {
+	ctx := context.Background()
+
+	connString := setupSchemaDB(t, ctx, "myschema", `
+CREATE SEQUENCE myschema.custom_seq CACHE 10;
+CREATE TABLE myschema.users (
+    id bigint DEFAULT nextval('myschema.custom_seq') NOT NULL,
+    code serial NOT NULL
+);
+ALTER SEQUENCE myschema.custom_seq OWNED BY myschema.users.id;
+CREATE SEQUENCE myschema.loose_seq OWNED BY myschema.users.code;
+`)
+
+	client := NewClient(&Options{
+		ConnString: connString,
+		Schemas:    []string{"myschema"},
+	})
+
+	dumped, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+	dump := dumped.String()
+	assert.Contains(t, dump, "id bigint DEFAULT nextval('myschema.custom_seq'::regclass) NOT NULL")
+	assert.Contains(t, dump, "code serial NOT NULL")
+	assert.Contains(t, dump, "ALTER SEQUENCE myschema.custom_seq OWNED BY myschema.users.id;")
+	assert.Contains(t, dump, "ALTER SEQUENCE myschema.loose_seq OWNED BY myschema.users.code;")
+	assert.NotContains(t, dump, "CREATE SEQUENCE myschema.users_code_seq")
+
+	dir := t.TempDir()
+	dumpFile := filepath.Join(dir, "dump.sql")
+	require.NoError(t, os.WriteFile(dumpFile, []byte(dump), 0o644))
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{dumpFile}})
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(got.SQL))
+
+	// The serial written the way pg_dump writes it, and the loose sequence
+	// detached.
+	desiredFile := filepath.Join(dir, "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE SEQUENCE myschema.custom_seq CACHE 10;
+CREATE SEQUENCE myschema.users_code_seq AS integer;
+CREATE SEQUENCE myschema.loose_seq;
+CREATE TABLE myschema.users (
+    id bigint DEFAULT nextval('myschema.custom_seq'::regclass) NOT NULL,
+    code integer DEFAULT nextval('myschema.users_code_seq'::regclass) NOT NULL
+);
+ALTER SEQUENCE myschema.custom_seq OWNED BY myschema.users.id;
+ALTER SEQUENCE myschema.users_code_seq OWNED BY myschema.users.code;`), 0o644))
+	got, err = client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Equal(t, "ALTER SEQUENCE myschema.loose_seq OWNED BY NONE;", strings.TrimSpace(got.SQL))
+}

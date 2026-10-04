@@ -1,6 +1,6 @@
-# CREATE SEQUENCE ... OWNED BY declares the owner too. The OWNED BY is planned
-# on its own after the table, which does not exist when the sequence is
-# created.
+# CREATE SEQUENCE ... OWNED BY declares the owner too. OWNED BY is planned as
+# a separate statement after the table, because the table does not exist when
+# the sequence is created.
 init: ""
 desired: |
   CREATE TABLE public.t (

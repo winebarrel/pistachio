@@ -1,0 +1,15 @@
+# A serial written as pg_dump writes it: the sequence, the nextval default and
+# OWNED BY. The sequence has the default name, so it is read back as a
+# serial, and the re-plan treats the desired sequence as part of the column.
+init: ""
+desired: |
+  CREATE SEQUENCE public.t_id_seq AS integer;
+  CREATE TABLE public.t (
+      id integer DEFAULT nextval('t_id_seq'::regclass) NOT NULL
+  );
+  ALTER SEQUENCE public.t_id_seq OWNED BY public.t.id;
+applied: |
+  -- public.t
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );

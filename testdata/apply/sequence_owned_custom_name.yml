@@ -1,5 +1,5 @@
-# A sequence a column owns under a name of its own is created, tied to the
-# column, and read back the same way.
+# An owned sequence with a custom name is created, gets its owner, and is
+# read back the same way.
 init: ""
 desired: |
   CREATE SEQUENCE public.custom_user_id_seq CACHE 10;

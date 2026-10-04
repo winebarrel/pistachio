@@ -4,15 +4,17 @@
 
 ## [Unreleased]
 
-* A sequence that a column owns is now managed with its owner, unless it is the sequence of an identity column or of a `serial` column that keeps the name `serial` gave it. `plan` and `apply` emit `ALTER SEQUENCE ... OWNED BY` and `OWNED BY NONE` for a change of owner. Before, any owned sequence was left out on both sides.
+* Sequences owned by a column are now managed, with their owner. `plan` and `apply` emit `ALTER SEQUENCE ... OWNED BY` or `OWNED BY NONE` when the owner changes. Before, every owned sequence was ignored. The sequences of identity columns, and of `serial` columns that keep the default sequence name, are still part of their column.
 
-* `dump` now writes a sequence that a column owns under a name of its own, with its options and an `ALTER SEQUENCE ... OWNED BY` after the tables, and writes the column with its own type and `nextval` default. Before, it wrote the column as `serial` or `bigserial`, so loading the dump gave the sequence the default name and default options. A column of a type other than `smallint`, `integer` or `bigint` that draws from a sequence it owns now keeps its default in the dump, and the sequence is written too.
+* `dump` now writes an owned sequence that has a custom name: the sequence with its options, the column with its type and `nextval` default, and `ALTER SEQUENCE ... OWNED BY` after the tables. Before, it wrote the column as `serial` or `bigserial`, so loading the dump created a sequence with the default name and default options.
 
-* A desired sequence with no owner, of the same name as a sequence that a column owns in the database, now plans `ALTER SEQUENCE ... OWNED BY NONE`. Before, the plan created the sequence again and apply failed with `relation already exists`.
+* `dump` now keeps the `nextval` default of a column whose type is not `smallint`, `integer` or `bigint`, and writes its sequence. Before, the default was lost.
 
-* A column that turns from `serial` into an identity column now drops its old sequence when `--allow-drop sequence` is given. Before, the sequence was left behind.
+* A desired sequence without an owner now detaches a sequence of the same name that a column owns in the database, with `OWNED BY NONE`. Before, the plan created the sequence again and apply failed with `relation already exists`.
 
-* A sequence that a column owns without drawing its default from it, and that the desired schema does not declare, is now planned for `DROP SEQUENCE`. A dump made by an earlier version leaves such a sequence out.
+* When a `serial` column becomes an identity column, the old sequence is now dropped. Before, it was left behind. The drop requires `--allow-drop sequence`.
+
+* An owned sequence that the column does not use for its default, and that the desired schema does not declare, is now dropped. The drop requires `--allow-drop sequence`. A dump from an earlier version does not include such a sequence.
 
 ## [1.74.0] - 2026-10-04
 

@@ -1,6 +1,5 @@
-# A column that draws from a sequence it owns, under a name serial would not
-# give it, is written with its own type and default. The sequence is written
-# with its name, its options and its owner.
+# An owned sequence with a custom name is written with its name, options and
+# owner. The column is written with its type and nextval default.
 init: |
   CREATE SEQUENCE public.custom_user_id_seq CACHE 10;
   CREATE TABLE public.users (

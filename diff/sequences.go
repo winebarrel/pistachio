@@ -10,12 +10,11 @@ import (
 
 type SequenceDiffResult struct {
 	Stmts []string
-	// OwnedByStmts tie a sequence to a column. They run after the table
-	// statements, since the column has to exist by then.
+	// OwnedByStmts set the owner. They run after the table statements,
+	// because the column must exist.
 	OwnedByStmts []string
-	// DisownStmts detach a sequence from its column. They run before the
-	// table statements, so that a table or column dropped in the same plan
-	// no longer takes the sequence with it.
+	// DisownStmts remove the owner. They run before the table statements, so
+	// that dropping the table or column does not drop the sequence.
 	DisownStmts         []string
 	DropStmts           []string
 	DisallowedDropStmts []string
@@ -62,8 +61,7 @@ func DiffSequences(current, desired *orderedmap.Map[string, *model.Sequence], dc
 			result.OwnedByStmts = append(result.OwnedByStmts, desiredSeq.OwnedBySQL())
 			continue
 		}
-		// The detach runs before the rename, so it names the sequence the
-		// way the database still does.
+		// This runs before the rename, so it uses the old name.
 		name := k
 		if from := desiredSeq.RenameFrom; from != nil {
 			if _, ok := original.GetOk(*from); ok {

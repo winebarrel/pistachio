@@ -357,8 +357,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		assumeValidatedConstraints(filteredTables, desiredTables, filteredDomains, desiredDomains)
 	}
 
-	// After the state hash, which reads the database alone: this settles the
-	// owned sequences against what the desired schema writes.
+	// This runs after the state hash, which must depend on the database only.
 	filteredSequences, desiredSequences = reconcileOwnedSequences(filteredSequences, desiredSequences, filteredTables, desiredTables)
 
 	// The Diff* functions below read the current side with renamed types and
@@ -725,23 +724,23 @@ func blockedError(prefix string, targets []string, dependents map[string][]catal
 	return nil
 }
 
-// reconcileOwnedSequences settles the sequences a column owns between the
-// two sides. It returns copies and leaves the maps it is given alone.
+// reconcileOwnedSequences matches the sequences that columns own on the two
+// sides. It returns copies and does not change its arguments.
 //
-//   - A current sequence that the desired schema does not declare goes with
-//     its owner when the desired schema drops the owning table or column, so
-//     no DROP SEQUENCE is planned for it. It is the column's when the desired
-//     schema writes the owning column as a serial, or leaves the column's
-//     default drawing from it: a schema written before pistachio managed
-//     owned sequences does either, the first after a table rename.
-//   - A desired sequence owned by a column that the database reads as a
-//     serial drawing from it is that column's, as pg_dump writes a serial.
-//   - A current owner is carried through a table or column rename, so that
-//     the rename alone plans no OWNED BY.
-//   - The sequence of a column that becomes an identity column is dropped,
-//     unless the desired schema declares it. ADD IDENTITY creates a sequence
-//     of its own, and the old one would be left owned by a column that no
-//     longer draws from it.
+//   - A current sequence that the desired schema does not declare is removed
+//     from the current side, so no DROP SEQUENCE is planned, when:
+//     the desired schema drops the owning table or column (PostgreSQL drops
+//     the sequence with it); the desired column is a serial type; or the
+//     desired column keeps the nextval default or has none. Schemas written
+//     for earlier versions rely on the last two.
+//   - A desired sequence is removed when the database reads it as a serial
+//     column's sequence. This is how pg_dump writes a serial.
+//   - A current owner is moved through a table or column rename, so the
+//     rename alone plans no OWNED BY.
+//   - When a serial column becomes an identity column, its old sequence is
+//     added to the current side so that it is dropped. ADD IDENTITY creates a
+//     new sequence. This is skipped when the desired schema declares the old
+//     one.
 func reconcileOwnedSequences(
 	current, desired *orderedmap.Map[string, *model.Sequence],
 	currentTables, desiredTables *orderedmap.Map[string, *model.Table],
@@ -787,8 +786,7 @@ func reconcileOwnedSequences(
 			if desiredCol == nil || !desiredCol.Identity.IsIdentityColumn() || col.Identity.IsIdentityColumn() {
 				continue
 			}
-			// Only the key reaches the DROP, so the name is what the catalog
-			// printed.
+			// Only the key is used, for the DROP.
 			current.Set(*col.SerialSequence, &model.Sequence{
 				Schema: t.Schema,
 				Name:   strings.TrimPrefix(*col.SerialSequence, model.Ident(t.Schema)+"."),
@@ -816,9 +814,9 @@ func reconcileOwnedSequences(
 	return current, desired
 }
 
-// drawsFrom reports whether the current column that owns seq draws its default
-// from it and the desired column leaves that default in place. A desired
-// column that writes no default leaves it, as the column diff does.
+// drawsFrom reports whether the current column that owns seq takes its default
+// from seq, and the desired column keeps that default. No default in the
+// desired column counts as keeping it, as in the column diff.
 func drawsFrom(currentTables *orderedmap.Map[string, *model.Table], seq *model.Sequence, desired *model.Column) bool {
 	t, ok := currentTables.GetOk(seq.OwnerFQTN())
 	if !ok {
@@ -831,9 +829,9 @@ func drawsFrom(currentTables *orderedmap.Map[string, *model.Table], seq *model.S
 	return desired.Default == nil || diff.EqualDefault(col.Default, desired.Default)
 }
 
-// renamedColumn returns the desired table and column that the current column
-// fqtn.column is, under its own names or under the names a rename gives it.
-// It returns nil when the desired schema has no such column.
+// renamedColumn returns the desired table and column for the current column
+// fqtn.column, following a table or column rename. It returns nil when the
+// desired schema has no such column.
 func renamedColumn(tables *orderedmap.Map[string, *model.Table], fqtn, column string) (*model.Table, *model.Column) {
 	t, ok := tables.GetOk(fqtn)
 	if !ok {

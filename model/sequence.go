@@ -8,10 +8,9 @@ import (
 	"github.com/winebarrel/orderedmap/v2"
 )
 
-// Sequence holds metadata for a PostgreSQL sequence created by CREATE SEQUENCE.
-// The sequence behind an identity column, and the one behind a serial column
-// that still has the name serial gave it, are column attributes and are not
-// held here. Any other sequence a column owns is, with its owner.
+// Sequence holds a PostgreSQL sequence. The sequences of identity columns, and
+// of serial columns with the default sequence name, belong to the column and
+// are not held here. Other owned sequences are, with their owner.
 type Sequence struct {
 	OID       uint32 `json:"oid"`
 	Schema    string `json:"schema"`
@@ -55,10 +54,9 @@ func (seq Sequence) OwnerFQTN() string {
 	return Ident(seq.Schema, *seq.OwnerTable)
 }
 
-// OwnedBySQL returns the ALTER SEQUENCE that ties the sequence to its owning
-// column, or "" when no column owns it. It is separate from SQL because the
-// table has to exist first, and a column default that draws from the sequence
-// needs the sequence before the table.
+// OwnedBySQL returns the ALTER SEQUENCE ... OWNED BY for the sequence, or ""
+// when no column owns it. It is separate from SQL because the sequence is
+// created before the table and OWNED BY needs the table.
 func (seq Sequence) OwnedBySQL() string {
 	if !seq.Owned() {
 		return ""

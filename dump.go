@@ -341,8 +341,8 @@ func (r *DumpResult) Files() map[string]string {
 		add(ct.Schema, ct.Name, model.CompositeTypeToSQL(ct))
 	}
 	for _, s := range r.sequences().CollectValues() {
-		// The OWNED BY goes in the sequence's own file. pista reads the files
-		// as one schema and does not check that the table comes first.
+		// OWNED BY goes in the sequence's file. The parser does not require
+		// the table to come first.
 		sql := model.SequenceToSQL(s)
 		if ownedBy := s.OwnedBySQL(); ownedBy != "" {
 			sql += "\n" + ownedBy

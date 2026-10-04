@@ -1,5 +1,5 @@
-# A sequence a column owns is created before the table whose default draws
-# from it, and tied to the column once the table exists.
+# An owned sequence is created before the table that uses it in a default,
+# and gets its owner after the table exists.
 init: ""
 desired: |
   CREATE SEQUENCE public.custom_user_id_seq CACHE 10;

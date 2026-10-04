@@ -1,0 +1,24 @@
+# --omit-schema drops the schema from the OWNED BY too.
+init: |
+  CREATE SEQUENCE public.custom_seq;
+  CREATE TABLE public.users (
+      id bigint DEFAULT nextval('custom_seq') NOT NULL
+  );
+  ALTER SEQUENCE public.custom_seq OWNED BY public.users.id;
+omit_schema: true
+dump: |
+  -- custom_seq
+  CREATE SEQUENCE custom_seq
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+
+  -- users
+  CREATE TABLE users (
+      id bigint DEFAULT nextval('custom_seq'::regclass) NOT NULL
+  );
+
+  ALTER SEQUENCE custom_seq OWNED BY users.id;

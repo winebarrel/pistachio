@@ -747,9 +747,9 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	if !current.Generated.IsStoredGeneratedColumn() && !desired.Generated.IsStoredGeneratedColumn() && !desIsIdent {
 		// A serial column's nextval() comes with the type, so a desired side
 		// that writes no default leaves it alone. One that writes a default is
-		// compared with it. The same goes for any column that draws from a
-		// sequence it owns: a dump made before pistachio wrote such a column
-		// with its default left the default out.
+		// compared with it. This applies to any column that takes its default
+		// from a sequence it owns: dumps from earlier versions left out such
+		// a default.
 		currentDefault := current.Default
 		if current.SerialSequence != nil && desired.Default == nil {
 			currentDefault = nil
@@ -922,8 +922,8 @@ func alterTypeName(typeName string) string {
 //
 // Returns "" for a column that owns no sequence, for one whose type is not
 // changing, and for a type a sequence cannot hold. It also returns "" when
-// neither side writes the column as a serial: the sequence is then one of its
-// own, and its type is what the desired schema declares for it.
+// neither side is a serial type. The sequence is then managed on its own, and
+// the desired schema declares its type.
 func alterSerialSequenceSQL(fqtn string, current, desired *model.Column) string {
 	if current.SerialSequence == nil {
 		return ""

@@ -210,9 +210,9 @@ A trigger blocks the change even when the column is only in its `UPDATE OF` list
 
 `DROP NOT NULL` runs after the table's constraint statements, so a primary key dropped in the same plan comes first. `DROP COLUMN` runs after the table's constraint, index, trigger, policy and comment statements.
 
-An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed. A column that turns from `serial` into an identity column gets a new sequence from `ADD IDENTITY`. The old one is dropped with `DROP SEQUENCE`, which requires `--allow-drop sequence`, unless the desired schema declares it.
+An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed. pistachio plans no `RESTART`. So a change that puts the current value outside the new range fails at apply with the server's error.
 
-pistachio plans no `RESTART`. So a change that puts the current value outside the new range fails at apply with the server's error.
+A column that changes from `serial` to identity gets a new sequence from `ADD IDENTITY`. pistachio drops the old sequence unless the desired schema declares it. The drop requires `--allow-drop sequence`.
 
 A column cannot become generated or plain in place, and a generated column's expression cannot change in place. Either is an error at plan time:
 
@@ -473,11 +473,16 @@ pistachio matches attributes by name. PostgreSQL cannot reorder them, so their o
 
 ## Sequences
 
-The sequence of an identity column is part of the column and is not managed as a sequence. So is the sequence of a `serial` column, as long as it keeps the name that `serial` gave it, `<table>_<column>_seq`, and the column is `smallint`, `integer` or `bigint` and draws its default from it. `dump` writes such a column as `serial`, `bigserial` or `smallserial`.
+pistachio manages every sequence except the two kinds that belong to a column:
 
-Any other sequence that a column owns is managed with its owner. That covers a sequence tied to a column with `OWNED BY`, and a `serial` sequence whose name no longer matches, as after `ALTER TABLE ... RENAME TO`. `dump` writes the sequence, the column with its own type and its `nextval` default, and `ALTER SEQUENCE ... OWNED BY` after the tables.
+- The sequence of an identity column.
+- The sequence of a `serial` column. A sequence is one when a `smallint`, `integer` or `bigint` column owns it, takes its default from it, and the sequence is still named `<table>_<column>_seq`. `dump` writes such a column as `serial`, `bigserial` or `smallserial`.
 
-A desired schema that writes the owning column as a `serial` type does not have to declare the sequence. Nor does one whose column keeps the `nextval` default or writes no default. The sequence is then taken as part of its column and is not dropped. A column that draws from a sequence it owns keeps its `nextval` default when the desired schema writes none, the way a `serial` column does, so leaving the default out does not remove it. A sequence whose owning table or column is dropped goes with it, and no `DROP SEQUENCE` is planned for it.
+Any other sequence that a column owns is managed together with its owner. Examples are a sequence attached with `OWNED BY`, and a `serial` sequence whose table was renamed. `dump` writes the sequence, then the column with its type and `nextval` default, then `ALTER SEQUENCE ... OWNED BY` after the tables.
+
+The desired schema does not have to declare an owned sequence when the column is written as a `serial` type, or when the column keeps its `nextval` default or has no default. The sequence then belongs to the column and is not dropped. As with a `serial` column, a default left out of the desired schema is not dropped.
+
+When the owning table or column is dropped, PostgreSQL drops the sequence too, so pistachio plans no `DROP SEQUENCE` for it.
 
 ### What is read
 
@@ -505,8 +510,6 @@ An option that is left out means the default that PostgreSQL gives it, not an un
 | Owner set or changed | `ALTER SEQUENCE ... OWNED BY`, after the table statements |
 | Owner removed | `ALTER SEQUENCE ... OWNED BY NONE`, before the table statements |
 | Renamed | `ALTER SEQUENCE ... RENAME TO` |
-
-A column that turns from `serial` into an identity column gets a new sequence from `ADD IDENTITY`. The old one is dropped with `DROP SEQUENCE`, which requires `--allow-drop sequence`, unless the desired schema declares it.
 
 pistachio plans no `RESTART`. So a change that puts the current value outside the new range fails at apply with the server's error. A sequence that a column default reads through `nextval` is created before that table and dropped after it. A rename of the sequence is applied to the default.
 
