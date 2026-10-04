@@ -1,6 +1,5 @@
--- Sequences a column owns under a name serial would not give them, and one
--- behind a serial column whose table was renamed. pista dump writes each with
--- its name, its options and its OWNED BY.
+-- Owned sequences with custom names, including a serial sequence that was
+-- renamed. pista dump writes each with its name, options and OWNED BY.
 CREATE SEQUENCE public.custom_user_id_seq
     AS integer
     START WITH 100
@@ -22,4 +21,4 @@ CREATE TABLE public.items (
     id serial NOT NULL
 );
 
-ALTER TABLE public.items RENAME TO goods;
+ALTER SEQUENCE public.items_id_seq RENAME TO item_ids;
