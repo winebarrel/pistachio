@@ -78,6 +78,8 @@ The classification comes from a table inside pistachio, applied to the statement
 - whether a column default calls a volatile function: one read of `pg_proc`
 - the rows and bytes, and the date when they were written: one read of `pg_class`, with the vacuum and analyze times that the server keeps in its statistics
 
+A type that the same plan creates does not exist yet, so the server cannot answer for it. A column type change to such a type is shown as `may rewrite`, as in a diff.
+
 Each read is skipped when nothing in the plan needs it. So a plan that only creates and drops tables, or a plan with no statements at all, reads no more than it would without the flag.
 
 

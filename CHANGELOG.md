@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [Unreleased]
+
+* With `--manage-routine`, a routine in a schema whose name needs quoting, such as `"App"`, no longer plans a `CREATE OR REPLACE` and a `DROP` on every run when the file qualifies a type in that schema.
+
+* `dump --split` now expands a leading `~`, as the other path options do.
+
+* `plan --explain` now writes `may rewrite` for a column type change to a type that the same plan creates. Before, the change got no comment.
+
 ## [1.75.0] - 2026-10-04
 
 * On PostgreSQL 18, `dump` now keeps a NOT NULL constraint name after a table or column rename. Before, it dropped every name ending in `_not_null`, so the restored constraint got a different name.

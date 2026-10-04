@@ -562,7 +562,8 @@ func (ex *explainer) alterTypeTouch(current string, desired *pg_query.TypeName) 
 	ch := catalog.TypeChange{Src: baseTypeString(current), Dst: typeNameString(desired)}
 	info, ok := ex.types[ch]
 	if !ok || !info.Known {
-		return touchNone
+		// The plan creates the type, so the server cannot tell yet.
+		return touchMayRewrite
 	}
 	if info.Constrained || strings.HasSuffix(current, "[]") != (len(desired.ArrayBounds) > 0) {
 		return touchRewrite

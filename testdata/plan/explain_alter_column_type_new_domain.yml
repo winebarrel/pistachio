@@ -1,5 +1,7 @@
 # The target type is created by the same plan, so the server cannot resolve it
-# at plan time. explain says nothing about such a change rather than guess.
+# at plan time. Whether the change rewrites the table is unknown, so it reads
+# as may rewrite, the way diff --explain shows a type change. The lock is
+# ACCESS EXCLUSIVE either way.
 explain: true
 init: |
   CREATE TABLE public.users (
@@ -18,4 +20,5 @@ desired: |
   );
 plan: |
   CREATE DOMAIN public.plain_text AS text;
+  -- may rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index may be rebuilt)
   ALTER TABLE public.users ALTER COLUMN note SET DATA TYPE public.plain_text;

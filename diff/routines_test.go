@@ -241,6 +241,29 @@ func TestDiffRoutines_SchemaQualifiedTypeIsTheSameRoutine(t *testing.T) {
 	assert.Empty(t, result.DisallowedDropStmts)
 }
 
+// The same holds when the schema name needs quoting, where the type carries
+// the quoted form.
+func TestDiffRoutines_SchemaQualifiedTypeQuotedSchema(t *testing.T) {
+	bare := newRoutine(func(r *model.Routine) {
+		r.Schema = "App"
+		r.Args[0].Type = "dom"
+		r.ReturnType = "dom"
+	})
+	qualified := newRoutine(func(r *model.Routine) {
+		r.Schema = "App"
+		r.Args[0].Type = `"App".dom`
+		r.ReturnType = `"App".dom`
+	})
+
+	assert.Equal(t, bare.FQRN(), qualified.FQRN(), "the two spellings must key alike")
+
+	result, err := DiffRoutines(newRoutineMap(bare), newRoutineMap(qualified), allowAllDrops{})
+	require.NoError(t, err)
+	assert.Empty(t, result.Stmts)
+	assert.Empty(t, result.DropStmts)
+	assert.Empty(t, result.DisallowedDropStmts)
+}
+
 // A DROP has to name the types as they were read, since PostgreSQL resolves
 // them under the same search_path the catalog reported them through.
 func TestDiffRoutines_DropNamesTypesAsRead(t *testing.T) {
