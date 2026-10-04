@@ -14,7 +14,9 @@ pistachio manages a PostgreSQL schema from SQL files. The files contain the whol
 
 ## How it works
 
-pistachio parses the files with [pg_query_go](https://github.com/pganalyze/pg_query_go), which wraps the PostgreSQL parser itself, so it reads the same SQL that PostgreSQL does. Every run computes the difference between the database and the files. There is no migration history to keep. A column added to the file becomes `ALTER TABLE ... ADD COLUMN`. A changed `CHECK` becomes a drop and an add. An object removed from the file is reported. It is dropped only when `--allow-drop` includes its type.
+Every run computes the difference between the database and the files. There is no migration history to keep. A column added to the file becomes `ALTER TABLE ... ADD COLUMN`. A changed `CHECK` becomes a drop and an add. An object removed from the file is reported. It is dropped only when `--allow-drop` includes its type.
+
+pistachio reads the SQL files with [pg_query_go](https://github.com/pganalyze/pg_query_go), a Go binding for the PostgreSQL parser. The files can use any SQL that PostgreSQL accepts.
 
 ![pistachio workflow](docs/workflow.svg)
 
