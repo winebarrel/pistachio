@@ -22,3 +22,20 @@ dump: |
   );
 
   ALTER SEQUENCE public.users_id_seq OWNED BY public.accounts.id;
+# PG18 keeps the automatic NOT NULL name across the table rename.
+dump_pg18: |
+  -- public.users_id_seq
+  CREATE SEQUENCE public.users_id_seq
+      AS integer
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 2147483647
+      CACHE 1;
+
+  -- public.accounts
+  CREATE TABLE public.accounts (
+      id integer DEFAULT nextval('users_id_seq'::regclass) CONSTRAINT users_id_not_null NOT NULL
+  );
+
+  ALTER SEQUENCE public.users_id_seq OWNED BY public.accounts.id;

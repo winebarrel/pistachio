@@ -26,3 +26,20 @@ applied: |
   );
 
   ALTER SEQUENCE public.t_id_seq OWNED BY public.t2.id;
+# PG18 keeps the automatic NOT NULL name across the table rename.
+applied_pg18: |
+  -- public.t_id_seq
+  CREATE SEQUENCE public.t_id_seq
+      AS integer
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 2147483647
+      CACHE 1;
+
+  -- public.t2
+  CREATE TABLE public.t2 (
+      id integer DEFAULT nextval('t_id_seq'::regclass) CONSTRAINT t_id_not_null NOT NULL
+  );
+
+  ALTER SEQUENCE public.t_id_seq OWNED BY public.t2.id;

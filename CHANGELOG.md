@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* On PostgreSQL 18, `dump` now keeps a NOT NULL constraint name after a table or column rename. Before, it dropped every name ending in `_not_null`, so the restored constraint got a different name.
+
 * **BREAKING**: Sequences owned by a column are now managed. Before, pistachio ignored them. With `--allow-drop sequence`, an owned sequence that is not in the desired schema is now dropped, unless the column uses it as its default. Dumps from earlier versions do not include such sequences.
 
 * `plan` and `apply` now emit `ALTER SEQUENCE ... OWNED BY` or `OWNED BY NONE` when the owner of a sequence changes.
@@ -15,8 +17,6 @@
 * A desired sequence with no owner now detaches a sequence of the same name that a column owns. Before, the plan created it again and apply failed.
 
 * When a `serial` column becomes an identity column or gets another default, its old sequence is now dropped. This needs `--allow-drop sequence`.
-
-* On PostgreSQL 18, `dump` now keeps a NOT NULL constraint name after a table or column rename. Before, it dropped every name ending in `_not_null`, so the restored constraint got a different name.
 
 ## [1.74.0] - 2026-10-04
 
