@@ -1007,6 +1007,7 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 		return folded
 	}
 	stripFuncSchema(node)
+	spreadVariadicArray(node)
 	return node
 }
 
@@ -1044,6 +1045,29 @@ func stripFuncSchema(node *pg_query.Node) {
 	if fc := node.GetFuncCall(); fc != nil {
 		fc.Funcname = lastNamePart(fc.Funcname)
 	}
+}
+
+// spreadVariadicArray turns f(x, VARIADIC ARRAY[a, b]) into f(x, a, b).
+//
+// PostgreSQL stores a call that spreads its arguments over a VARIADIC
+// parameter as an array passed with VARIADIC, so pg_get_expr and the other
+// deparsers hand back jsonb_extract_path_text(d, VARIADIC ARRAY['a'::text,
+// 'b'::text]) for jsonb_extract_path_text(d, 'a', 'b'). Spreading the array on
+// both sides makes the two compare equal; the text casts on the elements go
+// with the cast stripping above. An empty array and VARIADIC over a column or
+// another expression have no spread form, so they are left alone.
+func spreadVariadicArray(node *pg_query.Node) {
+	fc := node.GetFuncCall()
+	if fc == nil || !fc.FuncVariadic || len(fc.Args) == 0 {
+		return
+	}
+	last := len(fc.Args) - 1
+	arr := fc.Args[last].GetAArrayExpr()
+	if arr == nil || len(arr.Elements) == 0 {
+		return
+	}
+	fc.Args = append(fc.Args[:last:last], arr.Elements...)
+	fc.FuncVariadic = false
 }
 
 // foldNotDistinct turns NOT (a IS DISTINCT FROM b) into the equivalent

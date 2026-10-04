@@ -1,0 +1,11 @@
+# Spreading VARIADIC ARRAY[...] for the comparison must not hide a change to
+# an element.
+init: |
+  CREATE TABLE public.t (d jsonb);
+  CREATE INDEX t_expr_idx ON public.t (jsonb_extract_path_text(d, 'a', 'b'));
+desired: |
+  CREATE TABLE public.t (d jsonb);
+  CREATE INDEX t_expr_idx ON public.t (jsonb_extract_path_text(d, 'a', 'c'));
+plan: |
+  DROP INDEX public.t_expr_idx;
+  CREATE INDEX t_expr_idx ON public.t USING btree (jsonb_extract_path_text(d, 'a', 'c'));
