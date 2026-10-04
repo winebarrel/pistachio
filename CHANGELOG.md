@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.77.0] - 2026-10-04
 
 * pistachio now reads the column names in `CREATE VIEW v (x, y) AS ...`, and in `CREATE MATERIALIZED VIEW`. Before, it ignored them, so the view got the column names of its query and appeared in the plan on every run.
 
