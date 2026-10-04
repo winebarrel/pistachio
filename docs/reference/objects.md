@@ -212,7 +212,7 @@ A trigger blocks the change even when the column is only in its `UPDATE OF` list
 
 An identity column's sequence options, the `( ... )` after `AS IDENTITY`, are managed. pistachio plans no `RESTART`. So a change that puts the current value outside the new range fails at apply with the server's error.
 
-A column that changes from `serial` to identity gets a new sequence from `ADD IDENTITY`. pistachio drops the old sequence unless the desired schema declares it. The drop requires `--allow-drop sequence`.
+A column that changes from `serial` to identity gets a new sequence from `ADD IDENTITY`. pistachio drops the old sequence unless the desired schema declares it. It does the same for a `serial` column given another default. The drop requires `--allow-drop sequence`.
 
 A column cannot become generated or plain in place, and a generated column's expression cannot change in place. Either is an error at plan time:
 

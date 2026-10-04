@@ -924,6 +924,43 @@ Workaround: write the rule as `CREATE OR REPLACE RULE` under
 
 Origin: pg_dump fidelity comparison of the sample databases, 2026-09-23.
 
+## A serial sequence declared with another owner plans an unusable CREATE
+
+Priority: low.
+
+The sequence of a `serial` column is part of the column, so the catalog does
+not read it as a sequence. A desired schema can still declare it, with no
+owner or with another owner:
+
+```sql
+-- the database has: CREATE TABLE public.items (id serial NOT NULL);
+CREATE SEQUENCE public.items_id_seq AS integer;
+CREATE TABLE public.items (id integer GENERATED ALWAYS AS IDENTITY);
+```
+
+The plan then holds `CREATE SEQUENCE public.items_id_seq`, and apply fails
+with `relation "items_id_seq" already exists`. A declaration owned by the same
+column is taken as part of the column and works.
+
+Closing this means reading the sequence from the catalog whenever the desired
+schema declares it. Workaround: detach the sequence by hand with
+`ALTER SEQUENCE ... OWNED BY NONE` before the plan.
+
+Origin: review of #915, 2026-10-04.
+
+## `pista diff` drops an owned sequence the desired file leaves out
+
+Priority: low.
+
+`plan` keeps an owned sequence that the desired schema does not declare when
+the column still takes its default from it. It reads that from the catalog.
+`pista diff` reads the current side from a file, which does not say that the
+column's default uses the sequence. So with `--allow-drop sequence`, `diff`
+emits `DROP SEQUENCE` for it, and running that SQL fails because the default
+depends on the sequence. Workaround: declare the sequence in the desired file.
+
+Origin: review of #915, 2026-10-04.
+
 ## An identity column's sequence name is not managed
 
 Priority: low.

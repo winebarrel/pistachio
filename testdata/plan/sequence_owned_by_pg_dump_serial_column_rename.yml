@@ -1,0 +1,15 @@
+# A serial written as pg_dump writes it, in the same plan as a rename of its
+# column. The sequence is the column's, so it is not created again.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+desired: |
+  CREATE SEQUENCE public.t_id_seq AS integer;
+  CREATE TABLE public.t (
+      -- pista:renamed-from id
+      key integer DEFAULT nextval('t_id_seq'::regclass) NOT NULL
+  );
+  ALTER SEQUENCE public.t_id_seq OWNED BY public.t.key;
+plan: |
+  ALTER TABLE public.t RENAME COLUMN id TO key;

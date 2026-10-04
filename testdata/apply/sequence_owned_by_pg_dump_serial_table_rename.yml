@@ -1,0 +1,28 @@
+# A serial written as pg_dump writes it, applied with a rename of its table.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+desired: |
+  CREATE SEQUENCE public.t_id_seq AS integer;
+  -- pista:renamed-from public.t
+  CREATE TABLE public.t2 (
+      id integer DEFAULT nextval('t_id_seq'::regclass) NOT NULL
+  );
+  ALTER SEQUENCE public.t_id_seq OWNED BY public.t2.id;
+applied: |
+  -- public.t_id_seq
+  CREATE SEQUENCE public.t_id_seq
+      AS integer
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 2147483647
+      CACHE 1;
+
+  -- public.t2
+  CREATE TABLE public.t2 (
+      id integer DEFAULT nextval('t_id_seq'::regclass) NOT NULL
+  );
+
+  ALTER SEQUENCE public.t_id_seq OWNED BY public.t2.id;

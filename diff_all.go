@@ -364,7 +364,9 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	admit := func(seqs *orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence] {
 		return options.filterSequences(seqs).Filter(func(k string, _ *model.Sequence) bool { return !ignoredSet[k] })
 	}
-	filteredSequences, desiredSequences = reconcileOwnedSequences(filteredSequences, desiredSequences, filteredTables, desiredTables, admit)
+	var detached map[columnRef]bool
+	filteredSequences, desiredSequences, detached = reconcileOwnedSequences(filteredSequences, desiredSequences, filteredTables, desiredTables, admit)
+	filteredTables = withoutSerialSequence(filteredTables, detached)
 
 	// The Diff* functions below read the current side with renamed types and
 	// sequences carried into their references. orderStatements keeps the
@@ -747,22 +749,28 @@ func blockedError(prefix string, targets []string, dependents map[string][]catal
 //     identity column, the old sequence stays on the current side, or is
 //     added to it for a serial, so that it is dropped. ADD IDENTITY creates a
 //     new sequence. This is skipped when the desired schema declares the old
-//     one. admit applies the sequence filters and the ignore list to what is
-//     added.
+//     one. The same goes for a serial column given another default. admit
+//     applies the sequence filters and the ignore list to what is added.
+//
+// It also returns the current columns whose sequence the plan detaches or
+// moves. Such a column no longer keeps a default the desired schema leaves
+// out.
 func reconcileOwnedSequences(
 	current, desired *orderedmap.Map[string, *model.Sequence],
 	currentTables, desiredTables *orderedmap.Map[string, *model.Table],
 	admit func(*orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence],
-) (*orderedmap.Map[string, *model.Sequence], *orderedmap.Map[string, *model.Sequence]) {
+) (*orderedmap.Map[string, *model.Sequence], *orderedmap.Map[string, *model.Sequence], map[columnRef]bool) {
 	current, desired = current.Clone(), desired.Clone()
 
-	declared := map[string]bool{}
+	// Keyed by the current name, so a renamed sequence is found too.
+	declared := map[string]*model.Sequence{}
 	for k, seq := range desired.All() {
-		declared[k] = true
+		declared[k] = seq
 		if seq.RenameFrom != nil {
-			declared[*seq.RenameFrom] = true
+			declared[*seq.RenameFrom] = seq
 		}
 	}
+	detached := map[columnRef]bool{}
 
 	for _, e := range current.Entries() {
 		k, seq := e.Key, e.Value
@@ -770,7 +778,8 @@ func reconcileOwnedSequences(
 			continue
 		}
 		table, col := renamedColumn(desiredTables, seq.OwnerFQTN(), *seq.OwnerColumn)
-		if !declared[k] {
+		desiredSeq, ok := declared[k]
+		if !ok {
 			if col == nil || model.IsSerialType(col.TypeName) {
 				current.Delete(k)
 				continue
@@ -780,9 +789,16 @@ func reconcileOwnedSequences(
 			}
 			continue
 		}
-		if col != nil && (table.Name != *seq.OwnerTable || col.Name != *seq.OwnerColumn) {
+		ownerTable, ownerColumn := *seq.OwnerTable, *seq.OwnerColumn
+		if col != nil {
+			ownerTable, ownerColumn = table.Name, col.Name
+		}
+		if !desiredSeq.Owned() || *desiredSeq.OwnerTable != ownerTable || *desiredSeq.OwnerColumn != ownerColumn {
+			detached[columnRef{seq.OwnerFQTN(), *seq.OwnerColumn}] = true
+		}
+		if ownerTable != *seq.OwnerTable || ownerColumn != *seq.OwnerColumn {
 			renamed := *seq
-			renamed.OwnerTable, renamed.OwnerColumn = &table.Name, &col.Name
+			renamed.OwnerTable, renamed.OwnerColumn = &ownerTable, &ownerColumn
 			current.Set(k, &renamed)
 		}
 	}
@@ -796,11 +812,15 @@ func reconcileOwnedSequences(
 				continue
 			}
 			seq := &model.Sequence{Schema: t.Schema, Name: t.Name + "_" + col.Name + "_seq"}
-			if declared[seq.FQN()] {
+			if _, ok := declared[seq.FQN()]; ok {
 				continue
 			}
 			_, desiredCol := renamedColumn(desiredTables, t.FQTN(), col.Name)
-			if desiredCol == nil || !desiredCol.Identity.IsIdentityColumn() {
+			if desiredCol == nil {
+				continue
+			}
+			replaced := desiredCol.Default != nil && !diff.EqualDefault(col.Default, desiredCol.Default)
+			if !desiredCol.Identity.IsIdentityColumn() && !replaced {
 				continue
 			}
 			retired.Set(seq.FQN(), seq)
@@ -818,16 +838,68 @@ func reconcileOwnedSequences(
 		if _, ok := current.GetOk(k); ok {
 			continue
 		}
-		t, ok := currentTables.GetOk(seq.OwnerFQTN())
-		if !ok {
-			continue
-		}
-		if col, ok := t.Columns.GetOk(*seq.OwnerColumn); ok && col.SerialSequence != nil && *col.SerialSequence == k {
+		col := currentColumn(currentTables, desiredTables, seq.OwnerFQTN(), *seq.OwnerColumn)
+		if col != nil && col.SerialSequence != nil && *col.SerialSequence == k {
 			desired.Delete(k)
 		}
 	}
 
-	return current, desired
+	return current, desired, detached
+}
+
+// columnRef names a column by its table's qualified name.
+type columnRef struct {
+	table  string
+	column string
+}
+
+// currentColumn returns the current column that the desired column
+// fqtn.column is, following a table or column rename in the desired schema.
+func currentColumn(currentTables, desiredTables *orderedmap.Map[string, *model.Table], fqtn, column string) *model.Column {
+	if dt, ok := desiredTables.GetOk(fqtn); ok {
+		if dt.RenameFrom != nil {
+			if _, ok := currentTables.GetOk(*dt.RenameFrom); ok {
+				fqtn = *dt.RenameFrom
+			}
+		}
+		if dc, ok := dt.Columns.GetOk(column); ok && dc.RenameFrom != nil {
+			column = *dc.RenameFrom
+		}
+	}
+	t, ok := currentTables.GetOk(fqtn)
+	if !ok {
+		return nil
+	}
+	if col, ok := t.Columns.GetOk(column); ok {
+		return col
+	}
+	return nil
+}
+
+// withoutSerialSequence returns tables with SerialSequence cleared on the given
+// columns, copying only the tables it changes.
+func withoutSerialSequence(tables *orderedmap.Map[string, *model.Table], cols map[columnRef]bool) *orderedmap.Map[string, *model.Table] {
+	if len(cols) == 0 {
+		return tables
+	}
+	out := tables.Clone()
+	for ref := range cols {
+		t, ok := out.GetOk(ref.table)
+		if !ok {
+			continue
+		}
+		col, ok := t.Columns.GetOk(ref.column)
+		if !ok || col.SerialSequence == nil {
+			continue
+		}
+		copiedTable := *t
+		copiedTable.Columns = t.Columns.Clone()
+		copiedCol := *col
+		copiedCol.SerialSequence = nil
+		copiedTable.Columns.Set(ref.column, &copiedCol)
+		out.Set(ref.table, &copiedTable)
+	}
+	return out
 }
 
 // drawsFrom reports whether the current column that owns seq takes its default
