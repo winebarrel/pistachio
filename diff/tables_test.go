@@ -4802,6 +4802,35 @@ func TestSpreadVariadicArray(t *testing.T) {
 	})
 }
 
+func TestDropCaseElseNull(t *testing.T) {
+	t.Run("cast to text", func(t *testing.T) {
+		assert.True(t, equalSelectExpr(
+			"CASE WHEN (a > 0) THEN 'p'::text ELSE NULL::text END",
+			"CASE WHEN a > 0 THEN 'p' END"))
+	})
+
+	t.Run("cast to integer", func(t *testing.T) {
+		assert.True(t, equalSelectExpr(
+			"CASE a WHEN 1 THEN 10 ELSE NULL::integer END",
+			"CASE a WHEN 1 THEN 10 END"))
+	})
+
+	t.Run("bare NULL", func(t *testing.T) {
+		assert.True(t, equalSelectExpr(
+			"CASE WHEN (a > 0) THEN 'p'::text ELSE NULL::text END",
+			"CASE WHEN a > 0 THEN 'p' ELSE NULL END"))
+	})
+
+	t.Run("ELSE with a value is kept", func(t *testing.T) {
+		assert.False(t, equalSelectExpr(
+			"CASE WHEN (a > 0) THEN 'p'::text ELSE NULL::text END",
+			"CASE WHEN a > 0 THEN 'p' ELSE 'n' END"))
+		assert.False(t, equalSelectExpr(
+			"CASE WHEN (a > 0) THEN 1 ELSE 0 END",
+			"CASE WHEN a > 0 THEN 1 END"))
+	})
+}
+
 func TestEqualIndexDef_storageParamQuoting(t *testing.T) {
 	// pg_get_indexdef quotes the value, a file writes it bare.
 	assert.True(t, equalIndexDef(

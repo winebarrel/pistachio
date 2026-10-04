@@ -1,0 +1,10 @@
+# Dropping ELSE NULL for the comparison must not hide an ELSE with a value.
+init: |
+  CREATE TABLE public.t (a integer);
+  CREATE VIEW public.v AS SELECT CASE WHEN a > 0 THEN 'p' END AS k FROM public.t;
+desired: |
+  CREATE TABLE public.t (a integer);
+  CREATE VIEW public.v AS SELECT CASE WHEN a > 0 THEN 'p' ELSE 'n' END AS k FROM public.t;
+plan: |
+  CREATE OR REPLACE VIEW public.v AS
+  SELECT CASE WHEN a > 0 THEN 'p' ELSE 'n' END AS k FROM public.t;

@@ -1008,6 +1008,7 @@ func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 	}
 	stripFuncSchema(node)
 	spreadVariadicArray(node)
+	dropCaseElseNull(node)
 	return node
 }
 
@@ -1075,6 +1076,28 @@ func spreadVariadicArray(node *pg_query.Node) {
 	}
 	fc.Args = append(fc.Args[:last:last], arr.Elements...)
 	fc.FuncVariadic = false
+}
+
+// dropCaseElseNull removes an ELSE NULL from a CASE, with or without a cast.
+//
+// PostgreSQL stores a CASE written without ELSE with an ELSE NULL cast to the
+// result type, and the deparsers hand that back. The two mean the same, so
+// the ELSE is dropped on both sides. The cost is that an ELSE NULL::bigint
+// written to widen the result type of an integer CASE compares equal to no
+// ELSE at all. Telling those apart needs the type of the THEN results, which
+// the diff does not have.
+func dropCaseElseNull(node *pg_query.Node) {
+	ce := node.GetCaseExpr()
+	if ce == nil || ce.Defresult == nil {
+		return
+	}
+	def := ce.Defresult
+	if tc := def.GetTypeCast(); tc != nil {
+		def = tc.Arg
+	}
+	if def.GetAConst().GetIsnull() {
+		ce.Defresult = nil
+	}
 }
 
 // foldNotDistinct turns NOT (a IS DISTINCT FROM b) into the equivalent
