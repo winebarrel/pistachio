@@ -91,6 +91,30 @@ func TestRun_FmtCheckDiff(t *testing.T) {
 	assert.Contains(t, out.String(), path)
 }
 
+func TestRun_FmtStripRenamedFrom(t *testing.T) {
+	path := writeFile(t, "schema.sql", "-- pista:renamed-from old_users\nCREATE TABLE users (id integer);\n")
+
+	var out bytes.Buffer
+	code, stderr := runCLI(t, &out, "fmt", "--strip-renamed-from", path)
+	assert.Equal(t, 0, code)
+	assert.Empty(t, stderr)
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, "CREATE TABLE users (\n    id integer\n);\n", string(got))
+}
+
+// --strip-renamed-from would remove directives not applied yet on every run,
+// so the config file cannot set it.
+func TestRun_StripRenamedFromInConfig(t *testing.T) {
+	config := writeFile(t, "pista.yml", "strip-renamed-from: true\n")
+
+	var out bytes.Buffer
+	code, stderr := runCLI(t, &out, "--config", config, "fmt", "schema.sql")
+	assert.Equal(t, 80, code)
+	assert.Contains(t, stderr, "error: config key(s) only for the command line: strip-renamed-from")
+}
+
 func TestRun_Help(t *testing.T) {
 	var out bytes.Buffer
 	code, stderr := runCLI(t, &out, "--help")

@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* `fmt --strip-renamed-from` removes every `-- pista:renamed-from` directive.
+
 * With `--manage-routine`, a routine in a schema whose name needs quoting, such as `"App"`, no longer plans a `CREATE OR REPLACE` and a `DROP` on every run when the file qualifies a type in that schema.
 
 * `dump --split` now expands a leading `~`, as the other path options do.

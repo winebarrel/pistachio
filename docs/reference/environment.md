@@ -8,6 +8,7 @@ These options have no variable:
 - `--split`
 - `--omit-schema`
 - `--force`
+- `--strip-renamed-from`
 - `--pager`
 
 `PISTA_PAGER` contains the pager command. It does not stand for the `--pager` flag.

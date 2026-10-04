@@ -130,6 +130,115 @@ func TestFmt_Run_CheckFormatted(t *testing.T) {
 	assert.Empty(t, buf.String())
 }
 
+const renamedSQL = `-- pista:renamed-from public.old_items
+create table public.items (id integer not null,
+    -- pista:renamed-from title
+
+    name text);
+
+-- pista:renamed-from old_idx
+create index items_name_idx on public.items (name);
+`
+
+const strippedSQL = `create table public.items (
+    id integer not null,
+
+    name text
+);
+
+create index items_name_idx on public.items (name);
+`
+
+// --strip-renamed-from removes the directives and formats what is left.
+func TestFmt_Run_StripRenamedFrom(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", renamedSQL)
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{path}, StripRenamedFrom: true}
+	require.NoError(t, cmd.Run(&buf))
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, strippedSQL, string(got))
+	assert.Equal(t, path+"\n", buf.String())
+}
+
+// A directive between two blank lines leaves them both, and formatting folds
+// them into one.
+func TestFmt_Run_StripRenamedFromBlankLines(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", formattedSQL+"\n-- pista:renamed-from old_idx\n\n"+
+		"create index items_name_idx on public.items (name);\n")
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{path}, StripRenamedFrom: true}
+	require.NoError(t, cmd.Run(&buf))
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, formattedSQL+"\ncreate index items_name_idx on public.items (name);\n", string(got))
+}
+
+// A file that holds nothing but directives ends up empty.
+func TestFmt_Run_StripRenamedFromOnly(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", "-- pista:renamed-from old_items\n")
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{path}, StripRenamedFrom: true}
+	require.NoError(t, cmd.Run(&buf))
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+	assert.Equal(t, path+"\n", buf.String())
+}
+
+// Without the flag, the directives stay.
+func TestFmt_Run_KeepsRenamedFrom(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", "-- pista:renamed-from old_items\n"+formattedSQL)
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{path}}
+	require.NoError(t, cmd.Run(&buf))
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, "-- pista:renamed-from old_items\n"+formattedSQL, string(got))
+	assert.Empty(t, buf.String())
+}
+
+// With --check, a formatted file that still has a directive is reported and
+// left as it was.
+func TestFmt_Run_CheckStripRenamedFrom(t *testing.T) {
+	content := "-- pista:renamed-from old_items\n" + formattedSQL
+	path := writeSQLFile(t, "schema.sql", content)
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{path}, Check: true, StripRenamedFrom: true}
+	err := cmd.Run(&buf)
+	require.ErrorIs(t, err, command.ErrFormatDiff)
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, content, string(got))
+	assert.Equal(t, path+"\n", buf.String())
+}
+
+// A file that does not scan is reported and left as it was.
+func TestFmt_Run_StripRenamedFromScanError(t *testing.T) {
+	broken := "-- pista:renamed-from old_items\nSELECT 'abc\n"
+	path := writeSQLFile(t, "broken.sql", broken)
+
+	var buf bytes.Buffer
+	cmd := &command.Fmt{Files: []string{path}, StripRenamedFrom: true}
+	err := cmd.Run(&buf)
+	require.Error(t, err)
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, broken, string(got))
+	assert.Empty(t, buf.String())
+}
+
 func TestFmt_Run_ParseErrorLeavesFile(t *testing.T) {
 	broken := "CREATE TABLE (;\n"
 	path := writeSQLFile(t, "broken.sql", broken)
