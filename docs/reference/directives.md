@@ -63,7 +63,9 @@ See [Renaming objects](../guides/renaming.md) for column rename caveats.
 
 ## -- pista:retype-using
 
-Gives the `USING` expression of `ALTER COLUMN ... SET DATA TYPE` for a column whose type changes. The argument is the expression. It computes the new column value from the old one, and it is written into the statement as it is. Write the directive inside `CREATE TABLE` on the line before the column.
+Gives the `USING` expression for a column type change. The expression computes the new column value from the old one. pistachio adds it to `ALTER COLUMN ... SET DATA TYPE` without changing it. Write the directive inside `CREATE TABLE`, on the line before the column.
+
+Without a `USING` expression, PostgreSQL converts the values with an assignment cast. If the two types have no implicit or assignment cast between them, the type change fails. `text` to an enum is an example.
 
 ```sql
 CREATE TYPE public.item_status AS ENUM ('active', 'inactive');
@@ -76,15 +78,17 @@ CREATE TABLE public.items (
 );
 ```
 
+If the column was `text`, the plan is:
+
 ```sql
 ALTER TABLE public.items ALTER COLUMN status DROP DEFAULT;
 ALTER TABLE public.items ALTER COLUMN status SET DATA TYPE public.item_status USING status::public.item_status;
 ALTER TABLE public.items ALTER COLUMN status SET DEFAULT 'active';
 ```
 
-Without the directive, PostgreSQL converts the values with an assignment cast, and a type change with no implicit or assignment cast fails. PostgreSQL does not apply the `USING` expression to the default. So when the column has a default, it is dropped before the type change and set again after it. A serial column keeps its default, and a generated column has none. Indexes and constraints that use the column are not handled this way, and a type change can still fail on them.
+PostgreSQL does not apply the `USING` expression to the column default. So if the column has a default, pistachio drops it before the type change and sets it again after. A serial column keeps its default. Indexes and constraints that use the column get no such handling, and the type change can still fail on them.
 
-When the type does not change, the directive does nothing. So it can stay in the file after the change is applied.
+If the type does not change, the directive does nothing. You can leave it in the file after the change is applied.
 
 ## -- pista:execute
 

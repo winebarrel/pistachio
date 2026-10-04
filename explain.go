@@ -447,9 +447,15 @@ func (ex *explainer) classifyAlterTableCmd(key string, t *model.Table, recurse b
 
 	case pg_query.AlterTableType_AT_AlterColumnType:
 		col := ex.currentColumn(key, t, cmd.GetName())
-		tn := cmd.GetDef().GetColumnDef().GetTypeName()
+		cd := cmd.GetDef().GetColumnDef()
+		tn := cd.GetTypeName()
 		if col == nil || tn == nil {
 			return explainEffect{}
+		}
+		// A USING expression other than the column itself, cast or not,
+		// computes new values, so every row is rewritten whatever the types.
+		if u := cd.GetRawDefault(); u != nil && !isColumnCast(u, cmd.GetName()) {
+			return self(touchRewrite, blockAll)
 		}
 		return self(ex.alterTypeTouch(col.TypeName, tn), blockAll)
 
@@ -550,6 +556,16 @@ func (ex *explainer) isConstrainedDomain(tn *pg_query.TypeName) bool {
 		}
 	}
 	return false
+}
+
+// isColumnCast reports whether expr is the named column, under any number of
+// casts. As a USING expression it leaves the values as the types alone would.
+func isColumnCast(expr *pg_query.Node, name string) bool {
+	for expr.GetTypeCast() != nil {
+		expr = expr.GetTypeCast().GetArg()
+	}
+	fields := expr.GetColumnRef().GetFields()
+	return len(fields) > 0 && fields[len(fields)-1].GetString_().GetSval() == name
 }
 
 // alterTypeTouch decides what SET DATA TYPE does to the rows. A change the

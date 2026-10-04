@@ -35,7 +35,7 @@ A rewrite also says how many indexes it builds again. A partitioned table shows 
 
 A rewrite comes from:
 
-- a column type change that is not a widening
+- a column type change that is not a widening, or one whose `USING` expression is more than a cast of the column
 - `ADD COLUMN` with a volatile default, an identity, a generated expression or a serial type
 - `SET LOGGED` and `SET UNLOGGED`
 
