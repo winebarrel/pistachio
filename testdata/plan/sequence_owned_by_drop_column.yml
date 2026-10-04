@@ -1,0 +1,15 @@
+# Dropping a column drops the sequence it owns, so no DROP SEQUENCE is planned
+# for it.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val bigint DEFAULT nextval('my_seq'::regclass) NOT NULL
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
+desired: |
+  CREATE TABLE public.t (
+      id integer
+  );
+plan: |
+  ALTER TABLE public.t DROP COLUMN val;

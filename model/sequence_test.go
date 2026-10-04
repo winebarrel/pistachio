@@ -28,9 +28,28 @@ func TestSequence_FQN(t *testing.T) {
 func TestSequence_Owned(t *testing.T) {
 	seq := sampleSequence()
 	assert.False(t, seq.Owned())
-	owner := "public.users"
-	seq.OwnerTable = &owner
+	assert.Empty(t, seq.OwnerFQTN())
+	assert.Empty(t, seq.OwnedBySQL())
+	table, column := "users", "id"
+	seq.OwnerTable, seq.OwnerColumn = &table, &column
 	assert.True(t, seq.Owned())
+	assert.Equal(t, "public.users", seq.OwnerFQTN())
+	assert.Equal(t, "ALTER SEQUENCE public.order_seq OWNED BY public.users.id;", seq.OwnedBySQL())
+}
+
+func TestSequencesOwnedBySQL(t *testing.T) {
+	owned := sampleSequence()
+	table, column := "users", "id"
+	owned.OwnerTable, owned.OwnerColumn = &table, &column
+	standalone := sampleSequence()
+	standalone.Name = "other_seq"
+
+	seqs := orderedmap.New[string, *model.Sequence]()
+	seqs.Set(standalone.FQN(), standalone)
+	assert.Empty(t, model.SequencesOwnedBySQL(seqs))
+
+	seqs.Set(owned.FQN(), owned)
+	assert.Equal(t, "ALTER SEQUENCE public.order_seq OWNED BY public.users.id;", model.SequencesOwnedBySQL(seqs))
 }
 
 func TestSequence_SQL(t *testing.T) {

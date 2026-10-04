@@ -9,7 +9,14 @@ import (
 )
 
 type SequenceDiffResult struct {
-	Stmts               []string
+	Stmts []string
+	// OwnedByStmts tie a sequence to a column. They run after the table
+	// statements, since the column has to exist by then.
+	OwnedByStmts []string
+	// DisownStmts detach a sequence from its column. They run before the
+	// table statements, so that a table or column dropped in the same plan
+	// no longer takes the sequence with it.
+	DisownStmts         []string
 	DropStmts           []string
 	DisallowedDropStmts []string
 }
@@ -17,6 +24,8 @@ type SequenceDiffResult struct {
 func DiffSequences(current, desired *orderedmap.Map[string, *model.Sequence], dc DropChecker) (*SequenceDiffResult, error) {
 	dc = normalizeDropChecker(dc)
 	result := &SequenceDiffResult{}
+
+	original := current
 
 	// Detect renames
 	renameStmts, current, err := detectSequenceRenames(current, desired)
@@ -32,6 +41,9 @@ func DiffSequences(current, desired *orderedmap.Map[string, *model.Sequence], dc
 			if commentSQL := desiredSeq.CommentSQL(); commentSQL != "" {
 				result.Stmts = append(result.Stmts, commentSQL)
 			}
+			if ownedBySQL := desiredSeq.OwnedBySQL(); ownedBySQL != "" {
+				result.OwnedByStmts = append(result.OwnedByStmts, ownedBySQL)
+			}
 		}
 	}
 
@@ -42,6 +54,23 @@ func DiffSequences(current, desired *orderedmap.Map[string, *model.Sequence], dc
 			continue
 		}
 		result.Stmts = append(result.Stmts, diffSequence(k, currentSeq, desiredSeq)...)
+
+		if equalPtr(currentSeq.OwnerTable, desiredSeq.OwnerTable) && equalPtr(currentSeq.OwnerColumn, desiredSeq.OwnerColumn) {
+			continue
+		}
+		if desiredSeq.Owned() {
+			result.OwnedByStmts = append(result.OwnedByStmts, desiredSeq.OwnedBySQL())
+			continue
+		}
+		// The detach runs before the rename, so it names the sequence the
+		// way the database still does.
+		name := k
+		if from := desiredSeq.RenameFrom; from != nil {
+			if _, ok := original.GetOk(*from); ok {
+				name = *from
+			}
+		}
+		result.DisownStmts = append(result.DisownStmts, "ALTER SEQUENCE "+name+" OWNED BY NONE;")
 	}
 
 	// Dropped sequences. When the sequence-drop policy disallows it, emit a commented DROP.

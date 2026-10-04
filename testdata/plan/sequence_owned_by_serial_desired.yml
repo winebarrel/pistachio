@@ -1,0 +1,15 @@
+# A desired schema that writes a serial column claims the sequence the column
+# owns in the database, whatever its name. A table renamed after its serial
+# column was created keeps the old sequence name.
+init: |
+  CREATE TABLE public.users (
+      id bigserial NOT NULL
+  );
+  ALTER TABLE public.users RENAME TO accounts;
+desired: |
+  CREATE TABLE public.accounts (
+      id bigserial NOT NULL
+  );
+plan: ""
+count:
+  sequences: 1

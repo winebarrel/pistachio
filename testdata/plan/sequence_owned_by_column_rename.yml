@@ -1,0 +1,17 @@
+# Renaming the owning column carries the ownership, so the rename alone plans
+# no OWNED BY.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      a integer
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.a;
+desired: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      -- pista:renamed-from a
+      b integer
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.b;
+plan: |
+  ALTER TABLE public.t RENAME COLUMN a TO b;

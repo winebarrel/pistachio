@@ -298,10 +298,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	desiredCompositeTypes := options.filterCompositeTypes(client.reverseRemapCompositeTypeSchemas(desired.CompositeTypes))
 	desiredTables := options.filterTables(client.reverseRemapTableSchemas(desired.Tables))
 	desiredViews := options.filterViews(client.reverseRemapViewSchemas(desired.Views))
-	// Only standalone sequences are managed; sequences a desired CREATE
-	// SEQUENCE ties to a column via OWNED BY are excluded, matching the
-	// catalog side (which already drops serial/identity-owned sequences).
-	desiredSequences := options.filterSequences(standaloneSequences(client.reverseRemapSequenceSchemas(desired.Sequences)))
+	desiredSequences := options.filterSequences(client.reverseRemapSequenceSchemas(desired.Sequences))
 	desiredRoutines := options.filterRoutines(client.reverseRemapRoutineSchemas(desired.Routines))
 
 	// Objects marked -- pista:ignore are unmanaged: drop them from both the
@@ -359,6 +356,10 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	if options.AssumeValidated {
 		assumeValidatedConstraints(filteredTables, desiredTables, filteredDomains, desiredDomains)
 	}
+
+	// After the state hash, which reads the database alone: this settles the
+	// owned sequences against what the desired schema writes.
+	filteredSequences, desiredSequences = reconcileOwnedSequences(filteredSequences, desiredSequences, filteredTables, desiredTables)
 
 	// The Diff* functions below read the current side with renamed types and
 	// sequences carried into their references. orderStatements keeps the
@@ -724,12 +725,137 @@ func blockedError(prefix string, targets []string, dependents map[string][]catal
 	return nil
 }
 
-// standaloneSequences returns only the sequences not owned by a table column.
-// A desired CREATE SEQUENCE with OWNED BY ties the sequence to a column, so it
-// is treated as unmanaged, keeping the desired side symmetric with the catalog
-// side (which already excludes serial/identity-owned sequences).
-func standaloneSequences(sequences *orderedmap.Map[string, *model.Sequence]) *orderedmap.Map[string, *model.Sequence] {
-	return sequences.Filter(func(_ string, s *model.Sequence) bool { return !s.Owned() })
+// reconcileOwnedSequences settles the sequences a column owns between the
+// two sides. It returns copies and leaves the maps it is given alone.
+//
+//   - A current sequence that the desired schema does not declare goes with
+//     its owner when the desired schema drops the owning table or column, so
+//     no DROP SEQUENCE is planned for it. It is the column's when the desired
+//     schema writes the owning column as a serial, or leaves the column's
+//     default drawing from it: a schema written before pistachio managed
+//     owned sequences does either, the first after a table rename.
+//   - A desired sequence owned by a column that the database reads as a
+//     serial drawing from it is that column's, as pg_dump writes a serial.
+//   - A current owner is carried through a table or column rename, so that
+//     the rename alone plans no OWNED BY.
+//   - The sequence of a column that becomes an identity column is dropped,
+//     unless the desired schema declares it. ADD IDENTITY creates a sequence
+//     of its own, and the old one would be left owned by a column that no
+//     longer draws from it.
+func reconcileOwnedSequences(
+	current, desired *orderedmap.Map[string, *model.Sequence],
+	currentTables, desiredTables *orderedmap.Map[string, *model.Table],
+) (*orderedmap.Map[string, *model.Sequence], *orderedmap.Map[string, *model.Sequence]) {
+	current, desired = current.Clone(), desired.Clone()
+
+	declared := map[string]bool{}
+	for k, seq := range desired.All() {
+		declared[k] = true
+		if seq.RenameFrom != nil {
+			declared[*seq.RenameFrom] = true
+		}
+	}
+
+	for _, e := range current.Entries() {
+		k, seq := e.Key, e.Value
+		if !seq.Owned() {
+			continue
+		}
+		table, col := renamedColumn(desiredTables, seq.OwnerFQTN(), *seq.OwnerColumn)
+		if !declared[k] {
+			if col == nil || model.IsSerialType(col.TypeName) || drawsFrom(currentTables, seq, col) {
+				current.Delete(k)
+			}
+			continue
+		}
+		if col != nil && (table.Name != *seq.OwnerTable || col.Name != *seq.OwnerColumn) {
+			renamed := *seq
+			renamed.OwnerTable, renamed.OwnerColumn = &table.Name, &col.Name
+			current.Set(k, &renamed)
+		}
+	}
+
+	for _, t := range currentTables.All() {
+		for _, col := range t.Columns.All() {
+			if col.SerialSequence == nil || declared[*col.SerialSequence] {
+				continue
+			}
+			if _, ok := current.GetOk(*col.SerialSequence); ok {
+				continue
+			}
+			_, desiredCol := renamedColumn(desiredTables, t.FQTN(), col.Name)
+			if desiredCol == nil || !desiredCol.Identity.IsIdentityColumn() || col.Identity.IsIdentityColumn() {
+				continue
+			}
+			// Only the key reaches the DROP, so the name is what the catalog
+			// printed.
+			current.Set(*col.SerialSequence, &model.Sequence{
+				Schema: t.Schema,
+				Name:   strings.TrimPrefix(*col.SerialSequence, model.Ident(t.Schema)+"."),
+			})
+		}
+	}
+
+	for _, e := range desired.Entries() {
+		k, seq := e.Key, e.Value
+		if !seq.Owned() {
+			continue
+		}
+		if _, ok := current.GetOk(k); ok {
+			continue
+		}
+		t, ok := currentTables.GetOk(seq.OwnerFQTN())
+		if !ok {
+			continue
+		}
+		if col, ok := t.Columns.GetOk(*seq.OwnerColumn); ok && col.SerialSequence != nil && *col.SerialSequence == k {
+			desired.Delete(k)
+		}
+	}
+
+	return current, desired
+}
+
+// drawsFrom reports whether the current column that owns seq draws its default
+// from it and the desired column leaves that default in place. A desired
+// column that writes no default leaves it, as the column diff does.
+func drawsFrom(currentTables *orderedmap.Map[string, *model.Table], seq *model.Sequence, desired *model.Column) bool {
+	t, ok := currentTables.GetOk(seq.OwnerFQTN())
+	if !ok {
+		return false
+	}
+	col, ok := t.Columns.GetOk(*seq.OwnerColumn)
+	if !ok || col.SerialSequence == nil || *col.SerialSequence != seq.FQN() {
+		return false
+	}
+	return desired.Default == nil || diff.EqualDefault(col.Default, desired.Default)
+}
+
+// renamedColumn returns the desired table and column that the current column
+// fqtn.column is, under its own names or under the names a rename gives it.
+// It returns nil when the desired schema has no such column.
+func renamedColumn(tables *orderedmap.Map[string, *model.Table], fqtn, column string) (*model.Table, *model.Column) {
+	t, ok := tables.GetOk(fqtn)
+	if !ok {
+		for _, candidate := range tables.All() {
+			if candidate.RenameFrom != nil && *candidate.RenameFrom == fqtn {
+				t, ok = candidate, true
+				break
+			}
+		}
+	}
+	if !ok {
+		return nil, nil
+	}
+	if col, ok := t.Columns.GetOk(column); ok && col.RenameFrom == nil {
+		return t, col
+	}
+	for _, col := range t.Columns.All() {
+		if col.RenameFrom != nil && *col.RenameFrom == column {
+			return t, col
+		}
+	}
+	return nil, nil
 }
 
 // removeIgnored deletes every entry the ignored predicate matches from the
@@ -898,6 +1024,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	var stmts []string
 	stmts = append(stmts, diffs.Tables.FKDropStmts...)
 	stmts = append(stmts, sortedSQL(preDropStmts, true)...)
+	stmts = append(stmts, diffs.Sequences.DisownStmts...)
 	stmts = append(stmts, sortedSQL(createStmts, false)...)
 	stmts = append(stmts, diffs.Tables.PartitionedIndexStmts...)
 	// The logged <-> unlogged transitions carry their own order, so they are
@@ -905,6 +1032,7 @@ func orderStatements(current, desired *schemaObjects, diffs *objectDiffs) []stri
 	// puts them after any rename, and before the FK adds, which together with
 	// the FK drops above leaves exactly the keys that stay in place.
 	stmts = append(stmts, diffs.Tables.PersistenceStmts...)
+	stmts = append(stmts, diffs.Sequences.OwnedByStmts...)
 	stmts = append(stmts, sortedSQL(postDropStmts, true)...)
 	stmts = append(stmts, diffs.Tables.FKAddStmts...)
 	stmts = append(stmts, sortedSQL(viewCreateStmts, false)...)
@@ -926,6 +1054,7 @@ func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string
 	stmts = append(stmts, diffs.Domains.Stmts...)
 	stmts = append(stmts, diffs.CompositeTypes.Stmts...)
 	stmts = append(stmts, diffs.Sequences.Stmts...)
+	stmts = append(stmts, diffs.Sequences.DisownStmts...)
 	stmts = append(stmts, diffs.Routines.AtomicDropStmts...)
 	stmts = append(stmts, sortViewStmts(diffs.Views.DropStmts, current.Views, true)...)
 	stmts = append(stmts, diffs.Routines.Stmts...)
@@ -933,6 +1062,7 @@ func fallbackOrder(current, desired *schemaObjects, diffs *objectDiffs) []string
 	stmts = append(stmts, diffs.Tables.Stmts...)
 	stmts = append(stmts, diffs.Tables.PartitionedIndexStmts...)
 	stmts = append(stmts, diffs.Tables.PersistenceStmts...)
+	stmts = append(stmts, diffs.Sequences.OwnedByStmts...)
 	stmts = append(stmts, diffs.Tables.DropStmts...)
 	stmts = append(stmts, diffs.Sequences.DropStmts...)
 	stmts = append(stmts, diffs.Routines.DropStmts...)

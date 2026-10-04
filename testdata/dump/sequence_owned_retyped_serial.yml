@@ -1,0 +1,23 @@
+# A serial column moved to a type a sequence cannot hold is written with its
+# type and default, and its sequence is written out.
+init: |
+  CREATE TABLE public.t (
+      id serial NOT NULL
+  );
+  ALTER TABLE public.t ALTER COLUMN id SET DATA TYPE text;
+dump: |
+  -- public.t_id_seq
+  CREATE SEQUENCE public.t_id_seq
+      AS integer
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 2147483647
+      CACHE 1;
+
+  -- public.t
+  CREATE TABLE public.t (
+      id text DEFAULT nextval('t_id_seq'::regclass) NOT NULL
+  );
+
+  ALTER SEQUENCE public.t_id_seq OWNED BY public.t.id;

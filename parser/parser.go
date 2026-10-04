@@ -2084,9 +2084,8 @@ func defElemInt64(de *pg_query.DefElem) (int64, bool, error) {
 }
 
 // applyAlterSeqOwnedBy records an ALTER SEQUENCE OWNED BY clause on the
-// already-parsed sequence, marking it unmanaged. The catalog excludes owned
-// sequences, so without this every plan proposes creating a sequence that
-// already exists. Other ALTER SEQUENCE options are not tracked.
+// already-parsed sequence. OWNED BY NONE clears the owner. Other ALTER
+// SEQUENCE options are not tracked.
 func applyAlterSeqOwnedBy(as *pg_query.AlterSeqStmt, defaultSchema string, sequences *orderedmap.Map[string, *model.Sequence], offset int32) (*model.Sequence, error) {
 	if as.Sequence == nil {
 		return nil, nil
@@ -2144,9 +2143,8 @@ func warnIgnoredAlterSeqOptions(sql string, spans []fileSpan, rawStmt *pg_query.
 }
 
 // parseSeqOwnedBy extracts the owner table and column from an OWNED BY clause.
-// OWNED BY NONE (list ["none"]) yields nil owner. The pipeline only manages
-// standalone sequences, so an owned sequence is filtered out downstream; the
-// values here just mark it as owned.
+// OWNED BY NONE (list ["none"]) yields nil owner. A schema on the table is
+// dropped: PostgreSQL requires the table to be in the sequence's schema.
 func parseSeqOwnedBy(arg *pg_query.Node) (*string, *string) {
 	list := arg.GetList()
 	if list == nil {

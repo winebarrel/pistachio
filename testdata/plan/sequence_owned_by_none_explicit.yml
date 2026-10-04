@@ -1,0 +1,15 @@
+# ALTER SEQUENCE ... OWNED BY NONE in the desired schema detaches the sequence.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.id;
+desired: |
+  CREATE SEQUENCE public.my_seq OWNED BY public.t.id;
+  CREATE TABLE public.t (
+      id integer
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY NONE;
+plan: |
+  ALTER SEQUENCE public.my_seq OWNED BY NONE;

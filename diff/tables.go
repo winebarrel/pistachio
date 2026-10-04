@@ -747,7 +747,9 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	if !current.Generated.IsStoredGeneratedColumn() && !desired.Generated.IsStoredGeneratedColumn() && !desIsIdent {
 		// A serial column's nextval() comes with the type, so a desired side
 		// that writes no default leaves it alone. One that writes a default is
-		// compared with it.
+		// compared with it. The same goes for any column that draws from a
+		// sequence it owns: a dump made before pistachio wrote such a column
+		// with its default left the default out.
 		currentDefault := current.Default
 		if current.SerialSequence != nil && desired.Default == nil {
 			currentDefault = nil
@@ -919,9 +921,14 @@ func alterTypeName(typeName string) string {
 // type's defaults.
 //
 // Returns "" for a column that owns no sequence, for one whose type is not
-// changing, and for a type a sequence cannot hold.
+// changing, and for a type a sequence cannot hold. It also returns "" when
+// neither side writes the column as a serial: the sequence is then one of its
+// own, and its type is what the desired schema declares for it.
 func alterSerialSequenceSQL(fqtn string, current, desired *model.Column) string {
 	if current.SerialSequence == nil {
+		return ""
+	}
+	if !isSerialType(current.TypeName) && !isSerialType(desired.TypeName) {
 		return ""
 	}
 	// Only a type change reaches the sequence. Without this the statement
@@ -2501,6 +2508,12 @@ func equalDefault(current, desired *string) bool {
 	curStr, deparseErrCur := pg_query.Deparse(curResult)
 	desStr, deparseErrDes := pg_query.Deparse(desResult)
 	return deparseErrCur == nil && deparseErrDes == nil && curStr == desStr
+}
+
+// EqualDefault reports whether two column defaults are the same expression,
+// the way the column diff compares them.
+func EqualDefault(current, desired *string) bool {
+	return equalDefault(current, desired)
 }
 
 // expressionCast returns node's TypeCast when it casts something other than a

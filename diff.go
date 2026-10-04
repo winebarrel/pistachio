@@ -47,8 +47,7 @@ func (client *Client) Diff(options *DiffOptions) (*PlanResult, error) {
 	filterDesiredBySchemas(current, client.Schemas, nil)
 
 	// Routines mirror the catalog side: read only when --manage-routine asked
-	// for it. Owned sequences are excluded the way the desired side excludes
-	// them, so a sequence tied to a column stays unmanaged on both sides.
+	// for it.
 	currentRoutines := orderedmap.New[string, *model.Routine]()
 	if options.ManageRoutine {
 		currentRoutines = current.Routines
@@ -60,7 +59,7 @@ func (client *Client) Diff(options *DiffOptions) (*PlanResult, error) {
 		Enums:          current.Enums,
 		Domains:        current.Domains,
 		CompositeTypes: current.CompositeTypes,
-		Sequences:      standaloneSequences(current.Sequences),
+		Sequences:      current.Sequences,
 		Routines:       currentRoutines,
 	}, &diffAllOptions{
 		FilterOptions:            options.FilterOptions,

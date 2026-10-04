@@ -1,5 +1,5 @@
-# The sequence name in ALTER SEQUENCE may omit the schema; it resolves to the
-# target schema, so the owner is recorded on that sequence.
+# A desired sequence with no owner, of the same name as one a column owns in
+# the database, detaches it. It is not created again.
 init: |
   CREATE SEQUENCE public.my_seq;
   CREATE TABLE public.t (
@@ -8,10 +8,12 @@ init: |
   );
   ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
 desired: |
-  CREATE SEQUENCE my_seq;
+  CREATE SEQUENCE public.my_seq;
   CREATE TABLE public.t (
       id integer,
       val integer DEFAULT 42
   );
-  ALTER SEQUENCE my_seq OWNED BY public.t.val;
-plan: ""
+plan: |
+  ALTER SEQUENCE public.my_seq OWNED BY NONE;
+count:
+  sequences: 1

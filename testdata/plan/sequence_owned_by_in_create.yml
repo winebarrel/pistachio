@@ -1,0 +1,23 @@
+# CREATE SEQUENCE ... OWNED BY declares the owner too. The OWNED BY is planned
+# on its own after the table, which does not exist when the sequence is
+# created.
+init: ""
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL
+  );
+  CREATE SEQUENCE public.s OWNED BY public.t.id;
+plan: |
+  CREATE SEQUENCE public.s
+      AS bigint
+      START WITH 1
+      INCREMENT BY 1
+      MINVALUE 1
+      MAXVALUE 9223372036854775807
+      CACHE 1;
+  CREATE TABLE public.t (
+      id integer NOT NULL
+  );
+  ALTER SEQUENCE public.s OWNED BY public.t.id;
+count:
+  sequences: 0

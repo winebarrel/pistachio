@@ -1,0 +1,16 @@
+# OWNED BY runs after the ADD COLUMN that creates the owner.
+init: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer
+  );
+desired: |
+  CREATE SEQUENCE public.my_seq;
+  CREATE TABLE public.t (
+      id integer,
+      val bigint DEFAULT nextval('my_seq'::regclass) NOT NULL
+  );
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
+plan: |
+  ALTER TABLE public.t ADD COLUMN val bigint DEFAULT nextval('my_seq'::regclass) NOT NULL;
+  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;

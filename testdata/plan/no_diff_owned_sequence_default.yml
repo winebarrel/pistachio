@@ -1,6 +1,6 @@
-# A column whose default draws from a sequence it owns reads back as serial.
-# The default written out in the desired schema matches the one in the
-# database, so there is nothing to set.
+# A column whose default draws from a sequence it owns, under a name serial
+# would not give it, reads back with its own type and default, and the
+# sequence reads back with its owner. Both match the desired schema.
 init: |
   CREATE SEQUENCE public.custom_user_id_seq;
   CREATE TABLE public.users (

@@ -1,17 +1,14 @@
-# A sequence a column owns is read back with its owner, the same as the
-# desired schema declares it, so applying is a no-op.
+# OWNED BY runs after the ADD COLUMN that creates the owner.
 init: |
   CREATE SEQUENCE public.my_seq;
   CREATE TABLE public.t (
-      id integer,
-      val integer DEFAULT 42
+      id integer
   );
-  ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
 desired: |
   CREATE SEQUENCE public.my_seq;
   CREATE TABLE public.t (
       id integer,
-      val integer DEFAULT 42
+      val bigint DEFAULT nextval('my_seq'::regclass) NOT NULL
   );
   ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
 applied: |
@@ -27,8 +24,7 @@ applied: |
   -- public.t
   CREATE TABLE public.t (
       id integer,
-      val integer DEFAULT 42
+      val bigint DEFAULT nextval('my_seq'::regclass) NOT NULL
   );
 
   ALTER SEQUENCE public.my_seq OWNED BY public.t.val;
-applied_sql: ""

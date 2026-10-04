@@ -1,0 +1,17 @@
+# A sequence renamed and detached in one plan is detached under the name the
+# database still has.
+init: |
+  CREATE SEQUENCE public.old_seq;
+  CREATE TABLE public.t (
+      id integer
+  );
+  ALTER SEQUENCE public.old_seq OWNED BY public.t.id;
+desired: |
+  -- pista:renamed-from public.old_seq
+  CREATE SEQUENCE public.new_seq;
+  CREATE TABLE public.t (
+      id integer
+  );
+plan: |
+  ALTER SEQUENCE public.old_seq OWNED BY NONE;
+  ALTER SEQUENCE public.old_seq RENAME TO new_seq;

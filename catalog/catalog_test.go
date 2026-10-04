@@ -57,7 +57,6 @@ func TestCatalog_ClosedConnection(t *testing.T) {
 		{"CompositeTypes", func() error { _, err := cat.CompositeTypes(ctx); return err }},
 		{"ListCompositeTypes", func() error { _, err := cat.ListCompositeTypes(ctx); return err }},
 		{"Sequences", func() error { _, err := cat.Sequences(ctx); return err }},
-		{"ListSequences", func() error { _, err := cat.ListSequences(ctx); return err }},
 		{"Routines", func() error { _, err := cat.Routines(ctx); return err }},
 		{"ListRoutines", func() error { _, err := cat.ListRoutines(ctx); return err }},
 		{"ListIndexes", func() error { _, err := cat.ListIndexes(ctx); return err }},

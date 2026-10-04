@@ -1,5 +1,7 @@
-# A default the desired schema writes is compared with the one the serial
-# column carries, so a different one is set.
+# A default the desired schema writes is compared with the one the column
+# carries, so a different one is set. The sequence the column owned is not in
+# the desired schema, so it is dropped once the default no longer draws from
+# it.
 init: |
   CREATE SEQUENCE public.custom_user_id_seq;
   CREATE TABLE public.users (
@@ -12,3 +14,4 @@ desired: |
   );
 plan: |
   ALTER TABLE public.users ALTER COLUMN id SET DEFAULT 0;
+  DROP SEQUENCE public.custom_user_id_seq;
