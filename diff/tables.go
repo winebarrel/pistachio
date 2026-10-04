@@ -1056,6 +1056,13 @@ func stripFuncSchema(node *pg_query.Node) {
 // both sides makes the two compare equal; the text casts on the elements go
 // with the cast stripping above. An empty array and VARIADIC over a column or
 // another expression have no spread form, so they are left alone.
+//
+// This carries the same kind of tradeoff as stripFuncSchema: when a function
+// has a non-variadic overload beside the variadic one, such as f(text, text,
+// text) and f(text, VARIADIC text[]), the two spellings call different
+// functions but compare equal, so switching between them produces no diff.
+// Telling them apart means resolving the call against pg_proc, which the diff
+// does not do.
 func spreadVariadicArray(node *pg_query.Node) {
 	fc := node.GetFuncCall()
 	if fc == nil || !fc.FuncVariadic || len(fc.Args) == 0 {
