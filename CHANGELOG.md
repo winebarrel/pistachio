@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* Sequences owned by a column are now managed, with their owner. `plan` and `apply` emit `ALTER SEQUENCE ... OWNED BY` or `OWNED BY NONE` when the owner changes. Before, every owned sequence was ignored. The sequences of identity columns, and of `serial` columns that keep the default sequence name, are still part of their column.
+* **BREAKING**: Sequences owned by a column are now managed, with their owner. Before, every owned sequence was ignored. An owned sequence that the column does not use for its default, and that the desired schema does not declare, is now dropped when `--allow-drop sequence` is given; a dump from an earlier version does not include such a sequence. A `CREATE SEQUENCE ... OWNED BY` in the desired schema is now compared with the database. `plan` and `apply` emit `ALTER SEQUENCE ... OWNED BY` or `OWNED BY NONE` when the owner changes. The sequences of identity columns, and of `serial` columns that keep the default sequence name, are still part of their column.
 
 * `dump` now writes an owned sequence that has a custom name: the sequence with its options, the column with its type and `nextval` default, and `ALTER SEQUENCE ... OWNED BY` after the tables. Before, it wrote the column as `serial` or `bigserial`, so loading the dump created a sequence with the default name and default options.
 
@@ -13,8 +13,6 @@
 * A desired sequence without an owner now detaches a sequence of the same name that a column owns in the database, with `OWNED BY NONE`. Before, the plan created the sequence again and apply failed with `relation already exists`.
 
 * When a `serial` column becomes an identity column, the old sequence is now dropped. Before, it was left behind. The drop requires `--allow-drop sequence`.
-
-* An owned sequence that the column does not use for its default, and that the desired schema does not declare, is now dropped. The drop requires `--allow-drop sequence`. A dump from an earlier version does not include such a sequence.
 
 ## [1.74.0] - 2026-10-04
 
