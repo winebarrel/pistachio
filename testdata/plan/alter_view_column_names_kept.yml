@@ -1,0 +1,16 @@
+# A view that keeps its column list plans again on every run. Its output
+# columns are named by the list, so the plan replaces it rather than dropping
+# and creating it.
+init: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v_order (x) AS SELECT a AS z FROM public.t ORDER BY z;
+  CREATE VIEW public.v_new_name (a) AS SELECT b FROM public.t ORDER BY a;
+desired: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v_order (x) AS SELECT a AS z FROM public.t ORDER BY z;
+  CREATE VIEW public.v_new_name (a) AS SELECT b FROM public.t ORDER BY a;
+plan: |
+  CREATE OR REPLACE VIEW public.v_new_name (a) AS
+  SELECT b FROM public.t ORDER BY a;
+  CREATE OR REPLACE VIEW public.v_order (x) AS
+  SELECT a AS z FROM public.t ORDER BY z;

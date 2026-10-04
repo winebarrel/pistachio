@@ -1,0 +1,26 @@
+init: |
+  CREATE TABLE public.t (a integer, b integer);
+desired: |
+  CREATE TABLE public.t (a integer, b integer);
+  CREATE VIEW public.v_order (x) AS SELECT a AS z FROM public.t ORDER BY z;
+  CREATE VIEW public.v_group (x, n) AS SELECT a AS z, count(*) FROM public.t GROUP BY z;
+  CREATE VIEW public.v_union_order (x) AS SELECT a AS z FROM public.t UNION SELECT b FROM public.t ORDER BY z;
+  CREATE VIEW public.v_unreferenced (x) AS SELECT a AS z FROM public.t ORDER BY a;
+  CREATE VIEW public.v_new_name (a) AS SELECT b FROM public.t ORDER BY a;
+  CREATE VIEW public.v_own_column (x) AS SELECT a FROM public.t ORDER BY a;
+  CREATE VIEW public.v_new_name_alias (a) AS SELECT b AS z FROM public.t ORDER BY a;
+plan: |
+  CREATE OR REPLACE VIEW public.v_group (x, n) AS
+  SELECT a AS z, count(*) FROM public.t GROUP BY z;
+  CREATE OR REPLACE VIEW public.v_new_name (a) AS
+  SELECT b FROM public.t ORDER BY a;
+  CREATE OR REPLACE VIEW public.v_new_name_alias (a) AS
+  SELECT b AS z FROM public.t ORDER BY a;
+  CREATE OR REPLACE VIEW public.v_order (x) AS
+  SELECT a AS z FROM public.t ORDER BY z;
+  CREATE OR REPLACE VIEW public.v_own_column AS
+  SELECT a AS x FROM public.t ORDER BY a;
+  CREATE OR REPLACE VIEW public.v_union_order (x) AS
+  SELECT a AS z FROM public.t UNION SELECT b FROM public.t ORDER BY z;
+  CREATE OR REPLACE VIEW public.v_unreferenced AS
+  SELECT a AS x FROM public.t ORDER BY a;

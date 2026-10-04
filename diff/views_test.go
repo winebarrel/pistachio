@@ -1463,10 +1463,11 @@ func TestDiffViews_modifyMatviewWithIndex_perIndexDirective(t *testing.T) {
 
 func TestCanCreateOrReplaceView(t *testing.T) {
 	tests := []struct {
-		name    string
-		current string
-		desired string
-		want    bool
+		name         string
+		current      string
+		desired      string
+		desiredNames []string
+		want         bool
 	}{
 		{
 			name:    "identical column list",
@@ -1558,10 +1559,31 @@ func TestCanCreateOrReplaceView(t *testing.T) {
 			desired: "SELECT t.* FROM t",
 			want:    false,
 		},
+		{
+			name:         "kept column list names the leading columns",
+			current:      "SELECT a AS x, b FROM t ORDER BY a",
+			desired:      "SELECT a AS z, b FROM t ORDER BY z",
+			desiredNames: []string{"x"},
+			want:         true,
+		},
+		{
+			name:         "kept column list renames a column",
+			current:      "SELECT a AS x FROM t ORDER BY a",
+			desired:      "SELECT a AS z FROM t ORDER BY z",
+			desiredNames: []string{"y"},
+			want:         false,
+		},
+		{
+			name:         "kept column list longer than the query",
+			current:      "SELECT a AS x FROM t",
+			desired:      "SELECT a FROM t",
+			desiredNames: []string{"x", "y"},
+			want:         false,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := canCreateOrReplaceView(tc.current, tc.desired)
+			got := canCreateOrReplaceView(tc.current, tc.desired, tc.desiredNames)
 			assert.Equal(t, tc.want, got)
 		})
 	}

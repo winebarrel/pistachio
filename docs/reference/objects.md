@@ -344,7 +344,14 @@ The parser reads `CREATE VIEW` and `CREATE MATERIALIZED VIEW` with:
 
 PostgreSQL stores the column names in the query. `CREATE VIEW v (x, y) AS SELECT a, b FROM t` is dumped as `SELECT a AS x, b AS y FROM t`. pistachio reads both forms as the same view. Changing a name in the list renames a column, so the view is dropped and created.
 
-If a name in the list falls on `*` or `t.*`, or the query is `VALUES`, pistachio keeps the list in the `CREATE` statement. Such a view appears in the plan on every run.
+pistachio keeps the list in the `CREATE` statement in these cases:
+
+- A name in the list falls on `*` or `t.*`.
+- The query is `VALUES`.
+- `ORDER BY`, `GROUP BY` or `DISTINCT ON` refers to an alias that the list replaces, as in `CREATE VIEW v (x) AS SELECT a AS z FROM t ORDER BY z`.
+- `ORDER BY` or `DISTINCT ON` refers to a name that the list adds, as in `CREATE VIEW v (a) AS SELECT b FROM t ORDER BY a`.
+
+Such a view appears in the plan on every run.
 
 A plain view's `WITH (...)` contains `security_barrier` and `security_invoker`. These decide what the view means, not how it is stored, so the clause is managed with or without `--manage-storage-param`. The clause comes before `AS`:
 

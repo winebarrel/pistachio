@@ -72,6 +72,9 @@ func equalViewDef(current, desired string) bool {
 // with `cannot drop columns from view` (or a similar error), so the caller
 // must use DROP + CREATE in that case.
 //
+// desiredNames is the column list the desired view keeps on its CREATE, which
+// names its leading output columns in place of the query.
+//
 // Returns false when either side's output columns can't be determined
 // statically (SELECT *, target-list expressions without an alias, parse
 // error). That conservatively routes uncertain cases through DROP +
@@ -85,12 +88,14 @@ func equalViewDef(current, desired string) bool {
 // doesn't perform type inference, so we can't detect this statically;
 // users who hit it can resolve manually by adjusting the source DDL or
 // dropping the view in a pre-step.
-func canCreateOrReplaceView(current, desired string) bool {
+func canCreateOrReplaceView(current, desired string, desiredNames []string) bool {
 	curCols, curOK := viewOutputColumns(current)
 	desCols, desOK := viewOutputColumns(desired)
-	if !curOK || !desOK {
+	if !curOK || !desOK || len(desiredNames) > len(desCols) {
 		return false
 	}
+	// The column list of CREATE VIEW v (x, y) names the leading columns.
+	copy(desCols, desiredNames)
 	return len(desCols) >= len(curCols) && slices.Equal(desCols[:len(curCols)], curCols)
 }
 
@@ -281,7 +286,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 		// 	continue
 		// }
 		if !equalViewDef(currentView.Definition, desiredView.Definition) {
-			if desiredView.Materialized || !canCreateOrReplaceView(currentView.Definition, desiredView.Definition) {
+			if desiredView.Materialized || !canCreateOrReplaceView(currentView.Definition, desiredView.Definition, desiredView.ColumnNames) {
 				needsRecreateRenamed[newKey] = true
 			}
 		}
@@ -320,7 +325,7 @@ func DiffViews(current, desired *orderedmap.Map[string, *model.View], dc DropChe
 			// query removes, renames, or reorders an existing output
 			// column, so detect that case and fall back to DROP+CREATE.
 			needsDropCreate := desiredView.Materialized || currentView.Materialized != desiredView.Materialized ||
-				!canCreateOrReplaceView(currentView.Definition, desiredView.Definition)
+				!canCreateOrReplaceView(currentView.Definition, desiredView.Definition, desiredView.ColumnNames)
 			if needsDropCreate {
 				// When the view was also renamed, drop the old name;
 				// the database still has it because the ALTER RENAME

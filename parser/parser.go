@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
@@ -1611,7 +1612,8 @@ func parseViewStmt(vs *pg_query.ViewStmt, defaultSchema string) (*model.View, er
 //
 // It returns the names it could not write, to be kept as a column list: all of
 // them when the query has no target list (VALUES), when a star sits among the
-// named targets, or when there are more names than targets.
+// named targets, when there are more names than targets, or when the query
+// refers to a name that the rewrite would take away or add, as in ORDER BY z.
 func applyColumnNames(query *pg_query.Node, colNames []*pg_query.Node) []string {
 	if len(colNames) == 0 {
 		return nil
@@ -1636,14 +1638,76 @@ func applyColumnNames(query *pg_query.Node, colNames []*pg_query.Node) []string 
 		}
 		targets[i] = rt
 	}
+	if refersToChangedName(query.GetSelectStmt(), ss, targets, names) {
+		return names
+	}
 
 	for i, rt := range targets {
 		rt.Name = names[i]
-		if fields := rt.Val.GetColumnRef().GetFields(); len(fields) > 0 && fields[len(fields)-1].GetString_().GetSval() == names[i] {
+		if columnRefName(rt) == names[i] {
 			rt.Name = ""
 		}
 	}
 	return nil
+}
+
+// refersToChangedName reports whether the query refers by a bare name to an
+// output name that applyColumnNames would change. An alias the query wrote
+// goes away, so ORDER BY z or GROUP BY z breaks. A new name is resolved before
+// an input column of the same name in ORDER BY and DISTINCT ON, so
+// SELECT b FROM t ORDER BY a with the list (a) would sort by b instead of t.a.
+// GROUP BY resolves an input column first, so a new name there is harmless.
+// The name a column reference gives its target is not counted: once it goes,
+// the bare name still finds the same input column.
+//
+// Output names are visible only in these clauses, of the SELECT that carries
+// the targets and, for a set operation, of the whole, and not in a sub-query
+// under them.
+func refersToChangedName(top, ss *pg_query.SelectStmt, targets []*pg_query.ResTarget, names []string) bool {
+	removed := map[string]bool{}
+	added := map[string]bool{}
+	for i, rt := range targets {
+		cur := rt.Name
+		if cur == "" {
+			cur = columnRefName(rt)
+		}
+		if cur == names[i] {
+			continue
+		}
+		if rt.Name != "" {
+			removed[rt.Name] = true
+		}
+		added[names[i]] = true
+	}
+	either := maps.Clone(removed)
+	maps.Copy(either, added)
+	found := false
+	refers := func(clause []*pg_query.Node, names map[string]bool) {
+		for _, c := range clause {
+			pgast.Walk(c, pgast.WalkOptions{SkipSubqueries: true}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+				if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 1 && names[cr.Fields[0].GetString_().GetSval()] {
+					found = true
+				}
+				return n
+			})
+		}
+	}
+	for _, s := range []*pg_query.SelectStmt{top, ss} {
+		refers(s.SortClause, either)
+		refers(s.DistinctClause, either)
+		refers(s.GroupClause, removed)
+	}
+	return found
+}
+
+// columnRefName returns the name of the column a target reads, or "" when the
+// target is not a column reference.
+func columnRefName(rt *pg_query.ResTarget) string {
+	fields := rt.Val.GetColumnRef().GetFields()
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[len(fields)-1].GetString_().GetSval()
 }
 
 // isStarTarget reports whether a target is * or t.*.
