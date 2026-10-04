@@ -4,15 +4,17 @@
 
 ## [Unreleased]
 
-* **BREAKING**: Sequences owned by a column are now managed, with their owner. Before, every owned sequence was ignored. An owned sequence that the column does not use for its default, and that the desired schema does not declare, is now dropped when `--allow-drop sequence` is given; a dump from an earlier version does not include such a sequence. A `CREATE SEQUENCE ... OWNED BY` in the desired schema is now compared with the database. `plan` and `apply` emit `ALTER SEQUENCE ... OWNED BY` or `OWNED BY NONE` when the owner changes. The sequences of identity columns, and of `serial` columns that keep the default sequence name, are still part of their column.
+* **BREAKING**: Sequences owned by a column are now managed. Before, pistachio ignored them. With `--allow-drop sequence`, an owned sequence that is not in the desired schema is now dropped, unless the column uses it as its default. Dumps from earlier versions do not include such sequences.
 
-* `dump` now writes an owned sequence that has a custom name: the sequence with its options, the column with its type and `nextval` default, and `ALTER SEQUENCE ... OWNED BY` after the tables. Before, it wrote the column as `serial` or `bigserial`, so loading the dump created a sequence with the default name and default options.
+* `plan` and `apply` now emit `ALTER SEQUENCE ... OWNED BY` or `OWNED BY NONE` when the owner of a sequence changes.
 
-* `dump` now keeps the `nextval` default of a column whose type is not `smallint`, `integer` or `bigint`, and writes its sequence. Before, the default was lost.
+* `dump` now writes an owned sequence with a custom name, with its options and `OWNED BY`. Before, it wrote the column as `serial`, so the restored sequence got the default name and options.
 
-* A desired sequence without an owner now detaches a sequence of the same name that a column owns in the database, with `OWNED BY NONE`. Before, the plan created the sequence again and apply failed with `relation already exists`.
+* `dump` now keeps the `nextval` default of a column that is not `smallint`, `integer` or `bigint`.
 
-* When a `serial` column becomes an identity column, the old sequence is now dropped. Before, it was left behind. The drop requires `--allow-drop sequence`.
+* A desired sequence with no owner now detaches a sequence of the same name that a column owns. Before, the plan created it again and apply failed.
+
+* When a `serial` column becomes an identity column, its old sequence is now dropped. This needs `--allow-drop sequence`.
 
 ## [1.74.0] - 2026-10-04
 
