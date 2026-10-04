@@ -448,7 +448,7 @@ func lookupRoutine(routines *orderedmap.Map[string, *model.Routine], schema, nam
 			// The same two steps FQRN applies, or a comment naming a type in
 			// the routine's own schema would key as a different routine and
 			// silently fail to attach.
-			types = append(types, model.StripTypeSchema(stripTypeMod(typeName), schema))
+			types = append(types, model.StripTypeSchema(stripTypeMod(typeName), model.Ident(schema)))
 		}
 		r, _ := routines.GetOk(model.Ident(schema, name) + "(" + strings.Join(types, ", ") + ")")
 		return r

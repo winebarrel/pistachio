@@ -120,11 +120,11 @@ func (result *RoutineDiffResult) stmtsFor(r *model.Routine) *[]string {
 // two spellings directly would read as a change on every run.
 func normalizeTypes(r *model.Routine) *model.Routine {
 	c := *r
-	c.ReturnType = model.StripTypeSchema(r.ReturnType, r.Schema)
+	c.ReturnType = model.StripTypeSchema(r.ReturnType, model.Ident(r.Schema))
 	c.Args = make([]*model.RoutineArg, len(r.Args))
 	for i, a := range r.Args {
 		arg := *a
-		arg.Type = model.StripTypeSchema(a.Type, r.Schema)
+		arg.Type = model.StripTypeSchema(a.Type, model.Ident(r.Schema))
 		c.Args[i] = &arg
 	}
 	return &c

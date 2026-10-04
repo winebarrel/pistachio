@@ -2,6 +2,7 @@ package pistachio
 
 import (
 	"os"
+	"os/user"
 	"path/filepath"
 	"testing"
 	"time"
@@ -402,4 +403,42 @@ func TestYAMLConfig_CommandLineOnlyFlag(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, cli.ApplyFrom.Force)
 	})
+}
+
+// A flag that names a file or a directory expands a leading ~, whether it comes
+// from the command line or from the config file.
+func TestYAMLConfig_PathFlagsExpandHome(t *testing.T) {
+	u, err := user.Current()
+	require.NoError(t, err)
+	want := filepath.Join(u.HomeDir, "x")
+
+	for _, tc := range []struct {
+		name string
+		args []string
+		key  string
+		got  func(*commandCLI) string
+	}{
+		{"dump --split", []string{"dump"}, "split", func(c *commandCLI) string { return c.Dump.Split }},
+		{"plan --out", []string{"plan", "schema.sql"}, "out", func(c *commandCLI) string { return c.Plan.Out }},
+		{"plan --pre-sql-file", []string{"plan", "schema.sql"}, "pre-sql-file", func(c *commandCLI) string { return c.Plan.PreSQLFile }},
+		{"plan --concurrently-pre-sql-file", []string{"plan", "schema.sql"}, "concurrently-pre-sql-file", func(c *commandCLI) string { return c.Plan.ConcurrentlyPreSQLFile }},
+		{"apply --pre-sql-file", []string{"apply", "schema.sql"}, "pre-sql-file", func(c *commandCLI) string { return c.Apply.PreSQLFile }},
+		{"apply --concurrently-pre-sql-file", []string{"apply", "schema.sql"}, "concurrently-pre-sql-file", func(c *commandCLI) string { return c.Apply.ConcurrentlyPreSQLFile }},
+	} {
+		t.Run(tc.name+" flag", func(t *testing.T) {
+			cli, err := parseCommandCLI(t, append(tc.args, "--"+tc.key, "~/x")...)
+			require.NoError(t, err)
+			assert.Equal(t, want, tc.got(cli))
+		})
+		t.Run(tc.name+" config", func(t *testing.T) {
+			path := writeConfig(t, tc.key+": ~/x\n")
+			cli, err := parseCommandCLI(t, append([]string{"--config", path}, tc.args...)...)
+			require.NoError(t, err)
+			assert.Equal(t, want, tc.got(cli))
+		})
+	}
+
+	cli, err := parseCommandCLI(t, "apply-from", "~/x")
+	require.NoError(t, err)
+	assert.Equal(t, want, cli.ApplyFrom.PlanFile)
 }

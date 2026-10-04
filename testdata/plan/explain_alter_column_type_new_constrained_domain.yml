@@ -1,0 +1,24 @@
+# A change to a constrained domain that the same plan creates reads as may
+# rewrite too. PostgreSQL rewrites the table to check the values, but the
+# server cannot resolve the domain at plan time.
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code integer,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.users SELECT g, g FROM generate_series(1, 3) g;
+  ANALYZE public.users;
+desired: |
+  CREATE DOMAIN public.posint AS integer CHECK (VALUE > 0);
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code public.posint,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  CREATE DOMAIN public.posint AS integer
+      CONSTRAINT posint_check CHECK (value > 0);
+  -- may rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index may be rebuilt)
+  ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE public.posint;
