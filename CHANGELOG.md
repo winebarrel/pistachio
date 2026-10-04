@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `fmt` has a new option, `--strip-renamed-from`, that removes every `-- pista:renamed-from` directive.
+* `fmt --strip-renamed-from` removes every `-- pista:renamed-from` directive.
 
 ## [1.75.0] - 2026-10-04
 

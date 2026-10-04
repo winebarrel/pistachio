@@ -109,6 +109,39 @@ COMMENT ON TABLE users IS '
 `,
 		},
 		{
+			name: "consecutive directives and one before a closing parenthesis",
+			input: `CREATE TABLE users (
+	id integer
+	-- pista:renamed-from old_id
+	-- pista:renamed-from older_id
+);
+`,
+			expected: `CREATE TABLE users (
+	id integer
+);
+`,
+		},
+		{
+			name: "a block comment stays",
+			input: `/* -- pista:renamed-from old_users */
+/*
+-- pista:renamed-from old_users
+*/ -- pista:renamed-from old_users
+CREATE TABLE users (id integer);
+`,
+			expected: `/* -- pista:renamed-from old_users */
+/*
+-- pista:renamed-from old_users
+*/ -- pista:renamed-from old_users
+CREATE TABLE users (id integer);
+`,
+		},
+		{
+			name:     "only directives",
+			input:    "-- pista:renamed-from a\n-- pista:renamed-from b\n",
+			expected: "",
+		},
+		{
 			name:     "CRLF",
 			input:    "-- pista:renamed-from old_users\r\nCREATE TABLE users (id integer);\r\n",
 			expected: "CREATE TABLE users (id integer);\r\n",

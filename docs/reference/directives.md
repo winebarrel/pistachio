@@ -35,7 +35,7 @@ CREATE INDEX idx_users_display_name ON public.users (display_name);
 ALTER TABLE public.orders ADD CONSTRAINT fk_new_name FOREIGN KEY (user_id) REFERENCES public.users(id);
 ```
 
-For columns and constraints, write the directive inside `CREATE TABLE` on the line before the definition. pistachio silently skips a directive that has already been applied, so leave it in the file until cleanup. `pista fmt --strip-renamed-from` removes the directives.
+For columns and constraints, write the directive inside `CREATE TABLE` on the line before the definition. pistachio silently skips a directive that has already been applied, so leave it in the file until cleanup. `pista fmt --strip-renamed-from` removes them.
 
 For enum values, write the directive inside `CREATE TYPE ... AS ENUM` on the line before the value. The old value may be quoted or bare, and it is case-sensitive. The rename emits `ALTER TYPE ... RENAME VALUE`, which keeps stored data and the value's position.
 

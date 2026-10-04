@@ -91,6 +91,39 @@ func TestRun_FmtCheckDiff(t *testing.T) {
 	assert.Contains(t, out.String(), path)
 }
 
+// --strip-renamed-from is set by the flag, the environment variable or the
+// config file.
+func TestRun_FmtStripRenamedFrom(t *testing.T) {
+	const content = "-- pista:renamed-from old_users\nCREATE TABLE users (id integer);\n"
+
+	for name, args := range map[string]func(t *testing.T, path string) []string{
+		"flag": func(t *testing.T, path string) []string {
+			return []string{"fmt", "--strip-renamed-from", path}
+		},
+		"env": func(t *testing.T, path string) []string {
+			t.Setenv("PISTA_FMT_STRIP_RENAMED_FROM", "true")
+			return []string{"fmt", path}
+		},
+		"config": func(t *testing.T, path string) []string {
+			config := writeFile(t, "pista.yml", "strip-renamed-from: true\n")
+			return []string{"--config", config, "fmt", path}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := writeFile(t, "schema.sql", content)
+
+			var out bytes.Buffer
+			code, stderr := runCLI(t, &out, args(t, path)...)
+			assert.Equal(t, 0, code)
+			assert.Empty(t, stderr)
+
+			got, err := os.ReadFile(path)
+			require.NoError(t, err)
+			assert.Equal(t, "CREATE TABLE users (\n    id integer\n);\n", string(got))
+		})
+	}
+}
+
 func TestRun_Help(t *testing.T) {
 	var out bytes.Buffer
 	code, stderr := runCLI(t, &out, "--help")
