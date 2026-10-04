@@ -3,10 +3,10 @@ package catalog
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/pistachio/model"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 // ListColumnsByTables returns the columns of the given tables, keyed by table
@@ -154,6 +154,11 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 
 	inheritsChildren := inheritsChildOIDs(tables)
 
+	tableNames := make(map[uint32]string, len(tables))
+	for _, t := range tables {
+		tableNames[t.OID] = t.Name
+	}
+
 	args := pgx.NamedArgs{
 		"table_oids": oids,
 	}
@@ -215,14 +220,12 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 				Cycle:     *seqCycle,
 			}
 		}
-		// PG18 auto-names unnamed NOT NULL constraints as <table>_<col>_not_null
-		// (see ChooseConstraintName in src/backend/catalog/pg_constraint.c). The
-		// auto-name does not follow column or table renames, so checking the
-		// current <table>_<col>_ prefix is too strict. Strip any name with the
-		// _not_null suffix as a heuristic so unnamed declarations round-trip as
-		// unnamed across renames; the trade-off is that a user-supplied explicit
-		// name ending in "_not_null" would be lost on round-trip.
-		if col.NotNullName != nil && strings.HasSuffix(*col.NotNullName, "_not_null") {
+		// PostgreSQL names an unnamed NOT NULL <table>_<column>_not_null,
+		// shortened to fit (ChooseConstraintName in
+		// src/backend/catalog/pg_constraint.c). Treat that name as no name.
+		// A table or column rename keeps the old name, so after a rename the
+		// name stays and dump writes it.
+		if col.NotNullName != nil && *col.NotNullName == parser.MakeObjectName(tableNames[tableOID], col.Name, "not_null") {
 			col.NotNullName = nil
 		}
 		colsByTable[tableOID] = append(colsByTable[tableOID], &col)

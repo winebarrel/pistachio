@@ -58,3 +58,26 @@ applied: |
   COMMENT ON CONSTRAINT posts_n_check ON public.articles IS 'positive';
   COMMENT ON POLICY "Posts Read" ON public.articles IS 'reads';
   COMMENT ON TRIGGER "Posts Stamp" ON public.articles IS 'stamps';
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.stamp()
+  CREATE OR REPLACE FUNCTION public.stamp()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$ BEGIN RETURN NEW; END $$;
+
+  -- public.articles
+  CREATE TABLE public.articles (
+      id bigint CONSTRAINT posts_id_not_null NOT NULL,
+      num integer CONSTRAINT posts_n_not_null NOT NULL,
+      CONSTRAINT "Posts PK" PRIMARY KEY (id),
+      CONSTRAINT posts_n_check CHECK (num > 0)
+  );
+
+  CREATE POLICY "Posts Read" ON public.articles FOR SELECT USING ((num > 0));
+
+  CREATE TRIGGER "Posts Stamp" BEFORE UPDATE OF num ON articles FOR EACH ROW EXECUTE FUNCTION stamp();
+  COMMENT ON CONSTRAINT "Posts PK" ON public.articles IS 'it''s the key';
+  COMMENT ON CONSTRAINT posts_n_check ON public.articles IS 'positive';
+  COMMENT ON POLICY "Posts Read" ON public.articles IS 'reads';
+  COMMENT ON TRIGGER "Posts Stamp" ON public.articles IS 'stamps';

@@ -1,0 +1,14 @@
+# PG18 names a NOT NULL constraint <table>_<column>_not_null and keeps that
+# name when the table is renamed. The name no longer matches the table, so
+# dump writes it.
+min_pg: 18
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL
+  );
+  ALTER TABLE public.items RENAME TO goods;
+dump: |
+  -- public.goods
+  CREATE TABLE public.goods (
+      id integer CONSTRAINT items_id_not_null NOT NULL
+  );

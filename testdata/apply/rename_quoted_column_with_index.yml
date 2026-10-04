@@ -21,3 +21,12 @@ applied: |
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
   CREATE INDEX idx_users_myname ON public.users USING btree ("DisplayName");
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      "DisplayName" text CONSTRAINT "users_MyName_not_null" NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_users_myname ON public.users USING btree ("DisplayName");

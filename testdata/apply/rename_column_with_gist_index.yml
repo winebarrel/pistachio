@@ -21,3 +21,12 @@ applied: |
       CONSTRAINT reservations_pkey PRIMARY KEY (id)
   );
   CREATE INDEX idx_reservations_during ON public.reservations USING gist (time_range);
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.reservations
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      time_range tsrange CONSTRAINT reservations_during_not_null NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX idx_reservations_during ON public.reservations USING gist (time_range);

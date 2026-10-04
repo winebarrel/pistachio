@@ -37,3 +37,19 @@ applied: |
       id integer NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.purchases
+  CREATE TABLE public.purchases (
+      id integer CONSTRAINT orders_id_not_null NOT NULL,
+      user_id integer CONSTRAINT orders_user_id_not_null NOT NULL,
+      CONSTRAINT orders_pkey PRIMARY KEY (id)
+  );
+
+  ALTER TABLE ONLY public.purchases ADD CONSTRAINT fk_buyer FOREIGN KEY (user_id) REFERENCES users(id);
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

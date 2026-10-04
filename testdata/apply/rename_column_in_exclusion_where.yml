@@ -28,3 +28,14 @@ applied: |
       CONSTRAINT reservations_pkey PRIMARY KEY (id),
       CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&) WHERE (NOT is_canceled)
   );
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.reservations
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      during tsrange NOT NULL,
+      is_canceled boolean CONSTRAINT reservations_canceled_not_null NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, during WITH &&) WHERE (NOT is_canceled)
+  );

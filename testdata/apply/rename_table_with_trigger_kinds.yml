@@ -39,3 +39,14 @@ applied: |
   CREATE TRIGGER users_audit AFTER INSERT ON "Accounts" REFERENCING NEW TABLE AS inserted FOR EACH STATEMENT EXECUTE FUNCTION stamp();
   CREATE CONSTRAINT TRIGGER users_check AFTER INSERT ON "Accounts" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp();
   CREATE TRIGGER users_name BEFORE UPDATE OF label ON "Accounts" FOR EACH ROW WHEN (old.label IS DISTINCT FROM new.label) EXECUTE FUNCTION stamp();
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public."Accounts"
+  CREATE TABLE public."Accounts" (
+      id integer CONSTRAINT users_id_not_null NOT NULL,
+      label text
+  );
+
+  CREATE TRIGGER users_audit AFTER INSERT ON "Accounts" REFERENCING NEW TABLE AS inserted FOR EACH STATEMENT EXECUTE FUNCTION stamp();
+  CREATE CONSTRAINT TRIGGER users_check AFTER INSERT ON "Accounts" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION stamp();
+  CREATE TRIGGER users_name BEFORE UPDATE OF label ON "Accounts" FOR EACH ROW WHEN (old.label IS DISTINCT FROM new.label) EXECUTE FUNCTION stamp();

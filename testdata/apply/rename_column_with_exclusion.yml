@@ -25,3 +25,13 @@ applied: |
       CONSTRAINT reservations_pkey PRIMARY KEY (id),
       CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, time_range WITH &&)
   );
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.reservations
+  CREATE TABLE public.reservations (
+      id integer NOT NULL,
+      room integer NOT NULL,
+      time_range tsrange CONSTRAINT reservations_during_not_null NOT NULL,
+      CONSTRAINT reservations_pkey PRIMARY KEY (id),
+      CONSTRAINT no_overlap EXCLUDE USING gist (room WITH =, time_range WITH &&)
+  );
