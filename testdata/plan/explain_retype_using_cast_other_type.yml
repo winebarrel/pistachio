@@ -1,0 +1,21 @@
+# A cast to another type than the target, alone or in a chain (here alone), can change the
+# values (here it truncates them), so it rewrites the table.
+explain: true
+init: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      code character varying(50) NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+  INSERT INTO public.users SELECT g, 'c' || g FROM generate_series(1, 3) g;
+  ANALYZE public.users;
+desired: |
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      -- pista:retype-using code::character varying(10)
+      code character varying(100) NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );
+plan: |
+  -- rewrite, blocks reads and writes: public.users (~3 rows, 8192 bytes, as of {{today}}, 1 index rebuilt)
+  ALTER TABLE public.users ALTER COLUMN code SET DATA TYPE character varying(100) USING code::character varying(10);
