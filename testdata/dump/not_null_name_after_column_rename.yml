@@ -1,0 +1,12 @@
+# The automatic name does not follow a column rename either.
+min_pg: 18
+init: |
+  CREATE TABLE public.items (
+      code integer NOT NULL
+  );
+  ALTER TABLE public.items RENAME COLUMN code TO sku;
+dump: |
+  -- public.items
+  CREATE TABLE public.items (
+      sku integer CONSTRAINT items_code_not_null NOT NULL
+  );

@@ -1062,6 +1062,12 @@ func makeObjectName(name1, name2, label string) string {
 	return name + "_" + label
 }
 
+// MakeObjectName is makeObjectName for the catalog, which compares a stored
+// name with the one PostgreSQL would generate.
+func MakeObjectName(name1, name2, label string) string {
+	return makeObjectName(name1, name2, label)
+}
+
 // autoNameConstraint generates a PostgreSQL-style constraint name for unnamed
 // constraints, following the naming convention from PostgreSQL's
 // ChooseConstraintName (src/backend/catalog/pg_constraint.c):

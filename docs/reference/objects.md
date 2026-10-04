@@ -174,7 +174,7 @@ The parser reads the column definitions of `CREATE TABLE`:
 
 It also reads `ALTER TABLE ... ALTER COLUMN ... SET STORAGE` / `SET COMPRESSION` after the table. That is how `pg_dump` writes them.
 
-The parser reads a type in the form that the catalog reports. So an alias in the file compares equal to the name that the database has: `int` and `int4` are `integer`, `varchar` is `character varying`, and `timestamptz` is `timestamp with time zone`. `serial`, `bigserial` and `smallserial` are `integer`, `bigint` and `smallint` with a `nextval` default. A column written either way compares equal. A primary key column is `NOT NULL` whether or not the file says so. `COLLATE "default"` is what a column has implicitly, and the parser reads it as no collation. Any built-in type is accepted, arrays included. An identifier may be quoted.
+The parser reads a type in the form that the catalog reports. So an alias in the file compares equal to the name that the database has: `int` and `int4` are `integer`, `varchar` is `character varying`, and `timestamptz` is `timestamp with time zone`. `serial`, `bigserial` and `smallserial` are `integer`, `bigint` and `smallint` with a `nextval` default. A column written either way compares equal. A primary key column is `NOT NULL` whether or not the file says so. On PostgreSQL 18, an unnamed `NOT NULL` gets the name `<table>_<column>_not_null`, and pistachio reads that name as no name. The name does not change when the table or column is renamed, so after a rename `dump` writes it. `COLLATE "default"` is what a column has implicitly, and the parser reads it as no collation. Any built-in type is accepted, arrays included. An identifier may be quoted.
 
 ### Changes
 

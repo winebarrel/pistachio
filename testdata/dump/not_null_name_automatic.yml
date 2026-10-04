@@ -1,0 +1,11 @@
+# The automatic name is not written.
+min_pg: 18
+init: |
+  CREATE TABLE public."Users" (
+      "Email" text NOT NULL
+  );
+dump: |
+  -- public."Users"
+  CREATE TABLE public."Users" (
+      "Email" text NOT NULL
+  );

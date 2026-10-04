@@ -1,0 +1,17 @@
+# A table renamed by pista keeps its automatic NOT NULL name, which dump then
+# writes. The re-plan of the desired schema, which writes no name, is clean.
+min_pg: 18
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL
+  );
+desired: |
+  -- pista:renamed-from public.items
+  CREATE TABLE public.goods (
+      id integer NOT NULL
+  );
+applied: |
+  -- public.goods
+  CREATE TABLE public.goods (
+      id integer CONSTRAINT items_id_not_null NOT NULL
+  );

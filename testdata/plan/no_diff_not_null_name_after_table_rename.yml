@@ -1,0 +1,14 @@
+# After a table rename the database keeps the old automatic NOT NULL name. A
+# desired schema that writes no name plans nothing: the diff renames a NOT
+# NULL constraint only when both sides name it.
+min_pg: 18
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL
+  );
+  ALTER TABLE public.items RENAME TO goods;
+desired: |
+  CREATE TABLE public.goods (
+      id integer NOT NULL
+  );
+plan: ""

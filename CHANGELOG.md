@@ -16,6 +16,8 @@
 
 * When a `serial` column becomes an identity column or gets another default, its old sequence is now dropped. This needs `--allow-drop sequence`.
 
+* On PostgreSQL 18, `dump` now keeps a NOT NULL constraint name after a table or column rename. Before, it dropped every name ending in `_not_null`, so the restored constraint got a different name.
+
 ## [1.74.0] - 2026-10-04
 
 * **BREAKING**: A primary key written `USING INDEX` now needs a `CREATE INDEX` for its index in the schema files. Without one, reading the files fails with an error.

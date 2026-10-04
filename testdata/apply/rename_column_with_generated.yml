@@ -25,3 +25,12 @@ applied: |
       total integer GENERATED ALWAYS AS ((quantity * 2)) STORED,
       CONSTRAINT items_pkey PRIMARY KEY (id)
   );
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.items
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      quantity integer CONSTRAINT items_qty_not_null NOT NULL,
+      total integer GENERATED ALWAYS AS ((quantity * 2)) STORED,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );

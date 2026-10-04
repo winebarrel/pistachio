@@ -1,0 +1,11 @@
+# A name the user chose is kept even when it ends in _not_null.
+min_pg: 18
+init: |
+  CREATE TABLE public.users (
+      email text CONSTRAINT email_not_null NOT NULL
+  );
+dump: |
+  -- public.users
+  CREATE TABLE public.users (
+      email text CONSTRAINT email_not_null NOT NULL
+  );
