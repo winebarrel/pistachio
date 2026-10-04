@@ -1,6 +1,6 @@
-# PG18 names a NOT NULL constraint <table>_<column>_not_null and keeps the name
-# when the table is renamed. The name no longer matches the table, so dump
-# writes it.
+# PG18 names a NOT NULL constraint <table>_<column>_not_null and keeps that
+# name when the table is renamed. The name no longer matches the table, so
+# dump writes it.
 min_pg: 18
 init: |
   CREATE TABLE public.items (

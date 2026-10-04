@@ -202,14 +202,13 @@ Reading PG18's standalone `ALTER TABLE ... ADD CONSTRAINT name NOT NULL col` in
 a desired file waits on the parser: `pg_query_go` v6 embeds PostgreSQL 17.7 and
 has no 18 release.
 
-A second limitation: `catalog.ListColumnsByTables` reads a name as no name
-when it equals the name PostgreSQL gives an unnamed NOT NULL,
-`<table>_<column>_not_null`, shortened the way PostgreSQL shortens it. A name
-that PostgreSQL made unique with a number, such as `_not_null1`, does not
-match. `dump` then writes `CONSTRAINT ..._not_null1 NOT NULL` for a column
-that the file declared as a plain `NOT NULL`. The round trip holds, because
-the parser reads the name back and the diff emits a rename only when both
-sides are named.
+A second limitation: the catalog treats a NOT NULL name as no name only when
+it equals the name PostgreSQL gives an unnamed one, `<table>_<column>_not_null`,
+shortened to fit. When two names would clash, PostgreSQL adds a number, such
+as `_not_null1`. That name does not match, so `dump` writes
+`CONSTRAINT ..._not_null1 NOT NULL` for a column the file declared as a plain
+`NOT NULL`. The plan still comes back clean, because the diff renames a NOT
+NULL constraint only when both sides have a name.
 
 A third limitation: on PG<18 the parser still captures the inline name, but
 PostgreSQL drops it at apply time. The diff treats the resulting mismatch,

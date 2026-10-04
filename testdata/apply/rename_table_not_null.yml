@@ -1,5 +1,5 @@
-# A table renamed by pista keeps its automatic NOT NULL name, which dump then
-# writes. The re-plan of the desired schema, which writes no name, is clean.
+# pista renames the table, and the NOT NULL constraint keeps its old name, so
+# dump writes it. The desired schema has no name, and the re-plan is clean.
 min_pg: 18
 init: |
   CREATE TABLE public.items (

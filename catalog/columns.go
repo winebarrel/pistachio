@@ -222,9 +222,9 @@ func (c *Catalog) ListColumnsByTables(ctx context.Context, tables []*model.Table
 		}
 		// PostgreSQL names an unnamed NOT NULL <table>_<column>_not_null,
 		// shortened to fit (ChooseConstraintName in
-		// src/backend/catalog/pg_constraint.c). That name is read as no name.
-		// It does not follow a table or column rename, so after one the name
-		// is kept, and dump writes it.
+		// src/backend/catalog/pg_constraint.c). Treat that name as no name.
+		// A table or column rename keeps the old name, so after a rename the
+		// name stays and dump writes it.
 		if col.NotNullName != nil && *col.NotNullName == parser.MakeObjectName(tableNames[tableOID], col.Name, "not_null") {
 			col.NotNullName = nil
 		}

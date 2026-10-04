@@ -1,6 +1,6 @@
-# After a table rename the database keeps the old automatic NOT NULL name. A
-# desired schema that writes no name plans nothing: the diff renames a NOT
-# NULL constraint only when both sides name it.
+# After a table rename the database keeps the old NOT NULL name. A desired
+# schema with no name plans nothing, because the diff renames a NOT NULL
+# constraint only when both sides have a name.
 min_pg: 18
 init: |
   CREATE TABLE public.items (

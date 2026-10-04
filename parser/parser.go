@@ -1062,8 +1062,8 @@ func makeObjectName(name1, name2, label string) string {
 	return name + "_" + label
 }
 
-// MakeObjectName is makeObjectName for the catalog, which compares a stored
-// name with the one PostgreSQL would generate.
+// MakeObjectName exports makeObjectName. The catalog uses it to compare a
+// stored name with the name PostgreSQL would generate.
 func MakeObjectName(name1, name2, label string) string {
 	return makeObjectName(name1, name2, label)
 }

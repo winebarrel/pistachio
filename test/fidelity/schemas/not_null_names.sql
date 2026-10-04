@@ -1,6 +1,6 @@
--- On PostgreSQL 18 a NOT NULL constraint keeps its automatic name when the
--- table or the column is renamed. pista dump writes such a name, so the
--- restored constraint has it too.
+-- On PostgreSQL 18 a NOT NULL constraint keeps its old name when the table or
+-- column is renamed. pista dump writes that name, so the restored constraint
+-- has it too.
 CREATE TABLE public.items (
     id integer NOT NULL,
     code text NOT NULL
