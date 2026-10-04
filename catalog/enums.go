@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/model"
 )
@@ -63,15 +64,9 @@ func (c *Catalog) ListEnums(ctx context.Context) ([]*model.Enum, error) {
 			t.typname
 	`
 
-	var enums []*model.Enum
-	var e model.Enum
-	err := c.eachRow(ctx, "enum info", q, []any{&e.OID, &e.Schema, &e.Name, &e.Values, &e.Comment}, func() {
-		enum := e
-		enums = append(enums, &enum)
+	return collectRows(ctx, c, "enum info", q, pgx.NamedArgs{"schemas": c.schemas}, func(row pgx.Row) (*model.Enum, error) {
+		var e model.Enum
+		err := row.Scan(&e.OID, &e.Schema, &e.Name, &e.Values, &e.Comment)
+		return &e, err
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return enums, nil
 }

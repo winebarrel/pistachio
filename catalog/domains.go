@@ -65,20 +65,9 @@ func (c *Catalog) ListDomains(ctx context.Context) ([]*model.Domain, error) {
 			t.typname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get domain info: %w", err)
-	}
-	defer rows.Close()
-
-	var domains []*model.Domain
-	for rows.Next() {
+	domains, err := collectRows(ctx, c, "domain info", q, pgx.NamedArgs{"schemas": c.schemas}, func(row pgx.Row) (*model.Domain, error) {
 		var d model.Domain
-		err := rows.Scan(
+		err := row.Scan(
 			&d.OID,
 			&d.Schema,
 			&d.Name,
@@ -88,14 +77,10 @@ func (c *Catalog) ListDomains(ctx context.Context) ([]*model.Domain, error) {
 			&d.Collation,
 			&d.Comment,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan domain info: %w", err)
-		}
-		domains = append(domains, &d)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan domain info rows: %w", err)
+		return &d, err
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	oids := make([]uint32, len(domains))

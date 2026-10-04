@@ -57,33 +57,18 @@ func (c *Catalog) ListCompositeTypes(ctx context.Context) ([]*model.CompositeTyp
 			t.typname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get composite type info: %w", err)
-	}
-	defer rows.Close()
-
 	type ctRow struct {
 		ct       *model.CompositeType
 		typrelid uint32
 	}
-	var ctRows []ctRow
-	for rows.Next() {
+	ctRows, err := collectRows(ctx, c, "composite type info", q, pgx.NamedArgs{"schemas": c.schemas}, func(row pgx.Row) (ctRow, error) {
 		var ct model.CompositeType
 		var typrelid uint32
-		err := rows.Scan(&ct.OID, &ct.Schema, &ct.Name, &typrelid, &ct.Comment)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan composite type info: %w", err)
-		}
-		ctRows = append(ctRows, ctRow{ct: &ct, typrelid: typrelid})
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan composite type info rows: %w", err)
+		err := row.Scan(&ct.OID, &ct.Schema, &ct.Name, &typrelid, &ct.Comment)
+		return ctRow{ct: &ct, typrelid: typrelid}, err
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	relids := make([]uint32, len(ctRows))

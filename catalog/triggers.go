@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -59,15 +60,9 @@ func (c *Catalog) ListTriggers(ctx context.Context) ([]*model.Trigger, error) {
 			t.tgname
 	`
 
-	var triggers []*model.Trigger
-	var trg model.Trigger
-	err := c.eachRow(ctx, "trigger info", q, []any{&trg.Schema, &trg.Table, &trg.Name, &trg.Definition, &trg.State, &trg.Comment}, func() {
-		t := trg
-		triggers = append(triggers, &t)
+	return collectRows(ctx, c, "trigger info", q, pgx.NamedArgs{"schemas": c.schemas}, func(row pgx.Row) (*model.Trigger, error) {
+		var trg model.Trigger
+		err := row.Scan(&trg.Schema, &trg.Table, &trg.Name, &trg.Definition, &trg.State, &trg.Comment)
+		return &trg, err
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return triggers, nil
 }

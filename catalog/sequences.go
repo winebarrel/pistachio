@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/winebarrel/orderedmap/v2"
@@ -82,20 +81,9 @@ func (c *Catalog) Sequences(ctx context.Context) (*orderedmap.Map[string, *model
 			c.relname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get sequence info: %w", err)
-	}
-	defer rows.Close()
-
-	seqByKey := orderedmap.New[string, *model.Sequence]()
-	for rows.Next() {
+	seqs, err := collectRows(ctx, c, "sequence info", q, pgx.NamedArgs{"schemas": c.schemas}, func(row pgx.Row) (*model.Sequence, error) {
 		var s model.Sequence
-		err := rows.Scan(
+		err := row.Scan(
 			&s.OID,
 			&s.Schema,
 			&s.Name,
@@ -111,14 +99,15 @@ func (c *Catalog) Sequences(ctx context.Context) (*orderedmap.Map[string, *model
 			&s.OwnerColumn,
 			&s.Comment,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan sequence info: %w", err)
-		}
-		seqByKey.Set(s.FQN(), &s)
+		return &s, err
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan sequence info rows: %w", err)
+	seqByKey := orderedmap.New[string, *model.Sequence]()
+	for _, s := range seqs {
+		seqByKey.Set(s.FQN(), s)
 	}
 
 	return seqByKey, nil

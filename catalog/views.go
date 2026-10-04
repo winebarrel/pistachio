@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -111,23 +110,12 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			c.relname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get view info: %w", err)
-	}
-	defer rows.Close()
-
-	var views []*model.View
-	for rows.Next() {
+	return collectRows(ctx, c, "view info", q, pgx.NamedArgs{"schemas": c.schemas}, func(row pgx.Row) (*model.View, error) {
 		var v model.View
 		var checkOption *string
 		var reloptions, toastReloptions []string
 		var columnCommentNames, columnComments []string
-		err := rows.Scan(
+		err := row.Scan(
 			&v.OID,
 			&v.Schema,
 			&v.Name,
@@ -141,7 +129,7 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 			&columnComments,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan view info: %w", err)
+			return nil, err
 		}
 		if checkOption != nil {
 			v.CheckOption = *checkOption
@@ -153,14 +141,8 @@ func (c *Catalog) ListViews(ctx context.Context) ([]*model.View, error) {
 		for i, name := range columnCommentNames {
 			v.ColumnComments.Set(name, columnComments[i])
 		}
-		views = append(views, &v)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan view info rows: %w", err)
-	}
-
-	return views, nil
+		return &v, nil
+	})
 }
 
 // viewStorageParams turns a view's reloptions into the parameter map, leaving

@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -64,21 +63,10 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			ci.relname
 	`
 
-	args := pgx.NamedArgs{
-		"schemas": c.schemas,
-	}
-
-	rows, err := c.conn.Query(ctx, q, args)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: failed to get index info: %w", err)
-	}
-	defer rows.Close()
-
-	var indexes []*model.Index
-	for rows.Next() {
+	return collectRows(ctx, c, "index info", q, pgx.NamedArgs{"schemas": c.schemas}, func(row pgx.Row) (*model.Index, error) {
 		var idx model.Index
 		var onPartitioned bool
-		err := rows.Scan(
+		err := row.Scan(
 			&idx.OID,
 			&idx.Schema,
 			&idx.Name,
@@ -90,7 +78,7 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			&onPartitioned,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("catalog: failed to scan index info: %w", err)
+			return nil, err
 		}
 		if onPartitioned {
 			// pg_get_indexdef writes ONLY for every index on a partitioned
@@ -98,12 +86,6 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			// indexes when the plan creates it after them.
 			idx.Definition = strings.Replace(idx.Definition, " ON ONLY ", " ON ", 1)
 		}
-		indexes = append(indexes, &idx)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("catalog: failed to scan index info rows: %w", err)
-	}
-
-	return indexes, nil
+		return &idx, nil
+	})
 }
