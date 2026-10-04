@@ -131,6 +131,7 @@ bonita|sample-db-bonita||bonita
 ghostfolio|sample-db-prisma|REPO=ghostfolio/ghostfolio SHA=bbe6af82299ab9882164f495b6124cda2e300d3c DIR=prisma/migrations SCHEMA=ghostfolio|ghostfolio
 typebot|sample-db-prisma|REPO=baptisteArno/typebot.io SHA=61056ff9a98082485add8111e901d3148ca358ef DIR=packages/prisma/postgresql/migrations SCHEMA=typebot|typebot
 cratesio|sample-db-cratesio||cratesio
+panoptes|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/zooniverse/panoptes/a6f0f141d0c3f1ac69995e4b4dc511a06aa8ff3f/db/structure.sql SCHEMA=panoptes|panoptes
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -453,6 +454,11 @@ sample-db-camunda:
 # fuzzystrmatch, pg_trgm, pgcrypto, and uuid-ossp, one column typed by the
 # first and one gin index naming the trgm operator class; those are all
 # contrib and the official image already has them.
+#
+# panoptes (zooniverse/panoptes, Apache-2.0), the Zooniverse citizen science
+# platform, is Rails' structure.sql like discourse's. It installs intarray,
+# pg_stat_statements, and pg_trgm, all contrib, and declares none of them in an
+# index or a column.
 sample-db-pgdump-schema: PGOPTS = -c search_path=$(SCHEMA),public
 .PHONY: sample-db-pgdump-schema
 sample-db-pgdump-schema:
