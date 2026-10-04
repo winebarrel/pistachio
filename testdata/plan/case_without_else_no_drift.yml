@@ -1,0 +1,35 @@
+# PostgreSQL stores a CASE written without ELSE with an ELSE NULL cast to the
+# result type. A CASE written without ELSE must plan clean.
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      a integer,
+      k text DEFAULT CASE WHEN current_user = 'x' THEN 'p' END,
+      g integer GENERATED ALWAYS AS (CASE WHEN a > 0 THEN 1 END) STORED,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_a_check CHECK (CASE WHEN a > 0 THEN true END)
+  );
+  CREATE INDEX t_expr_idx ON public.t ((CASE WHEN a > 0 THEN 'p' END));
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY t_policy ON public.t USING (CASE a WHEN 1 THEN true END);
+  CREATE VIEW public.v_searched AS SELECT CASE WHEN a > 0 THEN 'p' END AS k FROM public.t;
+  CREATE VIEW public.v_simple AS SELECT CASE a WHEN 1 THEN 10 WHEN 2 THEN 20 END AS k FROM public.t;
+  CREATE VIEW public.v_explicit AS SELECT CASE WHEN a > 0 THEN 'p' ELSE NULL END AS k FROM public.t;
+  CREATE MATERIALIZED VIEW public.m AS SELECT CASE WHEN a > 0 THEN 'p' END AS k FROM public.t;
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      a integer,
+      k text DEFAULT CASE WHEN current_user = 'x' THEN 'p' END,
+      g integer GENERATED ALWAYS AS (CASE WHEN a > 0 THEN 1 END) STORED,
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_a_check CHECK (CASE WHEN a > 0 THEN true END)
+  );
+  CREATE INDEX t_expr_idx ON public.t ((CASE WHEN a > 0 THEN 'p' END));
+  ALTER TABLE public.t ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY t_policy ON public.t USING (CASE a WHEN 1 THEN true END);
+  CREATE VIEW public.v_searched AS SELECT CASE WHEN a > 0 THEN 'p' END AS k FROM public.t;
+  CREATE VIEW public.v_simple AS SELECT CASE a WHEN 1 THEN 10 WHEN 2 THEN 20 END AS k FROM public.t;
+  CREATE VIEW public.v_explicit AS SELECT CASE WHEN a > 0 THEN 'p' ELSE NULL END AS k FROM public.t;
+  CREATE MATERIALIZED VIEW public.m AS SELECT CASE WHEN a > 0 THEN 'p' END AS k FROM public.t;
+plan: ""
