@@ -21,3 +21,12 @@ applied: |
       CONSTRAINT users_pkey PRIMARY KEY (id),
       CONSTRAINT users_email_key UNIQUE (email_address)
   );
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.users
+  CREATE TABLE public.users (
+      id integer NOT NULL,
+      email_address text CONSTRAINT users_email_not_null NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id),
+      CONSTRAINT users_email_key UNIQUE (email_address)
+  );

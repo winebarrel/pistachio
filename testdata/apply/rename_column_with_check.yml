@@ -21,3 +21,12 @@ applied: |
       CONSTRAINT products_pkey PRIMARY KEY (id),
       CONSTRAINT products_qty_check CHECK (quantity > 0)
   );
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      quantity integer CONSTRAINT products_qty_not_null NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id),
+      CONSTRAINT products_qty_check CHECK (quantity > 0)
+  );

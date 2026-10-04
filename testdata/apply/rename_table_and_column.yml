@@ -19,3 +19,11 @@ applied: |
       display_name text NOT NULL,
       CONSTRAINT users_pkey PRIMARY KEY (id)
   );
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.accounts
+  CREATE TABLE public.accounts (
+      id integer CONSTRAINT users_id_not_null NOT NULL,
+      display_name text CONSTRAINT users_name_not_null NOT NULL,
+      CONSTRAINT users_pkey PRIMARY KEY (id)
+  );

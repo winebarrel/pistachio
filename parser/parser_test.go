@@ -3743,3 +3743,9 @@ func TestParseSQL_UnloggedSequence(t *testing.T) {
 	require.True(t, ok)
 	assert.False(t, seq.Unlogged)
 }
+
+func TestMakeObjectName_NotNull(t *testing.T) {
+	assert.Equal(t, "items_id_not_null", MakeObjectName("items", "id", "not_null"))
+	// The table part is shortened first, so the label survives.
+	assert.Equal(t, "customer_subscription_billing_history_arch_region_code_not_null", MakeObjectName("customer_subscription_billing_history_archive_2024_snapshot", "region_code", "not_null"))
+}

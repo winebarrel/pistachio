@@ -23,3 +23,11 @@ applied: |
   );
 
   CREATE TRIGGER users_stamp BEFORE INSERT ON accounts FOR EACH ROW EXECUTE FUNCTION stamp();
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.accounts
+  CREATE TABLE public.accounts (
+      id integer CONSTRAINT users_id_not_null NOT NULL
+  );
+
+  CREATE TRIGGER users_stamp BEFORE INSERT ON accounts FOR EACH ROW EXECUTE FUNCTION stamp();

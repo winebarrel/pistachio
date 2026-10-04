@@ -29,3 +29,13 @@ applied: |
   );
 
   CREATE TRIGGER products_audit AFTER UPDATE OF quantity ON products FOR EACH ROW WHEN (new.quantity IS DISTINCT FROM old.quantity) EXECUTE FUNCTION stamp();
+# PG18 keeps the automatic NOT NULL name across the rename, so dump writes it.
+applied_pg18: |
+  -- public.products
+  CREATE TABLE public.products (
+      id integer NOT NULL,
+      quantity integer CONSTRAINT products_qty_not_null NOT NULL,
+      CONSTRAINT products_pkey PRIMARY KEY (id)
+  );
+
+  CREATE TRIGGER products_audit AFTER UPDATE OF quantity ON products FOR EACH ROW WHEN (new.quantity IS DISTINCT FROM old.quantity) EXECUTE FUNCTION stamp();

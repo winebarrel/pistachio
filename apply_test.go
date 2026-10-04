@@ -224,10 +224,17 @@ CREATE INDEX idx_events_time ON myschema.events (event_time);`), 0o644))
 
 	got, err := client.Dump(ctx, &DumpOptions{})
 	require.NoError(t, err)
+	// PG18 keeps the automatic NOT NULL name across the rename.
+	eventTime := "event_time timestamp without time zone NOT NULL"
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+	if testutil.ServerMajorVersion(t, ctx, conn) >= 18 {
+		eventTime = "event_time timestamp without time zone CONSTRAINT events_occurred_at_not_null NOT NULL"
+	}
 	expected := `-- myschema.events
 CREATE TABLE myschema.events (
     id integer NOT NULL,
-    event_time timestamp without time zone NOT NULL,
+    ` + eventTime + `,
     CONSTRAINT events_pkey PRIMARY KEY (id)
 );
 CREATE INDEX idx_events_time ON myschema.events USING btree (event_time);`
