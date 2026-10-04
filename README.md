@@ -3,9 +3,9 @@
 [![CI](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml/badge.svg)](https://github.com/winebarrel/pistachio/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/winebarrel/pistachio/branch/main/graph/badge.svg?token=lWmtTkDrbz)](https://codecov.io/gh/winebarrel/pistachio)
 
-pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow. Define the desired schema in SQL, and pistachio generates the DDL diff.
+pistachio is a declarative schema management tool for PostgreSQL with a Terraform-like plan/apply workflow. You write the schema you want as DDL in SQL files. pistachio compares the database with the files and prints the DDL that makes the database match.
 
-pistachio manages a PostgreSQL schema from SQL files. The files contain the whole schema as DDL, in the form that `pista dump` writes. `pista plan` reads the database catalog and compares it with the files. It then prints the DDL that makes the database match the files. `pista apply` runs that DDL. `pista dump` writes the files from a database that you already have.
+`pista plan` prints that DDL. `pista apply` runs it. `pista dump` writes the files from an existing database.
 
 > [!TIP]
 > The [playground](https://pistachio-demo.winebarrel.workers.dev) runs `pista diff` on two schemas that you edit in the page. There is nothing to install.
