@@ -545,7 +545,7 @@ func (ex *explainer) isConstrainedDomain(tn *pg_query.TypeName) bool {
 	}
 	name := typeNameString(tn)
 	for key, d := range ex.domains.All() {
-		if key == name || (!strings.Contains(name, ".") && d.Name == name) {
+		if key == name || (!strings.Contains(name, ".") && model.Ident(d.Name) == name) {
 			return d.NotNull || len(d.Constraints) > 0
 		}
 	}
@@ -562,7 +562,8 @@ func (ex *explainer) alterTypeTouch(current string, desired *pg_query.TypeName) 
 	ch := catalog.TypeChange{Src: baseTypeString(current), Dst: typeNameString(desired)}
 	info, ok := ex.types[ch]
 	if !ok || !info.Known {
-		return touchNone
+		// The plan creates the type, so the server cannot tell yet.
+		return touchMayRewrite
 	}
 	if info.Constrained || strings.HasSuffix(current, "[]") != (len(desired.ArrayBounds) > 0) {
 		return touchRewrite
@@ -653,7 +654,8 @@ func baseTypeString(typeName string) string {
 // typeNameString spells a parsed type name the way to_regtype reads it: the
 // name without its modifier or array bound, and without the pg_catalog prefix
 // the grammar puts on a built-in type. A nil type name gives "", which
-// to_regtype answers with NULL rather than an error.
+// to_regtype answers with NULL rather than an error. Each part is quoted where
+// it needs it, or the server would fold a name like "App" to lower case.
 func typeNameString(tn *pg_query.TypeName) string {
 	var parts []string
 	for _, n := range tn.GetNames() {
@@ -664,7 +666,7 @@ func typeNameString(tn *pg_query.TypeName) string {
 	if len(parts) == 2 && parts[0] == "pg_catalog" {
 		parts = parts[1:]
 	}
-	return strings.Join(parts, ".")
+	return model.Ident(parts...)
 }
 
 func isSerialTypeName(tn *pg_query.TypeName) bool {

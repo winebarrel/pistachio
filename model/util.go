@@ -120,7 +120,8 @@ func QuoteLiteral(s string) string {
 // preserving any trailing "[]". The catalog reports a type in the search path
 // unqualified (via format_type), while desired SQL may write it schema-
 // qualified. Stripping the owning object's schema makes the two forms compare
-// equal. A type in a different search-path schema than its owner is not
+// equal. schema is the quoted form Ident writes, since that is how a type name
+// spells it. A type in a different search-path schema than its owner is not
 // covered.
 func StripTypeSchema(typeName, schema string) string {
 	if schema == "" {

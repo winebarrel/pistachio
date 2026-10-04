@@ -501,6 +501,20 @@ func TestParseSQL_CommentOnRoutineWithQualifiedArgType(t *testing.T) {
 	assert.Equal(t, "v1", *r.Comment)
 }
 
+// The same holds when the schema name needs quoting.
+func TestParseSQL_CommentOnRoutineWithQualifiedArgTypeQuotedSchema(t *testing.T) {
+	result, err := parseSQLNoFile(`
+		CREATE FUNCTION "App".f(x "App".rowtype) RETURNS text LANGUAGE sql AS $$ SELECT 'x' $$;
+		COMMENT ON FUNCTION "App".f("App".rowtype) IS 'v1';
+	`, "App")
+	require.NoError(t, err)
+
+	r, ok := result.Routines.GetOk(`"App".f(rowtype)`)
+	require.True(t, ok)
+	require.NotNil(t, r.Comment)
+	assert.Equal(t, "v1", *r.Comment)
+}
+
 func TestParseSQL_FunctionSecurityDefinerAndLeakproof(t *testing.T) {
 	result, err := parseSQLWithPublicSchema(`
 		CREATE FUNCTION public.f() RETURNS integer

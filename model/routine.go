@@ -118,7 +118,7 @@ func (r Routine) argTypes(stripSchema bool) []string {
 			continue
 		}
 		if stripSchema {
-			types = append(types, StripTypeSchema(a.Type, r.Schema))
+			types = append(types, StripTypeSchema(a.Type, Ident(r.Schema)))
 			continue
 		}
 		types = append(types, a.Type)

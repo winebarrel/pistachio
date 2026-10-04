@@ -46,6 +46,25 @@ func TestRoutine_FQRN(t *testing.T) {
 	assert.Equal(t, "public.f(integer, text, integer[])", r.FQRN())
 }
 
+// A type in the routine's own schema loses that qualifier, also when the
+// schema name needs quoting. A type in another schema keeps it.
+func TestRoutine_FQRN_StripsOwnSchema(t *testing.T) {
+	for _, tc := range []struct {
+		schema string
+		types  []string
+		want   string
+	}{
+		{"public", []string{"public.dom", "other.dom"}, "public.f(dom, other.dom)"},
+		{"App", []string{`"App".dom`, `"App".dom[]`, "app.dom"}, `"App".f(dom, dom[], app.dom)`},
+	} {
+		r := model.Routine{Schema: tc.schema, Name: "f"}
+		for _, typ := range tc.types {
+			r.Args = append(r.Args, &model.RoutineArg{Type: typ})
+		}
+		assert.Equal(t, tc.want, r.FQRN())
+	}
+}
+
 func TestRoutine_SQL(t *testing.T) {
 	cost := 5.0
 	rows := 7.0

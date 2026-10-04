@@ -218,3 +218,37 @@ CREATE DOMAIN "App".good_mood AS "App".mood;
 
 	assert.Empty(t, got.SQL)
 }
+
+// The same for a routine whose argument and return types sit in its own
+// schema. The two spellings used to key as two routines, so the plan created
+// one and dropped the other on every run. The comment names the argument type
+// with the schema too, and must still attach to the routine.
+func TestPlan_SearchPathRoutineArgTypeQuotedSchema(t *testing.T) {
+	ctx := context.Background()
+	desired := `
+CREATE TYPE "App".mood AS ENUM ('ok', 'ng');
+CREATE FUNCTION "App".f(x "App".mood) RETURNS "App".mood
+    LANGUAGE sql AS $$ SELECT x $$;
+COMMENT ON FUNCTION "App".f("App".mood) IS 'f';
+`
+	connString := setupSchemaDB(t, ctx, `"App"`, desired)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(desired), 0o600))
+
+	searchPath := `"App"`
+	client := NewClient(&Options{
+		ConnString:    connString,
+		Schemas:       []string{"App"},
+		SearchPath:    &searchPath,
+		ManageRoutine: true,
+	})
+
+	got, err := client.Plan(ctx, &PlanOptions{
+		AllowDrop: []string{"all"},
+		Files:     []string{desiredFile},
+	})
+	require.NoError(t, err)
+
+	assert.Empty(t, got.SQL)
+}
