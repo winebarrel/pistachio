@@ -7,6 +7,7 @@ A directive that follows code or a `/* ... */` comment on the same line is an er
 | Directive | Arguments | Applies to | Purpose |
 |---|---|---|---|
 | `renamed-from` | old name (required) | tables, views, enums, enum values, domains, composite types, composite attributes, sequences, columns, constraints, foreign keys, indexes, policies, triggers | Renames the object instead of dropping and creating it. |
+| `retype-using` | expression (required) | columns | Gives the `USING` expression of a column type change. |
 | `execute` | check SQL (optional) | any statement | Runs non-managed SQL after the managed DDL. |
 | `execute-first` | check SQL (optional) | any statement | Runs non-managed SQL before the managed DDL. |
 | `concurrently` | none | `CREATE INDEX` | Creates and drops the index with `CONCURRENTLY`. |
@@ -59,6 +60,31 @@ CREATE TYPE public.postal_address AS (
 ```
 
 See [Renaming objects](../guides/renaming.md) for column rename caveats.
+
+## -- pista:retype-using
+
+Gives the `USING` expression of `ALTER COLUMN ... SET DATA TYPE` for a column whose type changes. The argument is the expression. It computes the new column value from the old one, and it is written into the statement as it is. Write the directive inside `CREATE TABLE` on the line before the column.
+
+```sql
+CREATE TYPE public.item_status AS ENUM ('active', 'inactive');
+
+CREATE TABLE public.items (
+    id integer NOT NULL,
+    -- pista:retype-using status::public.item_status
+    status public.item_status DEFAULT 'active' NOT NULL,
+    CONSTRAINT items_pkey PRIMARY KEY (id)
+);
+```
+
+```sql
+ALTER TABLE public.items ALTER COLUMN status DROP DEFAULT;
+ALTER TABLE public.items ALTER COLUMN status SET DATA TYPE public.item_status USING status::public.item_status;
+ALTER TABLE public.items ALTER COLUMN status SET DEFAULT 'active';
+```
+
+Without the directive, PostgreSQL converts the values with an assignment cast, and a type change with no implicit or assignment cast fails. PostgreSQL does not apply the `USING` expression to the default. So when the column has a default, it is dropped before the type change and set again after it. A serial column keeps its default, and a generated column has none. Indexes and constraints that use the column are not handled this way, and a type change can still fail on them.
+
+When the type does not change, the directive does nothing. So it can stay in the file after the change is applied.
 
 ## -- pista:execute
 

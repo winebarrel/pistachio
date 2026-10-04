@@ -1,0 +1,24 @@
+# The USING expression is not applied to the default, so the default is
+# dropped before the type change and set again after it.
+init: |
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      status text DEFAULT 'active' NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TYPE public.item_status AS ENUM ('active', 'inactive');
+  CREATE TABLE public.items (
+      id integer NOT NULL,
+      -- pista:retype-using status::public.item_status
+      status public.item_status DEFAULT 'active' NOT NULL,
+      CONSTRAINT items_pkey PRIMARY KEY (id)
+  );
+plan: |
+  CREATE TYPE public.item_status AS ENUM (
+      'active',
+      'inactive'
+  );
+  ALTER TABLE public.items ALTER COLUMN status DROP DEFAULT;
+  ALTER TABLE public.items ALTER COLUMN status SET DATA TYPE public.item_status USING status::public.item_status;
+  ALTER TABLE public.items ALTER COLUMN status SET DEFAULT 'active';

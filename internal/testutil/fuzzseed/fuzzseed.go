@@ -55,6 +55,7 @@ var directives = []string{
 	"CREATE TABLE public.t (\n  id int, -- pista:renamed-from old_id\n  v text\n);",
 	"CREATE TABLE public.t (id int);\n-- pista:concurrently\nCREATE INDEX i ON public.t (id);",
 	"-- pista:bulk-alter\nCREATE TABLE public.t (id int);",
+	"CREATE TABLE public.t (\n  -- pista:retype-using v::integer\n  v integer DEFAULT 0\n);",
 	"-- pista:execute SELECT 1\nGRANT SELECT ON public.t TO r;",
 	"-- pista:execute-first\nGRANT SELECT ON public.t TO r;",
 	"CREATE TYPE public.e AS ENUM ('a', 'b'); -- pista:renamed-from old_e",

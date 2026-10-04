@@ -192,6 +192,39 @@ func TestExtractInlineDirectives_LeadingComma(t *testing.T) {
 	assert.Equal(t, map[string]string{"new_c": "old_c"}, dirs.Constraints)
 }
 
+func TestExtractInlineDirectives_RetypeUsing(t *testing.T) {
+	t.Run("column", func(t *testing.T) {
+		sql := `CREATE TABLE public.items (
+    id integer NOT NULL,
+    -- pista:retype-using status::public.item_status
+    status public.item_status NOT NULL
+);`
+		dirs := extractInlineDirectives(sql)
+		assert.Equal(t, map[string]string{"status": "status::public.item_status"}, dirs.RetypeUsing)
+		assert.Empty(t, dirs.Columns)
+	})
+
+	t.Run("with renamed-from", func(t *testing.T) {
+		sql := `CREATE TABLE public.t (
+    -- pista:renamed-from old_flag
+    -- pista:retype-using old_flag <> 0
+    "Flag" boolean
+);`
+		dirs := extractInlineDirectives(sql)
+		assert.Equal(t, map[string]string{"Flag": "old_flag <> 0"}, dirs.RetypeUsing)
+		assert.Equal(t, map[string]string{"Flag": "old_flag"}, dirs.Columns)
+	})
+
+	t.Run("constraint is not a column", func(t *testing.T) {
+		sql := `CREATE TABLE public.t (
+    id integer,
+    -- pista:retype-using id::bigint
+    CONSTRAINT t_pkey PRIMARY KEY (id)
+);`
+		assert.Empty(t, extractInlineDirectives(sql).RetypeUsing)
+	})
+}
+
 func TestExtractConstraintName(t *testing.T) {
 	assert.Equal(t, "users_pkey", extractConstraintName("CONSTRAINT users_pkey PRIMARY KEY (id)"))
 	assert.Equal(t, "My Con", extractConstraintName(`CONSTRAINT "My Con" UNIQUE (code)`))
@@ -578,6 +611,18 @@ func TestValidateDirectives_RenamedFromWithoutArg(t *testing.T) {
 		err := validateDirectives(sql)
 		require.Error(t, err, sql)
 		assert.Contains(t, err.Error(), "-- pista:renamed-from requires an argument")
+	}
+}
+
+func TestValidateDirectives_RetypeUsingWithoutArg(t *testing.T) {
+	for _, sql := range []string{
+		"CREATE TABLE t (\n  -- pista:retype-using\n  id int\n);",
+		"CREATE TABLE t (\n  -- pista:retype-using   \n  id int\n);",
+		"CREATE TABLE t (\n  -- pista:retype-using\r\n  id int\n);",
+	} {
+		err := validateDirectives(sql)
+		require.Error(t, err, sql)
+		assert.Contains(t, err.Error(), "-- pista:retype-using requires an argument")
 	}
 }
 

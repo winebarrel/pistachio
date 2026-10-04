@@ -10,6 +10,8 @@
 
 * A `CASE` written without `ELSE` no longer appears in the plan on every run. PostgreSQL stores it with an `ELSE NULL` cast to the result type. Before, an index, a constraint, a default, a policy or a view that used one was planned again on every run, and a generated column that used one failed the plan.
 
+* The new `-- pista:retype-using <expression>` directive gives the `USING` expression of a column type change. When the column has a default, the default is dropped before the change and set again after it. Without the directive, a type change with no implicit or assignment cast, such as `text` to an enum, failed at apply.
+
 ## [1.76.0] - 2026-10-04
 
 * `fmt --strip-renamed-from` removes every `-- pista:renamed-from` directive.

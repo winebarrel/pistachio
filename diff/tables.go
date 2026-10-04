@@ -686,10 +686,24 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 	// because PostgreSQL has no separate "set collation" syntax; re-issuing
 	// SET DATA TYPE without COLLATE reverts to the type's default collation.
 	retyped := columnRetyped(fqtn, current, desired)
+	// The USING expression of -- pista:retype-using is not applied to the
+	// default, which can fail to convert, so the default is dropped before
+	// the type change and the default section below sets it again. A serial
+	// column's nextval() converts to any integer type, and a generated
+	// column has no default to drop.
+	defaultDropped := false
 	if retyped {
+		if desired.RetypeUsing != nil && current.Default != nil &&
+			current.SerialSequence == nil && !current.Generated.IsGeneratedColumn() {
+			stmts = append(stmts, "ALTER TABLE "+fqtn+" ALTER COLUMN "+colIdent+" DROP DEFAULT;")
+			defaultDropped = true
+		}
 		sql := "ALTER TABLE " + fqtn + " ALTER COLUMN " + colIdent + " SET DATA TYPE " + alterTypeName(desired.TypeName)
 		if desired.Collation != nil {
 			sql += " COLLATE " + *desired.Collation
+		}
+		if desired.RetypeUsing != nil {
+			sql += " USING " + *desired.RetypeUsing
 		}
 		stmts = append(stmts, sql+";")
 	}
@@ -751,7 +765,7 @@ func alterColumnSQL(fqtn string, current, desired *model.Column) []string {
 		// from a sequence it owns: dumps from earlier versions left out such
 		// a default.
 		currentDefault := current.Default
-		if current.SerialSequence != nil && desired.Default == nil {
+		if current.SerialSequence != nil && desired.Default == nil || defaultDropped {
 			currentDefault = nil
 		}
 		if !equalDefault(currentDefault, desired.Default) {

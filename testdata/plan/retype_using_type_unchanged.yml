@@ -1,0 +1,9 @@
+# A directive left in place after the type change does nothing.
+init: |
+  CREATE TABLE public.t (code integer DEFAULT 0);
+desired: |
+  CREATE TABLE public.t (
+      -- pista:retype-using code::integer
+      code integer DEFAULT 0
+  );
+plan: ""

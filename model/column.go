@@ -62,6 +62,10 @@ type Column struct {
 	Name       string  `json:"name"`
 	RenameFrom *string `json:"rename_from"`
 	TypeName   string  `json:"type"`
+	// RetypeUsing is the USING expression of a type change, set by
+	// -- pista:retype-using. Only the desired side sets it, and it only shapes
+	// the SET DATA TYPE statement.
+	RetypeUsing *string `json:"-"`
 	// SerialSequence is the schema-qualified name of the sequence that the
 	// column owns and takes its default from. Only the catalog sets it; nil
 	// otherwise. The type name is a serial type only when the sequence has

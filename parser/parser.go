@@ -414,6 +414,11 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 					col.RenameFrom = &old
 				}
 			}
+			for colName, expr := range inlineDirectives.RetypeUsing {
+				if col, ok := table.Columns.GetOk(colName); ok {
+					col.RetypeUsing = &expr
+				}
+			}
 			for conName, oldName := range inlineDirectives.Constraints {
 				if con, ok := table.Constraints.GetOk(conName); ok {
 					old := oldName

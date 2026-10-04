@@ -5123,6 +5123,71 @@ func TestAlterColumnSQL_SerialWidening(t *testing.T) {
 	}, alterColumnSQL("public.users", current, desired))
 }
 
+func TestAlterColumnSQL_RetypeUsing(t *testing.T) {
+	using := "status::public.item_status"
+	def := "'active'::text"
+
+	t.Run("default set again", func(t *testing.T) {
+		current := &model.Column{Name: "status", TypeName: "text", Default: &def}
+		d := "'active'"
+		desired := &model.Column{Name: "status", TypeName: "public.item_status", Default: &d, RetypeUsing: &using}
+		assert.Equal(t, []string{
+			"ALTER TABLE public.items ALTER COLUMN status DROP DEFAULT;",
+			"ALTER TABLE public.items ALTER COLUMN status SET DATA TYPE public.item_status USING status::public.item_status;",
+			"ALTER TABLE public.items ALTER COLUMN status SET DEFAULT 'active';",
+		}, alterColumnSQL("public.items", current, desired))
+	})
+
+	t.Run("default removed", func(t *testing.T) {
+		current := &model.Column{Name: "status", TypeName: "text", Default: &def}
+		desired := &model.Column{Name: "status", TypeName: "public.item_status", RetypeUsing: &using}
+		assert.Equal(t, []string{
+			"ALTER TABLE public.items ALTER COLUMN status DROP DEFAULT;",
+			"ALTER TABLE public.items ALTER COLUMN status SET DATA TYPE public.item_status USING status::public.item_status;",
+		}, alterColumnSQL("public.items", current, desired))
+	})
+
+	t.Run("collation comes before USING", func(t *testing.T) {
+		coll := `"C"`
+		u := "code::varchar(10)"
+		current := &model.Column{Name: "code", TypeName: "text"}
+		desired := &model.Column{Name: "code", TypeName: "character varying(10)", Collation: &coll, RetypeUsing: &u}
+		assert.Equal(t, []string{
+			`ALTER TABLE public.items ALTER COLUMN code SET DATA TYPE character varying(10) COLLATE "C" USING code::varchar(10);`,
+		}, alterColumnSQL("public.items", current, desired))
+	})
+
+	// A serial column's nextval() converts to any integer type.
+	t.Run("serial default kept", func(t *testing.T) {
+		seq := "public.items_id_seq"
+		nextval := "nextval('items_id_seq'::regclass)"
+		u := "id::bigint"
+		current := &model.Column{Name: "id", TypeName: "serial", SerialSequence: &seq, Default: &nextval}
+		desired := &model.Column{Name: "id", TypeName: "bigserial", RetypeUsing: &u}
+		assert.Equal(t, []string{
+			"ALTER TABLE public.items ALTER COLUMN id SET DATA TYPE bigint USING id::bigint;",
+		}, alterColumnSQL("public.items", current, desired))
+	})
+
+	// A generated column's expression is not a default to drop.
+	t.Run("generated column", func(t *testing.T) {
+		expr := "(a * 2)"
+		u := "g::bigint"
+		current := &model.Column{Name: "g", TypeName: "integer", Default: &expr, Generated: 's'}
+		desired := &model.Column{Name: "g", TypeName: "bigint", Default: &expr, Generated: 's', RetypeUsing: &u}
+		assert.Equal(t, []string{
+			"ALTER TABLE public.items ALTER COLUMN g SET DATA TYPE bigint USING g::bigint;",
+		}, alterColumnSQL("public.items", current, desired))
+	})
+
+	t.Run("type unchanged", func(t *testing.T) {
+		current := &model.Column{Name: "status", TypeName: "text", Default: &def}
+		d := "'active'"
+		desired := &model.Column{Name: "status", TypeName: "text", Default: &d, RetypeUsing: &using}
+		assert.Empty(t, alterColumnSQL("public.items", current, desired))
+	})
+}
+
 // A serial column's default is left alone when the desired side writes none,
 // and compared with the one the desired side writes.
 func TestAlterColumnSQL_SerialDefault(t *testing.T) {
