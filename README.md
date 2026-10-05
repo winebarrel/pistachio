@@ -29,7 +29,7 @@ brew install winebarrel/pistachio/pistachio     # Homebrew
 mise use github:winebarrel/pistachio            # mise
 ```
 
-Alternatively, download a binary from [Releases](https://github.com/winebarrel/pistachio/releases). Binaries exist for macOS and Linux on amd64 and arm64, and for Windows on amd64.
+Alternatively, download a binary from [Releases](https://github.com/winebarrel/pistachio/releases/latest). Binaries exist for macOS and Linux on amd64 and arm64, and for Windows on amd64.
 
 The demo image bundles PostgreSQL and a sample schema:
 

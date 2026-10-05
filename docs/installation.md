@@ -18,7 +18,7 @@ mise use github:winebarrel/pistachio@<version>  # a specific version
 
 ## Download binary
 
-Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases).
+Download the latest binary from [Releases](https://github.com/winebarrel/pistachio/releases/latest).
 
 | OS      | Arch         |
 |---------|--------------|
