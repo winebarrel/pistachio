@@ -48,9 +48,13 @@ func mustNoError(err error) {
 // variables of its kind, so a column rule that reads index fails to compile.
 func newEnvs(tr *trace) map[parser.LintKind]*cel.Env {
 	funcs := []cel.EnvOption{
-		// The string functions of the CEL extensions, such as indexOf and
-		// substring.
+		// The CEL extensions for strings (indexOf, substring), regular
+		// expressions (regex.replace) and cel.bind. The regular expression
+		// functions need optional types.
 		ext.Strings(),
+		cel.OptionalTypes(),
+		ext.Regex(),
+		ext.Bindings(),
 		// m.values() lists the values of a map. Most of the document is
 		// keyed by name, and the macros iterate a map's keys.
 		cel.Function("values",

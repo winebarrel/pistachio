@@ -133,7 +133,12 @@ CREATE INDEX t_part2_idx ON public.t (a) WHERE id > 0;
 CREATE INDEX t_part3_idx ON public.t (a) WHERE id > 1;
 CREATE INDEX t_hash_idx ON public.t USING hash (a);
 CREATE INDEX t_incl_idx ON public.t (b) INCLUDE (a);
-CREATE INDEX t_ba_idx ON public.t (b, a);`), []string{"public"})
+CREATE INDEX t_ba_idx ON public.t (b, a);
+CREATE TABLE public.s (a int, b int, c int);
+CREATE INDEX s_a_idx ON public.s (a) WITH (fillfactor = 70);
+CREATE INDEX s_ab_idx ON public.s (a, b);
+CREATE INDEX s_c_idx ON public.s (c) TABLESPACE pg_default;
+CREATE INDEX s_c2_idx ON public.s (c) WITH (fillfactor = 50);`), []string{"public"})
 	require.NoError(t, err)
 
 	var got []string
@@ -149,6 +154,11 @@ CREATE INDEX t_ba_idx ON public.t (b, a);`), []string{"public"})
 		"schema.sql:10:1: index public.t_lower_idx: redundant-index: another index starts with the same columns",
 		"schema.sql:12:1: index public.t_part_idx: duplicate-index: another index has the same definition",
 		"schema.sql:13:1: index public.t_part2_idx: duplicate-index: another index has the same definition",
+		// Storage parameters and a tablespace do not change the queries an
+		// index serves.
+		"schema.sql:19:1: index public.s_a_idx: redundant-index: another index starts with the same columns",
+		"schema.sql:21:1: index public.s_c_idx: duplicate-index: another index has the same definition",
+		"schema.sql:22:1: index public.s_c2_idx: duplicate-index: another index has the same definition",
 	}, got)
 }
 
@@ -354,7 +364,9 @@ rules:
     message: prefix
   - name: strings
     on: table
-    assert: '"a USING b".indexOf(" USING ") == 1 && "abc".substring(1) == "bc"'
+    assert: >-
+      "a USING b".indexOf(" USING ") == 1 && "abc".substring(1) == "bc"
+      && regex.replace("a1b22", "[0-9]+", "") == "ab" && cel.bind(x, 2, x * x == 4)
     message: strings
 `, `CREATE TABLE public.t (id int NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (id));`)
 
