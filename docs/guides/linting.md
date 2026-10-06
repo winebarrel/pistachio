@@ -38,6 +38,7 @@ The repository has these rules in [`rules/`](https://github.com/winebarrel/pista
 | | `prefer-jsonb` | No column is `json`. |
 | `naming.yml` | `snake-case-table` | Every table name is snake_case. |
 | | `snake-case-column` | Every column name is snake_case. |
+| | `named-index`, `named-constraint`, `named-foreign-key` | Every index, constraint and foreign key has a name written in the file. These rules are commented out. |
 
 The type rules follow the PostgreSQL wiki page [Don't Do This](https://wiki.postgresql.org/wiki/Don't_Do_This).
 

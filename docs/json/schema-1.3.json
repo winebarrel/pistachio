@@ -302,6 +302,9 @@
               "type": "null"
             }
           ]
+        },
+        "auto_named": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -318,7 +321,8 @@
         "validated",
         "inherited",
         "index_name",
-        "comment"
+        "comment",
+        "auto_named"
       ]
     },
     "Domain": {
@@ -619,6 +623,9 @@
         },
         "match": {
           "type": "string"
+        },
+        "auto_named": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -643,7 +650,8 @@
         "ref_columns",
         "on_delete",
         "on_update",
-        "match"
+        "match",
+        "auto_named"
       ]
     },
     "IdentitySequence": {
@@ -758,6 +766,9 @@
         },
         "partial": {
           "type": "boolean"
+        },
+        "auto_named": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -777,7 +788,8 @@
         "include",
         "unique",
         "method",
-        "partial"
+        "partial",
+        "auto_named"
       ]
     },
     "Policy": {
