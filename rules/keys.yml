@@ -1,7 +1,10 @@
 rules:
+  # A partition takes the primary key of its partitioned table.
   - name: require-primary-key
     on: table
-    assert: table.constraints.values().exists(c, c.type == "primary_key")
+    assert: >-
+      table.partition_bound != null
+      || table.constraints.values().exists(c, c.type == "primary_key")
     message: the table has no primary key
 
   # integer runs out at about 2.1 billion rows.

@@ -25,7 +25,7 @@ The repository has these rules in [`rules/`](https://github.com/winebarrel/pista
 
 | File | Rule | Checks |
 |---|---|---|
-| `keys.yml` | `require-primary-key` | Every table has a primary key. |
+| `keys.yml` | `require-primary-key` | Every table has a primary key. A partition is skipped, since it takes the key of its partitioned table. |
 | | `prefer-bigint-key` | A primary key column is not `smallint` or `integer`. |
 | | `fk-needs-index` | An index, a primary key or a unique constraint starts with the columns of each foreign key. |
 | `indexes.yml` | `duplicate-index` | No two indexes have the same columns, `INCLUDE` columns, access method and uniqueness. |
@@ -67,7 +67,7 @@ rules:
 Each rule has four fields. All of them are required.
 
 `name`
-:   The name that the output and `-- pista:lint-ignore` use. It must be unique across all the rule files.
+:   The name that the output and `-- pista:lint-ignore` use. It must be unique across all the rule files, and it cannot contain a comma or a space.
 
 `on`
 :   The kind of object the rule checks: `table`, `column`, `index` or `foreign_key`.

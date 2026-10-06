@@ -188,3 +188,39 @@ func TestPositions_NoFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.Positions)
 }
+
+// A rename and a lint-ignore before the same column or key both apply.
+func TestLintIgnore_WithRenamedFrom(t *testing.T) {
+	result, err := parser.ParseSQLSourcesWithSchema([]parser.Source{{Name: "a.sql", SQL: `
+CREATE TABLE public.u (id int NOT NULL, CONSTRAINT u_pkey PRIMARY KEY (id));
+CREATE TABLE public.t (
+  -- pista:renamed-from old_at
+  -- pista:lint-ignore prefer-timestamptz
+  at timestamp,
+  u_id int,
+  -- pista:lint-ignore fk-needs-index
+  -- pista:renamed-from t_old_fkey
+  CONSTRAINT t_u_fkey FOREIGN KEY (u_id) REFERENCES public.u (id)
+);`}}, "public")
+	require.NoError(t, err)
+
+	table := result.Tables.Get("public.t")
+	assert.Equal(t, "old_at", *table.Columns.Get("at").RenameFrom)
+	assert.Equal(t, "t_old_fkey", *table.ForeignKeys.Get("t_u_fkey").RenameFrom)
+	assert.Equal(t, map[parser.LintTarget][]string{
+		{Kind: parser.LintColumn, Table: "public.t", Name: "at"}:           {"prefer-timestamptz"},
+		{Kind: parser.LintForeignKey, Table: "public.t", Name: "t_u_fkey"}: {"fk-needs-index"},
+	}, result.LintIgnores)
+}
+
+// The column counts characters, so text that is not ASCII before an object
+// does not shift it.
+func TestPositions_NonASCII(t *testing.T) {
+	result, err := parser.ParseSQLSourcesWithSchema([]parser.Source{
+		{Name: "a.sql", SQL: "-- あい\nCREATE TABLE public.t (/* あ */ at timestamp);"},
+	}, "public")
+	require.NoError(t, err)
+
+	pos := result.Positions[parser.LintTarget{Kind: parser.LintColumn, Table: "public.t", Name: "at"}]
+	assert.Equal(t, "a.sql:2:32", pos.String())
+}

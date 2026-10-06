@@ -137,6 +137,10 @@ func compileRule(spec ruleSpec, file string, envs map[parser.LintKind]*cel.Env) 
 	if spec.Name == "" {
 		return nil, fmt.Errorf("%s: a rule has no name", file)
 	}
+	// -- pista:lint-ignore separates names with commas and spaces.
+	if strings.ContainsAny(spec.Name, ", \t") {
+		return nil, fmt.Errorf("%s: rule name %q has a comma or a space", file, spec.Name)
+	}
 	where := fmt.Sprintf("%s: rule %s", file, spec.Name)
 
 	kind := parser.LintKind(spec.On)

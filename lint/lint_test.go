@@ -63,9 +63,11 @@ CREATE TABLE public.posts (
   created_at timestamp,
   price money,
   opens time with time zone,
+  editor_id bigint,
   CONSTRAINT posts_pkey PRIMARY KEY (id),
   CONSTRAINT posts_user_fkey FOREIGN KEY (user_id) REFERENCES public.users (id),
-  CONSTRAINT posts_org_fkey FOREIGN KEY (org_id) REFERENCES public.users (id)
+  CONSTRAINT posts_org_fkey FOREIGN KEY (org_id) REFERENCES public.users (id),
+  CONSTRAINT posts_editor_fkey FOREIGN KEY (editor_id) REFERENCES public.users (id)
 );
 CREATE INDEX posts_created_idx ON public.posts (created_at);
 CREATE INDEX posts_created_dup_idx ON public.posts (created_at);
@@ -77,7 +79,10 @@ CREATE UNIQUE INDEX posts_user_org_key ON public.posts (user_id, org_id);
 CREATE INDEX posts_lower_title_idx ON public.posts (lower("Title"));
 CREATE INDEX posts_lower_body_idx ON public.posts (lower(body::text));
 CREATE TABLE public.tags (id integer NOT NULL, CONSTRAINT tags_pkey PRIMARY KEY (id));
-CREATE TABLE public."Audit" (msg text);`), []string{"public"})
+CREATE TABLE public."Audit" (msg text);
+CREATE TABLE public.events (id bigint NOT NULL, at timestamptz NOT NULL, CONSTRAINT events_pkey PRIMARY KEY (id, at)) PARTITION BY RANGE (at);
+CREATE TABLE public.events_2026 PARTITION OF public.events FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+CREATE TABLE public.archived_users () INHERITS (public.users);`), []string{"public"})
 	require.NoError(t, err)
 
 	var got []string
@@ -92,12 +97,16 @@ CREATE TABLE public."Audit" (msg text);`), []string{"public"})
 		"schema.sql:9:3: column public.posts.created_at: prefer-timestamptz: use timestamp with time zone",
 		"schema.sql:10:3: column public.posts.price: no-money: use numeric",
 		"schema.sql:11:3: column public.posts.opens: no-timetz: use timestamp with time zone",
-		"schema.sql:16:1: index public.posts_created_idx: duplicate-index: another index has the same definition",
-		"schema.sql:17:1: index public.posts_created_dup_idx: duplicate-index: another index has the same definition",
-		"schema.sql:19:1: index public.posts_org_idx: redundant-index: another index starts with the same columns",
-		"schema.sql:25:1: table public.tags: prefer-bigint-key: use bigint for the primary key",
-		`schema.sql:26:1: table public."Audit": require-primary-key: the table has no primary key`,
-		`schema.sql:26:1: table public."Audit": snake-case-table: the table name is not snake_case`,
+		"schema.sql:18:1: index public.posts_created_idx: duplicate-index: another index has the same definition",
+		"schema.sql:19:1: index public.posts_created_dup_idx: duplicate-index: another index has the same definition",
+		"schema.sql:21:1: index public.posts_org_idx: redundant-index: another index starts with the same columns",
+		"schema.sql:16:3: foreign key posts_editor_fkey on public.posts: fk-needs-index: no index starts with the columns of the foreign key",
+		"schema.sql:27:1: table public.tags: prefer-bigint-key: use bigint for the primary key",
+		`schema.sql:28:1: table public."Audit": require-primary-key: the table has no primary key`,
+		`schema.sql:28:1: table public."Audit": snake-case-table: the table name is not snake_case`,
+		// A partition takes its parent's primary key, and an INHERITS child
+		// does not.
+		"schema.sql:31:1: table public.archived_users: require-primary-key: the table has no primary key",
 	}, got)
 }
 
@@ -353,6 +362,9 @@ func TestLoad_Errors(t *testing.T) {
 		"a syntax error":    {"rules:\n  - {name: r, on: table, assert: 'table.', message: m}\n", "rule r: ERROR"},
 		"a wrong variable":  {"rules:\n  - {name: r, on: table, assert: 'column.name == \"a\"', message: m}\n", "undeclared reference to 'column'"},
 		"a non-bool assert": {"rules:\n  - {name: r, on: table, assert: '1 + 1', message: m}\n", "rule r: assert is int, not bool"},
+		"a comma in a name": {"rules:\n  - {name: 'a,b', on: table, assert: 'true', message: m}\n", `rule name "a,b" has a comma or a space`},
+		"a space in a name": {"rules:\n  - {name: 'a b', on: table, assert: 'true', message: m}\n", `rule name "a b" has a comma or a space`},
+		"a misspelled key":  {"rule:\n  - {name: r, on: table, assert: 'true', message: m}\n", "field rule not found"},
 		"no rules":          {"", "no rules found in"},
 		"bad yaml":          {"rules: [", "did not find expected"},
 	} {
@@ -371,6 +383,13 @@ func TestLoad_DuplicateName(t *testing.T) {
 
 	_, err := lint.Load([]string{dir}, &bytes.Buffer{})
 	require.ErrorContains(t, err, "b.yml: rule r is also defined in")
+}
+
+func TestLoad_DuplicateNameInOneFile(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "rules.yml", "rules:\n  - {name: r, on: table, assert: 'true', message: m}\n  - {name: r, on: column, assert: 'true', message: m}\n")
+
+	_, err := lint.Load([]string{path}, &bytes.Buffer{})
+	require.ErrorContains(t, err, "rules.yml: rule r is also defined in")
 }
 
 func TestLoad_MissingPath(t *testing.T) {
