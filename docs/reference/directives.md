@@ -13,6 +13,7 @@ A directive that follows code or a `/* ... */` comment on the same line is an er
 | `concurrently` | none | `CREATE INDEX` | Creates and drops the index with `CONCURRENTLY`. |
 | `bulk-alter` | none | `CREATE TABLE` | Merges the table's `ALTER TABLE` actions into one statement. |
 | `ignore` | none | tables, views, enums, domains, composite types, sequences, routines | Leaves the object unmanaged. |
+| `lint-ignore` | rule names (required) | tables, columns, indexes, foreign keys | Turns lint rules off for the object. |
 
 ## -- pista:renamed-from
 
@@ -203,3 +204,26 @@ Each ignored object is reported as an `-- ignored: <name>` comment in `plan` and
 An ignored object still uses its name in the database, so it takes part in the duplicate-name check across object kinds.
 
 The directive attaches to a statement written in the schema file, so it can only ignore an object that you have declared. To keep an existing object that would otherwise be dropped, write its `CREATE` statement with the directive. Because the object is unmanaged, the parser does not validate its column references.
+
+## -- pista:lint-ignore
+
+Turns off the named [lint rules](../guides/linting.md) for one object. Separate several names with commas or spaces. Several directive lines before one object add up.
+
+It applies to:
+
+- the table, before `CREATE TABLE`
+- the column, before a column definition inside `CREATE TABLE`
+- the foreign key, before a `CONSTRAINT ... FOREIGN KEY` line inside `CREATE TABLE`
+- the index, before `CREATE INDEX`
+- each foreign key, before `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`
+
+```sql
+-- pista:lint-ignore require-primary-key
+CREATE TABLE public.event_log (
+    -- pista:lint-ignore prefer-timestamptz, prefer-text
+    at timestamp NOT NULL,
+    body varchar(200) NOT NULL
+);
+```
+
+The directive applies to the object it is written before, and not to the objects on it. Only `pista lint` reads it. It has no effect on `plan` or `apply`, and `pista parse` does not write it. A name that matches no rule is not an error.

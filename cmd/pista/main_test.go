@@ -91,6 +91,30 @@ func TestRun_FmtCheckDiff(t *testing.T) {
 	assert.Contains(t, out.String(), path)
 }
 
+func TestRun_Lint(t *testing.T) {
+	rules := writeFile(t, "rules.yml", "rules:\n  - {name: require-primary-key, on: table, assert: 'table.constraints.values().exists(c, c.type == \"primary_key\")', message: no primary key}\n")
+	bad := writeFile(t, "bad.sql", "CREATE TABLE public.logs (msg text);\n")
+	good := writeFile(t, "good.sql", usersTable)
+
+	var out bytes.Buffer
+	code, stderr := runCLI(t, &out, "lint", "-r", rules, bad)
+	assert.Equal(t, 2, code, "a violated rule exits with 2")
+	assert.Empty(t, stderr)
+	assert.Equal(t, "table public.logs: require-primary-key: no primary key\n", out.String())
+
+	out.Reset()
+	code, stderr = runCLI(t, &out, "lint", "-r", rules, good)
+	assert.Equal(t, 0, code)
+	assert.Empty(t, stderr)
+	assert.Empty(t, out.String())
+
+	// The rules can come from the config file, by the flag's name.
+	config := writeFile(t, "pista.yml", "rules:\n  - "+rules+"\n")
+	out.Reset()
+	code, _ = runCLI(t, &out, "-C", config, "lint", bad)
+	assert.Equal(t, 2, code)
+}
+
 func TestRun_FmtStripRenamedFrom(t *testing.T) {
 	path := writeFile(t, "schema.sql", "-- pista:renamed-from old_users\nCREATE TABLE users (id integer);\n")
 

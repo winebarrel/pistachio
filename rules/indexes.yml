@@ -1,0 +1,12 @@
+rules:
+  # Two indexes with the same columns, INCLUDE columns, access method and
+  # uniqueness. Sort order, operator classes and WHERE clauses are not
+  # compared, so a partial index is left out.
+  - name: duplicate-index
+    on: index
+    assert: >-
+      index.partial || !table.indexes.values().exists(o,
+        o.name != index.name && !o.partial
+        && o.columns == index.columns && o.include == index.include
+        && o.method == index.method && o.unique == index.unique)
+    message: another index has the same definition

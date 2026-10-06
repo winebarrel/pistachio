@@ -1,0 +1,20 @@
+rules:
+  - name: prefer-timestamptz
+    on: column
+    assert: column.base_type != "timestamp without time zone"
+    message: use timestamp with time zone
+
+  - name: prefer-jsonb
+    on: column
+    assert: column.base_type != "json"
+    message: use jsonb
+
+  - name: prefer-text
+    on: column
+    assert: column.base_type != "character varying" && column.base_type != "character"
+    message: use text, with a check constraint if the length matters
+
+  - name: prefer-identity
+    on: column
+    assert: '!(column.type in ["smallserial", "serial", "bigserial"])'
+    message: use an identity column

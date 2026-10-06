@@ -43,6 +43,7 @@ type cli struct {
 	Dump      command.Dump      `cmd:"" help:"Dump the current database schema as SQL."`
 	Fmt       command.Fmt       `cmd:"" help:"Format schema SQL files in place."`
 	Parse     command.Parse     `cmd:"" help:"Parse schema SQL files and print the result as JSON."`
+	Lint      command.Lint      `cmd:"" help:"Check schema SQL files against lint rules. No database is read."`
 }
 
 func main() {
@@ -82,9 +83,10 @@ func run(args []string, stdout, stderr io.Writer, exit func(int)) {
 
 	err = kctx.Run()
 	closePager()
-	// plan --check, diff --check and fmt --check report a difference as exit
-	// code 2 instead of a fatal error. The output has already been written.
-	if errors.Is(err, command.ErrPlanDiff) || errors.Is(err, command.ErrDiffChanges) || errors.Is(err, command.ErrFormatDiff) {
+	// plan --check, diff --check and fmt --check report a difference, and lint
+	// a violated rule, as exit code 2 instead of a fatal error. The output has
+	// already been written.
+	if errors.Is(err, command.ErrPlanDiff) || errors.Is(err, command.ErrDiffChanges) || errors.Is(err, command.ErrFormatDiff) || errors.Is(err, command.ErrLintViolations) {
 		kctx.Exit(2)
 		return
 	}

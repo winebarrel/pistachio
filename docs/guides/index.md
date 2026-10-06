@@ -22,3 +22,4 @@ Each guide covers one task. [Commands](../reference/commands/index.md) lists eve
 - [Diffing schema files](diffing.md): the DDL between two files or two git revisions.
 - [Formatting schema files](formatting.md): `pista fmt`.
 - [Parsing schema files](parsing.md): the schema as JSON.
+- [Linting schema files](linting.md): rules for the objects in schema files.

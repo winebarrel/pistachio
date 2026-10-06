@@ -27,6 +27,30 @@ type ParseResult struct {
 	Sequences      *orderedmap.Map[string, *model.Sequence]      `json:"sequences"`
 	Routines       *orderedmap.Map[string, *model.Routine]       `json:"routines"`
 	ExecuteStmts   []*ExecuteStmt                                `json:"execute_stmts"`
+	// LintIgnores holds the rules that -- pista:lint-ignore turns off, by the
+	// object it is written before. It is kept out of the model and of the
+	// JSON document: it means nothing to plan or apply, and the state hash
+	// that a plan file records is taken over the model.
+	LintIgnores map[LintTarget][]string `json:"-"`
+}
+
+// LintKind is a kind of object a lint rule checks.
+type LintKind string
+
+const (
+	LintTable      LintKind = "table"
+	LintColumn     LintKind = "column"
+	LintIndex      LintKind = "index"
+	LintForeignKey LintKind = "foreign_key"
+)
+
+// LintTarget names one object a lint rule checks. Table is the qualified name
+// of the table, or of the materialized view an index is on. Name is the name
+// of the column, index or foreign key, and empty for a table.
+type LintTarget struct {
+	Kind  LintKind
+	Table string
+	Name  string
 }
 
 // warnWriter receives warnings about statements pistachio does not support and
@@ -302,6 +326,13 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 	concurrentlyDirectives := extractConcurrentlyDirectives(sql, result.Stmts)
 	bulkAlterDirectives := extractBulkAlterDirectives(sql, result.Stmts)
 	ignoreDirectives := extractIgnoreDirectives(sql, result.Stmts)
+	lintIgnoreDirectives := extractLintIgnoreDirectives(sql, result.Stmts)
+	lintIgnores := map[LintTarget][]string{}
+	addLintIgnores := func(target LintTarget, rules []string) {
+		if len(rules) > 0 {
+			lintIgnores[target] = append(lintIgnores[target], rules...)
+		}
+	}
 	executeStmts, executeSkipLocations, err := extractExecuteDirectives(sql, result.Stmts)
 	if err != nil {
 		return nil, err
@@ -316,6 +347,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		node := rawStmt.Stmt
 		renameFrom := stmtDirectives[rawStmt.StmtLocation]
 		ignore := ignoreDirectives[rawStmt.StmtLocation]
+		lintIgnore := lintIgnoreDirectives[rawStmt.StmtLocation]
 		// Where a duplicate-name error points when the repeat is the
 		// statement itself rather than a part of one.
 		stmtOffset := stmtStart(sql, rawStmt)
@@ -428,6 +460,17 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 					fk.RenameFrom = &old
 				}
 			}
+			addLintIgnores(LintTarget{Kind: LintTable, Table: table.FQTN()}, lintIgnore)
+			for colName, rules := range inlineDirectives.LintIgnoreColumns {
+				if _, ok := table.Columns.GetOk(colName); ok {
+					addLintIgnores(LintTarget{Kind: LintColumn, Table: table.FQTN(), Name: colName}, rules)
+				}
+			}
+			for conName, rules := range inlineDirectives.LintIgnoreConstraints {
+				if _, ok := table.ForeignKeys.GetOk(conName); ok {
+					addLintIgnores(LintTarget{Kind: LintForeignKey, Table: table.FQTN(), Name: conName}, rules)
+				}
+			}
 
 			table.Ignore = ignore
 			if !table.Ignore {
@@ -486,6 +529,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				idx.Concurrently = true
 			}
 			fqtn := idx.FQTN()
+			addLintIgnores(LintTarget{Kind: LintIndex, Table: fqtn, Name: idx.Name}, lintIgnore)
 			if t, ok := tables.GetOk(fqtn); ok {
 				if err := setUnique(t.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
@@ -561,6 +605,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
+				addLintIgnores(LintTarget{Kind: LintForeignKey, Table: fqtn, Name: fk.Name}, lintIgnore)
 			}
 			for _, con := range cons {
 				if renameFrom != "" {
@@ -679,7 +724,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		return nil, err
 	}
 
-	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, Routines: routines, ExecuteStmts: executeStmts}
+	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, Routines: routines, ExecuteStmts: executeStmts, LintIgnores: lintIgnores}
 
 	if err := validateNamespaces(parsed); err != nil {
 		return nil, err

@@ -20,7 +20,7 @@ These options have no variable:
 | `PISTA_CONN_STR` | `--conn-string` | plan, apply, apply-from, dump |
 | `PISTA_DBNAME` | `--dbname` | plan, apply, apply-from, dump |
 | `PISTA_PASSWORD` | `--password` | plan, apply, apply-from, dump |
-| `PISTA_SCHEMAS` | `--schemas` | plan, apply, dump, diff, parse |
+| `PISTA_SCHEMAS` | `--schemas` | plan, apply, dump, diff, parse, lint |
 | `PISTA_SEARCH_PATH` | `--search-path` | plan, apply, dump |
 | `PISTA_INCLUDE` | `--include` | plan, apply, dump, diff |
 | `PISTA_EXCLUDE` | `--exclude` | plan, apply, dump, diff |
@@ -53,5 +53,6 @@ These options have no variable:
 | `PISTA_DUMP_EXPLAIN` | `--explain` | dump |
 | `PISTA_DUMP_OMIT_PARTITION_CHILD_INDEX` | `--omit-partition-child-index` | dump |
 | `PISTA_FMT_CHECK` | `--check` | fmt |
+| `PISTA_LINT_RULES` | `--rules` | lint |
 
 Each option is described on its command's page under [Commands](commands/index.md).

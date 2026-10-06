@@ -1,0 +1,15 @@
+rules:
+  - name: require-primary-key
+    on: table
+    assert: table.constraints.values().exists(c, c.type == "primary_key")
+    message: the table has no primary key
+
+  # A foreign key is covered when an index, a primary key or a unique
+  # constraint starts with its columns. A partial index does not count.
+  - name: fk-needs-index
+    on: foreign_key
+    assert: >-
+      table.indexes.values().exists(i, !i.partial && hasPrefix(i.columns, fk.columns))
+      || table.constraints.values().exists(c,
+           c.type in ["primary_key", "unique"] && hasPrefix(c.columns, fk.columns))
+    message: no index starts with the columns of the foreign key

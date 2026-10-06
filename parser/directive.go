@@ -36,6 +36,10 @@ var (
 	// Matches -- pista:bulk-alter with trailing content (invalid usage).
 	bulkAlterWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]+\S`)
 	ignoreDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]*\r?$`)
+	// Matches -- pista:lint-ignore and captures the rule names after it.
+	lintIgnoreDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:lint-ignore[ \t]+(.+?)[ \t]*\r?$`)
+	// Matches -- pista:lint-ignore with no rule name (invalid usage).
+	lintIgnoreWithoutArgPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:lint-ignore[ \t]*\r?$`)
 	// Matches -- pista:ignore with trailing content (invalid usage).
 	ignoreWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]+\S`)
 	// Matches any -- pista: directive, capturing the name (if any) after the colon.
@@ -51,6 +55,7 @@ var knownDirectives = map[string]bool{
 	"bulk-alter":    true,
 	"ignore":        true,
 	"retype-using":  true,
+	"lint-ignore":   true,
 }
 
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
@@ -88,6 +93,10 @@ func validateDirectives(rawSQL string) error {
 
 	if m := retypeUsingWithoutArgPattern.FindStringIndex(rawSQL); m != nil {
 		return &locatedError{msg: "-- pista:retype-using requires an argument", offset: m[0]}
+	}
+
+	if m := lintIgnoreWithoutArgPattern.FindStringIndex(rawSQL); m != nil {
+		return &locatedError{msg: "-- pista:lint-ignore requires a rule name", offset: m[0]}
 	}
 
 	if m := concurrentlyWithArgsPattern.FindStringIndex(rawSQL); m != nil {
@@ -334,6 +343,30 @@ func extractIgnoreDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32
 	return extractFlagDirectives(ignoreDirectivePattern, rawSQL, stmts)
 }
 
+// extractLintIgnoreDirectives scans each statement's leading comment region
+// for `-- pista:lint-ignore <rule>...` comments. Every such line counts.
+// Returns a map from StmtLocation to the rule names.
+func extractLintIgnoreDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32][]string {
+	directives := make(map[int32][]string)
+
+	for _, stmt := range stmts {
+		leading := leadingDirectiveText(stmtRegion(rawSQL, stmt))
+		for _, m := range lintIgnoreDirectivePattern.FindAllStringSubmatch(leading, -1) {
+			directives[stmt.StmtLocation] = append(directives[stmt.StmtLocation], splitRuleNames(m[1])...)
+		}
+	}
+
+	return directives
+}
+
+// splitRuleNames splits the argument of -- pista:lint-ignore into rule names.
+// Commas and spaces both separate them.
+func splitRuleNames(s string) []string {
+	return strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t'
+	})
+}
+
 // extractFlagDirectives scans raw SQL for argument-less directive comments
 // matching pattern in each statement's leading comment region.
 // Returns a set of StmtLocations that have the directive.
@@ -461,17 +494,24 @@ type inlineDirectives struct {
 	Columns     map[string]string // new column name -> old column name
 	Constraints map[string]string // new constraint name -> old constraint name
 	RetypeUsing map[string]string // column name -> USING expression
+	// Rule names from -- pista:lint-ignore, by column or constraint name.
+	LintIgnoreColumns     map[string][]string
+	LintIgnoreConstraints map[string][]string
 }
 
 // extractInlineDirectives scans the raw text of a CREATE TABLE statement for
 // `-- pista:renamed-from <old_name>` and `-- pista:retype-using <expression>`
 // directives that appear on lines immediately before column or constraint
-// definitions. retype-using applies to a column only.
+// definitions. retype-using applies to a column only. -- pista:lint-ignore is
+// read the same way.
 func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	result := &inlineDirectives{
 		Columns:     make(map[string]string),
 		Constraints: make(map[string]string),
 		RetypeUsing: make(map[string]string),
+
+		LintIgnoreColumns:     make(map[string][]string),
+		LintIgnoreConstraints: make(map[string][]string),
 	}
 
 	// Only scan lines inside the column/constraint list (after the opening parenthesis)
@@ -483,6 +523,7 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	lines := strings.Split(body, "\n")
 
 	var pendingRename, pendingRetype string
+	var pendingLint []string
 	for _, line := range lines {
 		// A leading comma belongs to the previous element, so the name that
 		// follows it is the one the directive renames.
@@ -496,17 +537,24 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 			pendingRetype = m[1]
 			continue
 		}
+		if m := lintIgnoreDirectivePattern.FindStringSubmatch(line); m != nil {
+			pendingLint = append(pendingLint, splitRuleNames(m[1])...)
+			continue
+		}
 
 		// Blank lines and other comments keep the pending directives.
 		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}
-		if pendingRename != "" || pendingRetype != "" {
+		if pendingRename != "" || pendingRetype != "" || len(pendingLint) > 0 {
 			upper := strings.ToUpper(trimmed)
 			if strings.HasPrefix(upper, "CONSTRAINT ") {
 				conName := extractConstraintName(trimmed)
 				if conName != "" && pendingRename != "" {
 					result.Constraints[conName] = pendingRename
+				}
+				if conName != "" && len(pendingLint) > 0 {
+					result.LintIgnoreConstraints[conName] = pendingLint
 				}
 			} else {
 				colName := extractColumnName(trimmed)
@@ -516,10 +564,14 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 				if colName != "" && pendingRetype != "" {
 					result.RetypeUsing[colName] = pendingRetype
 				}
+				if colName != "" && len(pendingLint) > 0 {
+					result.LintIgnoreColumns[colName] = pendingLint
+				}
 			}
 		}
 		pendingRename = ""
 		pendingRetype = ""
+		pendingLint = nil
 	}
 
 	return result

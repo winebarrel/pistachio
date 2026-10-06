@@ -82,6 +82,7 @@ nav:
           - guides/diffing.md
           - guides/formatting.md
           - guides/parsing.md
+          - guides/linting.md
   - Reference:
       - Commands:
           - reference/commands/index.md
@@ -92,6 +93,7 @@ nav:
           - reference/commands/diff.md
           - reference/commands/fmt.md
           - reference/commands/parse.md
+          - reference/commands/lint.md
       - reference/directives.md
       - reference/objects.md
       - reference/configuration.md
