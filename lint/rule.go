@@ -50,9 +50,9 @@ type Linter struct {
 
 // Load reads the rules in paths. A path is a rule file, or a directory whose
 // .yml and .yaml files are read in name order. Subdirectories are not read.
-// Two rules with the same name are an error. debug receives what the debug()
-// function prints.
-func Load(paths []string, debug io.Writer) (*Linter, error) {
+// Two rules with the same name are an error. stderr receives what the debug()
+// function prints and the warnings Run writes.
+func Load(paths []string, stderr io.Writer) (*Linter, error) {
 	var files []string
 	for _, path := range paths {
 		info, err := os.Stat(path)
@@ -84,7 +84,7 @@ func Load(paths []string, debug io.Writer) (*Linter, error) {
 		}
 	}
 
-	tr := &trace{w: debug}
+	tr := &trace{w: stderr}
 	envs := newEnvs(tr)
 
 	var rules []*Rule

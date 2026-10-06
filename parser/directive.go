@@ -36,10 +36,8 @@ var (
 	// Matches -- pista:bulk-alter with trailing content (invalid usage).
 	bulkAlterWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]+\S`)
 	ignoreDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]*\r?$`)
-	// Matches -- pista:lint-ignore and captures the rule names after it.
-	lintIgnoreDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:lint-ignore[ \t]+(.+?)[ \t]*\r?$`)
-	// Matches -- pista:lint-ignore with no rule name (invalid usage).
-	lintIgnoreWithoutArgPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:lint-ignore[ \t]*\r?$`)
+	// Matches -- pista:lint-ignore and captures what follows it, if anything.
+	lintIgnoreDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:lint-ignore(?:[ \t]+(.*?))?[ \t]*\r?$`)
 	// Matches -- pista:ignore with trailing content (invalid usage).
 	ignoreWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]+\S`)
 	// Matches any -- pista: directive, capturing the name (if any) after the colon.
@@ -93,10 +91,6 @@ func validateDirectives(rawSQL string) error {
 
 	if m := retypeUsingWithoutArgPattern.FindStringIndex(rawSQL); m != nil {
 		return &locatedError{msg: "-- pista:retype-using requires an argument", offset: m[0]}
-	}
-
-	if m := lintIgnoreWithoutArgPattern.FindStringIndex(rawSQL); m != nil {
-		return &locatedError{msg: "-- pista:lint-ignore requires a rule name", offset: m[0]}
 	}
 
 	if m := concurrentlyWithArgsPattern.FindStringIndex(rawSQL); m != nil {
@@ -352,16 +346,31 @@ func extractLintIgnoreDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[i
 	for _, stmt := range stmts {
 		leading := leadingDirectiveText(stmtRegion(rawSQL, stmt))
 		for _, m := range lintIgnoreDirectivePattern.FindAllStringSubmatch(leading, -1) {
-			directives[stmt.StmtLocation] = append(directives[stmt.StmtLocation], splitRuleNames(m[1])...)
+			directives[stmt.StmtLocation] = append(directives[stmt.StmtLocation], lintIgnoreNames(m[1])...)
 		}
 	}
 
 	return directives
 }
 
-// splitRuleNames splits the argument of -- pista:lint-ignore into rule names.
-// Commas and spaces both separate them.
+// lintIgnoreReason matches the reason that may follow the rule names of
+// -- pista:lint-ignore: a "--" after a space, and the rest of the line.
+var lintIgnoreReason = regexp.MustCompile(`[ \t]--.*$`)
+
+// lintIgnoreNames returns the rule names a -- pista:lint-ignore argument
+// turns off. With no name, it turns off every rule, which LintIgnoreAll
+// stands for.
+func lintIgnoreNames(arg string) []string {
+	if names := splitRuleNames(arg); len(names) > 0 {
+		return names
+	}
+	return []string{LintIgnoreAll}
+}
+
+// splitRuleNames splits the argument of -- pista:lint-ignore into rule names,
+// leaving out the reason after " --". Commas and spaces separate the names.
 func splitRuleNames(s string) []string {
+	s = lintIgnoreReason.ReplaceAllString(" "+s, "")
 	return strings.FieldsFunc(s, func(r rune) bool {
 		return r == ',' || r == ' ' || r == '\t'
 	})
@@ -582,7 +591,7 @@ func extractInlineLintIgnores(rawCreateTableSQL string, base int32) map[int32][]
 		offset += len(line)
 
 		if m := lintIgnoreDirectivePattern.FindStringSubmatch(line); m != nil {
-			pending = append(pending, splitRuleNames(m[1])...)
+			pending = append(pending, lintIgnoreNames(m[1])...)
 			continue
 		}
 		// The opening parenthesis and a leading comma belong to no element.

@@ -49,6 +49,11 @@ func (p Position) String() string {
 	return fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
 }
 
+// LintIgnoreAll is the name in LintIgnores that stands for every rule. A
+// -- pista:lint-ignore with no rule name gives it. No rule can have the empty
+// name.
+const LintIgnoreAll = ""
+
 // LintKind is a kind of object a lint rule checks.
 type LintKind string
 

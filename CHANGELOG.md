@@ -8,7 +8,7 @@
 
 * The new command `pista lint` checks the tables, columns, indexes and foreign keys in schema files against rules written in CEL. `--rules` names rule files or directories of them. A rule reads the objects as `parse` writes them. Each object that breaks a rule is printed with its file, line and column, and the exit status is 2. pistachio has no built-in rules. The repository has standard rules in `rules/` to copy.
 
-* The new directive `-- pista:lint-ignore <rule>...` turns lint rules off for the table, column, index or foreign key it is written before.
+* The new directive `-- pista:lint-ignore [<rule>...] [-- <reason>]` turns lint rules off for the table, column, index or foreign key it is written before. With no rule name, it turns every rule off. `pista lint` warns about a name that no rule has.
 
 ## [1.77.0] - 2026-10-04
 

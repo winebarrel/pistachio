@@ -244,6 +244,58 @@ CREATE INDEX t_a_idx ON public.t (a);`)
 	}, got)
 }
 
+// A directive with no rule name turns off every rule for the object, and is
+// not reported as an unknown name.
+func TestRun_LintIgnoreAll(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "rules.yml", `
+rules:
+  - {name: no-t, on: table, assert: "false", message: table}
+  - {name: no-t2, on: table, assert: "false", message: table 2}
+`)
+	var stderr bytes.Buffer
+	linter, err := lint.Load([]string{path}, &stderr)
+	require.NoError(t, err)
+
+	violations, err := linter.Run(parse(t, `
+-- pista:lint-ignore -- a scratch table
+CREATE TABLE public.t (a int);
+CREATE TABLE public.u (a int);`), []string{"public"})
+	require.NoError(t, err)
+
+	var got []string
+	for _, v := range violations {
+		got = append(got, v.String())
+	}
+	assert.Equal(t, []string{
+		"schema.sql:4:1: table public.u: no-t: table",
+		"schema.sql:4:1: table public.u: no-t2: table 2",
+	}, got)
+	assert.Empty(t, stderr.String())
+}
+
+// A name in -- pista:lint-ignore that no rule of the object's kind has is
+// reported on stderr, and does not change the result.
+func TestRun_LintIgnoreUnknownName(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "rules.yml", `
+rules:
+  - {name: no-t, on: table, assert: "false", message: table}
+  - {name: no-c, on: column, assert: "true", message: column}
+`)
+	var stderr bytes.Buffer
+	linter, err := lint.Load([]string{path}, &stderr)
+	require.NoError(t, err)
+
+	violations, err := linter.Run(parse(t, `
+-- pista:lint-ignore no-t, typo, no-c
+CREATE TABLE public.t (a int);`), []string{"public"})
+	require.NoError(t, err)
+
+	assert.Empty(t, violations)
+	assert.Equal(t, `warning: schema.sql:3:1: table public.t: -- pista:lint-ignore names no table rule typo
+warning: schema.sql:3:1: table public.t: -- pista:lint-ignore names no table rule no-c
+`, stderr.String())
+}
+
 // A table marked -- pista:ignore is not managed, so nothing on it is checked.
 func TestRun_PistaIgnoreSkipsTheTable(t *testing.T) {
 	got := run(t, `

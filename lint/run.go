@@ -46,6 +46,16 @@ type target struct {
 func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, error) {
 	targets := collectTargets(r, schemas)
 
+	// A name in -- pista:lint-ignore that no rule of the object's kind has
+	// turns nothing off, which is most likely a typo.
+	names := map[parser.LintKind]map[string]bool{}
+	for _, rule := range l.Rules {
+		if names[rule.On] == nil {
+			names[rule.On] = map[string]bool{}
+		}
+		names[rule.On][rule.Name] = true
+	}
+
 	var violations []Violation
 	for _, t := range targets {
 		ignored := r.LintIgnores[t.key]
@@ -53,8 +63,13 @@ func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, erro
 		if p, ok := r.Positions[t.key]; ok {
 			pos = p.String()
 		}
+		for _, name := range ignored {
+			if name != parser.LintIgnoreAll && !names[t.key.Kind][name] {
+				fmt.Fprintf(l.trace.w, "warning: %s: -- pista:lint-ignore names no %s rule %s\n", withPosition(pos, t.label), t.key.Kind, name) //nolint:errcheck
+			}
+		}
 		for _, rule := range l.Rules {
-			if rule.On != t.key.Kind || slices.Contains(ignored, rule.Name) {
+			if rule.On != t.key.Kind || slices.Contains(ignored, rule.Name) || slices.Contains(ignored, parser.LintIgnoreAll) {
 				continue
 			}
 

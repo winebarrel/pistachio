@@ -160,10 +160,10 @@ This example works only for names that need no quotes. The keys of `doc.tables` 
 
 ## Turning a rule off for one object
 
-[`-- pista:lint-ignore`](../reference/directives.md#-pistalint-ignore) turns off the named rules for the next object. Separate several names with commas or spaces.
+[`-- pista:lint-ignore`](../reference/directives.md#-pistalint-ignore) turns off the named rules for the next object. Separate several names with commas or spaces. With no name, it turns off every rule. A reason can follow after ` --`.
 
 ```sql
--- pista:lint-ignore require-primary-key
+-- pista:lint-ignore require-primary-key -- rows are only appended and never updated
 CREATE TABLE public.event_log (
     -- pista:lint-ignore prefer-timestamptz
     at timestamp NOT NULL,
@@ -182,5 +182,7 @@ Write it before one of these:
 So the directive goes before the line that `pista lint` reports.
 
 It applies to that object only. The directive on a table does not turn the rule off for the table's columns.
+
+`pista lint` writes a warning to standard error for a name that no rule of the object's kind has, since such a name turns nothing off. The warning does not change the exit status.
 
 A table marked `-- pista:ignore` is not checked at all.

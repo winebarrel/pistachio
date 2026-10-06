@@ -13,7 +13,7 @@ A directive that follows code or a `/* ... */` comment on the same line is an er
 | `concurrently` | none | `CREATE INDEX` | Creates and drops the index with `CONCURRENTLY`. |
 | `bulk-alter` | none | `CREATE TABLE` | Merges the table's `ALTER TABLE` actions into one statement. |
 | `ignore` | none | tables, views, enums, domains, composite types, sequences, routines | Leaves the object unmanaged. |
-| `lint-ignore` | rule names (required) | tables, columns, indexes, foreign keys | Turns lint rules off for the object. |
+| `lint-ignore` | rule names (optional; none means every rule), then ` --` and a reason (optional) | tables, columns, indexes, foreign keys | Turns lint rules off for the object. |
 
 ## -- pista:renamed-from
 
@@ -207,7 +207,7 @@ The directive attaches to a statement written in the schema file, so it can only
 
 ## -- pista:lint-ignore
 
-Turns off the named [lint rules](../guides/linting.md) for one object. Separate several names with commas or spaces. Several directive lines before one object add up.
+Turns off the named [lint rules](../guides/linting.md) for one object. Separate several names with commas or spaces. With no name, it turns off every rule for the object. A reason can follow after ` --`. Several directive lines before one object add up.
 
 It applies to:
 
@@ -220,10 +220,10 @@ It applies to:
 ```sql
 -- pista:lint-ignore require-primary-key
 CREATE TABLE public.event_log (
-    -- pista:lint-ignore prefer-timestamptz, prefer-text
+    -- pista:lint-ignore prefer-timestamptz, prefer-text -- written by an external system
     at timestamp NOT NULL,
     body varchar(200) NOT NULL
 );
 ```
 
-The directive applies to the object it is written before, and not to the objects on it. Only `pista lint` reads it. It has no effect on `plan` or `apply`, and `pista parse` does not write it. A name that matches no rule is not an error.
+The directive applies to the object it is written before, and not to the objects on it. Only `pista lint` reads it. It has no effect on `plan` or `apply`, and `pista parse` does not write it. For a name that no rule of the object's kind has, `pista lint` writes a warning to standard error. The exit status does not change.
