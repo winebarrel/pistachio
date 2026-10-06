@@ -1,7 +1,8 @@
 rules:
   - name: require-primary-key
     on: table
-    description: A partition takes the primary key of its partitioned table.
+    description: Every table needs a key that identifies its rows.
+    # A partition takes the primary key of its partitioned table.
     assert: >-
       table.partition_bound != null
       || table.constraints.values().exists(c, c.type == "primary_key")
@@ -20,8 +21,10 @@ rules:
   - name: fk-needs-index
     on: foreign_key
     description: >-
-      A foreign key is covered when an index, a primary key or a unique
-      constraint starts with its columns. A partial index does not count.
+      Without an index, deleting or updating a referenced row scans the
+      referencing table, and so does a join on the foreign key.
+    # A foreign key is covered when an index, a primary key or a unique
+    # constraint starts with its columns. A partial index does not count.
     assert: >-
       table.indexes.values().exists(i, !i.partial && hasPrefix(i.columns, fk.columns))
       || table.constraints.values().exists(c,

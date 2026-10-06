@@ -27,9 +27,9 @@ rules:
     on: index
     description: >-
       A B-tree index whose key elements start another B-tree index, written the
-      same way. The longer index serves the same queries. A unique index
-      enforces a constraint, and a partial index or one with INCLUDE covers
-      other queries, so they are skipped.
+      same way. The longer index serves the same queries.
+    # A unique index enforces a constraint, and a partial index or one with
+    # INCLUDE covers other queries, so they are skipped.
     assert: >-
       index.unique || index.partial || index.method != "btree" || size(index.include) > 0
       || cel.bind(key,
