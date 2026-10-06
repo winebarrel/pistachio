@@ -455,7 +455,7 @@ func lookupRoutine(routines *orderedmap.Map[string, *model.Routine], schema, nam
 	}
 
 	var found *model.Routine
-	for _, r := range routines.All() {
+	for r := range routines.Values() {
 		if r.Schema != schema || r.Name != name {
 			continue
 		}

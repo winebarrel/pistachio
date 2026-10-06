@@ -804,8 +804,8 @@ func reconcileOwnedSequences(
 	}
 
 	retired := orderedmap.New[string, *model.Sequence]()
-	for _, t := range currentTables.All() {
-		for _, col := range t.Columns.All() {
+	for t := range currentTables.Values() {
+		for col := range t.Columns.Values() {
 			// A serial column's sequence has the default name and is not on
 			// the current side.
 			if col.SerialSequence == nil || !model.IsSerialType(col.TypeName) {
@@ -925,7 +925,7 @@ func renamedColumn(tables *orderedmap.Map[string, *model.Table], fqtn, column st
 	// take its place. A directive left after the rename was applied names a
 	// source that is gone, and the name matches instead.
 	var t *model.Table
-	for _, candidate := range tables.All() {
+	for candidate := range tables.Values() {
 		if candidate.RenameFrom != nil && *candidate.RenameFrom == fqtn {
 			t = candidate
 			break
@@ -937,7 +937,7 @@ func renamedColumn(tables *orderedmap.Map[string, *model.Table], fqtn, column st
 			return nil, nil
 		}
 	}
-	for _, col := range t.Columns.All() {
+	for col := range t.Columns.Values() {
 		if col.RenameFrom != nil && *col.RenameFrom == column {
 			return t, col
 		}

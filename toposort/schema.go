@@ -405,7 +405,7 @@ func addRoutineDeps(
 	// SQL-standard body.
 	atomic := make(map[string]bool, routines.Len())
 
-	for _, r := range routines.All() {
+	for r := range routines.Values() {
 		node := RoutineNode(model.Ident(r.Schema, r.Name))
 		if _, ok := atomic[node]; !ok {
 			atomic[node] = true
@@ -426,7 +426,7 @@ func addRoutineDeps(
 		}
 	}
 
-	for _, r := range routines.All() {
+	for r := range routines.Values() {
 		if !r.Atomic() {
 			continue
 		}
