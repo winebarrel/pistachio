@@ -20,6 +20,9 @@ theme:
     # A section with an index.md opens that page when clicked. Guides and the
     # Commands section under Reference are two.
     - navigation.indexes
+    # Opens every collapsible subsection, such as Writing the schema and
+    # Commands, so the whole tree is visible without clicking through it.
+    - navigation.expand
     - navigation.top
     - content.code.copy
     - content.action.edit
