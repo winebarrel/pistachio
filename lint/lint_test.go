@@ -138,7 +138,12 @@ CREATE TABLE public.s (a int, b int, c int);
 CREATE INDEX s_a_idx ON public.s (a) WITH (fillfactor = 70);
 CREATE INDEX s_ab_idx ON public.s (a, b);
 CREATE INDEX s_c_idx ON public.s (c) TABLESPACE pg_default;
-CREATE INDEX s_c2_idx ON public.s (c) WITH (fillfactor = 50);`), []string{"public"})
+CREATE INDEX s_c2_idx ON public.s (c) WITH (fillfactor = 50);
+CREATE TABLE public.p (status text);
+CREATE INDEX p_cash_idx ON public.p (status) WHERE status = 'PAY TABLESPACE cash';
+CREATE INDEX p_card_idx ON public.p (status) WHERE status = 'PAY TABLESPACE card';
+CREATE INDEX p_with_idx ON public.p (status) WHERE status = 'a WITH (x)';
+CREATE INDEX p_with2_idx ON public.p (status) WHERE status = 'a WITH (y)';`), []string{"public"})
 	require.NoError(t, err)
 
 	var got []string

@@ -3,15 +3,21 @@
 # sort order, INCLUDE and WHERE. WITH (...) and TABLESPACE are removed first,
 # since they do not change the queries an index serves.
 rules:
+  # WITH (...) and TABLESPACE come before WHERE, so they are removed from the
+  # text before WHERE only. A string in the WHERE clause stays as it is.
   - name: duplicate-index
     on: index
     assert: >-
       cel.bind(key,
-        regex.replace(index.definition.substring(index.definition.indexOf(" USING ")),
-          " WITH \\([^)]*\\)| TABLESPACE [^ ]+", ""),
+        cel.bind(d, index.definition.substring(index.definition.indexOf(" USING ")),
+          cel.bind(w, d.indexOf(" WHERE ") >= 0 ? d.indexOf(" WHERE ") : size(d),
+            regex.replace(d.substring(0, w), " WITH \\([^)]*\\)| TABLESPACE [^ ]+", "")
+            + d.substring(w))),
         !table.indexes.values().exists(o, o.name != index.name && o.unique == index.unique
-          && regex.replace(o.definition.substring(o.definition.indexOf(" USING ")),
-               " WITH \\([^)]*\\)| TABLESPACE [^ ]+", "") == key))
+          && cel.bind(d, o.definition.substring(o.definition.indexOf(" USING ")),
+               cel.bind(w, d.indexOf(" WHERE ") >= 0 ? d.indexOf(" WHERE ") : size(d),
+                 regex.replace(d.substring(0, w), " WITH \\([^)]*\\)| TABLESPACE [^ ]+", "")
+                 + d.substring(w))) == key))
     message: another index has the same definition
 
   # A B-tree index whose key elements start another B-tree index, written the
