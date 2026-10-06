@@ -17,15 +17,6 @@ type Index struct {
 	// Size is the size estimate dump --explain writes in a comment above the
 	// index. Only dump sets it.
 	Size string `json:"-"`
-	// The parts of Definition. Columns holds the key column names, with nil
-	// for an expression. Partial reports a WHERE clause. They exist for the
-	// JSON document: only ParseResult.FillDerived sets them, and nothing
-	// reads them.
-	Columns []*string `json:"columns"`
-	Include []string  `json:"include"`
-	Unique  bool      `json:"unique"`
-	Method  string    `json:"method"`
-	Partial bool      `json:"partial"`
 }
 
 func (idx Index) FQTN() string {

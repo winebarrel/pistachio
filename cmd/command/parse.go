@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/winebarrel/pistachio"
+	"github.com/winebarrel/pistachio/document"
 )
 
 type Parse struct {
@@ -38,9 +39,5 @@ func (cmd *Parse) Run(w io.Writer) error {
 
 	// parse qualifies names with the first schema only, so domains are looked
 	// up there.
-	if err := result.FillDerived(cmd.Schemas[:1]); err != nil {
-		return err
-	}
-
-	return writeJSON(w, result)
+	return writeJSON(w, document.New(result, cmd.Schemas[:1]))
 }

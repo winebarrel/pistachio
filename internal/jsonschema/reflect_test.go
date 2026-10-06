@@ -75,10 +75,11 @@ func TestBuild_ColumnsAreAnArray(t *testing.T) {
 
 	columns, ok := table.Properties.Get("columns")
 	require.True(t, ok)
-	require.Len(t, columns.OneOf, 2, "a pointer property is a choice of the type and null")
-	assert.Equal(t, "array", columns.OneOf[0].Type)
-	require.NotNil(t, columns.OneOf[0].Items)
-	assert.Equal(t, "#/$defs/Column", columns.OneOf[0].Items.Ref)
+	// A slice, so an empty table writes [] rather than null.
+	assert.Empty(t, columns.OneOf)
+	assert.Equal(t, "array", columns.Type)
+	require.NotNil(t, columns.Items)
+	assert.Equal(t, "#/$defs/Column", columns.Items.Ref)
 
 	indexes, ok := table.Properties.Get("indexes")
 	require.True(t, ok)
