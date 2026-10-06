@@ -4,6 +4,7 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"slices"
+	"strings"
 
 	"cel.dev/cel-go/common/types"
 	"github.com/winebarrel/orderedmap/v2"
@@ -46,28 +47,12 @@ type target struct {
 func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, error) {
 	targets := collectTargets(r, schemas)
 
-	// A name in -- pista:lint-ignore that no rule of the object's kind has
-	// turns nothing off, which is most likely a typo.
-	names := map[parser.LintKind]map[string]bool{}
-	for _, rule := range l.Rules {
-		if names[rule.On] == nil {
-			names[rule.On] = map[string]bool{}
-		}
-		names[rule.On][rule.Name] = true
-	}
+	l.warnUnknownNames(r, targets)
 
 	var violations []Violation
 	for _, t := range targets {
 		ignored := r.LintIgnores[t.key]
-		var pos string
-		if p, ok := r.Positions[t.key]; ok {
-			pos = p.String()
-		}
-		for _, name := range ignored {
-			if name != parser.LintIgnoreAll && !names[t.key.Kind][name] {
-				fmt.Fprintf(l.trace.w, "warning: %s: -- pista:lint-ignore names no %s rule %s\n", withPosition(pos, t.label), t.key.Kind, name) //nolint:errcheck
-			}
-		}
+		pos := position(r, t.key)
 		for _, rule := range l.Rules {
 			if rule.On != t.key.Kind || slices.Contains(ignored, rule.Name) || slices.Contains(ignored, parser.LintIgnoreAll) {
 				continue
@@ -160,6 +145,55 @@ func addIndexes(add func(parser.LintTarget, string, map[string]any), fqtn string
 		for name, idx := range indexes.All() {
 			add(parser.LintTarget{Kind: parser.LintIndex, Table: fqtn, Name: name},
 				"index "+model.Ident(idx.Schema, idx.Name), map[string]any{"table": table, "index": jsonIndexes[name]})
+		}
+	}
+}
+
+func position(r *parser.ParseResult, key parser.LintTarget) string {
+	if p, ok := r.Positions[key]; ok {
+		return p.String()
+	}
+	return ""
+}
+
+// warnUnknownNames writes a warning for each name in a -- pista:lint-ignore
+// that no rule of the kinds it reaches has. Such a name turns nothing off,
+// which is most likely a typo. A directive on a table that is not checked is
+// left alone.
+func (l *Linter) warnUnknownNames(r *parser.ParseResult, targets []target) {
+	labels := map[parser.LintTarget]string{}
+	for _, t := range targets {
+		labels[t.key] = t.label
+	}
+	names := map[parser.LintKind]map[string]bool{}
+	for _, rule := range l.Rules {
+		if names[rule.On] == nil {
+			names[rule.On] = map[string]bool{}
+		}
+		names[rule.On][rule.Name] = true
+	}
+
+	for _, d := range r.LintIgnoreDirectives {
+		first := d.Targets[0]
+		label, checked := labels[first]
+		if !checked {
+			continue
+		}
+		var kinds []string
+		for _, k := range d.Targets {
+			if !slices.Contains(kinds, string(k.Kind)) {
+				kinds = append(kinds, string(k.Kind))
+			}
+		}
+		for _, name := range d.Rules {
+			known := name == parser.LintIgnoreAll
+			for _, k := range d.Targets {
+				known = known || names[k.Kind][name]
+			}
+			if !known {
+				fmt.Fprintf(l.trace.w, "warning: %s: -- pista:lint-ignore names no %s rule %s\n", //nolint:errcheck
+					withPosition(position(r, first), label), strings.Join(kinds, " or "), name)
+			}
 		}
 	}
 }

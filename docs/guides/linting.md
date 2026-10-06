@@ -189,6 +189,6 @@ So the directive goes before the line that `pista lint` reports.
 
 It applies to that object only. The directive on a table does not turn the rule off for the table's columns.
 
-`pista lint` writes a warning to standard error for a name that no rule of the object's kind has, since such a name turns nothing off. The warning does not change the exit status.
+`pista lint` writes a warning to standard error for a name that turns nothing off: no rule of the kinds the directive reaches has it. A directive before a column with `REFERENCES` reaches both column rules and foreign key rules. The warning does not change the exit status.
 
 A table marked `-- pista:ignore` is not checked at all.

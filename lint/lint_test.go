@@ -254,6 +254,48 @@ CREATE INDEX t_a_idx ON public.t (a);`)
 	}, got)
 }
 
+// A directive before a column with REFERENCES reaches the column and the
+// foreign key, so its names are checked against the rules of both kinds. One
+// directive gives at most one warning per name, and a directive on a table
+// that is not checked gives none.
+func TestRun_LintIgnoreUnknownNameAcrossKinds(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "rules.yml", `
+rules:
+  - {name: col-rule, on: column, assert: "true", message: column}
+  - {name: fk-rule, on: foreign_key, assert: "true", message: fk}
+`)
+	var stderr bytes.Buffer
+	linter, err := lint.Load([]string{path}, &stderr)
+	require.NoError(t, err)
+
+	_, err = linter.Run(parse(t, `
+CREATE TABLE public.u (id bigint PRIMARY KEY);
+CREATE TABLE public.t (
+  -- pista:lint-ignore fk-rule
+  a bigint REFERENCES public.u (id),
+  -- pista:lint-ignore col-rule
+  b bigint REFERENCES public.u (id),
+  -- pista:lint-ignore typo
+  c bigint REFERENCES public.u (id),
+  d bigint,
+  e bigint
+);
+-- pista:lint-ignore other-typo
+ALTER TABLE public.t
+  ADD CONSTRAINT t_d_fkey FOREIGN KEY (d) REFERENCES public.u (id),
+  ADD CONSTRAINT t_e_fkey FOREIGN KEY (e) REFERENCES public.u (id);
+-- pista:ignore
+CREATE TABLE public.skipped (
+  -- pista:lint-ignore ignored-typo
+  x int
+);`), []string{"public"})
+	require.NoError(t, err)
+
+	assert.Equal(t, `warning: schema.sql:9:3: column public.t.c: -- pista:lint-ignore names no column or foreign_key rule typo
+warning: schema.sql:14:1: foreign key t_d_fkey on public.t: -- pista:lint-ignore names no foreign_key rule other-typo
+`, stderr.String())
+}
+
 // A directive with no rule name turns off every rule for the object, and is
 // not reported as an unknown name.
 func TestRun_LintIgnoreAll(t *testing.T) {

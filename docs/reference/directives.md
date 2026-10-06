@@ -226,4 +226,4 @@ CREATE TABLE public.event_log (
 );
 ```
 
-The directive applies to the object it is written before, and not to the objects on it. Only `pista lint` reads it. It has no effect on `plan` or `apply`, and `pista parse` does not write it. For a name that no rule of the object's kind has, `pista lint` writes a warning to standard error. The exit status does not change.
+The directive applies to the object it is written before, and not to the objects on it. Only `pista lint` reads it. It has no effect on `plan` or `apply`, and `pista parse` does not write it. For a name that no rule of the kinds the directive reaches has, `pista lint` writes a warning to standard error. The exit status does not change.
