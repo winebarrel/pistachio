@@ -1,0 +1,10 @@
+rules:
+  - name: snake-case-table
+    on: table
+    assert: table.name.matches('^[a-z_][a-z0-9_]*$')
+    message: the table name is not snake_case
+
+  - name: snake-case-column
+    on: column
+    assert: column.name.matches('^[a-z_][a-z0-9_]*$')
+    message: the column name is not snake_case

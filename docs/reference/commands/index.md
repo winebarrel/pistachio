@@ -13,6 +13,7 @@ pista <command> [option...] [argument...]
 | [`diff`](diff.md) | Print the DDL that changes one schema file into another. | no |
 | [`fmt`](fmt.md) | Format schema files in place. | no |
 | [`parse`](parse.md) | Print, as JSON, the objects that schema files declare. | no |
+| [`lint`](lint.md) | Check schema files against lint rules. | no |
 
 Each command has a page with the same sections: Synopsis, Description, Options, Exit status, Environment, Examples and See also. A page has a Notes section when the command has behavior that does not fit under one option.
 
@@ -36,7 +37,7 @@ These options apply to every command. They can come before or after the command 
 
 ## Exit status
 
-Every command exits with 0 on success and 1 on error. A usage error, such as an unknown flag or a missing argument, exits with 80. `plan --check`, `diff --check` and `fmt --check` exit with 2 to report a difference. Each page says what counts as a difference. See [Exit status](../exit-status.md).
+Every command exits with 0 on success and 1 on error. A usage error, such as an unknown flag or a missing argument, exits with 80. `plan --check`, `diff --check` and `fmt --check` exit with 2 to report a difference, and `lint` exits with 2 to report a violated rule. Each page says what counts. See [Exit status](../exit-status.md).
 
 ## Environment
 

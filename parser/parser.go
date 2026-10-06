@@ -27,6 +27,62 @@ type ParseResult struct {
 	Sequences      *orderedmap.Map[string, *model.Sequence]      `json:"sequences"`
 	Routines       *orderedmap.Map[string, *model.Routine]       `json:"routines"`
 	ExecuteStmts   []*ExecuteStmt                                `json:"execute_stmts"`
+	// LintIgnores holds the rules that -- pista:lint-ignore turns off, by the
+	// object it is written before. It is kept out of the model and of the
+	// JSON document: it means nothing to plan or apply, and the state hash
+	// that a plan file records is taken over the model.
+	LintIgnores map[LintTarget][]string `json:"-"`
+	// LintIgnoreDirectives lists each -- pista:lint-ignore with every object
+	// it reaches. A directive before a column reaches the column and a
+	// foreign key written on it, so pista lint checks its names against the
+	// rules of both kinds at once.
+	LintIgnoreDirectives []LintIgnoreDirective `json:"-"`
+	// Positions holds where each table, column, index and foreign key is
+	// declared, for pista lint to report. It is empty for SQL that came from
+	// no file. Like LintIgnores, it is kept out of the model and the document.
+	Positions map[LintTarget]Position `json:"-"`
+}
+
+// Position is a place in a schema file.
+type Position struct {
+	File   string
+	Line   int
+	Column int
+}
+
+func (p Position) String() string {
+	return fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
+}
+
+// LintIgnoreDirective is one -- pista:lint-ignore, or several lines of it
+// before one element, with the objects it reaches.
+type LintIgnoreDirective struct {
+	Targets []LintTarget
+	Rules   []string
+}
+
+// LintIgnoreAll is the name in LintIgnores that stands for every rule. A
+// -- pista:lint-ignore with no rule name gives it. No rule can have the empty
+// name.
+const LintIgnoreAll = ""
+
+// LintKind is a kind of object a lint rule checks.
+type LintKind string
+
+const (
+	LintTable      LintKind = "table"
+	LintColumn     LintKind = "column"
+	LintIndex      LintKind = "index"
+	LintForeignKey LintKind = "foreign_key"
+)
+
+// LintTarget names one object a lint rule checks. Table is the qualified name
+// of the table, or of the materialized view an index is on. Name is the name
+// of the column, index or foreign key, and empty for a table.
+type LintTarget struct {
+	Kind  LintKind
+	Table string
+	Name  string
 }
 
 // warnWriter receives warnings about statements pistachio does not support and
@@ -302,6 +358,24 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 	concurrentlyDirectives := extractConcurrentlyDirectives(sql, result.Stmts)
 	bulkAlterDirectives := extractBulkAlterDirectives(sql, result.Stmts)
 	ignoreDirectives := extractIgnoreDirectives(sql, result.Stmts)
+	lintIgnoreDirectives := extractLintIgnoreDirectives(sql, result.Stmts)
+	lintIgnores := map[LintTarget][]string{}
+	var lintIgnoreList []LintIgnoreDirective
+	addLintIgnores := func(targets []LintTarget, rules []string) {
+		if len(rules) == 0 || len(targets) == 0 {
+			return
+		}
+		for _, target := range targets {
+			lintIgnores[target] = append(lintIgnores[target], rules...)
+		}
+		lintIgnoreList = append(lintIgnoreList, LintIgnoreDirective{Targets: targets, Rules: rules})
+	}
+	positions := map[LintTarget]Position{}
+	addPosition := func(target LintTarget, offset int32) {
+		if pos, ok := locate(sql, spans, int(offset)); ok {
+			positions[target] = Position{File: pos.path, Line: pos.line, Column: pos.col}
+		}
+	}
 	executeStmts, executeSkipLocations, err := extractExecuteDirectives(sql, result.Stmts)
 	if err != nil {
 		return nil, err
@@ -316,6 +390,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		node := rawStmt.Stmt
 		renameFrom := stmtDirectives[rawStmt.StmtLocation]
 		ignore := ignoreDirectives[rawStmt.StmtLocation]
+		lintIgnore := lintIgnoreDirectives[rawStmt.StmtLocation]
 		// Where a duplicate-name error points when the repeat is the
 		// statement itself rather than a part of one.
 		stmtOffset := stmtStart(sql, rawStmt)
@@ -428,6 +503,9 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 					fk.RenameFrom = &old
 				}
 			}
+			addLintIgnores([]LintTarget{{Kind: LintTable, Table: table.FQTN()}}, lintIgnore)
+			addCreateTablePositions(addPosition, node.GetCreateStmt(), table, stmtOffset)
+			addInlineLintIgnores(addLintIgnores, node.GetCreateStmt(), table, extractInlineLintIgnores(rawStmtSQL, rawStmt.StmtLocation))
 
 			table.Ignore = ignore
 			if !table.Ignore {
@@ -486,6 +564,8 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				idx.Concurrently = true
 			}
 			fqtn := idx.FQTN()
+			addLintIgnores([]LintTarget{{Kind: LintIndex, Table: fqtn, Name: idx.Name}}, lintIgnore)
+			addPosition(LintTarget{Kind: LintIndex, Table: fqtn, Name: idx.Name}, stmtOffset)
 			if t, ok := tables.GetOk(fqtn); ok {
 				if err := setUnique(t.Indexes, idx.Name, "index", idx, fqtn, stmtOffset); err != nil {
 					return nil, err
@@ -553,6 +633,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			if renameFrom != "" && len(cons)+len(fks) > 1 {
 				return nil, fmt.Errorf("pista:renamed-from is ambiguous: ALTER TABLE %s adds %d constraints in one statement", fqtn, len(cons)+len(fks))
 			}
+			var fkTargets []LintTarget
 			for _, fk := range fks {
 				if renameFrom != "" {
 					unquoted := normalizeUnqualifiedDirective(renameFrom)
@@ -561,7 +642,10 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 				if err := setUnique(t.ForeignKeys, fk.Name, "foreign key", fk, fqtn, stmtOffset); err != nil {
 					return nil, err
 				}
+				fkTargets = append(fkTargets, LintTarget{Kind: LintForeignKey, Table: fqtn, Name: fk.Name})
+				addPosition(LintTarget{Kind: LintForeignKey, Table: fqtn, Name: fk.Name}, stmtOffset)
 			}
+			addLintIgnores(fkTargets, lintIgnore)
 			for _, con := range cons {
 				if renameFrom != "" {
 					unquoted := normalizeUnqualifiedDirective(renameFrom)
@@ -679,7 +763,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		return nil, err
 	}
 
-	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, Routines: routines, ExecuteStmts: executeStmts}
+	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, Routines: routines, ExecuteStmts: executeStmts, LintIgnores: lintIgnores, LintIgnoreDirectives: lintIgnoreList, Positions: positions}
 
 	if err := validateNamespaces(parsed); err != nil {
 		return nil, err
@@ -3045,5 +3129,63 @@ func storageParamValue(de *pg_query.DefElem) string {
 		return strings.Join(parts, ".")
 	default:
 		return "true"
+	}
+}
+
+// addCreateTablePositions records where a table, its columns and its foreign
+// keys are declared. A foreign key written as a table constraint is placed at
+// its first keyword. parseCreateStmt has named an unnamed one by then. A key
+// written on a column is placed at the column, and any other at the table.
+func addCreateTablePositions(add func(LintTarget, int32), cs *pg_query.CreateStmt, table *model.Table, stmtOffset int32) {
+	fqtn := table.FQTN()
+	add(LintTarget{Kind: LintTable, Table: fqtn}, stmtOffset)
+
+	namedFKs := map[string]int32{}
+	columnFKs := map[string]int32{}
+	for _, elt := range cs.TableElts {
+		if cd := elt.GetColumnDef(); cd != nil {
+			add(LintTarget{Kind: LintColumn, Table: fqtn, Name: cd.Colname}, cd.Location)
+			for _, c := range cd.Constraints {
+				if con := c.GetConstraint(); con != nil && con.Contype == pg_query.ConstrType_CONSTR_FOREIGN {
+					columnFKs[cd.Colname] = cd.Location
+				}
+			}
+		} else if con := elt.GetConstraint(); con != nil && con.Contype == pg_query.ConstrType_CONSTR_FOREIGN && con.Conname != "" {
+			namedFKs[con.Conname] = con.Location
+		}
+	}
+
+	for name, fk := range table.ForeignKeys.All() {
+		offset := stmtOffset
+		if loc, ok := namedFKs[name]; ok {
+			offset = loc
+		} else if len(fk.Columns) == 1 {
+			if loc, ok := columnFKs[fk.Columns[0]]; ok {
+				offset = loc
+			}
+		}
+		add(LintTarget{Kind: LintForeignKey, Table: fqtn, Name: name}, offset)
+	}
+}
+
+// addInlineLintIgnores gives the rule names of each -- pista:lint-ignore line
+// in a CREATE TABLE to the element written after it. A directive before a
+// column also applies to a foreign key written on that column, since lint
+// reports that key at the column. parseCreateStmt has named every foreign key
+// by then, so an unnamed one is found too.
+func addInlineLintIgnores(add func([]LintTarget, []string), cs *pg_query.CreateStmt, table *model.Table, byOffset map[int32][]string) {
+	fqtn := table.FQTN()
+	for _, elt := range cs.TableElts {
+		if cd := elt.GetColumnDef(); cd != nil {
+			targets := []LintTarget{{Kind: LintColumn, Table: fqtn, Name: cd.Colname}}
+			for _, c := range cd.Constraints {
+				if con := c.GetConstraint(); con != nil && con.Contype == pg_query.ConstrType_CONSTR_FOREIGN {
+					targets = append(targets, LintTarget{Kind: LintForeignKey, Table: fqtn, Name: con.Conname})
+				}
+			}
+			add(targets, byOffset[cd.Location])
+		} else if con := elt.GetConstraint(); con != nil && con.Contype == pg_query.ConstrType_CONSTR_FOREIGN {
+			add([]LintTarget{{Kind: LintForeignKey, Table: fqtn, Name: con.Conname}}, byOffset[con.Location])
+		}
 	}
 }

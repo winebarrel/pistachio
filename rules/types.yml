@@ -1,0 +1,31 @@
+# The types that the PostgreSQL wiki page "Don't Do This" advises against.
+rules:
+  - name: prefer-timestamptz
+    on: column
+    assert: column.base_type != "timestamp without time zone"
+    message: use timestamp with time zone
+
+  - name: no-timetz
+    on: column
+    assert: column.base_type != "time with time zone"
+    message: use timestamp with time zone
+
+  - name: prefer-text
+    on: column
+    assert: column.base_type != "character varying" && column.base_type != "character"
+    message: use text, with a check constraint if the length matters
+
+  - name: no-money
+    on: column
+    assert: column.base_type != "money"
+    message: use numeric
+
+  - name: prefer-identity
+    on: column
+    assert: '!(column.type in ["smallserial", "serial", "bigserial"])'
+    message: use an identity column
+
+  - name: prefer-jsonb
+    on: column
+    assert: column.base_type != "json"
+    message: use jsonb

@@ -36,6 +36,8 @@ var (
 	// Matches -- pista:bulk-alter with trailing content (invalid usage).
 	bulkAlterWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:bulk-alter[ \t]+\S`)
 	ignoreDirectivePattern   = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]*\r?$`)
+	// Matches -- pista:lint-ignore and captures what follows it, if anything.
+	lintIgnoreDirectivePattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:lint-ignore(?:[ \t]+(.*?))?[ \t]*\r?$`)
 	// Matches -- pista:ignore with trailing content (invalid usage).
 	ignoreWithArgsPattern = regexp.MustCompile(`(?m)^[ \t]*--[ \t]*pista:ignore[ \t]+\S`)
 	// Matches any -- pista: directive, capturing the name (if any) after the colon.
@@ -51,6 +53,7 @@ var knownDirectives = map[string]bool{
 	"bulk-alter":    true,
 	"ignore":        true,
 	"retype-using":  true,
+	"lint-ignore":   true,
 }
 
 // validateDirectives checks for unknown -- pista: directives in the raw SQL
@@ -334,6 +337,45 @@ func extractIgnoreDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32
 	return extractFlagDirectives(ignoreDirectivePattern, rawSQL, stmts)
 }
 
+// extractLintIgnoreDirectives scans each statement's leading comment region
+// for `-- pista:lint-ignore <rule>...` comments. Every such line counts.
+// Returns a map from StmtLocation to the rule names.
+func extractLintIgnoreDirectives(rawSQL string, stmts []*pg_query.RawStmt) map[int32][]string {
+	directives := make(map[int32][]string)
+
+	for _, stmt := range stmts {
+		leading := leadingDirectiveText(stmtRegion(rawSQL, stmt))
+		for _, m := range lintIgnoreDirectivePattern.FindAllStringSubmatch(leading, -1) {
+			directives[stmt.StmtLocation] = append(directives[stmt.StmtLocation], lintIgnoreNames(m[1])...)
+		}
+	}
+
+	return directives
+}
+
+// lintIgnoreReason matches the reason that may follow the rule names of
+// -- pista:lint-ignore: a "--" after a space, and the rest of the line.
+var lintIgnoreReason = regexp.MustCompile(`[ \t]--.*$`)
+
+// lintIgnoreNames returns the rule names a -- pista:lint-ignore argument
+// turns off. With no name, it turns off every rule, which LintIgnoreAll
+// stands for.
+func lintIgnoreNames(arg string) []string {
+	if names := splitRuleNames(arg); len(names) > 0 {
+		return names
+	}
+	return []string{LintIgnoreAll}
+}
+
+// splitRuleNames splits the argument of -- pista:lint-ignore into rule names,
+// leaving out the reason after " --". Commas and spaces separate the names.
+func splitRuleNames(s string) []string {
+	s = lintIgnoreReason.ReplaceAllString(" "+s, "")
+	return strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t'
+	})
+}
+
 // extractFlagDirectives scans raw SQL for argument-less directive comments
 // matching pattern in each statement's leading comment region.
 // Returns a set of StmtLocations that have the directive.
@@ -496,6 +538,10 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 			pendingRetype = m[1]
 			continue
 		}
+		// Read by extractInlineLintIgnores.
+		if lintIgnoreDirectivePattern.MatchString(line) {
+			continue
+		}
 
 		// Blank lines and other comments keep the pending directives.
 		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
@@ -520,6 +566,44 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 		}
 		pendingRename = ""
 		pendingRetype = ""
+	}
+
+	return result
+}
+
+// extractInlineLintIgnores scans the element list of a CREATE TABLE statement
+// for -- pista:lint-ignore lines. It maps the offset of the element that
+// follows to the rule names, so the parser can match the directive to a
+// column or a constraint by where it is written, whatever its name. base is
+// the offset of rawCreateTableSQL in the parsed input.
+func extractInlineLintIgnores(rawCreateTableSQL string, base int32) map[int32][]string {
+	result := make(map[int32][]string)
+
+	parenIdx := strings.Index(rawCreateTableSQL, "(")
+	if parenIdx < 0 {
+		return result
+	}
+
+	var pending []string
+	offset := parenIdx
+	for _, line := range strings.SplitAfter(rawCreateTableSQL[parenIdx:], "\n") {
+		lineStart := offset
+		offset += len(line)
+
+		if m := lintIgnoreDirectivePattern.FindStringSubmatch(line); m != nil {
+			pending = append(pending, lintIgnoreNames(m[1])...)
+			continue
+		}
+		// The opening parenthesis and a leading comma belong to no element.
+		trimmed := strings.TrimLeft(line, " \t(,")
+		trimmed = strings.TrimLeft(trimmed, " \t")
+		if strings.TrimSpace(trimmed) == "" || strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		if len(pending) > 0 {
+			result[base+int32(lineStart+len(line)-len(trimmed))] = pending
+			pending = nil
+		}
 	}
 
 	return result
