@@ -36,7 +36,9 @@ func (cmd *Parse) Run(w io.Writer) error {
 		return err
 	}
 
-	if err := result.FillDerived(cmd.Schemas); err != nil {
+	// parse qualifies names with the first schema only, so domains are looked
+	// up there.
+	if err := result.FillDerived(cmd.Schemas[:1]); err != nil {
 		return err
 	}
 

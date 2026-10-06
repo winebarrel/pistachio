@@ -331,7 +331,9 @@ CREATE TABLE public.posts (
     tags varchar(20)[],
     CONSTRAINT posts_user_fkey FOREIGN KEY (user_id) REFERENCES public.users ON DELETE CASCADE
 );
-CREATE UNIQUE INDEX posts_user_idx ON public.posts (user_id, lower(tags[1])) INCLUDE (id) WHERE id > 0;`)
+CREATE UNIQUE INDEX posts_user_idx ON public.posts (user_id, lower(tags[1])) INCLUDE (id) WHERE id > 0;
+CREATE MATERIALIZED VIEW public.recent AS SELECT id, at FROM public.posts;
+CREATE INDEX recent_at_idx ON public.recent USING brin (at);`)
 
 	options := pistachio.Options{
 		ConnString: conn.Config().ConnString(),
@@ -365,6 +367,11 @@ CREATE UNIQUE INDEX posts_user_idx ON public.posts (user_id, lower(tags[1])) INC
 	assert.Equal(t, "cascade", fk["on_delete"])
 	assert.Equal(t, "no action", fk["on_update"])
 	assert.Equal(t, "simple", fk["match"])
+
+	recent := result["views"].(map[string]any)["public.recent"].(map[string]any)
+	mvIdx := recent["indexes"].(map[string]any)["recent_at_idx"].(map[string]any)
+	assert.Equal(t, []any{"at"}, mvIdx["columns"])
+	assert.Equal(t, "brin", mvIdx["method"])
 }
 
 // The document dump writes is the one the published schema describes, which is

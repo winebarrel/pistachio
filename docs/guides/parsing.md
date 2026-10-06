@@ -93,13 +93,13 @@ What PostgreSQL stores as a character code is written as a word. A constraint's 
 
 A generated column keeps its expression in `default`, next to `"generated": "stored"`. That is where the model stores it.
 
-Some fields restate part of another field, so that a reader does not have to take SQL text apart:
+Some fields repeat part of another field in a form that needs no SQL parsing:
 
-- A column's `base_type` is its `type` without the modifier and the array marker. A domain is followed to the type that it is over, and a serial type becomes its integer type. So `timestamp(3) without time zone`, and a domain over it, both become `timestamp without time zone`. `is_array` is `true` when the type, or a domain that it is followed through, is an array. A domain that the document does not contain is left as written. An unqualified domain name is looked up in the schemas of `--schemas`, in order.
-- An index's `columns` lists its key columns in order. An expression is `null`. `include` lists the columns of `INCLUDE`, `unique` is `true` for a unique index, `method` is the access method, such as `btree`, and `partial` is `true` when the index has a `WHERE` clause. Sort order, operator classes and collations are not restated.
-- A foreign key's `ref_columns` lists the referenced columns. `on_delete` and `on_update` are `no action`, `restrict`, `cascade`, `set null` or `set default`, and a key that writes no action reads `no action`. `match` is `simple`, `full` or `partial`.
+- A column's `base_type` is its `type` without the modifier and the array marker. A domain is replaced by the type it is based on, and a serial type by its integer type. For example, `timestamp(3) without time zone` and a domain over it both have the base type `timestamp without time zone`. `is_array` is `true` if the type, or the type a domain is based on, is an array. A domain that is not in the document is not replaced.
+- An index's `columns` lists the key columns in order. An expression is `null`. `include` lists the `INCLUDE` columns. `unique` is `true` for a unique index. `method` is the access method, such as `btree`. `partial` is `true` if the index has a `WHERE` clause. Sort order, operator classes and collations are not included.
+- A foreign key's `ref_columns` lists the referenced columns. `on_delete` and `on_update` are `no action`, `restrict`, `cascade`, `set null` or `set default`. A key that does not specify an action has `no action`. `match` is `simple` or `full`.
 
-Each of them is computed from the other fields of the same document, so `parse` and `dump --json` fill them the same way.
+`parse` looks up an unqualified domain name in the first schema of `--schemas`, then in `public`. `dump --json` looks in each schema of `--schemas`, then in `public`.
 
 Directives appear as fields. `-- pista:renamed-from` becomes `rename_from`, and `-- pista:ignore` becomes `"ignore": true`. On an enum value, the rename is written in the enum's `value_rename_from`, keyed by the new value and sorted by it. `values` remains in the order in which the file writes them.
 

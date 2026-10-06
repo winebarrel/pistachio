@@ -95,11 +95,11 @@ type Column struct {
 	// when the column carries none and default_toast_compression decides.
 	Compression string  `json:"compression"`
 	Comment     *string `json:"comment"`
-	// BaseType and IsArray are written to the JSON document for a reader
-	// that would otherwise take TypeName apart. BaseType is TypeName without
-	// its modifier and array marker, with a domain followed to the type it
-	// is over and a serial type read as its integer type. ParseResult.
-	// FillDerived sets both, and nothing else reads them.
+	// BaseType is TypeName without its modifier and array marker, with a
+	// domain replaced by the type it is based on and a serial type by its
+	// integer type. IsArray reports an array type. They exist for the JSON
+	// document: only ParseResult.FillDerived sets them, and nothing reads
+	// them.
 	BaseType string `json:"base_type"`
 	IsArray  bool   `json:"is_array"`
 }

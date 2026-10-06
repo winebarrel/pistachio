@@ -39,14 +39,15 @@ func compileSchema(t *testing.T) *jsonschema.Schema {
 }
 
 // parseDocument parses the files and returns the document as an any tree, the
-// way a consumer reads it. The marshaling matches command.Parse: json/v2 with
-// the model's marshalers, so the field presence and the shape are what the
-// command writes.
+// way a consumer reads it. It matches command.Parse: the derived fields are
+// filled, and json/v2 writes with the model's marshalers, so the field
+// presence and the shape are what the command writes.
 func parseDocument(t *testing.T, files ...string) any {
 	t.Helper()
 
 	result, err := parser.ParseSQLFilesWithSchema(files, "public")
 	require.NoError(t, err)
+	require.NoError(t, result.FillDerived([]string{"public"}))
 
 	b, err := json.Marshal(result, model.JSONMarshalers)
 	require.NoError(t, err)

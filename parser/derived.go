@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	pg_query "github.com/pganalyze/pg_query_go/v6"
@@ -9,13 +10,18 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// FillDerived sets the fields the JSON document carries so that a reader need
-// not take SQL text apart: a column's base type, and the parts of an index
-// and a foreign key definition. Each is read off what the model already
-// holds, so a document built from the catalog gets them the same way as one
-// built from files. schemas resolves an unqualified domain name, first match
-// wins, as the search path does.
+// FillDerived sets the fields that repeat part of another field in a form that
+// needs no SQL parsing: a column's base type, and the parts of an index and a
+// foreign key definition. It reads only the model, so a document built from
+// the catalog gets the same values as one built from files.
+//
+// An unqualified domain name is looked up in schemas and then in public, the
+// search path that plan, apply and dump set.
 func (r *ParseResult) FillDerived(schemas []string) error {
+	if !slices.Contains(schemas, "public") {
+		schemas = append(slices.Clip(schemas), "public")
+	}
+
 	var domains *orderedmap.Map[string, *model.Domain]
 	if r.Domains != nil {
 		domains = r.Domains
@@ -54,10 +60,9 @@ func (r *ParseResult) FillDerived(schemas []string) error {
 	return nil
 }
 
-// baseType strips a type name down to the type a rule compares: no modifier,
-// no array marker, a domain followed to the type under it and a serial type
-// read as its integer type. A name it does not know is returned as it is,
-// stripped.
+// baseType returns the type name without its modifier and array marker, with
+// a domain replaced by the type it is based on and a serial type by its
+// integer type. It also reports whether the type is an array.
 func baseType(typeName string, domains *orderedmap.Map[string, *model.Domain], schemas []string) (string, bool) {
 	isArray := false
 	seen := map[string]bool{}
@@ -84,9 +89,10 @@ func baseType(typeName string, domains *orderedmap.Map[string, *model.Domain], s
 	}
 }
 
-// stripTypeSuffixes removes every parenthesized modifier and the array marker
-// from a type name, leaving what a double-quoted identifier holds alone.
-// "timestamp(3) without time zone" becomes "timestamp without time zone".
+// stripTypeSuffixes removes the modifiers and the array marker from a type
+// name, and reports whether there was an array marker. Text inside double
+// quotes is kept. "timestamp(3) without time zone" becomes
+// "timestamp without time zone".
 func stripTypeSuffixes(typeName string) (string, bool) {
 	var b strings.Builder
 	quoted := false
@@ -115,8 +121,8 @@ func stripTypeSuffixes(typeName string) (string, bool) {
 	return strings.TrimSpace(b.String()), false
 }
 
-// lookupDomain finds the domain a type name names. A qualified name is looked
-// up as it is, and an unqualified one in each schema in turn.
+// lookupDomain returns the domain that a type name refers to, or nil. An
+// unqualified name is looked up in each schema in turn.
 func lookupDomain(name string, domains *orderedmap.Map[string, *model.Domain], schemas []string) *model.Domain {
 	if d, ok := domains.GetOk(name); ok {
 		return d
@@ -193,12 +199,11 @@ var fkActions = map[string]string{
 var fkMatchTypes = map[string]string{
 	"s": "simple",
 	"f": "full",
-	"p": "partial",
 }
 
 func fillForeignKey(fk *model.ForeignKey) error {
-	// The definition is the constraint clause alone, so it is read as the
-	// ALTER TABLE that would add it.
+	// The definition is only the constraint clause, so parse it inside an
+	// ALTER TABLE.
 	result, err := pg_query.Parse("ALTER TABLE t ADD CONSTRAINT c " + fk.Definition)
 	if err != nil {
 		return err

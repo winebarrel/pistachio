@@ -61,6 +61,7 @@ CREATE DOMAIN public.ts2 AS public.ts;
 CREATE DOMAIN public.ints AS int[];
 CREATE DOMAIN other."My Dom" AS varchar(10);
 CREATE TYPE public.st AS ENUM ('a');
+CREATE TYPE public."t(1)" AS ENUM ('a');
 CREATE TABLE public.t (
   a timestamp,
   b timestamp(3) without time zone,
@@ -75,7 +76,15 @@ CREATE TABLE public.t (
   k st,
   l public.ints,
   m other."My Dom",
-  n unknown_ext_type
+  n unknown_ext_type,
+  o ts[],
+  p public."t(1)",
+  q time(3) with time zone,
+  r bit varying(5),
+  s double precision,
+  u int[][],
+  v character(3),
+  w text
 );`)
 
 	table := result.Tables.Get("public.t")
@@ -100,6 +109,14 @@ CREATE TABLE public.t (
 		{"l", "integer", true},
 		{"m", "character varying", false},
 		{"n", "unknown_ext_type", false},
+		{"o", "timestamp without time zone", true},
+		{"p", `public."t(1)"`, false},
+		{"q", "time with time zone", false},
+		{"r", "bit varying", false},
+		{"s", "double precision", false},
+		{"u", "integer", true},
+		{"v", "character", false},
+		{"w", "text", false},
 	}
 	for _, c := range cases {
 		col := table.Columns.Get(c.name)
@@ -109,18 +126,28 @@ CREATE TABLE public.t (
 	}
 }
 
-// An unqualified domain name resolves against the schemas in order, the way
-// the catalog leaves a name unqualified when the search path reaches it.
-func TestFillDerived_DomainSearchesSchemas(t *testing.T) {
-	result := parseDerived(t, `
+// An unqualified domain name is looked up in the schemas in order and then in
+// public, the search path that plan, apply and dump set.
+func TestFillDerived_DomainSearchPath(t *testing.T) {
+	const sql = `
 CREATE DOMAIN app.code AS char(3);
-CREATE TABLE app.t (c code);`, "app", "public")
+CREATE DOMAIN public.code AS text;
+CREATE DOMAIN public.note AS varchar(10);
+CREATE DOMAIN other.flag AS boolean;
+CREATE TABLE app.t (c code, n note, f flag);`
 
-	col := result.Tables.Get("app.t").Columns.Get("c")
-	assert.Equal(t, "character", col.BaseType)
+	result := parseDerived(t, sql, "app")
+	columns := result.Tables.Get("app.t").Columns
+	assert.Equal(t, "character", columns.Get("c").BaseType, "the first schema wins over public")
+	assert.Equal(t, "character varying", columns.Get("n").BaseType, "public is searched last")
+	assert.Equal(t, "flag", columns.Get("f").BaseType, "a schema off the search path is not searched")
+
+	result = parseDerived(t, sql, "public", "app")
+	columns = result.Tables.Get("app.t").Columns
+	assert.Equal(t, "text", columns.Get("c").BaseType, "schemas are searched in order")
 }
 
-// A domain that names itself through another does not loop.
+// A domain that refers to itself through another does not loop.
 func TestFillDerived_DomainCycle(t *testing.T) {
 	result := parseDerived(t, `
 CREATE DOMAIN public.a AS public.b;
@@ -128,7 +155,7 @@ CREATE DOMAIN public.b AS public.a;
 CREATE TABLE public.t (c public.a);`)
 
 	col := result.Tables.Get("public.t").Columns.Get("c")
-	assert.NotEmpty(t, col.BaseType)
+	assert.Equal(t, "public.a", col.BaseType)
 }
 
 func TestFillDerived_Index(t *testing.T) {
@@ -136,7 +163,8 @@ func TestFillDerived_Index(t *testing.T) {
 CREATE TABLE public.t (a int, b text, c int, d int);
 CREATE UNIQUE INDEX t_full_idx ON public.t USING btree (a DESC, lower(b)) INCLUDE (c, d) WHERE a > 0;
 CREATE INDEX t_plain_idx ON public.t (a, c);
-CREATE INDEX t_gin_idx ON public.t USING gin (to_tsvector('simple', b));`)
+CREATE INDEX t_gin_idx ON public.t USING gin (to_tsvector('simple', b));
+CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLATE "C");`)
 
 	indexes := result.Tables.Get("public.t").Indexes
 
@@ -157,6 +185,11 @@ CREATE INDEX t_gin_idx ON public.t USING gin (to_tsvector('simple', b));`)
 	gin := indexes.Get("t_gin_idx")
 	assert.Equal(t, []*string{nil}, gin.Columns)
 	assert.Equal(t, "gin", gin.Method)
+
+	// An operator class, a sort order or a collation does not make a column
+	// an expression.
+	ops := indexes.Get("t_ops_idx")
+	assert.Equal(t, []*string{new("b"), new("b")}, ops.Columns)
 }
 
 func TestFillDerived_MaterializedViewIndex(t *testing.T) {
@@ -178,7 +211,8 @@ CREATE TABLE public.posts (
   user_id bigint,
   org bigint,
   CONSTRAINT posts_user_fkey FOREIGN KEY (user_id) REFERENCES users ON DELETE CASCADE,
-  CONSTRAINT posts_org_fkey FOREIGN KEY (org, user_id) REFERENCES public.users (org, id) MATCH FULL ON UPDATE SET NULL ON DELETE RESTRICT
+  CONSTRAINT posts_org_fkey FOREIGN KEY (org, user_id) REFERENCES public.users (org, id) MATCH FULL ON UPDATE SET NULL ON DELETE RESTRICT,
+  CONSTRAINT posts_lazy_fkey FOREIGN KEY (id) REFERENCES public.users (id) ON UPDATE SET DEFAULT DEFERRABLE INITIALLY DEFERRED
 );`)
 
 	fks := result.Tables.Get("public.posts").ForeignKeys
@@ -194,6 +228,11 @@ CREATE TABLE public.posts (
 	assert.Equal(t, "restrict", org.OnDelete)
 	assert.Equal(t, "set null", org.OnUpdate)
 	assert.Equal(t, "full", org.Match)
+
+	lazy := fks.Get("posts_lazy_fkey")
+	assert.Equal(t, []string{"id"}, lazy.RefColumns)
+	assert.Equal(t, "no action", lazy.OnDelete)
+	assert.Equal(t, "set default", lazy.OnUpdate)
 }
 
 // The fields are derived from what the model already holds, so a document the
@@ -203,7 +242,7 @@ func TestFillDerived_HandBuiltModel(t *testing.T) {
 	table.Columns = newColumns(&model.Column{Name: "a", TypeName: "character varying(20)[]"})
 	table.Indexes = newIndexes(&model.Index{Schema: "public", Name: "t_a_idx", Table: "t", Definition: "CREATE INDEX t_a_idx ON ONLY public.t USING hash (a)"})
 	table.ForeignKeys = newForeignKeys(&model.ForeignKey{
-		Name: "t_a_fkey", Definition: "FOREIGN KEY (a) REFERENCES other.\"Users\"(\"Name\") ON UPDATE CASCADE ON DELETE SET DEFAULT",
+		Name: "t_a_fkey", Definition: "FOREIGN KEY (a) REFERENCES other.\"Users\"(\"Name\") MATCH FULL ON UPDATE CASCADE ON DELETE SET DEFAULT NOT VALID",
 	})
 
 	result := &parser.ParseResult{Tables: newTables(table)}
@@ -221,16 +260,36 @@ func TestFillDerived_HandBuiltModel(t *testing.T) {
 	assert.Equal(t, []string{"Name"}, fk.RefColumns)
 	assert.Equal(t, "set default", fk.OnDelete)
 	assert.Equal(t, "cascade", fk.OnUpdate)
+	assert.Equal(t, "full", fk.Match)
+}
+
+// A document with nothing in it, or a table with no columns, needs nothing.
+func TestFillDerived_Empty(t *testing.T) {
+	require.NoError(t, (&parser.ParseResult{}).FillDerived([]string{"public"}))
+
+	result := &parser.ParseResult{Tables: newTables(&model.Table{Schema: "public", Name: "t"})}
+	require.NoError(t, result.FillDerived([]string{"public"}))
 }
 
 func TestFillDerived_BadDefinition(t *testing.T) {
-	table := &model.Table{Schema: "public", Name: "t"}
-	table.Indexes = newIndexes(&model.Index{Schema: "public", Name: "i", Table: "t", Definition: "not sql"})
+	for _, def := range []string{"not sql", "SELECT 1"} {
+		table := &model.Table{Schema: "public", Name: "t"}
+		table.Indexes = newIndexes(&model.Index{Schema: "public", Name: "i", Table: "t", Definition: def})
+		result := &parser.ParseResult{Tables: newTables(table)}
+		require.ErrorContains(t, result.FillDerived([]string{"public"}), "index public.i", def)
+	}
 
-	result := &parser.ParseResult{Tables: newTables(table)}
-	require.ErrorContains(t, result.FillDerived([]string{"public"}), "index public.i")
+	for _, def := range []string{"not sql", "CHECK (a > 0)"} {
+		table := &model.Table{Schema: "public", Name: "t"}
+		table.ForeignKeys = newForeignKeys(&model.ForeignKey{Name: "f", Definition: def})
+		result := &parser.ParseResult{Tables: newTables(table)}
+		require.ErrorContains(t, result.FillDerived([]string{"public"}), "foreign key f on public.t", def)
+	}
 
-	table.Indexes = nil
-	table.ForeignKeys = newForeignKeys(&model.ForeignKey{Name: "f", Definition: "not sql"})
-	assert.ErrorContains(t, result.FillDerived([]string{"public"}), "foreign key f")
+	view := &model.View{Schema: "public", Name: "mv", Materialized: true}
+	view.Indexes = newIndexes(&model.Index{Schema: "public", Name: "mv_i", Table: "mv", Definition: "not sql"})
+	views := orderedmap.New[string, *model.View]()
+	views.Set("public.mv", view)
+	result := &parser.ParseResult{Views: views}
+	require.ErrorContains(t, result.FillDerived([]string{"public"}), "index public.mv_i")
 }
