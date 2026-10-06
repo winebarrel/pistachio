@@ -60,17 +60,21 @@ A rule file is YAML with a list of rules:
 rules:
   - name: require-primary-key
     on: table
+    description: Every table needs a key that identifies its rows.
     assert: table.constraints.values().exists(c, c.type == "primary_key")
     message: the table has no primary key
 ```
 
-Each rule has four fields. All of them are required.
+A rule has these fields. All of them except `description` are required.
 
 `name`
 :   The name that the output and `-- pista:lint-ignore` use. It must be unique across all the rule files, and it cannot contain a comma or a space.
 
 `on`
 :   The kind of object the rule checks: `table`, `column`, `index` or `foreign_key`.
+
+`description`
+:   What the rule is for. pistachio does not print it.
 
 `assert`
 :   A [CEL](https://cel.dev/) expression. It must be true for every object of that kind, and it must return a boolean.

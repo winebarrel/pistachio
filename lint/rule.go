@@ -20,12 +20,13 @@ import (
 
 // Rule is one rule read from a rule file.
 type Rule struct {
-	Name    string
-	On      parser.LintKind
-	Assert  string
-	Message string
-	File    string
-	program cel.Program
+	Name        string
+	On          parser.LintKind
+	Description string
+	Assert      string
+	Message     string
+	File        string
+	program     cel.Program
 }
 
 type ruleFile struct {
@@ -33,10 +34,11 @@ type ruleFile struct {
 }
 
 type ruleSpec struct {
-	Name    string `yaml:"name"`
-	On      string `yaml:"on"`
-	Assert  string `yaml:"assert"`
-	Message string `yaml:"message"`
+	Name        string `yaml:"name"`
+	On          string `yaml:"on"`
+	Description string `yaml:"description"`
+	Assert      string `yaml:"assert"`
+	Message     string `yaml:"message"`
 }
 
 // kinds lists the values of on, in the order the documentation gives them.
@@ -168,11 +170,12 @@ func compileRule(spec ruleSpec, file string, envs map[parser.LintKind]*cel.Env) 
 		return nil, fmt.Errorf("%s: assert is %s, not bool", where, t)
 	}
 	return &Rule{
-		Name:    spec.Name,
-		On:      kind,
-		Assert:  spec.Assert,
-		Message: spec.Message,
-		File:    file,
-		program: must(env.Program(ast)),
+		Name:        spec.Name,
+		On:          kind,
+		Description: spec.Description,
+		Assert:      spec.Assert,
+		Message:     spec.Message,
+		File:        file,
+		program:     must(env.Program(ast)),
 	}, nil
 }

@@ -3,10 +3,13 @@
 # sort order, INCLUDE and WHERE. WITH (...) and TABLESPACE are removed first,
 # since they do not change the queries an index serves.
 rules:
-  # WITH (...) and TABLESPACE come before WHERE, so they are removed from the
-  # text before WHERE only. A string in the WHERE clause stays as it is.
   - name: duplicate-index
     on: index
+    description: >-
+      Two indexes that differ only in their names, storage parameters and
+      tablespaces serve the same queries.
+    # WITH (...) and TABLESPACE come before WHERE, so they are removed from the
+    # text before WHERE only. A string in the WHERE clause stays as it is.
     assert: >-
       cel.bind(key,
         cel.bind(d, index.definition.substring(index.definition.indexOf(" USING ")),
@@ -20,12 +23,13 @@ rules:
                  + d.substring(w))) == key))
     message: another index has the same definition
 
-  # A B-tree index whose key elements start another B-tree index, written the
-  # same way. The longer index serves the same queries. A unique index
-  # enforces a constraint, and a partial index or one with INCLUDE covers
-  # other queries, so they are skipped.
   - name: redundant-index
     on: index
+    description: >-
+      A B-tree index whose key elements start another B-tree index, written the
+      same way. The longer index serves the same queries.
+    # A unique index enforces a constraint, and a partial index or one with
+    # INCLUDE covers other queries, so they are skipped.
     assert: >-
       index.unique || index.partial || index.method != "btree" || size(index.include) > 0
       || cel.bind(key,

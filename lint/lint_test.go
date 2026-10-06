@@ -483,6 +483,29 @@ func TestLoad_Directory(t *testing.T) {
 	assert.Equal(t, []string{"a", "b", "c", "l", "d"}, names)
 }
 
+// description is optional, and is not printed.
+func TestLoad_Description(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "rules.yml", `
+rules:
+  - name: with
+    on: table
+    description: why the rule exists
+    assert: "false"
+    message: m
+  - {name: without, on: table, assert: 'true', message: m}
+`)
+	linter, err := lint.Load([]string{path}, &bytes.Buffer{})
+	require.NoError(t, err)
+	require.Len(t, linter.Rules, 2)
+	assert.Equal(t, "why the rule exists", linter.Rules[0].Description)
+	assert.Empty(t, linter.Rules[1].Description)
+
+	violations, err := linter.Run(parse(t, `CREATE TABLE public.t (a int);`), []string{"public"})
+	require.NoError(t, err)
+	require.Len(t, violations, 1)
+	assert.Equal(t, "schema.sql:1:1: table public.t: with: m", violations[0].String())
+}
+
 func TestLoad_BrokenLink(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.Symlink(filepath.Join(dir, "nope.yml"), filepath.Join(dir, "link.yml")))
