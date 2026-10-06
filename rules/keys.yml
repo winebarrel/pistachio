@@ -4,6 +4,16 @@ rules:
     assert: table.constraints.values().exists(c, c.type == "primary_key")
     message: the table has no primary key
 
+  # integer runs out at about 2.1 billion rows.
+  - name: prefer-bigint-key
+    on: table
+    assert: >-
+      table.constraints.values().filter(c, c.type == "primary_key").all(pk,
+        pk.columns.all(name,
+          table.columns.filter(col, col.name == name).all(col,
+            !(col.base_type in ["smallint", "integer"]))))
+    message: use bigint for the primary key
+
   # A foreign key is covered when an index, a primary key or a unique
   # constraint starts with its columns. A partial index does not count.
   - name: fk-needs-index

@@ -6,7 +6,7 @@
 
 * `parse` and `dump --json` write new fields that repeat part of another field in a form that needs no SQL parsing. A column has `base_type` and `is_array`. An index has `columns`, `include`, `unique`, `method` and `partial`. A foreign key has `ref_columns`, `on_delete`, `on_update` and `match`. The JSON Schema is now `schema-1.3.json`.
 
-* The new command `pista lint` checks the tables, columns, indexes and foreign keys in schema files against rules written in CEL. `--rules` names rule files or directories of them. A rule reads the objects as `parse` writes them. pistachio has no built-in rules, and the repository has a set of standard rules in `rules/` to copy. The exit status is 2 when a rule is false for an object.
+* The new command `pista lint` checks the tables, columns, indexes and foreign keys in schema files against rules written in CEL. `--rules` names rule files or directories of them. A rule reads the objects as `parse` writes them. Each object that breaks a rule is printed with its file, line and column, and the exit status is 2. pistachio has no built-in rules. The repository has standard rules in `rules/` to copy.
 
 * The new directive `-- pista:lint-ignore <rule>...` turns lint rules off for the table, column, index or foreign key it is written before.
 

@@ -47,7 +47,7 @@ func run(t *testing.T, rules, sql string) []string {
 }
 
 // The standard rules shipped in the repository, run over a schema that breaks
-// each of them once.
+// each of them, and that holds the cases each must leave alone.
 func TestStandardRules(t *testing.T) {
 	linter, err := lint.Load([]string{filepath.Join("..", "rules")}, &bytes.Buffer{})
 	require.NoError(t, err)
@@ -61,6 +61,8 @@ CREATE TABLE public.posts (
   body json,
   "Title" varchar(100),
   created_at timestamp,
+  price money,
+  opens time with time zone,
   CONSTRAINT posts_pkey PRIMARY KEY (id),
   CONSTRAINT posts_user_fkey FOREIGN KEY (user_id) REFERENCES public.users (id),
   CONSTRAINT posts_org_fkey FOREIGN KEY (org_id) REFERENCES public.users (id)
@@ -68,7 +70,13 @@ CREATE TABLE public.posts (
 CREATE INDEX posts_created_idx ON public.posts (created_at);
 CREATE INDEX posts_created_dup_idx ON public.posts (created_at);
 CREATE INDEX posts_created_part_idx ON public.posts (created_at) WHERE id > 0;
-CREATE INDEX posts_org_idx ON public.posts (org_id, created_at);
+CREATE INDEX posts_org_idx ON public.posts (org_id);
+CREATE INDEX posts_org_created_idx ON public.posts (org_id, created_at);
+CREATE UNIQUE INDEX posts_user_key ON public.posts (user_id);
+CREATE UNIQUE INDEX posts_user_org_key ON public.posts (user_id, org_id);
+CREATE INDEX posts_lower_title_idx ON public.posts (lower("Title"));
+CREATE INDEX posts_lower_body_idx ON public.posts (lower(body::text));
+CREATE TABLE public.tags (id integer NOT NULL, CONSTRAINT tags_pkey PRIMARY KEY (id));
 CREATE TABLE public."Audit" (msg text);`), []string{"public"})
 	require.NoError(t, err)
 
@@ -77,16 +85,19 @@ CREATE TABLE public."Audit" (msg text);`), []string{"public"})
 		got = append(got, v.String())
 	}
 	assert.Equal(t, []string{
-		"column public.posts.id: prefer-identity: use an identity column",
-		"column public.posts.body: prefer-jsonb: use jsonb",
-		`column public.posts."Title": snake-case-column: the column name is not snake_case`,
-		`column public.posts."Title": prefer-text: use text, with a check constraint if the length matters`,
-		"column public.posts.created_at: prefer-timestamptz: use timestamp with time zone",
-		"index public.posts_created_idx: duplicate-index: another index has the same definition",
-		"index public.posts_created_dup_idx: duplicate-index: another index has the same definition",
-		"foreign key posts_user_fkey on public.posts: fk-needs-index: no index starts with the columns of the foreign key",
-		`table public."Audit": require-primary-key: the table has no primary key`,
-		`table public."Audit": snake-case-table: the table name is not snake_case`,
+		"schema.sql:4:3: column public.posts.id: prefer-identity: use an identity column",
+		"schema.sql:7:3: column public.posts.body: prefer-jsonb: use jsonb",
+		`schema.sql:8:3: column public.posts."Title": snake-case-column: the column name is not snake_case`,
+		`schema.sql:8:3: column public.posts."Title": prefer-text: use text, with a check constraint if the length matters`,
+		"schema.sql:9:3: column public.posts.created_at: prefer-timestamptz: use timestamp with time zone",
+		"schema.sql:10:3: column public.posts.price: no-money: use numeric",
+		"schema.sql:11:3: column public.posts.opens: no-timetz: use timestamp with time zone",
+		"schema.sql:16:1: index public.posts_created_idx: duplicate-index: another index has the same definition",
+		"schema.sql:17:1: index public.posts_created_dup_idx: duplicate-index: another index has the same definition",
+		"schema.sql:19:1: index public.posts_org_idx: redundant-index: another index starts with the same columns",
+		"schema.sql:25:1: table public.tags: prefer-bigint-key: use bigint for the primary key",
+		`schema.sql:26:1: table public."Audit": require-primary-key: the table has no primary key`,
+		`schema.sql:26:1: table public."Audit": snake-case-table: the table name is not snake_case`,
 	}, got)
 }
 
@@ -118,11 +129,11 @@ CREATE INDEX mv_a_idx ON public.mv (a);
 CREATE VIEW public.v AS SELECT a FROM public.t;`)
 
 	assert.Equal(t, []string{
-		"table public.t: t: table",
-		"column public.t.a: c: column",
-		"index public.t_b_idx: i: index",
-		"foreign key t_a_fkey on public.t: f: fk",
-		"index public.mv_a_idx: i: index",
+		"schema.sql:3:1: table public.t: t: table",
+		"schema.sql:3:24: column public.t.a: c: column",
+		"schema.sql:4:1: index public.t_b_idx: i: index",
+		"schema.sql:3:38: foreign key t_a_fkey on public.t: f: fk",
+		"schema.sql:6:1: index public.mv_a_idx: i: index",
 	}, got)
 }
 
@@ -139,7 +150,7 @@ CREATE TABLE public.t (a int);
 CREATE MATERIALIZED VIEW public.mv AS SELECT a FROM public.t;
 CREATE INDEX mv_a_idx ON public.mv (a);`)
 
-	assert.Equal(t, []string{"index public.mv_a_idx: i: on mv"}, got)
+	assert.Equal(t, []string{"schema.sql:4:1: index public.mv_a_idx: i: on mv"}, got)
 }
 
 func TestRun_LintIgnore(t *testing.T) {
@@ -177,8 +188,8 @@ CREATE INDEX t_a_idx ON public.t (a);`)
 	// Only the objects on u are left, and the directive on t does not reach
 	// the objects on it.
 	assert.Equal(t, []string{
-		"table public.u: no-t: table",
-		"column public.u.id: no-c: column",
+		"schema.sql:2:1: table public.u: no-t: table",
+		"schema.sql:2:24: column public.u.id: no-c: column",
 	}, got)
 }
 
@@ -203,7 +214,7 @@ CREATE TABLE public.u (a int);
 CREATE MATERIALIZED VIEW public.mv AS SELECT a FROM public.u;
 CREATE INDEX mv_a_idx ON public.mv (a);`)
 
-	assert.Equal(t, []string{"table public.u: no-t: table"}, got)
+	assert.Equal(t, []string{"schema.sql:5:1: table public.u: no-t: table"}, got)
 }
 
 // doc is the whole document, so a rule can read another table.
@@ -222,7 +233,7 @@ CREATE TABLE public.t (a integer, b bigint,
   CONSTRAINT t_a_fkey FOREIGN KEY (a) REFERENCES public.u (id),
   CONSTRAINT t_b_fkey FOREIGN KEY (b) REFERENCES public.u (id));`)
 
-	assert.Equal(t, []string{"foreign key t_a_fkey on public.t: fk-type: the column types differ"}, got)
+	assert.Equal(t, []string{"schema.sql:4:3: foreign key t_a_fkey on public.t: fk-type: the column types differ"}, got)
 }
 
 func TestRun_Functions(t *testing.T) {
@@ -268,8 +279,8 @@ func TestRun_Errors(t *testing.T) {
 		assert string
 		want   string
 	}{
-		"a missing key":     {`column.nope == 1`, "column public.t.a: bad: no such key: nope"},
-		"a result not bool": {`column.name`, "column public.t.a: bad: assert returned string, not bool"},
+		"a missing key":     {`column.nope == 1`, "schema.sql:1:24: column public.t.a: bad: no such key: nope"},
+		"a result not bool": {`column.name`, "schema.sql:1:24: column public.t.a: bad: assert returned string, not bool"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := writeFile(t, t.TempDir(), "rules.yml", "rules:\n  - name: bad\n    on: column\n    assert: '"+tc.assert+"'\n    message: m\n")
@@ -286,8 +297,12 @@ func TestLoad_Directory(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "b.yaml", "rules:\n  - {name: b, on: table, assert: 'true', message: m}\n")
 	writeFile(t, dir, "a.yml", "rules:\n  - {name: a, on: table, assert: 'true', message: m}\n")
+	writeFile(t, dir, "c.YML", "rules:\n  - {name: c, on: table, assert: 'true', message: m}\n")
 	writeFile(t, dir, "notes.txt", "not a rule file")
-	writeFile(t, dir, "sub/c.yml", "rules:\n  - {name: c, on: table, assert: 'true', message: m}\n")
+	writeFile(t, dir, "sub/s.yml", "rules:\n  - {name: s, on: table, assert: 'true', message: m}\n")
+	writeFile(t, dir, "dir.yml/x.yml", "rules:\n  - {name: x, on: table, assert: 'true', message: m}\n")
+	shared := writeFile(t, t.TempDir(), "shared.yml", "rules:\n  - {name: l, on: table, assert: 'true', message: m}\n")
+	require.NoError(t, os.Symlink(shared, filepath.Join(dir, "link.yml")))
 	single := writeFile(t, t.TempDir(), "d.yml", "rules:\n  - {name: d, on: table, assert: 'true', message: m}\n")
 
 	linter, err := lint.Load([]string{dir, single}, &bytes.Buffer{})
@@ -297,7 +312,32 @@ func TestLoad_Directory(t *testing.T) {
 	for _, r := range linter.Rules {
 		names = append(names, r.Name)
 	}
-	assert.Equal(t, []string{"a", "b", "d"}, names, "name order, no subdirectory, then the file")
+	// Name order, with upper-case extensions and links to files, but no
+	// subdirectory; then the file named on its own.
+	assert.Equal(t, []string{"a", "b", "c", "l", "d"}, names)
+}
+
+func TestLoad_BrokenLink(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Symlink(filepath.Join(dir, "nope.yml"), filepath.Join(dir, "link.yml")))
+
+	_, err := lint.Load([]string{dir}, &bytes.Buffer{})
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+// A parse result with no positions, such as one built in memory, prints the
+// object alone.
+func TestRun_NoPosition(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "rules.yml", "rules:\n  - {name: r, on: table, assert: 'false', message: m}\n")
+	linter, err := lint.Load([]string{path}, &bytes.Buffer{})
+	require.NoError(t, err)
+
+	result := parse(t, `CREATE TABLE public.t (a int);`)
+	result.Positions = nil
+	violations, err := linter.Run(result, []string{"public"})
+	require.NoError(t, err)
+	require.Len(t, violations, 1)
+	assert.Equal(t, "table public.t: r: m", violations[0].String())
 }
 
 func TestLoad_Errors(t *testing.T) {

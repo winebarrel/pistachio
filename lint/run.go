@@ -12,15 +12,24 @@ import (
 	"github.com/winebarrel/pistachio/parser"
 )
 
-// Violation is one object for which a rule is false.
+// Violation is one object for which a rule is false. Position is where the
+// object is declared, and empty for SQL that came from no file.
 type Violation struct {
-	Object  string
-	Rule    string
-	Message string
+	Position string
+	Object   string
+	Rule     string
+	Message  string
 }
 
 func (v Violation) String() string {
-	return v.Object + ": " + v.Rule + ": " + v.Message
+	return withPosition(v.Position, v.Object+": "+v.Rule+": "+v.Message)
+}
+
+func withPosition(pos, s string) string {
+	if pos == "" {
+		return s
+	}
+	return pos + ": " + s
 }
 
 // target is one object to check, with the variables a rule of its kind reads.
@@ -43,6 +52,10 @@ func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, erro
 	var violations []Violation
 	for _, t := range targets {
 		ignored := r.LintIgnores[t.key]
+		var pos string
+		if p, ok := r.Positions[t.key]; ok {
+			pos = p.String()
+		}
 		for _, rule := range l.Rules {
 			if rule.On != t.key.Kind || slices.Contains(ignored, rule.Name) {
 				continue
@@ -51,14 +64,14 @@ func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, erro
 			l.trace.object, l.trace.rule = t.label, rule.Name
 			out, _, err := rule.program.Eval(t.vars)
 			if err != nil {
-				return nil, fmt.Errorf("%s: %s: %w", t.label, rule.Name, err)
+				return nil, fmt.Errorf("%s: %w", withPosition(pos, t.label+": "+rule.Name), err)
 			}
 			ok, isBool := out.(types.Bool)
 			if !isBool {
-				return nil, fmt.Errorf("%s: %s: assert returned %s, not bool", t.label, rule.Name, out.Type().TypeName())
+				return nil, fmt.Errorf("%s: assert returned %s, not bool", withPosition(pos, t.label+": "+rule.Name), out.Type().TypeName())
 			}
 			if !ok {
-				violations = append(violations, Violation{Object: t.label, Rule: rule.Name, Message: rule.Message})
+				violations = append(violations, Violation{Position: pos, Object: t.label, Rule: rule.Name, Message: rule.Message})
 			}
 		}
 	}

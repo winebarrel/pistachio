@@ -32,7 +32,7 @@ create table users (id bigint not null, constraint users_pkey primary key (id));
 	var buf bytes.Buffer
 	cmd := &command.Lint{Files: []string{path}, Rules: []string{rules}, Schemas: []string{"public"}}
 	require.ErrorIs(t, cmd.Run(&buf), command.ErrLintViolations)
-	assert.Equal(t, "table public.logs: require-primary-key: no primary key\n", buf.String())
+	assert.Equal(t, path+":2:1: table public.logs: require-primary-key: no primary key\n", buf.String())
 }
 
 func TestLint_Run_NoViolations(t *testing.T) {
@@ -53,7 +53,7 @@ func TestLint_Run_Schema(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := &command.Lint{Files: []string{path}, Rules: []string{rules}, Schemas: []string{"app", "public"}}
 	require.ErrorIs(t, cmd.Run(&buf), command.ErrLintViolations)
-	assert.Equal(t, "table app.logs: require-primary-key: no primary key\n", buf.String())
+	assert.Equal(t, path+":1:1: table app.logs: require-primary-key: no primary key\n", buf.String())
 }
 
 func TestLint_Run_Errors(t *testing.T) {
@@ -68,7 +68,7 @@ func TestLint_Run_Errors(t *testing.T) {
 	}{
 		"a bad rule file": {badRules, schema, "on must be one of"},
 		"a broken schema": {rules, broken, "syntax error"},
-		"a failing rule":  {runtime, schema, "table public.t: r: no such key: nope"},
+		"a failing rule":  {runtime, schema, "1:1: table public.t: r: no such key: nope"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cmd := &command.Lint{Files: []string{tc.file}, Rules: []string{tc.rules}, Schemas: []string{"public"}}

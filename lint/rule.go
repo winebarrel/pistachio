@@ -69,8 +69,17 @@ func Load(paths []string, debug io.Writer) (*Linter, error) {
 		}
 		for _, e := range entries {
 			ext := strings.ToLower(filepath.Ext(e.Name()))
-			if e.Type().IsRegular() && (ext == ".yml" || ext == ".yaml") {
-				files = append(files, filepath.Join(path, e.Name()))
+			if ext != ".yml" && ext != ".yaml" {
+				continue
+			}
+			// Stat follows a symbolic link, so a link to a rule file is read.
+			file := filepath.Join(path, e.Name())
+			info, err := os.Stat(file)
+			if err != nil {
+				return nil, err
+			}
+			if !info.IsDir() {
+				files = append(files, file)
 			}
 		}
 	}
