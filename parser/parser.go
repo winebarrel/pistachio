@@ -41,6 +41,19 @@ type ParseResult struct {
 	// declared, for pista lint to report. It is empty for SQL that came from
 	// no file. Like LintIgnores, it is kept out of the model and the document.
 	Positions map[LintTarget]Position `json:"-"`
+	// AutoNamed holds the indexes and constraints that the files declare
+	// without a name, which pistachio names the way PostgreSQL would. Like
+	// LintIgnores, it is kept out of the model.
+	AutoNamed map[AutoNamedObject]bool `json:"-"`
+}
+
+// AutoNamedObject names an index or a constraint in AutoNamed. Table is the
+// qualified name of its table or materialized view. Index tells an index from
+// a constraint, since the two do not share a namespace.
+type AutoNamedObject struct {
+	Index bool
+	Table string
+	Name  string
 }
 
 // Position is a place in a schema file.
@@ -371,6 +384,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		lintIgnoreList = append(lintIgnoreList, LintIgnoreDirective{Targets: targets, Rules: rules})
 	}
 	positions := map[LintTarget]Position{}
+	autoNamed := map[AutoNamedObject]bool{}
 	addPosition := func(target LintTarget, offset int32) {
 		if pos, ok := locate(sql, spans, int(offset)); ok {
 			positions[target] = Position{File: pos.path, Line: pos.line, Column: pos.col}
@@ -468,10 +482,12 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 
 		case node.GetCreateStmt() != nil:
+			unnamed := unnamedConstraints(node.GetCreateStmt())
 			table, err := parseCreateStmt(node.GetCreateStmt(), defaultSchema)
 			if err != nil {
 				return nil, err
 			}
+			addAutoNamed(autoNamed, table.FQTN(), unnamed)
 			if renameFrom != "" {
 				qualified := qualifyRenameFrom(renameFrom, defaultSchema)
 				table.RenameFrom = &qualified
@@ -552,9 +568,13 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 
 		case node.GetIndexStmt() != nil:
+			unnamed := node.GetIndexStmt().Idxname == ""
 			idx, err := parseIndexStmt(node.GetIndexStmt(), rawStmt, defaultSchema)
 			if err != nil {
 				return nil, err
+			}
+			if unnamed {
+				autoNamed[AutoNamedObject{Index: true, Table: idx.FQTN(), Name: idx.Name}] = true
 			}
 			if renameFrom != "" {
 				unquoted := normalizeUnqualifiedDirective(renameFrom)
@@ -624,10 +644,12 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			applyAlterTableTriggerState(as, t)
 			applyAlterTableColumnStorage(as, t)
 
+			unnamed := unnamedConstraints(as)
 			cons, fks, err := parseAlterTableConstraints(as, defaultSchema)
 			if err != nil {
 				return nil, err
 			}
+			addAutoNamed(autoNamed, fqtn, unnamed)
 			// A rename directive names a single old object, so it cannot be
 			// applied when one statement declares several constraints.
 			if renameFrom != "" && len(cons)+len(fks) > 1 {
@@ -763,7 +785,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 		return nil, err
 	}
 
-	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, Routines: routines, ExecuteStmts: executeStmts, LintIgnores: lintIgnores, LintIgnoreDirectives: lintIgnoreList, Positions: positions}
+	parsed := &ParseResult{Tables: tables, Views: views, Enums: enums, Domains: domains, CompositeTypes: compositeTypes, Sequences: sequences, Routines: routines, ExecuteStmts: executeStmts, LintIgnores: lintIgnores, LintIgnoreDirectives: lintIgnoreList, Positions: positions, AutoNamed: autoNamed}
 
 	if err := validateNamespaces(parsed); err != nil {
 		return nil, err
@@ -3129,6 +3151,48 @@ func storageParamValue(de *pg_query.DefElem) string {
 		return strings.Join(parts, ".")
 	default:
 		return "true"
+	}
+}
+
+// unnamedConstraints lists the constraints that a CREATE TABLE or an ALTER
+// TABLE writes without a name. Parsing the statement fills in their names, so
+// addAutoNamed reads them afterwards.
+func unnamedConstraints(stmt any) []*pg_query.Constraint {
+	var nodes []*pg_query.Node
+	switch s := stmt.(type) {
+	case *pg_query.CreateStmt:
+		for _, elt := range s.TableElts {
+			if cd := elt.GetColumnDef(); cd != nil {
+				nodes = append(nodes, cd.Constraints...)
+			} else {
+				nodes = append(nodes, elt)
+			}
+		}
+	case *pg_query.AlterTableStmt:
+		for _, cmd := range s.Cmds {
+			if c := cmd.GetAlterTableCmd(); c != nil && c.Subtype == pg_query.AlterTableType_AT_AddConstraint {
+				nodes = append(nodes, c.Def)
+			}
+		}
+	}
+
+	var unnamed []*pg_query.Constraint
+	for _, n := range nodes {
+		if con := n.GetConstraint(); con != nil && con.Conname == "" {
+			unnamed = append(unnamed, con)
+		}
+	}
+	return unnamed
+}
+
+// addAutoNamed records the constraints of fqtn that unnamedConstraints found
+// and parsing named. NOT NULL and the other column attributes stay unnamed
+// and are skipped.
+func addAutoNamed(autoNamed map[AutoNamedObject]bool, fqtn string, unnamed []*pg_query.Constraint) {
+	for _, con := range unnamed {
+		if con.Conname != "" {
+			autoNamed[AutoNamedObject{Table: fqtn, Name: con.Conname}] = true
+		}
 	}
 }
 

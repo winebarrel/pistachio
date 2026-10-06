@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,6 +109,51 @@ CREATE TABLE public.archived_users () INHERITS (public.users);`), []string{"publ
 		// A partition takes its parent's primary key, and an INHERITS child
 		// does not.
 		"schema.sql:31:1: table public.archived_users: require-primary-key: the table has no primary key",
+	}, got)
+}
+
+// The naming rules that require a name are commented out in naming.yml. This
+// removes the comment marks and checks them.
+func TestStandardRules_Named(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "rules", "naming.yml"))
+	require.NoError(t, err)
+	var lines []string
+	for line := range strings.Lines(string(data)) {
+		if rest, ok := strings.CutPrefix(line, "  # "); ok && (strings.HasPrefix(rest, "- ") || strings.HasPrefix(rest, "  ")) {
+			line = "  " + rest
+		}
+		lines = append(lines, line)
+	}
+	path := writeFile(t, t.TempDir(), "naming.yml", strings.Join(lines, ""))
+
+	linter, err := lint.Load([]string{path}, &bytes.Buffer{})
+	require.NoError(t, err)
+	var names []string
+	for _, r := range linter.Rules {
+		names = append(names, r.Name)
+	}
+	assert.Equal(t, []string{"snake-case-table", "snake-case-column", "named-index", "named-constraint", "named-foreign-key"}, names)
+
+	violations, err := linter.Run(parse(t, `
+CREATE TABLE public.u (id bigint PRIMARY KEY);
+CREATE TABLE public.v (id bigint, CONSTRAINT v_pkey PRIMARY KEY (id));
+CREATE TABLE public.t (
+  a bigint REFERENCES public.u (id),
+  b bigint,
+  CONSTRAINT t_b_fkey FOREIGN KEY (b) REFERENCES public.u (id)
+);
+CREATE INDEX ON public.t (a);
+CREATE INDEX t_b_idx ON public.t (b);`), []string{"public"})
+	require.NoError(t, err)
+
+	var got []string
+	for _, v := range violations {
+		got = append(got, v.String())
+	}
+	assert.Equal(t, []string{
+		"schema.sql:2:1: table public.u: named-constraint: a constraint on the table has no name",
+		"schema.sql:9:1: index public.t_a_idx: named-index: the index has no name",
+		"schema.sql:5:3: foreign key t_a_fkey on public.t: named-foreign-key: the foreign key has no name",
 	}, got)
 }
 

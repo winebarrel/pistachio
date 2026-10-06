@@ -25,12 +25,13 @@ type Document struct {
 	Views  *orderedmap.Map[string, *View]  `json:"views"`
 }
 
-// Table is a table with its columns, indexes and foreign keys replaced by the
-// types of this package. Columns is an array in the column order, as the model
-// writes it.
+// Table is a table with its columns, constraints, indexes and foreign keys
+// replaced by the types of this package. Columns is an array in the column
+// order, as the model writes it.
 type Table struct {
 	*model.Table
 	Columns     []*Column                            `json:"columns"`
+	Constraints *orderedmap.Map[string, *Constraint] `json:"constraints"`
 	Indexes     *orderedmap.Map[string, *Index]      `json:"indexes"`
 	ForeignKeys *orderedmap.Map[string, *ForeignKey] `json:"foreign_keys"`
 }
@@ -50,31 +51,42 @@ type Column struct {
 	IsArray  bool   `json:"is_array"`
 }
 
+// Constraint adds AutoNamed, which reports a constraint that the files
+// declare without a name. The catalog does not record it, so it is false in a
+// document built from the catalog.
+type Constraint struct {
+	*model.Constraint
+	AutoNamed bool `json:"auto_named"`
+}
+
 // Index adds the parts of the index definition. Columns holds the key column
 // names, with nil for an expression. Partial reports a WHERE clause.
+// AutoNamed is as in Constraint.
 type Index struct {
 	*model.Index
-	Columns []*string `json:"columns"`
-	Include []string  `json:"include"`
-	Unique  bool      `json:"unique"`
-	Method  string    `json:"method"`
-	Partial bool      `json:"partial"`
+	Columns   []*string `json:"columns"`
+	Include   []string  `json:"include"`
+	Unique    bool      `json:"unique"`
+	Method    string    `json:"method"`
+	Partial   bool      `json:"partial"`
+	AutoNamed bool      `json:"auto_named"`
 }
 
 // ForeignKey adds the parts of the key definition. OnDelete and OnUpdate hold
 // the action in lower case, "no action" when the key specifies none. Match is
-// simple or full.
+// simple or full. AutoNamed is as in Constraint.
 type ForeignKey struct {
 	*model.ForeignKey
 	RefColumns []string `json:"ref_columns"`
 	OnDelete   string   `json:"on_delete"`
 	OnUpdate   string   `json:"on_update"`
 	Match      string   `json:"match"`
+	AutoNamed  bool     `json:"auto_named"`
 }
 
-// New builds the document for a parse result. It reads only the model, so a
-// document built from the catalog gets the same values as one built from
-// files.
+// New builds the document for a parse result. Apart from AutoNamed, it reads
+// only the model, so a document built from the catalog gets the same values
+// as one built from files.
 //
 // An unqualified domain name is looked up in schemas and then in public, the
 // search path that plan, apply and dump set.
@@ -97,22 +109,30 @@ func New(r *parser.ParseResult, schemas []string) *Document {
 	if r.Tables != nil {
 		doc.Tables = orderedmap.New[string, *Table]()
 		for key, t := range r.Tables.All() {
-			doc.Tables.Set(key, newTable(t, domains, schemas))
+			doc.Tables.Set(key, newTable(t, domains, schemas, r.AutoNamed))
 		}
 	}
 
 	if r.Views != nil {
 		doc.Views = orderedmap.New[string, *View]()
 		for key, v := range r.Views.All() {
-			doc.Views.Set(key, &View{View: v, Indexes: newIndexes(v.Indexes)})
+			doc.Views.Set(key, &View{View: v, Indexes: newIndexes(v.Indexes, key, r.AutoNamed)})
 		}
 	}
 
 	return doc
 }
 
-func newTable(t *model.Table, domains *orderedmap.Map[string, *model.Domain], schemas []string) *Table {
-	table := &Table{Table: t, Indexes: newIndexes(t.Indexes)}
+func newTable(t *model.Table, domains *orderedmap.Map[string, *model.Domain], schemas []string, autoNamed map[parser.AutoNamedObject]bool) *Table {
+	fqtn := t.FQTN()
+	table := &Table{Table: t, Indexes: newIndexes(t.Indexes, fqtn, autoNamed)}
+
+	if t.Constraints != nil {
+		table.Constraints = orderedmap.New[string, *Constraint]()
+		for key, c := range t.Constraints.All() {
+			table.Constraints.Set(key, &Constraint{Constraint: c, AutoNamed: autoNamed[parser.AutoNamedObject{Table: fqtn, Name: c.Name}]})
+		}
+	}
 
 	if t.Columns != nil {
 		table.Columns = []*Column{}
@@ -126,7 +146,9 @@ func newTable(t *model.Table, domains *orderedmap.Map[string, *model.Domain], sc
 	if t.ForeignKeys != nil {
 		table.ForeignKeys = orderedmap.New[string, *ForeignKey]()
 		for key, fk := range t.ForeignKeys.All() {
-			table.ForeignKeys.Set(key, newForeignKey(fk))
+			f := newForeignKey(fk)
+			f.AutoNamed = autoNamed[parser.AutoNamedObject{Table: fqtn, Name: fk.Name}]
+			table.ForeignKeys.Set(key, f)
 		}
 	}
 
@@ -210,14 +232,17 @@ func lookupDomain(name string, domains *orderedmap.Map[string, *model.Domain], s
 	return nil
 }
 
-func newIndexes(indexes *orderedmap.Map[string, *model.Index]) *orderedmap.Map[string, *Index] {
+// newIndexes wraps the indexes of the table or materialized view fqtn.
+func newIndexes(indexes *orderedmap.Map[string, *model.Index], fqtn string, autoNamed map[parser.AutoNamedObject]bool) *orderedmap.Map[string, *Index] {
 	if indexes == nil {
 		return nil
 	}
 
 	m := orderedmap.New[string, *Index]()
 	for key, idx := range indexes.All() {
-		m.Set(key, newIndex(idx))
+		index := newIndex(idx)
+		index.AutoNamed = autoNamed[parser.AutoNamedObject{Index: true, Table: fqtn, Name: idx.Name}]
+		m.Set(key, index)
 	}
 
 	return m
