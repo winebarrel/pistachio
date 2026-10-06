@@ -82,9 +82,7 @@ func TestColumn_MarshalJSON(t *testing.T) {
 		"storage_type": "",
 		"type_storage": "",
 		"compression": "",
-		"comment": null,
-		"base_type": "",
-		"is_array": false
+		"comment": null
 	}`, marshalJSON(t, col))
 }
 
@@ -105,9 +103,7 @@ func TestColumn_MarshalJSON_ZeroValues(t *testing.T) {
 		"storage_type": "",
 		"type_storage": "",
 		"compression": "",
-		"comment": null,
-		"base_type": "",
-		"is_array": false
+		"comment": null
 	}`, marshalJSON(t, col))
 }
 
@@ -193,11 +189,7 @@ func TestForeignKey_MarshalJSON(t *testing.T) {
 		"schema": "public",
 		"table": "posts",
 		"ref_schema": "public",
-		"ref_table": "users",
-		"ref_columns": [],
-		"on_delete": "",
-		"on_update": "",
-		"match": ""
+		"ref_table": "users"
 	}`, marshalJSON(t, fk))
 }
 
@@ -324,12 +316,7 @@ func TestIndex_MarshalJSON(t *testing.T) {
 		"table_space": null,
 		"concurrently": true,
 		"comment": null,
-		"attached": false,
-		"columns": [],
-		"include": [],
-		"unique": false,
-		"method": "",
-		"partial": false
+		"attached": false
 	}`, marshalJSON(t, idx))
 }
 

@@ -17,6 +17,12 @@ create table public.items (
 
 ```json
 {
+  "enums": {},
+  "domains": {},
+  "composite_types": {},
+  "sequences": {},
+  "routines": {},
+  "execute_stmts": [],
   "tables": {
     "public.items": {
       "oid": 0,
@@ -34,6 +40,10 @@ create table public.items (
       "partition_bound": null,
       "row_security": false,
       "force_row_security": false,
+      "constraints": {},
+      "policies": {},
+      "triggers": {},
+      "comment": null,
       "columns": [
         {
           "name": "id",
@@ -50,24 +60,16 @@ create table public.items (
           "storage_type": "",
           "type_storage": "",
           "compression": "",
-          "comment": null
+          "comment": null,
+          "base_type": "bigint",
+          "is_array": false
         }
       ],
-      "constraints": {},
-      "foreign_keys": {},
       "indexes": {},
-      "policies": {},
-      "triggers": {},
-      "comment": null
+      "foreign_keys": {}
     }
   },
-  "views": {},
-  "enums": {},
-  "domains": {},
-  "composite_types": {},
-  "sequences": {},
-  "routines": {},
-  "execute_stmts": []
+  "views": {}
 }
 ```
 
@@ -100,6 +102,8 @@ Some fields repeat part of another field in a form that needs no SQL parsing:
 - A foreign key's `ref_columns` lists the referenced columns. `on_delete` and `on_update` are `no action`, `restrict`, `cascade`, `set null` or `set default`. A key that does not specify an action has `no action`. `match` is `simple` or `full`.
 
 `parse` looks up an unqualified domain name in the first schema of `--schemas`, then in `public`. `dump --json` looks in each schema of `--schemas`, then in `public`.
+
+If an index or foreign key definition cannot be parsed, its added fields are empty. This happens with syntax that PostgreSQL 18 added, such as a foreign key with `NOT ENFORCED`, because pistachio parses SQL with the PostgreSQL 17 grammar.
 
 Directives appear as fields. `-- pista:renamed-from` becomes `rename_from`, and `-- pista:ignore` becomes `"ignore": true`. On an enum value, the rename is written in the enum's `value_rename_from`, keyed by the new value and sorted by it. `values` remains in the order in which the file writes them.
 

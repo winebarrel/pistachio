@@ -1,4 +1,4 @@
-package parser_test
+package document_test
 
 import (
 	"testing"
@@ -6,11 +6,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/orderedmap/v2"
+	"github.com/winebarrel/pistachio/document"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
 )
 
-func parseDerived(t *testing.T, sql string, schemas ...string) *parser.ParseResult {
+func newDocument(t *testing.T, sql string, schemas ...string) *document.Document {
 	t.Helper()
 
 	if len(schemas) == 0 {
@@ -18,8 +19,15 @@ func parseDerived(t *testing.T, sql string, schemas ...string) *parser.ParseResu
 	}
 	result, err := parser.ParseSQLSourcesWithSchema([]parser.Source{{Name: "schema.sql", SQL: sql}}, schemas[0])
 	require.NoError(t, err)
-	require.NoError(t, result.FillDerived(schemas))
-	return result
+	return document.New(result, schemas)
+}
+
+func columnsByName(table *document.Table) map[string]*document.Column {
+	columns := map[string]*document.Column{}
+	for _, c := range table.Columns {
+		columns[c.Name] = c
+	}
+	return columns
 }
 
 func newTables(tables ...*model.Table) *orderedmap.Map[string, *model.Table] {
@@ -54,8 +62,8 @@ func newForeignKeys(fks ...*model.ForeignKey) *orderedmap.Map[string, *model.For
 	return m
 }
 
-func TestFillDerived_ColumnBaseType(t *testing.T) {
-	result := parseDerived(t, `
+func TestNew_ColumnBaseType(t *testing.T) {
+	doc := newDocument(t, `
 CREATE DOMAIN public.ts AS timestamp(3);
 CREATE DOMAIN public.ts2 AS public.ts;
 CREATE DOMAIN public.ints AS int[];
@@ -87,8 +95,9 @@ CREATE TABLE public.t (
   w text
 );`)
 
-	table := result.Tables.Get("public.t")
+	table := doc.Tables.Get("public.t")
 	require.NotNil(t, table)
+	columns := columnsByName(table)
 
 	cases := []struct {
 		name     string
@@ -119,16 +128,20 @@ CREATE TABLE public.t (
 		{"w", "text", false},
 	}
 	for _, c := range cases {
-		col := table.Columns.Get(c.name)
+		col := columns[c.name]
 		require.NotNil(t, col, c.name)
 		assert.Equal(t, c.baseType, col.BaseType, c.name)
 		assert.Equal(t, c.isArray, col.IsArray, c.name)
 	}
+
+	// The columns keep the order the table declares them in.
+	assert.Equal(t, "a", table.Columns[0].Name)
+	assert.Equal(t, "w", table.Columns[len(table.Columns)-1].Name)
 }
 
 // An unqualified domain name is looked up in the schemas in order and then in
 // public, the search path that plan, apply and dump set.
-func TestFillDerived_DomainSearchPath(t *testing.T) {
+func TestNew_DomainSearchPath(t *testing.T) {
 	const sql = `
 CREATE DOMAIN app.code AS char(3);
 CREATE DOMAIN public.code AS text;
@@ -136,37 +149,34 @@ CREATE DOMAIN public.note AS varchar(10);
 CREATE DOMAIN other.flag AS boolean;
 CREATE TABLE app.t (c code, n note, f flag);`
 
-	result := parseDerived(t, sql, "app")
-	columns := result.Tables.Get("app.t").Columns
-	assert.Equal(t, "character", columns.Get("c").BaseType, "the first schema wins over public")
-	assert.Equal(t, "character varying", columns.Get("n").BaseType, "public is searched last")
-	assert.Equal(t, "flag", columns.Get("f").BaseType, "a schema off the search path is not searched")
+	columns := columnsByName(newDocument(t, sql, "app").Tables.Get("app.t"))
+	assert.Equal(t, "character", columns["c"].BaseType, "the first schema wins over public")
+	assert.Equal(t, "character varying", columns["n"].BaseType, "public is searched last")
+	assert.Equal(t, "flag", columns["f"].BaseType, "a schema off the search path is not searched")
 
-	result = parseDerived(t, sql, "public", "app")
-	columns = result.Tables.Get("app.t").Columns
-	assert.Equal(t, "text", columns.Get("c").BaseType, "schemas are searched in order")
+	columns = columnsByName(newDocument(t, sql, "public", "app").Tables.Get("app.t"))
+	assert.Equal(t, "text", columns["c"].BaseType, "schemas are searched in order")
 }
 
 // A domain that refers to itself through another does not loop.
-func TestFillDerived_DomainCycle(t *testing.T) {
-	result := parseDerived(t, `
+func TestNew_DomainCycle(t *testing.T) {
+	doc := newDocument(t, `
 CREATE DOMAIN public.a AS public.b;
 CREATE DOMAIN public.b AS public.a;
 CREATE TABLE public.t (c public.a);`)
 
-	col := result.Tables.Get("public.t").Columns.Get("c")
-	assert.Equal(t, "public.a", col.BaseType)
+	assert.Equal(t, "public.a", doc.Tables.Get("public.t").Columns[0].BaseType)
 }
 
-func TestFillDerived_Index(t *testing.T) {
-	result := parseDerived(t, `
+func TestNew_Index(t *testing.T) {
+	doc := newDocument(t, `
 CREATE TABLE public.t (a int, b text, c int, d int);
 CREATE UNIQUE INDEX t_full_idx ON public.t USING btree (a DESC, lower(b)) INCLUDE (c, d) WHERE a > 0;
 CREATE INDEX t_plain_idx ON public.t (a, c);
 CREATE INDEX t_gin_idx ON public.t USING gin (to_tsvector('simple', b));
 CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLATE "C");`)
 
-	indexes := result.Tables.Get("public.t").Indexes
+	indexes := doc.Tables.Get("public.t").Indexes
 
 	full := indexes.Get("t_full_idx")
 	assert.Equal(t, []*string{new("a"), nil}, full.Columns)
@@ -192,19 +202,19 @@ CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLA
 	assert.Equal(t, []*string{new("b"), new("b")}, ops.Columns)
 }
 
-func TestFillDerived_MaterializedViewIndex(t *testing.T) {
-	result := parseDerived(t, `
+func TestNew_MaterializedViewIndex(t *testing.T) {
+	doc := newDocument(t, `
 CREATE TABLE public.t (a int);
 CREATE MATERIALIZED VIEW public.mv AS SELECT a FROM public.t;
 CREATE UNIQUE INDEX mv_a_idx ON public.mv (a);`)
 
-	idx := result.Views.Get("public.mv").Indexes.Get("mv_a_idx")
+	idx := doc.Views.Get("public.mv").Indexes.Get("mv_a_idx")
 	assert.Equal(t, []*string{new("a")}, idx.Columns)
 	assert.True(t, idx.Unique)
 }
 
-func TestFillDerived_ForeignKey(t *testing.T) {
-	result := parseDerived(t, `
+func TestNew_ForeignKey(t *testing.T) {
+	doc := newDocument(t, `
 CREATE TABLE public.users (id bigint NOT NULL, org bigint NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id), CONSTRAINT users_org_key UNIQUE (org, id));
 CREATE TABLE public.posts (
   id bigint,
@@ -215,7 +225,7 @@ CREATE TABLE public.posts (
   CONSTRAINT posts_lazy_fkey FOREIGN KEY (id) REFERENCES public.users (id) ON UPDATE SET DEFAULT DEFERRABLE INITIALLY DEFERRED
 );`)
 
-	fks := result.Tables.Get("public.posts").ForeignKeys
+	fks := doc.Tables.Get("public.posts").ForeignKeys
 
 	user := fks.Get("posts_user_fkey")
 	assert.Equal(t, []string{"id"}, user.RefColumns)
@@ -235,9 +245,9 @@ CREATE TABLE public.posts (
 	assert.Equal(t, "set default", lazy.OnUpdate)
 }
 
-// The fields are derived from what the model already holds, so a document the
-// catalog side builds gets them the same way.
-func TestFillDerived_HandBuiltModel(t *testing.T) {
+// The document reads only the model, so a model the catalog builds gets the
+// same values.
+func TestNew_CatalogModel(t *testing.T) {
 	table := &model.Table{Schema: "public", Name: "t"}
 	table.Columns = newColumns(&model.Column{Name: "a", TypeName: "character varying(20)[]"})
 	table.Indexes = newIndexes(&model.Index{Schema: "public", Name: "t_a_idx", Table: "t", Definition: "CREATE INDEX t_a_idx ON ONLY public.t USING hash (a)"})
@@ -245,51 +255,81 @@ func TestFillDerived_HandBuiltModel(t *testing.T) {
 		Name: "t_a_fkey", Definition: "FOREIGN KEY (a) REFERENCES other.\"Users\"(\"Name\") MATCH FULL ON UPDATE CASCADE ON DELETE SET DEFAULT NOT VALID",
 	})
 
-	result := &parser.ParseResult{Tables: newTables(table)}
-	require.NoError(t, result.FillDerived([]string{"public"}))
+	doc := document.New(&parser.ParseResult{Tables: newTables(table)}, []string{"public"})
+	got := doc.Tables.Get("public.t")
 
-	col := table.Columns.Get("a")
-	assert.Equal(t, "character varying", col.BaseType)
-	assert.True(t, col.IsArray)
+	assert.Equal(t, "character varying", got.Columns[0].BaseType)
+	assert.True(t, got.Columns[0].IsArray)
 
-	idx := table.Indexes.Get("t_a_idx")
+	idx := got.Indexes.Get("t_a_idx")
 	assert.Equal(t, []*string{new("a")}, idx.Columns)
 	assert.Equal(t, "hash", idx.Method)
 
-	fk := table.ForeignKeys.Get("t_a_fkey")
+	fk := got.ForeignKeys.Get("t_a_fkey")
 	assert.Equal(t, []string{"Name"}, fk.RefColumns)
 	assert.Equal(t, "set default", fk.OnDelete)
 	assert.Equal(t, "cascade", fk.OnUpdate)
 	assert.Equal(t, "full", fk.Match)
 }
 
-// A document with nothing in it, or a table with no columns, needs nothing.
-func TestFillDerived_Empty(t *testing.T) {
-	require.NoError(t, (&parser.ParseResult{}).FillDerived([]string{"public"}))
+// The model is left as it was: the added fields are only in the document.
+func TestNew_LeavesModelAlone(t *testing.T) {
+	table := &model.Table{Schema: "public", Name: "t"}
+	col := &model.Column{Name: "a", TypeName: "integer[]"}
+	table.Columns = newColumns(col)
+	result := &parser.ParseResult{Tables: newTables(table)}
 
-	result := &parser.ParseResult{Tables: newTables(&model.Table{Schema: "public", Name: "t"})}
-	require.NoError(t, result.FillDerived([]string{"public"}))
+	doc := document.New(result, []string{"public"})
+
+	assert.Same(t, table, doc.Tables.Get("public.t").Table)
+	assert.Same(t, col, doc.Tables.Get("public.t").Columns[0].Column)
+	assert.Equal(t, "integer[]", col.TypeName)
 }
 
-func TestFillDerived_BadDefinition(t *testing.T) {
-	for _, def := range []string{"not sql", "SELECT 1"} {
-		table := &model.Table{Schema: "public", Name: "t"}
-		table.Indexes = newIndexes(&model.Index{Schema: "public", Name: "i", Table: "t", Definition: def})
-		result := &parser.ParseResult{Tables: newTables(table)}
-		require.ErrorContains(t, result.FillDerived([]string{"public"}), "index public.i", def)
-	}
+// An empty document, or a table with no columns, keeps its nil maps.
+func TestNew_Empty(t *testing.T) {
+	doc := document.New(&parser.ParseResult{}, []string{"public"})
+	assert.Nil(t, doc.Tables)
+	assert.Nil(t, doc.Views)
 
-	for _, def := range []string{"not sql", "CHECK (a > 0)"} {
-		table := &model.Table{Schema: "public", Name: "t"}
-		table.ForeignKeys = newForeignKeys(&model.ForeignKey{Name: "f", Definition: def})
-		result := &parser.ParseResult{Tables: newTables(table)}
-		require.ErrorContains(t, result.FillDerived([]string{"public"}), "foreign key f on public.t", def)
-	}
+	doc = document.New(&parser.ParseResult{Tables: newTables(&model.Table{Schema: "public", Name: "t"})}, []string{"public"})
+	table := doc.Tables.Get("public.t")
+	assert.Nil(t, table.Columns)
+	assert.Nil(t, table.Indexes)
+	assert.Nil(t, table.ForeignKeys)
+}
 
+// A definition that pg_query cannot read leaves the added fields empty rather
+// than failing the document. PostgreSQL 18 writes such definitions, and the
+// parser reads the PostgreSQL 17 grammar.
+func TestNew_UnreadableDefinition(t *testing.T) {
+	table := &model.Table{Schema: "public", Name: "t"}
+	table.Indexes = newIndexes(
+		&model.Index{Schema: "public", Name: "i_overlaps", Table: "t", Definition: "CREATE UNIQUE INDEX i_overlaps ON public.t USING gist (a, p WITHOUT OVERLAPS)"},
+		&model.Index{Schema: "public", Name: "i_select", Table: "t", Definition: "SELECT 1"},
+	)
+	table.ForeignKeys = newForeignKeys(
+		&model.ForeignKey{Name: "f_not_enforced", Definition: "FOREIGN KEY (a) REFERENCES public.u(b) NOT ENFORCED"},
+		&model.ForeignKey{Name: "f_check", Definition: "CHECK (a > 0)"},
+		&model.ForeignKey{Name: "f_two", Definition: "CHECK (a > 0), ADD COLUMN b integer"},
+	)
 	view := &model.View{Schema: "public", Name: "mv", Materialized: true}
 	view.Indexes = newIndexes(&model.Index{Schema: "public", Name: "mv_i", Table: "mv", Definition: "not sql"})
 	views := orderedmap.New[string, *model.View]()
 	views.Set("public.mv", view)
-	result := &parser.ParseResult{Views: views}
-	require.ErrorContains(t, result.FillDerived([]string{"public"}), "index public.mv_i")
+
+	doc := document.New(&parser.ParseResult{Tables: newTables(table), Views: views}, []string{"public"})
+	got := doc.Tables.Get("public.t")
+
+	for name, idx := range got.Indexes.All() {
+		assert.Equal(t, []*string{}, idx.Columns, name)
+		assert.Equal(t, []string{}, idx.Include, name)
+		assert.Empty(t, idx.Method, name)
+	}
+	for name, fk := range got.ForeignKeys.All() {
+		assert.Equal(t, []string{}, fk.RefColumns, name)
+		assert.Empty(t, fk.OnDelete, name)
+		assert.Empty(t, fk.Match, name)
+	}
+	assert.Equal(t, []*string{}, doc.Views.Get("public.mv").Indexes.Get("mv_i").Columns)
 }

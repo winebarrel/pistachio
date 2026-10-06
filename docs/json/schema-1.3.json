@@ -1222,17 +1222,10 @@
           "type": "boolean"
         },
         "columns": {
-          "oneOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/Column"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "items": {
+            "$ref": "#/$defs/Column"
+          },
+          "type": "array"
         },
         "constraints": {
           "oneOf": [

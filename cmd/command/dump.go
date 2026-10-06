@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/winebarrel/pistachio"
+	"github.com/winebarrel/pistachio/document"
 )
 
 type Dump struct {
@@ -27,11 +28,7 @@ func (cmd *Dump) Run(ctx context.Context, w io.Writer) error {
 	// The JSON carries no header: a comment naming the connection and the
 	// object count would not parse, and the count is in the document itself.
 	if cmd.JSON {
-		doc := result.Document()
-		if err := doc.FillDerived(cmd.Schemas); err != nil {
-			return err
-		}
-		return writeJSON(w, doc)
+		return writeJSON(w, document.New(result.Document(), cmd.Schemas))
 	}
 
 	if cmd.Split == "" {

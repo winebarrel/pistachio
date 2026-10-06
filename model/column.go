@@ -95,13 +95,6 @@ type Column struct {
 	// when the column carries none and default_toast_compression decides.
 	Compression string  `json:"compression"`
 	Comment     *string `json:"comment"`
-	// BaseType is TypeName without its modifier and array marker, with a
-	// domain replaced by the type it is based on and a serial type by its
-	// integer type. IsArray reports an array type. They exist for the JSON
-	// document: only ParseResult.FillDerived sets them, and nothing reads
-	// them.
-	BaseType string `json:"base_type"`
-	IsArray  bool   `json:"is_array"`
 }
 
 func (col *Column) String() string {

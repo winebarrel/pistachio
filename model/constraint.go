@@ -95,14 +95,6 @@ type ForeignKey struct {
 	Table     string  `json:"table"`
 	RefSchema *string `json:"ref_schema"`
 	RefTable  *string `json:"ref_table"`
-	// The parts of Definition. OnDelete and OnUpdate hold the action in lower
-	// case, "no action" when the key specifies none. Match is simple or
-	// full. They exist for the JSON document: only ParseResult.FillDerived
-	// sets them, and nothing reads them.
-	RefColumns []string `json:"ref_columns"`
-	OnDelete   string   `json:"on_delete"`
-	OnUpdate   string   `json:"on_update"`
-	Match      string   `json:"match"`
 }
 
 func (fk *ForeignKey) String() string {
