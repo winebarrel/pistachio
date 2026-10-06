@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.78.0] - 2026-10-07
 
 * The documentation site no longer publishes the JSON Schemas `schema-1.0.json`, `schema-1.1.json` and `schema-1.2.json`. Use `schema-1.3.json`.
 
