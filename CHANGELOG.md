@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `parse` and `dump --json` write new fields that repeat part of another field in a form that needs no SQL parsing. A column has `base_type` and `is_array`. An index has `columns`, `include`, `unique`, `method` and `partial`. A foreign key has `ref_columns`, `on_delete`, `on_update` and `match`. The JSON Schema is now `schema-1.3.json`.
+
 ## [1.77.0] - 2026-10-04
 
 * pistachio now reads the column names in `CREATE VIEW v (x, y) AS ...`, and in `CREATE MATERIALIZED VIEW`. Before, it ignored them, so the view got the column names of its query and appeared in the plan on every run.

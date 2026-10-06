@@ -1,5 +1,5 @@
 // Package jsonschema builds the JSON Schema of the document `pista parse`
-// writes. It reflects over parser.ParseResult, so the schema follows the
+// writes. It reflects over document.Document, so the schema follows the
 // structs rather than a description kept beside them.
 package jsonschema
 
@@ -10,12 +10,11 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
-	"github.com/winebarrel/pistachio/model"
-	"github.com/winebarrel/pistachio/parser"
+	"github.com/winebarrel/pistachio/document"
 )
 
 // Version is the version the schema's file name and URL carry.
-const Version = "1.2"
+const Version = "1.3"
 
 // Path is where the file sits in the repository and on the documentation site.
 const Path = "docs/json/schema-" + Version + ".json"
@@ -47,7 +46,7 @@ func Marshal() ([]byte, error) {
 // Build returns the schema of a `pista parse` document.
 func Build() (*jsonschema.Schema, error) {
 	r := &jsonschema.Reflector{
-		// The document is the ParseResult itself, not a $ref to it.
+		// The document is the Document itself, not a $ref to it.
 		ExpandedStruct: true,
 		// A field absent from the JSON is not a thing the output has: every
 		// field is written, so every field is required.
@@ -55,9 +54,9 @@ func Build() (*jsonschema.Schema, error) {
 	}
 	r.Mapper = mapper
 
-	root := reflect.TypeFor[parser.ParseResult]()
+	root := reflect.TypeFor[document.Document]()
 
-	schema := r.Reflect(&parser.ParseResult{})
+	schema := r.Reflect(&document.Document{})
 	schema.ID = ID
 	schema.Title = title
 	schema.Description = description
@@ -125,12 +124,6 @@ func mapper(t reflect.Type) *jsonschema.Schema {
 			// left to the reflector, which describes it as best it can. Build
 			// catches it: the definition the $ref would have named is missing.
 			return nil
-		}
-
-		// A table's columns are written as an array, in the physical column
-		// order. model.JSONMarshalers is what writes them that way.
-		if deref(valueType) == reflect.TypeFor[model.Column]() {
-			return &jsonschema.Schema{Type: "array", Items: value}
 		}
 
 		return &jsonschema.Schema{Type: "object", AdditionalProperties: value}
