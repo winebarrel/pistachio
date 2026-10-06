@@ -112,8 +112,6 @@ CREATE TABLE public.archived_users () INHERITS (public.users);`), []string{"publ
 	}, got)
 }
 
-// The index rules compare the definition from USING on, so an operator class,
-// a collation, a sort order or a WHERE clause makes two indexes different.
 // The naming rules that require a name are commented out in naming.yml. This
 // removes the comment marks and checks them.
 func TestStandardRules_Named(t *testing.T) {
@@ -159,6 +157,8 @@ CREATE INDEX t_b_idx ON public.t (b);`), []string{"public"})
 	}, got)
 }
 
+// The index rules compare the definition from USING on, so an operator class,
+// a collation, a sort order or a WHERE clause makes two indexes different.
 func TestStandardRules_Indexes(t *testing.T) {
 	linter, err := lint.Load([]string{filepath.Join("..", "rules", "indexes.yml")}, &bytes.Buffer{})
 	require.NoError(t, err)
