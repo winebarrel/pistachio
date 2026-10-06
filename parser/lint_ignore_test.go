@@ -224,3 +224,45 @@ func TestPositions_NonASCII(t *testing.T) {
 	pos := result.Positions[parser.LintTarget{Kind: parser.LintColumn, Table: "public.t", Name: "at"}]
 	assert.Equal(t, "a.sql:2:32", pos.String())
 }
+
+// A directive before a column also reaches the foreign key written on that
+// column, and one before an unnamed FOREIGN KEY line reaches that key. lint
+// reports both keys at those lines.
+func TestLintIgnore_ForeignKeysWithoutConstraint(t *testing.T) {
+	got := parseLintIgnores(t, `
+CREATE TABLE public.users (id bigint PRIMARY KEY);
+CREATE TABLE public.posts (
+    id bigint PRIMARY KEY,
+    -- pista:lint-ignore fk-needs-index
+    user_id bigint REFERENCES public.users (id),
+    a bigint,
+    b bigint,
+    -- pista:lint-ignore fk-needs-index
+    FOREIGN KEY (a) REFERENCES public.users (id),
+    -- pista:lint-ignore fk-needs-index
+    CONSTRAINT posts_b_fkey FOREIGN KEY (b) REFERENCES public.users (id)
+);`)
+
+	assert.Equal(t, map[parser.LintTarget][]string{
+		{Kind: parser.LintColumn, Table: "public.posts", Name: "user_id"}:                {"fk-needs-index"},
+		{Kind: parser.LintForeignKey, Table: "public.posts", Name: "posts_user_id_fkey"}: {"fk-needs-index"},
+		{Kind: parser.LintForeignKey, Table: "public.posts", Name: "posts_a_fkey"}:       {"fk-needs-index"},
+		{Kind: parser.LintForeignKey, Table: "public.posts", Name: "posts_b_fkey"}:       {"fk-needs-index"},
+	}, got)
+}
+
+// A leading comma does not hide the element.
+func TestLintIgnore_LeadingComma(t *testing.T) {
+	got := parseLintIgnores(t, `
+CREATE TABLE public.t (
+    -- pista:lint-ignore r1
+    a int
+    -- pista:lint-ignore r2
+  , b int
+);`)
+
+	assert.Equal(t, map[parser.LintTarget][]string{
+		{Kind: parser.LintColumn, Table: "public.t", Name: "a"}: {"r1"},
+		{Kind: parser.LintColumn, Table: "public.t", Name: "b"}: {"r2"},
+	}, got)
+}

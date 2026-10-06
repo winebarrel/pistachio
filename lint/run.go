@@ -44,10 +44,7 @@ type target struct {
 // A table marked -- pista:ignore is not checked, nor is anything on it.
 // schemas resolves an unqualified domain name, as document.New does.
 func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, error) {
-	targets, err := collectTargets(r, schemas)
-	if err != nil {
-		return nil, err
-	}
+	targets := collectTargets(r, schemas)
 
 	var violations []Violation
 	for _, t := range targets {
@@ -83,16 +80,13 @@ func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, erro
 // document that pista parse writes, so a rule sees the same fields. The
 // document's maps carry no order once decoded, so the order comes from the
 // parse result.
-func collectTargets(r *parser.ParseResult, schemas []string) ([]target, error) {
+func collectTargets(r *parser.ParseResult, schemas []string) []target {
 	doc := document.New(r, schemas)
-	encoded, err := json.Marshal(doc, json.Deterministic(true), model.JSONMarshalers)
-	if err != nil {
-		return nil, err
-	}
+	// The document is built here from a parse result, so it always encodes,
+	// and what it encodes to always decodes.
+	encoded := must(json.Marshal(doc, json.Deterministic(true), model.JSONMarshalers))
 	var root map[string]any
-	if err := json.Unmarshal(encoded, &root); err != nil {
-		return nil, err
-	}
+	mustNoError(json.Unmarshal(encoded, &root))
 
 	jsonTables, _ := root["tables"].(map[string]any)
 	jsonViews, _ := root["views"].(map[string]any)
@@ -142,17 +136,15 @@ func collectTargets(r *parser.ParseResult, schemas []string) ([]target, error) {
 		}
 	}
 
-	return targets, nil
+	return targets
 }
 
 func addIndexes(add func(parser.LintTarget, string, map[string]any), fqtn string, table map[string]any, indexes *orderedmap.Map[string, *document.Index]) {
-	if indexes == nil {
-		return
-	}
-
-	jsonIndexes, _ := table["indexes"].(map[string]any)
-	for name, idx := range indexes.All() {
-		add(parser.LintTarget{Kind: parser.LintIndex, Table: fqtn, Name: name},
-			"index "+model.Ident(idx.Schema, idx.Name), map[string]any{"table": table, "index": jsonIndexes[name]})
+	if indexes != nil {
+		jsonIndexes, _ := table["indexes"].(map[string]any)
+		for name, idx := range indexes.All() {
+			add(parser.LintTarget{Kind: parser.LintIndex, Table: fqtn, Name: name},
+				"index "+model.Ident(idx.Schema, idx.Name), map[string]any{"table": table, "index": jsonIndexes[name]})
+		}
 	}
 }

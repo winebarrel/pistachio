@@ -494,24 +494,17 @@ type inlineDirectives struct {
 	Columns     map[string]string // new column name -> old column name
 	Constraints map[string]string // new constraint name -> old constraint name
 	RetypeUsing map[string]string // column name -> USING expression
-	// Rule names from -- pista:lint-ignore, by column or constraint name.
-	LintIgnoreColumns     map[string][]string
-	LintIgnoreConstraints map[string][]string
 }
 
 // extractInlineDirectives scans the raw text of a CREATE TABLE statement for
 // `-- pista:renamed-from <old_name>` and `-- pista:retype-using <expression>`
 // directives that appear on lines immediately before column or constraint
-// definitions. retype-using applies to a column only. -- pista:lint-ignore is
-// read the same way.
+// definitions. retype-using applies to a column only.
 func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	result := &inlineDirectives{
 		Columns:     make(map[string]string),
 		Constraints: make(map[string]string),
 		RetypeUsing: make(map[string]string),
-
-		LintIgnoreColumns:     make(map[string][]string),
-		LintIgnoreConstraints: make(map[string][]string),
 	}
 
 	// Only scan lines inside the column/constraint list (after the opening parenthesis)
@@ -523,7 +516,6 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 	lines := strings.Split(body, "\n")
 
 	var pendingRename, pendingRetype string
-	var pendingLint []string
 	for _, line := range lines {
 		// A leading comma belongs to the previous element, so the name that
 		// follows it is the one the directive renames.
@@ -537,8 +529,8 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 			pendingRetype = m[1]
 			continue
 		}
-		if m := lintIgnoreDirectivePattern.FindStringSubmatch(line); m != nil {
-			pendingLint = append(pendingLint, splitRuleNames(m[1])...)
+		// Read by extractInlineLintIgnores.
+		if lintIgnoreDirectivePattern.MatchString(line) {
 			continue
 		}
 
@@ -546,15 +538,12 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}
-		if pendingRename != "" || pendingRetype != "" || len(pendingLint) > 0 {
+		if pendingRename != "" || pendingRetype != "" {
 			upper := strings.ToUpper(trimmed)
 			if strings.HasPrefix(upper, "CONSTRAINT ") {
 				conName := extractConstraintName(trimmed)
 				if conName != "" && pendingRename != "" {
 					result.Constraints[conName] = pendingRename
-				}
-				if conName != "" && len(pendingLint) > 0 {
-					result.LintIgnoreConstraints[conName] = pendingLint
 				}
 			} else {
 				colName := extractColumnName(trimmed)
@@ -564,14 +553,48 @@ func extractInlineDirectives(rawCreateTableSQL string) *inlineDirectives {
 				if colName != "" && pendingRetype != "" {
 					result.RetypeUsing[colName] = pendingRetype
 				}
-				if colName != "" && len(pendingLint) > 0 {
-					result.LintIgnoreColumns[colName] = pendingLint
-				}
 			}
 		}
 		pendingRename = ""
 		pendingRetype = ""
-		pendingLint = nil
+	}
+
+	return result
+}
+
+// extractInlineLintIgnores scans the element list of a CREATE TABLE statement
+// for -- pista:lint-ignore lines. It maps the offset of the element that
+// follows to the rule names, so the parser can match the directive to a
+// column or a constraint by where it is written, whatever its name. base is
+// the offset of rawCreateTableSQL in the parsed input.
+func extractInlineLintIgnores(rawCreateTableSQL string, base int32) map[int32][]string {
+	result := make(map[int32][]string)
+
+	parenIdx := strings.Index(rawCreateTableSQL, "(")
+	if parenIdx < 0 {
+		return result
+	}
+
+	var pending []string
+	offset := parenIdx
+	for _, line := range strings.SplitAfter(rawCreateTableSQL[parenIdx:], "\n") {
+		lineStart := offset
+		offset += len(line)
+
+		if m := lintIgnoreDirectivePattern.FindStringSubmatch(line); m != nil {
+			pending = append(pending, splitRuleNames(m[1])...)
+			continue
+		}
+		// The opening parenthesis and a leading comma belong to no element.
+		trimmed := strings.TrimLeft(line, " \t(,")
+		trimmed = strings.TrimLeft(trimmed, " \t")
+		if strings.TrimSpace(trimmed) == "" || strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		if len(pending) > 0 {
+			result[base+int32(lineStart+len(line)-len(trimmed))] = pending
+			pending = nil
+		}
 	}
 
 	return result

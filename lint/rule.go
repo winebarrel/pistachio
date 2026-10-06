@@ -85,10 +85,7 @@ func Load(paths []string, debug io.Writer) (*Linter, error) {
 	}
 
 	tr := &trace{w: debug}
-	envs, err := newEnvs(tr)
-	if err != nil {
-		return nil, err
-	}
+	envs := newEnvs(tr)
 
 	var rules []*Rule
 	seen := map[string]string{}
@@ -126,8 +123,16 @@ func readRuleFile(file string) ([]ruleSpec, error) {
 	var rf ruleFile
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	if err := dec.Decode(&rf); err != nil && !errors.Is(err, io.EOF) {
+	if err := dec.Decode(&rf); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("%s: %w", file, err)
+	}
+	// A second document after --- would be skipped without a word.
+	var next yaml.Node
+	if err := dec.Decode(&next); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("%s: a rule file holds one YAML document", file)
 	}
 
 	return rf.Rules, nil
@@ -162,17 +167,12 @@ func compileRule(spec ruleSpec, file string, envs map[parser.LintKind]*cel.Env) 
 	if t := ast.OutputType(); t != cel.BoolType && t != cel.DynType {
 		return nil, fmt.Errorf("%s: assert is %s, not bool", where, t)
 	}
-	program, err := env.Program(ast)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", where, err)
-	}
-
 	return &Rule{
 		Name:    spec.Name,
 		On:      kind,
 		Assert:  spec.Assert,
 		Message: spec.Message,
 		File:    file,
-		program: program,
+		program: must(env.Program(ast)),
 	}, nil
 }

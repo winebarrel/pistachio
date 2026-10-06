@@ -212,8 +212,8 @@ Turns off the named [lint rules](../guides/linting.md) for one object. Separate 
 It applies to:
 
 - the table, before `CREATE TABLE`
-- the column, before a column definition inside `CREATE TABLE`
-- the foreign key, before a `CONSTRAINT ... FOREIGN KEY` line inside `CREATE TABLE`
+- the column, before a column definition inside `CREATE TABLE`, and a foreign key written on that column with `REFERENCES`
+- the foreign key, before a `FOREIGN KEY` or `CONSTRAINT ... FOREIGN KEY` line inside `CREATE TABLE`
 - the index, before `CREATE INDEX`
 - each foreign key, before `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`
 

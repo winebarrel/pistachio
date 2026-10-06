@@ -1,24 +1,27 @@
 rules:
-  # Another index has the same columns, INCLUDE columns, access method and
-  # uniqueness. Sort order, operator classes and WHERE clauses are not
-  # compared, so a partial index and an index on an expression are skipped.
+  # Another index has the same definition apart from its name: the same
+  # uniqueness, and the same text from USING on. That text holds the access
+  # method, the columns and expressions with their operator classes,
+  # collations and sort order, INCLUDE and WHERE.
   - name: duplicate-index
     on: index
     assert: >-
-      index.partial || null in index.columns || !table.indexes.values().exists(o,
-        o.name != index.name && !o.partial
-        && o.columns == index.columns && o.include == index.include
-        && o.method == index.method && o.unique == index.unique)
+      !table.indexes.values().exists(o, o.name != index.name && o.unique == index.unique
+        && o.definition.substring(o.definition.indexOf(" USING "))
+           == index.definition.substring(index.definition.indexOf(" USING ")))
     message: another index has the same definition
 
-  # A B-tree index whose columns start another B-tree index. The longer
-  # index serves the same queries. A unique index enforces a constraint, so
-  # it is skipped.
+  # A B-tree index whose key elements start another B-tree index, written
+  # the same way. The longer index serves the same queries. A unique index
+  # enforces a constraint, and a partial index or one with INCLUDE covers
+  # other queries, so they are skipped.
   - name: redundant-index
     on: index
     assert: >-
-      index.partial || index.unique || index.method != "btree" || null in index.columns
+      index.unique || index.partial || index.method != "btree" || size(index.include) > 0
       || !table.indexes.values().exists(o,
            o.name != index.name && !o.partial && o.method == "btree"
-           && size(o.columns) > size(index.columns) && hasPrefix(o.columns, index.columns))
+           && o.definition.substring(o.definition.indexOf(" USING ")).startsWith(
+                index.definition.substring(index.definition.indexOf(" USING "),
+                  size(index.definition) - 1) + ", "))
     message: another index starts with the same columns

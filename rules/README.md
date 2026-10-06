@@ -7,8 +7,8 @@ These are rules for [`pista lint`](https://winebarrel.github.io/pistachio/refere
 | `keys.yml` | `require-primary-key` | Every table has a primary key. A partition is skipped, since it takes the key of its partitioned table. |
 | | `prefer-bigint-key` | A primary key column is not `smallint` or `integer`. |
 | | `fk-needs-index` | An index, a primary key or a unique constraint starts with the columns of each foreign key. |
-| `indexes.yml` | `duplicate-index` | No two indexes have the same columns, `INCLUDE` columns, access method and uniqueness. |
-| | `redundant-index` | No B-tree index has columns that another B-tree index starts with. |
+| `indexes.yml` | `duplicate-index` | No two indexes have the same definition apart from their names. |
+| | `redundant-index` | No B-tree index has key columns that another B-tree index starts with, written the same way. |
 | `types.yml` | `prefer-timestamptz` | No column is `timestamp without time zone`. |
 | | `no-timetz` | No column is `time with time zone`. |
 | | `prefer-text` | No column is `varchar` or `char`. |

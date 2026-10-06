@@ -10,6 +10,7 @@ import (
 	"cel.dev/cel-go/common/types"
 	"cel.dev/cel-go/common/types/ref"
 	"cel.dev/cel-go/common/types/traits"
+	"cel.dev/cel-go/ext"
 	"github.com/winebarrel/pistachio/parser"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -30,10 +31,26 @@ var variables = map[parser.LintKind][]string{
 	parser.LintForeignKey: {"table", "fk"},
 }
 
+// must returns v, and panics on an error that only a bug in this package can
+// cause, such as a CEL declaration that does not build.
+func must[T any](v T, err error) T {
+	mustNoError(err)
+	return v
+}
+
+func mustNoError(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
 // newEnvs builds one CEL environment per kind. A rule can use only the
 // variables of its kind, so a column rule that reads index fails to compile.
-func newEnvs(tr *trace) (map[parser.LintKind]*cel.Env, error) {
+func newEnvs(tr *trace) map[parser.LintKind]*cel.Env {
 	funcs := []cel.EnvOption{
+		// The string functions of the CEL extensions, such as indexOf and
+		// substring.
+		ext.Strings(),
 		// m.values() lists the values of a map. Most of the document is
 		// keyed by name, and the macros iterate a map's keys.
 		cel.Function("values",
@@ -58,14 +75,10 @@ func newEnvs(tr *trace) (map[parser.LintKind]*cel.Env, error) {
 		for _, name := range names {
 			opts = append(opts, cel.Variable(name, cel.DynType))
 		}
-		env, err := cel.NewEnv(opts...)
-		if err != nil {
-			return nil, err
-		}
-		envs[kind] = env
+		envs[kind] = must(cel.NewEnv(opts...))
 	}
 
-	return envs, nil
+	return envs
 }
 
 // mapValues and listHasPrefix are declared for a map and for lists, so CEL

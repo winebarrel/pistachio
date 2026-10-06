@@ -483,16 +483,7 @@ func parseSQLWithSchema(sql string, defaultSchema string, spans []fileSpan) (*Pa
 			}
 			addLintIgnores(LintTarget{Kind: LintTable, Table: table.FQTN()}, lintIgnore)
 			addCreateTablePositions(addPosition, node.GetCreateStmt(), table, stmtOffset)
-			for colName, rules := range inlineDirectives.LintIgnoreColumns {
-				if _, ok := table.Columns.GetOk(colName); ok {
-					addLintIgnores(LintTarget{Kind: LintColumn, Table: table.FQTN(), Name: colName}, rules)
-				}
-			}
-			for conName, rules := range inlineDirectives.LintIgnoreConstraints {
-				if _, ok := table.ForeignKeys.GetOk(conName); ok {
-					addLintIgnores(LintTarget{Kind: LintForeignKey, Table: table.FQTN(), Name: conName}, rules)
-				}
-			}
+			addInlineLintIgnores(addLintIgnores, node.GetCreateStmt(), table, extractInlineLintIgnores(rawStmtSQL, rawStmt.StmtLocation))
 
 			table.Ignore = ignore
 			if !table.Ignore {
@@ -3150,5 +3141,27 @@ func addCreateTablePositions(add func(LintTarget, int32), cs *pg_query.CreateStm
 			}
 		}
 		add(LintTarget{Kind: LintForeignKey, Table: fqtn, Name: name}, offset)
+	}
+}
+
+// addInlineLintIgnores gives the rule names of each -- pista:lint-ignore line
+// in a CREATE TABLE to the element written after it. A directive before a
+// column also applies to a foreign key written on that column, since lint
+// reports that key at the column. parseCreateStmt has named every foreign key
+// by then, so an unnamed one is found too.
+func addInlineLintIgnores(add func(LintTarget, []string), cs *pg_query.CreateStmt, table *model.Table, byOffset map[int32][]string) {
+	fqtn := table.FQTN()
+	for _, elt := range cs.TableElts {
+		if cd := elt.GetColumnDef(); cd != nil {
+			rules := byOffset[cd.Location]
+			add(LintTarget{Kind: LintColumn, Table: fqtn, Name: cd.Colname}, rules)
+			for _, c := range cd.Constraints {
+				if con := c.GetConstraint(); con != nil && con.Contype == pg_query.ConstrType_CONSTR_FOREIGN {
+					add(LintTarget{Kind: LintForeignKey, Table: fqtn, Name: con.Conname}, rules)
+				}
+			}
+		} else if con := elt.GetConstraint(); con != nil && con.Contype == pg_query.ConstrType_CONSTR_FOREIGN {
+			add(LintTarget{Kind: LintForeignKey, Table: fqtn, Name: con.Conname}, byOffset[con.Location])
+		}
 	}
 }

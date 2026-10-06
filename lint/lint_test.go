@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -107,6 +108,47 @@ CREATE TABLE public.archived_users () INHERITS (public.users);`), []string{"publ
 		// A partition takes its parent's primary key, and an INHERITS child
 		// does not.
 		"schema.sql:31:1: table public.archived_users: require-primary-key: the table has no primary key",
+	}, got)
+}
+
+// The index rules compare the definition from USING on, so an operator class,
+// a collation, a sort order or a WHERE clause makes two indexes different.
+func TestStandardRules_Indexes(t *testing.T) {
+	linter, err := lint.Load([]string{filepath.Join("..", "rules", "indexes.yml")}, &bytes.Buffer{})
+	require.NoError(t, err)
+
+	violations, err := linter.Run(parse(t, `
+CREATE TABLE public.t (id bigint NOT NULL, a text, b text, CONSTRAINT t_pkey PRIMARY KEY (id));
+CREATE INDEX t_a_idx ON public.t (a);
+CREATE INDEX t_a_ops_idx ON public.t (a text_pattern_ops);
+CREATE INDEX t_a_c_idx ON public.t (a COLLATE "C");
+CREATE INDEX t_a_desc_idx ON public.t (a DESC);
+CREATE INDEX t_a_dup_idx ON public.t (a);
+CREATE INDEX t_ab_idx ON public.t (a, b);
+CREATE INDEX t_ops_b_idx ON public.t (a text_pattern_ops, b);
+CREATE INDEX t_lower_idx ON public.t (lower(a));
+CREATE INDEX t_lower_b_idx ON public.t (lower(a), b);
+CREATE INDEX t_part_idx ON public.t (a) WHERE id > 0;
+CREATE INDEX t_part2_idx ON public.t (a) WHERE id > 0;
+CREATE INDEX t_part3_idx ON public.t (a) WHERE id > 1;
+CREATE INDEX t_hash_idx ON public.t USING hash (a);
+CREATE INDEX t_incl_idx ON public.t (b) INCLUDE (a);
+CREATE INDEX t_ba_idx ON public.t (b, a);`), []string{"public"})
+	require.NoError(t, err)
+
+	var got []string
+	for _, v := range violations {
+		got = append(got, v.String())
+	}
+	assert.Equal(t, []string{
+		"schema.sql:3:1: index public.t_a_idx: duplicate-index: another index has the same definition",
+		"schema.sql:3:1: index public.t_a_idx: redundant-index: another index starts with the same columns",
+		"schema.sql:4:1: index public.t_a_ops_idx: redundant-index: another index starts with the same columns",
+		"schema.sql:7:1: index public.t_a_dup_idx: duplicate-index: another index has the same definition",
+		"schema.sql:7:1: index public.t_a_dup_idx: redundant-index: another index starts with the same columns",
+		"schema.sql:10:1: index public.t_lower_idx: redundant-index: another index starts with the same columns",
+		"schema.sql:12:1: index public.t_part_idx: duplicate-index: another index has the same definition",
+		"schema.sql:13:1: index public.t_part2_idx: duplicate-index: another index has the same definition",
 	}, got)
 }
 
@@ -258,6 +300,10 @@ rules:
       hasPrefix(["a", "b"], ["a"]) && hasPrefix(["a"], []) && !hasPrefix(["a"], ["a", "b"])
       && !hasPrefix(["a", "b"], ["b"])
     message: prefix
+  - name: strings
+    on: table
+    assert: '"a USING b".indexOf(" USING ") == 1 && "abc".substring(1) == "bc"'
+    message: strings
 `, `CREATE TABLE public.t (id int NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (id));`)
 
 	assert.Empty(t, got)
@@ -367,6 +413,7 @@ func TestLoad_Errors(t *testing.T) {
 		"a misspelled key":  {"rule:\n  - {name: r, on: table, assert: 'true', message: m}\n", "field rule not found"},
 		"no rules":          {"", "no rules found in"},
 		"bad yaml":          {"rules: [", "did not find expected"},
+		"two documents":     {"rules:\n  - {name: a, on: table, assert: 'true', message: m}\n---\nrules:\n  - {name: b, on: table, assert: 'true', message: m}\n", "a rule file holds one YAML document"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := writeFile(t, t.TempDir(), "rules.yml", tc.content)
@@ -390,6 +437,26 @@ func TestLoad_DuplicateNameInOneFile(t *testing.T) {
 
 	_, err := lint.Load([]string{path}, &bytes.Buffer{})
 	require.ErrorContains(t, err, "rules.yml: rule r is also defined in")
+}
+
+// A rule file or a directory that cannot be read is an error. Root reads
+// anything, and Windows does not apply these modes, so neither can run it.
+func TestLoad_Unreadable(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("permissions do not stop this user")
+	}
+
+	file := writeFile(t, t.TempDir(), "rules.yml", "rules:\n  - {name: r, on: table, assert: 'true', message: m}\n")
+	require.NoError(t, os.Chmod(file, 0o000))
+	_, err := lint.Load([]string{file}, &bytes.Buffer{})
+	require.ErrorIs(t, err, os.ErrPermission)
+
+	dir := t.TempDir()
+	writeFile(t, dir, "rules.yml", "rules:\n  - {name: r, on: table, assert: 'true', message: m}\n")
+	require.NoError(t, os.Chmod(dir, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	_, err = lint.Load([]string{dir}, &bytes.Buffer{})
+	require.ErrorIs(t, err, os.ErrPermission)
 }
 
 func TestLoad_MissingPath(t *testing.T) {

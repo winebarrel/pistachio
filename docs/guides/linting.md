@@ -28,8 +28,8 @@ The repository has these rules in [`rules/`](https://github.com/winebarrel/pista
 | `keys.yml` | `require-primary-key` | Every table has a primary key. A partition is skipped, since it takes the key of its partitioned table. |
 | | `prefer-bigint-key` | A primary key column is not `smallint` or `integer`. |
 | | `fk-needs-index` | An index, a primary key or a unique constraint starts with the columns of each foreign key. |
-| `indexes.yml` | `duplicate-index` | No two indexes have the same columns, `INCLUDE` columns, access method and uniqueness. |
-| | `redundant-index` | No B-tree index has columns that another B-tree index starts with. |
+| `indexes.yml` | `duplicate-index` | No two indexes have the same definition apart from their names. |
+| | `redundant-index` | No B-tree index has key columns that another B-tree index starts with, written the same way. |
 | `types.yml` | `prefer-timestamptz` | No column is `timestamp without time zone`. |
 | | `no-timetz` | No column is `time with time zone`. |
 | | `prefer-text` | No column is `varchar` or `char`. |
@@ -103,7 +103,7 @@ Most of the document is keyed by name. A table's `constraints` and `indexes` are
 
 ## Functions
 
-A rule can use the standard CEL functions and these:
+A rule can use the standard CEL functions, the [string extensions](https://github.com/google/cel-go/blob/master/ext/README.md#strings) such as `indexOf` and `substring`, and these:
 
 `m.values()`
 :   The values of the map `m`, as a list.
@@ -174,9 +174,12 @@ CREATE TABLE public.event_log (
 Write it before one of these:
 
 - `CREATE TABLE`, for the table
-- a column or a `CONSTRAINT ... FOREIGN KEY` line inside `CREATE TABLE`, for that column or foreign key
+- a column inside `CREATE TABLE`, for the column and for a foreign key written on it with `REFERENCES`
+- a `FOREIGN KEY` or `CONSTRAINT ... FOREIGN KEY` line inside `CREATE TABLE`, for that foreign key
 - `CREATE INDEX`, for the index
 - `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY`, for the foreign key
+
+So the directive goes before the line that `pista lint` reports.
 
 It applies to that object only. The directive on a table does not turn the rule off for the table's columns.
 
