@@ -217,7 +217,7 @@ CREATE TABLE public.t (
 // does not shift it.
 func TestPositions_NonASCII(t *testing.T) {
 	result, err := parser.ParseSQLSourcesWithSchema([]parser.Source{
-		{Name: "a.sql", SQL: "-- あい\nCREATE TABLE public.t (/* あ */ at timestamp);"},
+		{Name: "a.sql", SQL: "-- \u3042\u3044\nCREATE TABLE public.t (/* \u3042 */ at timestamp);"},
 	}, "public")
 	require.NoError(t, err)
 
