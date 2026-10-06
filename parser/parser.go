@@ -839,7 +839,7 @@ func applyUsingIndexPrimaryKeyNotNull(tables *orderedmap.Map[string, *model.Tabl
 		if t.Ignore {
 			continue
 		}
-		for _, con := range t.Constraints.All() {
+		for con := range t.Constraints.Values() {
 			if !con.Type.IsPrimaryKeyConstraint() || con.IndexName == "" {
 				continue
 			}
@@ -2605,8 +2605,8 @@ func parseInlineForeignKey(con *pg_query.Constraint, schema, table, defaultSchem
 // bare name against. A key to a table the schema does not declare, or to one
 // with no primary key, is left as written.
 func fillFKRefColumns(tables *orderedmap.Map[string, *model.Table]) error {
-	for _, t := range tables.All() {
-		for _, fk := range t.ForeignKeys.All() {
+	for t := range tables.Values() {
+		for fk := range t.ForeignKeys.Values() {
 			con := pgast.ParseConstraintDef(fk.Definition)
 			if con == nil || len(con.PkAttrs) > 0 {
 				continue
@@ -2639,7 +2639,7 @@ func fillFKRefColumns(tables *orderedmap.Map[string, *model.Table]) error {
 // it has none. A key written USING INDEX lists no columns, so they are read
 // from the index it takes over.
 func primaryKeyColumns(t *model.Table) []string {
-	for _, con := range t.Constraints.All() {
+	for con := range t.Constraints.Values() {
 		if !con.Type.IsPrimaryKeyConstraint() {
 			continue
 		}

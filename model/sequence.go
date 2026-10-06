@@ -112,7 +112,7 @@ func SequencesToSQL(sequences *orderedmap.Map[string, *Sequence]) string {
 // in the order of the map, or "" when no column owns any of them.
 func SequencesOwnedBySQL(sequences *orderedmap.Map[string, *Sequence]) string {
 	var stmts []string
-	for _, seq := range sequences.All() {
+	for seq := range sequences.Values() {
 		if s := seq.OwnedBySQL(); s != "" {
 			stmts = append(stmts, s)
 		}

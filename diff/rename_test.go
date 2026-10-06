@@ -284,7 +284,7 @@ func TestRenameColumnKeys_RemapsAndPreservesOrder(t *testing.T) {
 
 	out := renameColumnKeys(in, map[string]string{"b": "d"})
 	keys := []string{}
-	for k := range out.All() {
+	for k := range out.Keys() {
 		keys = append(keys, k)
 	}
 	assert.Equal(t, []string{"a", "d", "c"}, keys)
@@ -298,7 +298,7 @@ func TestRenameColumnKeys_NoCascadeOnChain(t *testing.T) {
 
 	out := renameColumnKeys(in, map[string]string{"a": "b", "b": "c"})
 	keys := []string{}
-	for k := range out.All() {
+	for k := range out.Keys() {
 		keys = append(keys, k)
 	}
 	assert.Equal(t, []string{"b", "c"}, keys)

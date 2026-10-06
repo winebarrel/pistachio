@@ -288,7 +288,7 @@ func parentIndexCopies(current, desired *orderedmap.Map[string, *model.Table], t
 	columns := indexColumns(desired, t, t)
 
 	copies := map[string]bool{}
-	for _, idx := range t.Indexes.All() {
+	for idx := range t.Indexes.Values() {
 		for parentName, parentIdx := range parent.Indexes.All() {
 			if parentExists {
 				currentIdx, ok := currentIndexes.GetOk(parentName)
@@ -2070,7 +2070,7 @@ func diffForeignKeys(fqtn, schema string, partitioned bool, current, desired *or
 // without the rest a dropped comment would compare against nothing and stay.
 func withInheritedColumns(current, desired *model.Table) *model.Table {
 	cols := orderedmap.New[string, *model.Column]()
-	for name := range current.Columns.All() {
+	for name := range current.Columns.Keys() {
 		if col, ok := desired.Columns.GetOk(name); ok {
 			cols.Set(name, col)
 		} else {

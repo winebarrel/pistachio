@@ -30,9 +30,9 @@ func (r *ParseResult) FillDerived(schemas []string) error {
 	}
 
 	if r.Tables != nil {
-		for _, t := range r.Tables.All() {
+		for t := range r.Tables.Values() {
 			if t.Columns != nil {
-				for _, col := range t.Columns.All() {
+				for col := range t.Columns.Values() {
 					col.BaseType, col.IsArray = baseType(col.TypeName, domains, schemas)
 				}
 			}
@@ -40,7 +40,7 @@ func (r *ParseResult) FillDerived(schemas []string) error {
 				return err
 			}
 			if t.ForeignKeys != nil {
-				for _, fk := range t.ForeignKeys.All() {
+				for fk := range t.ForeignKeys.Values() {
 					if err := fillForeignKey(fk); err != nil {
 						return fmt.Errorf("failed to read foreign key %s on %s: %w", fk.Name, t.FQTN(), err)
 					}
@@ -50,7 +50,7 @@ func (r *ParseResult) FillDerived(schemas []string) error {
 	}
 
 	if r.Views != nil {
-		for _, v := range r.Views.All() {
+		for v := range r.Views.Values() {
 			if err := fillIndexes(v.Indexes); err != nil {
 				return err
 			}
@@ -142,7 +142,7 @@ func fillIndexes(indexes *orderedmap.Map[string, *model.Index]) error {
 		return nil
 	}
 
-	for _, idx := range indexes.All() {
+	for idx := range indexes.Values() {
 		if err := fillIndex(idx); err != nil {
 			return fmt.Errorf("failed to read index %s: %w", model.Ident(idx.Schema, idx.Name), err)
 		}

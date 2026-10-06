@@ -400,7 +400,7 @@ func toFileName(schema, name string) string {
 // partition still finds the index it copies.
 func omitPartitionChildIndexes(tables *orderedmap.Map[string, *model.Table]) {
 	kept := map[*model.Table]*orderedmap.Map[string, *model.Index]{}
-	for _, t := range tables.All() {
+	for t := range tables.Values() {
 		if !t.IsPartitionChild() {
 			continue
 		}
@@ -414,7 +414,7 @@ func omitPartitionChildIndexes(tables *orderedmap.Map[string, *model.Table]) {
 			if !idx.Attached || idx.Comment != nil {
 				return true
 			}
-			for _, parentIdx := range parent.Indexes.All() {
+			for parentIdx := range parent.Indexes.Values() {
 				if diff.IsPartitionIndexCopy(idx, parentIdx) {
 					return false
 				}
