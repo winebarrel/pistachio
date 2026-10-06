@@ -32,3 +32,27 @@
     display: none;
   }
 }
+
+/* Below 76.25em the primary navigation is a drawer in which each section
+   slides in as a panel of its own, and navigation.expand does not apply.
+   Lay the sections out inline instead, so the drawer shows every page. */
+@media screen and (max-width: 76.234375em) {
+  .md-nav--primary .md-nav__item .md-nav {
+    position: static;
+    height: auto;
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .md-nav--primary .md-nav__item .md-nav > .md-nav__title,
+  .md-nav--primary .md-nav__link .md-nav__icon {
+    display: none;
+  }
+
+  .md-nav--primary .md-nav__item .md-nav > .md-nav__list {
+    box-shadow: none;
+    overflow: visible;
+    padding-left: 0.8rem;
+  }
+}
