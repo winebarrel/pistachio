@@ -333,3 +333,68 @@ func TestNew_UnreadableDefinition(t *testing.T) {
 	}
 	assert.Equal(t, []*string{}, doc.Views.Get("public.mv").Indexes.Get("mv_i").Columns)
 }
+
+// auto_named marks an index or a constraint that the files declare without a
+// name, so that pistachio named it the way PostgreSQL would.
+func TestNew_AutoNamed(t *testing.T) {
+	doc := newDocument(t, `
+CREATE TABLE public.u (id bigint PRIMARY KEY);
+CREATE TABLE public.t (
+  id bigint,
+  a bigint REFERENCES public.u (id),
+  b bigint UNIQUE,
+  c bigint CHECK (c > 0),
+  d bigint,
+  e bigint,
+  f bigint CONSTRAINT t_f_named CHECK (f > 0),
+  PRIMARY KEY (id),
+  FOREIGN KEY (d) REFERENCES public.u (id),
+  CONSTRAINT t_e_fkey FOREIGN KEY (e) REFERENCES public.u (id)
+);
+ALTER TABLE public.t ADD FOREIGN KEY (b) REFERENCES public.u (id);
+ALTER TABLE public.t ADD CONSTRAINT t_c_fkey FOREIGN KEY (c) REFERENCES public.u (id);
+ALTER TABLE public.t ADD UNIQUE (d);
+CREATE INDEX ON public.t (e);
+CREATE INDEX t_f_idx ON public.t (f);
+CREATE MATERIALIZED VIEW public.mv AS SELECT id FROM public.t;
+CREATE INDEX ON public.mv (id);
+CREATE INDEX mv_named ON public.mv (id);`)
+
+	u := doc.Tables.Get("public.u")
+	assert.True(t, u.Constraints.Get("u_pkey").AutoNamed)
+
+	tbl := doc.Tables.Get("public.t")
+	constraints := map[string]bool{}
+	for key, c := range tbl.Constraints.All() {
+		constraints[key] = c.AutoNamed
+	}
+	assert.Equal(t, map[string]bool{
+		"t_pkey": true, "t_b_key": true, "t_c_check": true, "t_f_named": false, "t_d_key": true,
+	}, constraints)
+
+	fks := map[string]bool{}
+	for key, fk := range tbl.ForeignKeys.All() {
+		fks[key] = fk.AutoNamed
+	}
+	assert.Equal(t, map[string]bool{
+		"t_a_fkey": true, "t_d_fkey": true, "t_e_fkey": false, "t_b_fkey": true, "t_c_fkey": false,
+	}, fks)
+
+	assert.True(t, tbl.Indexes.Get("t_e_idx").AutoNamed)
+	assert.False(t, tbl.Indexes.Get("t_f_idx").AutoNamed)
+
+	mv := doc.Views.Get("public.mv")
+	assert.True(t, mv.Indexes.Get("mv_id_idx").AutoNamed)
+	assert.False(t, mv.Indexes.Get("mv_named").AutoNamed)
+}
+
+// A constraint named after an index with USING INDEX takes the index's name,
+// which the file did not write for the constraint.
+func TestNew_AutoNamedUsingIndex(t *testing.T) {
+	doc := newDocument(t, `
+CREATE TABLE public.t (a bigint NOT NULL);
+CREATE UNIQUE INDEX t_a_idx ON public.t (a);
+ALTER TABLE public.t ADD UNIQUE USING INDEX t_a_idx;`)
+
+	assert.True(t, doc.Tables.Get("public.t").Constraints.Get("t_a_idx").AutoNamed)
+}

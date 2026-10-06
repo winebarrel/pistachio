@@ -17,6 +17,7 @@ These are rules for [`pista lint`](https://winebarrel.github.io/pistachio/refere
 | | `prefer-jsonb` | No column is `json`. |
 | `naming.yml` | `snake-case-table` | Every table name is snake_case. |
 | | `snake-case-column` | Every column name is snake_case. |
+| | `named-index`, `named-constraint`, `named-foreign-key` | Every index, constraint and foreign key has a name written in the file. These rules are commented out. |
 
 ## Usage
 

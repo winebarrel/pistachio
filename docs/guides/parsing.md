@@ -101,6 +101,8 @@ Some fields repeat part of another field in a form that needs no SQL parsing:
 - An index's `columns` lists the key columns in order. An expression is `null`. `include` lists the `INCLUDE` columns. `unique` is `true` for a unique index. `method` is the access method, such as `btree`. `partial` is `true` if the index has a `WHERE` clause. Sort order, operator classes and collations are not included.
 - A foreign key's `ref_columns` lists the referenced columns. `on_delete` and `on_update` are `no action`, `restrict`, `cascade`, `set null` or `set default`. A key that does not specify an action has `no action`. `match` is `simple` or `full`.
 
+An index, a constraint and a foreign key have `auto_named`. It is `true` when the file declares the object without a name, so that pistachio names it the way PostgreSQL would. A primary key or unique constraint added with `USING INDEX` and no `CONSTRAINT` clause takes the name of the index, and also has `true`. The database does not record whether a name was written, so `dump --json` always writes `false`.
+
 `parse` looks up an unqualified domain name in the first schema of `--schemas`, then in `public`. `dump --json` looks in each schema of `--schemas`, then in `public`.
 
 If an index or foreign key definition cannot be parsed, its added fields are empty. This happens with syntax that PostgreSQL 18 added, such as a foreign key with `NOT ENFORCED`, because pistachio parses SQL with the PostgreSQL 17 grammar.

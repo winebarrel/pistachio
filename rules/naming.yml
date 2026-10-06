@@ -8,3 +8,24 @@ rules:
     on: column
     assert: column.name.matches('^[a-z_][a-z0-9_]*$')
     message: the column name is not snake_case
+
+  # These rules are turned off. To require a name on every index, constraint
+  # and foreign key, remove the "# " in front of their lines.
+  #
+  # - name: named-index
+  #   on: index
+  #   description: A name written in the file says what the index is for.
+  #   assert: '!index.auto_named'
+  #   message: the index has no name
+  #
+  # - name: named-constraint
+  #   on: table
+  #   description: A name written in the file says what the constraint is for.
+  #   assert: '!table.constraints.values().exists(c, c.auto_named)'
+  #   message: a constraint on the table has no name
+  #
+  # - name: named-foreign-key
+  #   on: foreign_key
+  #   description: A name written in the file says what the foreign key is for.
+  #   assert: '!fk.auto_named'
+  #   message: the foreign key has no name
