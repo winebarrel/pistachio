@@ -10,6 +10,8 @@
 
 * The new directive `-- pista:lint-ignore [<rule>...] [-- <reason>]` turns lint rules off for the table, column, index or foreign key it is written before. With no rule name, it turns every rule off. `pista lint` warns about a name that no rule has.
 
+* The documentation site no longer publishes the JSON Schemas `schema-1.0.json`, `schema-1.1.json` and `schema-1.2.json`. Use `schema-1.3.json`.
+
 ## [1.77.0] - 2026-10-04
 
 * pistachio now reads the column names in `CREATE VIEW v (x, y) AS ...`, and in `CREATE MATERIALIZED VIEW`. Before, it ignored them, so the view got the column names of its query and appeared in the plan on every run.
