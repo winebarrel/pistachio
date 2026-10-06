@@ -15,7 +15,7 @@ import (
 )
 
 // Version is the version the schema's file name and URL carry.
-const Version = "1.2"
+const Version = "1.3"
 
 // Path is where the file sits in the repository and on the documentation site.
 const Path = "docs/json/schema-" + Version + ".json"

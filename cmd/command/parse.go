@@ -36,5 +36,9 @@ func (cmd *Parse) Run(w io.Writer) error {
 		return err
 	}
 
+	if err := result.FillDerived(cmd.Schemas); err != nil {
+		return err
+	}
+
 	return writeJSON(w, result)
 }

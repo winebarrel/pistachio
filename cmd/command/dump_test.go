@@ -315,6 +315,58 @@ CREATE VIEW public.live AS SELECT id FROM public.users;`)
 	assert.Equal(t, "extended", columns["email"]["type_storage"])
 }
 
+// dump fills the derived fields from what the catalog reports, the way parse
+// fills them from the files, so a rule reads the same values from either.
+func TestDump_Run_JSON_DerivedFields(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx)
+
+	testutil.SetupDB(t, ctx, conn, `CREATE DOMAIN public.ts AS timestamp(3);
+CREATE TABLE public.users (id bigint NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+CREATE TABLE public.posts (
+    id bigint,
+    user_id bigint,
+    at public.ts,
+    tags varchar(20)[],
+    CONSTRAINT posts_user_fkey FOREIGN KEY (user_id) REFERENCES public.users ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX posts_user_idx ON public.posts (user_id, lower(tags[1])) INCLUDE (id) WHERE id > 0;`)
+
+	options := pistachio.Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+	}
+
+	var buf bytes.Buffer
+	cmd := &command.Dump{Options: options}
+	cmd.JSON = true
+	require.NoError(t, cmd.Run(ctx, &buf))
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+
+	posts := result["tables"].(map[string]any)["public.posts"].(map[string]any)
+
+	columns := columnsByName(t, posts)
+	assert.Equal(t, "timestamp without time zone", columns["at"]["base_type"])
+	assert.Equal(t, "character varying", columns["tags"]["base_type"])
+	assert.Equal(t, true, columns["tags"]["is_array"])
+
+	idx := posts["indexes"].(map[string]any)["posts_user_idx"].(map[string]any)
+	assert.Equal(t, []any{"user_id", nil}, idx["columns"])
+	assert.Equal(t, []any{"id"}, idx["include"])
+	assert.Equal(t, true, idx["unique"])
+	assert.Equal(t, "btree", idx["method"])
+	assert.Equal(t, true, idx["partial"])
+
+	fk := posts["foreign_keys"].(map[string]any)["posts_user_fkey"].(map[string]any)
+	assert.Equal(t, []any{"id"}, fk["ref_columns"])
+	assert.Equal(t, "cascade", fk["on_delete"])
+	assert.Equal(t, "no action", fk["on_update"])
+	assert.Equal(t, "simple", fk["match"])
+}
+
 // The document dump writes is the one the published schema describes, which is
 // why the schema's name carries no command.
 func TestDump_Run_JSON_MatchesJSONSchema(t *testing.T) {

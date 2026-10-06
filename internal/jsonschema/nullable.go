@@ -46,7 +46,13 @@ func markStruct(schema *jsonschema.Schema, t reflect.Type) error {
 	}
 
 	for _, f := range reflect.VisibleFields(t) {
-		if f.Type.Kind() != reflect.Pointer {
+		pointer := f.Type.Kind() == reflect.Pointer
+		// A slice of pointers to a plain value writes an unset element as
+		// null, as an index's columns does for an expression. A slice of
+		// pointers to a struct, such as a routine's arguments, holds no nil.
+		pointerItems := f.Type.Kind() == reflect.Slice && f.Type.Elem().Kind() == reflect.Pointer &&
+			f.Type.Elem().Elem().Kind() != reflect.Struct
+		if !pointer && !pointerItems {
 			continue
 		}
 
@@ -60,7 +66,11 @@ func markStruct(schema *jsonschema.Schema, t reflect.Type) error {
 			return fmt.Errorf("jsonschema: %s has no property %q", t.Name(), name)
 		}
 
-		schema.Properties.Set(name, nullable(prop))
+		if pointer {
+			schema.Properties.Set(name, nullable(prop))
+		} else if prop.Items != nil {
+			prop.Items = nullable(prop.Items)
+		}
 	}
 
 	return nil

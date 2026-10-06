@@ -100,7 +100,7 @@ func TestParse_Run_WritesEveryField(t *testing.T) {
 		"name", "rename_from", "type", "serial_sequence", "not_null",
 		"not_null_name", "default", "identity", "identity_sequence",
 		"generated", "collation", "storage_type", "type_storage",
-		"compression", "comment",
+		"compression", "comment", "base_type", "is_array",
 	} {
 		assert.Contains(t, col, key)
 	}
@@ -113,6 +113,52 @@ func TestParse_Run_WritesEveryField(t *testing.T) {
 		assert.Contains(t, result, key)
 	}
 	assert.Equal(t, []any{}, result["execute_stmts"])
+}
+
+// The fields a rule reads without taking SQL text apart: a column's type with
+// its modifier, array marker and domain removed, and the parts of an index and
+// a foreign key definition.
+func TestParse_Run_DerivedFields(t *testing.T) {
+	path := writeSQLFile(t, "schema.sql", `
+create domain ts as timestamp(3);
+create table users (id bigint not null, constraint users_pkey primary key (id));
+create table posts (
+    id bigint,
+    user_id bigint,
+    at ts,
+    tags varchar(20)[],
+    constraint posts_user_fkey foreign key (user_id) references users on delete cascade
+);
+create unique index posts_user_idx on posts (user_id, lower(tags[1])) include (id) where id > 0;
+`)
+
+	var buf bytes.Buffer
+	cmd := &command.Parse{Schemas: []string{"public"}, Files: []string{path}}
+	require.NoError(t, cmd.Run(&buf))
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &result))
+
+	posts := result["tables"].(map[string]any)["public.posts"].(map[string]any)
+
+	columns := columnsByName(t, posts)
+	assert.Equal(t, "timestamp without time zone", columns["at"]["base_type"])
+	assert.Equal(t, false, columns["at"]["is_array"])
+	assert.Equal(t, "character varying", columns["tags"]["base_type"])
+	assert.Equal(t, true, columns["tags"]["is_array"])
+
+	idx := posts["indexes"].(map[string]any)["posts_user_idx"].(map[string]any)
+	assert.Equal(t, []any{"user_id", nil}, idx["columns"])
+	assert.Equal(t, []any{"id"}, idx["include"])
+	assert.Equal(t, true, idx["unique"])
+	assert.Equal(t, "btree", idx["method"])
+	assert.Equal(t, true, idx["partial"])
+
+	fk := posts["foreign_keys"].(map[string]any)["posts_user_fkey"].(map[string]any)
+	assert.Equal(t, []any{"id"}, fk["ref_columns"])
+	assert.Equal(t, "cascade", fk["on_delete"])
+	assert.Equal(t, "no action", fk["on_update"])
+	assert.Equal(t, "simple", fk["match"])
 }
 
 // A check expression carries characters encoding/json v1 escapes. The command
