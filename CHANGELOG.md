@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* The documentation site no longer publishes the JSON Schemas `schema-1.0.json`, `schema-1.1.json` and `schema-1.2.json`. Use `schema-1.3.json`.
+
 * `parse` and `dump --json` write new fields that repeat part of another field in a form that needs no SQL parsing. A column has `base_type` and `is_array`. An index has `columns`, `include`, `unique`, `method` and `partial`. A foreign key has `ref_columns`, `on_delete`, `on_update` and `match`. An index, a constraint and a foreign key have `auto_named`, which is `true` when the file declares the object without a name. The JSON Schema is now `schema-1.3.json`.
 
 * The new command `pista lint` checks the tables, columns, indexes and foreign keys in schema files against rules written in CEL. `--rules` names rule files or directories of them. A rule reads the objects as `parse` writes them. A rule can carry a `description` that says what it is for. Each object that breaks a rule is printed with its file, line and column, and the exit status is 2. pistachio has no built-in rules. The repository has standard rules in `rules/` to copy.
