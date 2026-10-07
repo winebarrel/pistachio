@@ -506,6 +506,47 @@ rules:
 	assert.Equal(t, []string{"schema.sql:1:32: column public.t.created_at: at-is-timestamptz: use timestamp with time zone"}, got)
 }
 
+// Load keeps when as written. debug() in when names the object and the rule,
+// as it does in assert.
+func TestRun_WhenDebug(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "rules.yml", `
+rules:
+  - name: dbg
+    on: column
+    when: debug("name", column.name) == "a"
+    assert: "true"
+    message: m
+`)
+	var out bytes.Buffer
+	linter, err := lint.Load([]string{path}, &out)
+	require.NoError(t, err)
+	assert.Equal(t, `debug("name", column.name) == "a"`, linter.Rules[0].When)
+
+	_, err = linter.Run(parse(t, `CREATE TABLE public.t (a int, b int);`), []string{"public"})
+	require.NoError(t, err)
+	assert.Equal(t, `debug: column public.t.a: dbg: name = "a"
+debug: column public.t.b: dbg: name = "b"
+`, out.String())
+}
+
+// A rule that -- pista:lint-ignore turns off is skipped before its when is
+// evaluated, so a when that would fail on that object does not run.
+func TestRun_WhenIgnored(t *testing.T) {
+	got := run(t, `
+rules:
+  - name: r
+    on: column
+    when: column.nope == 1
+    assert: "true"
+    message: m
+`, `CREATE TABLE public.t (
+  -- pista:lint-ignore r
+  a int
+);`)
+
+	assert.Empty(t, got)
+}
+
 func TestRun_WhenErrors(t *testing.T) {
 	for name, tc := range map[string]struct {
 		when string

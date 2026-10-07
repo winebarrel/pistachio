@@ -79,7 +79,7 @@ A rule has these fields. All of them except `description` and `when` are require
 :   What the rule is for. pistachio does not print it.
 
 `when`
-:   A [CEL](https://cel.dev/) expression that chooses the objects the rule checks. `assert` is evaluated only for an object for which it is true. It must return a boolean. Without it, the rule checks every object of its kind.
+:   A [CEL](https://cel.dev/) expression that limits the rule to some objects. The rule checks an object only if this is true. It must return a boolean. Without it, the rule checks every object of its kind.
 
 `assert`
 :   A CEL expression. It must be true for every object the rule checks, and it must return a boolean.
@@ -87,7 +87,7 @@ A rule has these fields. All of them except `description` and `when` are require
 `message`
 :   The text printed when `assert` is false.
 
-`when` and `assert` read the same variables. An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
+`when` and `assert` can use the same variables. An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
 
 
 ## What a rule reads

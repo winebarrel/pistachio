@@ -1,7 +1,7 @@
 // Package lint checks the objects that schema files declare against rules the
 // user writes. A rule is a CEL expression that must be true for every object
-// of one kind, or for those that the rule's when expression chooses. The rule
-// reads the object as pista parse writes it in JSON.
+// of one kind. Its when expression can limit it to some of those objects. The
+// rule reads the object as pista parse writes it in JSON.
 package lint
 
 import (
