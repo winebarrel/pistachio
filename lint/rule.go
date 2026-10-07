@@ -1,6 +1,7 @@
 // Package lint checks the objects that schema files declare against rules the
 // user writes. A rule is a CEL expression that must be true for every object
-// of one kind. The rule reads the object as pista parse writes it in JSON.
+// of one kind. Its when expression can limit it to some of those objects. The
+// rule reads the object as pista parse writes it in JSON.
 package lint
 
 import (
@@ -23,10 +24,14 @@ type Rule struct {
 	Name        string
 	On          parser.LintKind
 	Description string
+	When        string
 	Assert      string
 	Message     string
 	File        string
-	program     cel.Program
+	// when is nil when the rule has no when, so it checks every object of
+	// its kind.
+	when    cel.Program
+	program cel.Program
 }
 
 type ruleFile struct {
@@ -37,6 +42,7 @@ type ruleSpec struct {
 	Name        string `yaml:"name"`
 	On          string `yaml:"on"`
 	Description string `yaml:"description"`
+	When        string `yaml:"when"`
 	Assert      string `yaml:"assert"`
 	Message     string `yaml:"message"`
 }
@@ -162,20 +168,40 @@ func compileRule(spec ruleSpec, file string, envs map[parser.LintKind]*cel.Env) 
 	}
 
 	env := envs[kind]
-	ast, iss := env.Compile(spec.Assert)
-	if iss.Err() != nil {
-		return nil, fmt.Errorf("%s: %w", where, iss.Err())
+	program, err := compileExpr(env, spec.Assert, "assert", where)
+	if err != nil {
+		return nil, err
 	}
-	if t := ast.OutputType(); t != cel.BoolType && t != cel.DynType {
-		return nil, fmt.Errorf("%s: assert is %s, not bool", where, t)
+	var when cel.Program
+	if spec.When != "" {
+		when, err = compileExpr(env, spec.When, "when", where)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return &Rule{
 		Name:        spec.Name,
 		On:          kind,
 		Description: spec.Description,
+		When:        spec.When,
 		Assert:      spec.Assert,
 		Message:     spec.Message,
 		File:        file,
-		program:     must(env.Program(ast)),
+		when:        when,
+		program:     program,
 	}, nil
+}
+
+// compileExpr compiles the CEL expression of the field assert or when. Its
+// result must be a boolean.
+func compileExpr(env *cel.Env, expr, field, where string) (cel.Program, error) {
+	ast, iss := env.Compile(expr)
+	if iss.Err() != nil {
+		return nil, fmt.Errorf("%s: %s: %w", where, field, iss.Err())
+	}
+	if t := ast.OutputType(); t != cel.BoolType && t != cel.DynType {
+		return nil, fmt.Errorf("%s: %s is %s, not bool", where, field, t)
+	}
+	return must(env.Program(ast)), nil
 }

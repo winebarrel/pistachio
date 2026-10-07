@@ -30,13 +30,14 @@ rules:
       same way. The longer index serves the same queries.
     # A unique index enforces a constraint, and a partial index or one with
     # INCLUDE covers other queries, so they are skipped.
+    when: >-
+      !index.unique && !index.partial && index.method == "btree" && size(index.include) == 0
     assert: >-
-      index.unique || index.partial || index.method != "btree" || size(index.include) > 0
-      || cel.bind(key,
-           regex.replace(index.definition.substring(index.definition.indexOf(" USING ")),
-             " WITH \\([^)]*\\)| TABLESPACE [^ ]+", ""),
-           !table.indexes.values().exists(o,
-             o.name != index.name && !o.partial && o.method == "btree"
-             && o.definition.substring(o.definition.indexOf(" USING "))
-                  .startsWith(key.substring(0, size(key) - 1) + ", ")))
+      cel.bind(key,
+        regex.replace(index.definition.substring(index.definition.indexOf(" USING ")),
+          " WITH \\([^)]*\\)| TABLESPACE [^ ]+", ""),
+        !table.indexes.values().exists(o,
+          o.name != index.name && !o.partial && o.method == "btree"
+          && o.definition.substring(o.definition.indexOf(" USING "))
+               .startsWith(key.substring(0, size(key) - 1) + ", ")))
     message: another index starts with the same columns

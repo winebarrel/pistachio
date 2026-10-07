@@ -12,7 +12,7 @@ pista lint [option...] file...
 
 `pista lint` reads the files with the parser that [`pista plan`](plan.md) uses. It checks each table, column, index and foreign key against the rules in the rule files. No database is read.
 
-A rule is a [CEL](https://cel.dev/) expression that must be true for every object of one kind. It reads the object as [`pista parse`](parse.md) writes it in JSON. pistachio has no built-in rules. The repository has standard rules in [`rules/`](https://github.com/winebarrel/pistachio/tree/main/rules) to copy and change. See [Linting schema files](../../guides/linting.md) for how to use them and how to write a rule.
+A rule is a [CEL](https://cel.dev/) expression that must be true for every object of one kind. A second, optional expression limits the rule to some of those objects. It reads the object as [`pista parse`](parse.md) writes it in JSON. pistachio has no built-in rules. The repository has standard rules in [`rules/`](https://github.com/winebarrel/pistachio/tree/main/rules) to copy and change. See [Linting schema files](../../guides/linting.md) for how to use them and how to write a rule.
 
 Each object that breaks a rule is printed on one line, with the file, line and column where the object is declared:
 

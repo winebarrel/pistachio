@@ -62,11 +62,12 @@ rules:
   - name: require-primary-key
     on: table
     description: Every table needs a key that identifies its rows.
+    when: table.partition_bound == null
     assert: table.constraints.values().exists(c, c.type == "primary_key")
     message: the table has no primary key
 ```
 
-A rule has these fields. All of them except `description` are required.
+A rule has these fields. All of them except `description` and `when` are required.
 
 `name`
 :   The name that the output and `-- pista:lint-ignore` use. It must be unique across all the rule files, and it cannot contain a comma or a space.
@@ -77,13 +78,16 @@ A rule has these fields. All of them except `description` are required.
 `description`
 :   What the rule is for. pistachio does not print it.
 
+`when`
+:   A [CEL](https://cel.dev/) expression that limits the rule to some objects. The rule checks an object only if this is true. It must return a boolean. Without it, the rule checks every object of its kind.
+
 `assert`
-:   A [CEL](https://cel.dev/) expression. It must be true for every object of that kind, and it must return a boolean.
+:   A CEL expression. It must be true for every object the rule checks, and it must return a boolean.
 
 `message`
-:   The text printed when the expression is false.
+:   The text printed when `assert` is false.
 
-An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
+`when` and `assert` can use the same variables. An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
 
 
 ## What a rule reads

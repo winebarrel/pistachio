@@ -486,6 +486,86 @@ debug: column public.t.a: dbg: type = int
 `, out.String())
 }
 
+// when chooses the objects a rule checks. assert is evaluated only where when
+// is true.
+func TestRun_When(t *testing.T) {
+	got := run(t, `
+rules:
+  - name: at-is-timestamptz
+    on: column
+    when: column.name.endsWith("_at")
+    assert: column.base_type == "timestamp with time zone"
+    message: use timestamp with time zone
+  - name: no-reads-when-skipped
+    on: column
+    when: column.name == "a"
+    assert: column.nope == 1
+    message: m
+`, `CREATE TABLE public.t (b text, created_at timestamp, updated_at timestamptz, c timestamp);`)
+
+	assert.Equal(t, []string{"schema.sql:1:32: column public.t.created_at: at-is-timestamptz: use timestamp with time zone"}, got)
+}
+
+// Load keeps when as written. debug() in when names the object and the rule,
+// as it does in assert.
+func TestRun_WhenDebug(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "rules.yml", `
+rules:
+  - name: dbg
+    on: column
+    when: debug("name", column.name) == "a"
+    assert: "true"
+    message: m
+`)
+	var out bytes.Buffer
+	linter, err := lint.Load([]string{path}, &out)
+	require.NoError(t, err)
+	assert.Equal(t, `debug("name", column.name) == "a"`, linter.Rules[0].When)
+
+	_, err = linter.Run(parse(t, `CREATE TABLE public.t (a int, b int);`), []string{"public"})
+	require.NoError(t, err)
+	assert.Equal(t, `debug: column public.t.a: dbg: name = "a"
+debug: column public.t.b: dbg: name = "b"
+`, out.String())
+}
+
+// A rule that -- pista:lint-ignore turns off is skipped before its when is
+// evaluated, so a when that would fail on that object does not run.
+func TestRun_WhenIgnored(t *testing.T) {
+	got := run(t, `
+rules:
+  - name: r
+    on: column
+    when: column.nope == 1
+    assert: "true"
+    message: m
+`, `CREATE TABLE public.t (
+  -- pista:lint-ignore r
+  a int
+);`)
+
+	assert.Empty(t, got)
+}
+
+func TestRun_WhenErrors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		when string
+		want string
+	}{
+		"a missing key":     {`column.nope == 1`, "schema.sql:1:24: column public.t.a: bad: no such key: nope"},
+		"a result not bool": {`column.name`, "schema.sql:1:24: column public.t.a: bad: when returned string, not bool"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := writeFile(t, t.TempDir(), "rules.yml", "rules:\n  - name: bad\n    on: column\n    when: '"+tc.when+"'\n    assert: 'true'\n    message: m\n")
+			linter, err := lint.Load([]string{path}, &bytes.Buffer{})
+			require.NoError(t, err)
+
+			_, err = linter.Run(parse(t, `CREATE TABLE public.t (a int);`), []string{"public"})
+			require.EqualError(t, err, tc.want)
+		})
+	}
+}
+
 func TestRun_Errors(t *testing.T) {
 	for name, tc := range map[string]struct {
 		assert string
@@ -580,20 +660,23 @@ func TestLoad_Errors(t *testing.T) {
 		content string
 		want    string
 	}{
-		"no name":           {"rules:\n  - {on: table, assert: 'true', message: m}\n", "a rule has no name"},
-		"a bad kind":        {"rules:\n  - {name: r, on: view, assert: 'true', message: m}\n", `rule r: on must be one of table, column, index or foreign_key, not "view"`},
-		"no assert":         {"rules:\n  - {name: r, on: table, message: m}\n", "rule r: assert is empty"},
-		"no message":        {"rules:\n  - {name: r, on: table, assert: 'true'}\n", "rule r: message is empty"},
-		"an unknown key":    {"rules:\n  - {name: r, on: table, assert: 'true', message: m, level: error}\n", "field level not found"},
-		"a syntax error":    {"rules:\n  - {name: r, on: table, assert: 'table.', message: m}\n", "rule r: ERROR"},
-		"a wrong variable":  {"rules:\n  - {name: r, on: table, assert: 'column.name == \"a\"', message: m}\n", "undeclared reference to 'column'"},
-		"a non-bool assert": {"rules:\n  - {name: r, on: table, assert: '1 + 1', message: m}\n", "rule r: assert is int, not bool"},
-		"a comma in a name": {"rules:\n  - {name: 'a,b', on: table, assert: 'true', message: m}\n", `rule name "a,b" has a comma or a space`},
-		"a space in a name": {"rules:\n  - {name: 'a b', on: table, assert: 'true', message: m}\n", `rule name "a b" has a comma or a space`},
-		"a misspelled key":  {"rule:\n  - {name: r, on: table, assert: 'true', message: m}\n", "field rule not found"},
-		"no rules":          {"", "no rules found in"},
-		"bad yaml":          {"rules: [", "did not find expected"},
-		"two documents":     {"rules:\n  - {name: a, on: table, assert: 'true', message: m}\n---\nrules:\n  - {name: b, on: table, assert: 'true', message: m}\n", "a rule file holds one YAML document"},
+		"no name":               {"rules:\n  - {on: table, assert: 'true', message: m}\n", "a rule has no name"},
+		"a bad kind":            {"rules:\n  - {name: r, on: view, assert: 'true', message: m}\n", `rule r: on must be one of table, column, index or foreign_key, not "view"`},
+		"no assert":             {"rules:\n  - {name: r, on: table, message: m}\n", "rule r: assert is empty"},
+		"no message":            {"rules:\n  - {name: r, on: table, assert: 'true'}\n", "rule r: message is empty"},
+		"an unknown key":        {"rules:\n  - {name: r, on: table, assert: 'true', message: m, level: error}\n", "field level not found"},
+		"a syntax error":        {"rules:\n  - {name: r, on: table, assert: 'table.', message: m}\n", "rule r: assert: ERROR"},
+		"a wrong variable":      {"rules:\n  - {name: r, on: table, assert: 'column.name == \"a\"', message: m}\n", "undeclared reference to 'column'"},
+		"a non-bool assert":     {"rules:\n  - {name: r, on: table, assert: '1 + 1', message: m}\n", "rule r: assert is int, not bool"},
+		"a comma in a name":     {"rules:\n  - {name: 'a,b', on: table, assert: 'true', message: m}\n", `rule name "a,b" has a comma or a space`},
+		"a space in a name":     {"rules:\n  - {name: 'a b', on: table, assert: 'true', message: m}\n", `rule name "a b" has a comma or a space`},
+		"a misspelled key":      {"rule:\n  - {name: r, on: table, assert: 'true', message: m}\n", "field rule not found"},
+		"no rules":              {"", "no rules found in"},
+		"bad yaml":              {"rules: [", "did not find expected"},
+		"a when syntax error":   {"rules:\n  - {name: r, on: table, when: 'table.', assert: 'true', message: m}\n", "rule r: when: ERROR"},
+		"a non-bool when":       {"rules:\n  - {name: r, on: table, when: '1 + 1', assert: 'true', message: m}\n", "rule r: when is int, not bool"},
+		"a wrong when variable": {"rules:\n  - {name: r, on: table, when: 'column.name == \"a\"', assert: 'true', message: m}\n", "undeclared reference to 'column'"},
+		"two documents":         {"rules:\n  - {name: a, on: table, assert: 'true', message: m}\n---\nrules:\n  - {name: b, on: table, assert: 'true', message: m}\n", "a rule file holds one YAML document"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := writeFile(t, t.TempDir(), "rules.yml", tc.content)
