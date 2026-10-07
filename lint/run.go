@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"cel.dev/cel-go/cel"
 	"cel.dev/cel-go/common/types"
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/document"
@@ -59,13 +60,19 @@ func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, erro
 			}
 
 			l.trace.object, l.trace.rule = t.label, rule.Name
-			out, _, err := rule.program.Eval(t.vars)
-			if err != nil {
-				return nil, fmt.Errorf("%s: %w", withPosition(pos, t.label+": "+rule.Name), err)
+			where := withPosition(pos, t.label+": "+rule.Name)
+			if rule.when != nil {
+				applies, err := evalBool(rule.when, t.vars, "when", where)
+				if err != nil {
+					return nil, err
+				}
+				if !applies {
+					continue
+				}
 			}
-			ok, isBool := out.(types.Bool)
-			if !isBool {
-				return nil, fmt.Errorf("%s: assert returned %s, not bool", withPosition(pos, t.label+": "+rule.Name), out.Type().TypeName())
+			ok, err := evalBool(rule.program, t.vars, "assert", where)
+			if err != nil {
+				return nil, err
 			}
 			if !ok {
 				violations = append(violations, Violation{Position: pos, Object: t.label, Rule: rule.Name, Message: rule.Message})
@@ -74,6 +81,20 @@ func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, erro
 	}
 
 	return violations, nil
+}
+
+// evalBool evaluates the program of the field assert or when. A rule whose
+// type CEL could not tell at compile time can still return something else.
+func evalBool(program cel.Program, vars map[string]any, field, where string) (bool, error) {
+	out, _, err := program.Eval(vars)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", where, err)
+	}
+	b, ok := out.(types.Bool)
+	if !ok {
+		return false, fmt.Errorf("%s: %s returned %s, not bool", where, field, out.Type().TypeName())
+	}
+	return bool(b), nil
 }
 
 // collectTargets lists the objects to check. Each object is read from the JSON

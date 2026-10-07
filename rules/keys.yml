@@ -3,9 +3,8 @@ rules:
     on: table
     description: Every table needs a key that identifies its rows.
     # A partition takes the primary key of its partitioned table.
-    assert: >-
-      table.partition_bound != null
-      || table.constraints.values().exists(c, c.type == "primary_key")
+    when: table.partition_bound == null
+    assert: table.constraints.values().exists(c, c.type == "primary_key")
     message: the table has no primary key
 
   - name: prefer-bigint-key
