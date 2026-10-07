@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.78.1] - 2026-10-07
 
 * A lint rule can have `when`, a CEL expression that limits the rule to some objects. The rule checks an object only if `when` is true.
 
