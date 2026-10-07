@@ -2,13 +2,17 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A lint rule can have `when`, a CEL expression that limits the rule to some objects. The rule checks an object only if `when` is true.
+
 ## [1.78.0] - 2026-10-07
 
 * The documentation site no longer publishes the JSON Schemas `schema-1.0.json`, `schema-1.1.json` and `schema-1.2.json`. Use `schema-1.3.json`.
 
 * `parse` and `dump --json` write new fields that repeat part of another field in a form that needs no SQL parsing. A column has `base_type` and `is_array`. An index has `columns`, `include`, `unique`, `method` and `partial`. A foreign key has `ref_columns`, `on_delete`, `on_update` and `match`. An index, a constraint and a foreign key have `auto_named`, which is `true` when the file declares the object without a name. The JSON Schema is now `schema-1.3.json`.
 
-* The new command `pista lint` checks the tables, columns, indexes and foreign keys in schema files against rules written in CEL. `--rules` names rule files or directories of them. A rule reads the objects as `parse` writes them. A rule can carry a `description` that says what it is for. A rule's `when` limits it to some of the objects. Each object that breaks a rule is printed with its file, line and column, and the exit status is 2. pistachio has no built-in rules. The repository has standard rules in `rules/` to copy.
+* The new command `pista lint` checks the tables, columns, indexes and foreign keys in schema files against rules written in CEL. `--rules` names rule files or directories of them. A rule reads the objects as `parse` writes them. A rule can carry a `description` that says what it is for. Each object that breaks a rule is printed with its file, line and column, and the exit status is 2. pistachio has no built-in rules. The repository has standard rules in `rules/` to copy.
 
 * The new directive `-- pista:lint-ignore [<rule>...] [-- <reason>]` turns lint rules off for the table, column, index or foreign key it is written before. With no rule name, it turns every rule off. `pista lint` warns about a name that no rule has.
 
