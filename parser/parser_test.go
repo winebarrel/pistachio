@@ -32,8 +32,10 @@ func TestParseSQL(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			data, err := os.ReadFile(file)
 			require.NoError(t, err)
+			dec := yaml.NewDecoder(bytes.NewReader(data))
+			dec.KnownFields(true)
 			var tc parseTestCase
-			require.NoError(t, yaml.Unmarshal(data, &tc))
+			require.NoError(t, dec.Decode(&tc))
 
 			result, err := parseSQLWithPublicSchema(tc.Input)
 			require.NoError(t, err)
