@@ -770,7 +770,7 @@ CREATE SEQUENCE myschema.order_seq INCREMENT BY 1;
 
 	// The desired public.order_seq is reverse-remapped to myschema.order_seq
 	// (exercises reverseRemapSequenceSchemas) and diffed against the real DB.
-	assert.Contains(t, got.SQL, "ALTER SEQUENCE myschema.order_seq INCREMENT BY 2;")
+	assert.Equal(t, "ALTER SEQUENCE myschema.order_seq INCREMENT BY 2;", strings.TrimSpace(got.SQL))
 }
 
 // TestApply_UnqualifiedUserTypeInNonPublicSchema guards the apply-time
@@ -879,7 +879,7 @@ CREATE TYPE myschema.address AS (street text, city text);
 
 	// The desired public.address is reverse-remapped to myschema.address
 	// (exercises reverseRemapCompositeTypeSchemas) and diffed against the DB.
-	assert.Contains(t, got.SQL, "ALTER TYPE myschema.address ADD ATTRIBUTE country text;")
+	assert.Equal(t, "ALTER TYPE myschema.address ADD ATTRIBUTE country text;", strings.TrimSpace(got.SQL))
 }
 
 func TestDump_WithSchemaMap_Files(t *testing.T) {
@@ -935,7 +935,7 @@ CREATE TABLE myschema.users (
 	t.Log(got)
 
 	// Should detect the diff and produce ALTER TABLE with the real DB schema
-	assert.Contains(t, got.SQL, "ALTER TABLE myschema.users ADD COLUMN name text;")
+	assert.Equal(t, "ALTER TABLE myschema.users ADD COLUMN name text;", strings.TrimSpace(got.SQL))
 }
 
 func TestPlan_WithSchemaMap_NoDiff(t *testing.T) {
@@ -1156,9 +1156,10 @@ CREATE TABLE myschema.users (
 	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
-	// "other" schema is not reverse-mapped, so it won't match myschema
-	// This results in creating the "other" table and dropping "myschema" table
-	assert.Contains(t, got.SQL, "DROP TABLE myschema.users;")
+	// "other" schema is not reverse-mapped, so it won't match myschema.
+	// It is also outside the managed schemas, so the plan only drops the
+	// "myschema" table and creates nothing.
+	assert.Equal(t, "DROP TABLE myschema.users;", strings.TrimSpace(got.SQL))
 }
 
 func TestPlan_WithSchemaMap_ForeignKey(t *testing.T) {
@@ -1201,7 +1202,7 @@ ALTER TABLE ONLY public.posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (use
 	require.NoError(t, err)
 	t.Log(got)
 
-	assert.Contains(t, got.SQL, "ALTER TABLE myschema.posts ADD COLUMN title text;")
+	assert.Equal(t, "ALTER TABLE myschema.posts ADD COLUMN title text;", strings.TrimSpace(got.SQL))
 }
 
 func TestPlan_WithSchemaMap_Index(t *testing.T) {
@@ -1234,7 +1235,7 @@ CREATE INDEX users_name_idx ON public.users (name);
 	require.NoError(t, err)
 	t.Log(got)
 
-	assert.Contains(t, got.SQL, "users_name_idx")
+	assert.Equal(t, "CREATE INDEX users_name_idx ON myschema.users USING btree (name);", strings.TrimSpace(got.SQL))
 }
 
 func TestPlan_WithSchemaMap_View(t *testing.T) {
@@ -1265,7 +1266,7 @@ CREATE VIEW public.active_users AS SELECT id FROM public.users;
 	require.NoError(t, err)
 	t.Log(got)
 
-	assert.Contains(t, got.SQL, "CREATE OR REPLACE VIEW myschema.active_users")
+	assert.Equal(t, "CREATE OR REPLACE VIEW myschema.active_users AS\nSELECT id FROM myschema.users;", strings.TrimSpace(got.SQL))
 }
 
 // A materialized view's index and its comment move to the mapped schema with
@@ -1392,7 +1393,7 @@ CREATE TABLE myschema.users (
 	require.NoError(t, err)
 	t.Log(got)
 
-	assert.Contains(t, got.SQL, "ALTER TABLE myschema.users ADD COLUMN name text;")
+	assert.Equal(t, "ALTER TABLE myschema.users ADD COLUMN name text;", strings.TrimSpace(got.SQL))
 }
 
 func TestPlan_SchemalessDesired_CustomSchema_NoDiff(t *testing.T) {
@@ -1460,7 +1461,7 @@ CREATE DOMAIN myschema.pos_int AS integer;
 
 	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Contains(t, got.SQL, "ALTER DOMAIN myschema.pos_int SET NOT NULL;")
+	assert.Equal(t, "ALTER DOMAIN myschema.pos_int SET NOT NULL;", strings.TrimSpace(got.SQL))
 }
 
 func TestDump_WithSchemaMap_Enum(t *testing.T) {
@@ -1503,7 +1504,7 @@ CREATE TYPE myschema.status AS ENUM ('active', 'inactive');
 	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
 
-	assert.Contains(t, got.SQL, "ALTER TYPE myschema.status ADD VALUE 'pending' AFTER 'inactive';")
+	assert.Equal(t, "ALTER TYPE myschema.status ADD VALUE 'pending' AFTER 'inactive';", strings.TrimSpace(got.SQL))
 }
 
 func TestPlan_WithSchemaMap_Enum_NoDiff(t *testing.T) {
@@ -1729,8 +1730,7 @@ CREATE POLICY owner_select ON public.documents FOR SELECT USING (owner = session
 
 	got, err := client.Plan(ctx, &PlanOptions{AllowDrop: []string{"all"}, Files: []string{desiredFile}})
 	require.NoError(t, err)
-	assert.Contains(t, got.SQL, "ALTER POLICY owner_select ON myschema.documents")
-	assert.NotContains(t, got.SQL, "ALTER POLICY owner_select ON public.documents")
+	assert.Equal(t, "ALTER POLICY owner_select ON myschema.documents USING (owner = session_user);", strings.TrimSpace(got.SQL))
 }
 
 // TestDump_WithSchemaMap_Routine covers the routine arm of the remap. The
@@ -1865,13 +1865,11 @@ COMMENT ON TRIGGER posts_stamp ON myschema.posts IS 'stamps';
 	require.NoError(t, os.WriteFile(desiredFile, []byte(changed), 0o644))
 	got, err = client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
-	for _, want := range []string{
+	assert.Equal(t, strings.Join([]string{
 		"COMMENT ON CONSTRAINT pos_check ON DOMAIN myschema.pos IS 'positive';",
-		"COMMENT ON CONSTRAINT posts_pkey ON myschema.posts IS 'primary key';",
-		"COMMENT ON CONSTRAINT posts_user_id_fkey ON myschema.posts IS 'writer';",
 		"COMMENT ON POLICY posts_read ON myschema.posts IS 'readers';",
 		"COMMENT ON TRIGGER posts_stamp ON myschema.posts IS 'stamper';",
-	} {
-		assert.Contains(t, got.SQL, want)
-	}
+		"COMMENT ON CONSTRAINT posts_pkey ON myschema.posts IS 'primary key';",
+		"COMMENT ON CONSTRAINT posts_user_id_fkey ON myschema.posts IS 'writer';",
+	}, "\n"), strings.TrimSpace(got.SQL))
 }
