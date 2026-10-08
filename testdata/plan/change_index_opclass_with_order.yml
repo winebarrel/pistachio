@@ -1,0 +1,26 @@
+# An operator class next to a sort order, or on an expression, compares equal
+# to what the catalog prints. Adding one to an existing element changes the
+# index, so only that index is dropped and created again.
+init: |
+  CREATE TABLE public.glossary (
+      id integer NOT NULL,
+      term text NOT NULL,
+      note text,
+      CONSTRAINT glossary_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX glossary_term_desc_idx ON public.glossary USING btree (term text_pattern_ops DESC);
+  CREATE INDEX glossary_lower_term_idx ON public.glossary USING btree (lower(term) text_pattern_ops);
+  CREATE INDEX glossary_note_idx ON public.glossary USING btree (note DESC);
+desired: |
+  CREATE TABLE public.glossary (
+      id integer NOT NULL,
+      term text NOT NULL,
+      note text,
+      CONSTRAINT glossary_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX glossary_term_desc_idx ON public.glossary USING btree (term text_pattern_ops DESC);
+  CREATE INDEX glossary_lower_term_idx ON public.glossary USING btree (lower(term) text_pattern_ops);
+  CREATE INDEX glossary_note_idx ON public.glossary USING btree (note text_pattern_ops DESC);
+plan: |
+  DROP INDEX public.glossary_note_idx;
+  CREATE INDEX glossary_note_idx ON public.glossary USING btree (note text_pattern_ops DESC);
