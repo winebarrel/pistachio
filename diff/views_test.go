@@ -409,6 +409,20 @@ func TestEqualViewDef_singleRelationScope(t *testing.T) {
 		"SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)",
 		"SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = o.id)",
 	))
+	assert.False(t, equalViewDef(
+		"SELECT u.name, (SELECT count(*) FROM orders o WHERE o.user_id = u.id) AS n FROM users u",
+		"SELECT u.name, (SELECT count(*) FROM orders o WHERE o.user_id = o.id) AS n FROM users u",
+	))
+	// A LATERAL sub-query is a scope of its own, and the outer FROM holds two
+	// relations, so the outer prefixes stay.
+	assert.True(t, equalViewDef(
+		"SELECT u.name, l.n FROM users u, LATERAL (SELECT o.id AS n FROM orders o WHERE o.user_id = u.id) l",
+		"SELECT u.name, l.n FROM users u, LATERAL (SELECT id AS n FROM orders o WHERE user_id = u.id) l",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT u.name, l.n FROM users u, LATERAL (SELECT o.id AS n FROM orders o WHERE o.user_id = u.id) l",
+		"SELECT u.name, l.n FROM users u, LATERAL (SELECT u.id AS n FROM orders o WHERE o.user_id = u.id) l",
+	))
 	// A function in FROM is named by its alias, or by the function itself.
 	assert.True(t, equalViewDef(
 		"SELECT g FROM generate_series(1, 3) g(g)",

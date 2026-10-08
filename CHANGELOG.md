@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* A view or materialized view whose `FROM` holds more than one relation now plans a change of the table a column reference names. Before, pistachio dropped every table qualifier before comparing view bodies, so changing `u.id` to `o.id` in a join, or `o.user_id = u.id` to `o.user_id = o.id` in a correlated sub-query, planned no change. A qualifier is now dropped only in a `SELECT` with a single relation in `FROM`, and only when it names that relation. A view over a join whose desired definition leaves a column unqualified now plans `CREATE OR REPLACE VIEW` on every run; qualify the column, as `pista dump` does.
+* `plan` now finds a change to the table prefix of a column in a view over a join. Before, pistachio removed every prefix before it compared two views. So changing `u.id` to `o.id` in a join, or `o.user_id = u.id` to `o.user_id = o.id` in a sub-query, planned no change. This applies to materialized views too. A view over a join that leaves a column without its prefix is now replaced on every run. Write the prefix, as `dump` does.
 
 ## [1.79.0] - 2026-10-09
 

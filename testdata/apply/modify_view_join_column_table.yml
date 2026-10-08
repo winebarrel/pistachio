@@ -1,0 +1,29 @@
+init: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.user_orders AS
+  SELECT u.id, u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id;
+desired: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.user_orders AS
+  SELECT o.id, u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id;
+applied: |
+  -- public.orders
+  CREATE TABLE public.orders (
+      id integer,
+      user_id integer
+  );
+
+  -- public.users
+  CREATE TABLE public.users (
+      id integer,
+      name text
+  );
+
+  -- public.user_orders
+  CREATE OR REPLACE VIEW public.user_orders AS
+  SELECT o.id,
+      u.name
+     FROM users u
+       JOIN orders o ON o.user_id = u.id;
