@@ -1,0 +1,17 @@
+# A trigger written without FOR EACH fires once per statement. Dropping
+# FOR EACH ROW from the desired schema replaces the trigger, and the plan after
+# the apply is empty.
+init: |
+  CREATE FUNCTION public.visits_noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+  CREATE TABLE public.visits (id integer NOT NULL);
+  CREATE TRIGGER visits_audit AFTER INSERT ON public.visits FOR EACH ROW EXECUTE FUNCTION public.visits_noop();
+desired: |
+  CREATE TABLE public.visits (id integer NOT NULL);
+  CREATE TRIGGER visits_audit AFTER INSERT ON public.visits EXECUTE FUNCTION visits_noop();
+applied: |
+  -- public.visits
+  CREATE TABLE public.visits (
+      id integer NOT NULL
+  );
+
+  CREATE TRIGGER visits_audit AFTER INSERT ON visits FOR EACH STATEMENT EXECUTE FUNCTION visits_noop();

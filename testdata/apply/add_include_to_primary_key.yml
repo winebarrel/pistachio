@@ -1,0 +1,21 @@
+# INCLUDE is part of the primary key's index, so adding it replaces the
+# constraint.
+init: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id) INCLUDE (carrier)
+  );
+applied: |
+  -- public.shipments
+  CREATE TABLE public.shipments (
+      id integer NOT NULL,
+      carrier text,
+      CONSTRAINT shipments_pkey PRIMARY KEY (id) INCLUDE (carrier)
+  );

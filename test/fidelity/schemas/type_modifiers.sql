@@ -1,0 +1,22 @@
+CREATE TABLE public.meters (
+    id integer NOT NULL,
+    span interval year to month,
+    window_len interval day to second(0),
+    elapsed interval(3),
+    minutes interval minute,
+    mask bit varying(16),
+    fixed_mask bit(4),
+    code character(4),
+    label character varying,
+    read_at time(3) without time zone,
+    read_tz time with time zone,
+    stamped timestamp(0) with time zone,
+    amount numeric,
+    raw bytea,
+    addr inet,
+    net cidr,
+    hw macaddr,
+    during tstzrange,
+    days daterange,
+    CONSTRAINT meters_pkey PRIMARY KEY (id)
+);

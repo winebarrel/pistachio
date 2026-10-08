@@ -1,0 +1,25 @@
+# Moving NULLs to the other end changes the index, so it is dropped and
+# created again.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      taken_at timestamp with time zone NOT NULL,
+      value integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX readings_taken_at_idx ON public.readings USING btree (taken_at DESC);
+  CREATE INDEX readings_value_idx ON public.readings USING btree (value NULLS FIRST);
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      taken_at timestamp with time zone NOT NULL,
+      value integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX readings_taken_at_idx ON public.readings USING btree (taken_at DESC NULLS LAST);
+  CREATE INDEX readings_value_idx ON public.readings USING btree (value);
+plan: |
+  DROP INDEX public.readings_taken_at_idx;
+  DROP INDEX public.readings_value_idx;
+  CREATE INDEX readings_taken_at_idx ON public.readings USING btree (taken_at DESC NULLS LAST);
+  CREATE INDEX readings_value_idx ON public.readings USING btree (value);

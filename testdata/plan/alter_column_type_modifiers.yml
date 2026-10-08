@@ -1,0 +1,26 @@
+# Interval fields and precision, bit varying length and time precision are part
+# of the type. Changing one alters the column type; a modifier left as it is
+# is not a change.
+init: |
+  CREATE TABLE public.meters (
+      id integer NOT NULL,
+      span interval YEAR TO MONTH,
+      elapsed interval(3),
+      mask bit varying(8),
+      code character(4),
+      read_at time(3) without time zone
+  );
+desired: |
+  CREATE TABLE public.meters (
+      id integer NOT NULL,
+      span interval DAY TO SECOND,
+      elapsed interval(6),
+      mask bit varying(16),
+      code character(4),
+      read_at time(0) without time zone
+  );
+plan: |
+  ALTER TABLE public.meters ALTER COLUMN span SET DATA TYPE interval day to second;
+  ALTER TABLE public.meters ALTER COLUMN elapsed SET DATA TYPE interval(6);
+  ALTER TABLE public.meters ALTER COLUMN mask SET DATA TYPE bit varying(16);
+  ALTER TABLE public.meters ALTER COLUMN read_at SET DATA TYPE time(0) without time zone;
