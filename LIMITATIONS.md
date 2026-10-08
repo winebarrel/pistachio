@@ -633,9 +633,10 @@ Expanding the star on the desired side needs the column list of every FROM
 item. `DiffViews` receives only the view maps, so the table columns would
 have to be threaded in. `model.View` carries a definition rather than
 columns, so a star over another view has to be resolved recursively from
-that definition. `equalViewDef` already strips table qualification. So the
-expansion only has to produce the column names in the right order, not the
-qualified form that the catalog prints.
+that definition. `equalViewDef` strips the table prefix in a `SELECT` with
+one relation in `FROM`. There the expansion only has to produce the column
+names in the right order. Over a join it has to produce the prefix too, as the
+catalog prints it.
 
 What the star should mean is a separate decision. PostgreSQL expands it at
 `CREATE` time and freezes the result. So adding a column to a base table
@@ -728,17 +729,35 @@ Workaround: write the constant the way `pista dump` emits it.
 
 Origin: [#710](https://github.com/winebarrel/pistachio/pull/710).
 
-## A view change to a qualifier alone is not seen
+## A view change to the schema of a table alone is not seen
 
-`pg_get_viewdef` and a written view body qualify references differently. So
-the view comparison drops the schema from every table reference and the table
-from every `table.column` on both sides. A change to a qualifier alone plans
-no change. An example is `o.created_at` to `u.created_at` in a join. Closing
-this means dropping a qualifier only where one side leaves it out.
+`pg_get_viewdef` leaves out the schema of a table that is on the
+`search_path`, and a written view body often includes it. So the view
+comparison drops the schema from every table reference on both sides. A change
+to the schema alone plans no change. An example is `s1.prices` to `s2.prices`.
+`stripFuncSchema` does the same for a function call, so `s1.tax()` to
+`s2.tax()` is not seen either. Closing this means dropping a schema only when
+it is on the `search_path`, and the diff does not have the `search_path`.
 
 Workaround: run the `CREATE OR REPLACE VIEW` by hand.
 
 Origin: bug survey, 2026-09-27.
+
+## Perpetual drift on a bare column in a view over a join
+
+Priority: low.
+
+`pg_get_viewdef` writes the table prefix on every column of a `SELECT` whose
+`FROM` has more than one relation. There the view comparison keeps the
+prefix, because it decides which column is read. A desired view that leaves
+the prefix out, as in `SELECT name FROM users u JOIN orders o ...`, does not
+match `SELECT u.name ...`. So `CREATE OR REPLACE VIEW` is re-emitted on every
+plan. Closing this means finding the table of each bare column, which needs
+the columns of every relation in `FROM`. `DiffViews` does not have them.
+
+Workaround: write the prefix the way `pista dump` emits it.
+
+Origin: [#953](https://github.com/winebarrel/pistachio/pull/953).
 
 ## Routine renaming is not supported
 
