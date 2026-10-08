@@ -1,0 +1,23 @@
+# NULLS FIRST is the default for DESC and NULLS LAST the default for ASC, and
+# the catalog omits a default. Writing the default is not a change.
+init: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      taken_at timestamp with time zone NOT NULL,
+      value integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX readings_taken_at_idx ON public.readings USING btree (taken_at DESC);
+  CREATE INDEX readings_value_idx ON public.readings USING btree (value);
+  CREATE INDEX readings_value_taken_at_idx ON public.readings USING btree (value, taken_at DESC);
+desired: |
+  CREATE TABLE public.readings (
+      id integer NOT NULL,
+      taken_at timestamp with time zone NOT NULL,
+      value integer,
+      CONSTRAINT readings_pkey PRIMARY KEY (id)
+  );
+  CREATE INDEX readings_taken_at_idx ON public.readings USING btree (taken_at DESC NULLS FIRST);
+  CREATE INDEX readings_value_idx ON public.readings USING btree (value ASC NULLS LAST);
+  CREATE INDEX readings_value_taken_at_idx ON public.readings USING btree (value ASC, taken_at DESC NULLS FIRST);
+plan: ""

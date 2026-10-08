@@ -1,0 +1,34 @@
+# A view written by hand with these FROM, WHERE and window forms compares
+# equal to what pg_get_viewdef returns for it. One view per form, so a
+# failure names the one that drifted.
+init: |
+  CREATE TABLE public.shelves (
+      id integer NOT NULL,
+      label text NOT NULL,
+      slots text[] NOT NULL,
+      placed_at timestamp with time zone NOT NULL,
+      weight numeric(8,2),
+      CONSTRAINT shelves_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v_lateral_ordinality AS SELECT s.id, u.slot, u.pos FROM public.shelves s, LATERAL unnest(s.slots) WITH ORDINALITY AS u(slot, pos);
+  CREATE VIEW public.v_materialized_cte AS WITH heavy AS MATERIALIZED (SELECT id FROM public.shelves WHERE weight > 5) SELECT h.id FROM heavy h;
+  CREATE VIEW public.v_exists AS SELECT s.id FROM public.shelves s WHERE EXISTS (SELECT 1 FROM public.shelves x WHERE x.id = s.id AND x.weight > 1);
+  CREATE VIEW public.v_window_frame AS SELECT id, sum(weight) OVER (ORDER BY placed_at ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running FROM public.shelves;
+  CREATE VIEW public.v_order_limit AS SELECT id, label FROM public.shelves WHERE placed_at > now() - interval '7 days' ORDER BY placed_at DESC NULLS LAST LIMIT 10;
+  CREATE VIEW public.v_having AS SELECT label, count(*) AS n FROM public.shelves GROUP BY label HAVING count(*) > 1;
+desired: |
+  CREATE TABLE public.shelves (
+      id integer NOT NULL,
+      label text NOT NULL,
+      slots text[] NOT NULL,
+      placed_at timestamp with time zone NOT NULL,
+      weight numeric(8,2),
+      CONSTRAINT shelves_pkey PRIMARY KEY (id)
+  );
+  CREATE VIEW public.v_lateral_ordinality AS SELECT s.id, u.slot, u.pos FROM public.shelves s, LATERAL unnest(s.slots) WITH ORDINALITY AS u(slot, pos);
+  CREATE VIEW public.v_materialized_cte AS WITH heavy AS MATERIALIZED (SELECT id FROM public.shelves WHERE weight > 5) SELECT h.id FROM heavy h;
+  CREATE VIEW public.v_exists AS SELECT s.id FROM public.shelves s WHERE EXISTS (SELECT 1 FROM public.shelves x WHERE x.id = s.id AND x.weight > 1);
+  CREATE VIEW public.v_window_frame AS SELECT id, sum(weight) OVER (ORDER BY placed_at ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running FROM public.shelves;
+  CREATE VIEW public.v_order_limit AS SELECT id, label FROM public.shelves WHERE placed_at > now() - interval '7 days' ORDER BY placed_at DESC NULLS LAST LIMIT 10;
+  CREATE VIEW public.v_having AS SELECT label, count(*) AS n FROM public.shelves GROUP BY label HAVING count(*) > 1;
+plan: ""
