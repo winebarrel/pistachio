@@ -54,6 +54,7 @@ func TestMatchLiterals(t *testing.T) {
 		{"other type", "'1 hour'::text", "'01:00:00'::interval", nil},
 		{"not a string", "1", "'1'::integer", nil},
 		{"uncast current", "'a'", "'b'", nil},
+		{"cast on an expression", "now()", "now()::date", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

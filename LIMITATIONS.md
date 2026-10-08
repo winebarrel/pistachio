@@ -490,18 +490,17 @@ in place.
 resolves to `timestamp without time zone`, and the catalog re-prints it in that
 type's output form.
 
-A column `DEFAULT` drifts the same way: `DEFAULT '1 hour'` on an `interval`
-column reads back as `'01:00:00'::interval`, and every plan writes
+A column `DEFAULT` drifts the same way. `DEFAULT '1 hour'` on an `interval`
+column is read back as `'01:00:00'::interval`, so every plan writes
 `SET DEFAULT`.
 
-`diff/desugar.go` undoes syntactic rewrites. Matching a literal is different.
-It means running the type's input and output functions over the literal, which
-only the server can do. `--evaluate-literals` on `plan` and `apply` asks the
-server to print the literals that differ, for a column or domain `DEFAULT` and
-a table or domain `CHECK`. It is off by default because it adds a query. An
-index predicate, a view body, a policy, a trigger `WHEN` and a generated column
-are still compared by spelling, as is anything under `diff`, which has no
-server to ask.
+`diff/desugar.go` undoes syntactic rewrites. A literal is different: only the
+server can run the input and output functions of a type. `--evaluate-literals`
+on `plan` and `apply` sends the literals to the server and compares the values.
+It covers the `DEFAULT` of a column or domain, a generated column, and a
+`CHECK` on a table or domain. It is off by default because it adds a query. An
+index predicate, a view body, a policy and a trigger `WHEN` are still compared
+by text. `diff` has no server to ask, so it always compares by text.
 
 `dump` writes the catalog form. So a dump fed back plans clean, and only a
 hand-written literal reaches this.

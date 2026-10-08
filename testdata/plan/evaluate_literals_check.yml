@@ -1,6 +1,6 @@
 evaluate_literals: true
 init: |
-  CREATE DOMAIN public.dur AS interval DEFAULT '1 hour' CONSTRAINT dur_check CHECK (VALUE > '30 minutes');
+  CREATE DOMAIN public.dur AS interval DEFAULT '1 hour' CONSTRAINT dur_check CHECK (VALUE > '30 minutes') CONSTRAINT dur_max CHECK (VALUE < '2 days');
   CREATE TABLE public.t (
       id integer NOT NULL,
       iv interval,
@@ -8,7 +8,7 @@ init: |
       CONSTRAINT t_iv_check CHECK (iv < '1 hour' AND iv > '-1 hours')
   );
 desired: |
-  CREATE DOMAIN public.dur AS interval DEFAULT '1 hour' CONSTRAINT dur_check CHECK (VALUE > '30 minutes');
+  CREATE DOMAIN public.dur AS interval DEFAULT '1 hour' CONSTRAINT dur_check CHECK (VALUE > '30 minutes') CONSTRAINT dur_max CHECK (VALUE < '2 days');
   CREATE TABLE public.t (
       id integer NOT NULL,
       iv interval,

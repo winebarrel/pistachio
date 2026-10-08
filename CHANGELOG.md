@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `plan` and `apply` take `--evaluate-literals`. A string literal under a cast in a column or domain `DEFAULT` or a `CHECK` constraint is compared by the value the server reads it as, not by its spelling, so `DEFAULT '1 hour'` on an `interval` column no longer plans `SET DEFAULT` on every run. The literals spelled differently from the catalog are sent to the server in one query. Off by default.
+* `plan` and `apply` take `--evaluate-literals`. It compares a string literal with a cast by value, not by text, in the `DEFAULT` of a column or domain, a generated column and a `CHECK` constraint. For example, `DEFAULT '1 hour'` on an `interval` column no longer plans `SET DEFAULT` on every run. The literals whose text differs are sent to the server in one query. The option is off by default.
 
 ## [1.78.1] - 2026-10-07
 

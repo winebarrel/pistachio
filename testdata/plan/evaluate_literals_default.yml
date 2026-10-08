@@ -12,6 +12,10 @@ init: |
       a integer[] DEFAULT '{1, 2}',
       ip inet DEFAULT '192.168.0.1/32',
       expr timestamptz DEFAULT now() - interval '1 day 2 hours',
+      iv2 interval DEFAULT '1 hour',
+      n integer DEFAULT 0,
+      ts timestamptz DEFAULT '2020-01-01',
+      g interval GENERATED ALWAYS AS (iv + '30 minutes') STORED,
       CONSTRAINT t_pkey PRIMARY KEY (id)
   );
 desired: |
@@ -27,6 +31,10 @@ desired: |
       a integer[] DEFAULT '{1, 2}',
       ip inet DEFAULT '192.168.0.1/32',
       expr timestamptz DEFAULT now() - interval '1 day 2 hours',
+      iv2 interval DEFAULT '1 hour',
+      n integer DEFAULT 0,
+      ts timestamptz DEFAULT '2020-01-01',
+      g interval GENERATED ALWAYS AS (iv + '30 minutes') STORED,
       CONSTRAINT t_pkey PRIMARY KEY (id)
   );
 plan: ""

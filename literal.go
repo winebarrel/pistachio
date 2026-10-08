@@ -2,7 +2,6 @@ package pistachio
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -13,23 +12,23 @@ import (
 	"github.com/winebarrel/pistachio/model"
 )
 
-// --evaluate-literals compares a typed literal by its value rather than by its
-// spelling. PostgreSQL stores the value of a literal, not the text it was
-// written as, and the catalog prints it back in the type's output format:
-// DEFAULT '1 hour' on an interval column reads back as '01:00:00'::interval.
-// The diff compares text, so a desired schema that spells the literal some
-// other way plans the same statement on every run.
+// --evaluate-literals compares a string literal with a cast by value, not by
+// text. PostgreSQL stores the value of a literal, not its text, and the
+// catalog prints the value in the output format of its type. DEFAULT '1 hour'
+// on an interval column is read back as '01:00:00'::interval. The diff
+// compares text, so it plans the same statement on every run.
 //
-// The server is the only thing that knows each type's output format, so the
-// literals that differ are sent to it to print. Where the printed form of the
-// desired literal matches the current one, the current side is rewritten to
-// the desired spelling before the diff runs, the way referenceRenames carries
-// a rename into it. The desired side, which the statements are written from,
-// is never touched.
+// Only the server knows the output format of each type, so the literals whose
+// text differs are sent to it. When the server prints the desired literal the
+// same way as the current one, the current side is rewritten to the desired
+// text before the diff runs, as referenceRenames does for a rename. The
+// statements are written from the desired side, which is not changed.
 //
-// The scope is a column or domain DEFAULT and a table or domain CHECK
-// constraint. A column or domain whose type changes in the same run is left
-// alone, since the current side's cast names the old type.
+// This covers the DEFAULT of a column or domain, the expression of a
+// generated column, which the model keeps in Default, and a CHECK constraint
+// on a table or domain. A table with a column that changes type in the same
+// run is skipped, and so is a domain whose base type changes, because the cast
+// on the current side names the old type.
 
 // literalPrinter returns the text the server prints for each cast expression.
 // An expression it cannot evaluate is left out of the result.
@@ -37,7 +36,8 @@ type literalPrinter func(exprs []string) map[string]string
 
 // printLiterals asks the server for the output form of each expression in one
 // round trip. format's %s goes through the type's output function, which is
-// what the catalog prints. A cast to text need not: inet's keeps the netmask.
+// what the catalog prints. A cast to text can differ: inet::text keeps the
+// netmask.
 // A literal the type refuses fails the whole query, so on an error each is
 // asked on its own and the failures are dropped. apply reports them when it
 // runs the statement.
@@ -87,22 +87,21 @@ func castLiteral(node *pg_query.Node) (*pg_query.String, *pg_query.TypeCast) {
 	return s, tc
 }
 
-// castExpr writes the SQL for value cast to tn.
-func castExpr(value string, tn *pg_query.TypeName) (string, error) {
+// castExpr writes the SQL for value cast to tn. A tree that came out of the
+// parser deparses, so the error is not checked: an empty string matches
+// nothing.
+func castExpr(value string, tn *pg_query.TypeName) string {
 	cast := &pg_query.Node{Node: &pg_query.Node_TypeCast{TypeCast: &pg_query.TypeCast{
 		Arg:      pg_query.MakeAConstStrNode(value, 0),
 		TypeName: tn,
 	}}}
-	sql, err := pg_query.Deparse(&pg_query.ParseResult{
+	sql, _ := pg_query.Deparse(&pg_query.ParseResult{
 		Version: pgast.ParseTreeVersion,
 		Stmts: []*pg_query.RawStmt{{Stmt: &pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: &pg_query.SelectStmt{
 			TargetList: []*pg_query.Node{pg_query.MakeResTargetNodeWithVal(cast, 0)},
 		}}}}},
 	})
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimPrefix(sql, "SELECT "), nil
+	return strings.TrimPrefix(sql, "SELECT ")
 }
 
 // matchLiterals walks desired and current in step and calls visit for each
@@ -123,14 +122,9 @@ func matchLiterals(desired, current *pg_query.Node, visit func(cur *pg_query.Str
 		if desStr == nil || desStr.Sval == curStr.Sval {
 			return cur
 		}
-		expr, err := castExpr(desStr.Sval, curCast.TypeName)
-		if err != nil {
+		expr := castExpr(desStr.Sval, curCast.TypeName)
+		if expr == "" || desCast != nil && castExpr(desStr.Sval, desCast.TypeName) != expr {
 			return cur
-		}
-		if desCast != nil {
-			if desExpr, err := castExpr(desStr.Sval, desCast.TypeName); err != nil || desExpr != expr {
-				return cur
-			}
 		}
 		visit(curStr, literalPair{desired: desStr.Sval, expr: expr})
 		return cur
@@ -149,18 +143,16 @@ type literalAligner struct {
 // Before the literals are printed it records what to ask; after, it returns
 // the current expression with each literal whose printed form matches spelled
 // the desired way, and whether anything changed.
-func (a *literalAligner) align(current, desired string, parse func(string) (*pg_query.ParseResult, *pg_query.Node, error), deparse func(*pg_query.ParseResult) (string, error)) (string, bool) {
+//
+// parse returns a nil node and deparse an empty string on an error. Both sides
+// were parsed once already, so neither happens, and a nil node pairs with
+// nothing.
+func (a *literalAligner) align(current, desired string, parse func(string) (*pg_query.ParseResult, *pg_query.Node), deparse func(*pg_query.ParseResult) string) (string, bool) {
 	if current == desired {
 		return current, false
 	}
-	curResult, curNode, err := parse(current)
-	if err != nil {
-		return current, false
-	}
-	_, desNode, err := parse(desired)
-	if err != nil {
-		return current, false
-	}
+	curResult, curNode := parse(current)
+	_, desNode := parse(desired)
 	changed := false
 	matchLiterals(desNode, curNode, func(cur *pg_query.String, pair literalPair) {
 		if a.printed == nil {
@@ -175,41 +167,32 @@ func (a *literalAligner) align(current, desired string, parse func(string) (*pg_
 			changed = true
 		}
 	})
-	if !changed {
-		return current, false
+	if changed {
+		if out := deparse(curResult); out != "" {
+			return out, true
+		}
 	}
-	out, err := deparse(curResult)
-	if err != nil {
-		return current, false
-	}
-	return out, true
+	return current, false
 }
 
-func parseDefault(expr string) (*pg_query.ParseResult, *pg_query.Node, error) {
-	result, target, err := pgast.ParseExpr(expr)
-	if err != nil {
-		return nil, nil, err
-	}
-	return result, target.Val, nil
+func parseDefault(expr string) (*pg_query.ParseResult, *pg_query.Node) {
+	result, target, _ := pgast.ParseExpr(expr)
+	return result, target.GetVal()
 }
 
-func deparseDefault(result *pg_query.ParseResult) (string, error) {
-	sql, err := pg_query.Deparse(result)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimPrefix(sql, "SELECT "), nil
+func deparseDefault(result *pg_query.ParseResult) string {
+	sql, _ := pg_query.Deparse(result)
+	return strings.TrimPrefix(sql, "SELECT ")
 }
 
-func parseCheck(def string) (*pg_query.ParseResult, *pg_query.Node, error) {
-	result, con, err := pgast.ParseConstraintDefStrict(def)
-	if err != nil {
-		return nil, nil, err
-	}
-	if con.Contype != pg_query.ConstrType_CONSTR_CHECK {
-		return nil, nil, fmt.Errorf("not a check constraint")
-	}
-	return result, con.RawExpr, nil
+func parseCheck(def string) (*pg_query.ParseResult, *pg_query.Node) {
+	result, con, _ := pgast.ParseConstraintDefStrict(def)
+	return result, con.GetRawExpr()
+}
+
+func deparseCheck(result *pg_query.ParseResult) string {
+	def, _ := pgast.DeparseConstraintDef(result)
+	return def
 }
 
 func (a *literalAligner) alignDefault(current, desired *string) (*string, bool) {
@@ -221,7 +204,7 @@ func (a *literalAligner) alignDefault(current, desired *string) (*string, bool) 
 }
 
 func (a *literalAligner) alignCheck(current, desired string) (string, bool) {
-	return a.align(current, desired, parseCheck, pgast.DeparseConstraintDef)
+	return a.align(current, desired, parseCheck, deparseCheck)
 }
 
 // alignTables returns tables with the literals in their column defaults and
