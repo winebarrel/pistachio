@@ -476,37 +476,22 @@ Priority: low.
 A constant is stored as the value that its type's input function produced. It
 is not stored as the text that produced it. The catalog prints the value back
 in the type's output form. A literal whose text differs from that form never
-compares equal. This holds whether or not the literal names the type.
-`CHECK (a > timestamp '2000-01-01')` and, on a `timestamp` column,
-`CHECK (a > '2000-01-01')` both come back from `pg_get_constraintdef` as
-`CHECK ((a > '2000-01-01 00:00:00'::timestamp without time zone))`. So the
-`CHECK` is dropped and re-added on every plan, and the whole table is
-revalidated. `timestamp '2000-01-01 00:00:00'` plans clean. An index
-predicate, a view body, a policy, a trigger `WHEN` and a domain `CHECK` drift
-the same way. A generated column fails the run, because it cannot be altered
-in place.
+compares equal. This holds whether or not the literal names the type. On a
+`timestamp` column, the index predicate `WHERE a > '2000-01-01'` comes back
+from `pg_get_indexdef` as
+`WHERE (a > '2000-01-01 00:00:00'::timestamp without time zone)`. So the index
+is dropped and re-created on every plan. `timestamp '2000-01-01 00:00:00'`
+plans clean. A view body, a policy and a trigger `WHEN` drift the same way.
 
 `a AT TIME ZONE 'UTC' > '2000-01-01'` is the same case. The right operand
 resolves to `timestamp without time zone`, and the catalog re-prints it in that
 type's output form.
 
-A column `DEFAULT` drifts the same way. `DEFAULT '1 hour'` on an `interval`
-column is read back as `'01:00:00'::interval`, so every plan writes
-`SET DEFAULT`.
-
-`diff/desugar.go` undoes syntactic rewrites. A literal is different: only the
-server can run the input and output functions of a type. `--evaluate-literals`
-on `plan` and `apply` sends the literals to the server and compares the values.
-It covers the `DEFAULT` of a column or domain, a generated column, and a
-`CHECK` on a table or domain. It is off by default because it adds a query. An
-index predicate, a view body, a policy and a trigger `WHEN` are still compared
-by text. `diff` has no server to ask, so it always compares by text.
-
 `dump` writes the catalog form. So a dump fed back plans clean, and only a
 hand-written literal reaches this.
 
 Workaround: write the literal in the type's output form, the way
-`pg_get_constraintdef` prints it.
+`pg_get_indexdef` prints it.
 
 Origin: expression normalization review, 2026-08-30.
 
