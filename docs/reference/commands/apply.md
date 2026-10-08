@@ -109,6 +109,9 @@ The [general options](index.md#general-options) apply as well.
 `--assume-validated`
 :   Treat every table constraint, domain constraint and foreign key as validated. `NOT VALID` in the desired schema is ignored. Neither `NOT VALID` nor `VALIDATE CONSTRAINT` is run. The environment variable is `PISTA_ASSUME_VALIDATED`.
 
+`--evaluate-literals`
+:   Compare a string literal under a cast by its value rather than by its spelling. This applies to a column or domain `DEFAULT` and to a table or domain `CHECK` constraint. The catalog prints a literal in its type's output form, so `DEFAULT '1 hour'` on an `interval` column reads back as `'01:00:00'::interval` and otherwise plans `SET DEFAULT` on every run. With this option, each literal whose spelling differs from the catalog's is sent to the server, in one query, to be printed in its type's output form; where the two forms agree, there is no change. The statements written keep the spelling of the desired schema. A column or domain whose type changes in the same run is compared by spelling. The environment variable is `PISTA_EVALUATE_LITERALS`.
+
 ### Execution
 
 `--with-tx`

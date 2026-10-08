@@ -33,6 +33,7 @@ type applyTestCase struct {
 	ForceIndexConcurrently   bool             `yaml:"force_index_concurrently,omitempty"`
 	BulkAlter                bool             `yaml:"bulk_alter,omitempty"`
 	AssumeValidated          bool             `yaml:"assume_validated,omitempty"`
+	EvaluateLiterals         bool             `yaml:"evaluate_literals,omitempty"`
 	Timing                   bool             `yaml:"timing,omitempty"`
 	Include                  []string         `yaml:"include,omitempty"`
 	Exclude                  []string         `yaml:"exclude,omitempty"`
@@ -148,6 +149,7 @@ func TestApply(t *testing.T) {
 				ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 				BulkAlter:                tc.BulkAlter,
 				AssumeValidated:          tc.AssumeValidated,
+				EvaluateLiterals:         tc.EvaluateLiterals,
 				Timing:                   tc.Timing,
 				PreSQL:                   tc.PreSQL,
 				PreSQLFile:               preSQLFile,
@@ -181,6 +183,7 @@ func TestApply(t *testing.T) {
 					DisableIndexConcurrently: tc.DisableIndexConcurrently,
 					ForceIndexConcurrently:   tc.ForceIndexConcurrently,
 					AssumeValidated:          tc.AssumeValidated,
+					EvaluateLiterals:         tc.EvaluateLiterals,
 					PreSQL:                   tc.PreSQL,
 					PreSQLFile:               preSQLFile,
 					ConcurrentlyPreSQL:       tc.ConcurrentlyPreSQL,

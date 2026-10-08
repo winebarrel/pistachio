@@ -1,0 +1,14 @@
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      iv interval DEFAULT '1 hour',
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      iv interval DEFAULT '1 hour',
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.t ALTER COLUMN iv SET DEFAULT '1 hour';

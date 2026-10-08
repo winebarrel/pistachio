@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `plan` and `apply` take `--evaluate-literals`. A string literal under a cast in a column or domain `DEFAULT` or a `CHECK` constraint is compared by the value the server reads it as, not by its spelling, so `DEFAULT '1 hour'` on an `interval` column no longer plans `SET DEFAULT` on every run. The literals spelled differently from the catalog are sent to the server in one query. Off by default.
+
 ## [1.78.1] - 2026-10-07
 
 * A lint rule can have `when`, a CEL expression that limits the rule to some objects. The rule checks an object only if `when` is true.

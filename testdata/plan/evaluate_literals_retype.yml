@@ -1,0 +1,16 @@
+evaluate_literals: true
+init: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      v text DEFAULT '01:00:00',
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+desired: |
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      v interval DEFAULT '1 hour',
+      CONSTRAINT t_pkey PRIMARY KEY (id)
+  );
+plan: |
+  ALTER TABLE public.t ALTER COLUMN v SET DATA TYPE interval;
+  ALTER TABLE public.t ALTER COLUMN v SET DEFAULT '1 hour';

@@ -2474,6 +2474,13 @@ var serialBaseTypes = map[string]string{
 	"smallserial": "smallint",
 }
 
+// EqualTypeName reports whether two type names name the same type, the way
+// the column diff compares them. schema is the schema of the object that
+// holds the type.
+func EqualTypeName(a, b, schema string) bool {
+	return equalTypeName(a, b, schema)
+}
+
 // equalTypeName compares two type names, treating serial types as equal to their base types.
 func equalTypeName(a, b, schema string) bool {
 	a = foldTypeMod(model.StripTypeSchema(a, schema))
