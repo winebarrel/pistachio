@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A view or materialized view whose `FROM` holds more than one relation now plans a change of the table a column reference names. Before, pistachio dropped every table qualifier before comparing view bodies, so changing `u.id` to `o.id` in a join, or `o.user_id = u.id` to `o.user_id = o.id` in a correlated sub-query, planned no change. A qualifier is now dropped only in a `SELECT` with a single relation in `FROM`, and only when it names that relation. A view over a join whose desired definition leaves a column unqualified now plans `CREATE OR REPLACE VIEW` on every run; qualify the column, as `pista dump` does.
+
 ## [1.79.0] - 2026-10-09
 
 * `plan` and `apply` take `--evaluate-literals`. It compares a string literal with a cast by value, not by text, in the `DEFAULT` of a column or domain, a generated column and a `CHECK` constraint. For example, `DEFAULT '1 hour'` on an `interval` column no longer plans `SET DEFAULT` on every run. The literals whose text differs are sent to the server in one query. The option is off by default.

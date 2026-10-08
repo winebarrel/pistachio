@@ -1,0 +1,16 @@
+# In a view over a join, the table qualifier decides which column a reference
+# reads, so moving a column from one joined table to the other must produce
+# DDL.
+init: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.user_orders AS
+  SELECT u.id, u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id;
+desired: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.user_orders AS
+  SELECT o.id, u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id;
+plan: |
+  CREATE OR REPLACE VIEW public.user_orders AS
+  SELECT o.id, u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id;

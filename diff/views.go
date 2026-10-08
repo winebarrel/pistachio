@@ -165,11 +165,19 @@ func selectOutputColumns(node *pg_query.Node) ([]string, bool) {
 	return names, true
 }
 
-// stripQualifications removes the schema from every RangeVar and the table
-// prefix from every two-part ColumnRef in the statement. pg_get_viewdef omits
-// the schema when it is on the search path and qualifies a column with its
-// table, and a written view definition tends to do the opposite, so both sides
-// are reduced to the bare form before they are compared.
+// stripQualifications removes the schema from every RangeVar and, in a SELECT
+// whose FROM holds a single relation, the table prefix from the two-part
+// ColumnRefs naming that relation. pg_get_viewdef omits the schema when it is
+// on the search path and qualifies a column with its table, and a written view
+// definition tends to do the opposite, so both sides are reduced to the bare
+// form before they are compared.
+//
+// A column prefix is dropped only where it cannot change what the reference
+// reads. With one relation in FROM a bare name finds that relation's column
+// before any outer one, so users.id and id are the same column. With two or
+// more, u.id and o.id are different columns, and pg_get_viewdef always
+// qualifies there, so the prefix stays. A prefix naming an outer relation from
+// inside a sub-query stays for the same reason.
 //
 // The walk reaches every node kind, which is what the older enumeration could
 // not do: a reference sitting inside COALESCE, CASE, GREATEST, a subscript, a
@@ -183,15 +191,72 @@ func stripQualifications(node *pg_query.Node) {
 			rv.Schemaname = ""
 			return n
 		}
-		if cr := n.GetColumnRef(); cr != nil {
-			// "table.column" -> "column". Only when both parts are plain
-			// identifiers, so table.* keeps its prefix.
-			if len(cr.Fields) == 2 && cr.Fields[1].GetString_() != nil {
-				cr.Fields = cr.Fields[1:]
-			}
+		if ss := n.GetSelectStmt(); ss != nil {
+			stripColumnPrefixes(ss)
 		}
 		return n
 	})
+}
+
+// stripColumnPrefixes drops the prefix from the column references of one
+// SELECT that name the single relation in its FROM. The arms of a set
+// operation are SelectStmts rather than Nodes, so it goes down them itself;
+// a sub-query or CTE is a Node, reached by the walk in stripQualifications.
+func stripColumnPrefixes(ss *pg_query.SelectStmt) {
+	if ss.Op != pg_query.SetOperation_SETOP_NONE {
+		stripColumnPrefixes(ss.Larg)
+		stripColumnPrefixes(ss.Rarg)
+		return
+	}
+	if len(ss.FromClause) != 1 {
+		return
+	}
+	name := fromItemName(ss.FromClause[0])
+	if name == "" {
+		return
+	}
+	root := &pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: ss}}
+	pgast.Walk(root, pgast.WalkOptions{SkipSubqueries: true}, func(_ pgast.Ctx, n *pg_query.Node) *pg_query.Node {
+		// "table.column" -> "column". Only when both parts are plain
+		// identifiers, so table.* keeps its prefix.
+		if cr := n.GetColumnRef(); cr != nil && len(cr.Fields) == 2 &&
+			cr.Fields[0].GetString_().GetSval() == name && cr.Fields[1].GetString_() != nil {
+			cr.Fields = cr.Fields[1:]
+		}
+		return n
+	})
+}
+
+// fromItemName returns the name a FROM item is referenced by: its alias, or
+// for a table without one the table name and for a function without one the
+// function name, which is what pg_get_viewdef qualifies with. A join holds
+// more than one relation and returns "".
+func fromItemName(item *pg_query.Node) string {
+	switch {
+	case item.GetRangeVar() != nil:
+		rv := item.GetRangeVar()
+		if rv.Alias != nil {
+			return rv.Alias.Aliasname
+		}
+		return rv.Relname
+	case item.GetRangeSubselect() != nil:
+		return item.GetRangeSubselect().GetAlias().GetAliasname()
+	case item.GetRangeFunction() != nil:
+		rf := item.GetRangeFunction()
+		if rf.Alias != nil {
+			return rf.Alias.Aliasname
+		}
+		if len(rf.Functions) == 1 {
+			if items := rf.Functions[0].GetList().GetItems(); len(items) > 0 {
+				if fc := items[0].GetFuncCall(); fc != nil {
+					if s := fc.Funcname[len(fc.Funcname)-1].GetString_(); s != nil {
+						return s.Sval
+					}
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // stripSetOpBranchNames removes the target names from every SELECT of a
