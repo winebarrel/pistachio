@@ -5,7 +5,9 @@ init: |
       id integer NOT NULL,
       iv interval,
       CONSTRAINT t_pkey PRIMARY KEY (id),
-      CONSTRAINT t_iv_check CHECK (iv < '1 hour' AND iv > '-1 hours')
+      CONSTRAINT t_iv_check CHECK (iv < '1 hour' AND iv > '-1 hours'),
+      CONSTRAINT t_iv_in CHECK (iv IN ('1 hour', '2 hours')),
+      CONSTRAINT t_iv_between CHECK (iv BETWEEN '1 minute' AND '1 day 2 hours')
   );
 desired: |
   CREATE DOMAIN public.dur AS interval DEFAULT '1 hour' CONSTRAINT dur_check CHECK (VALUE > '30 minutes') CONSTRAINT dur_max CHECK (VALUE < '2 days');
@@ -13,6 +15,8 @@ desired: |
       id integer NOT NULL,
       iv interval,
       CONSTRAINT t_pkey PRIMARY KEY (id),
-      CONSTRAINT t_iv_check CHECK (iv < '1 hour' AND iv > '-1 hours')
+      CONSTRAINT t_iv_check CHECK (iv < '1 hour' AND iv > '-1 hours'),
+      CONSTRAINT t_iv_in CHECK (iv IN ('1 hour', '2 hours')),
+      CONSTRAINT t_iv_between CHECK (iv BETWEEN '1 minute' AND '1 day 2 hours')
   );
 plan: ""

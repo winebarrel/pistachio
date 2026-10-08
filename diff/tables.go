@@ -997,6 +997,13 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 	return pgast.Walk(node, pgast.WalkOptions{}, normalizeExprNode)
 }
 
+// NormalizeCheckExpr applies the normalization the CHECK comparison applies to
+// both sides, such as folding = ANY (ARRAY[...]) into IN (...) and expanding
+// BETWEEN, and returns the new root.
+func NormalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
+	return normalizeCheckExpr(node)
+}
+
 func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 	if tc := node.GetTypeCast(); tc != nil {
 		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) {

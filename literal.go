@@ -185,9 +185,17 @@ func deparseDefault(result *pg_query.ParseResult) string {
 	return strings.TrimPrefix(sql, "SELECT ")
 }
 
+// parseCheck normalizes the expression the way the CHECK comparison does
+// before the literals are paired. The catalog prints IN (...) as
+// = ANY (ARRAY[...]) and expands BETWEEN, so the raw trees of the two sides
+// do not line up.
 func parseCheck(def string) (*pg_query.ParseResult, *pg_query.Node) {
 	result, con, _ := pgast.ParseConstraintDefStrict(def)
-	return result, con.GetRawExpr()
+	if con == nil {
+		return result, nil
+	}
+	con.RawExpr = diff.NormalizeCheckExpr(con.RawExpr)
+	return result, con.RawExpr
 }
 
 func deparseCheck(result *pg_query.ParseResult) string {

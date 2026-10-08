@@ -70,3 +70,11 @@ func TestMatchLiterals(t *testing.T) {
 		})
 	}
 }
+
+func TestAlignCheck_Unparsable(t *testing.T) {
+	a := &literalAligner{seen: map[string]bool{}}
+	got, changed := a.alignCheck("CHECK (", "CHECK (iv < '1 hour')")
+	assert.Equal(t, "CHECK (", got)
+	assert.False(t, changed)
+	assert.Empty(t, a.exprs)
+}

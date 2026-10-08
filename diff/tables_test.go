@@ -1963,6 +1963,20 @@ func TestEqualTypeName(t *testing.T) {
 	assert.False(t, equalTypeName(`"Addr"`, `"addr"`, "public"))
 }
 
+func TestEqualTypeName_Exported(t *testing.T) {
+	assert.True(t, EqualTypeName("serial", "integer", "public"))
+	assert.False(t, EqualTypeName("integer", "text", "public"))
+}
+
+func TestNormalizeCheckExpr_Exported(t *testing.T) {
+	result, con, err := pgast.ParseConstraintDefStrict("CHECK (iv = ANY (ARRAY['01:00:00'::interval, '02:00:00'::interval]))")
+	require.NoError(t, err)
+	con.RawExpr = NormalizeCheckExpr(con.RawExpr)
+	def, err := pgast.DeparseConstraintDef(result)
+	require.NoError(t, err)
+	assert.Equal(t, "CHECK (iv IN ('01:00:00'::interval, '02:00:00'::interval))", def)
+}
+
 func TestFoldTypeMod(t *testing.T) {
 	assert.Equal(t, "geometry(polygon,4326)", foldTypeMod("geometry(Polygon,4326)"))
 	// A type name without a modifier is untouched, quoted or not.
