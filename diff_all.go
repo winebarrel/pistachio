@@ -27,10 +27,14 @@ type diffAllOptions struct {
 	ForceIndexConcurrently   bool
 	BulkAlter                bool
 	AssumeValidated          bool
+	EvaluateLiterals         bool
 	// StateHash asks for the hash of the current side the diff read. Only a
 	// run that writes a plan file needs it, so every other run pays nothing
 	// for the extra encoding.
 	StateHash bool
+	// printLiterals is set by diffAll when EvaluateLiterals is on. Diff has
+	// no server to ask, so it leaves this nil.
+	printLiterals literalPrinter
 }
 
 // desiredInput is what a run reads from the file system: the parsed desired
@@ -171,6 +175,12 @@ func (client *Client) diffAll(ctx context.Context, conn *pgx.Conn, options *diff
 	current, err := readCurrent(ctx, cat, &options.FilterOptions)
 	if err != nil {
 		return nil, err
+	}
+
+	if options.EvaluateLiterals {
+		options.printLiterals = func(exprs []string) map[string]string {
+			return printLiterals(ctx, conn, exprs)
+		}
 	}
 
 	result, err := client.diffObjects(current, options)
@@ -387,6 +397,10 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		diffTables = refs.applyTables(filteredTables)
 		diffDomains = refs.applyDomains(filteredDomains)
 		diffCompositeTypes = refs.applyCompositeTypes(filteredCompositeTypes)
+	}
+
+	if options.printLiterals != nil {
+		diffTables, diffDomains = evaluateLiterals(options.printLiterals, diffTables, desiredTables, diffDomains, desiredDomains)
 	}
 
 	enumDiff, err := diff.DiffEnums(filteredEnums, desiredEnums, &options.DropPolicy)

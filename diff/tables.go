@@ -997,6 +997,13 @@ func normalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
 	return pgast.Walk(node, pgast.WalkOptions{}, normalizeExprNode)
 }
 
+// NormalizeCheckExpr applies the normalization the CHECK comparison applies to
+// both sides, such as folding = ANY (ARRAY[...]) into IN (...) and expanding
+// BETWEEN, and returns the new root.
+func NormalizeCheckExpr(node *pg_query.Node) *pg_query.Node {
+	return normalizeCheckExpr(node)
+}
+
 func normalizeExprNode(ctx pgast.Ctx, node *pg_query.Node) *pg_query.Node {
 	if tc := node.GetTypeCast(); tc != nil {
 		if tc.Arg != nil && !ctx.IsSelectTarget() && isTextLikeTypeName(tc.TypeName) {
@@ -2472,6 +2479,13 @@ var serialBaseTypes = map[string]string{
 	"serial":      "integer",
 	"bigserial":   "bigint",
 	"smallserial": "smallint",
+}
+
+// EqualTypeName reports whether two type names name the same type, the way
+// the column diff compares them. schema is the schema of the object that
+// holds the type.
+func EqualTypeName(a, b, schema string) bool {
+	return equalTypeName(a, b, schema)
 }
 
 // equalTypeName compares two type names, treating serial types as equal to their base types.

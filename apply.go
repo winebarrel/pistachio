@@ -22,6 +22,7 @@ type ApplyOptions struct {
 	ForceIndexConcurrently   bool     `xor:"index-concurrently,tx-mode" env:"PISTA_FORCE_INDEX_CONCURRENTLY" help:"Force CONCURRENTLY on every CREATE/DROP INDEX, including pure drops."`
 	BulkAlter                bool     `env:"PISTA_BULK_ALTER" help:"Combine consecutive ALTER TABLE actions on the same table into a single statement. FK changes, RENAME, VALIDATE CONSTRAINT, RLS toggles, and skipped DROPs stay separate."`
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
+	EvaluateLiterals         bool     `env:"PISTA_EVALUATE_LITERALS" help:"Compare a string literal with a cast by value, not by text, in a DEFAULT, a generated column and a CHECK constraint. The literals whose text differs are sent to the server in one query."`
 	ExecOptions
 }
 
@@ -122,6 +123,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		ForceIndexConcurrently:   options.ForceIndexConcurrently,
 		BulkAlter:                options.BulkAlter,
 		AssumeValidated:          options.AssumeValidated,
+		EvaluateLiterals:         options.EvaluateLiterals,
 	})
 	if err != nil {
 		return nil, err

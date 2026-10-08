@@ -1,0 +1,32 @@
+evaluate_literals: true
+init: |
+  CREATE DOMAIN public.dur AS interval DEFAULT '1 hour' CONSTRAINT dur_check CHECK (VALUE > '30 minutes');
+  CREATE DOMAIN public.old_dur AS interval DEFAULT '1 hour';
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      iv interval DEFAULT '1 hour',
+      old interval DEFAULT '1 hour',
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_iv_check CHECK (iv < '1 hour'),
+      CONSTRAINT t_iv_range CHECK (iv > '-1 hours' AND iv < '1 day')
+  );
+desired: |
+  CREATE DOMAIN public.dur AS interval DEFAULT '2 hours' CONSTRAINT dur_check CHECK (VALUE > '40 minutes');
+  CREATE TABLE public.t (
+      id integer NOT NULL,
+      iv interval DEFAULT '2 hours',
+      CONSTRAINT t_pkey PRIMARY KEY (id),
+      CONSTRAINT t_iv_check CHECK (iv < '2 hours'),
+      CONSTRAINT t_iv_range CHECK (iv > '-1 hours' AND iv < '2 days')
+  );
+plan: |
+  ALTER DOMAIN public.dur SET DEFAULT '2 hours';
+  ALTER DOMAIN public.dur DROP CONSTRAINT dur_check;
+  ALTER DOMAIN public.dur ADD CONSTRAINT dur_check CHECK (value > '40 minutes');
+  ALTER TABLE public.t ALTER COLUMN iv SET DEFAULT '2 hours';
+  ALTER TABLE public.t DROP CONSTRAINT t_iv_check;
+  ALTER TABLE public.t DROP CONSTRAINT t_iv_range;
+  ALTER TABLE public.t ADD CONSTRAINT t_iv_check CHECK (iv < '2 hours');
+  ALTER TABLE public.t ADD CONSTRAINT t_iv_range CHECK (iv > '-1 hours' AND iv < '2 days');
+  ALTER TABLE public.t DROP COLUMN old;
+  DROP DOMAIN public.old_dur;
