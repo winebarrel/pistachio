@@ -1,20 +1,18 @@
 # Build the documentation site with MkDocs and publish it to GitHub Pages.
 # The Markdown under docs/ is the source; the HTML is built here and never
 # committed. --strict fails the build on a broken internal link.
+#
+# The site follows releases, not main: a release tag publishes it, so it never
+# describes a change that has not been released. release-tag.yml pushes the
+# tag with the App token, which is what lets that push start this workflow.
+# Running it by hand on a tag republishes that tag's docs.
 name: docs
 
 on:
   push:
-    branches: [main]
-    paths:
-      - docs/**
-      - overrides/**
-      - mkdocs.yml
-      - hooks.py
-      - requirements-docs.txt
-      - CHANGELOG.md
-      - LIMITATIONS.md
-      - .github/workflows/docs.yml
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+
+  workflow_dispatch:
   pull_request:
     paths:
       - docs/**
@@ -29,8 +27,8 @@ on:
 permissions:
   contents: read
 
-# One Pages deployment at a time. Two pushes to main in quick succession would
-# otherwise race, and cancelling the older one would publish out of order.
+# One Pages deployment at a time. Two runs in quick succession would otherwise
+# race, and cancelling the older one would publish out of order.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -52,10 +50,10 @@ jobs:
         with:
           path: site
 
-  # Only the push to main publishes. A pull request builds to catch a broken
-  # link and stops there.
+  # Only a release tag publishes. A pull request builds to catch a broken link
+  # and stops there.
   deploy:
-    if: github.event_name == 'push'
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
