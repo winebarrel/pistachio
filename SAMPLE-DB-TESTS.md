@@ -234,6 +234,7 @@ tip do not load. Its loader says why.
 | typebot | typebot | [baptisteArno/typebot.io](https://github.com/baptisteArno/typebot.io) |
 | cratesio | cratesio | [rust-lang/crates.io](https://github.com/rust-lang/crates.io) |
 | panoptes | panoptes | [zooniverse/panoptes](https://github.com/zooniverse/panoptes) |
+| harness | harness | [harness/harness](https://github.com/harness/harness) |
 
 ## Coverage
 
@@ -264,6 +265,7 @@ exceptions:
   counted on 2026-09-21 on 16.13. vaultwarden, authelia, hydra, bonita,
   ghostfolio, and typebot were counted on 2026-09-22 on 16.13.
 - cratesio was counted on 2026-09-25 on 16.13. panoptes was counted on 2026-10-04 on 16.14.
+  harness was counted on 2026-10-08 on 16.15.
 - The Sequences column was counted on 15.18 throughout. The Triggers column was
   added on 2026-08-24 and the Routines column on 2026-08-25. Both were counted
   on 15.18 for every sample.
@@ -407,11 +409,12 @@ pistachio does not read them either.
 | typebot | 31 | 245 | 53 | 31 | 23 | 0 | 5 | 0 | 0 | 0 |
 | cratesio | 35 | 207 | 85 | 35 | 47 | 1 | 0 | 0 | 25 | 31 |
 | panoptes | 54 | 530 | 202 | 68 | 52 | 0 | 0 | 0 | 4 | 0 |
-| **Total** | **10,218** | **87,942** | **31,070** | **13,647** | **16,917** | **2,311** | **715** | **873** | **2,027** | **1,823** |
+| harness | 97 | 1,060 | 246 | 180 | 141 | 0 | 3 | 0 | 6 | 8 |
+| **Total** | **10,315** | **89,002** | **31,316** | **13,827** | **17,058** | **2,311** | **718** | **873** | **2,033** | **1,831** |
 
 ### Size
 
-The 110 dumps come to about 290,000 lines of SQL. chado is 43,700 of them,
+The 111 dumps come to about 292,000 lines of SQL. chado is 43,700 of them,
 which is the longest dump of any sample. gitlab is 34,700 and uyuni is 19,700.
 gitlab is still about a quarter of the constraints, a fifth of the indexes, a
 sixth of the foreign keys and of the columns, and a seventh of the tables.
@@ -442,10 +445,11 @@ Indexes:
 - hnsw, pgvector's method: citizenlab, affine, lobehub.
 - Partial indexes: mediawiki, synapse, musicbrainz, chado, danbooru, lago,
   mattermost, lemmy, windmill, feedbin, penpot, openreplay, logto, omero,
-  uyuni, lobehub, hydra, panoptes.
+  uyuni, lobehub, hydra, panoptes, harness.
 - Expression indexes: rt, musicbrainz, danbooru, mattermost, feedbin, langfuse,
-  penpot, dcm4chee, logto, omero, uyuni, lobehub, hexpm, panoptes.
-- Unique indexes over an expression: rt, mattermost.
+  penpot, dcm4chee, logto, omero, uyuni, lobehub, hexpm, panoptes, harness.
+- Unique indexes over an expression: rt, mattermost, harness (most of them
+  partial).
 - gin over `to_tsvector`: rt, langfuse, uyuni, hexpm (with another function
   inside it).
 - An operator class named: `gin_trgm_ops` (danbooru, openreplay, uyuni, hexpm,
@@ -471,18 +475,18 @@ Constraints and keys:
 - No CHECK at all: dhis2, mattermost, vaultwarden, bonita, omop, zed,
   formbricks.
 - Foreign keys over more than one column: zed, formbricks, hydra (three
-  columns).
+  columns), harness.
 - Foreign keys across schemas: adventureworks, mimiciv, chado.
 - Referential actions on both sides: icinga_director, calcom, triggerdev,
   langfuse, logto, formbricks, hoppscotch, authelia; `ON UPDATE RESTRICT`:
   hydra.
-- `ON DELETE` alone: glific, dokploy, openreplay, lobehub, uyuni.
+- `ON DELETE` alone: glific, dokploy, openreplay, lobehub, uyuni, harness.
 - No foreign key at all: mediawiki, temporal, imdb, dolphinscheduler,
   nightingale, joomla, hyperswitch, icinga_ido, bareos, opencms, kamailio,
   shenyu, nacos, gravitino, streampark.
 - Tables with no primary key: shenyu, concourse, omop, teable, typebot,
-  authelia.
-- Composite primary keys: vaultwarden, bonita.
+  authelia, harness.
+- Composite primary keys: vaultwarden, bonita, harness.
 
 Types and columns:
 
@@ -495,6 +499,8 @@ Types and columns:
   in a view), uyuni (read by an index and a generated column).
 - Stored generated columns: bigbluebutton (over a function of its own), uyuni.
 - Identity columns: openreplay, uyuni.
+- A serial column whose sequence still carries the name the table had before
+  a rename, so dump writes the sequence on its own with `OWNED BY`: harness.
 - Standalone sequences: ranger, wso2apim, wso2is, dcm4chee, alfresco,
   roundcube, omero, uyuni, streampark (non-default `START WITH` and
   `MINVALUE`).
@@ -510,7 +516,8 @@ Types and columns:
 - Quoted mixed-case identifiers: chinook, hive, hatchet, calcom, triggerdev,
   documenso, bigbluebutton, dokploy, formbricks, hoppscotch; langfuse for its
   enum types only.
-- Table and column comments: gravitino, shenyu, nacos, glific, streampark.
+- Table and column comments: gravitino, shenyu, nacos, glific, streampark,
+  harness (one table comment).
 
 Tables and views:
 
@@ -531,10 +538,11 @@ Triggers:
 
 - Constraint triggers: boundary, omero.
 - A trigger in `ENABLE ALWAYS` state: gitlab.
-- Statement-level triggers with transition tables, and triggers on a
-  partitioned table: hatchet.
+- Statement-level triggers with transition tables: hatchet, harness.
+- Triggers on a partitioned table: hatchet.
 - An INSTEAD OF trigger on a view: marquez.
-- `UPDATE OF` a column list: affine, formbricks (with arguments), hoppscotch.
+- `UPDATE OF` a column list: affine, formbricks (with arguments), hoppscotch,
+  harness.
 - One trigger function per table: uyuni. One shared by every table:
   streampark.
 - Trigger functions in another schema: lemmy.
@@ -545,7 +553,8 @@ Schemas and extensions:
 - Many schemas, most holding routines alone: uyuni.
 - Extensions in a schema of their own: citizenlab, windmill, lemmy.
 - An extension installed and then left unused: formbricks (pgvector, which
-  the load still needs on the server).
+  the load still needs on the server), harness (btree_gin, citext, and
+  pg_trgm).
 
 ## Load-time adjustments
 

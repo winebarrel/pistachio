@@ -132,6 +132,7 @@ ghostfolio|sample-db-prisma|REPO=ghostfolio/ghostfolio SHA=bbe6af82299ab9882164f
 typebot|sample-db-prisma|REPO=baptisteArno/typebot.io SHA=61056ff9a98082485add8111e901d3148ca358ef DIR=packages/prisma/postgresql/migrations SCHEMA=typebot|typebot
 cratesio|sample-db-cratesio||cratesio
 panoptes|sample-db-pgdump-schema|URL=https://raw.githubusercontent.com/zooniverse/panoptes/a6f0f141d0c3f1ac69995e4b4dc511a06aa8ff3f/db/structure.sql SCHEMA=panoptes|panoptes
+harness|sample-db-harness||harness
 endef
 
 # Every loader pipes its schema into this psql. ON_ERROR_STOP makes a failing
@@ -1672,6 +1673,46 @@ sample-db-cratesio:
 	  | LC_ALL=C sort | cut -f2- \
 	  | while IFS= read -r d; do cat "$$d/up.sql" || exit 1; printf '\n;\n'; done \
 	  | $(PSQL)
+
+# Harness (harness/harness, Apache-2.0), the developer platform formerly named
+# Gitness, which hosts Git repositories, pipelines, and artifact registries. Its
+# schema ships as one flat directory of migrations, a file per step named
+# `NNNN_<what>.up.sql`, which maragudk/migrate applies in name order. Its
+# pattern for the up side is `^([\w-]+).up.sql$` with the dot unescaped, so four
+# files named `NNNN_<what>_up.sql` run as well, and later steps depend on them;
+# the glob takes both spellings. Six steps also run Go code after their SQL.
+# That code reads and writes rows and changes no schema, so the SQL is the whole
+# of it.
+#
+# The first file adds a primary key to `migrations`, the table the runner
+# creates for itself rather than a migration. A stand-in is created before the
+# migrations run and dropped once they have, as sample-db-harbor does with
+# golang-migrate's; it is not part of Harness's schema.
+#
+# Nothing names a schema except one trigger that calls a function as `public.`,
+# which the same file creates unqualified, so the qualifier is stripped and
+# search_path places both. The four contrib extensions, btree_gin, citext,
+# pg_trgm, and uuid-ossp, are installed with IF NOT EXISTS, which in `make
+# schema` finds three of them in other samples' schemas, so all four are
+# installed into `public` and relocated up front, as sample-db-cratesio does.
+HARNESS_SHA = eb7750ea08ace4ee6b23960c7a2c7ed3ede9b4c9
+
+sample-db-harness: PGOPTS = -c search_path=harness,public
+.PHONY: sample-db-harness
+sample-db-harness:
+	for e in btree_gin citext pg_trgm uuid-ossp; do \
+	  $(PSQL) -c "CREATE EXTENSION IF NOT EXISTS \"$$e\" WITH SCHEMA public" -c "ALTER EXTENSION \"$$e\" SET SCHEMA public" || exit 1; \
+	done
+	$(PSQL) -c 'CREATE SCHEMA IF NOT EXISTS harness'
+	$(PSQL) -c 'SET search_path = harness; CREATE TABLE migrations (version text NOT NULL)'
+	dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	$(FETCH) https://codeload.github.com/harness/harness/tar.gz/$(HARNESS_SHA) \
+	  | tar xz -C "$$dir" --strip-components=6 harness-$(HARNESS_SHA)/app/store/database/migrate/postgres && \
+	cd "$$dir" && LC_ALL=C && \
+	for f in *up.sql; do cat "$$f"; printf '\n;\n'; done \
+	  | sed -E 's/([^A-Za-z0-9_])public\./\1/g' \
+	  | $(PSQL)
+	$(PSQL) -c 'SET search_path = harness; DROP TABLE migrations'
 
 # SAMPLE narrows the check to the samples it names, separated by commas:
 #   make test-samples SAMPLE=lemmy,cratesio
