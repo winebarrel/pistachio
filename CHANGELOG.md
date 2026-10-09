@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* A lint rule can have `let`, a list of values that `assert` reads by name. Each has `name` and `expr`, a CEL expression. The values are evaluated in order after `when` is true, and each can read the ones before it. The standard rules `prefer-bigint-key`, `fk-needs-index` and `redundant-index` in `rules/` now use it.
+
 ## [1.80.0] - 2026-10-09
 
 * The documentation site no longer publishes the JSON Schema `schema-1.3.json`. Use `schema-1.4.json`.

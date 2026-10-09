@@ -67,7 +67,7 @@ rules:
     message: the table has no primary key
 ```
 
-A rule has these fields. All of them except `description` and `when` are required.
+A rule has these fields. All of them except `description`, `when` and `let` are required.
 
 `name`
 :   The name that the output and `-- pista:lint-ignore` use. It must be unique across all the rule files, and it cannot contain a comma or a space.
@@ -81,13 +81,48 @@ A rule has these fields. All of them except `description` and `when` are require
 `when`
 :   A [CEL](https://cel.dev/) expression that limits the rule to some objects. The rule checks an object only if this is true. It must return a boolean. Without it, the rule checks every object of its kind.
 
+`let`
+:   A list of values to name, each with `name` and `expr`. `expr` is a CEL expression, and `assert` reads its value by `name`. See [Naming values](#naming-values).
+
 `assert`
 :   A CEL expression. It must be true for every object the rule checks, and it must return a boolean.
 
 `message`
 :   The text printed when `assert` is false.
 
-`when` and `assert` can use the same variables. An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
+`when` and `assert` can use the same variables, and `assert` can also use the values of `let`. An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
+
+
+## Naming values
+
+`let` names the values that `assert` reads, so that a long expression can be split into steps:
+
+```yaml
+- name: prefer-bigint-key
+  on: table
+  let:
+    - name: small_int_columns
+      expr: table.columns.filter(c, c.base_type in ["smallint", "integer"]).map(c, c.name)
+  assert: >-
+    !table.constraints.values().exists(c, c.type == "primary_key"
+      && c.columns.exists(n, n in small_int_columns))
+  message: use bigint for the primary key
+```
+
+The values are evaluated in order, after `when` is true and before `assert`. Each `expr` can read the variables of the rule and the values before it. `when` cannot read them. A value is evaluated even if `assert` does not read it.
+
+`name` must be a CEL identifier. It cannot be a reserved word, contain a dot, or be the name of a variable or of another value of the rule.
+
+A value has the type that CEL finds for its expression. So a rule with `assert: x`, where `x` is `1`, fails to compile.
+
+In the flow style of YAML, quote an expression that has a comma:
+
+```yaml
+  let:
+    - {name: pk_columns, expr: 'table.constraints.values().map(c, c.columns)'}
+```
+
+An error in a value names it, as in `rule prefer-bigint-key: let small_int_columns: ...`.
 
 
 ## What a rule reads
@@ -116,7 +151,7 @@ A rule can use the standard CEL functions, these [CEL extensions](https://github
 
 - the string functions, such as `indexOf` and `substring`
 - the regular expression functions, such as `regex.replace`
-- `cel.bind`, which names a value inside an expression
+- `cel.bind`, which names a value inside an expression. To name a value for the whole of `assert`, use [`let`](#naming-values).
 
 pistachio adds these:
 
@@ -152,10 +187,14 @@ A foreign key that no index starts with:
 ```yaml
 - name: fk-needs-index
   on: foreign_key
-  assert: >-
-    table.indexes.values().exists(i, !i.partial && hasPrefix(i.columns, fk.columns))
-    || table.constraints.values().exists(c,
-         c.type in ["primary_key", "unique"] && hasPrefix(c.columns, fk.columns))
+  let:
+    - name: index_covers
+      expr: table.indexes.values().exists(i, !i.partial && hasPrefix(i.columns, fk.columns))
+    - name: key_covers
+      expr: >-
+        table.constraints.values().exists(c,
+          c.type in ["primary_key", "unique"] && hasPrefix(c.columns, fk.columns))
+  assert: index_covers || key_covers
   message: no index starts with the columns of the foreign key
 ```
 
