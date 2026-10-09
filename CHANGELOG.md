@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.80.1] - 2026-10-09
 
 * A lint rule can have `let`, a list of named values. Each item has `name` and `expr`, a CEL expression. `assert` and later items can use the names. The items are evaluated in order when `when` is true. The standard rules `prefer-bigint-key`, `fk-needs-index` and `redundant-index` in `rules/` now use it.
 
