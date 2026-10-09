@@ -1,26 +1,19 @@
-# Both rules compare an index's definition from USING on: the access method,
-# the columns and expressions with their operator classes, collations and
-# sort order, INCLUDE and WHERE. WITH (...) and TABLESPACE are removed first,
-# since they do not change the queries an index serves.
+# Both rules compare the keys of indexes. A key includes its operator class,
+# collation and sort order. Storage parameters and tablespaces are not
+# compared, since they do not change the queries an index serves.
 rules:
   - name: duplicate-index
     on: index
     description: >-
       Two indexes that differ only in their names, storage parameters and
       tablespaces serve the same queries.
-    # WITH (...) and TABLESPACE come before WHERE, so they are removed from the
-    # text before WHERE only. A string in the WHERE clause stays as it is.
+    # NULLS NOT DISTINCT is not compared. Of two unique indexes that differ
+    # only in it, the one with it enforces more, so the other is not needed.
     assert: >-
-      cel.bind(key,
-        cel.bind(d, index.definition.substring(index.definition.indexOf(" USING ")),
-          cel.bind(w, d.indexOf(" WHERE ") >= 0 ? d.indexOf(" WHERE ") : size(d),
-            regex.replace(d.substring(0, w), " WITH \\([^)]*\\)| TABLESPACE [^ ]+", "")
-            + d.substring(w))),
-        !table.indexes.values().exists(o, o.name != index.name && o.unique == index.unique
-          && cel.bind(d, o.definition.substring(o.definition.indexOf(" USING ")),
-               cel.bind(w, d.indexOf(" WHERE ") >= 0 ? d.indexOf(" WHERE ") : size(d),
-                 regex.replace(d.substring(0, w), " WITH \\([^)]*\\)| TABLESPACE [^ ]+", "")
-                 + d.substring(w))) == key))
+      !table.indexes.values().exists(o, o.name != index.name
+        && o.unique == index.unique && o.method == index.method
+        && o.keys == index.keys && o.include == index.include
+        && o.where == index.where)
     message: another index has the same definition
 
   - name: redundant-index
@@ -33,11 +26,7 @@ rules:
     when: >-
       !index.unique && !index.partial && index.method == "btree" && size(index.include) == 0
     assert: >-
-      cel.bind(key,
-        regex.replace(index.definition.substring(index.definition.indexOf(" USING ")),
-          " WITH \\([^)]*\\)| TABLESPACE [^ ]+", ""),
-        !table.indexes.values().exists(o,
-          o.name != index.name && !o.partial && o.method == "btree"
-          && o.definition.substring(o.definition.indexOf(" USING "))
-               .startsWith(key.substring(0, size(key) - 1) + ", ")))
+      !table.indexes.values().exists(o,
+        o.name != index.name && !o.partial && o.method == "btree"
+        && size(o.keys) > size(index.keys) && hasPrefix(o.keys, index.keys))
     message: another index starts with the same columns

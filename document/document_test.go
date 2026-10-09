@@ -170,16 +170,19 @@ CREATE TABLE public.t (c public.a);`)
 
 func TestNew_Index(t *testing.T) {
 	doc := newDocument(t, `
-CREATE TABLE public.t (a int, b text, c int, d int);
+CREATE TABLE public.t (a int, b text, c int, d int, "Weird Col" int);
 CREATE UNIQUE INDEX t_full_idx ON public.t USING btree (a DESC, lower(b)) INCLUDE (c, d) WHERE a > 0;
 CREATE INDEX t_plain_idx ON public.t (a, c);
 CREATE INDEX t_gin_idx ON public.t USING gin (to_tsvector('simple', b));
-CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLATE "C");`)
+CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLATE "C");
+CREATE INDEX t_quoted_idx ON public.t ("Weird Col", (a + 1)) WHERE b <> 'x' AND (c IS NULL OR d > 0);`)
 
 	indexes := doc.Tables.Get("public.t").Indexes
 
 	full := indexes.Get("t_full_idx")
 	assert.Equal(t, []*string{new("a"), nil}, full.Columns)
+	assert.Equal(t, []string{"a DESC", "lower(b)"}, full.Keys)
+	assert.Equal(t, new("a > 0"), full.Where)
 	assert.Equal(t, []string{"c", "d"}, full.Include)
 	assert.True(t, full.Unique)
 	assert.Equal(t, "btree", full.Method)
@@ -191,15 +194,23 @@ CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLA
 	assert.False(t, plain.Unique)
 	assert.Equal(t, "btree", plain.Method)
 	assert.False(t, plain.Partial)
+	assert.Equal(t, []string{"a", "c"}, plain.Keys)
+	assert.Nil(t, plain.Where)
 
 	gin := indexes.Get("t_gin_idx")
 	assert.Equal(t, []*string{nil}, gin.Columns)
+	assert.Equal(t, []string{"to_tsvector('simple', b)"}, gin.Keys)
 	assert.Equal(t, "gin", gin.Method)
 
 	// An operator class, a sort order or a collation does not make a column
 	// an expression.
 	ops := indexes.Get("t_ops_idx")
 	assert.Equal(t, []*string{new("b"), new("b")}, ops.Columns)
+	assert.Equal(t, []string{"b text_pattern_ops DESC NULLS FIRST", "b COLLATE \"C\""}, ops.Keys)
+
+	quoted := indexes.Get("t_quoted_idx")
+	assert.Equal(t, []string{`"Weird Col"`, "(a + 1)"}, quoted.Keys)
+	assert.Equal(t, new("b <> 'x' AND (c IS NULL OR d > 0)"), quoted.Where)
 }
 
 func TestNew_MaterializedViewIndex(t *testing.T) {
@@ -210,6 +221,7 @@ CREATE UNIQUE INDEX mv_a_idx ON public.mv (a);`)
 
 	idx := doc.Views.Get("public.mv").Indexes.Get("mv_a_idx")
 	assert.Equal(t, []*string{new("a")}, idx.Columns)
+	assert.Equal(t, []string{"a"}, idx.Keys)
 	assert.True(t, idx.Unique)
 }
 
@@ -250,7 +262,8 @@ CREATE TABLE public.posts (
 func TestNew_CatalogModel(t *testing.T) {
 	table := &model.Table{Schema: "public", Name: "t"}
 	table.Columns = newColumns(&model.Column{Name: "a", TypeName: "character varying(20)[]"})
-	table.Indexes = newIndexes(&model.Index{Schema: "public", Name: "t_a_idx", Table: "t", Definition: "CREATE INDEX t_a_idx ON ONLY public.t USING hash (a)"})
+	table.Indexes = newIndexes(&model.Index{Schema: "public", Name: "t_a_idx", Table: "t", Definition: "CREATE INDEX t_a_idx ON ONLY public.t USING hash (a)"},
+		&model.Index{Schema: "public", Name: "t_expr_idx", Table: "t", Definition: "CREATE INDEX t_expr_idx ON public.t USING btree (((a)::text)) WHERE ((a)::text <> ''::text)"})
 	table.ForeignKeys = newForeignKeys(&model.ForeignKey{
 		Name: "t_a_fkey", Definition: "FOREIGN KEY (a) REFERENCES other.\"Users\"(\"Name\") MATCH FULL ON UPDATE CASCADE ON DELETE SET DEFAULT NOT VALID",
 	})
@@ -264,6 +277,13 @@ func TestNew_CatalogModel(t *testing.T) {
 	idx := got.Indexes.Get("t_a_idx")
 	assert.Equal(t, []*string{new("a")}, idx.Columns)
 	assert.Equal(t, "hash", idx.Method)
+	assert.Equal(t, []string{"a"}, idx.Keys)
+
+	// pg_get_indexdef wraps an expression and a WHERE clause in parentheses
+	// that the parser drops.
+	expr := got.Indexes.Get("t_expr_idx")
+	assert.Equal(t, []string{"(a::text)"}, expr.Keys)
+	assert.Equal(t, new("a::text <> ''::text"), expr.Where)
 
 	fk := got.ForeignKeys.Get("t_a_fkey")
 	assert.Equal(t, []string{"Name"}, fk.RefColumns)
@@ -323,6 +343,8 @@ func TestNew_UnreadableDefinition(t *testing.T) {
 
 	for name, idx := range got.Indexes.All() {
 		assert.Equal(t, []*string{}, idx.Columns, name)
+		assert.Equal(t, []string{}, idx.Keys, name)
+		assert.Nil(t, idx.Where, name)
 		assert.Equal(t, []string{}, idx.Include, name)
 		assert.Empty(t, idx.Method, name)
 	}

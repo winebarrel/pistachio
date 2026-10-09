@@ -157,8 +157,9 @@ CREATE INDEX t_b_idx ON public.t (b);`), []string{"public"})
 	}, got)
 }
 
-// The index rules compare the definition from USING on, so an operator class,
-// a collation, a sort order or a WHERE clause makes two indexes different.
+// The index rules compare the method, keys, INCLUDE columns and WHERE clause,
+// so an operator class, a collation, a sort order or a WHERE clause makes two
+// indexes different.
 func TestStandardRules_Indexes(t *testing.T) {
 	linter, err := lint.Load([]string{filepath.Join("..", "rules", "indexes.yml")}, &bytes.Buffer{})
 	require.NoError(t, err)
@@ -189,7 +190,21 @@ CREATE TABLE public.p (status text);
 CREATE INDEX p_cash_idx ON public.p (status) WHERE status = 'PAY TABLESPACE cash';
 CREATE INDEX p_card_idx ON public.p (status) WHERE status = 'PAY TABLESPACE card';
 CREATE INDEX p_with_idx ON public.p (status) WHERE status = 'a WITH (x)';
-CREATE INDEX p_with2_idx ON public.p (status) WHERE status = 'a WITH (y)';`), []string{"public"})
+CREATE INDEX p_with2_idx ON public.p (status) WHERE status = 'a WITH (y)';
+CREATE TABLE public.n (a int);
+CREATE UNIQUE INDEX n_a_idx ON public.n (a);
+CREATE UNIQUE INDEX n_a_nnd_idx ON public.n (a) NULLS NOT DISTINCT;
+CREATE TABLE public.r (a int, b int, c int, d int);
+CREATE INDEX r_a_idx ON public.r (a);
+CREATE INDEX r_ab_part_idx ON public.r (a, b) WHERE c > 0;
+CREATE INDEX r_c_idx ON public.r (c);
+CREATE UNIQUE INDEX r_cd_idx ON public.r (c, d) INCLUDE (a);
+CREATE INDEX r_d_idx ON public.r (d);
+CREATE UNIQUE INDEX r_d_uq_idx ON public.r (d);
+CREATE INDEX r_b_idx ON public.r (b);
+CREATE INDEX r_b_incl_idx ON public.r (b) INCLUDE (a);
+CREATE INDEX r_ab_gist_idx ON public.r USING gist (a, b);
+CREATE INDEX r_a_gist_idx ON public.r USING gist (a);`), []string{"public"})
 	require.NoError(t, err)
 
 	var got []string
@@ -210,6 +225,14 @@ CREATE INDEX p_with2_idx ON public.p (status) WHERE status = 'a WITH (y)';`), []
 		"schema.sql:19:1: index public.s_a_idx: redundant-index: another index starts with the same columns",
 		"schema.sql:21:1: index public.s_c_idx: duplicate-index: another index has the same definition",
 		"schema.sql:22:1: index public.s_c2_idx: duplicate-index: another index has the same definition",
+		// NULLS NOT DISTINCT is not compared. The index with it enforces
+		// more, so the one without it is not needed.
+		"schema.sql:29:1: index public.n_a_idx: duplicate-index: another index has the same definition",
+		"schema.sql:30:1: index public.n_a_nnd_idx: duplicate-index: another index has the same definition",
+		// A longer index that is unique or has INCLUDE still covers the
+		// shorter one. A partial one does not, and neither does one whose
+		// uniqueness or INCLUDE differs from an index with the same keys.
+		"schema.sql:34:1: index public.r_c_idx: redundant-index: another index starts with the same columns",
 	}, got)
 }
 
