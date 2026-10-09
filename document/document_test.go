@@ -180,6 +180,8 @@ CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLA
 
 	full := indexes.Get("t_full_idx")
 	assert.Equal(t, []*string{new("a"), nil}, full.Columns)
+	assert.Equal(t, []string{"a DESC", "lower(b)"}, full.Keys)
+	assert.Equal(t, new("a > 0"), full.Where)
 	assert.Equal(t, []string{"c", "d"}, full.Include)
 	assert.True(t, full.Unique)
 	assert.Equal(t, "btree", full.Method)
@@ -191,15 +193,19 @@ CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLA
 	assert.False(t, plain.Unique)
 	assert.Equal(t, "btree", plain.Method)
 	assert.False(t, plain.Partial)
+	assert.Equal(t, []string{"a", "c"}, plain.Keys)
+	assert.Nil(t, plain.Where)
 
 	gin := indexes.Get("t_gin_idx")
 	assert.Equal(t, []*string{nil}, gin.Columns)
+	assert.Equal(t, []string{"to_tsvector('simple', b)"}, gin.Keys)
 	assert.Equal(t, "gin", gin.Method)
 
 	// An operator class, a sort order or a collation does not make a column
 	// an expression.
 	ops := indexes.Get("t_ops_idx")
 	assert.Equal(t, []*string{new("b"), new("b")}, ops.Columns)
+	assert.Equal(t, []string{"b text_pattern_ops DESC NULLS FIRST", "b COLLATE \"C\""}, ops.Keys)
 }
 
 func TestNew_MaterializedViewIndex(t *testing.T) {
@@ -250,7 +256,8 @@ CREATE TABLE public.posts (
 func TestNew_CatalogModel(t *testing.T) {
 	table := &model.Table{Schema: "public", Name: "t"}
 	table.Columns = newColumns(&model.Column{Name: "a", TypeName: "character varying(20)[]"})
-	table.Indexes = newIndexes(&model.Index{Schema: "public", Name: "t_a_idx", Table: "t", Definition: "CREATE INDEX t_a_idx ON ONLY public.t USING hash (a)"})
+	table.Indexes = newIndexes(&model.Index{Schema: "public", Name: "t_a_idx", Table: "t", Definition: "CREATE INDEX t_a_idx ON ONLY public.t USING hash (a)"},
+		&model.Index{Schema: "public", Name: "t_expr_idx", Table: "t", Definition: "CREATE INDEX t_expr_idx ON public.t USING btree (((a)::text)) WHERE ((a)::text <> ''::text)"})
 	table.ForeignKeys = newForeignKeys(&model.ForeignKey{
 		Name: "t_a_fkey", Definition: "FOREIGN KEY (a) REFERENCES other.\"Users\"(\"Name\") MATCH FULL ON UPDATE CASCADE ON DELETE SET DEFAULT NOT VALID",
 	})
@@ -264,6 +271,13 @@ func TestNew_CatalogModel(t *testing.T) {
 	idx := got.Indexes.Get("t_a_idx")
 	assert.Equal(t, []*string{new("a")}, idx.Columns)
 	assert.Equal(t, "hash", idx.Method)
+	assert.Equal(t, []string{"a"}, idx.Keys)
+
+	// pg_get_indexdef wraps an expression and a WHERE clause in parentheses
+	// that the parser drops.
+	expr := got.Indexes.Get("t_expr_idx")
+	assert.Equal(t, []string{"(a::text)"}, expr.Keys)
+	assert.Equal(t, new("a::text <> ''::text"), expr.Where)
 
 	fk := got.ForeignKeys.Get("t_a_fkey")
 	assert.Equal(t, []string{"Name"}, fk.RefColumns)

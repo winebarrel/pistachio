@@ -60,15 +60,18 @@ type Constraint struct {
 }
 
 // Index adds the parts of the index definition. Columns holds the key column
-// names, with nil for an expression. Partial reports a WHERE clause.
-// AutoNamed is as in Constraint.
+// names, with nil for an expression. Keys holds each key element as SQL, with
+// its expression, collation, operator class and sort order. Partial reports a
+// WHERE clause, and Where holds its condition. AutoNamed is as in Constraint.
 type Index struct {
 	*model.Index
 	Columns   []*string `json:"columns"`
+	Keys      []string  `json:"keys"`
 	Include   []string  `json:"include"`
 	Unique    bool      `json:"unique"`
 	Method    string    `json:"method"`
 	Partial   bool      `json:"partial"`
+	Where     *string   `json:"where"`
 	AutoNamed bool      `json:"auto_named"`
 }
 
@@ -249,7 +252,7 @@ func newIndexes(indexes *orderedmap.Map[string, *model.Index], fqtn string, auto
 }
 
 func newIndex(idx *model.Index) *Index {
-	index := &Index{Index: idx, Columns: []*string{}, Include: []string{}}
+	index := &Index{Index: idx, Columns: []*string{}, Keys: []string{}, Include: []string{}}
 
 	result, err := pg_query.Parse(idx.Definition)
 	if err != nil || len(result.Stmts) != 1 {
@@ -266,6 +269,7 @@ func newIndex(idx *model.Index) *Index {
 			name = &ie.Name
 		}
 		index.Columns = append(index.Columns, name)
+		index.Keys = append(index.Keys, deparseIndexElem(result.Version, is.AccessMethod, p))
 	}
 
 	for _, p := range is.IndexIncludingParams {
@@ -277,8 +281,45 @@ func newIndex(idx *model.Index) *Index {
 	index.Unique = is.Unique
 	index.Method = is.AccessMethod
 	index.Partial = is.WhereClause != nil
+	if is.WhereClause != nil {
+		where := deparseWhere(result.Version, is.WhereClause)
+		index.Where = &where
+	}
 
 	return index
+}
+
+// deparseIndexElem writes one key element as an index on it alone writes it,
+// and cuts out what is inside the parentheses.
+func deparseIndexElem(version int32, method string, elem *pg_query.Node) string {
+	stmt := &pg_query.IndexStmt{
+		Relation:     &pg_query.RangeVar{Relname: "t", Inh: true},
+		AccessMethod: method,
+		IndexParams:  []*pg_query.Node{elem},
+	}
+	sql := deparse(version, &pg_query.Node{Node: &pg_query.Node_IndexStmt{IndexStmt: stmt}})
+	_, after, _ := strings.Cut(sql, " (")
+
+	return strings.TrimSuffix(after, ")")
+}
+
+// deparseWhere writes the condition of a WHERE clause.
+func deparseWhere(version int32, where *pg_query.Node) string {
+	stmt := &pg_query.SelectStmt{WhereClause: where}
+	sql := deparse(version, &pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: stmt}})
+
+	return strings.TrimPrefix(sql, "SELECT WHERE ")
+}
+
+// deparse writes a statement built from a parse tree that pg_query has just
+// read, so it does not fail.
+func deparse(version int32, stmt *pg_query.Node) string {
+	sql, err := pg_query.Deparse(&pg_query.ParseResult{Version: version, Stmts: []*pg_query.RawStmt{{Stmt: stmt}}})
+	if err != nil {
+		panic(err)
+	}
+
+	return sql
 }
 
 var fkActions = map[string]string{

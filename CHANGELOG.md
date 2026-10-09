@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `parse` and `dump --json` write two more fields for an index. `keys` lists the key elements as SQL, each with its expression, collation, operator class and sort order. `where` is the condition of the `WHERE` clause, or `null`. A lint rule can compare indexes with them instead of taking `definition` apart. The standard rules `duplicate-index` and `redundant-index` in `rules/indexes.yml` now use them, and `duplicate-index` no longer compares `NULLS NOT DISTINCT`. The JSON Schema is now `schema-1.4.json`.
+
 ## [1.79.1] - 2026-10-09
 
 * `plan` now finds a change to the table prefix of a column in a view over a join. Before, pistachio removed every prefix before it compared two views. So changing `u.id` to `o.id` in a join, or `o.user_id = u.id` to `o.user_id = o.id` in a sub-query, planned no change. This applies to materialized views too. A view over a join that leaves a column without its prefix is now replaced on every run. Write the prefix, as `dump` does.
