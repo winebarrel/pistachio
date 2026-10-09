@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* The documentation site no longer publishes the JSON Schema `schema-1.3.json`. Use `schema-1.4.json`.
+
 * `parse` and `dump --json` write two more fields for an index. `keys` lists the key elements as SQL, each with its expression, collation, operator class and sort order. `where` is the condition of the `WHERE` clause, or `null`. A lint rule can compare indexes with them instead of taking `definition` apart. The standard rules `duplicate-index` and `redundant-index` in `rules/indexes.yml` now use them, and `duplicate-index` no longer compares `NULLS NOT DISTINCT`. The JSON Schema is now `schema-1.4.json`.
 
 ## [1.79.1] - 2026-10-09
