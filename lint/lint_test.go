@@ -55,7 +55,7 @@ func TestStandardRules(t *testing.T) {
 	require.NoError(t, err)
 
 	violations, err := linter.Run(parse(t, `
-CREATE TABLE public.users (id bigint GENERATED ALWAYS AS IDENTITY, name text NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
+CREATE TABLE public.users (id bigint GENERATED ALWAYS AS IDENTITY, name text NOT NULL, age integer, CONSTRAINT users_pkey PRIMARY KEY (id));
 CREATE TABLE public.posts (
   id bigserial NOT NULL,
   user_id bigint,
@@ -552,8 +552,9 @@ debug: column public.t.b: dbg: name = "b"
 `, out.String())
 }
 
-// A rule that -- pista:lint-ignore turns off is skipped before its when is
-// evaluated, so a when that would fail on that object does not run.
+// A rule that -- pista:lint-ignore turns off is skipped before its when and
+// let are evaluated, so an expression that would fail on that object does not
+// run.
 func TestRun_WhenIgnored(t *testing.T) {
 	got := run(t, `
 rules:
@@ -562,8 +563,14 @@ rules:
     when: column.nope == 1
     assert: "true"
     message: m
+  - name: l
+    on: column
+    let:
+      - {name: x, expr: column.nope}
+    assert: x == 1
+    message: m
 `, `CREATE TABLE public.t (
-  -- pista:lint-ignore r
+  -- pista:lint-ignore r l
   a int
 );`)
 
@@ -585,6 +592,89 @@ func TestRun_WhenErrors(t *testing.T) {
 
 			_, err = linter.Run(parse(t, `CREATE TABLE public.t (a int);`), []string{"public"})
 			require.EqualError(t, err, tc.want)
+		})
+	}
+}
+
+// let names values in order. Each one reads the ones before it, and assert
+// reads them all. They are evaluated only where when is true. A name may be
+// a variable of another kind, and an empty let names nothing.
+func TestRun_Let(t *testing.T) {
+	got := run(t, `
+rules:
+  - name: pk-is-bigint
+    on: table
+    let:
+      - name: pk
+        expr: table.constraints.values().filter(c, c.type == "primary_key")
+      - {name: pk_cols, expr: 'pk.map(c, c.columns)'}
+    assert: >-
+      !pk_cols.exists(cols, cols.exists(n,
+        table.columns.exists(c, c.name == n && c.base_type == "integer")))
+    message: use bigint
+  - name: no-reads-when-skipped
+    on: column
+    when: column.name == "a"
+    let:
+      - {name: x, expr: column.nope}
+    assert: x == 1
+    message: m
+  - name: other-kind-name
+    on: table
+    let:
+      - {name: column, expr: 'table.columns[0]'}
+    assert: column.name == "id"
+    message: m
+  - name: empty
+    on: table
+    let: []
+    assert: "true"
+    message: m
+`, `CREATE TABLE public.t (id int NOT NULL, CONSTRAINT t_pkey PRIMARY KEY (id));
+CREATE TABLE public.u (id bigint NOT NULL, CONSTRAINT u_pkey PRIMARY KEY (id));`)
+
+	assert.Equal(t, []string{"schema.sql:1:1: table public.t: pk-is-bigint: use bigint"}, got)
+}
+
+// Load keeps let as written. The values are evaluated in order, including one
+// that assert does not read. debug() in let names the object and the rule, as
+// it does in assert.
+func TestRun_LetDebug(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "rules.yml", `
+rules:
+  - name: dbg
+    on: column
+    let:
+      - {name: name, expr: 'debug("name", column.name)'}
+      - {name: unused, expr: 'debug("unused", 1)'}
+    assert: name != ""
+    message: m
+`)
+	var out bytes.Buffer
+	linter, err := lint.Load([]string{path}, &out)
+	require.NoError(t, err)
+	require.Len(t, linter.Rules[0].Let, 2)
+	assert.Equal(t, "name", linter.Rules[0].Let[0].Name)
+	assert.Equal(t, `debug("name", column.name)`, linter.Rules[0].Let[0].Expr)
+
+	_, err = linter.Run(parse(t, `CREATE TABLE public.t (a int);`), []string{"public"})
+	require.NoError(t, err)
+	assert.Equal(t, "debug: column public.t.a: dbg: name = \"a\"\ndebug: column public.t.a: dbg: unused = 1\n", out.String())
+}
+
+// A value that fails is an error even if assert does not read it.
+func TestRun_LetErrors(t *testing.T) {
+	for name, assertExpr := range map[string]string{
+		"read":   "x == 1",
+		"unread": "true",
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := writeFile(t, t.TempDir(), "rules.yml", "rules:\n  - name: bad\n    on: column\n    let:\n      - {name: x, expr: column.nope}\n    assert: '"+assertExpr+"'\n    message: m\n")
+			linter, err := lint.Load([]string{path}, &bytes.Buffer{})
+			require.NoError(t, err)
+
+			_, err = linter.Run(parse(t, `CREATE TABLE public.t (a int);`), []string{"public"})
+			require.EqualError(t, err, "schema.sql:1:24: column public.t.a: bad: let x: no such key: nope")
 		})
 	}
 }
@@ -699,6 +789,24 @@ func TestLoad_Errors(t *testing.T) {
 		"a when syntax error":   {"rules:\n  - {name: r, on: table, when: 'table.', assert: 'true', message: m}\n", "rule r: when: ERROR"},
 		"a non-bool when":       {"rules:\n  - {name: r, on: table, when: '1 + 1', assert: 'true', message: m}\n", "rule r: when is int, not bool"},
 		"a wrong when variable": {"rules:\n  - {name: r, on: table, when: 'column.name == \"a\"', assert: 'true', message: m}\n", "undeclared reference to 'column'"},
+		"a let syntax error":    {"rules:\n  - {name: r, on: table, let: [{name: x, expr: 'table.'}], assert: 'true', message: m}\n", "rule r: let x: ERROR"},
+		"no let name":           {"rules:\n  - {name: r, on: table, let: [{expr: '1'}], assert: 'true', message: m}\n", "rule r: a let has no name"},
+		"no let expr":           {"rules:\n  - {name: r, on: table, let: [{name: x}], assert: 'true', message: m}\n", "rule r: let x: expr is empty"},
+		"an unknown let key":    {"rules:\n  - {name: r, on: table, let: [{name: x, expr: '1', type: int}], assert: 'true', message: m}\n", "field type not found"},
+		"a let not a list":      {"rules:\n  - {name: r, on: table, let: {x: '1'}, assert: 'true', message: m}\n", "cannot unmarshal"},
+		"a dashed let name":     {"rules:\n  - {name: r, on: table, let: [{name: 'a-b', expr: '1'}], assert: 'true', message: m}\n", `rule r: let name "a-b" is not a CEL identifier`},
+		"a dotted let name":     {"rules:\n  - {name: r, on: table, let: [{name: 'a.b', expr: '1'}], assert: 'true', message: m}\n", `rule r: let name "a.b" is not a CEL identifier`},
+		"a root let name":       {"rules:\n  - {name: r, on: table, let: [{name: '.x', expr: '1'}], assert: 'true', message: m}\n", `rule r: let name ".x" is not a CEL identifier`},
+		"a spaced let name":     {"rules:\n  - {name: r, on: table, let: [{name: ' x', expr: '1'}], assert: 'true', message: m}\n", `rule r: let name " x" is not a CEL identifier`},
+		"a let of another rule": {"rules:\n  - {name: a, on: table, let: [{name: x, expr: 'true'}], assert: 'x', message: m}\n  - {name: b, on: table, assert: 'x', message: m}\n", "rule b: assert: ERROR: <input>:1:1: undeclared reference to 'x'"},
+		"a reserved let name":   {"rules:\n  - {name: r, on: table, let: [{name: 'if', expr: '1'}], assert: 'true', message: m}\n", `rule r: let name "if" is not a CEL identifier`},
+		"a literal let name":    {"rules:\n  - {name: r, on: table, let: [{name: 'true', expr: '1'}], assert: 'true', message: m}\n", `rule r: let name "true" is not a CEL identifier`},
+		"a let named twice":     {"rules:\n  - {name: r, on: table, let: [{name: x, expr: '1'}, {name: x, expr: '2'}], assert: 'true', message: m}\n", "rule r: let x is already defined"},
+		"a let named table":     {"rules:\n  - {name: r, on: table, let: [{name: table, expr: '1'}], assert: 'true', message: m}\n", "rule r: let table is already defined"},
+		"a let named doc":       {"rules:\n  - {name: r, on: column, let: [{name: doc, expr: '1'}], assert: 'true', message: m}\n", "rule r: let doc is already defined"},
+		"a later let":           {"rules:\n  - {name: r, on: table, let: [{name: x, expr: 'y'}, {name: y, expr: '1'}], assert: 'true', message: m}\n", "rule r: let x: ERROR: <input>:1:1: undeclared reference to 'y'"},
+		"a let in when":         {"rules:\n  - {name: r, on: table, let: [{name: x, expr: 'true'}], when: 'x', assert: 'true', message: m}\n", "rule r: when: ERROR: <input>:1:1: undeclared reference to 'x'"},
+		"a non-bool let assert": {"rules:\n  - {name: r, on: table, let: [{name: x, expr: '1'}], assert: 'x', message: m}\n", "rule r: assert is int, not bool"},
 		"two documents":         {"rules:\n  - {name: a, on: table, assert: 'true', message: m}\n---\nrules:\n  - {name: b, on: table, assert: 'true', message: m}\n", "a rule file holds one YAML document"},
 	} {
 		t.Run(name, func(t *testing.T) {

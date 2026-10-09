@@ -67,7 +67,7 @@ rules:
     message: the table has no primary key
 ```
 
-A rule has these fields. All of them except `description` and `when` are required.
+A rule has these fields. All of them except `description`, `when` and `let` are required.
 
 `name`
 :   The name that the output and `-- pista:lint-ignore` use. It must be unique across all the rule files, and it cannot contain a comma or a space.
@@ -81,13 +81,54 @@ A rule has these fields. All of them except `description` and `when` are require
 `when`
 :   A [CEL](https://cel.dev/) expression that limits the rule to some objects. The rule checks an object only if this is true. It must return a boolean. Without it, the rule checks every object of its kind.
 
+`let`
+:   Values that `assert` can use by name. See [Naming values](#naming-values).
+
 `assert`
 :   A CEL expression. It must be true for every object the rule checks, and it must return a boolean.
 
 `message`
 :   The text printed when `assert` is false.
 
-`when` and `assert` can use the same variables. An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
+`when` and `assert` can use the same variables. `assert` can also use the names in `let`. An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
+
+
+## Naming values
+
+`let` gives names to values. `assert` can then use the names. Use it to split a long expression:
+
+```yaml
+- name: prefer-bigint-key
+  on: table
+  let:
+    - name: small_int_columns
+      expr: table.columns.filter(c, c.base_type in ["smallint", "integer"]).map(c, c.name)
+  assert: >-
+    !table.constraints.values().exists(c, c.type == "primary_key"
+      && c.columns.exists(n, n in small_int_columns))
+  message: use bigint for the primary key
+```
+
+`let` is a list. Each item has two fields:
+
+`name`
+:   The name of the value. It must be a CEL identifier, so it cannot be a reserved word or contain a dot. It cannot be `doc`, a variable of the rule, or the name of another item.
+
+`expr`
+:   A CEL expression. It can use the variables of the rule and the names of the items before it.
+
+The items are evaluated in order, after `when` and before `assert`. They are evaluated only when `when` is true, so `when` cannot use them. An item is evaluated even if `assert` does not use it.
+
+The type of a value is the type of its expression. If `x` is `1`, `assert: x` fails to compile, because `x` is an int.
+
+An error in an item includes its name, for example `let small_int_columns: no such key: base_typ`.
+
+To write an item on one line, quote `expr`. Otherwise YAML reads a comma or a bracket in the expression as its own syntax:
+
+```yaml
+  let:
+    - {name: pk_columns, expr: 'table.constraints.values().map(c, c.columns)'}
+```
 
 
 ## What a rule reads
@@ -116,7 +157,7 @@ A rule can use the standard CEL functions, these [CEL extensions](https://github
 
 - the string functions, such as `indexOf` and `substring`
 - the regular expression functions, such as `regex.replace`
-- `cel.bind`, which names a value inside an expression
+- `cel.bind`, which names a value inside one expression. See also [`let`](#naming-values).
 
 pistachio adds these:
 
@@ -152,10 +193,14 @@ A foreign key that no index starts with:
 ```yaml
 - name: fk-needs-index
   on: foreign_key
-  assert: >-
-    table.indexes.values().exists(i, !i.partial && hasPrefix(i.columns, fk.columns))
-    || table.constraints.values().exists(c,
-         c.type in ["primary_key", "unique"] && hasPrefix(c.columns, fk.columns))
+  let:
+    - name: index_covers
+      expr: table.indexes.values().exists(i, !i.partial && hasPrefix(i.columns, fk.columns))
+    - name: key_covers
+      expr: >-
+        table.constraints.values().exists(c,
+          c.type in ["primary_key", "unique"] && hasPrefix(c.columns, fk.columns))
+  assert: index_covers || key_covers
   message: no index starts with the columns of the foreign key
 ```
 

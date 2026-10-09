@@ -25,8 +25,11 @@ rules:
     # INCLUDE covers other queries, so they are skipped.
     when: >-
       !index.unique && !index.partial && index.method == "btree" && size(index.include) == 0
+    let:
+      - name: others
+        expr: >-
+          table.indexes.values().filter(o,
+            o.name != index.name && !o.partial && o.method == "btree")
     assert: >-
-      !table.indexes.values().exists(o,
-        o.name != index.name && !o.partial && o.method == "btree"
-        && size(o.keys) > size(index.keys) && hasPrefix(o.keys, index.keys))
+      !others.exists(o, size(o.keys) > size(index.keys) && hasPrefix(o.keys, index.keys))
     message: another index starts with the same columns

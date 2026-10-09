@@ -3,6 +3,7 @@ package lint
 import (
 	"encoding/json/v2"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -70,7 +71,11 @@ func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, erro
 					continue
 				}
 			}
-			ok, err := evalBool(rule.program, t.vars, "assert", where)
+			vars, err := evalLets(rule.Let, t.vars, where)
+			if err != nil {
+				return nil, err
+			}
+			ok, err := evalBool(rule.program, vars, "assert", where)
 			if err != nil {
 				return nil, err
 			}
@@ -81,6 +86,23 @@ func (l *Linter) Run(r *parser.ParseResult, schemas []string) ([]Violation, erro
 	}
 
 	return violations, nil
+}
+
+// evalLets evaluates the values of let in order and returns vars with them
+// added. vars itself is shared by every rule, so it is left alone.
+func evalLets(lets []Let, vars map[string]any, where string) (map[string]any, error) {
+	if len(lets) == 0 {
+		return vars, nil
+	}
+	vars = maps.Clone(vars)
+	for _, l := range lets {
+		out, _, err := l.program.Eval(vars)
+		if err != nil {
+			return nil, fmt.Errorf("%s: let %s: %w", where, l.Name, err)
+		}
+		vars[l.Name] = out
+	}
+	return vars, nil
 }
 
 // evalBool evaluates the program of the field assert or when. A rule whose

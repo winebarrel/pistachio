@@ -10,11 +10,12 @@ rules:
   - name: prefer-bigint-key
     on: table
     description: integer runs out at about 2.1 billion rows.
+    let:
+      - name: small_int_columns
+        expr: table.columns.filter(c, c.base_type in ["smallint", "integer"]).map(c, c.name)
     assert: >-
-      table.constraints.values().filter(c, c.type == "primary_key").all(pk,
-        pk.columns.all(name,
-          table.columns.filter(col, col.name == name).all(col,
-            !(col.base_type in ["smallint", "integer"]))))
+      !table.constraints.values().exists(c, c.type == "primary_key"
+        && c.columns.exists(n, n in small_int_columns))
     message: use bigint for the primary key
 
   - name: fk-needs-index
@@ -24,8 +25,12 @@ rules:
       referencing table, and so does a join on the foreign key.
     # A foreign key is covered when an index, a primary key or a unique
     # constraint starts with its columns. A partial index does not count.
-    assert: >-
-      table.indexes.values().exists(i, !i.partial && hasPrefix(i.columns, fk.columns))
-      || table.constraints.values().exists(c,
-           c.type in ["primary_key", "unique"] && hasPrefix(c.columns, fk.columns))
+    let:
+      - name: index_covers
+        expr: table.indexes.values().exists(i, !i.partial && hasPrefix(i.columns, fk.columns))
+      - name: key_covers
+        expr: >-
+          table.constraints.values().exists(c,
+            c.type in ["primary_key", "unique"] && hasPrefix(c.columns, fk.columns))
+    assert: index_covers || key_covers
     message: no index starts with the columns of the foreign key

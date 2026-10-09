@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"cel.dev/cel-go/cel"
+	celast "cel.dev/cel-go/common/ast"
 	"github.com/winebarrel/pistachio/parser"
 	"gopkg.in/yaml.v3"
 )
@@ -24,6 +25,7 @@ type Rule struct {
 	Name        string
 	On          parser.LintKind
 	Description string
+	Let         []Let
 	When        string
 	Assert      string
 	Message     string
@@ -34,17 +36,30 @@ type Rule struct {
 	program cel.Program
 }
 
+// Let is one value that let names. assert reads it by Name.
+type Let struct {
+	Name    string
+	Expr    string
+	program cel.Program
+}
+
 type ruleFile struct {
 	Rules []ruleSpec `yaml:"rules"`
 }
 
 type ruleSpec struct {
-	Name        string `yaml:"name"`
-	On          string `yaml:"on"`
-	Description string `yaml:"description"`
-	When        string `yaml:"when"`
-	Assert      string `yaml:"assert"`
-	Message     string `yaml:"message"`
+	Name        string    `yaml:"name"`
+	On          string    `yaml:"on"`
+	Description string    `yaml:"description"`
+	Let         []letSpec `yaml:"let"`
+	When        string    `yaml:"when"`
+	Assert      string    `yaml:"assert"`
+	Message     string    `yaml:"message"`
+}
+
+type letSpec struct {
+	Name string `yaml:"name"`
+	Expr string `yaml:"expr"`
 }
 
 // kinds lists the values of on, in the order the documentation gives them.
@@ -167,23 +182,30 @@ func compileRule(spec ruleSpec, file string, envs map[parser.LintKind]*cel.Env) 
 		return nil, fmt.Errorf("%s: message is empty", where)
 	}
 
+	// when cannot read let, since let is evaluated only where when is true.
 	env := envs[kind]
-	program, err := compileExpr(env, spec.Assert, "assert", where)
-	if err != nil {
-		return nil, err
-	}
 	var when cel.Program
 	if spec.When != "" {
+		var err error
 		when, err = compileExpr(env, spec.When, "when", where)
 		if err != nil {
 			return nil, err
 		}
+	}
+	lets, env, err := compileLets(env, spec.Let, kind, where)
+	if err != nil {
+		return nil, err
+	}
+	program, err := compileExpr(env, spec.Assert, "assert", where)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Rule{
 		Name:        spec.Name,
 		On:          kind,
 		Description: spec.Description,
+		Let:         lets,
 		When:        spec.When,
 		Assert:      spec.Assert,
 		Message:     spec.Message,
@@ -191,6 +213,54 @@ func compileRule(spec ruleSpec, file string, envs map[parser.LintKind]*cel.Env) 
 		when:        when,
 		program:     program,
 	}, nil
+}
+
+// compileLets compiles the values of let in order, each one with the values
+// before it declared. It returns env with every value declared, for assert.
+func compileLets(env *cel.Env, specs []letSpec, kind parser.LintKind, where string) ([]Let, *cel.Env, error) {
+	defined := append([]string{"doc"}, variables[kind]...)
+	var lets []Let
+	for _, spec := range specs {
+		if spec.Name == "" {
+			return nil, nil, fmt.Errorf("%s: a let has no name", where)
+		}
+		if !isIdent(env, spec.Name) {
+			return nil, nil, fmt.Errorf("%s: let name %q is not a CEL identifier", where, spec.Name)
+		}
+		if slices.Contains(defined, spec.Name) {
+			return nil, nil, fmt.Errorf("%s: let %s is already defined", where, spec.Name)
+		}
+		if spec.Expr == "" {
+			return nil, nil, fmt.Errorf("%s: let %s: expr is empty", where, spec.Name)
+		}
+
+		ast, iss := env.Compile(spec.Expr)
+		if iss.Err() != nil {
+			return nil, nil, fmt.Errorf("%s: let %s: %w", where, spec.Name, iss.Err())
+		}
+		// The value keeps the type CEL found, so assert x on an int fails to
+		// compile rather than when it runs.
+		env = must(env.Extend(cel.Variable(spec.Name, ast.OutputType())))
+		lets = append(lets, Let{Name: spec.Name, Expr: spec.Expr, program: must(env.Program(ast))})
+		defined = append(defined, spec.Name)
+	}
+
+	return lets, env, nil
+}
+
+// isIdent reports whether name parses as one CEL identifier, so CEL decides
+// which words are reserved. CEL also parses .x as an identifier, one that
+// reads x from the root scope, so a leading dot is refused here.
+func isIdent(env *cel.Env, name string) bool {
+	if strings.HasPrefix(name, ".") {
+		return false
+	}
+	parsed, iss := env.Parse(name)
+	if iss.Err() != nil {
+		return false
+	}
+	e := parsed.NativeRep().Expr()
+	return e.Kind() == celast.IdentKind && e.AsIdent() == name
 }
 
 // compileExpr compiles the CEL expression of the field assert or when. Its
