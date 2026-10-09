@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* A lint rule can have `let`, a list of values that `assert` reads by name. Each has `name` and `expr`, a CEL expression. The values are evaluated in order after `when` is true, and each can read the ones before it. The standard rules `prefer-bigint-key`, `fk-needs-index` and `redundant-index` in `rules/` now use it.
+* A lint rule can have `let`, a list of named values. Each item has `name` and `expr`, a CEL expression. `assert` and later items can use the names. The items are evaluated in order when `when` is true. The standard rules `prefer-bigint-key`, `fk-needs-index` and `redundant-index` in `rules/` now use it.
 
 ## [1.80.0] - 2026-10-09
 

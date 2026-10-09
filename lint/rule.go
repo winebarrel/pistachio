@@ -249,8 +249,12 @@ func compileLets(env *cel.Env, specs []letSpec, kind parser.LintKind, where stri
 }
 
 // isIdent reports whether name parses as one CEL identifier, so CEL decides
-// which words are reserved.
+// which words are reserved. CEL also parses .x as an identifier, one that
+// reads x from the root scope, so a leading dot is refused here.
 func isIdent(env *cel.Env, name string) bool {
+	if strings.HasPrefix(name, ".") {
+		return false
+	}
 	parsed, iss := env.Parse(name)
 	if iss.Err() != nil {
 		return false

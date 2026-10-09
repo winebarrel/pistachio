@@ -82,7 +82,7 @@ A rule has these fields. All of them except `description`, `when` and `let` are 
 :   A [CEL](https://cel.dev/) expression that limits the rule to some objects. The rule checks an object only if this is true. It must return a boolean. Without it, the rule checks every object of its kind.
 
 `let`
-:   A list of values to name, each with `name` and `expr`. `expr` is a CEL expression, and `assert` reads its value by `name`. See [Naming values](#naming-values).
+:   Values that `assert` can use by name. See [Naming values](#naming-values).
 
 `assert`
 :   A CEL expression. It must be true for every object the rule checks, and it must return a boolean.
@@ -90,12 +90,12 @@ A rule has these fields. All of them except `description`, `when` and `let` are 
 `message`
 :   The text printed when `assert` is false.
 
-`when` and `assert` can use the same variables, and `assert` can also use the values of `let`. An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
+`when` and `assert` can use the same variables. `assert` can also use the names in `let`. An unknown field is an error. So is a rule that does not compile, and a rule that fails while it runs, for example because it reads a field that does not exist.
 
 
 ## Naming values
 
-`let` names the values that `assert` reads, so that a long expression can be split into steps:
+`let` gives names to values. `assert` can then use the names. Use it to split a long expression:
 
 ```yaml
 - name: prefer-bigint-key
@@ -109,20 +109,26 @@ A rule has these fields. All of them except `description`, `when` and `let` are 
   message: use bigint for the primary key
 ```
 
-The values are evaluated in order, after `when` is true and before `assert`. Each `expr` can read the variables of the rule and the values before it. `when` cannot read them. A value is evaluated even if `assert` does not read it.
+`let` is a list. Each item has two fields:
 
-`name` must be a CEL identifier. It cannot be a reserved word, contain a dot, or be the name of a variable or of another value of the rule.
+`name`
+:   The name of the value. It must be a CEL identifier, so it cannot be a reserved word or contain a dot. It cannot be `doc`, a variable of the rule, or the name of another item.
 
-A value has the type that CEL finds for its expression. So a rule with `assert: x`, where `x` is `1`, fails to compile.
+`expr`
+:   A CEL expression. It can use the variables of the rule and the names of the items before it.
 
-In the flow style of YAML, quote an expression that has a comma:
+The items are evaluated in order, after `when` and before `assert`. They are evaluated only when `when` is true, so `when` cannot use them. An item is evaluated even if `assert` does not use it.
+
+The type of a value is the type of its expression. If `x` is `1`, `assert: x` fails to compile, because `x` is an int.
+
+An error in an item includes its name, for example `let small_int_columns: no such key: base_typ`.
+
+To write an item on one line, quote `expr`. Otherwise YAML reads a comma or a bracket in the expression as its own syntax:
 
 ```yaml
   let:
     - {name: pk_columns, expr: 'table.constraints.values().map(c, c.columns)'}
 ```
-
-An error in a value names it, as in `rule prefer-bigint-key: let small_int_columns: ...`.
 
 
 ## What a rule reads
@@ -151,7 +157,7 @@ A rule can use the standard CEL functions, these [CEL extensions](https://github
 
 - the string functions, such as `indexOf` and `substring`
 - the regular expression functions, such as `regex.replace`
-- `cel.bind`, which names a value inside an expression. To name a value for the whole of `assert`, use [`let`](#naming-values).
+- `cel.bind`, which names a value inside one expression. See also [`let`](#naming-values).
 
 pistachio adds these:
 
