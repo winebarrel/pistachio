@@ -238,6 +238,8 @@ func fromItemName(item *pg_query.Node) string {
 			return rv.Alias.Aliasname
 		}
 		return rv.Relname
+	case item.GetRangeTableSample() != nil:
+		return fromItemName(item.GetRangeTableSample().Relation)
 	case item.GetRangeSubselect() != nil:
 		return item.GetRangeSubselect().GetAlias().GetAliasname()
 	case item.GetRangeFunction() != nil:

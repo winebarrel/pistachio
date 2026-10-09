@@ -423,6 +423,15 @@ func TestEqualViewDef_singleRelationScope(t *testing.T) {
 		"SELECT u.name, l.n FROM users u, LATERAL (SELECT o.id AS n FROM orders o WHERE o.user_id = u.id) l",
 		"SELECT u.name, l.n FROM users u, LATERAL (SELECT u.id AS n FROM orders o WHERE o.user_id = u.id) l",
 	))
+	// A table with TABLESAMPLE is named like the table.
+	assert.True(t, equalViewDef(
+		"SELECT users.id FROM users TABLESAMPLE system (10)",
+		"SELECT id FROM users TABLESAMPLE SYSTEM (10)",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT u.id FROM users u TABLESAMPLE system (10)",
+		"SELECT id FROM users u TABLESAMPLE SYSTEM (10)",
+	))
 	// A function in FROM is named by its alias, or by the function itself.
 	assert.True(t, equalViewDef(
 		"SELECT g FROM generate_series(1, 3) g(g)",
