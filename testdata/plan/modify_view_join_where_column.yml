@@ -1,0 +1,15 @@
+# A join qualifier in WHERE picks the table the condition reads, so moving it
+# to the other table must produce DDL.
+init: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.big_orders AS
+  SELECT u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id WHERE o.id > 100;
+desired: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.big_orders AS
+  SELECT u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id WHERE u.id > 100;
+plan: |
+  CREATE OR REPLACE VIEW public.big_orders AS
+  SELECT u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id WHERE u.id > 100;

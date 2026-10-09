@@ -1,0 +1,15 @@
+# Inside a correlated sub-query a qualifier naming the outer table reads the
+# outer row, so pointing it at the inner table instead must produce DDL.
+init: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.users_with_orders AS
+  SELECT u.name FROM public.users u WHERE EXISTS (SELECT 1 FROM public.orders o WHERE o.user_id = u.id);
+desired: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.users_with_orders AS
+  SELECT u.name FROM public.users u WHERE EXISTS (SELECT 1 FROM public.orders o WHERE o.user_id = o.id);
+plan: |
+  CREATE OR REPLACE VIEW public.users_with_orders AS
+  SELECT u.name FROM public.users u WHERE EXISTS (SELECT 1 FROM public.orders o WHERE o.user_id = o.id);

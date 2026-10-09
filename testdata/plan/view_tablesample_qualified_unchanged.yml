@@ -1,0 +1,9 @@
+# A column of a table with TABLESAMPLE is compared without its table prefix,
+# as for a plain table.
+init: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE VIEW public.sampled_users AS SELECT id FROM public.users TABLESAMPLE SYSTEM (10);
+desired: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE VIEW public.sampled_users AS SELECT users.id FROM public.users TABLESAMPLE SYSTEM (10);
+plan: ""

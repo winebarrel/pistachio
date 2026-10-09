@@ -367,9 +367,11 @@ A materialized view's `WITH (...)` is managed with `--manage-storage-param`. See
 pistachio compares a query as PostgreSQL stores it. These are not changes:
 
 - a schema on a table
-- a table prefix on a column
+- a table prefix on a column, in a `SELECT` whose `FROM` has one table, sub-query or function
 - a cast that the catalog adds
 - an `IN` list that the catalog rewrites
+
+In a `SELECT` whose `FROM` has more than one table, the prefix decides which column is read, so a change to it is a change. PostgreSQL stores the prefix there even when the file leaves it out. So a view over a join that leaves a column without its prefix is replaced on every run. `dump` writes the prefix.
 
 A materialized view written with `WITH NO DATA` is created with it, so its query does not run until a `REFRESH MATERIALIZED VIEW`. Whether a view is populated is data state, not schema. pistachio does not compare it, adding or removing `WITH NO DATA` produces no changes on its own, and `dump` does not write it.
 

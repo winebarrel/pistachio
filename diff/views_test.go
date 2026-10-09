@@ -359,7 +359,97 @@ func TestEqualViewDef_whereSubquery(t *testing.T) {
 	// Covers SubLink + BoolExpr paths in stripQualifications
 	assert.True(t, equalViewDef(
 		"SELECT users.id FROM users WHERE users.id > 0 AND EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)",
+		"SELECT id FROM public.users WHERE id > 0 AND EXISTS (SELECT 1 FROM public.orders WHERE user_id = users.id)",
+	))
+	// Inside the sub-query a bare id is orders.id, not the outer users.id.
+	assert.False(t, equalViewDef(
+		"SELECT users.id FROM users WHERE users.id > 0 AND EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)",
 		"SELECT id FROM public.users WHERE id > 0 AND EXISTS (SELECT 1 FROM public.orders WHERE user_id = id)",
+	))
+}
+
+func TestEqualViewDef_joinScopeKeepsQualifier(t *testing.T) {
+	// With more than one relation in FROM the qualifier picks the column.
+	assert.False(t, equalViewDef(
+		"SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id",
+		"SELECT o.id FROM users u JOIN orders o ON o.user_id = u.id",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT p.name AS parent, c.name AS child FROM users p JOIN users c ON c.parent_id = p.id",
+		"SELECT c.name AS parent, p.name AS child FROM users p JOIN users c ON c.parent_id = p.id",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT users.name FROM users, orders WHERE orders.id > 100",
+		"SELECT users.name FROM users, orders WHERE users.id > 100",
+	))
+	// A bare column in a join is not resolved, so it differs from the
+	// qualified form pg_get_viewdef writes.
+	assert.False(t, equalViewDef(
+		"SELECT u.name FROM users u JOIN orders o ON o.user_id = u.id",
+		"SELECT name FROM users u JOIN orders o ON o.user_id = u.id",
+	))
+}
+
+func TestEqualViewDef_singleRelationScope(t *testing.T) {
+	// A sub-query in FROM, a CTE and a correlated sub-query each strip their
+	// own single relation, and leave a reference to the outer one alone.
+	assert.True(t, equalViewDef(
+		"SELECT s.n FROM (SELECT items.id AS n FROM items) s",
+		"SELECT n FROM (SELECT id AS n FROM items) s",
+	))
+	assert.True(t, equalViewDef(
+		"WITH c AS (SELECT items.id FROM items) SELECT c.id FROM c",
+		"WITH c AS (SELECT id FROM items) SELECT id FROM c",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)",
+		"SELECT name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE user_id = u.id)",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)",
+		"SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = o.id)",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT u.name, (SELECT count(*) FROM orders o WHERE o.user_id = u.id) AS n FROM users u",
+		"SELECT u.name, (SELECT count(*) FROM orders o WHERE o.user_id = o.id) AS n FROM users u",
+	))
+	// A LATERAL sub-query is a scope of its own, and the outer FROM holds two
+	// relations, so the outer prefixes stay.
+	assert.True(t, equalViewDef(
+		"SELECT u.name, l.n FROM users u, LATERAL (SELECT o.id AS n FROM orders o WHERE o.user_id = u.id) l",
+		"SELECT u.name, l.n FROM users u, LATERAL (SELECT id AS n FROM orders o WHERE user_id = u.id) l",
+	))
+	assert.False(t, equalViewDef(
+		"SELECT u.name, l.n FROM users u, LATERAL (SELECT o.id AS n FROM orders o WHERE o.user_id = u.id) l",
+		"SELECT u.name, l.n FROM users u, LATERAL (SELECT u.id AS n FROM orders o WHERE o.user_id = u.id) l",
+	))
+	// A table with TABLESAMPLE is named like the table.
+	assert.True(t, equalViewDef(
+		"SELECT users.id FROM users TABLESAMPLE system (10)",
+		"SELECT id FROM users TABLESAMPLE SYSTEM (10)",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT u.id FROM users u TABLESAMPLE system (10)",
+		"SELECT id FROM users u TABLESAMPLE SYSTEM (10)",
+	))
+	// A function in FROM is named by its alias, or by the function itself.
+	assert.True(t, equalViewDef(
+		"SELECT g FROM generate_series(1, 3) g(g)",
+		"SELECT g.g FROM generate_series(1, 3) g(g)",
+	))
+	assert.True(t, equalViewDef(
+		"SELECT generate_series FROM generate_series(1, 3)",
+		"SELECT generate_series.generate_series FROM pg_catalog.generate_series(1, 3)",
+	))
+	// Each branch of a set operation is a scope of its own.
+	assert.True(t, equalViewDef(
+		"SELECT users.id FROM users UNION SELECT o.id FROM orders o",
+		"SELECT id FROM users UNION SELECT id FROM orders o",
+	))
+	// A qualifier naming a relation outside the scope stays.
+	assert.False(t, equalViewDef(
+		"SELECT items.id FROM items",
+		"SELECT other.id FROM items",
 	))
 }
 

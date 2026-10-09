@@ -1,0 +1,13 @@
+# A self join reads the same column through two aliases, so swapping them
+# must produce DDL.
+init: |
+  CREATE TABLE public.users (id integer, name text, parent_id integer);
+  CREATE VIEW public.user_parents AS
+  SELECT p.name AS parent, c.name AS child FROM public.users p JOIN public.users c ON c.parent_id = p.id;
+desired: |
+  CREATE TABLE public.users (id integer, name text, parent_id integer);
+  CREATE VIEW public.user_parents AS
+  SELECT c.name AS parent, p.name AS child FROM public.users p JOIN public.users c ON c.parent_id = p.id;
+plan: |
+  CREATE OR REPLACE VIEW public.user_parents AS
+  SELECT c.name AS parent, p.name AS child FROM public.users p JOIN public.users c ON c.parent_id = p.id;

@@ -1,0 +1,13 @@
+# A view over a join written with every column qualified, as dump writes it,
+# needs no DDL.
+init: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.user_orders AS
+  SELECT o.id, u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id;
+desired: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.user_orders AS
+  SELECT o.id, u.name FROM public.users u JOIN public.orders o ON o.user_id = u.id;
+plan: ""

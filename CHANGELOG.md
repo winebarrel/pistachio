@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `plan` now finds a change to the table prefix of a column in a view over a join. Before, pistachio removed every prefix before it compared two views. So changing `u.id` to `o.id` in a join, or `o.user_id = u.id` to `o.user_id = o.id` in a sub-query, planned no change. This applies to materialized views too. A view over a join that leaves a column without its prefix is now replaced on every run. Write the prefix, as `dump` does.
+
 ## [1.79.0] - 2026-10-09
 
 * `plan` and `apply` take `--evaluate-literals`. It compares a string literal with a cast by value, not by text, in the `DEFAULT` of a column or domain, a generated column and a `CHECK` constraint. For example, `DEFAULT '1 hour'` on an `interval` column no longer plans `SET DEFAULT` on every run. The literals whose text differs are sent to the server in one query. The option is off by default.

@@ -1,0 +1,16 @@
+# In a view over a join the catalog qualifies every column, and a bare column
+# in the desired view is not resolved to its table. So the view is replaced on
+# every run until the column is qualified.
+init: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.user_orders AS
+  SELECT name FROM public.users u JOIN public.orders o ON o.user_id = u.id;
+desired: |
+  CREATE TABLE public.users (id integer, name text);
+  CREATE TABLE public.orders (id integer, user_id integer);
+  CREATE VIEW public.user_orders AS
+  SELECT name FROM public.users u JOIN public.orders o ON o.user_id = u.id;
+plan: |
+  CREATE OR REPLACE VIEW public.user_orders AS
+  SELECT name FROM public.users u JOIN public.orders o ON o.user_id = u.id;
