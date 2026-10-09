@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.79.1] - 2026-10-09
 
 * `plan` now finds a change to the table prefix of a column in a view over a join. Before, pistachio removed every prefix before it compared two views. So changing `u.id` to `o.id` in a join, or `o.user_id = u.id` to `o.user_id = o.id` in a sub-query, planned no change. This applies to materialized views too. A view over a join that leaves a column without its prefix is now replaced on every run. Write the prefix, as `dump` does.
 
