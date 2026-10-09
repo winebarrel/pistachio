@@ -193,7 +193,18 @@ CREATE INDEX p_with_idx ON public.p (status) WHERE status = 'a WITH (x)';
 CREATE INDEX p_with2_idx ON public.p (status) WHERE status = 'a WITH (y)';
 CREATE TABLE public.n (a int);
 CREATE UNIQUE INDEX n_a_idx ON public.n (a);
-CREATE UNIQUE INDEX n_a_nnd_idx ON public.n (a) NULLS NOT DISTINCT;`), []string{"public"})
+CREATE UNIQUE INDEX n_a_nnd_idx ON public.n (a) NULLS NOT DISTINCT;
+CREATE TABLE public.r (a int, b int, c int, d int);
+CREATE INDEX r_a_idx ON public.r (a);
+CREATE INDEX r_ab_part_idx ON public.r (a, b) WHERE c > 0;
+CREATE INDEX r_c_idx ON public.r (c);
+CREATE UNIQUE INDEX r_cd_idx ON public.r (c, d) INCLUDE (a);
+CREATE INDEX r_d_idx ON public.r (d);
+CREATE UNIQUE INDEX r_d_uq_idx ON public.r (d);
+CREATE INDEX r_b_idx ON public.r (b);
+CREATE INDEX r_b_incl_idx ON public.r (b) INCLUDE (a);
+CREATE INDEX r_ab_gist_idx ON public.r USING gist (a, b);
+CREATE INDEX r_a_gist_idx ON public.r USING gist (a);`), []string{"public"})
 	require.NoError(t, err)
 
 	var got []string
@@ -218,6 +229,10 @@ CREATE UNIQUE INDEX n_a_nnd_idx ON public.n (a) NULLS NOT DISTINCT;`), []string{
 		// more, so the one without it is not needed.
 		"schema.sql:29:1: index public.n_a_idx: duplicate-index: another index has the same definition",
 		"schema.sql:30:1: index public.n_a_nnd_idx: duplicate-index: another index has the same definition",
+		// A longer index that is unique or has INCLUDE still covers the
+		// shorter one. A partial one does not, and neither does one whose
+		// uniqueness or INCLUDE differs from an index with the same keys.
+		"schema.sql:34:1: index public.r_c_idx: redundant-index: another index starts with the same columns",
 	}, got)
 }
 

@@ -289,8 +289,8 @@ func newIndex(idx *model.Index) *Index {
 	return index
 }
 
-// deparseIndexElem writes one key element as an index on it alone writes it,
-// and cuts out what is inside the parentheses.
+// deparseIndexElem returns one key element as SQL. It deparses an index on
+// that element alone and takes the text inside the parentheses.
 func deparseIndexElem(version int32, method string, elem *pg_query.Node) string {
 	stmt := &pg_query.IndexStmt{
 		Relation:     &pg_query.RangeVar{Relname: "t", Inh: true},
@@ -303,7 +303,7 @@ func deparseIndexElem(version int32, method string, elem *pg_query.Node) string 
 	return strings.TrimSuffix(after, ")")
 }
 
-// deparseWhere writes the condition of a WHERE clause.
+// deparseWhere returns the condition of a WHERE clause as SQL.
 func deparseWhere(version int32, where *pg_query.Node) string {
 	stmt := &pg_query.SelectStmt{WhereClause: where}
 	sql := deparse(version, &pg_query.Node{Node: &pg_query.Node_SelectStmt{SelectStmt: stmt}})
@@ -311,14 +311,10 @@ func deparseWhere(version int32, where *pg_query.Node) string {
 	return strings.TrimPrefix(sql, "SELECT WHERE ")
 }
 
-// deparse writes a statement built from a parse tree that pg_query has just
-// read, so it does not fail.
+// deparse writes one statement. The nodes come from a tree that pg_query has
+// just read, so it does not fail.
 func deparse(version int32, stmt *pg_query.Node) string {
-	sql, err := pg_query.Deparse(&pg_query.ParseResult{Version: version, Stmts: []*pg_query.RawStmt{{Stmt: stmt}}})
-	if err != nil {
-		panic(err)
-	}
-
+	sql, _ := pg_query.Deparse(&pg_query.ParseResult{Version: version, Stmts: []*pg_query.RawStmt{{Stmt: stmt}}})
 	return sql
 }
 

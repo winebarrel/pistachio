@@ -1,13 +1,14 @@
-# Both rules compare indexes by their access method, key elements (with their
-# operator classes, collations and sort order), INCLUDE columns and WHERE
-# clause. Storage parameters and tablespaces are not compared, since they do
-# not change the queries an index serves.
+# Both rules compare the keys of indexes. A key includes its operator class,
+# collation and sort order. Storage parameters and tablespaces are not
+# compared, since they do not change the queries an index serves.
 rules:
   - name: duplicate-index
     on: index
     description: >-
       Two indexes that differ only in their names, storage parameters and
       tablespaces serve the same queries.
+    # NULLS NOT DISTINCT is not compared. Of two unique indexes that differ
+    # only in it, the one with it enforces more, so the other is not needed.
     assert: >-
       !table.indexes.values().exists(o, o.name != index.name
         && o.unique == index.unique && o.method == index.method

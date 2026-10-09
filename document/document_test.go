@@ -170,11 +170,12 @@ CREATE TABLE public.t (c public.a);`)
 
 func TestNew_Index(t *testing.T) {
 	doc := newDocument(t, `
-CREATE TABLE public.t (a int, b text, c int, d int);
+CREATE TABLE public.t (a int, b text, c int, d int, "Weird Col" int);
 CREATE UNIQUE INDEX t_full_idx ON public.t USING btree (a DESC, lower(b)) INCLUDE (c, d) WHERE a > 0;
 CREATE INDEX t_plain_idx ON public.t (a, c);
 CREATE INDEX t_gin_idx ON public.t USING gin (to_tsvector('simple', b));
-CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLATE "C");`)
+CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLATE "C");
+CREATE INDEX t_quoted_idx ON public.t ("Weird Col", (a + 1)) WHERE b <> 'x' AND (c IS NULL OR d > 0);`)
 
 	indexes := doc.Tables.Get("public.t").Indexes
 
@@ -206,6 +207,10 @@ CREATE INDEX t_ops_idx ON public.t (b text_pattern_ops DESC NULLS FIRST, b COLLA
 	ops := indexes.Get("t_ops_idx")
 	assert.Equal(t, []*string{new("b"), new("b")}, ops.Columns)
 	assert.Equal(t, []string{"b text_pattern_ops DESC NULLS FIRST", "b COLLATE \"C\""}, ops.Keys)
+
+	quoted := indexes.Get("t_quoted_idx")
+	assert.Equal(t, []string{`"Weird Col"`, "(a + 1)"}, quoted.Keys)
+	assert.Equal(t, new("b <> 'x' AND (c IS NULL OR d > 0)"), quoted.Where)
 }
 
 func TestNew_MaterializedViewIndex(t *testing.T) {
@@ -216,6 +221,7 @@ CREATE UNIQUE INDEX mv_a_idx ON public.mv (a);`)
 
 	idx := doc.Views.Get("public.mv").Indexes.Get("mv_a_idx")
 	assert.Equal(t, []*string{new("a")}, idx.Columns)
+	assert.Equal(t, []string{"a"}, idx.Keys)
 	assert.True(t, idx.Unique)
 }
 
@@ -337,6 +343,8 @@ func TestNew_UnreadableDefinition(t *testing.T) {
 
 	for name, idx := range got.Indexes.All() {
 		assert.Equal(t, []*string{}, idx.Columns, name)
+		assert.Equal(t, []string{}, idx.Keys, name)
+		assert.Nil(t, idx.Where, name)
 		assert.Equal(t, []string{}, idx.Include, name)
 		assert.Empty(t, idx.Method, name)
 	}
