@@ -296,6 +296,17 @@ func readSQLFile(path string) (string, error) {
 }
 
 func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult, error) {
+	sources, err := ReadSQLFiles(paths)
+	if err != nil {
+		return nil, err
+	}
+
+	return ParseSQLSourcesWithSchema(sources, defaultSchema)
+}
+
+// ReadSQLFiles reads the files ParseSQLFilesWithSchema parses, "-" being
+// stdin, for a caller that changes the SQL before it is parsed.
+func ReadSQLFiles(paths []string) ([]Source, error) {
 	sources := make([]Source, 0, len(paths))
 	for _, path := range paths {
 		sql, err := readSQLFile(path)
@@ -309,7 +320,7 @@ func ParseSQLFilesWithSchema(paths []string, defaultSchema string) (*ParseResult
 		sources = append(sources, Source{Name: name, SQL: sql})
 	}
 
-	return ParseSQLSourcesWithSchema(sources, defaultSchema)
+	return sources, nil
 }
 
 // Source is one piece of desired-schema SQL and the name a message calls it

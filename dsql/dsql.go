@@ -452,3 +452,44 @@ func Exec(ctx context.Context, conn Conn, stmt string) error {
 
 	return nil
 }
+
+// StripAsync blanks out the ASYNC of each CREATE [UNIQUE] INDEX ASYNC, for a
+// schema written for DSQL: PostgreSQL's grammar has no such word, so nothing
+// can parse the statement with it. Only an unquoted async right after INDEX
+// goes, which is how DSQL reads it too: it takes CREATE INDEX async ON t as
+// an index with no name, and an index named async has to be quoted. The word
+// is replaced with spaces of the same length, so a position in an error
+// still points at the right place. SQL that does not scan is returned as it
+// is, for the parser to report.
+func StripAsync(sql string) string {
+	result, err := pg_query.Scan(sql)
+	if err != nil {
+		return sql
+	}
+
+	var code []*pg_query.ScanToken
+	for _, t := range result.Tokens {
+		if t.Token != pg_query.Token_SQL_COMMENT && t.Token != pg_query.Token_C_COMMENT {
+			code = append(code, t)
+		}
+	}
+
+	b := []byte(sql)
+	for i, t := range code {
+		if t.Token != pg_query.Token_IDENT || i < 2 || code[i-1].Token != pg_query.Token_INDEX {
+			continue
+		}
+		create := code[i-2]
+		if create.Token == pg_query.Token_UNIQUE && i >= 3 {
+			create = code[i-3]
+		}
+		if create.Token != pg_query.Token_CREATE || !strings.EqualFold(sql[t.Start:t.End], "async") {
+			continue
+		}
+		for j := t.Start; j < t.End; j++ {
+			b[j] = ' '
+		}
+	}
+
+	return string(b)
+}

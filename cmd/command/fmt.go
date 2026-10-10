@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/winebarrel/pistachio/dsql"
 	"github.com/winebarrel/pistachio/format"
 )
 
@@ -19,6 +20,9 @@ type Fmt struct {
 	Check bool     `env:"PISTA_FMT_CHECK" help:"Report the files that are not formatted instead of writing them. Exits with code 2 when there are any."`
 	// StripRenamedFrom is for the cleanup after a rename has been applied.
 	StripRenamedFrom bool `noconfig:"" help:"Remove every -- pista:renamed-from directive."`
+	// DSQLStripAsync turns a schema written for Aurora DSQL into one
+	// pistachio reads.
+	DSQLStripAsync bool `env:"PISTA_DSQL_STRIP_ASYNC" help:"Remove ASYNC from CREATE INDEX ASYNC, which Aurora DSQL takes and PostgreSQL does not."`
 }
 
 func (cmd *Fmt) Run(w io.Writer) error {
@@ -68,6 +72,9 @@ func (cmd *Fmt) formatFile(path string, w io.Writer) (bool, error) {
 	}
 
 	in := string(src)
+	if cmd.DSQLStripAsync {
+		in = dsql.StripAsync(in)
+	}
 	if cmd.StripRenamedFrom {
 		if in, err = format.StripRenamedFrom(in); err != nil {
 			return false, err

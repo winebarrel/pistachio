@@ -135,7 +135,7 @@ CREATE VIEW public.v AS SELECT id FROM public.users;`)
 
 		desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 		require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (id integer NOT NULL);`), 0o644))
-		desired, err := client.loadDesiredInput([]string{desiredFile}, "", "", "", "")
+		desired, err := client.loadDesiredInput([]string{desiredFile}, "", "", "", "", false)
 		require.NoError(t, err)
 
 		planConn, err := client.connect(ctx, true)

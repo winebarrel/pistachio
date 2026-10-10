@@ -26,6 +26,9 @@ type ApplyOptions struct {
 	AssumeValidated          bool     `env:"PISTA_ASSUME_VALIDATED" help:"Treat every table constraint, domain constraint, and foreign key as validated: ignore NOT VALID and never emit VALIDATE CONSTRAINT."`
 	EvaluateLiterals         bool     `env:"PISTA_EVALUATE_LITERALS" help:"Compare a string literal with a cast by value, not by text, in a DEFAULT, a generated column and a CHECK constraint. The literals whose text differs are sent to the server in one query."`
 	ExecOptions
+	// DSQLIgnoreAsync reads a desired schema written for DSQL, which has
+	// CREATE INDEX ASYNC.
+	DSQLIgnoreAsync bool `env:"PISTA_DSQL_IGNORE_ASYNC" help:"With --engine dsql, ignore ASYNC in CREATE INDEX ASYNC in the desired schema."`
 }
 
 // ExecOptions decides how the statements are run rather than what they are, so
@@ -106,6 +109,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		options.Files,
 		options.PreSQL, options.PreSQLFile,
 		options.ConcurrentlyPreSQL, options.ConcurrentlyPreSQLFile,
+		options.DSQLIgnoreAsync,
 	)
 	if err != nil {
 		return nil, err

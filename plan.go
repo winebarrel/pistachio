@@ -25,6 +25,9 @@ type PlanOptions struct {
 	NoReadOnly               bool     `env:"PISTA_NO_READ_ONLY" help:"Open the database connection read-write. By default plan uses a read-only connection."`
 	Explain                  bool     `env:"PISTA_EXPLAIN" help:"Comment each statement that scans or rewrites a table with what it does, what its lock blocks, and the table's row and byte estimate from pg_class."`
 	Out                      string   `type:"path" env:"PISTA_OUT" placeholder:"FILE" help:"Also write the plan to this file, for pista apply-from to execute later. The plan is fixed when it is written: apply-from runs these statements, and only checks that the schema has not changed under them."`
+	// DSQLIgnoreAsync reads a desired schema written for DSQL, which has
+	// CREATE INDEX ASYNC.
+	DSQLIgnoreAsync bool `env:"PISTA_DSQL_IGNORE_ASYNC" help:"With --engine dsql, ignore ASYNC in CREATE INDEX ASYNC in the desired schema."`
 }
 
 // ObjectCount holds the number of objects inspected by type.
@@ -90,6 +93,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		options.Files,
 		options.PreSQL, options.PreSQLFile,
 		options.ConcurrentlyPreSQL, options.ConcurrentlyPreSQLFile,
+		options.DSQLIgnoreAsync,
 	)
 	if err != nil {
 		return nil, err

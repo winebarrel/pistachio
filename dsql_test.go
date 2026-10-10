@@ -245,3 +245,31 @@ func TestDSQL_DumpIdentityCache(t *testing.T) {
 	assert.Contains(t, dumped.String(), "GENERATED ALWAYS AS IDENTITY (CACHE 1)")
 	assert.Contains(t, dumped.Files()["public.users.sql"], "GENERATED ALWAYS AS IDENTITY (CACHE 1)")
 }
+
+const dsqlUsersAsync = `CREATE TABLE public.users (
+    id bigint GENERATED ALWAYS AS IDENTITY (CACHE 1),
+    name text NOT NULL,
+    email text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX ASYNC users_name_idx ON public.users (name);
+`
+
+// --dsql-ignore-async reads a desired schema written with ASYNC. Without it,
+// ASYNC is a syntax error, as for any other server.
+func TestDSQL_IgnoreAsync(t *testing.T) {
+	ctx := context.Background()
+	client := localDSQLClient(t, "")
+	desired := writeDSQLSchema(t, dsqlUsersAsync)
+
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desired}})
+	require.ErrorContains(t, err, "syntax error")
+
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desired}, DSQLIgnoreAsync: true})
+	require.NoError(t, err)
+	assert.Contains(t, got.SQL, "CREATE INDEX ASYNC users_name_idx ON public.users (name);")
+
+	var buf bytes.Buffer
+	_, err = client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desired}, DSQLIgnoreAsync: true}, &buf)
+	require.ErrorContains(t, err, "CREATE INDEX ASYNC", "local PostgreSQL has no ASYNC, so the apply reaches it and stops")
+}

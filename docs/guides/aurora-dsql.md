@@ -24,7 +24,9 @@ pista plan --engine dsql -c "postgres://admin@$HOST/postgres?sslmode=require" sc
 | Add a unique constraint to an existing table | `CREATE UNIQUE INDEX ASYNC`, then `ADD CONSTRAINT ... UNIQUE USING INDEX`. |
 | Create an identity column | `CACHE 1` is added when no cache size is given. DSQL requires a cache size. |
 
-`dump` also adds `CACHE 1` to identity columns. It writes indexes with `USING btree` and without `ASYNC`, so that pistachio can read the dump back. Do not write `ASYNC` in your schema files. It is not PostgreSQL syntax, so pistachio cannot parse it.
+`dump` also adds `CACHE 1` to identity columns. It writes indexes with `USING btree` and without `ASYNC`, so that pistachio can read the dump back.
+
+`ASYNC` is not PostgreSQL syntax, so pistachio cannot parse a schema file that has `CREATE INDEX ASYNC`. Remove it with `pista fmt --dsql-strip-async`, or pass `--dsql-ignore-async` to `plan` and `apply` to ignore it.
 
 DSQL reports some things that are not in your schema. pistachio ignores them:
 

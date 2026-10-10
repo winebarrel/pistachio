@@ -342,3 +342,22 @@ func TestFmt_Run_MissingFile(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to format 1 file(s)")
 }
+
+// --dsql-strip-async removes ASYNC from a schema written for Aurora DSQL and
+// formats what is left. Without it, the file does not parse.
+func TestFmt_Run_DSQLStripAsync(t *testing.T) {
+	async := "create table public.items (id integer not null, name text);\n\ncreate unique index async items_name_idx on public.items (name);\n"
+	path := writeSQLFile(t, "schema.sql", async)
+
+	var buf bytes.Buffer
+	require.Error(t, (&command.Fmt{Files: []string{path}}).Run(&buf))
+
+	buf.Reset()
+	cmd := &command.Fmt{Files: []string{path}, DSQLStripAsync: true}
+	require.NoError(t, cmd.Run(&buf))
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, "create table public.items (\n    id integer not null,\n    name text\n);\n\ncreate unique index items_name_idx on public.items (name);\n", string(got))
+	assert.Equal(t, path+"\n", buf.String())
+}
