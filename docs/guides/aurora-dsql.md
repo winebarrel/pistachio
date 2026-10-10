@@ -1,6 +1,6 @@
 # Aurora DSQL
 
-Use `--engine dsql` to manage a schema on Amazon Aurora DSQL. Write the schema in normal PostgreSQL syntax. pistachio changes the generated statements into the form that DSQL accepts. If DSQL cannot make a change, `plan` fails.
+Use `--engine dsql` to manage a schema on Amazon Aurora DSQL. Write the schema in normal PostgreSQL syntax. pistachio changes the generated statements into the form that DSQL accepts. `plan` fails for the changes listed in [Changes that plan rejects](#changes-that-plan-rejects).
 
 DSQL supports only part of PostgreSQL. For example, it has no foreign keys, enums, triggers, policies, partitioned tables, composite types or column collations. pistachio does not check for these. DSQL rejects them when you apply.
 
