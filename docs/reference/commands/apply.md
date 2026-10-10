@@ -33,7 +33,10 @@ The output is written when the run ends. It lists the statements in the order in
 
 A drop that the desired schema implies runs only when `--allow-drop` includes its type. Otherwise the drop is written as a `-- skipped:` comment.
 
-If an index is invalid (`pg_index.indisvalid` is false), the output has a `-- Warning: index ... is invalid` line under the object count. A failed `CREATE INDEX CONCURRENTLY` leaves such an index. Its definition matches, so pistachio does not replace it. Drop it yourself. `plan` writes the same warning.
+If an index is invalid (`pg_index.indisvalid` is false), the output has a `-- Warning: index ... is invalid` line under the object count. PostgreSQL does not use an invalid index. pistachio does not replace it, because its definition matches. `plan` writes the same warning. Two common causes:
+
+- A failed `CREATE INDEX CONCURRENTLY` leaves an invalid index. Drop it and run `apply` again.
+- An index created with `ON ONLY` on a partitioned table stays invalid until every partition has a matching index attached with `ALTER INDEX ... ATTACH PARTITION`.
 
 ## Options
 

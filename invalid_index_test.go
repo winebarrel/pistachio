@@ -163,3 +163,27 @@ func TestPlan_InvalidIndexWarning_Ignored(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got.InvalidIndexes)
 }
+
+// An index created ON ONLY a partitioned table is invalid until an index of
+// every partition is attached. It is reported too, with no change planned:
+// the dump writes it without ONLY, and that is what the catalog read reports.
+func TestPlan_InvalidIndexWarning_PartitionedOnOnly(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.p (id integer, k integer) PARTITION BY RANGE (id);
+CREATE TABLE public.p1 PARTITION OF public.p FOR VALUES FROM (0) TO (10);
+CREATE INDEX p_k_idx ON ONLY public.p (k);`)
+
+	client := NewClient(&Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}})
+	dumped, err := client.Dump(ctx, &DumpOptions{})
+	require.NoError(t, err)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(dumped.String()), 0o644))
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.False(t, got.HasChanges, got.SQL)
+	assert.Equal(t, "-- Warning: index public.p_k_idx is invalid", got.InvalidIndexes)
+}
