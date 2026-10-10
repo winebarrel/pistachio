@@ -67,9 +67,6 @@ The [general options](index.md#general-options) apply as well.
 `--engine=`*engine*
 :   The server the schema is applied to: `postgres`, or `dsql` for Amazon Aurora DSQL. The default is `postgres`. The environment variable is `PISTA_ENGINE`. See [Aurora DSQL](../../guides/aurora-dsql.md).
 
-`--dsql-ignore-async`
-:   Ignore `ASYNC` in `CREATE INDEX ASYNC` in the files. This option requires `--engine dsql`. The environment variable is `PISTA_DSQL_IGNORE_ASYNC`. See [Aurora DSQL](../../guides/aurora-dsql.md).
-
 `-I` *pattern*, `--include=`*pattern*
 :   Manage only the objects whose name matches the pattern. `*` and `?` are wildcards. A wildcard pattern must match the whole name. `/re/` is a regular expression. It matches anywhere in the name unless it is anchored. The pattern is matched against the name alone, without the schema. This option can be given more than once. The environment variable is `PISTA_INCLUDE`.
 
@@ -122,6 +119,9 @@ The [general options](index.md#general-options) apply as well.
 
 `--evaluate-literals`
 :   Compare a string literal with a cast by value, not by text. This applies to the `DEFAULT` of a column or domain, the expression of a generated column, and a `CHECK` constraint on a table or domain. PostgreSQL prints a literal in the output format of its type. For example, `DEFAULT '1 hour'` on an `interval` column is read back as `'01:00:00'::interval`, so without this option every plan writes `SET DEFAULT` for the column. With this option, the literals whose text differs are sent to the server in one query and compared by value. The statements use the text of the desired schema. If a column changes type in the same run, its table is compared by text. The same holds for a domain whose base type changes. The environment variable is `PISTA_EVALUATE_LITERALS`.
+
+`--dsql-ignore-async`
+:   Ignore `ASYNC` in `CREATE INDEX ASYNC` in the files. This option requires `--engine dsql`. The environment variable is `PISTA_DSQL_IGNORE_ASYNC`. See [Aurora DSQL](../../guides/aurora-dsql.md).
 
 ### Execution
 

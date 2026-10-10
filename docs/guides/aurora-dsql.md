@@ -26,7 +26,7 @@ pista plan --engine dsql -c "postgres://admin@$HOST/postgres?sslmode=require" sc
 
 `dump` also adds `CACHE 1` to identity columns. It writes indexes with `USING btree` and without `ASYNC`, so that pistachio can read the dump back.
 
-`ASYNC` is not PostgreSQL syntax, so pistachio cannot parse a schema file that has `CREATE INDEX ASYNC`. Remove it with `pista fmt --dsql-strip-async`, or pass `--dsql-ignore-async` to `plan` and `apply` to ignore it.
+`ASYNC` is not PostgreSQL syntax, so pistachio cannot parse a schema file that has `CREATE INDEX ASYNC`. Remove it with `pista fmt --dsql-strip-async`, or pass `--dsql-ignore-async` to `plan` and `apply` to ignore it. `lint`, `parse` and `diff` have no such option, so remove `ASYNC` with `pista fmt --dsql-strip-async` before you use them.
 
 DSQL reports some things that are not in your schema. pistachio ignores them:
 
