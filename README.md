@@ -7,6 +7,9 @@ pistachio is a declarative schema management tool for PostgreSQL with a Terrafor
 
 `pista plan` prints that DDL. `pista apply` runs it. `pista dump` writes the files from an existing database.
 
+> [!NOTE]
+> Since 1.81.0, pistachio supports Amazon Aurora DSQL with `--engine dsql`. See the [Aurora DSQL guide](https://winebarrel.github.io/pistachio/guides/aurora-dsql/). This should not change how pistachio works with PostgreSQL. If you find a problem, please [open an issue](https://github.com/winebarrel/pistachio/issues).
+
 > [!TIP]
 > The [playground](https://pistachio-demo.winebarrel.workers.dev) runs `pista diff` on two schemas that you edit in the page. There is nothing to install.
 
