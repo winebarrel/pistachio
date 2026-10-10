@@ -38,7 +38,13 @@ func dsqlClient(t *testing.T) *pistachio.Client {
 	}
 	opts := []pgstub.Option{pgstub.Replay(dsqlRecording)}
 	if connString != "" {
-		opts = []pgstub.Option{pgstub.Record(connString, dsqlRecording)}
+		// The cluster gives each object a new OID and each index build a new
+		// job ID. Numbering them keeps a recording made again the same.
+		opts = []pgstub.Option{
+			pgstub.Record(connString, dsqlRecording),
+			pgstub.NormalizeOIDs(),
+			pgstub.NormalizeColumn("job_id", "job-"),
+		}
 	}
 	stub := pgstub.Start(t, opts...)
 

@@ -20,9 +20,10 @@ export PGPASSWORD
 # connection string without one would take it.
 export TEST_PISTA_DSQL_CONN_STR="postgres://admin@$DSQL_HOST:5432/postgres?sslmode=require"
 
-rm -f "$recording"
-# pgstub writes the recording even when the test fails, so the check below
-# runs either way, and the test's status is the script's in the end.
+# The file is not removed first: pgstub leaves it alone when the answers are
+# the same, so recording again with no change leaves no diff. pgstub writes
+# the recording even when the test fails, so the check below runs either
+# way, and the test's status is the script's in the end.
 status=0
 go test -count=1 -v -run '^TestDSQL$' . || status=$?
 
