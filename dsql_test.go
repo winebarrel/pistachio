@@ -5,12 +5,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/winebarrel/pgstub"
+	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
 // dsqlRecording holds what an Aurora DSQL cluster answered to TestDSQL. The
@@ -137,6 +139,9 @@ func TestDSQL(t *testing.T) {
 		assert.NotContains(t, dump, "btree_index")
 		assert.NotContains(t, dump, "COMPRESSION")
 		requireNoDSQLDrift(t, client, dump)
+
+		// dump --split writes the same CACHE 1.
+		assert.Contains(t, dumped.Files()["public.users.sql"], "GENERATED ALWAYS AS IDENTITY (CACHE 1)")
 	})
 
 	t.Run("a change DSQL cannot run is refused at plan", func(t *testing.T) {
@@ -148,6 +153,17 @@ func TestDSQL(t *testing.T) {
 		changed := dsqlUsersChanged + "ALTER TABLE public.users ADD CONSTRAINT users_name_key UNIQUE (name);\n"
 		_, err := dsqlApply(t, client, changed, ExecOptions{DSQLNoWaitIndexBuild: true})
 		require.ErrorContains(t, err, "--dsql-no-wait-index-build cannot be used")
+	})
+
+	t.Run("change an index without waiting for the build", func(t *testing.T) {
+		changed := strings.Replace(dsqlUsersChanged, "users_status_idx ON public.users (status, name)", "users_status_idx ON public.users (status)", 1)
+		out, err := dsqlApply(t, client, changed, ExecOptions{DSQLNoWaitIndexBuild: true})
+		require.NoError(t, err)
+		assert.Contains(t, out, "DROP INDEX public.users_status_idx;\nCREATE INDEX ASYNC users_status_idx ON public.users (status);")
+		requireNoDSQLDrift(t, client, changed)
+
+		_, err = dsqlApply(t, client, dsqlUsersChanged, ExecOptions{})
+		require.NoError(t, err)
 	})
 
 	t.Run("apply-from", func(t *testing.T) {
@@ -167,4 +183,21 @@ func TestDSQL(t *testing.T) {
 		assert.Contains(t, buf.String(), "COMMENT ON TABLE public.users IS 'people';")
 		requireNoDSQLDrift(t, client, changed)
 	})
+}
+
+// The -- pista:bulk-alter directive is refused like --bulk-alter. The refusal
+// comes before anything DSQL-specific is sent, so local PostgreSQL serves.
+func TestDSQL_BulkAlterDirective(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+	testutil.SetupDB(t, ctx, conn, "")
+
+	client := NewClient(&Options{
+		ConnString: conn.Config().ConnString(),
+		Schemas:    []string{"public"},
+		Engine:     EngineDSQL,
+	})
+	_, err := client.Plan(ctx, &PlanOptions{Files: []string{writeDSQLSchema(t, "-- pista:bulk-alter\n"+dsqlUsers)}})
+	require.EqualError(t, err, "-- pista:bulk-alter cannot be used with --engine dsql")
 }

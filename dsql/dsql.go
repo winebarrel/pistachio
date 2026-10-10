@@ -30,7 +30,10 @@ const btreeMethod = "btree_index"
 // side uses. DSQL reports every index's access method as btree_index, adds
 // every non-key column to a primary key's index as INCLUDE, and stores every
 // column compressed with lz4. None of them is something the schema says.
-func NormalizeCurrent(tables *orderedmap.Map[string, *model.Table]) error {
+//
+// A definition that does not parse is left as it is. The catalog writes
+// definitions that parse, so that is not reached by a real read.
+func NormalizeCurrent(tables *orderedmap.Map[string, *model.Table]) {
 	for _, t := range tables.CollectValues() {
 		for _, col := range t.Columns.CollectValues() {
 			col.Compression = ""
@@ -42,34 +45,29 @@ func NormalizeCurrent(tables *orderedmap.Map[string, *model.Table]) error {
 			}
 			result, pk, err := pgast.ParseConstraintDefStrict(con.Definition)
 			if err != nil {
-				return fmt.Errorf("dsql: primary key %s: %w", con.Name, err)
+				continue
 			}
 			pk.Including = nil
-			def, err := pgast.DeparseConstraintDef(result)
-			if err != nil {
-				return fmt.Errorf("dsql: primary key %s: %w", con.Name, err)
+			if def, err := pgast.DeparseConstraintDef(result); err == nil {
+				con.Definition = def
 			}
-			con.Definition = def
 		}
 
 		for _, idx := range t.Indexes.CollectValues() {
 			result, err := pg_query.Parse(idx.Definition)
 			if err != nil {
-				return fmt.Errorf("dsql: index %s: %w", idx.Name, err)
+				continue
 			}
 			is := result.Stmts[0].Stmt.GetIndexStmt()
-			if is.AccessMethod == btreeMethod {
-				is.AccessMethod = "btree"
+			if is.AccessMethod != btreeMethod {
+				continue
 			}
-			def, err := pg_query.Deparse(result)
-			if err != nil {
-				return fmt.Errorf("dsql: index %s: %w", idx.Name, err)
+			is.AccessMethod = "btree"
+			if def, err := pg_query.Deparse(result); err == nil {
+				idx.Definition = def
 			}
-			idx.Definition = def
 		}
 	}
-
-	return nil
 }
 
 // Split rewrites the two changes DSQL takes only in another form. It runs
@@ -83,13 +81,16 @@ func NormalizeCurrent(tables *orderedmap.Map[string, *model.Table]) error {
 // A unique constraint added to a table becomes CREATE UNIQUE INDEX and ADD
 // CONSTRAINT ... USING INDEX: DSQL takes no other ADD CONSTRAINT. Exec waits
 // for the index between the two.
-func Split(stmts []string) ([]string, error) {
+//
+// A statement that does not parse is left as it is, for Finish to report.
+func Split(stmts []string) []string {
 	var out []string
 
 	for _, stmt := range stmts {
 		result, err := pg_query.Parse(stmt)
 		if err != nil {
-			return nil, fmt.Errorf("dsql: failed to parse %q: %w", stmt, err)
+			out = append(out, stmt)
+			continue
 		}
 
 		as := result.Stmts[0].Stmt.GetAlterTableStmt()
@@ -114,17 +115,13 @@ func Split(stmts []string) ([]string, error) {
 				out = append(out, stmt)
 				continue
 			}
-			split, err := splitAddUnique(as.Relation, con)
-			if err != nil {
-				return nil, fmt.Errorf("dsql: failed to rewrite %q: %w", stmt, err)
-			}
-			out = append(out, split...)
+			out = append(out, splitAddUnique(as.Relation, con)...)
 		default:
 			out = append(out, stmt)
 		}
 	}
 
-	return out, nil
+	return out
 }
 
 // splitAddColumnDefault cuts the DEFAULT out of an ADD COLUMN. A column that
@@ -156,7 +153,7 @@ func splitAddColumnDefault(stmt, table string, col *pg_query.ColumnDef) ([]strin
 
 // splitAddUnique writes the unique index and the constraint that takes it
 // over, both under the constraint's name.
-func splitAddUnique(rel *pg_query.RangeVar, con *pg_query.Constraint) ([]string, error) {
+func splitAddUnique(rel *pg_query.RangeVar, con *pg_query.Constraint) []string {
 	params := make([]*pg_query.Node, 0, len(con.Keys))
 	for _, k := range con.Keys {
 		params = append(params, indexElem(k.GetString_().Sval))
@@ -166,7 +163,7 @@ func splitAddUnique(rel *pg_query.RangeVar, con *pg_query.Constraint) ([]string,
 		including = append(including, indexElem(k.GetString_().Sval))
 	}
 
-	index, err := deparse(&pg_query.Node{Node: &pg_query.Node_IndexStmt{IndexStmt: &pg_query.IndexStmt{
+	index := deparse(&pg_query.Node{Node: &pg_query.Node_IndexStmt{IndexStmt: &pg_query.IndexStmt{
 		Idxname:              con.Conname,
 		Relation:             rel,
 		IndexParams:          params,
@@ -175,11 +172,8 @@ func splitAddUnique(rel *pg_query.RangeVar, con *pg_query.Constraint) ([]string,
 		Unique:               true,
 		NullsNotDistinct:     con.NullsNotDistinct,
 	}}})
-	if err != nil {
-		return nil, err
-	}
 
-	constraint, err := deparse(&pg_query.Node{Node: &pg_query.Node_AlterTableStmt{AlterTableStmt: &pg_query.AlterTableStmt{
+	constraint := deparse(&pg_query.Node{Node: &pg_query.Node_AlterTableStmt{AlterTableStmt: &pg_query.AlterTableStmt{
 		Relation: rel,
 		Objtype:  pg_query.ObjectType_OBJECT_TABLE,
 		Cmds: []*pg_query.Node{{Node: &pg_query.Node_AlterTableCmd{AlterTableCmd: &pg_query.AlterTableCmd{
@@ -193,11 +187,8 @@ func splitAddUnique(rel *pg_query.RangeVar, con *pg_query.Constraint) ([]string,
 			}}},
 		}}}},
 	}}})
-	if err != nil {
-		return nil, err
-	}
 
-	return []string{index + ";", constraint + ";"}, nil
+	return []string{index + ";", constraint + ";"}
 }
 
 func indexElem(name string) *pg_query.Node {
@@ -208,11 +199,14 @@ func indexElem(name string) *pg_query.Node {
 	}}}
 }
 
-func deparse(stmt *pg_query.Node) (string, error) {
-	return pg_query.Deparse(&pg_query.ParseResult{
+// deparse writes a statement built here. Deparse fails only on a tree it
+// does not know, which these are not, so the error is not returned.
+func deparse(stmt *pg_query.Node) string {
+	sql, _ := pg_query.Deparse(&pg_query.ParseResult{
 		Version: pgast.ParseTreeVersion,
 		Stmts:   []*pg_query.RawStmt{{Stmt: stmt}},
 	})
+	return sql
 }
 
 // relationName writes the table a statement names. model.Ident leaves an
@@ -259,11 +253,7 @@ func Finish(stmts []string) ([]string, error) {
 			continue
 		}
 
-		stmt, err = AddIdentityCache(stmt)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, stmt)
+		out = append(out, AddIdentityCache(stmt))
 	}
 
 	return out, nil
@@ -312,25 +302,21 @@ func refusal(node *pg_query.Node) string {
 }
 
 // addAsync writes ASYNC after CREATE [UNIQUE] INDEX. The statement is one
-// deparse wrote, so the words are where it puts them.
+// deparse wrote, so it starts with those words.
 func addAsync(def string) string {
-	for _, prefix := range []string{"CREATE UNIQUE INDEX ", "CREATE INDEX "} {
-		if rest, ok := strings.CutPrefix(def, prefix); ok {
-			return prefix + "ASYNC " + rest
-		}
-	}
-	return def
+	return strings.Replace(def, " INDEX ", " INDEX ASYNC ", 1)
 }
 
 // AddIdentityCache writes CACHE 1 on each identity column that names no
 // cache size. The model leaves a cache of 1 out as the default, and DSQL
 // rejects an identity column without one. sql may hold several statements
 // and comments, as a dump does; the text is changed where the identity
-// clause sits and nowhere else, so the layout stays as it was.
-func AddIdentityCache(sql string) (string, error) {
+// clause sits and nowhere else, so the layout stays as it was. SQL that does
+// not parse is returned as it is.
+func AddIdentityCache(sql string) string {
 	result, err := pg_query.Parse(sql)
 	if err != nil {
-		return "", fmt.Errorf("dsql: failed to parse %q: %w", sql, err)
+		return sql
 	}
 
 	var locations []int32
@@ -351,7 +337,7 @@ func AddIdentityCache(sql string) (string, error) {
 		sql = insertCache(sql, int(loc))
 	}
 
-	return sql, nil
+	return sql
 }
 
 // identityConstraints returns the identity clauses of a statement: those of
@@ -406,24 +392,18 @@ func insertCache(sql string, loc int) string {
 // UnwaitedUniqueIndex reports a unique constraint that takes over an index
 // the same statements build with ASYNC. Without the wait the index is not
 // valid yet when the constraint takes it over, so --dsql-no-wait-index-build
-// cannot run them. An index that already exists needs no wait.
-func UnwaitedUniqueIndex(stmts []string) (string, bool, error) {
+// cannot run them. An index that already exists needs no wait. A statement
+// that does not parse has nothing to report.
+func UnwaitedUniqueIndex(stmts []string) (string, bool) {
 	built := map[string]bool{}
 
 	for _, stmt := range stmts {
-		if rest, ok := strings.CutPrefix(stmt, "CREATE UNIQUE INDEX ASYNC "); ok {
-			result, err := pg_query.Parse("CREATE UNIQUE INDEX " + rest)
-			if err != nil {
-				return "", false, fmt.Errorf("dsql: failed to parse %q: %w", stmt, err)
-			}
-			built[result.Stmts[0].Stmt.GetIndexStmt().Idxname] = true
+		result, err := pg_query.Parse(strings.Replace(stmt, " INDEX ASYNC ", " INDEX ", 1))
+		if err != nil {
 			continue
 		}
-
-		result, err := pg_query.Parse(stmt)
-		if err != nil {
-			// A statement the diff did not write, such as pre-SQL, has
-			// nothing to report.
+		if is := result.Stmts[0].Stmt.GetIndexStmt(); is != nil {
+			built[is.Idxname] = is.Unique
 			continue
 		}
 		as := result.Stmts[0].Stmt.GetAlterTableStmt()
@@ -432,13 +412,13 @@ func UnwaitedUniqueIndex(stmts []string) (string, bool, error) {
 		}
 		for _, c := range as.Cmds {
 			con := c.GetAlterTableCmd().GetDef().GetConstraint()
-			if con != nil && con.Indexname != "" && built[con.Indexname] {
-				return con.Indexname, true, nil
+			if con != nil && built[con.Indexname] {
+				return con.Indexname, true
 			}
 		}
 	}
 
-	return "", false, nil
+	return "", false
 }
 
 // Conn is the part of a connection Exec uses.

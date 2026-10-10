@@ -371,9 +371,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 	// After the state hash, which apply-from takes over a read it does not
 	// normalize.
 	if client.Engine.isDSQL() {
-		if err := dsql.NormalizeCurrent(filteredTables); err != nil {
-			return nil, err
-		}
+		dsql.NormalizeCurrent(filteredTables)
 	}
 
 	// This runs after the state hash, which must depend on the database only.
@@ -470,9 +468,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		if len(bulkAlterTables) > 0 {
 			return nil, fmt.Errorf("-- pista:bulk-alter cannot be used with --engine dsql")
 		}
-		if tableDiff.Stmts, err = dsql.Split(tableDiff.Stmts); err != nil {
-			return nil, err
-		}
+		tableDiff.Stmts = dsql.Split(tableDiff.Stmts)
 	}
 	if options.BulkAlter || len(bulkAlterTables) > 0 {
 		tableDiff.Stmts = mergeAlterTable(tableDiff.Stmts, func(fqtn string) bool {

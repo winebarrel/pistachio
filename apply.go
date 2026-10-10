@@ -192,11 +192,7 @@ func (client *Client) applyStmts(
 	// A unique constraint takes over its index only once the index is valid,
 	// so it cannot follow a build nobody waits for.
 	if client.Engine.isDSQL() && options.DSQLNoWaitIndexBuild {
-		name, ok, err := dsql.UnwaitedUniqueIndex(input.Stmts)
-		if err != nil {
-			return err
-		}
-		if ok {
+		if name, ok := dsql.UnwaitedUniqueIndex(input.Stmts); ok {
 			return fmt.Errorf("--dsql-no-wait-index-build cannot be used when a unique constraint takes over index %s, which this plan builds", name)
 		}
 	}

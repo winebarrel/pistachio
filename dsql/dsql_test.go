@@ -49,6 +49,14 @@ func TestNormalizeCurrent(t *testing.T) {
 		Table:      "users",
 		Definition: "CREATE UNIQUE INDEX users_lower_idx ON public.users USING btree_index (lower(name)) WHERE (id > 0)",
 	})
+	// Not something DSQL reports, but a method other than btree_index is
+	// left as it is.
+	idxs.Set("public.users_tags_idx", &model.Index{
+		Schema:     "public",
+		Name:       "users_tags_idx",
+		Table:      "users",
+		Definition: "CREATE INDEX users_tags_idx ON public.users USING gin (tags)",
+	})
 
 	tables := orderedmap.New[string, *model.Table]()
 	tables.Set("public.users", &model.Table{
@@ -59,7 +67,7 @@ func TestNormalizeCurrent(t *testing.T) {
 		Indexes:     idxs,
 	})
 
-	require.NoError(t, dsql.NormalizeCurrent(tables))
+	dsql.NormalizeCurrent(tables)
 
 	users := tables.Get("public.users")
 	assert.Empty(t, users.Columns.Get("name").Compression)
@@ -68,6 +76,7 @@ func TestNormalizeCurrent(t *testing.T) {
 	assert.Equal(t, "CHECK ((name <> ''::text))", users.Constraints.Get("users_name_check").Definition)
 	assert.Equal(t, "CREATE INDEX users_name_idx ON public.users USING btree (name)", users.Indexes.Get("public.users_name_idx").Definition)
 	assert.Equal(t, "CREATE UNIQUE INDEX users_lower_idx ON public.users USING btree (lower(name)) WHERE id > 0", users.Indexes.Get("public.users_lower_idx").Definition)
+	assert.Equal(t, "CREATE INDEX users_tags_idx ON public.users USING gin (tags)", users.Indexes.Get("public.users_tags_idx").Definition)
 }
 
 func TestNormalizeCurrentNoIndexesOrConstraints(t *testing.T) {
@@ -79,32 +88,27 @@ func TestNormalizeCurrentNoIndexesOrConstraints(t *testing.T) {
 		Constraints: orderedmap.New[string, *model.Constraint](),
 		Indexes:     orderedmap.New[string, *model.Index](),
 	})
-	require.NoError(t, dsql.NormalizeCurrent(tables))
+	dsql.NormalizeCurrent(tables)
 }
 
+// A definition that does not parse is left as it is.
 func TestNormalizeCurrentBadDefinition(t *testing.T) {
 	cons := orderedmap.New[string, *model.Constraint]()
 	cons.Set("t_pkey", &model.Constraint{Name: "t_pkey", Type: 'p', Definition: "PRIMARY KEY ("})
+	idxs := orderedmap.New[string, *model.Index]()
+	idxs.Set("public.i", &model.Index{Schema: "public", Name: "i", Table: "t", Definition: "CREATE INDEX i ON"})
 	tables := orderedmap.New[string, *model.Table]()
 	tables.Set("public.t", &model.Table{
 		Schema:      "public",
 		Name:        "t",
 		Columns:     orderedmap.New[string, *model.Column](),
 		Constraints: cons,
-		Indexes:     orderedmap.New[string, *model.Index](),
-	})
-	require.Error(t, dsql.NormalizeCurrent(tables))
-
-	idxs := orderedmap.New[string, *model.Index]()
-	idxs.Set("public.i", &model.Index{Schema: "public", Name: "i", Table: "t", Definition: "CREATE INDEX i ON"})
-	tables.Set("public.t", &model.Table{
-		Schema:      "public",
-		Name:        "t",
-		Columns:     orderedmap.New[string, *model.Column](),
-		Constraints: orderedmap.New[string, *model.Constraint](),
 		Indexes:     idxs,
 	})
-	require.Error(t, dsql.NormalizeCurrent(tables))
+
+	dsql.NormalizeCurrent(tables)
+	assert.Equal(t, "PRIMARY KEY (", cons.Get("t_pkey").Definition)
+	assert.Equal(t, "CREATE INDEX i ON", idxs.Get("public.i").Definition)
 }
 
 func TestSplit(t *testing.T) {
@@ -150,6 +154,14 @@ func TestSplit(t *testing.T) {
 			},
 		},
 		{
+			name:  "a unique constraint with INCLUDE and NULLS NOT DISTINCT",
+			input: []string{"ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE NULLS NOT DISTINCT (email) INCLUDE (name);"},
+			expected: []string{
+				"CREATE UNIQUE INDEX users_email_key ON public.users (email) INCLUDE (name) NULLS NOT DISTINCT;",
+				"ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;",
+			},
+		},
+		{
 			name:     "a unique constraint over an existing index is left alone",
 			input:    []string{"ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_idx;"},
 			expected: []string{"ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_idx;"},
@@ -163,16 +175,14 @@ func TestSplit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual, err := dsql.Split(tt.input)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, actual)
+			assert.Equal(t, tt.expected, dsql.Split(tt.input))
 		})
 	}
 }
 
+// A statement that does not parse is left for Finish to report.
 func TestSplitParseError(t *testing.T) {
-	_, err := dsql.Split([]string{"ALTER TABLE"})
-	require.Error(t, err)
+	assert.Equal(t, []string{"ALTER TABLE"}, dsql.Split([]string{"ALTER TABLE"}))
 }
 
 func TestFinish(t *testing.T) {
@@ -215,6 +225,11 @@ func TestFinish(t *testing.T) {
 			name:     "an identity column with a cache keeps it",
 			input:    []string{"CREATE TABLE public.t (\n    id bigint GENERATED ALWAYS AS IDENTITY (CACHE 65536)\n);"},
 			expected: []string{"CREATE TABLE public.t (\n    id bigint GENERATED ALWAYS AS IDENTITY (CACHE 65536)\n);"},
+		},
+		{
+			name:     "an identity column added to a table",
+			input:    []string{"ALTER TABLE public.t ADD COLUMN n bigint GENERATED ALWAYS AS IDENTITY;"},
+			expected: []string{"ALTER TABLE public.t ADD COLUMN n bigint GENERATED ALWAYS AS IDENTITY (CACHE 1);"},
 		},
 		{
 			name:     "an identity added to a column",
@@ -273,33 +288,27 @@ func TestAddIdentityCache(t *testing.T) {
 	sql := "-- public.t\nCREATE TABLE public.t (\n    id bigint GENERATED ALWAYS AS IDENTITY,\n    n bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY 2),\n    v text,\n    CONSTRAINT t_pkey PRIMARY KEY (id)\n);\n\n-- public.u\nCREATE TABLE public.u (\n    id bigint GENERATED ALWAYS AS IDENTITY (CACHE 65536)\n);"
 	expected := "-- public.t\nCREATE TABLE public.t (\n    id bigint GENERATED ALWAYS AS IDENTITY (CACHE 1),\n    n bigint GENERATED BY DEFAULT AS IDENTITY (INCREMENT BY 2 CACHE 1),\n    v text,\n    CONSTRAINT t_pkey PRIMARY KEY (id)\n);\n\n-- public.u\nCREATE TABLE public.u (\n    id bigint GENERATED ALWAYS AS IDENTITY (CACHE 65536)\n);"
 
-	actual, err := dsql.AddIdentityCache(sql)
-	require.NoError(t, err)
-	assert.Equal(t, expected, actual)
-
-	_, err = dsql.AddIdentityCache("CREATE TABLE (")
-	require.Error(t, err)
+	assert.Equal(t, expected, dsql.AddIdentityCache(sql))
+	assert.Equal(t, "CREATE TABLE (", dsql.AddIdentityCache("CREATE TABLE ("))
 }
 
 func TestUnwaitedUniqueIndex(t *testing.T) {
-	name, ok, err := dsql.UnwaitedUniqueIndex([]string{
+	name, ok := dsql.UnwaitedUniqueIndex([]string{
 		"CREATE UNIQUE INDEX ASYNC users_email_key ON public.users (email);",
 		"ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;",
 	})
-	require.NoError(t, err)
 	assert.True(t, ok)
 	assert.Equal(t, "users_email_key", name)
 
-	// An index that already exists needs no wait.
-	_, ok, err = dsql.UnwaitedUniqueIndex([]string{
+	// An index that already exists needs no wait, and a plain index cannot
+	// back a unique constraint. A statement that does not parse is skipped.
+	_, ok = dsql.UnwaitedUniqueIndex([]string{
+		"SELECT (",
 		"CREATE INDEX ASYNC users_name_idx ON public.users (name);",
 		"ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_idx;",
+		"COMMENT ON TABLE public.users IS 'x';",
 	})
-	require.NoError(t, err)
 	assert.False(t, ok)
-
-	_, _, err = dsql.UnwaitedUniqueIndex([]string{"CREATE UNIQUE INDEX ASYNC ("})
-	require.Error(t, err)
 }
 
 type fakeRow struct {

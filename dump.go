@@ -45,18 +45,12 @@ type DumpResult struct {
 	Count ObjectCount
 }
 
-// tableSQL adds what --engine dsql needs to the rendered tables. A model read
-// from a catalog renders SQL that parses, so the error path is not reached
-// by a real dump; the SQL is returned as it was, as formatSQL does.
+// tableSQL adds what --engine dsql needs to the rendered tables.
 func (r *DumpResult) tableSQL(sql string) string {
 	if !r.DSQL {
 		return sql
 	}
-	out, err := dsql.AddIdentityCache(sql)
-	if err != nil {
-		return sql
-	}
-	return out
+	return dsql.AddIdentityCache(sql)
 }
 
 // stripRelationSchemaPrefix removes the schema qualification from the relation
@@ -474,9 +468,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 	}
 
 	if client.Engine.isDSQL() {
-		if err := dsql.NormalizeCurrent(current.Tables); err != nil {
-			return nil, err
-		}
+		dsql.NormalizeCurrent(current.Tables)
 	}
 
 	// The estimates are keyed by the names the catalog read, so they are
