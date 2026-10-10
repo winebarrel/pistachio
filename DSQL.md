@@ -33,6 +33,11 @@ record it again with `DSQL_HOST=<endpoint> make record-dsql` on a cluster
 whose public schema is empty. The script refuses a recording that names the
 cluster or holds something that looks like a credential.
 
+The `dsql` CI job runs `make test-dsql` and is a required check. A pull
+request that changes a statement pistachio sends fails it until the
+recording is made again. Without a cluster, leave the job failing and say so
+in the pull request; a maintainer with a cluster records it.
+
 The rest of this file is the evidence.
 
 Connection:

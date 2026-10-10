@@ -21,10 +21,14 @@ export PGPASSWORD
 export TEST_PISTA_DSQL_CONN_STR="postgres://admin@$DSQL_HOST:5432/postgres?sslmode=require"
 
 rm -f "$recording"
-go test -count=1 -v -run '^TestDSQL$' .
+# pgstub writes the recording even when the test fails, so the check below
+# runs either way, and the test's status is the script's in the end.
+status=0
+go test -count=1 -v -run '^TestDSQL$' . || status=$?
 
 cluster=${DSQL_HOST%%.*}
-if grep -nEi -e "$cluster" -e 'on\.aws|amazonaws\.com|arn:aws' -e '(AKIA|ASIA)[0-9A-Z]{16}' -e 'X-Amz-' "$recording"; then
+if [ -f "$recording" ] && grep -nEi -e "$cluster" -e 'on\.aws|amazonaws\.com|arn:aws' -e '(AKIA|ASIA)[0-9A-Z]{16}' -e 'X-Amz-' "$recording"; then
   echo "error: $recording names the cluster or holds a credential; do not commit it" >&2
   exit 1
 fi
+exit "$status"
