@@ -35,8 +35,13 @@ The rest of this file is the evidence.
 Connection:
 - DSQL rejects the `default_transaction_read_only` startup parameter
   (`FATAL: setting configuration parameter "default_transaction_read_only"
-  not supported`, SQLSTATE 0A000). `--engine dsql` does not send it, so
-  `plan` and `dump` connect read-write.
+  not supported`, SQLSTATE 0A000). `SET default_transaction_read_only = on`
+  after connecting is rejected the same way. `SET SESSION CHARACTERISTICS
+  AS TRANSACTION READ ONLY` works: `default_transaction_read_only` then reads
+  `on`, and an autocommit `CREATE TABLE` fails with `cannot execute CREATE
+  TABLE in a read-only transaction`. `--engine dsql` runs that statement
+  after connecting, so `plan` and `dump` stay read-only (verified
+  2026-10-10).
 
 Catalog read layer (no incompatibility found):
 - Every catalog dependency exists on DSQL. All 7 catalog functions that
