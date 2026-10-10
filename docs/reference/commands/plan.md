@@ -66,6 +66,9 @@ These options decide what is read on both sides. `plan --out` records them in th
 `--search-path=`*path*
 :   The `search_path` for the connection. The catalog reports an object that is reachable through the `search_path` without its schema. So this option decides which names are reported without a schema. An empty value qualifies every name. The default is `public`. The environment variable is `PISTA_SEARCH_PATH`. See [Notes](#notes).
 
+`--engine=`*engine*
+:   The server the schema is applied to: `postgres`, or `dsql` for Amazon Aurora DSQL. The default is `postgres`. The environment variable is `PISTA_ENGINE`. See [Aurora DSQL](../../guides/aurora-dsql.md).
+
 `-I` *pattern*, `--include=`*pattern*
 :   Manage only the objects whose name matches the pattern. `*` and `?` are wildcards. A wildcard pattern must match the whole name. `/re/` is a regular expression. It matches anywhere in the name unless it is anchored. The pattern is matched against the name alone, without the schema. This option can be given more than once. The environment variable is `PISTA_INCLUDE`.
 

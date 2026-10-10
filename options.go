@@ -60,6 +60,9 @@ type ScopeOptions struct {
 	// under which the catalog qualifies everything, rather than a request for
 	// the default. nil means the default.
 	SearchPath *string `env:"PISTA_SEARCH_PATH" default:"public" json:"search_path" help:"search_path for the database connection. The catalog reports an object reachable through it without its schema, so this decides how dump writes that object. Pass an empty value to qualify everything."`
+	// Engine is here because dsql changes what the current side reads: the
+	// catalog's values are brought to the form the desired side uses.
+	Engine Engine `enum:"postgres,dsql" default:"postgres" env:"PISTA_ENGINE" json:"engine" help:"Server the schema is applied to: postgres, or dsql for Amazon Aurora DSQL."`
 	FilterOptions
 }
 

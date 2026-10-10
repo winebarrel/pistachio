@@ -17,6 +17,11 @@ type Dump struct {
 	pistachio.DumpOptions
 }
 
+// AfterApply refuses the options the engine cannot use.
+func (cmd *Dump) AfterApply() error {
+	return pistachio.ValidateDumpEngine(cmd.Engine, &cmd.DumpOptions)
+}
+
 func (cmd *Dump) Run(ctx context.Context, w io.Writer) error {
 	client := pistachio.NewClient(&cmd.Options)
 

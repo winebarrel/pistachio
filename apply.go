@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/winebarrel/pistachio/dsql"
 	"github.com/winebarrel/pistachio/parser"
 )
 
@@ -47,6 +49,10 @@ type ExecOptions struct {
 	// over, so it passes the terminal here. nil writes the line to the
 	// output writer.
 	WaitWriter io.Writer `kong:"-"`
+	// DSQLNoWaitIndexBuild leaves an index build running when apply moves on.
+	// DSQL builds every index in the background, and apply waits for each by
+	// default.
+	DSQLNoWaitIndexBuild bool `env:"PISTA_DSQL_NO_WAIT_INDEX_BUILD" help:"With --engine dsql, do not wait for an index build to finish before running the next statement."`
 }
 
 // applyInput is the statement set an apply runs, whichever it came from: the
@@ -183,6 +189,18 @@ func (client *Client) applyStmts(
 	}
 	withTx := options.WithTx || (options.TryTx && !input.HasConcurrentlyIndex)
 
+	// A unique constraint takes over its index only once the index is valid,
+	// so it cannot follow a build nobody waits for.
+	if client.Engine.isDSQL() && options.DSQLNoWaitIndexBuild {
+		name, ok, err := dsql.UnwaitedUniqueIndex(input.Stmts)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return fmt.Errorf("--dsql-no-wait-index-build cannot be used when a unique constraint takes over index %s, which this plan builds", name)
+		}
+	}
+
 	if len(input.Stmts) == 0 && len(input.ExecuteStmts) == 0 {
 		return nil
 	}
@@ -193,6 +211,15 @@ func (client *Client) applyStmts(
 	exec := conn.Exec
 	queryRow := conn.QueryRow
 	commit := func(context.Context) error { return nil }
+
+	// DSQL builds an index in the background. Each build is waited for
+	// before the next statement runs. --with-tx is refused with dsql, so the
+	// transaction below never replaces this.
+	if client.Engine.isDSQL() && !options.DSQLNoWaitIndexBuild {
+		exec = func(ctx context.Context, sql string, _ ...any) (pgconn.CommandTag, error) {
+			return pgconn.CommandTag{}, dsql.Exec(ctx, conn, sql)
+		}
+	}
 
 	// writeTiming reports how long the statement just written to w took. It is
 	// a no-op without --timing.

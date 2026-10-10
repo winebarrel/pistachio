@@ -81,6 +81,7 @@ nav:
           - guides/explaining-plans.md
           - guides/plan-files.md
           - guides/exclusive-apply.md
+          - guides/aurora-dsql.md
       - Without a database:
           - guides/diffing.md
           - guides/formatting.md

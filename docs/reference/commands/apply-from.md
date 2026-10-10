@@ -54,6 +54,9 @@ The options that decide what is read or what is run are not accepted. The plan f
 `--exclusive-wait=`*duration*
 :   This option is like `--exclusive`, but it waits up to *duration* for the other apply to finish. `0` waits without limit. The environment variable is `PISTA_EXCLUSIVE_WAIT`.
 
+`--dsql-no-wait-index-build`
+:   Do not wait for an index build to finish before the next statement runs. This option requires a plan file written with `--engine dsql`. The environment variable is `PISTA_DSQL_NO_WAIT_INDEX_BUILD`. See [Aurora DSQL](../../guides/aurora-dsql.md#index-builds).
+
 `--force`
 :   Run the plan even when the database has drifted since the plan was written. The drift is reported as a warning at the top of the output, not as an error. A difference in the major version of the server is refused in both cases. This option cannot be set from the config file.
 

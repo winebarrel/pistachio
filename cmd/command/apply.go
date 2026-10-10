@@ -15,6 +15,11 @@ type Apply struct {
 	pistachio.ApplyOptions
 }
 
+// AfterApply refuses the options the engine cannot use.
+func (cmd *Apply) AfterApply() error {
+	return pistachio.ValidateApplyEngine(cmd.Engine, &cmd.ApplyOptions)
+}
+
 func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
 	client := pistachio.NewClient(&cmd.Options)
 

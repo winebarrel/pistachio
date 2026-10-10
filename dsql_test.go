@@ -1,0 +1,170 @@
+package pistachio
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pgstub"
+)
+
+// dsqlRecording holds what an Aurora DSQL cluster answered to TestDSQL. The
+// test replays it, so it runs without a cluster.
+const dsqlRecording = "testdata/dsql/dsql.yaml"
+
+// dsqlClient returns a client that talks to a stub replaying dsqlRecording.
+// With TEST_PISTA_DSQL_CONN_STR set, the stub sends every statement to that
+// cluster instead and records the answers, which is how the recording is
+// made. The password is an IAM token, which the stub reads from PGPASSWORD.
+// The cluster has to hold nothing in public when the recording starts.
+func dsqlClient(t *testing.T) *Client {
+	t.Helper()
+	opts := []pgstub.Option{pgstub.Replay(dsqlRecording)}
+	if connString := os.Getenv("TEST_PISTA_DSQL_CONN_STR"); connString != "" {
+		opts = []pgstub.Option{pgstub.Record(connString, dsqlRecording)}
+	}
+	stub := pgstub.Start(t, opts...)
+
+	searchPath := DefaultSearchPath
+	return NewClient(&Options{
+		ConnString: stub.ConnString(),
+		Schemas:    []string{"public"},
+		SearchPath: &searchPath,
+		Engine:     EngineDSQL,
+	})
+}
+
+func writeDSQLSchema(t *testing.T, sql string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(path, []byte(sql), 0o644))
+	return path
+}
+
+func dsqlApply(t *testing.T, client *Client, sql string, exec ExecOptions) (string, error) {
+	t.Helper()
+	var buf bytes.Buffer
+	_, err := client.Apply(context.Background(), &ApplyOptions{
+		AllowDrop:   []string{"all"},
+		Files:       []string{writeDSQLSchema(t, sql)},
+		ExecOptions: exec,
+	}, &buf)
+	return buf.String(), err
+}
+
+func dsqlPlan(t *testing.T, client *Client, sql string) (*PlanResult, error) {
+	t.Helper()
+	return client.Plan(context.Background(), &PlanOptions{
+		AllowDrop: []string{"all"},
+		Files:     []string{writeDSQLSchema(t, sql)},
+	})
+}
+
+func requireNoDSQLDrift(t *testing.T, client *Client, sql string) {
+	t.Helper()
+	result, err := dsqlPlan(t, client, sql)
+	require.NoError(t, err)
+	assert.False(t, result.HasChanges, "drift:\n%s", result.SQL)
+}
+
+const dsqlUsers = `CREATE TABLE public.users (
+    id bigint GENERATED ALWAYS AS IDENTITY (CACHE 1),
+    name text NOT NULL,
+    email text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX users_name_idx ON public.users (name);
+`
+
+const dsqlUsersChanged = `CREATE TABLE public.users (
+    id bigint GENERATED ALWAYS AS IDENTITY (CACHE 1),
+    name text NOT NULL,
+    email text,
+    status text DEFAULT 'active',
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    CONSTRAINT users_email_key UNIQUE (email)
+);
+CREATE INDEX users_name_idx ON public.users (name);
+CREATE INDEX users_status_idx ON public.users (status, name);
+`
+
+func TestDSQL(t *testing.T) {
+	client := dsqlClient(t)
+	ctx := context.Background()
+
+	// The versions the recording was made against, for reference: DSQL can
+	// change its answers without changing them.
+	conn, err := pgx.Connect(ctx, client.ConnString)
+	require.NoError(t, err)
+	var major int
+	require.NoError(t, conn.QueryRow(ctx, "SELECT sys.dsql_major_version()").Scan(&major))
+	t.Logf("DSQL major version %d, server version %s", major, conn.PgConn().ParameterStatus("server_version"))
+	require.NoError(t, conn.Close(ctx))
+
+	_, err = dsqlApply(t, client, "", ExecOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := dsqlApply(t, client, "", ExecOptions{})
+		assert.NoError(t, err)
+	})
+
+	t.Run("create", func(t *testing.T) {
+		out, err := dsqlApply(t, client, dsqlUsers, ExecOptions{})
+		require.NoError(t, err)
+		assert.Contains(t, out, "CREATE INDEX ASYNC users_name_idx ON public.users (name);")
+		requireNoDSQLDrift(t, client, dsqlUsers)
+	})
+
+	t.Run("add a column with a default and a unique constraint", func(t *testing.T) {
+		out, err := dsqlApply(t, client, dsqlUsersChanged, ExecOptions{})
+		require.NoError(t, err)
+		assert.Contains(t, out, "ALTER TABLE public.users ADD COLUMN status text;\nALTER TABLE public.users ALTER COLUMN status SET DEFAULT 'active';")
+		assert.Contains(t, out, "CREATE UNIQUE INDEX ASYNC users_email_key ON public.users (email);\nALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_key;")
+		requireNoDSQLDrift(t, client, dsqlUsersChanged)
+	})
+
+	t.Run("dump plans clean", func(t *testing.T) {
+		dumped, err := client.Dump(ctx, &DumpOptions{})
+		require.NoError(t, err)
+		dump := dumped.String()
+		assert.Contains(t, dump, "GENERATED ALWAYS AS IDENTITY (CACHE 1)")
+		assert.NotContains(t, dump, "INCLUDE")
+		assert.NotContains(t, dump, "btree_index")
+		assert.NotContains(t, dump, "COMPRESSION")
+		requireNoDSQLDrift(t, client, dump)
+	})
+
+	t.Run("a change DSQL cannot run is refused at plan", func(t *testing.T) {
+		_, err := dsqlPlan(t, client, dsqlUsers)
+		require.ErrorContains(t, err, "DSQL does not support DROP COLUMN")
+	})
+
+	t.Run("no wait with a unique constraint is refused", func(t *testing.T) {
+		changed := dsqlUsersChanged + "ALTER TABLE public.users ADD CONSTRAINT users_name_key UNIQUE (name);\n"
+		_, err := dsqlApply(t, client, changed, ExecOptions{DSQLNoWaitIndexBuild: true})
+		require.ErrorContains(t, err, "--dsql-no-wait-index-build cannot be used")
+	})
+
+	t.Run("apply-from", func(t *testing.T) {
+		changed := dsqlUsersChanged + "COMMENT ON TABLE public.users IS 'people';\n"
+		out := filepath.Join(t.TempDir(), "plan.json")
+		_, err := client.Plan(ctx, &PlanOptions{
+			AllowDrop: []string{"all"},
+			Files:     []string{writeDSQLSchema(t, changed)},
+			Out:       out,
+		})
+		require.NoError(t, err)
+
+		require.NoError(t, ValidateApplyFromEngine(&ApplyFromOptions{PlanFile: out}))
+		var buf bytes.Buffer
+		_, err = NewClient(&Options{ConnOptions: client.ConnOptions}).ApplyFrom(ctx, &ApplyFromOptions{PlanFile: out}, &buf)
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "COMMENT ON TABLE public.users IS 'people';")
+		requireNoDSQLDrift(t, client, changed)
+	})
+}

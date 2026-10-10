@@ -22,6 +22,7 @@ These options have no variable:
 | `PISTA_PASSWORD` | `--password` | plan, apply, apply-from, dump |
 | `PISTA_SCHEMAS` | `--schemas` | plan, apply, dump, diff, parse, lint |
 | `PISTA_SEARCH_PATH` | `--search-path` | plan, apply, dump |
+| `PISTA_ENGINE` | `--engine` | plan, apply, dump |
 | `PISTA_INCLUDE` | `--include` | plan, apply, dump, diff |
 | `PISTA_EXCLUDE` | `--exclude` | plan, apply, dump, diff |
 | `PISTA_ENABLE` | `--enable` | plan, apply, dump, diff |
@@ -49,6 +50,7 @@ These options have no variable:
 | `PISTA_TIMING` | `--timing` | apply, apply-from |
 | `PISTA_EXCLUSIVE` | `--exclusive` | apply, apply-from |
 | `PISTA_EXCLUSIVE_WAIT` | `--exclusive-wait` | apply, apply-from |
+| `PISTA_DSQL_NO_WAIT_INDEX_BUILD` | `--dsql-no-wait-index-build` | apply, apply-from |
 | `PISTA_NO_FORMAT` | `--no-format` | dump |
 | `PISTA_DUMP_JSON` | `--json` | dump |
 | `PISTA_DUMP_EXPLAIN` | `--explain` | dump |

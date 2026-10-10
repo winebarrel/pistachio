@@ -132,7 +132,9 @@ func (client *Client) connect(ctx context.Context, readOnly bool) (*pgx.Conn, er
 		return nil, err
 	}
 
-	if readOnly {
+	// DSQL rejects the parameter, and has no other way to open a read-only
+	// connection.
+	if readOnly && !client.Engine.isDSQL() {
 		cfg.RuntimeParams["default_transaction_read_only"] = "on"
 	}
 
