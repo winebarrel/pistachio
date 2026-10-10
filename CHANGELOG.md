@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.81.0] - 2026-10-11
 
 * **Amazon Aurora DSQL support**: `plan`, `apply`, `apply-from` and `dump` take `--engine dsql` for Amazon Aurora DSQL. See the Aurora DSQL guide.
 
