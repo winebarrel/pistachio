@@ -21,14 +21,23 @@ import (
 const dsqlRecording = "testdata/dsql/dsql.yaml"
 
 // dsqlClient returns a client that talks to a stub replaying dsqlRecording.
+// It skips the test unless TEST_PISTA_DSQL is set: the recording has to be
+// made again whenever a statement pistachio sends changes, so `make test`
+// leaves it out and `make test-dsql` runs it.
+//
 // With TEST_PISTA_DSQL_CONN_STR set, the stub sends every statement to that
-// cluster instead and records the answers, which is how the recording is
-// made. The password is an IAM token, which the stub reads from PGPASSWORD.
-// The cluster has to hold nothing in public when the recording starts.
+// cluster instead and records the answers, which is how `make record-dsql`
+// makes the recording. The password is an IAM token, which the stub reads
+// from PGPASSWORD. The cluster has to hold nothing in public when the
+// recording starts.
 func dsqlClient(t *testing.T) *pistachio.Client {
 	t.Helper()
+	connString := os.Getenv("TEST_PISTA_DSQL_CONN_STR")
+	if os.Getenv("TEST_PISTA_DSQL") == "" && connString == "" {
+		t.Skip("TEST_PISTA_DSQL is not set; run make test-dsql")
+	}
 	opts := []pgstub.Option{pgstub.Replay(dsqlRecording)}
-	if connString := os.Getenv("TEST_PISTA_DSQL_CONN_STR"); connString != "" {
+	if connString != "" {
 		opts = []pgstub.Option{pgstub.Record(connString, dsqlRecording)}
 	}
 	stub := pgstub.Start(t, opts...)
@@ -96,6 +105,10 @@ CREATE INDEX users_name_idx ON public.users (name);
 CREATE INDEX users_status_idx ON public.users (status, name);
 `
 
+// TestDSQL covers what only a DSQL cluster can answer: that it takes the
+// statements --engine dsql writes, that apply waits for its index builds, and
+// that what it reports reads back without drift. Behavior decided before
+// anything DSQL-specific is sent is tested against local PostgreSQL below.
 func TestDSQL(t *testing.T) {
 	client := dsqlClient(t)
 	ctx := context.Background()
@@ -145,17 +158,6 @@ func TestDSQL(t *testing.T) {
 		assert.Contains(t, dumped.Files()["public.users.sql"], "GENERATED ALWAYS AS IDENTITY (CACHE 1)")
 	})
 
-	t.Run("a change DSQL cannot run is refused at plan", func(t *testing.T) {
-		_, err := dsqlPlan(t, client, dsqlUsers)
-		require.ErrorContains(t, err, "DSQL does not support DROP COLUMN")
-	})
-
-	t.Run("no wait with a unique constraint is refused", func(t *testing.T) {
-		changed := dsqlUsersChanged + "ALTER TABLE public.users ADD CONSTRAINT users_name_key UNIQUE (name);\n"
-		_, err := dsqlApply(t, client, changed, pistachio.ExecOptions{DSQLNoWaitIndexBuild: true})
-		require.ErrorContains(t, err, "--dsql-no-wait-index-build cannot be used")
-	})
-
 	t.Run("change an index without waiting for the build", func(t *testing.T) {
 		changed := strings.Replace(dsqlUsersChanged, "users_status_idx ON public.users (status, name)", "users_status_idx ON public.users (status)", 1)
 		out, err := dsqlApply(t, client, changed, pistachio.ExecOptions{DSQLNoWaitIndexBuild: true})
@@ -166,39 +168,74 @@ func TestDSQL(t *testing.T) {
 		_, err = dsqlApply(t, client, dsqlUsersChanged, pistachio.ExecOptions{})
 		require.NoError(t, err)
 	})
-
-	t.Run("apply-from", func(t *testing.T) {
-		changed := dsqlUsersChanged + "COMMENT ON TABLE public.users IS 'people';\n"
-		out := filepath.Join(t.TempDir(), "plan.json")
-		_, err := client.Plan(ctx, &pistachio.PlanOptions{
-			AllowDrop: []string{"all"},
-			Files:     []string{writeDSQLSchema(t, changed)},
-			Out:       out,
-		})
-		require.NoError(t, err)
-
-		require.NoError(t, pistachio.ValidateApplyFromEngine(&pistachio.ApplyFromOptions{PlanFile: out}))
-		var buf bytes.Buffer
-		_, err = pistachio.NewClient(&pistachio.Options{ConnOptions: client.ConnOptions}).ApplyFrom(ctx, &pistachio.ApplyFromOptions{PlanFile: out}, &buf)
-		require.NoError(t, err)
-		assert.Contains(t, buf.String(), "COMMENT ON TABLE public.users IS 'people';")
-		requireNoDSQLDrift(t, client, changed)
-	})
 }
 
 // The -- pista:bulk-alter directive is refused like --bulk-alter. The refusal
 // comes before anything DSQL-specific is sent, so local PostgreSQL serves.
 func TestDSQL_BulkAlterDirective(t *testing.T) {
+	client := localDSQLClient(t, "")
+	_, err := client.Plan(context.Background(), &pistachio.PlanOptions{Files: []string{writeDSQLSchema(t, "-- pista:bulk-alter\n"+dsqlUsers)}})
+	require.EqualError(t, err, "-- pista:bulk-alter cannot be used with --engine dsql")
+}
+
+// localDSQLClient returns a --engine dsql client for local PostgreSQL, loaded
+// with initSQL. It serves the tests whose outcome is decided before anything
+// DSQL-specific reaches the server.
+func localDSQLClient(t *testing.T, initSQL string) *pistachio.Client {
+	t.Helper()
 	ctx := context.Background()
 	conn := testutil.ConnectDB(t)
 	defer conn.Close(ctx) //nolint:errcheck
-	testutil.SetupDB(t, ctx, conn, "")
+	testutil.SetupDB(t, ctx, conn, initSQL)
 
-	client := pistachio.NewClient(&pistachio.Options{
+	return pistachio.NewClient(&pistachio.Options{
 		ConnString: conn.Config().ConnString(),
 		Schemas:    []string{"public"},
 		Engine:     pistachio.EngineDSQL,
 	})
-	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{writeDSQLSchema(t, "-- pista:bulk-alter\n"+dsqlUsers)}})
-	require.EqualError(t, err, "-- pista:bulk-alter cannot be used with --engine dsql")
+}
+
+// A change DSQL cannot make is refused at plan, before anything is applied.
+func TestDSQL_RefusedAtPlan(t *testing.T) {
+	client := localDSQLClient(t, dsqlUsersChanged)
+	_, err := dsqlPlan(t, client, dsqlUsers)
+	require.ErrorContains(t, err, "DSQL does not support DROP COLUMN")
+}
+
+// A unique constraint cannot take over an index nobody waits for, so apply
+// refuses before it runs a statement.
+func TestDSQL_NoWaitUniqueRefused(t *testing.T) {
+	client := localDSQLClient(t, dsqlUsers)
+	changed := dsqlUsers + "ALTER TABLE public.users ADD CONSTRAINT users_name_key UNIQUE (name);\n"
+	_, err := dsqlApply(t, client, changed, pistachio.ExecOptions{DSQLNoWaitIndexBuild: true})
+	require.ErrorContains(t, err, "--dsql-no-wait-index-build cannot be used")
+}
+
+// The plan file records the engine, and apply-from runs the plan under it.
+func TestDSQL_ApplyFrom(t *testing.T) {
+	ctx := context.Background()
+	client := localDSQLClient(t, dsqlUsers)
+	changed := dsqlUsers + "COMMENT ON TABLE public.users IS 'people';\n"
+
+	out := filepath.Join(t.TempDir(), "plan.json")
+	_, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{writeDSQLSchema(t, changed)}, Out: out})
+	require.NoError(t, err)
+
+	require.NoError(t, pistachio.ValidateApplyFromEngine(&pistachio.ApplyFromOptions{PlanFile: out}))
+	require.EqualError(t, pistachio.ValidateApplyFromEngine(&pistachio.ApplyFromOptions{PlanFile: out, WithTx: true}), "--with-tx cannot be used with --engine dsql")
+
+	var buf bytes.Buffer
+	_, err = pistachio.NewClient(&pistachio.Options{ConnOptions: client.ConnOptions}).ApplyFrom(ctx, &pistachio.ApplyFromOptions{PlanFile: out}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "COMMENT ON TABLE public.users IS 'people';")
+	requireNoDSQLDrift(t, client, changed)
+}
+
+// dump writes CACHE 1 on an identity column, in one file and split.
+func TestDSQL_DumpIdentityCache(t *testing.T) {
+	client := localDSQLClient(t, dsqlUsers)
+	dumped, err := client.Dump(context.Background(), &pistachio.DumpOptions{})
+	require.NoError(t, err)
+	assert.Contains(t, dumped.String(), "GENERATED ALWAYS AS IDENTITY (CACHE 1)")
+	assert.Contains(t, dumped.Files()["public.users.sql"], "GENERATED ALWAYS AS IDENTITY (CACHE 1)")
 }

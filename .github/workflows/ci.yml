@@ -251,6 +251,38 @@ jobs:
           disable_search: true
           flags: pg${{ matrix.postgres }}
 
+  dsql:
+    runs-on: ubuntu-latest
+    # TestDSQL replays a recording of an Aurora DSQL cluster through pgstub,
+    # so it needs no database. It runs only with TEST_PISTA_DSQL set, which the
+    # test jobs leave unset, so it runs here once. A failure here usually means
+    # a statement pistachio sends changed: run `make record-dsql`.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make test-dsql TEST_OPTS='-coverprofile=coverage.txt' TEST_JUNIT=junit.xml
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: dsql
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-dsql
+          path: coverage.txt
+      # Uploaded even when the test failed, since a failed test is what the
+      # report is there to describe.
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        if: ${{ !cancelled() }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: junit.xml
+          disable_search: true
+          flags: dsql
+
   samples:
     runs-on: ubuntu-latest
     # Checks pista against real-world sample schemas: downloads each from its

@@ -111,6 +111,22 @@ test-scenario: clean-schema
 test-fidelity: clean-schema
 	bash test/fidelity/run.sh
 
+# TestDSQL replays a recording of an Aurora DSQL cluster through pgstub, so it
+# needs neither a cluster nor PostgreSQL. It runs only with TEST_PISTA_DSQL
+# set: the recording has to be made again whenever a statement pistachio sends
+# changes, catalog queries included, so `make test` leaves it out and CI runs
+# it in a job of its own.
+.PHONY: test-dsql
+test-dsql:
+	TEST_PISTA_DSQL=1 go test -count=1 -v -run '^TestDSQL$$' . $(TEST_OPTS) $(TEST_REPORT)
+
+# Makes the TestDSQL recording again against a live cluster. DSQL_HOST names
+# the cluster endpoint, and its public schema must be empty. See
+# scripts/record-dsql.sh.
+.PHONY: record-dsql
+record-dsql:
+	bash scripts/record-dsql.sh
+
 # The CHANGELOG.md merge driver that changelog-merge.yml runs. No database.
 .PHONY: test-changelog
 test-changelog:
