@@ -1,12 +1,14 @@
 package pistachio
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
 func TestEngineIsDSQL(t *testing.T) {
@@ -69,4 +71,21 @@ func TestValidateDumpEngine(t *testing.T) {
 	require.NoError(t, ValidateDumpEngine(EnginePostgres, &DumpOptions{Explain: true}))
 	require.EqualError(t, ValidateDumpEngine(EngineDSQL, &DumpOptions{Explain: true}), "--explain cannot be used with --engine dsql")
 	require.NoError(t, ValidateDumpEngine(EngineDSQL, &DumpOptions{}))
+}
+
+// DSQL rejects default_transaction_read_only, so a read-only connection sets
+// the session's transactions read-only once it is open. Local PostgreSQL
+// takes the same statement.
+func TestConnect_DSQLReadOnly(t *testing.T) {
+	ctx := context.Background()
+	client := NewClient(&Options{ConnString: testutil.ConnString(), Schemas: []string{"public"}, Engine: EngineDSQL})
+
+	for readOnly, want := range map[bool]string{true: "on", false: "off"} {
+		conn, err := client.connect(ctx, readOnly)
+		require.NoError(t, err)
+		var got string
+		require.NoError(t, conn.QueryRow(ctx, "SHOW transaction_read_only").Scan(&got))
+		assert.Equal(t, want, got)
+		require.NoError(t, conn.Close(ctx))
+	}
 }

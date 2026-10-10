@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/winebarrel/pistachio/model"
 )
 
@@ -125,17 +126,23 @@ func (client *Client) searchPathSQL() string {
 // rejects writes, so read-only operations (plan, dump) cannot modify the
 // database even by accident. apply passes false because it applies DDL.
 // The read-only flag is set as a startup parameter, so it is in effect for the
-// whole connection with no extra round-trip.
+// whole connection with no extra round-trip. DSQL rejects that parameter, so
+// under --engine dsql the session is made read-only by a statement once the
+// connection is open, which costs one round-trip.
 func (client *Client) connect(ctx context.Context, readOnly bool) (*pgx.Conn, error) {
 	cfg, err := client.buildConnConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	// DSQL rejects the parameter, and has no other way to open a read-only
-	// connection.
 	if readOnly && !client.Engine.isDSQL() {
 		cfg.RuntimeParams["default_transaction_read_only"] = "on"
+	}
+	// Run as part of the connect, so a failure fails the connection.
+	if readOnly && client.Engine.isDSQL() {
+		cfg.AfterConnect = func(ctx context.Context, conn *pgconn.PgConn) error {
+			return conn.Exec(ctx, "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY").Close()
+		}
 	}
 
 	// Set search_path so the catalog output follows this setting rather than a

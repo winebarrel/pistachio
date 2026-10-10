@@ -13,7 +13,7 @@ export PGPASSWORD="$(aws dsql generate-db-connect-admin-auth-token --hostname "$
 pista plan --engine dsql -c "postgres://admin@$HOST/postgres?sslmode=require" schema.sql
 ```
 
-DSQL does not allow a read-only connection. With `--engine dsql`, `plan` and `dump` connect read-write.
+`plan` and `dump` use a read-only connection, as they do on PostgreSQL. DSQL rejects the `default_transaction_read_only` parameter that pistachio normally sets. So with `--engine dsql`, pistachio runs `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY` after it connects. `--no-read-only` skips it.
 
 ## Generated statements
 
