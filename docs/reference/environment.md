@@ -51,11 +51,13 @@ These options have no variable:
 | `PISTA_EXCLUSIVE` | `--exclusive` | apply, apply-from |
 | `PISTA_EXCLUSIVE_WAIT` | `--exclusive-wait` | apply, apply-from |
 | `PISTA_DSQL_NO_WAIT_INDEX_BUILD` | `--dsql-no-wait-index-build` | apply, apply-from |
+| `PISTA_DSQL_IGNORE_ASYNC` | `--dsql-ignore-async` | plan, apply |
 | `PISTA_NO_FORMAT` | `--no-format` | dump |
 | `PISTA_DUMP_JSON` | `--json` | dump |
 | `PISTA_DUMP_EXPLAIN` | `--explain` | dump |
 | `PISTA_DUMP_OMIT_PARTITION_CHILD_INDEX` | `--omit-partition-child-index` | dump |
 | `PISTA_FMT_CHECK` | `--check` | fmt |
+| `PISTA_DSQL_STRIP_ASYNC` | `--dsql-strip-async` | fmt |
 | `PISTA_LINT_RULES` | `--rules` | lint |
 
 Each option is described on its command's page under [Commands](commands/index.md).

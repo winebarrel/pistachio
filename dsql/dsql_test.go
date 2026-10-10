@@ -390,3 +390,29 @@ func TestExec(t *testing.T) {
 		require.ErrorContains(t, dsql.Exec(ctx, conn, "DROP INDEX public.i;"), "boom")
 	})
 }
+
+func TestStripAsync(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"an index", "CREATE INDEX ASYNC i ON t (c);", "CREATE INDEX       i ON t (c);"},
+		{"a unique index", "CREATE UNIQUE INDEX ASYNC i ON t (c);", "CREATE UNIQUE INDEX       i ON t (c);"},
+		{"any case", "create index async i on t (c);", "create index       i on t (c);"},
+		{"IF NOT EXISTS", "CREATE INDEX ASYNC IF NOT EXISTS i ON t (c);", "CREATE INDEX       IF NOT EXISTS i ON t (c);"},
+		{"a comment in between", "CREATE INDEX /* x */ ASYNC i ON t (c);", "CREATE INDEX /* x */       i ON t (c);"},
+		{"an unnamed index", "CREATE INDEX async ON t (c);", "CREATE INDEX       ON t (c);"},
+		{"several statements", "CREATE INDEX ASYNC a ON t (c);\nCREATE TABLE t (c int);\nCREATE INDEX ASYNC b ON t (c);", "CREATE INDEX       a ON t (c);\nCREATE TABLE t (c int);\nCREATE INDEX       b ON t (c);"},
+		{"a quoted name stays", `CREATE INDEX ASYNC "async" ON t (c);`, `CREATE INDEX       "async" ON t (c);`},
+		{"an index named like it stays", "CREATE INDEX async_idx ON t (c);", "CREATE INDEX async_idx ON t (c);"},
+		{"text elsewhere stays", "COMMENT ON TABLE t IS 'CREATE INDEX ASYNC';\nCREATE TABLE async (c int);", "COMMENT ON TABLE t IS 'CREATE INDEX ASYNC';\nCREATE TABLE async (c int);"},
+		{"SQL that does not scan stays", "CREATE INDEX ASYNC i ON t (c) 'unterminated", "CREATE INDEX ASYNC i ON t (c) 'unterminated"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, dsql.StripAsync(tt.input))
+		})
+	}
+}

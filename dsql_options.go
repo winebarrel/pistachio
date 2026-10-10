@@ -3,6 +3,9 @@ package pistachio
 import (
 	"errors"
 	"fmt"
+
+	"github.com/winebarrel/pistachio/dsql"
+	"github.com/winebarrel/pistachio/parser"
 )
 
 // Engine is the server a run targets. postgres is PostgreSQL itself. dsql is
@@ -88,14 +91,29 @@ func requireDSQL(engine Engine, o *ExecOptions) error {
 	return nil
 }
 
+// requireDSQLIgnoreAsync refuses --dsql-ignore-async without --engine dsql.
+// ASYNC is not PostgreSQL syntax, so a schema with it is DSQL's.
+func requireDSQLIgnoreAsync(engine Engine, set bool) error {
+	if set && !engine.isDSQL() {
+		return errors.New("--dsql-ignore-async requires --engine dsql")
+	}
+	return nil
+}
+
 // ValidatePlanEngine refuses the plan options --engine dsql cannot use.
 func ValidatePlanEngine(engine Engine, o *PlanOptions) error {
+	if err := requireDSQLIgnoreAsync(engine, o.DSQLIgnoreAsync); err != nil {
+		return err
+	}
 	return refuseWithDSQL(engine, planRefused(o)...)
 }
 
 // ValidateApplyEngine refuses the apply options --engine dsql cannot use.
 func ValidateApplyEngine(engine Engine, o *ApplyOptions) error {
 	if err := requireDSQL(engine, &o.ExecOptions); err != nil {
+		return err
+	}
+	if err := requireDSQLIgnoreAsync(engine, o.DSQLIgnoreAsync); err != nil {
 		return err
 	}
 	return refuseWithDSQL(engine, append(planRefused(&PlanOptions{
@@ -128,4 +146,17 @@ func ValidateApplyFromEngine(o *ApplyFromOptions) error {
 // ValidateDumpEngine refuses the dump options --engine dsql cannot use.
 func ValidateDumpEngine(engine Engine, o *DumpOptions) error {
 	return refuseWithDSQL(engine, dsqlRefused{"explain", o.Explain})
+}
+
+// parseStrippingAsync parses the desired schema files with the ASYNC of each
+// CREATE INDEX ASYNC blanked out, for --dsql-ignore-async.
+func parseStrippingAsync(files []string, defaultSchema string) (*parser.ParseResult, error) {
+	sources, err := parser.ReadSQLFiles(files)
+	if err != nil {
+		return nil, err
+	}
+	for i := range sources {
+		sources[i].SQL = dsql.StripAsync(sources[i].SQL)
+	}
+	return parser.ParseSQLSourcesWithSchema(sources, defaultSchema)
 }

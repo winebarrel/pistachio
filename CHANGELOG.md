@@ -6,6 +6,8 @@
 
 * **Amazon Aurora DSQL support**: `plan`, `apply`, `apply-from` and `dump` take `--engine dsql` for Amazon Aurora DSQL. See the Aurora DSQL guide.
 
+* `pista fmt --dsql-strip-async` removes `ASYNC` from `CREATE INDEX ASYNC`. `plan` and `apply` take `--dsql-ignore-async` to ignore it in the desired schema under `--engine dsql`.
+
 * `plan` and `apply` warn about each invalid index, such as one left by a failed `CREATE INDEX CONCURRENTLY`.
 
 ## [1.80.1] - 2026-10-09

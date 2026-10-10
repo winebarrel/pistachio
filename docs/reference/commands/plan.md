@@ -125,6 +125,9 @@ These options shape the DDL. `plan --out` writes the result into the plan file.
 `--evaluate-literals`
 :   Compare a string literal with a cast by value, not by text. This applies to the `DEFAULT` of a column or domain, the expression of a generated column, and a `CHECK` constraint on a table or domain. PostgreSQL prints a literal in the output format of its type. For example, `DEFAULT '1 hour'` on an `interval` column is read back as `'01:00:00'::interval`, so without this option every plan writes `SET DEFAULT` for the column. With this option, the literals whose text differs are sent to the server in one query and compared by value. The statements use the text of the desired schema. If a column changes type in the same run, its table is compared by text. The same holds for a domain whose base type changes. The environment variable is `PISTA_EVALUATE_LITERALS`.
 
+`--dsql-ignore-async`
+:   Ignore `ASYNC` in `CREATE INDEX ASYNC` in the files. This option requires `--engine dsql`. The environment variable is `PISTA_DSQL_IGNORE_ASYNC`. See [Aurora DSQL](../../guides/aurora-dsql.md).
+
 ### Output
 
 `--explain`
