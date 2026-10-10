@@ -31,7 +31,9 @@ PostgreSQL. `make test-dsql` runs it, and `make test` skips it. A change to
 any statement pistachio sends, catalog queries included, breaks the replay:
 record it again with `DSQL_HOST=<endpoint> make record-dsql` on a cluster
 whose public schema is empty. The script refuses a recording that names the
-cluster or holds something that looks like a credential.
+cluster or holds something that looks like a credential. OIDs and index
+build job IDs are numbered in the recording, so recording again with no
+change leaves the file as it was.
 
 The `dsql` CI job runs `make test-dsql` and is a required check. A pull
 request that changes a statement pistachio sends fails it until the
