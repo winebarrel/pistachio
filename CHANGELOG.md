@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+* `plan`, `apply`, `apply-from` and `dump` take `--engine dsql` for Amazon Aurora DSQL. See the Aurora DSQL guide.
+
 * `plan` and `apply` warn about each invalid index, such as one left by a failed `CREATE INDEX CONCURRENTLY`.
 
 ## [1.80.1] - 2026-10-09

@@ -13,6 +13,7 @@ import (
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/diff"
+	"github.com/winebarrel/pistachio/dsql"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
 	"github.com/winebarrel/pistachio/toposort"
@@ -370,6 +371,12 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		assumeValidatedConstraints(filteredTables, desiredTables, filteredDomains, desiredDomains)
 	}
 
+	// After the state hash, which apply-from takes over a read it does not
+	// normalize.
+	if client.Engine.isDSQL() {
+		dsql.NormalizeCurrent(filteredTables)
+	}
+
 	// This runs after the state hash, which must depend on the database only.
 	// A sequence it adds back for a drop goes through the same filters and
 	// ignore list as the rest.
@@ -460,6 +467,12 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 			bulkAlterTables[t.FQTN()] = true
 		}
 	}
+	if client.Engine.isDSQL() {
+		if len(bulkAlterTables) > 0 {
+			return nil, fmt.Errorf("-- pista:bulk-alter cannot be used with --engine dsql")
+		}
+		tableDiff.Stmts = dsql.Split(tableDiff.Stmts)
+	}
 	if options.BulkAlter || len(bulkAlterTables) > 0 {
 		tableDiff.Stmts = mergeAlterTable(tableDiff.Stmts, func(fqtn string) bool {
 			return options.BulkAlter || bulkAlterTables[fqtn]
@@ -497,6 +510,12 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 			Routines:       routineDiff,
 		},
 	)
+
+	if client.Engine.isDSQL() {
+		if stmts, err = dsql.Finish(stmts); err != nil {
+			return nil, err
+		}
+	}
 
 	disallowed := slices.Concat(
 		viewDiff.DisallowedDropStmts,

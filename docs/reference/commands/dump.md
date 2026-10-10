@@ -76,6 +76,9 @@ The [general options](index.md#general-options) apply as well.
 `--search-path=`*path*
 :   The `search_path` for the connection. An object that is reachable through it is written without its schema. An empty value qualifies every name. The default is `public`. The environment variable is `PISTA_SEARCH_PATH`. See the [notes on `plan`](plan.md#notes).
 
+`--engine=`*engine*
+:   The server the schema is applied to: `postgres`, or `dsql` for Amazon Aurora DSQL. The default is `postgres`. The environment variable is `PISTA_ENGINE`. See [Aurora DSQL](../../guides/aurora-dsql.md).
+
 `-I` *pattern*, `--include=`*pattern*
 :   Dump only the objects whose name matches the pattern. `*` and `?` are wildcards. A wildcard pattern must match the whole name. `/re/` is a regular expression. It matches anywhere in the name unless it is anchored. This option can be given more than once. The environment variable is `PISTA_INCLUDE`.
 

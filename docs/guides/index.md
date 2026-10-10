@@ -16,6 +16,7 @@ Each guide covers one task. [Commands](../reference/commands/index.md) lists eve
 - [Explaining a plan](explaining-plans.md): what each statement scans or rewrites, and what it blocks.
 - [Plan files](plan-files.md): plan on one machine, apply on another.
 - [Preventing concurrent applies](exclusive-apply.md): one apply at a time per database.
+- [Aurora DSQL](aurora-dsql.md): applying a schema to Amazon Aurora DSQL.
 
 ## Without a database
 

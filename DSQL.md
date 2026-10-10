@@ -1,44 +1,42 @@
 # Amazon Aurora DSQL
 
-pistachio does not support DSQL. Support looks feasible, but it is not
-clear that anyone needs it, so the work has not been started. This file
-records what a live cluster answered, so that an attempt starts from
-evidence rather than from the PostgreSQL manual.
+`--engine dsql` supports DSQL. The user-facing description is
+docs/guides/aurora-dsql.md. This file records what a live cluster answered,
+so that a change to that support starts from evidence rather than from the
+PostgreSQL manual.
 
 The findings were verified against a live DSQL cluster (PostgreSQL 16 wire
-protocol, ap-northeast-1). Adding ASYNC to CREATE INDEX is not enough.
-Within DSQL's supported feature set, pistachio does not yet reach a stable
-state with no drift.
+protocol, ap-northeast-1) on 2026-07-23, and again on 2026-10-10
+(`server_version` 16.15, `sys.dsql_major_version()` 1).
 
 The features that DSQL does not support (foreign keys, triggers, PL/pgSQL,
 and so on) are out of scope. A schema that is written for DSQL never
-contains them, so pistachio never emits them. The findings below are the
-cases where the target state is within DSQL's supported set, but
-pistachio's transition DDL or its drift comparison is wrong for it.
+contains them. DSQL refuses them at apply.
 
-Support policy, if DSQL support is added:
+Support policy:
 - Work correctly within DSQL's supported feature set. Do not reproduce
   every PostgreSQL feature on DSQL.
-- Leave the diffs that DSQL cannot apply out of the specification. Some
-  diffs need an operation that DSQL has no path for: `DROP COLUMN`,
-  `SET NOT NULL`, a column `TYPE` change, adding a NOT NULL column, and
-  adding a PK or CHECK constraint to an existing table. For these,
-  pistachio emits standard PostgreSQL DDL, and DSQL rejects it at apply.
-  That is acceptable, the same as for any unsupported feature. Do not add
-  recreation or back-fill machinery to force these through.
-- Gate DSQL support behind an opt-in option (a flag or an environment
-  variable). Without it, the behavior stays exactly as it is today. There
-  is no dialect layer now, so the DSQL paths must be additive and must not
-  change the default PostgreSQL output.
+- Refuse at plan the changes that DSQL has no path for: `DROP COLUMN`,
+  `SET NOT NULL`, a column `TYPE` change, adding a NOT NULL column, adding
+  a PK or CHECK constraint to an existing table, and `CONCURRENTLY`. Do not
+  add recreation or back-fill machinery to force these through.
+- Keep the DSQL paths opt-in and additive. Without `--engine dsql`, the
+  behavior is exactly what it was before. The DSQL code sits in the `dsql`
+  package and `dsql_options.go`, called from branches on the engine.
 
-The concrete work is listed under "Minimum a DSQL mode would require"
-below. The rest of this file is the evidence.
+TestDSQL in dsql_test.go replays testdata/dsql/dsql.yaml with pgstub, so CI
+needs no cluster. To record it again, run the test with
+TEST_PISTA_DSQL_CONN_STR set to a cluster whose public schema is empty and
+PGPASSWORD set to an IAM token. Check the new file for anything that should
+not be committed before adding it.
+
+The rest of this file is the evidence.
 
 Connection:
 - DSQL rejects the `default_transaction_read_only` startup parameter
   (`FATAL: setting configuration parameter "default_transaction_read_only"
-  not supported`, SQLSTATE 0A000). `plan` and `dump` must be run with
-  `--no-read-only`. A DSQL mode would need to stop sending this parameter.
+  not supported`, SQLSTATE 0A000). `--engine dsql` does not send it, so
+  `plan` and `dump` connect read-write.
 
 Catalog read layer (no incompatibility found):
 - Every catalog dependency exists on DSQL. All 7 catalog functions that
@@ -79,19 +77,22 @@ Sequences:
 - `CREATE SEQUENCE` requires an explicit cache size. DSQL rejects a plain
   `CREATE SEQUENCE` with `CREATE SEQUENCE is not supported without an
   explicit cache size. please define CACHE greater than or equal to 65536
-  or equal to 1`. pistachio emits `CREATE SEQUENCE` without CACHE, so
-  applying a sequence fails. The read path works on a sequence that was
-  created with CACHE.
+  or equal to 1`. pistachio always writes CACHE for a sequence, so this
+  needs no change.
+- An identity column requires an explicit cache size too
+  (`identity column is not supported without an explicit cache size`),
+  and must be `bigint`. The model leaves CACHE 1 out as the default, so
+  `--engine dsql` writes it.
 
 Tables and constraints:
 - CREATE TABLE with an inline PRIMARY KEY applies successfully.
 - Primary-key drift (a false positive): DSQL adds every non-key column as
   an `INCLUDE` column on the PK index, and it stores the access method as
   `btree_index`. So a table that was created from `PRIMARY KEY (id)`
-  dumps back as `PRIMARY KEY (id) INCLUDE (name, email)`. pistachio treats
-  this as a diff, and it re-plans
+  dumps back as `PRIMARY KEY (id) INCLUDE (name, email)`. Without the
+  engine, pistachio treats this as a diff, and it re-plans
   `ALTER TABLE ... DROP CONSTRAINT ...; ALTER TABLE ... ADD CONSTRAINT ...`
-  on every run.
+  on every run. `--engine dsql` drops the `INCLUDE` from the current side.
 - That generated fix cannot be applied either. DSQL rejects
   `ALTER TABLE ... DROP CONSTRAINT` on a primary key
   (`unsupported ALTER TABLE DROP CONSTRAINT statement`, SQLSTATE 0A000),
@@ -105,21 +106,21 @@ target state. Both categories were confirmed on the live cluster and
 checked against the `ALTER TABLE` grammar. The grammar is exhaustive, so an
 action that is absent from it has no alternative form.
 
-Reachable through an alternative DSQL syntax (pistachio would need to emit
-the statements differently):
+Reachable through an alternative DSQL syntax (`--engine dsql` writes the
+statements this way):
 - Add a column with a DEFAULT. `ADD COLUMN col type DEFAULT expr` fails
   with `ALTER TABLE ADD COLUMN with constraint not supported`. But a plain
   `ADD COLUMN col type` followed by `ALTER COLUMN col SET DEFAULT expr`
   succeeds and yields the defaulted column. That is two statements instead
-  of one.
+  of one. The rows already in the table keep NULL, since the column has no
+  default when it is added.
 - Add a UNIQUE constraint to an existing table. `ADD CONSTRAINT ... UNIQUE
   (col)` is not available. But this sequence succeeds and produces
   `UNIQUE (col)`: run `CREATE UNIQUE INDEX ASYNC`, wait for the build to
   reach VALID with `CALL sys.wait_for_job('<job_id>')`, then run
   `ALTER TABLE ... ADD CONSTRAINT name UNIQUE USING INDEX index_name`. This
-  was confirmed. Note that it requires the job-wait step between the two
-  statements. pistachio's flat, synchronous apply loop does not do that
-  today.
+  was confirmed. It requires the job wait between the two statements,
+  which `--engine dsql` does after every `CREATE INDEX ASYNC`.
 
 No alternative path (DSQL cannot do these to an existing table at all;
 the actions are absent from the `ALTER TABLE` grammar):
@@ -157,32 +158,39 @@ Indexes (the original ASYNC question):
   already correct. This has the same root cause as the PK INCLUDE and
   method drift above.
 
-Minimum a DSQL mode would require, per the above:
-- Do not send `default_transaction_read_only`.
-- Index generation: turn `CREATE INDEX` into `CREATE INDEX ASYNC`, drop
-  the `USING <method>` clause, and poll the `job_id` to completion.
-- Drift normalization: ignore the `INCLUDE` that DSQL adds to a PK index,
-  and treat `btree` and `btree_index` as equivalent when comparing the
-  current side with the desired side.
-- Sequence generation: emit an explicit `CACHE` (>= 65536 or = 1),
-  because DSQL rejects a plain `CREATE SEQUENCE`.
-- Rewrite the two reachable transitions into DSQL's alternative multi-step
-  form instead of failing:
-  - Adding a column DEFAULT -> a plain `ADD COLUMN`, then `SET DEFAULT`.
-  - Adding a UNIQUE constraint to an existing table ->
-    `CREATE UNIQUE INDEX ASYNC`, a job wait, then
-    `ADD CONSTRAINT ... UNIQUE USING INDEX`. This needs the same async
-    job-wait plumbing as index creation.
-- Detect the transitions that have no DSQL path, and fail with a clear
-  message instead of emitting DDL that fails at apply: `DROP COLUMN`,
-  `SET NOT NULL`, a column `TYPE` change, adding a NOT NULL column, and
-  adding a PK or CHECK constraint to an existing table.
-
-The catalog read layer needs no DSQL-specific work. The gaps are all on
-the DDL-generation and drift-comparison side. The async job wait, for both
-index creation and the UNIQUE USING INDEX path, is the largest change,
-because the apply loop currently sends each statement synchronously.
-
-The codebase has no dialect layer today, so this is new work.
-
-Origin: live DSQL investigation, 2026-07-23.
+Findings of 2026-10-10:
+- Every `CREATE INDEX` needs ASYNC, even on an empty table
+  (`unsupported mode. please use CREATE INDEX ASYNC.`). `CREATE INDEX
+  ASYNC` returns one row, column `job_id` (text). `CALL
+  sys.wait_for_job('<id>')` returns one row, column `succeeded` (bool).
+  An index being built has `indisvalid = f`.
+- An unquoted `async` right after `INDEX` is always the ASYNC keyword. An
+  index named `async` has to be quoted.
+- `CREATE INDEX CONCURRENTLY` -> `CONCURRENTLY not supported for CREATE
+  INDEX`. `DROP INDEX CONCURRENTLY` fails even alone with `DROP INDEX
+  CONCURRENTLY must be first action in transaction`. A plain `DROP INDEX`
+  works.
+- No advisory lock (`function pg_try_advisory_lock not supported`).
+- One DDL statement per transaction (`multiple ddl statements not supported
+  in a transaction`). A combined ALTER TABLE works, including `ADD COLUMN`
+  with `SET DEFAULT` on the same column.
+- A column added after the primary key is also added to the key's
+  `INCLUDE`.
+- Every text column has `attcompression = 'l'` (`default_toast_compression`
+  is lz4). DSQL rejects both `SET COMPRESSION` and the `COMPRESSION`
+  clause.
+- `pg_class.reltuples` is -1 and `relpages` is 0.
+- These work: renaming a table, column, constraint, index, view, sequence
+  or domain; `SET SCHEMA`; `COMMENT ON`; `CREATE OR REPLACE VIEW`; view
+  `SET`/`RESET`; dropping a CHECK or UNIQUE constraint; identity `SET
+  GENERATED`, `SET INCREMENT BY`, `RESTART` and `DROP IDENTITY`; SQL
+  functions; `CREATE DOMAIN` and a domain's DEFAULT.
+- These fail: composite types (`unsupported statement: CompositeType`),
+  materialized views (`unsupported statement: CreateTableAs`), `ALTER
+  DOMAIN ... ADD CONSTRAINT`, `ALTER DOMAIN ... SET NOT NULL`, a column
+  `COLLATE` (`COLLATE clause not supported`), and adding an identity column
+  to an existing table (`ALTER TABLE ADD COLUMN with constraint not
+  supported`).
+- Limits: a transaction lasts at most 5 minutes and a connection at most
+  60 minutes. Neither can be changed, and `sys.wait_for_job` takes no
+  timeout.

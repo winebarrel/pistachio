@@ -8,6 +8,7 @@ import (
 	"github.com/winebarrel/orderedmap/v2"
 	"github.com/winebarrel/pistachio/catalog"
 	"github.com/winebarrel/pistachio/diff"
+	"github.com/winebarrel/pistachio/dsql"
 	"github.com/winebarrel/pistachio/format"
 	"github.com/winebarrel/pistachio/model"
 	"github.com/winebarrel/pistachio/parser"
@@ -38,7 +39,18 @@ type DumpResult struct {
 	Routines       *orderedmap.Map[string, *model.Routine]
 	OmitSchema     bool
 	NoFormat       bool
-	Count          ObjectCount
+	// DSQL writes CACHE 1 on an identity column, which DSQL requires and the
+	// model leaves out as the default.
+	DSQL  bool
+	Count ObjectCount
+}
+
+// tableSQL adds what --engine dsql needs to the rendered tables.
+func (r *DumpResult) tableSQL(sql string) string {
+	if !r.DSQL {
+		return sql
+	}
+	return dsql.AddIdentityCache(sql)
 }
 
 // stripRelationSchemaPrefix removes the schema qualification from the relation
@@ -277,7 +289,7 @@ func (r *DumpResult) String() string {
 		parts = append(parts, model.RoutinesToSQL(plain))
 	}
 	if tables.Len() > 0 {
-		parts = append(parts, model.TablesToSQL(tables))
+		parts = append(parts, r.tableSQL(model.TablesToSQL(tables)))
 	}
 	if ownedBy := model.SequencesOwnedBySQL(sequences); ownedBy != "" {
 		parts = append(parts, ownedBy)
@@ -355,7 +367,7 @@ func (r *DumpResult) Files() map[string]string {
 		add(rt.Schema, rt.Name, model.RoutineToSQL(rt))
 	}
 	for _, t := range r.tables().CollectValues() {
-		add(t.Schema, t.Name, model.TableToSQL(t))
+		add(t.Schema, t.Name, r.tableSQL(model.TableToSQL(t)))
 	}
 	for _, v := range r.views().CollectValues() {
 		add(v.Schema, v.Name, model.ViewToSQL(v))
@@ -455,6 +467,10 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		omitPartitionChildIndexes(current.Tables)
 	}
 
+	if client.Engine.isDSQL() {
+		dsql.NormalizeCurrent(current.Tables)
+	}
+
 	// The estimates are keyed by the names the catalog read, so they are
 	// attached before a --schema-map remap renames the schemas.
 	if options.Explain {
@@ -483,6 +499,7 @@ func (client *Client) Dump(ctx context.Context, options *DumpOptions) (*DumpResu
 		Routines:       dumped.Routines,
 		OmitSchema:     options.OmitSchema,
 		NoFormat:       options.NoFormat,
+		DSQL:           client.Engine.isDSQL(),
 		Count:          dumped.count(client.Schemas, client.ManageRoutine),
 	}, nil
 }

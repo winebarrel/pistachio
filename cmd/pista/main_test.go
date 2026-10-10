@@ -310,3 +310,84 @@ func TestRun_ForceInConfig(t *testing.T) {
 	assert.Equal(t, 80, code)
 	assert.Contains(t, stderr, "error: config key(s) only for the command line: force")
 }
+
+// --engine dsql refuses the options DSQL cannot use. kong's xor tag looks at
+// whether a flag was given rather than at its value, so the commands refuse
+// them in a hook. The hook runs before a database is reached, so no
+// connection is needed. Its error is not a kong usage error, so the exit code
+// is 1, as for the other hooks.
+func TestRun_EngineDSQLRefusesOptions(t *testing.T) {
+	desired := writeFile(t, "desired.sql", usersTable)
+	tests := []struct {
+		args []string
+		err  string
+	}{
+		{[]string{"plan", "--engine", "dsql", "--explain", desired}, "--explain cannot be used with --engine dsql"},
+		{[]string{"plan", "--engine", "dsql", "--bulk-alter", desired}, "--bulk-alter cannot be used with --engine dsql"},
+		{[]string{"plan", "--engine", "dsql", "--force-index-concurrently", desired}, "--force-index-concurrently cannot be used with --engine dsql"},
+		{[]string{"plan", "--engine", "dsql", "--disable-index-concurrently", desired}, "--disable-index-concurrently cannot be used with --engine dsql"},
+		{[]string{"plan", "--engine", "dsql", "--concurrently-pre-sql", "SELECT 1", desired}, "--concurrently-pre-sql cannot be used with --engine dsql"},
+		{[]string{"plan", "--engine", "dsql", "--concurrently-pre-sql-file", desired, desired}, "--concurrently-pre-sql-file cannot be used with --engine dsql"},
+		{[]string{"apply", "--engine", "dsql", "--bulk-alter", desired}, "--bulk-alter cannot be used with --engine dsql"},
+		{[]string{"apply", "--engine", "dsql", "--with-tx", desired}, "--with-tx cannot be used with --engine dsql"},
+		{[]string{"apply", "--engine", "dsql", "--try-tx", desired}, "--try-tx cannot be used with --engine dsql"},
+		{[]string{"apply", "--engine", "dsql", "--exclusive", desired}, "--exclusive cannot be used with --engine dsql"},
+		{[]string{"apply", "--engine", "dsql", "--exclusive-wait", "1s", desired}, "--exclusive-wait cannot be used with --engine dsql"},
+		{[]string{"apply", "--dsql-no-wait-index-build", desired}, "--dsql-no-wait-index-build requires --engine dsql"},
+		{[]string{"dump", "--engine", "dsql", "--explain"}, "--explain cannot be used with --engine dsql"},
+	}
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.args[:len(tt.args)-1], " "), func(t *testing.T) {
+			var stdout bytes.Buffer
+			code, stderr := runCLI(t, &stdout, tt.args...)
+			assert.Equal(t, 1, code)
+			assert.Contains(t, stderr, tt.err)
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+// PISTA_ENGINE selects the engine the same way, so a flag set beside it is
+// refused too.
+func TestRun_EngineDSQLEnvRefusesOptions(t *testing.T) {
+	t.Setenv("PISTA_ENGINE", "dsql")
+	var stdout bytes.Buffer
+	code, stderr := runCLI(t, &stdout, "plan", "--explain", writeFile(t, "desired.sql", usersTable))
+	assert.Equal(t, 1, code)
+	assert.Contains(t, stderr, "--explain cannot be used with --engine dsql")
+}
+
+// apply-from takes the engine from the plan file, so its hook reads the file
+// to refuse the options that engine cannot use.
+func TestRun_ApplyFromEngineDSQLRefusesOptions(t *testing.T) {
+	dsqlPlan := writeFile(t, "dsql.json", `{"version":5,"scope":{"engine":"dsql"}}`)
+	postgresPlan := writeFile(t, "postgres.json", `{"version":5,"scope":{"engine":"postgres"}}`)
+	unknownPlan := writeFile(t, "unknown.json", `{"version":5,"scope":{"engine":"mysql"}}`)
+	tests := []struct {
+		args []string
+		err  string
+	}{
+		{[]string{"apply-from", "--with-tx", dsqlPlan}, "--with-tx cannot be used with --engine dsql"},
+		{[]string{"apply-from", "--try-tx", dsqlPlan}, "--try-tx cannot be used with --engine dsql"},
+		{[]string{"apply-from", "--exclusive", dsqlPlan}, "--exclusive cannot be used with --engine dsql"},
+		{[]string{"apply-from", "--dsql-no-wait-index-build", postgresPlan}, "--dsql-no-wait-index-build requires --engine dsql"},
+		{[]string{"apply-from", unknownPlan}, `unknown engine "mysql"`},
+	}
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {
+			var stdout bytes.Buffer
+			code, stderr := runCLI(t, &stdout, tt.args...)
+			assert.Equal(t, 1, code)
+			assert.Contains(t, stderr, tt.err)
+			assert.Empty(t, stdout.String())
+		})
+	}
+}
+
+// A value kong does not know is refused by the enum tag.
+func TestRun_EngineUnknown(t *testing.T) {
+	var stdout bytes.Buffer
+	code, stderr := runCLI(t, &stdout, "dump", "--engine", "mysql")
+	assert.Equal(t, 80, code)
+	assert.Contains(t, stderr, `--engine must be one of "postgres","dsql"`)
+}

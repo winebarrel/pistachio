@@ -20,6 +20,11 @@ type Plan struct {
 	Check bool `env:"PISTA_CHECK" help:"Exit with code 2 when the plan contains executable changes."`
 }
 
+// AfterApply refuses the options the engine cannot use.
+func (cmd *Plan) AfterApply() error {
+	return pistachio.ValidatePlanEngine(cmd.Engine, &cmd.PlanOptions)
+}
+
 func (cmd *Plan) Run(ctx context.Context, w io.Writer) error {
 	client := pistachio.NewClient(&cmd.Options)
 

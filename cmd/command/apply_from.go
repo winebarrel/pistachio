@@ -17,6 +17,11 @@ type ApplyFrom struct {
 	pistachio.ApplyFromOptions
 }
 
+// AfterApply refuses the options the plan file's engine cannot use.
+func (cmd *ApplyFrom) AfterApply() error {
+	return pistachio.ValidateApplyFromEngine(&cmd.ApplyFromOptions)
+}
+
 func (cmd *ApplyFrom) Run(ctx context.Context, w io.Writer) error {
 	client := pistachio.NewClient(&pistachio.Options{ConnOptions: cmd.ConnOptions})
 
