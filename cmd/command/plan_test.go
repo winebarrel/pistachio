@@ -582,3 +582,47 @@ CREATE OR REPLACE FUNCTION public.test_func() RETURNS void AS $$ BEGIN END; $$ L
 	assert.NotContains(t, got, "-- pista:execute")
 	assert.Contains(t, got, "-- No changes")
 }
+
+// setupInvalidIndex leaves public.users_email_key invalid, the way a unique
+// index built concurrently over duplicates does, and returns the desired
+// schema file that declares the index.
+func setupInvalidIndex(t *testing.T, ctx context.Context) (pistachio.Options, string) {
+	t.Helper()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+INSERT INTO public.users VALUES (1, 'a'), (2, 'a');`)
+	_, err := conn.Exec(ctx, "CREATE UNIQUE INDEX CONCURRENTLY users_email_key ON public.users (email)")
+	require.Error(t, err)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email);
+`), 0o644))
+
+	return pistachio.Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}}, desiredFile
+}
+
+// The warning goes right under the header, before the statements.
+func TestPlan_Run_InvalidIndexWarning(t *testing.T) {
+	ctx := context.Background()
+	options, desiredFile := setupInvalidIndex(t, ctx)
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Options: options, Files: []string{desiredFile}}
+	require.NoError(t, cmd.Run(ctx, &buf))
+
+	lines := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	require.Len(t, lines, 4)
+	assert.Equal(t, "-- Warning: index public.users_email_key is invalid", lines[2])
+	assert.Equal(t, "-- No changes", lines[3])
+}

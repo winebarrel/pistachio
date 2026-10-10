@@ -39,7 +39,8 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			ts.spcname,
 			descr.description AS comment,
 			ci.relispartition AS attached,
-			ct.relkind = 'p' AS on_partitioned
+			ct.relkind = 'p' AS on_partitioned,
+			NOT i.indisvalid AS invalid
 		FROM
 			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
 			pg_catalog.pg_index i
@@ -88,6 +89,7 @@ func (c *Catalog) ListIndexes(ctx context.Context) ([]*model.Index, error) {
 			&idx.Comment,
 			&idx.Attached,
 			&onPartitioned,
+			&idx.Invalid,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: failed to scan index info: %w", err)

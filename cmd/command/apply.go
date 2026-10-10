@@ -47,6 +47,9 @@ func writeApplyResult(w io.Writer, client *pistachio.Client, result *pistachio.A
 	// transaction comments) even when no schema change was applied, so the
 	// "-- No changes" and timing decisions are driven by result.Applied rather
 	// than the buffer length.
+	if result.InvalidIndexes != "" {
+		fmt.Fprintln(w, result.InvalidIndexes) //nolint:errcheck
+	}
 	w.Write(out) //nolint:errcheck
 	if result.Ignored != "" {
 		fmt.Fprintln(w, result.Ignored) //nolint:errcheck

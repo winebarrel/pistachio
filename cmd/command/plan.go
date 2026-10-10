@@ -54,6 +54,9 @@ func writeHeader(w io.Writer, client *pistachio.Client, title string, count pist
 // DROPs come before "-- No changes" so the summary line reads naturally at
 // the end.
 func writePlanResult(w io.Writer, result *pistachio.PlanResult) {
+	if result.InvalidIndexes != "" {
+		fmt.Fprintln(w, result.InvalidIndexes) //nolint:errcheck
+	}
 	if result.HasChanges {
 		fmt.Fprintln(w, result.SQL) //nolint:errcheck
 	}

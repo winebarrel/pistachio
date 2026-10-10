@@ -14,6 +14,11 @@ type Index struct {
 	// PostgreSQL rejects a DROP of one and drops it with the parent's. Only the
 	// catalog sets it.
 	Attached bool `json:"attached"`
+	// Invalid marks an index whose build failed or has not finished,
+	// pg_index.indisvalid false. plan and apply warn about one, since it
+	// matches its definition but does nothing. Only the catalog sets it, and
+	// it stays out of the JSON, which the state hash and parse read.
+	Invalid bool `json:"-"`
 	// Size is the size estimate dump --explain writes in a comment above the
 	// index. Only dump sets it.
 	Size string `json:"-"`

@@ -122,6 +122,9 @@ type diffAllResult struct {
 	// comments the output carries; the plan file records these so apply-from
 	// can drop them from its read before it hashes it.
 	IgnoredObjects []string
+	// InvalidIndexes warns about each managed index whose build failed or
+	// has not finished.
+	InvalidIndexes []string
 }
 
 // ignoredObjectComments renders the -- ignored: line of each name. plan writes
@@ -509,6 +512,7 @@ func (client *Client) diffObjects(current *schemaObjects, options *diffAllOption
 		Stmts:                 stmts,
 		DisallowedDrops:       disallowed,
 		Ignored:               ignoredObjectComments(ignored),
+		InvalidIndexes:        invalidIndexWarnings(filteredTables, filteredViews),
 		IgnoredObjects:        ignored,
 		PreSQL:                options.Desired.preSQL,
 		ConcurrentlyPreSQL:    options.Desired.concurrentlyPreSQL,
@@ -1468,4 +1472,29 @@ func nameIdent(names []*pg_query.Node) string {
 	}
 
 	return model.Ident(parts...)
+}
+
+// invalidIndexWarnings returns a warning for each index of the current side
+// that is invalid. Such an index matches its definition, so the diff leaves it
+// alone, but it is not used. A build that failed leaves it behind, and it has
+// to be dropped by hand.
+func invalidIndexWarnings(tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View]) []string {
+	var warnings []string
+	add := func(indexes *orderedmap.Map[string, *model.Index]) {
+		if indexes == nil {
+			return
+		}
+		for _, idx := range indexes.CollectValues() {
+			if idx.Invalid {
+				warnings = append(warnings, "-- Warning: index "+model.Ident(idx.Schema, idx.Name)+" is invalid")
+			}
+		}
+	}
+	for _, t := range tables.CollectValues() {
+		add(t.Indexes)
+	}
+	for _, v := range views.CollectValues() {
+		add(v.Indexes)
+	}
+	return warnings
 }
