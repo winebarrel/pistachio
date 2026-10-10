@@ -1,4 +1,4 @@
-recorded_at: 2026-10-10T13:45:19Z
+recorded_at: 2026-10-10T14:18:21Z
 server_version: "16.15"
 exchanges:
   - query: SELECT sys.dsql_major_version()
@@ -101,7 +101,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -127,8 +128,8 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
   - query: |2-
 
       		WITH
@@ -276,7 +277,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -302,8 +304,8 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
   - query: |2-
 
       		WITH
@@ -650,7 +652,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -676,8 +679,8 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
   - query: |2-
 
       		WITH
@@ -825,7 +828,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -851,8 +855,8 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
   - query: |2-
 
       		WITH
@@ -1117,9 +1121,9 @@ exchanges:
   - query: CREATE INDEX ASYNC users_name_idx ON public.users (name);
     columns: [job_id]
     rows:
-      - [x2b33yaolregpfcvq6wnziqsue]
+      - [nxcmkzumfjcadderil3przlqrq]
     complete: CREATE INDEX
-  - query: CALL sys.wait_for_job('x2b33yaolregpfcvq6wnziqsue')
+  - query: CALL sys.wait_for_job('nxcmkzumfjcadderil3przlqrq')
     columns: [succeeded]
     types: [bool]
     rows:
@@ -1191,7 +1195,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -1326,14 +1330,14 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -1415,12 +1419,12 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email)', '{id}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -1458,7 +1462,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -1492,7 +1496,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -1518,10 +1523,10 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -1669,7 +1674,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -1695,10 +1701,10 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -2016,7 +2022,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -2151,14 +2157,14 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -2240,12 +2246,12 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email)', '{id}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -2283,7 +2289,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -2317,7 +2323,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -2343,10 +2350,10 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -2494,7 +2501,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -2520,10 +2528,10 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -2784,9 +2792,9 @@ exchanges:
   - query: CREATE UNIQUE INDEX ASYNC users_email_key ON public.users (email);
     columns: [job_id]
     rows:
-      - [om43hdgw7fec5by6f2a3nl3ili]
+      - [23c6veadbza5zjvzmklg6szg5q]
     complete: CREATE INDEX
-  - query: CALL sys.wait_for_job('om43hdgw7fec5by6f2a3nl3ili')
+  - query: CALL sys.wait_for_job('23c6veadbza5zjvzmklg6szg5q')
     columns: [succeeded]
     types: [bool]
     rows:
@@ -2797,9 +2805,9 @@ exchanges:
   - query: CREATE INDEX ASYNC users_status_idx ON public.users (status, name);
     columns: [job_id]
     rows:
-      - [yry4vcr67veybnu2qrapz4aesa]
+      - [xfegsongnfbm3i23kbmk2ekfia]
     complete: CREATE INDEX
-  - query: CALL sys.wait_for_job('yry4vcr67veybnu2qrapz4aesa')
+  - query: CALL sys.wait_for_job('xfegsongnfbm3i23kbmk2ekfia')
     columns: [succeeded]
     types: [bool]
     rows:
@@ -2871,7 +2879,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -3006,15 +3014,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -3096,13 +3104,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -3140,7 +3148,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -3174,7 +3182,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -3200,11 +3209,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -3352,7 +3361,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -3378,11 +3388,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -3700,7 +3710,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -3835,15 +3845,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -3925,13 +3935,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -3969,7 +3979,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -4003,7 +4013,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -4029,11 +4040,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -4181,7 +4192,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -4207,11 +4219,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -4529,7 +4541,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -4664,15 +4676,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -4754,13 +4766,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -4798,7 +4810,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -4832,7 +4844,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -4858,11 +4871,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -5010,7 +5023,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -5036,11 +5050,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -5358,7 +5372,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -5493,15 +5507,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -5583,13 +5597,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -5627,7 +5641,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -5661,7 +5675,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -5687,11 +5702,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -5839,7 +5854,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -5865,11 +5881,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -6187,7 +6203,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -6322,15 +6338,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -6412,13 +6428,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -6456,7 +6472,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -6490,7 +6506,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -6516,11 +6533,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -6668,7 +6685,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -6694,11 +6712,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -7016,7 +7034,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -7151,15 +7169,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -7241,13 +7259,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -7285,7 +7303,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -7319,7 +7337,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -7345,11 +7364,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -7497,7 +7516,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -7523,11 +7543,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26559", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26590", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -7868,7 +7888,7 @@ exchanges:
   - query: CREATE INDEX ASYNC users_status_idx ON public.users (status);
     columns: [job_id]
     rows:
-      - [xidg6yc7u5cvzom7olrs3efno4]
+      - [lil5ujjdsffsvgbk3mcuiu32xy]
     complete: CREATE INDEX
   - query: |2-
 
@@ -7936,7 +7956,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -8071,15 +8091,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -8161,13 +8181,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -8205,7 +8225,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -8239,7 +8259,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -8265,11 +8286,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26560", public, users_status_idx, users, CREATE INDEX users_status_idx ON public.users USING btree_index (status), null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26591", public, users_status_idx, users, CREATE INDEX users_status_idx ON public.users USING btree_index (status), null, null, f, f, t]
   - query: |2-
 
       		WITH
@@ -8417,7 +8438,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -8443,11 +8465,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26560", public, users_status_idx, users, CREATE INDEX users_status_idx ON public.users USING btree_index (status), null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26591", public, users_status_idx, users, CREATE INDEX users_status_idx ON public.users USING btree_index (status), null, null, f, f, t]
   - query: |2-
 
       		WITH
@@ -8765,7 +8787,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -8900,15 +8922,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -8990,13 +9012,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -9034,7 +9056,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -9068,7 +9090,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -9094,11 +9117,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26560", public, users_status_idx, users, CREATE INDEX users_status_idx ON public.users USING btree_index (status), null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26591", public, users_status_idx, users, CREATE INDEX users_status_idx ON public.users USING btree_index (status), null, null, f, f, t]
   - query: |2-
 
       		WITH
@@ -9246,7 +9269,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -9272,11 +9296,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26560", public, users_status_idx, users, CREATE INDEX users_status_idx ON public.users USING btree_index (status), null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26591", public, users_status_idx, users, CREATE INDEX users_status_idx ON public.users USING btree_index (status), null, null, f, f, t]
   - query: |2-
 
       		WITH
@@ -9617,9 +9641,9 @@ exchanges:
   - query: CREATE INDEX ASYNC users_status_idx ON public.users (status, name);
     columns: [job_id]
     rows:
-      - [dxsavsykrza6hoqk4phq3iadqa]
+      - [wqed5y5pbje33kepra2p62twqu]
     complete: CREATE INDEX
-  - query: CALL sys.wait_for_job('dxsavsykrza6hoqk4phq3iadqa')
+  - query: CALL sys.wait_for_job('wqed5y5pbje33kepra2p62twqu')
     columns: [succeeded]
     types: [bool]
     rows:
@@ -9691,7 +9715,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -9826,15 +9850,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -9916,13 +9940,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -9960,7 +9984,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -9994,7 +10018,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -10020,11 +10045,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26561", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26592", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -10172,7 +10197,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -10198,11 +10224,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26561", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26592", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -10530,7 +10556,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, null]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -10665,15 +10691,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -10755,13 +10781,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -10799,7 +10825,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -10833,7 +10859,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -10859,11 +10886,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26561", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26592", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -11011,7 +11038,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -11037,11 +11065,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26561", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26592", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -11363,7 +11391,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, people]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, people]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -11498,15 +11526,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -11588,13 +11616,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -11632,7 +11660,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -11666,7 +11694,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -11692,11 +11721,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26561", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26592", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -11844,7 +11873,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -11870,11 +11900,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26561", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26592", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -12192,7 +12222,7 @@ exchanges:
     columns: [oid, nspname, relname, spcname, unlogged, partitioned, partition_def, parent_schema, parent_name, partition_bound, relrowsecurity, relforcerowsecurity, reloptions, toast_reloptions, description]
     types: [oid, name, name, name, bool, bool, text, name, name, text, bool, bool, _text, _text, text]
     rows:
-      - ["26550", public, users, null, f, f, null, null, null, null, f, f, null, null, people]
+      - ["26581", public, users, null, f, f, null, null, null, null, f, f, null, null, people]
   - query: |2-
 
       		-- https://www.postgresql.org/docs/current/catalog-pg-attribute.html
@@ -12327,15 +12357,15 @@ exchanges:
       			a.attrelid,
       			a.attnum
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [attrelid, attname, attislocal, type_name, serial_sequence, attnotnull, not_null_name, default, attidentity, attgenerated, collation, storage_type, type_storage, compression, description, seqstart, seqmin, seqmax, seqincrement, seqcache, seqcycle]
     types: [oid, name, bool, text, text, bool, name, text, char, char, text, text, text, text, text, int8, int8, int8, int8, int8, bool]
     rows:
-      - ["26550", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
-      - ["26550", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
-      - ["26550", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", id, t, bigint, null, t, null, null, a, "", null, plain, plain, "", null, "1", "1", "9223372036854775807", "1", "1", f]
+      - ["26581", name, t, text, null, t, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", email, t, text, null, f, null, null, "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
+      - ["26581", status, t, text, null, f, null, '''active''::text', "", "", null, extended, extended, lz4, null, null, null, null, null, null, null]
   - query: |2-
 
       		WITH
@@ -12417,13 +12447,13 @@ exchanges:
       			array_position('{p,u,c,x,f}'::"char"[], con.contype),
       			con.conname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [conrelid, oid, conname, contype, definition, columns, condeferrable, condeferred, convalidated, conislocal, index_options, ref_schema, ref_table, comment]
     types: [oid, oid, name, char, text, _name, bool, bool, bool, bool, _text, name, name, text]
     rows:
-      - ["26550", "26554", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
-      - ["26550", "26558", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
+      - ["26581", "26585", users_pkey, p, 'PRIMARY KEY (id) INCLUDE (name, email, status)', '{id}', f, f, t, t, null, null, null, null]
+      - ["26581", "26589", users_email_key, u, UNIQUE (email), '{email}', f, f, t, t, null, null, null, null]
   - query: |2-
 
       		SELECT
@@ -12461,7 +12491,7 @@ exchanges:
       			pol.polrelid,
       			pol.polname
       	
-    args: ['{26550}']
+    args: ['{26581}']
     param_types: [_oid]
     columns: [polrelid, polname, polpermissive, polcmd, roles, using_expr, with_check, comment]
     types: [oid, name, bool, char, _name, text, text, text]
@@ -12495,7 +12525,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -12521,11 +12552,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26561", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26592", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
@@ -12673,7 +12704,8 @@ exchanges:
       			ts.spcname,
       			descr.description AS comment,
       			ci.relispartition AS attached,
-      			ct.relkind = 'p' AS on_partitioned
+      			ct.relkind = 'p' AS on_partitioned,
+      			NOT i.indisvalid AS invalid
       		FROM
       			-- https://www.postgresql.org/docs/current/catalog-pg-index.html
       			pg_catalog.pg_index i
@@ -12699,11 +12731,11 @@ exchanges:
       	
     args: ['{public}']
     param_types: [_name]
-    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned]
-    types: [oid, name, name, name, text, name, text, bool, bool]
+    columns: [oid, nspname, name, table, definition, spcname, comment, attached, on_partitioned, invalid]
+    types: [oid, name, name, name, text, name, text, bool, bool, bool]
     rows:
-      - ["26555", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f]
-      - ["26561", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f]
+      - ["26586", public, users_name_idx, users, CREATE INDEX users_name_idx ON public.users USING btree_index (name), null, null, f, f, f]
+      - ["26592", public, users_status_idx, users, 'CREATE INDEX users_status_idx ON public.users USING btree_index (status, name)', null, null, f, f, f]
   - query: |2-
 
       		WITH
