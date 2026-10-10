@@ -1,4 +1,4 @@
-package pistachio
+package pistachio_test
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/winebarrel/pistachio"
 	"github.com/winebarrel/pistachio/internal/testutil"
 )
 
@@ -47,8 +48,8 @@ func TestPlan_InvalidIndexWarning(t *testing.T) {
 	ctx := context.Background()
 	connString, desiredFile := setupInvalidIndex(t, ctx)
 
-	client := NewClient(&Options{ConnString: connString, Schemas: []string{"public"}})
-	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connString, Schemas: []string{"public"}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 
 	// The index matches the desired schema, so there is nothing to apply.
@@ -60,9 +61,9 @@ func TestApply_InvalidIndexWarning(t *testing.T) {
 	ctx := context.Background()
 	connString, desiredFile := setupInvalidIndex(t, ctx)
 
-	client := NewClient(&Options{ConnString: connString, Schemas: []string{"public"}})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connString, Schemas: []string{"public"}})
 	var buf bytes.Buffer
-	got, err := client.Apply(ctx, &ApplyOptions{Files: []string{desiredFile}}, &buf)
+	got, err := client.Apply(ctx, &pistachio.ApplyOptions{Files: []string{desiredFile}}, &buf)
 	require.NoError(t, err)
 
 	assert.False(t, got.Applied)
@@ -74,13 +75,13 @@ func TestPlan_InvalidIndexWarning_Excluded(t *testing.T) {
 	ctx := context.Background()
 	connString, _ := setupInvalidIndex(t, ctx)
 
-	client := NewClient(&Options{
+	client := pistachio.NewClient(&pistachio.Options{
 		ConnString: connString,
 		Schemas:    []string{"public"}, Exclude: []string{"users"},
 	})
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, nil, 0o644))
-	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got.InvalidIndexes)
 }
@@ -103,8 +104,8 @@ SELECT 'a'::text AS email;
 CREATE UNIQUE INDEX emails_email_key ON public.emails USING btree (email);
 `), 0o644))
 
-	client := NewClient(&Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}})
-	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Equal(t, "-- Warning: index public.emails_email_key is invalid", got.InvalidIndexes)
 }
@@ -143,8 +144,8 @@ CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email);
 CREATE UNIQUE INDEX users_name_key ON public.users USING btree (name);
 `), 0o644))
 
-	client := NewClient(&Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}})
-	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Equal(t, "-- Warning: index public.users_email_key is invalid\n-- Warning: index public.users_name_key is invalid", got.InvalidIndexes)
 }
@@ -158,8 +159,8 @@ func TestPlan_InvalidIndexWarning_Ignored(t *testing.T) {
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte("-- pista:ignore\n"+invalidIndexSchema), 0o644))
 
-	client := NewClient(&Options{ConnString: connString, Schemas: []string{"public"}})
-	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: connString, Schemas: []string{"public"}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.Empty(t, got.InvalidIndexes)
 }
@@ -176,13 +177,13 @@ func TestPlan_InvalidIndexWarning_PartitionedOnOnly(t *testing.T) {
 CREATE TABLE public.p1 PARTITION OF public.p FOR VALUES FROM (0) TO (10);
 CREATE INDEX p_k_idx ON ONLY public.p (k);`)
 
-	client := NewClient(&Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}})
-	dumped, err := client.Dump(ctx, &DumpOptions{})
+	client := pistachio.NewClient(&pistachio.Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}})
+	dumped, err := client.Dump(ctx, &pistachio.DumpOptions{})
 	require.NoError(t, err)
 
 	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
 	require.NoError(t, os.WriteFile(desiredFile, []byte(dumped.String()), 0o644))
-	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	got, err := client.Plan(ctx, &pistachio.PlanOptions{Files: []string{desiredFile}})
 	require.NoError(t, err)
 	assert.False(t, got.HasChanges, got.SQL)
 	assert.Equal(t, "-- Warning: index public.p_k_idx is invalid", got.InvalidIndexes)
