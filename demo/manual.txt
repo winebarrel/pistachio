@@ -15,6 +15,8 @@ Try the following:
   pista plan  desired.sql     # ...should now print "No changes"
   pista dump                  # dump the current schema
   pista lint  desired.sql     # check against the lint rules
+  pista fmt --check desired.sql  # list the file if not formatted
+  pista fmt   desired.sql     # format the file in place
   psql                        # poke around the DB
 
 Destructive changes (DROP COLUMN / DROP TABLE / DROP FUNCTION /
