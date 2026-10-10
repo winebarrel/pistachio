@@ -39,6 +39,31 @@ func TestListIndexes(t *testing.T) {
 		assert.Contains(t, idx.Definition, "btree")
 	})
 
+	t.Run("invalid index", func(t *testing.T) {
+		testutil.SetupDB(t, ctx, conn, `
+			CREATE TABLE public.users (
+				id integer NOT NULL,
+				email text,
+				CONSTRAINT users_pkey PRIMARY KEY (id)
+			);
+			CREATE INDEX idx_users_id ON public.users USING btree (id);
+			INSERT INTO public.users VALUES (1, 'a'), (2, 'a');
+		`)
+		// A unique index built concurrently over duplicates fails and is left
+		// behind invalid.
+		_, err := conn.Exec(ctx, "CREATE UNIQUE INDEX CONCURRENTLY idx_users_email ON public.users (email)")
+		require.Error(t, err)
+
+		cat, err := catalog.NewCatalog(conn, []string{"public"})
+		require.NoError(t, err)
+		tables, err := cat.Tables(ctx)
+		require.NoError(t, err)
+
+		tbl := tables.Get("public.users")
+		assert.True(t, tbl.Indexes.Get("idx_users_email").Invalid)
+		assert.False(t, tbl.Indexes.Get("idx_users_id").Invalid)
+	})
+
 	t.Run("index comment", func(t *testing.T) {
 		testutil.SetupDB(t, ctx, conn, `
 			CREATE TABLE public.users (

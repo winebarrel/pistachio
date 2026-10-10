@@ -74,6 +74,9 @@ type ApplyResult struct {
 	Count           ObjectCount
 	DisallowedDrops string
 	Ignored         string
+	// InvalidIndexes warns about each managed index that is invalid, one
+	// comment per line.
+	InvalidIndexes string
 	// Applied reports whether any schema change was actually applied: schema
 	// DDL or an executed -- pista:execute statement. Pre-SQL,
 	// concurrently-pre-SQL, transaction control, search_path setup, and
@@ -139,6 +142,7 @@ func (client *Client) Apply(ctx context.Context, options *ApplyOptions, w io.Wri
 		Count:           result.Count,
 		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
 		Ignored:         strings.Join(result.Ignored, "\n"),
+		InvalidIndexes:  strings.Join(result.InvalidIndexes, "\n"),
 	}
 
 	if err := client.applyStmts(ctx, conn, &applyInput{

@@ -16,6 +16,7 @@ The files together form one schema. A statement that refers to another object, f
 
 The output is SQL. It starts with the connection and a count of the objects. After that it contains:
 
+- one `-- Warning: index ... is invalid` line for each invalid index,
 - the pre-SQL,
 - the concurrently-pre-SQL,
 - the `-- pista:execute-first` statements,
