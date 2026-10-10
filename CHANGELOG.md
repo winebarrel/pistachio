@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-* `plan` and `apply` write `-- Warning: index ... is invalid` for each managed index that is invalid, such as one that a failed `CREATE INDEX CONCURRENTLY` left behind.
+* `plan` and `apply` warn about each invalid index, such as one left by a failed `CREATE INDEX CONCURRENTLY`.
 
 ## [1.80.1] - 2026-10-09
 

@@ -1481,9 +1481,6 @@ func nameIdent(names []*pg_query.Node) string {
 func invalidIndexWarnings(tables *orderedmap.Map[string, *model.Table], views *orderedmap.Map[string, *model.View]) []string {
 	var warnings []string
 	add := func(indexes *orderedmap.Map[string, *model.Index]) {
-		if indexes == nil {
-			return
-		}
 		for _, idx := range indexes.CollectValues() {
 			if idx.Invalid {
 				warnings = append(warnings, "-- Warning: index "+model.Ident(idx.Schema, idx.Name)+" is invalid")

@@ -626,3 +626,22 @@ func TestPlan_Run_InvalidIndexWarning(t *testing.T) {
 	assert.Equal(t, "-- Warning: index public.users_email_key is invalid", lines[2])
 	assert.Equal(t, "-- No changes", lines[3])
 }
+
+// With statements to run, the warning still comes first.
+func TestPlan_Run_InvalidIndexWarningWithChanges(t *testing.T) {
+	ctx := context.Background()
+	options, desiredFile := setupInvalidIndex(t, ctx)
+
+	desired, err := os.ReadFile(desiredFile)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(desiredFile, append(desired, "COMMENT ON TABLE public.users IS 'people';\n"...), 0o644))
+
+	var buf bytes.Buffer
+	cmd := &command.Plan{Options: options, Files: []string{desiredFile}}
+	require.NoError(t, cmd.Run(ctx, &buf))
+
+	lines := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	require.Len(t, lines, 4)
+	assert.Equal(t, "-- Warning: index public.users_email_key is invalid", lines[2])
+	assert.Equal(t, "COMMENT ON TABLE public.users IS 'people';", lines[3])
+}

@@ -84,3 +84,82 @@ func TestPlan_InvalidIndexWarning_Excluded(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got.InvalidIndexes)
 }
+
+// An index on a materialized view is reported the same way.
+func TestPlan_InvalidIndexWarning_MaterializedView(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	testutil.SetupDB(t, ctx, conn, `CREATE MATERIALIZED VIEW public.emails AS SELECT 'a'::text AS email UNION ALL SELECT 'a'::text;`)
+	_, err := conn.Exec(ctx, "CREATE UNIQUE INDEX CONCURRENTLY emails_email_key ON public.emails (email)")
+	require.Error(t, err)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE MATERIALIZED VIEW public.emails AS
+SELECT 'a'::text AS email
+UNION ALL
+SELECT 'a'::text AS email;
+CREATE UNIQUE INDEX emails_email_key ON public.emails USING btree (email);
+`), 0o644))
+
+	client := NewClient(&Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}})
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Equal(t, "-- Warning: index public.emails_email_key is invalid", got.InvalidIndexes)
+}
+
+// Each invalid index gets a line of its own, and a valid one gets none.
+func TestPlan_InvalidIndexWarning_Several(t *testing.T) {
+	ctx := context.Background()
+	conn := testutil.ConnectDB(t)
+	defer conn.Close(ctx) //nolint:errcheck
+
+	testutil.SetupDB(t, ctx, conn, `CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX users_id_idx ON public.users USING btree (id);
+INSERT INTO public.users VALUES (1, 'a', 'b'), (2, 'a', 'b');`)
+	for _, sql := range []string{
+		"CREATE UNIQUE INDEX CONCURRENTLY users_email_key ON public.users (email)",
+		"CREATE UNIQUE INDEX CONCURRENTLY users_name_key ON public.users (name)",
+	} {
+		_, err := conn.Exec(ctx, sql)
+		require.Error(t, err)
+	}
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte(`CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text,
+    name text,
+    CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+CREATE INDEX users_id_idx ON public.users USING btree (id);
+CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email);
+CREATE UNIQUE INDEX users_name_key ON public.users USING btree (name);
+`), 0o644))
+
+	client := NewClient(&Options{ConnString: conn.Config().ConnString(), Schemas: []string{"public"}})
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Equal(t, "-- Warning: index public.users_email_key is invalid\n-- Warning: index public.users_name_key is invalid", got.InvalidIndexes)
+}
+
+// An index on a table the desired schema ignores is not managed, so it is not
+// reported.
+func TestPlan_InvalidIndexWarning_Ignored(t *testing.T) {
+	ctx := context.Background()
+	connString, _ := setupInvalidIndex(t, ctx)
+
+	desiredFile := filepath.Join(t.TempDir(), "desired.sql")
+	require.NoError(t, os.WriteFile(desiredFile, []byte("-- pista:ignore\n"+invalidIndexSchema), 0o644))
+
+	client := NewClient(&Options{ConnString: connString, Schemas: []string{"public"}})
+	got, err := client.Plan(ctx, &PlanOptions{Files: []string{desiredFile}})
+	require.NoError(t, err)
+	assert.Empty(t, got.InvalidIndexes)
+}
