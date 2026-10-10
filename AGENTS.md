@@ -37,6 +37,8 @@ make test           # go test -p 1 -v ./... $(TEST_OPTS)
 make test-scenario  # CLI scenario tests (bash, requires PostgreSQL)
 make test-fidelity  # restore fidelity check (bash, requires PostgreSQL and pg_dump)
 make test-changelog # CHANGELOG.md merge driver test (bash, no database)
+make test-dsql      # TestDSQL: replays the Aurora DSQL recording (no database)
+make record-dsql    # records TestDSQL again against a live cluster (DSQL_HOST)
 make fuzz           # fuzz targets (no database; FUZZTIME per target, default 1m)
 make lint           # golangci-lint run
 make fix            # golangci-lint run --fix (auto-fix lint errors)
@@ -45,8 +47,9 @@ make fix            # golangci-lint run --fix (auto-fix lint errors)
 - Tests require a running PostgreSQL instance. `compose.yaml` publishes each version of the CI matrix on its own port (15 -> 5415, 16 -> 5416, 17 -> 5417, 18 -> 5418), so several can run side by side; `PGPORT` (default 5415) selects which one every `psql`- and test-based target uses. The Makefile builds `TEST_PISTA_CONN_STR` from it; set that variable to point somewhere else entirely.
 - Tests run with `-p 1` (sequential packages) because integration tests share a single database.
 - The `plan`, `apply` and `dump` fixture cases run in parallel, each on a database of its own taken from a pool: `pista_test_1` to `pista_test_<GOMAXPROCS>`, created on the same server on first use and kept. The role needs `CREATEDB`. `-parallel 1` runs them one at a time.
-- CI uploads the coverage profile of each test job as an artifact: `coverage-windows-apply`, `coverage-windows-plan`, `coverage-windows-rest` and `coverage-pg15` to `coverage-pg18`. Each holds `coverage.txt`. The Windows tests are split across three jobs, so each Windows profile covers only part of the tests. View it with `go tool cover -html=coverage.txt`.
+- CI uploads the coverage profile of each test job as an artifact: `coverage-windows-apply`, `coverage-windows-plan`, `coverage-windows-rest`, `coverage-pg15` to `coverage-pg18` and `coverage-dsql`. Each holds `coverage.txt`. The Windows tests are split across three jobs, so each Windows profile covers only part of the tests. View it with `go tool cover -html=coverage.txt`.
 - `make test`, `make test-scenario` and `make test-fidelity` depend on `clean-schema`, so they wipe every extension and every user schema before running. The tests themselves reset only `public`, and a sample schema left over from `make schema` is otherwise still visible to them. `clean-schema` follows `PGHOST`/`PGUSER`/`PGPORT`, not `TEST_PISTA_CONN_STR`, so override `PGPORT` rather than the connection string.
+- `TestDSQL` runs only with `TEST_PISTA_DSQL` set, so `make test` skips it and `make test-dsql` runs it; CI runs it in the `dsql` job. It replays `testdata/dsql/dsql.yaml` through pgstub, and the recording has to be made again with `make record-dsql` whenever a statement pistachio sends changes, catalog queries included. The other DSQL tests use local PostgreSQL and run under `make test`.
 - `make schema` and other `psql`-based targets rely on `PGHOST=localhost` / `PGUSER=postgres` / `PGPORT` (exported from the Makefile).
 - The sample schema targets (`schema`, `sample-db-*`, `test-samples`, `clean-schema`, `reset-db`) live in `sample-db.mk`, which the Makefile includes. See `SAMPLE-DB-TESTS.md`.
 

@@ -25,10 +25,13 @@ Support policy:
   package and `dsql_options.go`, called from branches on the engine.
 
 TestDSQL in dsql_test.go replays testdata/dsql/dsql.yaml with pgstub, so CI
-needs no cluster. To record it again, run the test with
-TEST_PISTA_DSQL_CONN_STR set to a cluster whose public schema is empty and
-PGPASSWORD set to an IAM token. Check the new file for anything that should
-not be committed before adding it.
+needs no cluster. It covers only what a cluster has to answer; what is
+decided before anything DSQL-specific is sent is tested against local
+PostgreSQL. `make test-dsql` runs it, and `make test` skips it. A change to
+any statement pistachio sends, catalog queries included, breaks the replay:
+record it again with `DSQL_HOST=<endpoint> make record-dsql` on a cluster
+whose public schema is empty. The script refuses a recording that names the
+cluster or holds something that looks like a credential.
 
 The rest of this file is the evidence.
 
