@@ -489,3 +489,17 @@ func TestApply_Run_ExclusiveWaitMessageIsNotHeldBack(t *testing.T) {
 	assert.Equal(t, "-- Waiting for another exclusive apply to finish", lines[0])
 	assert.Contains(t, w.String(), "CREATE TABLE public.users")
 }
+
+func TestApply_Run_InvalidIndexWarning(t *testing.T) {
+	ctx := context.Background()
+	options, desiredFile := setupInvalidIndex(t, ctx)
+
+	var buf bytes.Buffer
+	cmd := &command.Apply{Options: options, Files: []string{desiredFile}}
+	require.NoError(t, cmd.Run(ctx, &buf))
+
+	lines := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	require.Len(t, lines, 4)
+	assert.Equal(t, "-- Warning: index public.users_email_key is invalid", lines[2])
+	assert.Equal(t, "-- No changes", lines[3])
+}

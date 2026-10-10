@@ -41,6 +41,11 @@ func (cmd *Apply) Run(ctx context.Context, w io.Writer) error {
 func writeApplyResult(w io.Writer, client *pistachio.Client, result *pistachio.ApplyResult, out []byte) {
 	writeHeader(w, client, "Apply to", result.Count)
 
+	// The invalid-index warnings come first, as in plan.
+	if result.InvalidIndexes != "" {
+		fmt.Fprintln(w, result.InvalidIndexes) //nolint:errcheck
+	}
+
 	// Same ordering as Plan: executed SQL (incl. pre-SQL) first, then skipped
 	// DROPs as comments. When nothing was applied, skipped DROPs precede
 	// "-- No changes". The buffer may still hold output (e.g. --with-tx

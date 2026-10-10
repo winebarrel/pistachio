@@ -2,6 +2,10 @@
 
 # Changelog
 
+## [Unreleased]
+
+* `plan` and `apply` warn about each invalid index, such as one left by a failed `CREATE INDEX CONCURRENTLY`.
+
 ## [1.80.1] - 2026-10-09
 
 * A lint rule can have `let`, a list of named values. Each item has `name` and `expr`, a CEL expression. `assert` and later items can use the names. The items are evaluated in order when `when` is true. The standard rules `prefer-bigint-key`, `fk-needs-index` and `redundant-index` in `rules/` now use it.

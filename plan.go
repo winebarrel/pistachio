@@ -77,6 +77,9 @@ type PlanResult struct {
 	// HasChanges is true when the plan contains executable statements
 	// (DDL or execute directives). Suppressed drops do not count.
 	HasChanges bool
+	// InvalidIndexes warns about each managed index that is invalid, one
+	// comment per line.
+	InvalidIndexes string
 }
 
 func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResult, error) {
@@ -253,6 +256,7 @@ func (client *Client) Plan(ctx context.Context, options *PlanOptions) (*PlanResu
 		SQL:             strings.Join(stmts, "\n"),
 		DisallowedDrops: strings.Join(result.DisallowedDrops, "\n"),
 		Ignored:         strings.Join(result.Ignored, "\n"),
+		InvalidIndexes:  strings.Join(result.InvalidIndexes, "\n"),
 		Count:           result.Count,
 		HasChanges:      hasChanges,
 	}, nil

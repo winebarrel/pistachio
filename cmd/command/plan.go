@@ -48,12 +48,16 @@ func writeHeader(w io.Writer, client *pistachio.Client, title string, count pist
 	fmt.Fprintf(w, "-- %s %s (%s)\n", title, count.SchemaLabel(), count.Summary()) //nolint:errcheck
 }
 
-// writePlanResult prints the body of a plan or a diff. Executable SQL (incl.
-// pre-SQL) comes first so it can be piped/copied as a runnable script;
-// skipped DROPs follow as informational comments. In the no-SQL case, skipped
+// writePlanResult prints the body of a plan or a diff. The invalid-index
+// warnings come first, as comments. Executable SQL (incl. pre-SQL) follows so
+// it can be piped/copied as a runnable script; skipped DROPs follow as
+// informational comments. In the no-SQL case, skipped
 // DROPs come before "-- No changes" so the summary line reads naturally at
 // the end.
 func writePlanResult(w io.Writer, result *pistachio.PlanResult) {
+	if result.InvalidIndexes != "" {
+		fmt.Fprintln(w, result.InvalidIndexes) //nolint:errcheck
+	}
 	if result.HasChanges {
 		fmt.Fprintln(w, result.SQL) //nolint:errcheck
 	}
