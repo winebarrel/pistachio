@@ -26,6 +26,7 @@ RUN apk add --no-cache bash sudo vim less bat jq && \
 COPY --from=build /out/pista /usr/local/bin/pista
 COPY demo/entrypoint.sh /entrypoint.sh
 COPY demo/manual.txt demo/current.sql demo/desired.sql /demo/
+COPY rules/*.yml /demo/rules/
 RUN chmod +x /entrypoint.sh && chown -R postgres:postgres /demo
 
 ENV PGHOST=/var/run/postgresql \
@@ -33,6 +34,7 @@ ENV PGHOST=/var/run/postgresql \
     PGDATABASE=demo \
     PISTA_CONN_STR=postgres://postgres@/demo \
     PISTA_MANAGE_ROUTINE=1 \
+    PISTA_LINT_RULES=/demo/rules \
     PISTA_PAGER="bat -l sql -p --paging=never --color=always"
 
 WORKDIR /demo
