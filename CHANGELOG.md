@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [1.83.0] - 2026-10-11
 
 * **BREAKING**: Remove `--dsql-ignore-async` and `PISTA_DSQL_IGNORE_ASYNC`. With `--engine dsql`, `plan` and `apply` now always ignore `ASYNC` in `CREATE INDEX ASYNC` in the desired schema.
 
