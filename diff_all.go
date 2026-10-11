@@ -914,10 +914,7 @@ func currentColumn(currentTables, desiredTables *orderedmap.Map[string, *model.T
 	if !ok {
 		return nil
 	}
-	if col, ok := t.Columns.GetOk(column); ok {
-		return col
-	}
-	return nil
+	return t.Columns.Get(column)
 }
 
 // withoutSerialSequence returns tables with SerialSequence cleared on the given

@@ -336,9 +336,9 @@ func extractViewDepsFallback(definition, defaultSchema string, defined map[strin
 		// Try matching the unqualified part (e.g., "users" for "public.users").
 		// `name` is a model.Ident-formed key, so its schema portion may be
 		// quoted (e.g. `"MySchema"`); compare against the same form.
-		parts := strings.SplitN(name, ".", 2)
-		if len(parts) == 2 && (parts[0] == model.Ident(defaultSchema) || parts[0] == "public") {
-			if strings.Contains(definition, parts[1]) {
+		schema, rel, ok := strings.Cut(name, ".")
+		if ok && (schema == model.Ident(defaultSchema) || schema == "public") {
+			if strings.Contains(definition, rel) {
 				seen[name] = true
 			}
 		}
