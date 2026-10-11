@@ -88,7 +88,7 @@ func OrderFromSchema(
 	// Views: depend on tables/views referenced in their definition
 	addViewDeps(g, views, defined)
 
-	addRoutineDeps(g, routines, tables, views, defined)
+	addRoutineDeps(g, routines, domains, tables, views, defined)
 
 	order, err := g.Sort()
 	if err != nil {
@@ -366,17 +366,19 @@ func RoutineNode(qualifiedName string) string {
 // that call them.
 //
 // A routine depends on the types in its signature, so it is created after
-// them. Every table and view is then made to depend on every routine, so
-// routines come first: a CHECK constraint, a GENERATED expression, an index
-// expression, a policy or a trigger can call one, and those run as part of the
-// table DDL. The edge is drawn wholesale rather than by reading each
-// expression, since the answer is the same "routine first" either way.
+// them. Every domain, table and view is then made to depend on every routine,
+// so routines come first: a CHECK constraint, a DEFAULT, a GENERATED
+// expression, an index expression, a policy or a trigger can call one, and
+// those run as part of the domain or table DDL. The edge is drawn wholesale
+// rather than by reading each expression, since the answer is the same
+// "routine first" either way.
 //
-// A signature can name a relation as well as a type: RETURNS SETOF <table>, or
-// a table row type as a parameter. The routine then follows that relation, and
-// a table or view it reaches that way gets no wholesale edge, which would
-// close a cycle. When two routines name two different relations, the first
-// still precedes the other relation and the second follows both.
+// A signature can name a relation or a domain as well as a type: RETURNS SETOF
+// <table>, or a table row type or a domain as a parameter. The routine then
+// follows it, and a domain, table or view it reaches that way gets no
+// wholesale edge, which would close a cycle. When two routines name two
+// different relations, the first still precedes the other relation and the
+// second follows both.
 //
 // The reverse direction is otherwise absent. A LANGUAGE sql body that reads a
 // table would want the table first, which cannot hold at the same time as the
@@ -392,6 +394,7 @@ func RoutineNode(qualifiedName string) string {
 func addRoutineDeps(
 	g *graph,
 	routines *orderedmap.Map[string, *model.Routine],
+	domains *orderedmap.Map[string, *model.Domain],
 	tables *orderedmap.Map[string, *model.Table],
 	views *orderedmap.Map[string, *model.View],
 	defined map[string]bool,
@@ -451,7 +454,7 @@ func addRoutineDeps(
 	}
 
 	// An edge into a routine does not change what the routine reaches, so one
-	// walk per routine covers every table and view.
+	// walk per routine covers every domain, table and view.
 	addDependents := func(keys func(func(string) bool)) {
 		for _, node := range nodes {
 			if atomic[node] {
@@ -466,6 +469,7 @@ func addRoutineDeps(
 			}
 		}
 	}
+	addDependents(domains.Keys())
 	addDependents(tables.Keys())
 	addDependents(views.Keys())
 }

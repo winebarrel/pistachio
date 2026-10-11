@@ -1,4 +1,4 @@
-recorded_at: 2026-10-11T00:27:20Z
+recorded_at: 2026-10-11T11:32:20Z
 server_version: "16.15"
 exchanges:
   - query: SELECT sys.dsql_major_version()
@@ -539,11 +539,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -1090,11 +1096,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -1210,13 +1222,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -1298,6 +1317,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -1940,11 +1960,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -2037,13 +2063,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -2125,6 +2158,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -2767,11 +2801,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -2896,13 +2936,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -2984,6 +3031,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -3630,11 +3678,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -3729,13 +3783,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -3817,6 +3878,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -4463,11 +4525,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -4562,13 +4630,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -4650,6 +4725,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -5296,11 +5372,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -5393,13 +5475,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -5481,6 +5570,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -6127,11 +6217,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -6317,13 +6413,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -6405,6 +6508,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -7051,11 +7155,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -7148,13 +7258,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -7236,6 +7353,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -7882,11 +8000,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -8076,13 +8200,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -8164,6 +8295,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -8810,11 +8942,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -8947,13 +9085,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -9035,6 +9180,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -9688,11 +9834,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -9786,13 +9938,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -9874,6 +10033,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -10527,11 +10687,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -10631,13 +10797,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -10719,6 +10892,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -11371,11 +11545,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
@@ -11469,13 +11649,20 @@ exchanges:
       			-- column the child redeclares is local and inherited at once, and
       			-- stays.
       			a.attislocal,
-      			-- A serial type only while the sequence has the default name.
-      			-- Any other column that takes its default from a sequence it
-      			-- owns keeps its own type and default, and catalog/sequences.go
-      			-- reads the sequence, so that dump writes its name and options.
+      			-- A serial type only while the sequence has the default name and
+      			-- the default options for its type. Any other column that takes
+      			-- its default from a sequence it owns keeps its own type and
+      			-- default, and catalog/sequences.go reads the sequence, so that
+      			-- dump writes its name and options.
       			CASE
       				WHEN s.is_serial
       				AND seqc.relname = tc.relname || '_' || a.attname || '_seq'
+      				AND (sq.seqstart, sq.seqincrement, sq.seqmin, sq.seqcache, sq.seqcycle) = (1, 1, 1, 1, false)
+      				AND sq.seqmax = CASE sq.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				THEN CASE pg_catalog.format_type(a.atttypid, a.atttypmod)
       					WHEN 'integer' THEN 'serial'
       					WHEN 'bigint' THEN 'bigserial'
@@ -11557,6 +11744,7 @@ exchanges:
       			JOIN pg_catalog.pg_class tc ON tc.oid = a.attrelid
       			LEFT JOIN pg_catalog.pg_class seqc ON s.is_serial
       			AND seqc.oid = pg_catalog.pg_get_serial_sequence(a.attrelid::regclass::text, a.attname)::regclass
+      			LEFT JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = seqc.oid
       			LEFT JOIN pg_catalog.pg_collation co ON co.OID = a.attcollation
       			AND co.oid != t.typcollation
       			LEFT JOIN pg_catalog.pg_namespace con ON con.oid = co.collnamespace
@@ -12209,11 +12397,17 @@ exchanges:
       			AND d.deptype IS DISTINCT FROM 'i'
       			-- The sequence of a column that catalog/columns.go reads as a
       			-- serial: an integer column takes its default from it, and it
-      			-- has the default name.
+      			-- has the default name and the default options for its type.
       			AND NOT COALESCE(
       				a.attidentity = ''
       				AND a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype)
       				AND c.relname = rc.relname || '_' || a.attname || '_seq'
+      				AND (s.seqstart, s.seqincrement, s.seqmin, s.seqcache, s.seqcycle) = (1, 1, 1, 1, false)
+      				AND s.seqmax = CASE s.seqtypid
+      					WHEN 'int2'::regtype THEN 32767
+      					WHEN 'int4'::regtype THEN 2147483647
+      					ELSE 9223372036854775807
+      				END
       				AND pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('
       					|| quote_literal(c.oid::regclass::text)
       					|| '::regclass)',
